@@ -1,0 +1,518 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Base Models — E1.1 Schema Foundation
+// ---------------------------------------------------------------------------
+// Conventions (Architecture §2.3):
+//   - UUID PKs: id String @id @default(uuid())
+//   - Natural keys where appropriate (Currency.code, Country.code)
+//   - snake_case DB mapping: @@map("table_name"), @map("column_name")
+//   - Timestamps: createdAt/updatedAt on every model
+//   - Audit: createdBy/updatedBy on mutable models
+//   - isActive on reference entities (soft-delete pattern §2.3.1)
+//   - Monetary: Decimal @db.Decimal(19,4)
+//   - Exchange rates: Decimal @db.Decimal(18,8)
+//   - Quantities: Decimal @db.Decimal(10,4)
+// ---------------------------------------------------------------------------
+
+// Currency and Country are GLOBAL reference entities shared across all companies.
+// They do NOT have a companyId field — this is an intentional exception to the
+// "companyId on every table" rule (Architecture §2.3). Currencies and countries
+// are ISO standards and are not tenant-scoped. Per-company FX rates are handled
+// by ExchangeRate which IS tenant-scoped via companyId.
+model Currency {
+  code       String   @id @map("code") @db.VarChar(3)
+  name       String   @map("name")
+  symbol     String   @map("symbol")
+  minorUnit  Int      @default(2) @map("minor_unit")
+  roundTotal Int      @default(2) @map("round_total")
+  roundVat   Int      @default(2) @map("round_vat")
+  roundLine  Int      @default(2) @map("round_line")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  companyProfiles          CompanyProfile[]
+  exchangeRates            ExchangeRate[]
+  countriesWithThisDefault Country[]        @relation("CountryDefaultCurrency")
+
+  @@map("currencies")
+}
+
+model Country {
+  code                String   @id @map("code") @db.VarChar(2)
+  iso3Code            String   @map("iso3_code") @db.VarChar(3)
+  name                String   @map("name")
+  defaultCurrencyCode String?  @map("default_currency_code") @db.VarChar(3)
+  region              String?  @map("region")
+  vatPrefix           String?  @map("vat_prefix")
+  dateFormat          String?  @map("date_format")
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  defaultCurrency Currency?        @relation("CountryDefaultCurrency", fields: [defaultCurrencyCode], references: [code])
+  companyProfiles CompanyProfile[]
+  bankHolidays    BankHoliday[]
+
+  @@map("countries")
+}
+
+enum ExchangeRateSource {
+  BOE
+  ECB
+  MANUAL
+
+  @@map("exchange_rate_source")
+}
+
+model ExchangeRate {
+  id           String             @id @default(uuid()) @map("id")
+  companyId    String             @map("company_id")
+  currencyCode String             @map("currency_code") @db.VarChar(3)
+  rateDate     DateTime           @map("rate_date") @db.Date
+  buyRate      Decimal            @map("buy_rate") @db.Decimal(18, 8)
+  sellRate     Decimal            @map("sell_rate") @db.Decimal(18, 8)
+  midRate      Decimal            @map("mid_rate") @db.Decimal(18, 8)
+  source       ExchangeRateSource @map("source")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  company  CompanyProfile @relation(fields: [companyId], references: [id])
+  currency Currency       @relation(fields: [currencyCode], references: [code])
+
+  @@unique([companyId, currencyCode, rateDate], map: "uq_exchange_rates_company_currency_date")
+  @@index([companyId], map: "idx_exchange_rates_company_id")
+  @@map("exchange_rates")
+}
+
+model Department {
+  id         String  @id @default(uuid()) @map("id")
+  companyId  String  @map("company_id")
+  code       String  @map("code")
+  name       String  @map("name")
+  costCentre String? @map("cost_centre")
+  managerId  String? @map("manager_id") // FK to User — added in E1-4
+  isActive   Boolean @default(true) @map("is_active")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  company CompanyProfile @relation(fields: [companyId], references: [id])
+  manager User?          @relation("DepartmentManager", fields: [managerId], references: [id])
+
+  @@unique([companyId, code], map: "uq_departments_company_code")
+  @@index([companyId, isActive], map: "idx_departments_company_active")
+  @@map("departments")
+}
+
+model PaymentTerms {
+  id              String   @id @default(uuid()) @map("id")
+  companyId       String   @map("company_id")
+  code            String   @map("code")
+  name            String   @map("name")
+  dueDays         Int      @map("due_days")
+  discountPercent Decimal? @map("discount_percent") @db.Decimal(5, 2)
+  discountDays    Int?     @map("discount_days")
+  isDefault       Boolean  @default(false) @map("is_default")
+  isActive        Boolean  @default(true) @map("is_active")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  company CompanyProfile @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, code], map: "uq_payment_terms_company_code")
+  @@index([companyId, isActive], map: "idx_payment_terms_company_active")
+  @@map("payment_terms")
+}
+
+enum VatType {
+  STANDARD
+  REDUCED
+  ZERO
+  EXEMPT
+  OUTSIDE_SCOPE
+  REVERSE_CHARGE
+  SECOND_HAND
+
+  @@map("vat_type")
+}
+
+model VatCode {
+  id                  String  @id @default(uuid()) @map("id")
+  companyId           String  @map("company_id")
+  code                String  @map("code")
+  name                String  @map("name")
+  rate                Decimal @map("rate") @db.Decimal(5, 2)
+  type                VatType @map("type")
+  salesAccountCode    String? @map("sales_account_code")
+  purchaseAccountCode String? @map("purchase_account_code")
+  isDefault           Boolean @default(false) @map("is_default")
+  isActive            Boolean @default(true) @map("is_active")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  company CompanyProfile @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, code], map: "uq_vat_codes_company_code")
+  @@index([companyId, isActive], map: "idx_vat_codes_company_active")
+  @@map("vat_codes")
+}
+
+enum TagType {
+  CUSTOMER
+  ITEM
+  ORDER
+  GENERAL
+
+  @@map("tag_type")
+}
+
+model Tag {
+  id        String  @id @default(uuid()) @map("id")
+  companyId String  @map("company_id")
+  code      String  @map("code")
+  name      String  @map("name")
+  tagType   TagType @map("tag_type")
+  color     String? @map("color") // hex colour
+  isActive  Boolean @default(true) @map("is_active")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  company CompanyProfile @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, code, tagType], map: "uq_tags_company_code_type")
+  @@index([companyId, isActive], map: "idx_tags_company_active")
+  @@map("tags")
+}
+
+enum HolidayType {
+  PUBLIC
+  COMPANY
+  SPECIAL
+
+  @@map("holiday_type")
+}
+
+model BankHoliday {
+  id          String      @id @default(uuid()) @map("id")
+  companyId   String      @map("company_id")
+  name        String      @map("name")
+  date        DateTime    @map("date") @db.Date
+  countryCode String      @map("country_code") @db.VarChar(2)
+  holidayType HolidayType @map("holiday_type")
+  isRecurring Boolean     @default(false) @map("is_recurring")
+  isActive    Boolean     @default(true) @map("is_active")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  company CompanyProfile @relation(fields: [companyId], references: [id])
+  country Country        @relation(fields: [countryCode], references: [code])
+
+  @@unique([companyId, date, countryCode], map: "uq_bank_holidays_company_date_country")
+  @@index([companyId, isActive], map: "idx_bank_holidays_company_active")
+  @@map("bank_holidays")
+}
+
+enum VatScheme {
+  STANDARD
+  FLAT_RATE
+  CASH
+
+  @@map("vat_scheme")
+}
+
+// CompanyProfile defines the company itself — its `id` IS the companyId that all
+// other tenant-scoped tables reference. No self-referential companyId needed here.
+model CompanyProfile {
+  id                 String  @id @default(uuid()) @map("id")
+  name               String  @map("name")
+  legalName          String? @map("legal_name")
+  registrationNumber String? @map("registration_number")
+  vatNumber          String? @map("vat_number")
+  utrNumber          String? @map("utr_number")
+  natureOfBusiness   String? @map("nature_of_business")
+  baseCurrencyCode   String  @default("GBP") @map("base_currency_code") @db.VarChar(3)
+  isDefault          Boolean @default(false) @map("is_default")
+  isActive           Boolean @default(true) @map("is_active")
+
+  // Address
+  addressLine1 String? @map("address_line_1")
+  addressLine2 String? @map("address_line_2")
+  city         String? @map("city")
+  county       String? @map("county")
+  postcode     String? @map("postcode")
+  countryCode  String  @default("GB") @map("country_code") @db.VarChar(2)
+
+  // Contact
+  phone   String? @map("phone")
+  email   String? @map("email")
+  website String? @map("website")
+
+  // Configuration
+  timezone           String @default("Europe/London") @map("timezone")
+  weekStart          Int    @default(1) @map("week_start")
+  dateFormat         String @default("DD/MM/YYYY") @map("date_format")
+  decimalSeparator   String @default(".") @map("decimal_separator")
+  thousandsSeparator String @default(",") @map("thousands_separator")
+  vatScheme          VatScheme @default(STANDARD) @map("vat_scheme")
+  defaultLanguage    String @default("en") @map("default_language")
+
+  // Tax Agent
+  taxAgentName  String? @map("tax_agent_name")
+  taxAgentPhone String? @map("tax_agent_phone")
+  taxAgentEmail String? @map("tax_agent_email")
+
+  // Branding
+  logoUrl String? @map("logo_url")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdBy String   @map("created_by")
+  updatedBy String   @map("updated_by")
+
+  // Relations
+  baseCurrency    Currency       @relation(fields: [baseCurrencyCode], references: [code])
+  country         Country        @relation(fields: [countryCode], references: [code])
+  exchangeRates   ExchangeRate[]
+  departments     Department[]
+  paymentTerms    PaymentTerms[]
+  vatCodes        VatCode[]
+  tags            Tag[]
+  bankHolidays    BankHoliday[]
+  systemSettings  SystemSetting[]
+  sharingRulesAsSource RegisterSharingRule[] @relation("SharingSource")
+  sharingRulesAsTarget RegisterSharingRule[] @relation("SharingTarget")
+  userCompanyRoles     UserCompanyRole[]
+  users                User[]
+  numberSeries         NumberSeries[]
+
+  @@index([baseCurrencyCode], map: "idx_company_profiles_base_currency_code")
+  @@index([countryCode], map: "idx_company_profiles_country_code")
+  @@index([isDefault], map: "idx_company_profiles_is_default")
+  @@map("company_profiles")
+}
+
+enum SettingCategory {
+  GENERAL
+  FINANCE
+  AR
+  AP
+  SALES
+  PURCHASING
+  INVENTORY
+  CRM
+  HR
+  MANUFACTURING
+  REPORTING
+
+  @@map("setting_category")
+}
+
+enum SettingValueType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
+
+  @@map("setting_value_type")
+}
+
+model SystemSetting {
+  id        String           @id @default(uuid()) @map("id")
+  companyId String           @map("company_id")
+  key       String           @map("key")
+  value     String           @map("value") // JSON-serialised
+  valueType SettingValueType @map("value_type")
+  category  SettingCategory   @map("category")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  company CompanyProfile @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, key], map: "uq_system_settings_company_key")
+  @@index([companyId, category], map: "idx_system_settings_company_category")
+  @@map("system_settings")
+}
+
+// ---------------------------------------------------------------------------
+// Multi-Company & RBAC Models — E1.3 Multi-Company Models
+// ---------------------------------------------------------------------------
+
+enum SharingMode {
+  NONE
+  ALL_COMPANIES
+  SELECTED
+
+  @@map("sharing_mode")
+}
+
+model RegisterSharingRule {
+  id              String      @id @default(uuid()) @map("id")
+  entityType      String      @map("entity_type")
+  sharingMode     SharingMode @map("sharing_mode")
+  sourceCompanyId String      @map("source_company_id")
+  targetCompanyId String?     @map("target_company_id")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  sourceCompany CompanyProfile  @relation("SharingSource", fields: [sourceCompanyId], references: [id])
+  targetCompany CompanyProfile? @relation("SharingTarget", fields: [targetCompanyId], references: [id])
+
+  @@unique([entityType, sourceCompanyId, targetCompanyId], map: "uq_sharing_rule")
+  // NOTE: Partial index for NULL targetCompanyId uniqueness added via raw SQL in migration:
+  // CREATE UNIQUE INDEX "uq_sharing_rule_no_target" ON "register_sharing_rules" ("entity_type", "source_company_id") WHERE "target_company_id" IS NULL;
+  // This prevents duplicate ALL_COMPANIES/NONE rules per entityType + sourceCompanyId (PostgreSQL treats NULLs as distinct in unique constraints).
+  @@index([sourceCompanyId, entityType], map: "idx_sharing_rules_source_entity")
+  @@index([targetCompanyId, entityType], map: "idx_sharing_rules_target_entity")
+  @@map("register_sharing_rules")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  STAFF
+  VIEWER
+
+  @@map("user_role")
+}
+
+enum ViewScope {
+  PERSONAL
+  ROLE
+  GLOBAL
+
+  @@map("view_scope")
+}
+
+model UserCompanyRole {
+  id        String    @id @default(uuid()) @map("id")
+  userId    String    @map("user_id")
+  companyId String?   @map("company_id")
+  role      UserRole  @map("role")
+
+  // Audit
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  company   CompanyProfile? @relation(fields: [companyId], references: [id])
+  user      User            @relation(fields: [userId], references: [id])
+
+  @@unique([userId, companyId], map: "uq_user_company_role")
+  // NOTE: Partial index for global role uniqueness added via raw SQL in migration:
+  // CREATE UNIQUE INDEX "uq_user_company_role_global" ON "user_company_roles" ("user_id") WHERE "company_id" IS NULL;
+  @@map("user_company_roles")
+}
+
+// ---------------------------------------------------------------------------
+// User & Session Models — E1.4
+// ---------------------------------------------------------------------------
+
+model User {
+  id             String    @id @default(uuid()) @map("id")
+  email          String    @map("email")
+  passwordHash   String    @map("password_hash")
+  firstName      String    @map("first_name")
+  lastName       String    @map("last_name")
+  companyId      String    @map("company_id")
+  mfaEnabled     Boolean   @default(false) @map("mfa_enabled")
+  mfaSecret      String?   @map("mfa_secret")
+  isActive       Boolean   @default(true) @map("is_active")
+  lastLoginAt    DateTime? @map("last_login_at")
+  enabledModules Json      @default("[]") @map("enabled_modules")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdBy String   @map("created_by")
+  updatedBy String   @map("updated_by")
+
+  // Relations
+  company            CompanyProfile    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  companyRoles       UserCompanyRole[]
+  refreshTokens      RefreshToken[]
+  managedDepartments Department[]      @relation("DepartmentManager")
+
+  @@unique([email], map: "uq_users_email")
+  @@index([companyId], map: "idx_users_company_id")
+  @@index([isActive], map: "idx_users_is_active")
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @map("id")
+  userId    String    @map("user_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  ipAddress String?   @map("ip_address")
+  userAgent String?   @map("user_agent")
+  createdAt DateTime  @default(now()) @map("created_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tokenHash], map: "uq_refresh_tokens_token_hash")
+  @@index([userId, revokedAt], map: "idx_refresh_tokens_user_revoked")
+  @@map("refresh_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// Number Series — E1.5
+// ---------------------------------------------------------------------------
+
+model NumberSeries {
+  id         String  @id @default(uuid()) @map("id")
+  companyId  String  @map("company_id")
+  entityType String  @map("entity_type")
+  prefix     String  @map("prefix")
+  nextValue  Int     @default(1) @map("next_value")
+  padding    Int     @default(5) @map("padding")
+  suffix     String? @map("suffix")
+  isActive   Boolean @default(true) @map("is_active")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  company CompanyProfile @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, entityType], map: "uq_number_series_company_entity")
+  @@index([companyId], map: "idx_number_series_company_id")
+  @@index([companyId, isActive], map: "idx_number_series_company_active")
+  @@map("number_series")
+}

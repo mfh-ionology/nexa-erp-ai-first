@@ -112,6 +112,31 @@ export function createBaseConfig({ tsconfigRootDir }) {
       },
     },
 
+    // Test files — relax strict rules that add friction without value in tests
+    {
+      files: ['**/__tests__/**/*.ts', '**/*.test.ts', '**/*.spec.ts'],
+      rules: {
+        'no-console': 'off',
+        '@typescript-eslint/no-non-null-assertion': 'off',
+        '@typescript-eslint/restrict-template-expressions': 'off',
+        '@typescript-eslint/restrict-plus-operands': 'off',
+        '@typescript-eslint/require-await': 'off',
+        '@typescript-eslint/naming-convention': 'off',
+      },
+    },
+
+    // Seed and config files — scripts that legitimately use console and process.exit
+    {
+      files: ['**/prisma/seed.ts', '**/prisma.config.ts', '**/vitest.config.ts'],
+      rules: {
+        'no-console': 'off',
+        'n/no-process-exit': 'off',
+        '@typescript-eslint/restrict-template-expressions': 'off',
+        '@typescript-eslint/naming-convention': 'off',
+        '@typescript-eslint/use-unknown-in-catch-callback-variable': 'off',
+      },
+    },
+
     // JS files configuration (config files, etc.) — disable type-checked rules
     {
       files: ['**/*.js', '**/*.mjs', '**/*.cjs'],

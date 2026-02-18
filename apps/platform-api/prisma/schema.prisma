@@ -1,0 +1,251 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/platform-prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --- Enums ---
+
+enum TenantStatus {
+  PROVISIONING
+  ACTIVE
+  SUSPENDED
+  READ_ONLY
+  ARCHIVED
+
+  @@map("tenant_status")
+}
+
+enum BillingStatus {
+  CURRENT
+  GRACE
+  OVERDUE
+  BLOCKED
+
+  @@map("billing_status")
+}
+
+enum EnforcementAction {
+  NONE
+  WARNING
+  READ_ONLY
+  SUSPENDED
+
+  @@map("enforcement_action")
+}
+
+enum PlatformRole {
+  PLATFORM_ADMIN
+  PLATFORM_VIEWER
+
+  @@map("platform_role")
+}
+
+// --- Models ---
+
+model Tenant {
+  id             String        @id @default(uuid()) @map("id")
+  code           String        @unique @map("code") @db.VarChar(50)
+  displayName    String        @map("display_name")
+  legalName      String?       @map("legal_name")
+  status         TenantStatus  @default(PROVISIONING) @map("status")
+  planId         String        @map("plan_id")
+  billingStatus  BillingStatus @default(CURRENT) @map("billing_status")
+  region         String        @default("uk-south") @map("region") @db.VarChar(30)
+  dbHost         String        @map("db_host")
+  dbName         String        @map("db_name")
+  dbPort         Int           @default(5432) @map("db_port")
+  sandboxEnabled Boolean       @default(false) @map("sandbox_enabled")
+  lastActivityAt DateTime?     @map("last_activity_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  plan            Plan                   @relation(fields: [planId], references: [id])
+  moduleOverrides TenantModuleOverride[]
+  featureFlags    TenantFeatureFlag[]
+  aiQuota         TenantAiQuota?
+  aiUsageRecords  TenantAiUsage[]
+  billing         TenantBilling?
+  impersonations  ImpersonationSession[]
+
+  @@index([status], map: "idx_tenants_status")
+  @@index([planId], map: "idx_tenants_plan_id")
+  @@map("tenants")
+}
+
+// --- Supporting Models ---
+
+model Plan {
+  id                      String  @id @default(uuid()) @map("id")
+  code                    String  @unique @map("code") @db.VarChar(30)
+  displayName             String  @map("display_name")
+  maxUsers                Int     @map("max_users")
+  maxCompanies            Int     @map("max_companies")
+  monthlyAiTokenAllowance BigInt  @map("monthly_ai_token_allowance")
+  aiHardLimit             Boolean @default(true) @map("ai_hard_limit")
+  enabledModules          Json    @map("enabled_modules") @db.JsonB
+  apiRateLimit            Int     @default(1000) @map("api_rate_limit")
+  isActive                Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenants Tenant[]
+
+  @@map("plans")
+}
+
+model TenantModuleOverride {
+  id        String   @id @default(uuid()) @map("id")
+  tenantId  String   @map("tenant_id")
+  moduleKey String   @map("module_key") @db.VarChar(50)
+  enabled   Boolean  @map("enabled")
+  reason    String?  @map("reason")
+  changedBy String   @map("changed_by")
+  changedAt DateTime @default(now()) @map("changed_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, moduleKey], map: "uq_tenant_module_overrides_tenant_module")
+  @@map("tenant_module_overrides")
+}
+
+model TenantFeatureFlag {
+  id         String   @id @default(uuid()) @map("id")
+  tenantId   String   @map("tenant_id")
+  featureKey String   @map("feature_key") @db.VarChar(100)
+  enabled    Boolean  @map("enabled")
+  changedBy  String   @map("changed_by")
+  changedAt  DateTime @default(now()) @map("changed_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, featureKey], map: "uq_tenant_feature_flags_tenant_feature")
+  @@map("tenant_feature_flags")
+}
+
+model TenantAiQuota {
+  id             String   @id @default(uuid()) @map("id")
+  tenantId       String   @unique @map("tenant_id")
+  periodStart    DateTime @map("period_start") @db.Date
+  periodEnd      DateTime @map("period_end") @db.Date
+  tokensUsed     BigInt   @default(0) @map("tokens_used")
+  tokenAllowance BigInt   @map("token_allowance")
+  softLimitPct   Int      @default(80) @map("soft_limit_pct")
+  hardLimitPct   Int      @default(100) @map("hard_limit_pct")
+  burstAllowance BigInt?  @map("burst_allowance")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("tenant_ai_quotas")
+}
+
+model TenantAiUsage {
+  id               String   @id @default(uuid()) @map("id")
+  tenantId         String   @map("tenant_id")
+  userId           String   @map("user_id") @db.VarChar(100)
+  featureKey       String   @map("feature_key") @db.VarChar(100)
+  model            String   @map("model") @db.VarChar(100)
+  promptTokens     Int      @map("prompt_tokens")
+  completionTokens Int      @map("completion_tokens")
+  totalTokens      Int      @map("total_tokens")
+  costEstimate     Decimal  @map("cost_estimate") @db.Decimal(10, 6)
+  requestId        String   @unique @map("request_id") @db.VarChar(100)
+  timestamp        DateTime @default(now()) @map("timestamp")
+
+  // Append-only: createdAt only, NO updatedAt (matches PlatformAuditLog pattern)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, timestamp], map: "idx_tenant_ai_usage_tenant_timestamp")
+  @@index([tenantId, featureKey], map: "idx_tenant_ai_usage_tenant_feature")
+  @@map("tenant_ai_usage")
+}
+
+model TenantBilling {
+  id                 String            @id @default(uuid()) @map("id")
+  tenantId           String            @unique @map("tenant_id")
+  stripeCustomerId   String?           @map("stripe_customer_id")
+  subscriptionStatus String?           @map("subscription_status") @db.VarChar(30)
+  currentPeriodEnd   DateTime?         @map("current_period_end")
+  gracePeriodDays    Int               @default(14) @map("grace_period_days")
+  lastPaymentAt      DateTime?         @map("last_payment_at")
+  dunningLevel       Int               @default(0) @map("dunning_level")
+  enforcementAction  EnforcementAction @default(NONE) @map("enforcement_action")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("tenant_billing")
+}
+
+model PlatformUser {
+  id           String       @id @default(uuid()) @map("id")
+  email        String       @unique @map("email")
+  passwordHash String       @map("password_hash")
+  displayName  String       @map("display_name")
+  role         PlatformRole @map("role")
+  mfaEnabled   Boolean      @default(false) @map("mfa_enabled")
+  mfaSecret    String?      @map("mfa_secret")
+  isActive     Boolean      @default(true) @map("is_active")
+  lastLoginAt  DateTime?    @map("last_login_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  auditLogs      PlatformAuditLog[]
+  impersonations ImpersonationSession[]
+
+  @@map("platform_users")
+}
+
+model PlatformAuditLog {
+  id             String   @id @default(uuid()) @map("id")
+  platformUserId String   @map("platform_user_id")
+  action         String   @map("action") @db.VarChar(100)
+  targetType     String?  @map("target_type") @db.VarChar(50)
+  targetId       String?  @map("target_id")
+  details        Json?    @map("details") @db.JsonB
+  ipAddress      String   @map("ip_address") @db.VarChar(45)
+  userAgent      String?  @map("user_agent") @db.VarChar(500)
+  timestamp      DateTime @default(now()) @map("timestamp")
+
+  // Append-only: createdAt only, NO updatedAt (NFR49)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  platformUser PlatformUser @relation(fields: [platformUserId], references: [id])
+
+  @@index([platformUserId, timestamp], map: "idx_platform_audit_log_user_timestamp")
+  @@index([targetType, targetId], map: "idx_platform_audit_log_target")
+  @@map("platform_audit_log")
+}
+
+model ImpersonationSession {
+  id             String    @id @default(uuid()) @map("id")
+  platformUserId String    @map("platform_user_id")
+  tenantId       String    @map("tenant_id")
+  reason         String    @map("reason")
+  startedAt      DateTime  @default(now()) @map("started_at")
+  endedAt        DateTime? @map("ended_at")
+  expiresAt      DateTime  @map("expires_at")
+  actionsLog     Json?     @map("actions_log") @db.JsonB
+
+  // Write-once: createdAt only, NO updatedAt (endedAt is the close marker)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  platformUser PlatformUser @relation(fields: [platformUserId], references: [id])
+  tenant       Tenant       @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, startedAt], map: "idx_impersonation_sessions_tenant_started")
+  @@map("impersonation_sessions")
+}
