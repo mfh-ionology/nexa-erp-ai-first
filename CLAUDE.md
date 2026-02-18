@@ -5,11 +5,13 @@
 Whenever requirements, features, or architectural decisions are **added, modified, or removed**, ALL of the following documents MUST be updated to stay in sync:
 
 ### Core Specification Documents
+
 1. **PRD** — `_bmad-output/planning-artifacts/prd.md`
 2. **Architecture** — `_bmad-output/planning-artifacts/architecture.md`
 3. **UX Design Specification** — `_bmad-output/planning-artifacts/ux-design-specification.md`
 
 ### Reference Documents (Implementation Detail)
+
 4. **API Contracts** — `_bmad-output/planning-artifacts/api-contracts.md`
 5. **State Machine Reference** — `_bmad-output/planning-artifacts/state-machine-reference.md`
 6. **Event Catalog** — `_bmad-output/planning-artifacts/event-catalog.md`
@@ -17,6 +19,7 @@ Whenever requirements, features, or architectural decisions are **added, modifie
 8. **Business Rules Compendium** — `_bmad-output/planning-artifacts/business-rules-compendium.md`
 
 ### Cross-Cutting & Tracking
+
 9. **Project Context** — `_bmad-output/planning-artifacts/project-context.md` (architectural decisions, cross-cutting patterns)
 10. **Traceability Workbook** — `_bmad-output/planning-artifacts/Nexa-ERP-Traceability-Workbook-v1.xlsx` (regenerate via `scripts/generate-traceability-workbook.py` after updating the script data)
 
@@ -57,6 +60,7 @@ When the **Story Manager (SM)**, **Developer (Dev)**, or **Test Architect (TEA)*
 8. **Business Rules Compendium** — `_bmad-output/planning-artifacts/business-rules-compendium.md`
 
 No story should be created by reading only 1-2 documents. Cross-referencing all 8 ensures:
+
 - UX screens match the data model fields and API endpoints
 - Status transitions in the UI match the state machine definitions
 - Events fired match the event catalog
