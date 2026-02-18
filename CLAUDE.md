@@ -67,6 +67,16 @@ No story should be created by reading only 1-2 documents. Cross-referencing all 
 - Business rules are enforced in both frontend validation and backend logic
 - Acceptance criteria are testable against the Architecture's NFRs
 
+## Git Push Rule (MANDATORY)
+
+Before any `git push`, switch to the correct GitHub account:
+
+```bash
+gh auth switch --user mfshussein
+```
+
+This ensures pushes authenticate against the correct GitHub account. Always run this before pushing.
+
 ## Key Directories
 
 - Spec-pack: `docs/spec-pack/`
