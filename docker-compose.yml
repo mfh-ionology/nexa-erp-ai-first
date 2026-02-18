@@ -1,0 +1,91 @@
+name: nexa-erp
+
+services:
+  erp-db:
+    image: postgres:17
+    container_name: nexa-erp-db
+    restart: unless-stopped
+    ports:
+      - '${ERP_DB_PORT:-5432}:5432'
+    environment:
+      POSTGRES_DB: ${ERP_DB_NAME:-nexa_erp_dev}
+      POSTGRES_USER: ${ERP_DB_USER:-nexa}
+      POSTGRES_PASSWORD: ${ERP_DB_PASSWORD:-nexa_dev_pass}
+    command: postgres -c max_connections=200
+    volumes:
+      - erp-pgdata:/var/lib/postgresql/data
+    shm_size: 256m
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${ERP_DB_USER:-nexa} -d ${ERP_DB_NAME:-nexa_erp_dev}']
+      start_period: 5s
+      interval: 2s
+      retries: 10
+      timeout: 3s
+
+  # Platform DB: single central database with low connection count — default
+  # max_connections (100) is sufficient; no PgBouncer pooling needed.
+  platform-db:
+    image: postgres:17
+    container_name: nexa-platform-db
+    restart: unless-stopped
+    ports:
+      - '${PLATFORM_DB_PORT:-5433}:5432'
+    environment:
+      POSTGRES_DB: ${PLATFORM_DB_NAME:-nexa_platform_dev}
+      POSTGRES_USER: ${PLATFORM_DB_USER:-nexa_platform}
+      POSTGRES_PASSWORD: ${PLATFORM_DB_PASSWORD:-nexa_platform_dev_pass}
+    volumes:
+      - platform-pgdata:/var/lib/postgresql/data
+    shm_size: 256m
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${PLATFORM_DB_USER:-nexa_platform} -d ${PLATFORM_DB_NAME:-nexa_platform_dev}',
+        ]
+      start_period: 5s
+      interval: 2s
+      retries: 10
+      timeout: 3s
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: nexa-pgbouncer
+    restart: unless-stopped
+    ports:
+      - '${PGBOUNCER_PORT:-6432}:5432'
+    environment:
+      DATABASE_URL: postgres://${ERP_DB_USER:-nexa}:${ERP_DB_PASSWORD:-nexa_dev_pass}@erp-db:5432/${ERP_DB_NAME:-nexa_erp_dev}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: '1000'
+      DEFAULT_POOL_SIZE: '20'
+      MIN_POOL_SIZE: '5'
+    depends_on:
+      erp-db:
+        condition: service_healthy
+    # TCP-level check per spec — pg_isready without -U/-d acts as a TCP probe
+    # (edoburu/pgbouncer listens on internal port 5432)
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -p 5432']
+      start_period: 5s
+      interval: 2s
+      retries: 10
+      timeout: 3s
+
+  redis:
+    image: redis:7-alpine
+    container_name: nexa-redis
+    restart: unless-stopped
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    command: redis-server --appendonly no
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      start_period: 5s
+      interval: 2s
+      retries: 10
+      timeout: 3s
+
+volumes:
+  erp-pgdata:
+  platform-pgdata:
