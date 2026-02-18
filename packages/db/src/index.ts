@@ -41,6 +41,7 @@ export { getVisibleCompanyIds } from './utils/sharing';
 export { resolveUserRole } from './utils/rbac';
 
 // Services
+export type { TransactionClient } from './services/number-series.service';
 export {
   nextNumber,
   NumberSeriesError,

@@ -4,7 +4,7 @@ import { Prisma } from '../../generated/prisma/client';
 // ---------------------------------------------------------------------------
 // TransactionClient type — the Prisma interactive-transaction client type
 // ---------------------------------------------------------------------------
-type TransactionClient = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
+export type TransactionClient = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
 
 // ---------------------------------------------------------------------------
 // Error classes
@@ -43,18 +43,21 @@ export class NumberSeriesInactiveError extends NumberSeriesError {
  * callers receive unique, gap-free numbers.
  *
  * **CRITICAL**: This function does NOT create its own transaction. The caller
- * MUST pass either a PrismaClient or a transaction client (`tx`) so that
- * number allocation is part of the same transaction that creates the document.
- * If the document creation fails and the transaction rolls back, the number
- * is never consumed — guaranteeing gap-free numbering.
+ * MUST pass an interactive transaction client (`tx`) so that number allocation
+ * is part of the same transaction that creates the document. If the document
+ * creation fails and the transaction rolls back, the number is never consumed
+ * — guaranteeing gap-free numbering.
  *
- * @param tx - PrismaClient or interactive transaction client
+ * Accepting only TransactionClient (not bare PrismaClient) enforces at the
+ * type level that callers wrap number allocation in a transaction.
+ *
+ * @param tx - Prisma interactive transaction client (from prisma.$transaction)
  * @param companyId - The company UUID
  * @param entityType - e.g. 'INVOICE', 'PURCHASE_ORDER', 'JOURNAL'
  * @returns Formatted number string, e.g. "INV-00001"
  */
 export async function nextNumber(
-  tx: PrismaClient | TransactionClient,
+  tx: TransactionClient,
   companyId: string,
   entityType: string,
 ): Promise<string> {

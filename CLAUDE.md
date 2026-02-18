@@ -77,6 +77,28 @@ gh auth switch --user mfshussein
 
 This ensures pushes authenticate against the correct GitHub account. Always run this before pushing.
 
+## Prisma Migration Rules (MANDATORY)
+
+- **NEVER use `prisma db push`** — always use `prisma migrate dev`. Using `db push` corrupts migration state and causes subsequent `migrate dev` to fail with drift detection errors.
+- **Set `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=yes`** in `.env` for dev environments. Prisma 7 blocks destructive operations without this.
+- **Partial unique indexes** (PostgreSQL `WHERE` clauses) cannot be expressed in Prisma schema. Add them as raw SQL at the end of the migration file BEFORE applying. Use `prisma migrate dev --create-only` to generate the migration, add the raw SQL, then apply.
+
+## Protected Files (MANDATORY)
+
+When working on a story, do NOT delete or overwrite files created by previous stories unless the current story explicitly requires modifying them. Key protected files from E0/E1:
+
+- `packages/db/src/client.ts` — PrismaClient singleton
+- `packages/db/src/index.ts` — barrel exports for @nexa/db
+- `packages/db/src/utils/sharing.ts` — getVisibleCompanyIds
+- `packages/db/src/utils/rbac.ts` — resolveUserRole
+- `packages/db/src/services/number-series.service.ts` — nextNumber
+- `packages/db/package.json` — do not strip dependencies
+- `packages/config/eslint/base.js` — shared ESLint config
+- `apps/platform-api/src/client.ts` — Platform PrismaClient
+- `apps/platform-api/src/index.ts` — barrel exports for platform-api
+
+If a story retry subprocess needs to regenerate code, it must preserve existing exports and utilities from prior stories.
+
 ## Key Directories
 
 - Spec-pack: `docs/spec-pack/`
