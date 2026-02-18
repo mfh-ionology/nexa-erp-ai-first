@@ -1,4 +1,6 @@
 // @nexa/api — ERP API server (Fastify)
 // Populated in subsequent epics
 export {};
-// CI verification: test PR trigger
+
+// Deliberate TypeScript error to verify CI failure reporting
+const testNumber: number = 'this is not a number';
