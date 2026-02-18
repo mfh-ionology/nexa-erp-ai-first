@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  pull_request:
+    branches: ['*']
+  push:
+    branches: [main]
+
+# Cancel in-progress runs for the same branch/PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        # version auto-read from packageManager field in root package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: turbo lint --output-logs=new-only --log-prefix=task
+
+      - name: Typecheck
+        run: turbo typecheck --output-logs=new-only --log-prefix=task
+
+      - name: Test
+        run: turbo test --output-logs=new-only --log-prefix=task
+
+      - name: Build
+        run: turbo build --output-logs=new-only --log-prefix=task
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            **/coverage/
+            **/coverage-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          echo "## Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Check if any coverage summary files exist
+          COVERAGE_FOUND=false
+          for summary in apps/*/coverage/coverage-summary.json packages/*/coverage/coverage-summary.json; do
+            if [ -f "$summary" ]; then
+              COVERAGE_FOUND=true
+              PACKAGE_DIR=$(dirname $(dirname "$summary"))
+              PACKAGE_NAME=$(basename "$PACKAGE_DIR")
+              TOTAL=$(cat "$summary" | node -e "
+                const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+                const t = data.total;
+                console.log([t.lines.pct, t.statements.pct, t.functions.pct, t.branches.pct].join(','));
+              " 2>/dev/null || echo "")
+              if [ -n "$TOTAL" ]; then
+                IFS=',' read -r LINES STMTS FUNCS BRANCHES <<< "$TOTAL"
+                echo "### $PACKAGE_NAME" >> $GITHUB_STEP_SUMMARY
+                echo "| Metric | Coverage |" >> $GITHUB_STEP_SUMMARY
+                echo "|--------|----------|" >> $GITHUB_STEP_SUMMARY
+                echo "| Lines | ${LINES}% |" >> $GITHUB_STEP_SUMMARY
+                echo "| Statements | ${STMTS}% |" >> $GITHUB_STEP_SUMMARY
+                echo "| Functions | ${FUNCS}% |" >> $GITHUB_STEP_SUMMARY
+                echo "| Branches | ${BRANCHES}% |" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+              fi
+            fi
+          done
+
+          if [ "$COVERAGE_FOUND" = false ]; then
+            echo "_No coverage reports generated. Coverage will be available once test runners are configured (E0.S4+)._" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Report failure summary
+        if: failure()
+        run: |
+          echo "## CI Failure Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "One or more CI steps failed. Check the individual step logs above for details." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Step | Description |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint | ESLint across all workspaces |" >> $GITHUB_STEP_SUMMARY
+          echo "| Typecheck | TypeScript strict compilation |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test | Unit tests across all workspaces |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | Full build in topological order |" >> $GITHUB_STEP_SUMMARY

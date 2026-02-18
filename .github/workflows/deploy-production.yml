@@ -1,0 +1,89 @@
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm production deployment'
+        required: true
+        type: string
+
+# Only one production deploy at a time
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  DEPLOY_ENVIRONMENT: production
+
+jobs:
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+    steps:
+      - name: Validate confirmation
+        if: github.event.inputs.confirm != 'deploy'
+        run: |
+          echo "::error::Deployment not confirmed. You must type 'deploy' to confirm."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        # version auto-read from packageManager field in root package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: turbo lint
+
+      - name: Typecheck
+        run: turbo typecheck
+
+      - name: Test
+        run: turbo test
+
+      - name: Build
+        run: turbo build
+
+  deploy:
+    name: Deploy to Production
+    needs: ci
+    runs-on: ubuntu-latest
+    # TODO: Configure GitHub Environment "production" with required reviewers
+    # for manual approval gate. This requires GitHub Pro/Team/Enterprise plan.
+    # To set up: Repository Settings > Environments > New environment "production"
+    # > Add required reviewers > Add protection rules.
+    # When configured, uncomment the line below:
+    # environment: production
+    environment: production
+    env:
+      DEPLOY_ENVIRONMENT: production
+    steps:
+      - name: Deploy stub
+        run: |
+          echo "Deploy to production — implementation deferred to infrastructure epic"
+          echo ""
+          echo "Environment: $DEPLOY_ENVIRONMENT"
+          echo "Commit: ${{ github.sha }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo ""
+          echo "## Production Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** $DEPLOY_ENVIRONMENT" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** Stub — actual deployment deferred to infrastructure epic" >> $GITHUB_STEP_SUMMARY
