@@ -11,7 +11,28 @@ export const baseNamingConvention = [
   { selector: 'parameter', format: ['camelCase'], leadingUnderscore: 'allow' },
   { selector: 'typeLike', format: ['PascalCase'] },
   { selector: 'enumMember', format: ['UPPER_CASE'] },
-  { selector: 'property', format: ['camelCase', 'UPPER_CASE'], leadingUnderscore: 'allow' },
+  {
+    selector: 'property',
+    format: ['camelCase', 'UPPER_CASE'],
+    leadingUnderscore: 'allow',
+  },
+  // Allow numeric keys (Fastify route schemas: { 200: ..., 201: ... })
+  {
+    selector: 'objectLiteralProperty',
+    format: null,
+    filter: { regex: '^\\d+$', match: true },
+  },
+  // Allow kebab-case HTTP headers (x-company-id, x-request-id)
+  {
+    selector: 'objectLiteralProperty',
+    format: null,
+    filter: { regex: '^x-', match: true },
+  },
+  // Allow PascalCase type properties (Fastify generics: Body, Params, Querystring, Reply)
+  {
+    selector: 'typeProperty',
+    format: ['camelCase', 'UPPER_CASE', 'PascalCase'],
+  },
   { selector: 'classMethod', format: ['camelCase'] },
   { selector: 'import', format: null },
 ];
@@ -114,7 +135,7 @@ export function createBaseConfig({ tsconfigRootDir }) {
 
     // Test files — relax strict rules that add friction without value in tests
     {
-      files: ['**/__tests__/**/*.ts', '**/*.test.ts', '**/*.spec.ts'],
+      files: ['**/__tests__/**/*.ts', '**/*.test.ts', '**/*.spec.ts', '**/test-utils/**/*.ts'],
       rules: {
         'no-console': 'off',
         '@typescript-eslint/no-non-null-assertion': 'off',
@@ -122,6 +143,16 @@ export function createBaseConfig({ tsconfigRootDir }) {
         '@typescript-eslint/restrict-plus-operands': 'off',
         '@typescript-eslint/require-await': 'off',
         '@typescript-eslint/naming-convention': 'off',
+        // Fastify's inject().json() returns `any` — safe in test assertions
+        '@typescript-eslint/no-unsafe-assignment': 'off',
+        '@typescript-eslint/no-unsafe-member-access': 'off',
+        '@typescript-eslint/no-unsafe-return': 'off',
+        '@typescript-eslint/no-unsafe-argument': 'off',
+        '@typescript-eslint/no-unsafe-call': 'off',
+        // Type narrowing in tests often uses optional chains for safety
+        '@typescript-eslint/no-unnecessary-condition': 'off',
+        // Fastify cookie objects in test assertions
+        '@typescript-eslint/no-base-to-string': 'off',
       },
     },
 
