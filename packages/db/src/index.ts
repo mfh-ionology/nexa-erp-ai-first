@@ -46,6 +46,14 @@ export {
 // Utilities
 export { getVisibleCompanyIds } from './utils/sharing';
 export { resolveUserRole } from './utils/rbac';
+export { loadDefaultData } from './utils/default-data-loader';
+export type {
+  CompanyDefaults,
+  ResourceDefault,
+  AccessGroupDefault,
+  PermissionDefault,
+  FieldOverrideDefault,
+} from './utils/default-data-loader';
 
 // Services
 export type { TransactionClient } from './services/number-series.service';
