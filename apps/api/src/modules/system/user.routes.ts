@@ -7,16 +7,19 @@ import {
   updateUserRequestSchema,
   updateUserRoleRequestSchema,
   updateUserModulesRequestSchema,
+  replaceUserAccessGroupsRequestSchema,
   userParamsSchema,
   userListQuerySchema,
   userResponseSchema,
   userListResponseSchema,
+  userAccessGroupResponseSchema,
 } from './user.schema.js';
 import type {
   CreateUserRequest,
   UpdateUserRequest,
   UpdateUserRoleRequest,
   UpdateUserModulesRequest,
+  ReplaceUserAccessGroupsRequest,
   UserParams,
   UserListQuery,
 } from './user.schema.js';
@@ -29,7 +32,7 @@ import {
   updateUserModules,
   deactivateUser,
 } from './user.service.js';
-import { createRbacGuard } from '../../core/rbac/index.js';
+import { createRbacGuard, permissionCache } from '../../core/rbac/index.js';
 import { sendSuccess } from '../../core/utils/response.js';
 import { successEnvelope } from '../../core/schemas/envelope.js';
 import { extractRequestContext } from '../../core/types/request-context.js';
@@ -219,6 +222,71 @@ async function userRoutes(fastify: FastifyInstance): Promise<void> {
       const ctx = extractRequestContext(request);
       const user = await deactivateUser(prisma, request.params.id, request.companyId, ctx);
       return sendSuccess(reply, user);
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // GET /users/:id/access-groups — list user's assigned access groups
+  // -------------------------------------------------------------------------
+  fastify.get<{ Params: UserParams }>(
+    '/users/:id/access-groups',
+    {
+      schema: {
+        params: userParamsSchema,
+        response: { 200: successEnvelope(userAccessGroupResponseSchema.array()) },
+      },
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
+    },
+    async (request, reply) => {
+      const assignments = await prisma.userAccessGroup.findMany({
+        where: { userId: request.params.id, companyId: request.companyId },
+        include: { accessGroup: { select: { id: true, code: true, name: true } } },
+        orderBy: { createdAt: 'asc' },
+      });
+      return sendSuccess(reply, assignments);
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // PUT /users/:id/access-groups — replace-all access group assignments
+  // -------------------------------------------------------------------------
+  fastify.put<{ Params: UserParams; Body: ReplaceUserAccessGroupsRequest }>(
+    '/users/:id/access-groups',
+    {
+      schema: {
+        params: userParamsSchema,
+        body: replaceUserAccessGroupsRequestSchema,
+      },
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
+    },
+    async (request, reply) => {
+      const { id: targetUserId } = request.params;
+      const { accessGroupIds } = request.body;
+
+      // Delete existing and create new in a transaction
+      await prisma.$transaction([
+        prisma.userAccessGroup.deleteMany({
+          where: { userId: targetUserId, companyId: request.companyId },
+        }),
+        prisma.userAccessGroup.createMany({
+          data: accessGroupIds.map((accessGroupId) => ({
+            userId: targetUserId,
+            accessGroupId,
+            companyId: request.companyId,
+            assignedBy: request.userId,
+          })),
+        }),
+      ]);
+
+      // Invalidate permission cache for the target user
+      permissionCache.invalidate(targetUserId, request.companyId);
+
+      const assignments = await prisma.userAccessGroup.findMany({
+        where: { userId: targetUserId, companyId: request.companyId },
+        include: { accessGroup: { select: { id: true, code: true, name: true } } },
+        orderBy: { createdAt: 'asc' },
+      });
+      return sendSuccess(reply, assignments);
     },
   );
 }

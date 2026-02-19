@@ -89,6 +89,27 @@ export const userResponseSchema = z.object({
 export const userListResponseSchema = z.array(userResponseSchema);
 
 // ---------------------------------------------------------------------------
+// Access Group Assignment Schemas
+// ---------------------------------------------------------------------------
+
+export const replaceUserAccessGroupsRequestSchema = z.object({
+  accessGroupIds: z.array(z.uuid()).min(1, 'At least one access group is required'),
+});
+
+export const userAccessGroupResponseSchema = z.object({
+  id: z.string(),
+  accessGroupId: z.string(),
+  companyId: z.string(),
+  assignedBy: z.string(),
+  createdAt: z.date(),
+  accessGroup: z.object({
+    id: z.string(),
+    code: z.string(),
+    name: z.string(),
+  }),
+});
+
+// ---------------------------------------------------------------------------
 // Inferred TypeScript Types
 // ---------------------------------------------------------------------------
 
@@ -96,6 +117,7 @@ export type CreateUserRequest = z.infer<typeof createUserRequestSchema>;
 export type UpdateUserRequest = z.infer<typeof updateUserRequestSchema>;
 export type UpdateUserRoleRequest = z.infer<typeof updateUserRoleRequestSchema>;
 export type UpdateUserModulesRequest = z.infer<typeof updateUserModulesRequestSchema>;
+export type ReplaceUserAccessGroupsRequest = z.infer<typeof replaceUserAccessGroupsRequestSchema>;
 export type UserParams = z.infer<typeof userParamsSchema>;
 export type UserListQuery = z.infer<typeof userListQuerySchema>;
 export type UserResponse = z.infer<typeof userResponseSchema>;
