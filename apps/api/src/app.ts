@@ -108,6 +108,14 @@ export async function buildApp(opts: { logger?: boolean | Record<string, unknown
     routePrefix: '/documentation',
   });
 
+  // -- Custom 404 handler (ensures 404s follow the standard error envelope)
+  fastify.setNotFoundHandler((_request, reply) => {
+    void reply.status(404).send({
+      success: false,
+      error: { code: 'NOT_FOUND', message: 'Route not found' },
+    });
+  });
+
   // -- Routes
   await fastify.register(healthRoutesPlugin);
   await fastify.register(authRoutesPlugin, { prefix: '/auth' });

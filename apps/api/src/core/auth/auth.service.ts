@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import argon2 from 'argon2';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
-import type { PrismaClient } from '@nexa/db';
+import type { PrismaClient, TransactionClient } from '@nexa/db';
 import { resolveUserRole } from '@nexa/db';
 
 // ---------------------------------------------------------------------------
@@ -133,7 +133,10 @@ export async function revokeRefreshToken(prisma: PrismaClient, tokenHash: string
   });
 }
 
-export async function revokeAllUserTokens(prisma: PrismaClient, userId: string): Promise<void> {
+export async function revokeAllUserTokens(
+  prisma: PrismaClient | TransactionClient,
+  userId: string,
+): Promise<void> {
   await prisma.refreshToken.updateMany({
     where: { userId, revokedAt: null },
     data: { revokedAt: new Date() },

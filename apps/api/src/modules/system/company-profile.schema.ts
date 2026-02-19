@@ -45,7 +45,9 @@ export const createCompanyProfileRequestSchema = z.object({
   logoUrl: z.url().optional(),
 });
 
-export const updateCompanyProfileRequestSchema = createCompanyProfileRequestSchema.partial();
+export const updateCompanyProfileRequestSchema = createCompanyProfileRequestSchema
+  .omit({ baseCurrencyCode: true })
+  .partial();
 
 // ---------------------------------------------------------------------------
 // Response Schemas

@@ -36,7 +36,7 @@ const PUBLIC_ROUTE_PREFIXES = ['/documentation'];
 
 function isPublicRoute(url: string): boolean {
   // Strip query string for matching
-  const path = url.split('?')[0]!;
+  const path = url.split('?')[0] ?? url;
   if (PUBLIC_ROUTES.has(path)) return true;
   return PUBLIC_ROUTE_PREFIXES.some((prefix) => path === prefix || path.startsWith(prefix + '/'));
 }
@@ -55,12 +55,12 @@ const jwtVerifyPluginFn = async (fastify: FastifyInstance): Promise<void> => {
   // Fastify 5 disallows reference-type defaults (shared across requests).
   // Use getter/setter so each request gets its own empty array.
   fastify.decorateRequest('enabledModules', {
-    // eslint-disable-next-line @typescript-eslint/naming-convention -- Fastify internal storage property
     getter() {
+      // eslint-disable-next-line @typescript-eslint/naming-convention -- Fastify internal storage property
       return (this as unknown as { _enabledModules?: string[] })._enabledModules ?? [];
     },
-    // eslint-disable-next-line @typescript-eslint/naming-convention -- Fastify internal storage property
     setter(value: string[]) {
+      // eslint-disable-next-line @typescript-eslint/naming-convention -- Fastify internal storage property
       (this as unknown as { _enabledModules?: string[] })._enabledModules = value;
     },
   });
@@ -86,7 +86,21 @@ const jwtVerifyPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     try {
       const payload = await verifyAccessToken(token);
 
-      request.userId = payload.sub!;
+      // Validate required JWT claims are present and correctly typed
+      if (typeof payload.sub !== 'string' || payload.sub.length === 0) {
+        throw new Error('Missing or invalid sub claim');
+      }
+      if (typeof payload.tenantId !== 'string' || payload.tenantId.length === 0) {
+        throw new Error('Missing or invalid tenantId claim');
+      }
+      if (typeof payload.role !== 'string' || payload.role.length === 0) {
+        throw new Error('Missing or invalid role claim');
+      }
+      if (!Array.isArray(payload.enabledModules)) {
+        throw new Error('Missing or invalid enabledModules claim');
+      }
+
+      request.userId = payload.sub;
       request.tenantId = payload.tenantId;
       request.userRole = payload.role;
       request.enabledModules = payload.enabledModules;

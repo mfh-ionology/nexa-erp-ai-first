@@ -3,7 +3,7 @@ import { prisma, resolveUserRole, UserRole } from '@nexa/db';
 
 import { companySwitchParamsSchema, companySwitchResponseSchema } from './company.schema.js';
 import type { CompanySwitchParams, CompanySwitchResponse } from './company.schema.js';
-import { AuthError, NotFoundError } from '../../core/errors/index.js';
+import { AuthError } from '../../core/errors/index.js';
 import { sendSuccess } from '../../core/utils/response.js';
 import { successEnvelope } from '../../core/schemas/envelope.js';
 import { createRbacGuard } from '../../core/rbac/index.js';
@@ -29,18 +29,16 @@ async function companyRoutes(fastify: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const { id: targetCompanyId } = request.params;
 
-      // Verify target company exists and is active (check existence BEFORE access)
+      // Verify target company exists and is active.
+      // Security: use uniform 403 for both "not found" and "inactive" to prevent
+      // company-ID enumeration via 404-vs-403 distinction.
       const company = await prisma.companyProfile.findUnique({
         where: { id: targetCompanyId },
         select: { name: true, isActive: true },
       });
 
-      if (!company) {
-        throw new NotFoundError('COMPANY_NOT_FOUND', 'Company does not exist');
-      }
-
-      if (!company.isActive) {
-        throw new NotFoundError('COMPANY_NOT_FOUND', 'Company is not active');
+      if (!company || !company.isActive) {
+        throw new AuthError('COMPANY_ACCESS_DENIED', 'You do not have access to this company', 403);
       }
 
       // 7.4 — Verify user has access to target company

@@ -1,7 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { SignJWT } from 'jose';
 
 // ---------------------------------------------------------------------------
 // Mock @nexa/db (buildApp now transitively imports it via auth routes)
@@ -45,7 +44,7 @@ vi.mock('argon2', () => ({
   },
 }));
 
-const TEST_JWT_SECRET = 'test-secret-that-is-at-least-32-chars-long!!';
+import { makeTestJwt, TEST_JWT_SECRET } from './test-utils/jwt.js';
 
 let testJwt: string;
 
@@ -53,20 +52,6 @@ beforeAll(async () => {
   vi.stubEnv('JWT_SECRET', TEST_JWT_SECRET);
   testJwt = await makeTestJwt();
 });
-
-// Generate a valid test JWT for authenticated test requests
-async function makeTestJwt(): Promise<string> {
-  return new SignJWT({
-    sub: '00000000-0000-4000-a000-000000000099',
-    tenantId: '00000000-0000-4000-a000-000000000001',
-    role: 'ADMIN',
-    enabledModules: ['FINANCE'],
-  })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setExpirationTime('15m')
-    .setIssuedAt()
-    .sign(new TextEncoder().encode(TEST_JWT_SECRET));
-}
 
 /** Returns auth headers with a valid test JWT */
 function authHeaders(): { authorization: string } {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { UserRole } from '@nexa/db';
 
 // ---------------------------------------------------------------------------
 // Request Schemas
@@ -15,7 +16,7 @@ export const companySwitchParamsSchema = z.object({
 export const companySwitchResponseSchema = z.object({
   companyId: z.uuid(),
   companyName: z.string(),
-  role: z.enum(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']),
+  role: z.enum(UserRole),
 });
 
 // ---------------------------------------------------------------------------

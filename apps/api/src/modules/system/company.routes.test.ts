@@ -223,10 +223,11 @@ describe('POST /system/companies/:id/switch', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 8.4 — Switch to non-existent company → 404 COMPANY_NOT_FOUND
+  // 8.4 — Switch to non-existent/inactive company → 403 COMPANY_ACCESS_DENIED
+  // Security: uniform 403 prevents company-ID enumeration via 404-vs-403 distinction
   // -------------------------------------------------------------------------
   describe('switch to non-existent company', () => {
-    it('returns 404 COMPANY_NOT_FOUND when company does not exist', async () => {
+    it('returns 403 COMPANY_ACCESS_DENIED when company does not exist', async () => {
       // NONEXISTENT_COMPANY_ID not in companies map → returns null
       setupMocks();
 
@@ -238,13 +239,13 @@ describe('POST /system/companies/:id/switch', () => {
         headers: authHeaders(),
       });
 
-      expect(res.statusCode).toBe(404);
+      expect(res.statusCode).toBe(403);
       const body = res.json();
       expect(body.success).toBe(false);
-      expect(body.error.code).toBe('COMPANY_NOT_FOUND');
+      expect(body.error.code).toBe('COMPANY_ACCESS_DENIED');
     });
 
-    it('returns 404 COMPANY_NOT_FOUND when company is inactive', async () => {
+    it('returns 403 COMPANY_ACCESS_DENIED when company is inactive', async () => {
       setupMocks({
         companies: { [TARGET_COMPANY_ID]: { name: 'Inactive Corp', isActive: false } },
       });
@@ -257,10 +258,10 @@ describe('POST /system/companies/:id/switch', () => {
         headers: authHeaders(),
       });
 
-      expect(res.statusCode).toBe(404);
+      expect(res.statusCode).toBe(403);
       const body = res.json();
       expect(body.success).toBe(false);
-      expect(body.error.code).toBe('COMPANY_NOT_FOUND');
+      expect(body.error.code).toBe('COMPANY_ACCESS_DENIED');
     });
   });
 

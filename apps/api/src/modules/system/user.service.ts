@@ -4,7 +4,7 @@ import type { RequestContext } from '../../core/types/request-context.js';
 import type { CreateUserRequest, UserListQuery } from './user.schema.js';
 import { hashPassword } from '../../core/auth/auth.service.js';
 import { revokeAllUserTokens } from '../../core/auth/auth.service.js';
-import { AppError, NotFoundError } from '../../core/errors/index.js';
+import { AppError, DomainError, NotFoundError } from '../../core/errors/index.js';
 import type { PaginationMeta } from '../../core/utils/response.js';
 
 // ---------------------------------------------------------------------------
@@ -286,6 +286,11 @@ export async function deactivateUser(
   companyId: string,
   ctx: RequestContext,
 ) {
+  // Security: prevent self-deactivation to avoid orphaning the company
+  if (id === ctx.userId) {
+    throw new DomainError('SELF_DEACTIVATION', 'Cannot deactivate your own account');
+  }
+
   const existing = await prisma.user.findUnique({
     where: { id },
     select: { id: true, companyId: true },
@@ -312,9 +317,7 @@ export async function deactivateUser(
           },
         },
       }),
-      // revokeAllUserTokens expects PrismaClient but tx is TransactionClient.
-      // Safe: it only uses refreshToken.updateMany which exists on both types.
-      revokeAllUserTokens(tx as unknown as PrismaClient, id),
+      revokeAllUserTokens(tx, id),
     ]);
     return result;
   });

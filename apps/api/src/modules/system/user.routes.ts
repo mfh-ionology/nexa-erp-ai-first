@@ -33,6 +33,7 @@ import { createRbacGuard } from '../../core/rbac/index.js';
 import { sendSuccess } from '../../core/utils/response.js';
 import { successEnvelope } from '../../core/schemas/envelope.js';
 import { extractRequestContext } from '../../core/types/request-context.js';
+import { AuthError } from '../../core/errors/index.js';
 
 // ---------------------------------------------------------------------------
 // Response schemas for pagination
@@ -74,6 +75,10 @@ async function userRoutes(fastify: FastifyInstance): Promise<void> {
       preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
+      // Security: non-SUPER_ADMIN users cannot create SUPER_ADMIN users
+      if (request.body.role === UserRole.SUPER_ADMIN && request.userRole !== UserRole.SUPER_ADMIN) {
+        throw new AuthError('FORBIDDEN', 'Insufficient privileges to assign SUPER_ADMIN role', 403);
+      }
       const ctx = extractRequestContext(request);
       const user = await createUser(prisma, { ...request.body, companyId: request.companyId }, ctx);
       return sendSuccess(reply, user, undefined, 201);
@@ -156,6 +161,10 @@ async function userRoutes(fastify: FastifyInstance): Promise<void> {
       preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
+      // Security: non-SUPER_ADMIN users cannot assign SUPER_ADMIN role
+      if (request.body.role === UserRole.SUPER_ADMIN && request.userRole !== UserRole.SUPER_ADMIN) {
+        throw new AuthError('FORBIDDEN', 'Insufficient privileges to assign SUPER_ADMIN role', 403);
+      }
       const ctx = extractRequestContext(request);
       const result = await updateUserRole(
         prisma,
