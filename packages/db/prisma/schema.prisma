@@ -86,6 +86,8 @@ model ExchangeRate {
   // Audit
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+  createdBy String   @map("created_by")
+  updatedBy String   @map("updated_by")
 
   // Relations
   company  CompanyProfile @relation(fields: [companyId], references: [id])
@@ -311,6 +313,8 @@ model CompanyProfile {
   userCompanyRoles     UserCompanyRole[]
   users                User[]
   numberSeries         NumberSeries[]
+  accessGroups         AccessGroup[]
+  userAccessGroups     UserAccessGroup[]
 
   @@index([baseCurrencyCode], map: "idx_company_profiles_base_currency_code")
   @@index([countryCode], map: "idx_company_profiles_country_code")
@@ -409,12 +413,134 @@ enum UserRole {
   @@map("user_role")
 }
 
+// Used by SavedView model (planned for E3+ — UX §2.11).
+// Defined here to reserve the PostgreSQL enum type.
 enum ViewScope {
   PERSONAL
   ROLE
   GLOBAL
 
   @@map("view_scope")
+}
+
+// ---------------------------------------------------------------------------
+// Granular RBAC — E2b Access Groups
+// ---------------------------------------------------------------------------
+
+enum ResourceType {
+  PAGE
+  REPORT
+  SETTING
+  MAINTENANCE
+
+  @@map("resource_type")
+}
+
+enum FieldVisibility {
+  VISIBLE
+  READ_ONLY
+  HIDDEN
+
+  @@map("field_visibility")
+}
+
+// Global registry of all controllable pages, reports, settings, and maintenances.
+// Resources are NOT company-scoped — they define the system-wide resource catalog.
+// Company-specific permissions are handled by AccessGroupPermission.
+model Resource {
+  id          String       @id @default(uuid()) @map("id")
+  code        String       @unique @map("code")
+  name        String       @map("name")
+  module      String       @map("module")
+  type        ResourceType @map("type")
+  parentCode  String?      @map("parent_code")
+  sortOrder   Int          @default(0) @map("sort_order")
+  icon        String?      @map("icon")
+  description String?      @map("description")
+  isActive    Boolean      @default(true) @map("is_active")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  parent         Resource?                  @relation("ResourceHierarchy", fields: [parentCode], references: [code])
+  children       Resource[]                 @relation("ResourceHierarchy")
+  permissions    AccessGroupPermission[]
+  fieldOverrides AccessGroupFieldOverride[]
+
+  @@index([module, sortOrder], map: "idx_resources_module_sort")
+  @@map("resources")
+}
+
+model AccessGroup {
+  id          String   @id @default(uuid()) @map("id")
+  companyId   String   @map("company_id")
+  code        String   @map("code")
+  name        String   @map("name")
+  description String?  @map("description")
+  isSystem    Boolean  @default(false) @map("is_system")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdBy   String   @map("created_by")
+  updatedBy   String   @map("updated_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  company          CompanyProfile            @relation(fields: [companyId], references: [id])
+  permissions      AccessGroupPermission[]
+  fieldOverrides   AccessGroupFieldOverride[]
+  userAccessGroups UserAccessGroup[]
+
+  @@unique([companyId, code], map: "uq_access_groups_company_code")
+  @@map("access_groups")
+}
+
+model AccessGroupPermission {
+  id            String   @id @default(uuid()) @map("id")
+  accessGroupId String   @map("access_group_id")
+  resourceCode  String   @map("resource_code")
+  canAccess     Boolean  @default(false) @map("can_access")
+  canNew        Boolean  @default(false) @map("can_new")
+  canView       Boolean  @default(false) @map("can_view")
+  canEdit       Boolean  @default(false) @map("can_edit")
+  canDelete     Boolean  @default(false) @map("can_delete")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  accessGroup AccessGroup @relation(fields: [accessGroupId], references: [id], onDelete: Cascade)
+  resource    Resource    @relation(fields: [resourceCode], references: [code])
+
+  @@unique([accessGroupId, resourceCode], map: "uq_access_group_permissions")
+  @@map("access_group_permissions")
+}
+
+model AccessGroupFieldOverride {
+  id            String          @id @default(uuid()) @map("id")
+  accessGroupId String          @map("access_group_id")
+  resourceCode  String          @map("resource_code")
+  fieldPath     String          @map("field_path")
+  visibility    FieldVisibility @map("visibility")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  accessGroup AccessGroup @relation(fields: [accessGroupId], references: [id], onDelete: Cascade)
+  resource    Resource    @relation(fields: [resourceCode], references: [code])
+
+  @@unique([accessGroupId, resourceCode, fieldPath], map: "uq_access_group_field_overrides")
+  @@map("access_group_field_overrides")
+}
+
+model UserAccessGroup {
+  id            String   @id @default(uuid()) @map("id")
+  userId        String   @map("user_id")
+  accessGroupId String   @map("access_group_id")
+  companyId     String   @map("company_id")
+  assignedBy    String   @map("assigned_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessGroup AccessGroup    @relation(fields: [accessGroupId], references: [id], onDelete: Cascade)
+  company     CompanyProfile @relation(fields: [companyId], references: [id])
+
+  @@unique([userId, accessGroupId, companyId], map: "uq_user_access_groups")
+  @@map("user_access_groups")
 }
 
 model UserCompanyRole {
@@ -465,6 +591,7 @@ model User {
   companyRoles       UserCompanyRole[]
   refreshTokens      RefreshToken[]
   managedDepartments Department[]      @relation("DepartmentManager")
+  userAccessGroups   UserAccessGroup[]
 
   @@unique([email], map: "uq_users_email")
   @@index([companyId], map: "idx_users_company_id")

@@ -20,6 +20,11 @@ export type {
   User,
   RefreshToken,
   NumberSeries,
+  Resource,
+  AccessGroup,
+  AccessGroupPermission,
+  AccessGroupFieldOverride,
+  UserAccessGroup,
 } from '../generated/prisma/client';
 
 // Enums
@@ -34,6 +39,8 @@ export {
   SharingMode,
   UserRole,
   ViewScope,
+  ResourceType,
+  FieldVisibility,
 } from '../generated/prisma/client';
 
 // Utilities
