@@ -1,6 +1,13 @@
-import { PrismaClient, UserRole, VatType } from '../generated/prisma/client';
+import {
+  PrismaClient,
+  UserRole,
+  VatType,
+  type ResourceType,
+  type FieldVisibility,
+} from '../generated/prisma/client';
+import { loadDefaultData } from '../src/utils/default-data-loader.js';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { randomBytes, scryptSync } from 'crypto';
+import argon2 from 'argon2';
 
 // Seed uses DIRECT_URL (bypasses PgBouncer) for reliable transactional seeding.
 // Runtime client (src/client.ts) uses DATABASE_URL via PgBouncer instead.
@@ -187,11 +194,13 @@ async function seedNumberSeries() {
 
 async function seedDefaultUser() {
   // DEV ONLY — seed password is not a secret.
-  // Uses Node.js built-in scrypt (no native addon needed).
-  // The API auth layer will use argon2 for production password hashing.
-  const salt = randomBytes(16).toString('hex');
-  const hash = scryptSync('NexaDev2026!', salt, 64).toString('hex');
-  const passwordHash = `scrypt:${salt}:${hash}`;
+  // Uses argon2id (matching the API auth layer) so login works against seeded data.
+  const passwordHash = await argon2.hash('NexaDev2026', {
+    type: argon2.argon2id,
+    memoryCost: 65536,
+    timeCost: 3,
+    parallelism: 4,
+  });
 
   await prisma.user.upsert({
     where: { id: DEFAULT_USER_ID },
@@ -242,6 +251,141 @@ async function seedDefaultUser() {
   console.log('Seeded default admin user + global SUPER_ADMIN role');
 }
 
+async function seedResources() {
+  const defaults = loadDefaultData();
+  // Seed resources without parentCode first (to satisfy FK constraints), then update parentCodes
+  for (const r of defaults.resources) {
+    await prisma.resource.upsert({
+      where: { code: r.code },
+      update: {
+        name: r.name,
+        module: r.module,
+        type: r.type as ResourceType,
+        sortOrder: r.sortOrder,
+        icon: r.icon ?? null,
+        description: r.description ?? null,
+      },
+      create: {
+        code: r.code,
+        name: r.name,
+        module: r.module,
+        type: r.type as ResourceType,
+        parentCode: null, // Set later to avoid FK ordering issues
+        sortOrder: r.sortOrder,
+        icon: r.icon ?? null,
+        description: r.description ?? null,
+      },
+    });
+  }
+  // Now set parentCode references
+  for (const r of defaults.resources) {
+    if (r.parentCode) {
+      await prisma.resource.update({
+        where: { code: r.code },
+        data: { parentCode: r.parentCode },
+      });
+    }
+  }
+  console.log(`Seeded ${defaults.resources.length} resources`);
+}
+
+async function seedAccessGroups() {
+  const defaults = loadDefaultData();
+  for (const group of defaults.accessGroups) {
+    const ag = await prisma.accessGroup.upsert({
+      where: { companyId_code: { companyId: DEFAULT_COMPANY_ID, code: group.code } },
+      update: {
+        name: group.name,
+        description: group.description,
+        isSystem: group.isSystem,
+        updatedBy: 'system-seed',
+      },
+      create: {
+        companyId: DEFAULT_COMPANY_ID,
+        code: group.code,
+        name: group.name,
+        description: group.description,
+        isSystem: group.isSystem,
+        createdBy: 'system-seed',
+        updatedBy: 'system-seed',
+      },
+    });
+
+    for (const perm of group.permissions) {
+      await prisma.accessGroupPermission.upsert({
+        where: {
+          accessGroupId_resourceCode: {
+            accessGroupId: ag.id,
+            resourceCode: perm.resourceCode,
+          },
+        },
+        update: {
+          canAccess: perm.canAccess,
+          canNew: perm.canNew,
+          canView: perm.canView,
+          canEdit: perm.canEdit,
+          canDelete: perm.canDelete,
+        },
+        create: {
+          accessGroupId: ag.id,
+          resourceCode: perm.resourceCode,
+          canAccess: perm.canAccess,
+          canNew: perm.canNew,
+          canView: perm.canView,
+          canEdit: perm.canEdit,
+          canDelete: perm.canDelete,
+        },
+      });
+    }
+
+    for (const fo of group.fieldOverrides) {
+      await prisma.accessGroupFieldOverride.upsert({
+        where: {
+          accessGroupId_resourceCode_fieldPath: {
+            accessGroupId: ag.id,
+            resourceCode: fo.resourceCode,
+            fieldPath: fo.fieldPath,
+          },
+        },
+        update: { visibility: fo.visibility as FieldVisibility },
+        create: {
+          accessGroupId: ag.id,
+          resourceCode: fo.resourceCode,
+          fieldPath: fo.fieldPath,
+          visibility: fo.visibility as FieldVisibility,
+        },
+      });
+    }
+  }
+  console.log(`Seeded ${defaults.accessGroups.length} access groups with permissions`);
+}
+
+async function assignDefaultUserAccessGroups() {
+  const fullAccessGroup = await prisma.accessGroup.findUnique({
+    where: { companyId_code: { companyId: DEFAULT_COMPANY_ID, code: 'FULL_ACCESS' } },
+  });
+  if (fullAccessGroup) {
+    const existing = await prisma.userAccessGroup.findFirst({
+      where: {
+        userId: DEFAULT_USER_ID,
+        accessGroupId: fullAccessGroup.id,
+        companyId: DEFAULT_COMPANY_ID,
+      },
+    });
+    if (!existing) {
+      await prisma.userAccessGroup.create({
+        data: {
+          userId: DEFAULT_USER_ID,
+          accessGroupId: fullAccessGroup.id,
+          companyId: DEFAULT_COMPANY_ID,
+          assignedBy: 'system-seed',
+        },
+      });
+    }
+  }
+  console.log('Assigned FULL_ACCESS group to default admin user');
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -255,6 +399,9 @@ async function main() {
   await seedVatCodes();
   await seedPaymentTerms();
   await seedDefaultUser();
+  await seedResources();
+  await seedAccessGroups();
+  await assignDefaultUserAccessGroups();
   console.log('Seeding complete.');
 }
 
