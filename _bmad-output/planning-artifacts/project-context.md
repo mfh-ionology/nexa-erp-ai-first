@@ -110,14 +110,119 @@ async function getVisibleCompanyIds(
 }
 ```
 
-## 2. RBAC: Global Role + Per-Company Exceptions
+## 2. RBAC: Access Groups + Resource Permission Matrix
+
+### Decision: Granular permissions via access groups (replaces fixed role hierarchy)
+
+The original 5-level role hierarchy (`SUPER_ADMIN > ADMIN > MANAGER > STAFF > VIEWER`) was insufficient for production ERP needs. The new model provides per-resource, per-action, per-field permissions via custom **access groups**. Designed in Epic E2b. See full design: `docs/plans/2026-02-19-granular-rbac-access-groups-design.md`.
+
+### Key Concepts
+
+- **Resource** — single registry of all controllable pages, reports, settings, and maintenances. Each resource has a dot-notation `code` (e.g., `sales.orders.list`), a human-readable `name`, and a `module` grouping. Resource names (not codes) are shown in all UI and AI interactions.
+- **AccessGroup** — a named, company-scoped collection of permissions (e.g., "Sales Manager", "Finance Clerk"). Replaces fixed roles for permission purposes. Admins create custom groups without code changes.
+- **Permission Matrix** — per resource per access group: `canAccess` (gate), `canNew`, `canView`, `canEdit`, `canDelete` (action flags).
+- **Field Overrides** — sparse table with three states: `VISIBLE`, `READ_ONLY`, `HIDDEN`. Default when no override exists: `VISIBLE`.
+- **Multiple groups per user** — a user can be assigned 1+ access groups per company. Conflict resolution: **most permissive wins** (OR across all groups).
+- **SUPER_ADMIN** — system-level bypass; skips the permission matrix entirely.
+- **UserCompanyRole** — meaning narrows to admin privilege level only (`SUPER_ADMIN`, `ADMIN`). `MANAGER`/`STAFF`/`VIEWER` retained for backward compat but no longer drive page/action permissions.
+- **Default data file** — JSON file (`packages/db/default-data/company-defaults.json`) imported on company creation; contains resources, pre-built access groups with permissions and field overrides, plus VAT codes, payment terms, number series, currencies. Editable without code changes; supports industry variants.
+- **Resource registry drives navigation, permissions, and AI context** — the Resource table is the single source of truth for what appears in the sidebar, what the permission guard checks, and what the AI assistant knows about available functionality.
+
+### Prisma Schema (Key Tables)
 
 ```prisma
+model Resource {
+  id          String       @id @default(uuid())
+  code        String       @unique                       // "sales.orders.list"
+  name        String                                     // "Sales Orders"
+  module      String                                     // "sales"
+  type        ResourceType                               // PAGE, REPORT, SETTING, MAINTENANCE
+  parentCode  String?      @map("parent_code")           // detail → list
+  sortOrder   Int          @default(0) @map("sort_order")
+  icon        String?
+  description String?
+  isActive    Boolean      @default(true) @map("is_active")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@map("resources")
+  @@index([module, sortOrder], map: "idx_resources_module_sort")
+}
+
+model AccessGroup {
+  id          String   @id @default(uuid())
+  companyId   String   @map("company_id")
+  code        String                                     // "SALES_MGR" — unique per company
+  name        String                                     // "Sales Manager"
+  description String?
+  isSystem    Boolean  @default(false) @map("is_system") // pre-built, can't delete
+  isActive    Boolean  @default(true) @map("is_active")
+  createdBy   String   @map("created_by")
+  updatedBy   String   @map("updated_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  company     Company  @relation(fields: [companyId], references: [id])
+  permissions AccessGroupPermission[]
+  fieldOverrides AccessGroupFieldOverride[]
+  users       UserAccessGroup[]
+
+  @@map("access_groups")
+  @@unique([companyId, code], map: "uq_access_group_company_code")
+}
+
+model AccessGroupPermission {
+  id            String      @id @default(uuid())
+  accessGroupId String      @map("access_group_id")
+  resourceCode  String      @map("resource_code")
+  canAccess     Boolean     @default(false) @map("can_access")
+  canNew        Boolean     @default(false) @map("can_new")
+  canView       Boolean     @default(false) @map("can_view")
+  canEdit       Boolean     @default(false) @map("can_edit")
+  canDelete     Boolean     @default(false) @map("can_delete")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  accessGroup   AccessGroup @relation(fields: [accessGroupId], references: [id], onDelete: Cascade)
+
+  @@map("access_group_permissions")
+  @@unique([accessGroupId, resourceCode], map: "uq_agp_group_resource")
+}
+
+model AccessGroupFieldOverride {
+  id            String          @id @default(uuid())
+  accessGroupId String          @map("access_group_id")
+  resourceCode  String          @map("resource_code")
+  fieldPath     String          @map("field_path")         // "costPrice"
+  visibility    FieldVisibility                             // VISIBLE, READ_ONLY, HIDDEN
+
+  accessGroup   AccessGroup     @relation(fields: [accessGroupId], references: [id], onDelete: Cascade)
+
+  @@map("access_group_field_overrides")
+  @@unique([accessGroupId, resourceCode, fieldPath], map: "uq_agfo_group_resource_field")
+}
+
+model UserAccessGroup {
+  id            String      @id @default(uuid())
+  userId        String      @map("user_id")
+  accessGroupId String      @map("access_group_id")
+  companyId     String      @map("company_id")
+  assignedBy    String      @map("assigned_by")
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  user          User        @relation(fields: [userId], references: [id])
+  accessGroup   AccessGroup @relation(fields: [accessGroupId], references: [id])
+  company       Company     @relation(fields: [companyId], references: [id])
+
+  @@map("user_access_groups")
+  @@unique([userId, accessGroupId, companyId], map: "uq_uag_user_group_company")
+}
+
 model UserCompanyRole {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")
-  companyId String?  @map("company_id")  // NULL = global role (applies to all companies)
-  role      UserRole
+  companyId String?  @map("company_id")  // NULL = global role
+  role      UserRole                     // SUPER_ADMIN or ADMIN (others retained but no longer drive permissions)
 
   user      User     @relation(fields: [userId], references: [id])
   company   Company? @relation(fields: [companyId], references: [id])
@@ -125,15 +230,73 @@ model UserCompanyRole {
   @@map("user_company_roles")
   @@unique([userId, companyId], map: "uq_user_company_role")
 }
+
+enum ResourceType {
+  PAGE
+  REPORT
+  SETTING
+  MAINTENANCE
+
+  @@map("resource_type")
+}
+
+enum FieldVisibility {
+  VISIBLE
+  READ_ONLY
+  HIDDEN
+
+  @@map("field_visibility")
+}
 ```
 
-**Resolution order:**
-1. Look for company-specific role: `WHERE userId = ? AND companyId = ?`
-2. If found, use it (this is the exception/override)
-3. If not found, fall back to global role: `WHERE userId = ? AND companyId IS NULL`
-4. If neither, user has NO access to that company
+### Permission Resolution Order
 
-**Example:** Mohammed has ADMIN globally + VIEWER override for Company 3 → ADMIN everywhere except Company 3.
+1. **SUPER_ADMIN bypass** — if user has `SUPER_ADMIN` in `UserCompanyRole`, allow everything (skip matrix)
+2. **Resolve access groups** — `SELECT accessGroupId FROM UserAccessGroup WHERE userId = ? AND companyId = ?`
+3. **Merge permissions (most permissive wins)** — OR across all groups: `canAccess = OR(all), canNew = OR(all), canView = OR(all), canEdit = OR(all), canDelete = OR(all)`
+4. **Check resource + action** — if `canAccess = false` → deny; if specific action flag = false → deny; otherwise → allow
+5. **Field visibility** — merge field overrides across groups (most permissive wins: `VISIBLE > READ_ONLY > HIDDEN`); default when no override exists: `VISIBLE`
+
+### Caching
+
+- Cache key: `permissions:{userId}:{companyId}`
+- TTL: 60 seconds
+- Invalidate on: access group edit, user group assignment change, resource change
+- Storage: Redis (already in stack from E0)
+
+### Module Access Derivation
+
+Module-level navigation visibility is derived from access group permissions: if **any** resource in a module has `canAccess = true` for the user, that module's nav item is shown. The `enabledModules` JSON field on User is removed.
+
+### Pre-built Access Groups (Shipped Defaults)
+
+| Code | Name | Purpose |
+|------|------|---------|
+| `FULL_ACCESS` | Full Access | Everything enabled — auto-assigned to company creator |
+| `FINANCE_MANAGER` | Finance Manager | Full GL, AR, AP, bank, reports. No HR/Manufacturing |
+| `SALES_MANAGER` | Sales Manager | Full sales orders, quotes, customers, sales reports |
+| `SALES_STAFF` | Sales Staff | Create/view orders and quotes. No delete, no cost price fields |
+| `READ_ONLY` | Read Only | View access to all pages, no create/edit/delete |
+| (+ 7 more) | See design doc | Finance Clerk, Purchase Manager/Clerk, Warehouse Staff, HR Manager/Viewer, Report Viewer |
+
+All seeded with `isSystem: true` (cannot be deleted, can be modified and cloned).
+
+### Middleware
+
+- `createPermissionGuard(resourceCode, action?)` — Fastify `preHandler` hook replacing `createRbacGuard()`. Checks resource + action via the resolution algorithm above.
+- `filterFieldsByPermission(resourceCode)` — response hook that strips `HIDDEN` fields and adds `_fieldMeta` for `READ_ONLY` markers.
+
+### Progressive Module Adoption
+
+Each module epic (E14 Finance, E16 Sales, etc.) will:
+1. Add its resources to the `Resource` table via Prisma migration
+2. Add resources + default permissions to `company-defaults.json`
+3. Use `createPermissionGuard()` on all routes
+4. Define field overrides for sensitive fields in default access groups
+
+### Example
+
+Mohammed has the "Full Access" group in most companies + the "Read Only" group in Company 3 → full permissions everywhere except Company 3 (view-only there).
 
 ## 3. i18n / Localization Infrastructure
 
@@ -292,6 +455,7 @@ Every ERP service imports `packages/platform-client` which provides:
 | E0 | Monorepo + DevOps (includes Platform DB in Docker Compose) |
 | E1 | Database + Core Models (ERP DB with companyId + **Platform DB** with tenant/plan/billing/AI usage models) |
 | E2 | API Server + Auth + Multi-Company RBAC |
+| **E2b** | **Granular RBAC & Access Groups** (Resource table, AccessGroup, permission matrix, field overrides, `createPermissionGuard()`, default data file) |
 | E3 | Event Bus + Audit Trail |
 | **E3b** | **Platform API + AI Gateway** (internal entitlement endpoints, AI Gateway service, Platform Client SDK with caching + circuit breaker) |
 
@@ -359,7 +523,7 @@ All agents should consult these documents:
 6. **Claude Opus 4.6 for all coding** — no other models for implementation
 7. **TDD: Red-Green-Refactor** — write failing tests first, then implement
 8. **Every AI call goes through the AI Gateway** — no direct LLM API calls from business modules. All provider SDKs (Anthropic, OpenAI, etc.) are encapsulated in provider adapters within the AI Gateway.
-9. **Every ERP module checks entitlements via Platform Client SDK** — module access, user quotas, write permissions
+9. **Every ERP module checks entitlements via Platform Client SDK** — module access, user quotas, write permissions. Module-level access is also derived from access group permissions on resources in that module (if any resource in a module has `canAccess = true`, the module nav item is shown)
 10. **Platform Admin actions are always audit-logged** — no state-changing operation without an audit record
 11. **Epic Page Approval Gate** — before starting any Epic, all pages for that Epic must be designed (using screen templates T1–T8, action bar system, and UX Quality Contract from the UX Design Specification), reviewed, and approved by Mohammed. No implementation begins without this approval.
 12. **8-Document Rule** — SM, Dev, and TEA agents must reference ALL 8 key specification documents (PRD, Architecture, UX Design Specification, API Contracts, Data Models, Event Catalog, State Machine Reference, Business Rules Compendium) when creating stories, acceptance criteria, or test plans

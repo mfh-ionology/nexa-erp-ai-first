@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify';
-import { prisma, UserRole } from '@nexa/db';
+import { prisma } from '@nexa/db';
 
 import { resourceListQuerySchema, resourceResponseSchema } from './resource.schema.js';
 import type { ResourceListQuery } from './resource.schema.js';
-import { createRbacGuard } from '../../core/rbac/index.js';
+import { createPermissionGuard } from '../../core/rbac/index.js';
 import { sendSuccess } from '../../core/utils/response.js';
 import { successEnvelope } from '../../core/schemas/envelope.js';
 
@@ -23,7 +23,7 @@ async function resourceRoutes(fastify: FastifyInstance): Promise<void> {
         querystring: resourceListQuerySchema,
         response: { 200: successEnvelope(resourceResponseSchema.array()) },
       },
-      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
+      preHandler: createPermissionGuard('system.access-groups.list', 'view'),
     },
     async (request, reply) => {
       const { module, type, search, isActive } = request.query;

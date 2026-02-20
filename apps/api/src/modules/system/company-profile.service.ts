@@ -1,11 +1,13 @@
-import type { PrismaClient } from '@nexa/db';
-import { UserRole } from '@nexa/db';
+import type { PrismaClient, FieldVisibility } from '@nexa/db';
+import { UserRole, loadDefaultData } from '@nexa/db';
 import type { RequestContext } from '../../core/types/request-context.js';
 import type {
   CreateCompanyProfileRequest,
   UpdateCompanyProfileRequest,
+  ImportDefaultsRequest,
 } from './company-profile.schema.js';
 import { NotFoundError } from '../../core/errors/index.js';
+import { permissionCache } from '../../core/rbac/index.js';
 
 // ---------------------------------------------------------------------------
 // getCompanyProfile
@@ -77,6 +79,65 @@ export async function createCompanyProfile(
       },
     });
 
+    // Seed default access groups with permissions and field overrides
+    const defaults = loadDefaultData();
+    let fullAccessGroupId: string | null = null;
+
+    for (const agDef of defaults.accessGroups) {
+      const ag = await tx.accessGroup.create({
+        data: {
+          companyId: company.id,
+          code: agDef.code,
+          name: agDef.name,
+          description: agDef.description,
+          isSystem: agDef.isSystem,
+          createdBy: ctx.userId,
+          updatedBy: ctx.userId,
+        },
+      });
+
+      if (agDef.code === 'FULL_ACCESS') {
+        fullAccessGroupId = ag.id;
+      }
+
+      if (agDef.permissions.length > 0) {
+        await tx.accessGroupPermission.createMany({
+          data: agDef.permissions.map((p) => ({
+            accessGroupId: ag.id,
+            resourceCode: p.resourceCode,
+            canAccess: p.canAccess,
+            canNew: p.canNew,
+            canView: p.canView,
+            canEdit: p.canEdit,
+            canDelete: p.canDelete,
+          })),
+        });
+      }
+
+      if (agDef.fieldOverrides.length > 0) {
+        await tx.accessGroupFieldOverride.createMany({
+          data: agDef.fieldOverrides.map((fo) => ({
+            accessGroupId: ag.id,
+            resourceCode: fo.resourceCode,
+            fieldPath: fo.fieldPath,
+            visibility: fo.visibility as FieldVisibility,
+          })),
+        });
+      }
+    }
+
+    // Assign the FULL_ACCESS group to the creating user
+    if (fullAccessGroupId) {
+      await tx.userAccessGroup.create({
+        data: {
+          userId: ctx.userId,
+          companyId: company.id,
+          accessGroupId: fullAccessGroupId,
+          assignedBy: ctx.userId,
+        },
+      });
+    }
+
     return company;
   });
 
@@ -113,4 +174,130 @@ export async function updateCompanyProfile(
 
   // TODO: E3 — emit settings.updated event
   return updated;
+}
+
+// ---------------------------------------------------------------------------
+// exportDefaults — export company's access groups, permissions, field overrides
+// ---------------------------------------------------------------------------
+
+export async function exportDefaults(prisma: PrismaClient, companyId: string) {
+  const accessGroups = await prisma.accessGroup.findMany({
+    where: { companyId },
+    include: {
+      permissions: { orderBy: { resourceCode: 'asc' } },
+      fieldOverrides: { orderBy: [{ resourceCode: 'asc' }, { fieldPath: 'asc' }] },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  return {
+    version: '1.0.0',
+    exportedAt: new Date().toISOString(),
+    companyId,
+    accessGroups: accessGroups.map((ag) => ({
+      code: ag.code,
+      name: ag.name,
+      description: ag.description ?? '',
+      isSystem: ag.isSystem,
+      permissions: ag.permissions.map((p) => ({
+        resourceCode: p.resourceCode,
+        canAccess: p.canAccess,
+        canNew: p.canNew,
+        canView: p.canView,
+        canEdit: p.canEdit,
+        canDelete: p.canDelete,
+      })),
+      fieldOverrides: ag.fieldOverrides.map((fo) => ({
+        resourceCode: fo.resourceCode,
+        fieldPath: fo.fieldPath,
+        visibility: fo.visibility,
+      })),
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// importDefaults — upsert access groups with permissions and field overrides
+// ---------------------------------------------------------------------------
+
+export async function importDefaults(
+  prisma: PrismaClient,
+  companyId: string,
+  data: ImportDefaultsRequest,
+  ctx: RequestContext,
+) {
+  const results = { created: 0, updated: 0 };
+
+  for (const agData of data.accessGroups) {
+    const existing = await prisma.accessGroup.findUnique({
+      // eslint-disable-next-line @typescript-eslint/naming-convention -- Prisma compound unique key
+      where: { companyId_code: { companyId, code: agData.code } },
+    });
+
+    let groupId: string;
+
+    if (existing) {
+      await prisma.accessGroup.update({
+        where: { id: existing.id },
+        data: {
+          name: agData.name,
+          description: agData.description ?? null,
+          updatedBy: ctx.userId,
+        },
+      });
+      groupId = existing.id;
+      results.updated++;
+    } else {
+      const created = await prisma.accessGroup.create({
+        data: {
+          companyId,
+          code: agData.code,
+          name: agData.name,
+          description: agData.description ?? null,
+          isSystem: agData.isSystem ?? false,
+          createdBy: ctx.userId,
+          updatedBy: ctx.userId,
+        },
+      });
+      groupId = created.id;
+      results.created++;
+    }
+
+    // Replace permissions if provided
+    if (agData.permissions.length > 0) {
+      await prisma.$transaction([
+        prisma.accessGroupPermission.deleteMany({ where: { accessGroupId: groupId } }),
+        prisma.accessGroupPermission.createMany({
+          data: agData.permissions.map((p) => ({
+            accessGroupId: groupId,
+            resourceCode: p.resourceCode,
+            canAccess: p.canAccess,
+            canNew: p.canNew,
+            canView: p.canView,
+            canEdit: p.canEdit,
+            canDelete: p.canDelete,
+          })),
+        }),
+      ]);
+    }
+
+    // Replace field overrides if provided
+    if (agData.fieldOverrides.length > 0) {
+      await prisma.$transaction([
+        prisma.accessGroupFieldOverride.deleteMany({ where: { accessGroupId: groupId } }),
+        prisma.accessGroupFieldOverride.createMany({
+          data: agData.fieldOverrides.map((fo) => ({
+            accessGroupId: groupId,
+            resourceCode: fo.resourceCode,
+            fieldPath: fo.fieldPath,
+            visibility: fo.visibility as FieldVisibility,
+          })),
+        }),
+      ]);
+    }
+  }
+
+  permissionCache.invalidateCompany(companyId);
+
+  return results;
 }

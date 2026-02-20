@@ -46,8 +46,9 @@ export const createCompanyProfileRequestSchema = z.object({
 });
 
 export const updateCompanyProfileRequestSchema = createCompanyProfileRequestSchema
-  .omit({ baseCurrencyCode: true })
-  .partial();
+  .omit({ baseCurrencyCode: true, countryCode: true })
+  .partial()
+  .strict();
 
 // ---------------------------------------------------------------------------
 // Response Schemas
@@ -103,9 +104,47 @@ export const companyProfileResponseSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Default Data Import Schema
+// ---------------------------------------------------------------------------
+
+const importPermissionSchema = z.object({
+  resourceCode: z.string(),
+  canAccess: z.boolean(),
+  canNew: z.boolean(),
+  canView: z.boolean(),
+  canEdit: z.boolean(),
+  canDelete: z.boolean(),
+});
+
+const importFieldOverrideSchema = z.object({
+  resourceCode: z.string(),
+  fieldPath: z.string(),
+  visibility: z.enum(['VISIBLE', 'READ_ONLY', 'HIDDEN']),
+});
+
+const importAccessGroupSchema = z.object({
+  code: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  isSystem: z.boolean().optional(),
+  permissions: z.array(importPermissionSchema).default([]),
+  fieldOverrides: z.array(importFieldOverrideSchema).default([]),
+});
+
+export const importDefaultsRequestSchema = z.object({
+  accessGroups: z.array(importAccessGroupSchema).min(1),
+});
+
+export const importDefaultsResponseSchema = z.object({
+  created: z.number(),
+  updated: z.number(),
+});
+
+// ---------------------------------------------------------------------------
 // Inferred TypeScript Types
 // ---------------------------------------------------------------------------
 
 export type CreateCompanyProfileRequest = z.infer<typeof createCompanyProfileRequestSchema>;
 export type UpdateCompanyProfileRequest = z.infer<typeof updateCompanyProfileRequestSchema>;
 export type CompanyProfileResponse = z.infer<typeof companyProfileResponseSchema>;
+export type ImportDefaultsRequest = z.infer<typeof importDefaultsRequestSchema>;

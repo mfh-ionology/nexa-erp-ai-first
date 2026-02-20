@@ -12,6 +12,10 @@ const { mockPrisma, mockResolveUserRole } = vi.hoisted(() => ({
     user: { findUnique: vi.fn(), update: vi.fn() },
     userCompanyRole: { findUnique: vi.fn(), findFirst: vi.fn() },
     companyProfile: { findUnique: vi.fn() },
+    userAccessGroup: { findMany: vi.fn() },
+    accessGroupPermission: { findMany: vi.fn() },
+    accessGroupFieldOverride: { findMany: vi.fn() },
+    resource: { findMany: vi.fn() },
   },
   mockResolveUserRole: vi.fn(),
 }));
@@ -35,6 +39,7 @@ vi.mock('@nexa/db', () => ({
 import { jwtVerifyPlugin } from '../../core/auth/jwt-verify.hook.js';
 import { companyContextPlugin } from '../../core/middleware/company-context.js';
 import { registerErrorHandler } from '../../core/middleware/error-handler.js';
+import { permissionCache } from '../../core/rbac/index.js';
 import { zodValidatorCompiler, zodSerializerCompiler } from '../../core/validation/index.js';
 import { companyRoutesPlugin } from './company.routes.js';
 
@@ -132,6 +137,23 @@ function setupMocks(
   if (config.userUpdate !== false) {
     mockPrisma.user.update.mockResolvedValue({});
   }
+
+  // Permission guard mocks — default: full access to system.company-profile
+  mockPrisma.userAccessGroup.findMany.mockResolvedValue([{ accessGroupId: 'mock-group-id' }]);
+  mockPrisma.accessGroupPermission.findMany.mockResolvedValue([
+    {
+      resourceCode: 'system.company-profile',
+      canAccess: true,
+      canView: true,
+      canNew: true,
+      canEdit: true,
+      canDelete: true,
+    },
+  ]);
+  mockPrisma.accessGroupFieldOverride.findMany.mockResolvedValue([]);
+  mockPrisma.resource.findMany.mockResolvedValue([
+    { code: 'system.company-profile', module: 'SYSTEM' },
+  ]);
 }
 
 // ---------------------------------------------------------------------------
@@ -161,6 +183,7 @@ describe('POST /system/companies/:id/switch', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    permissionCache.clear();
   });
 
   afterEach(async () => {
@@ -348,16 +371,14 @@ describe('POST /system/companies/:id/switch', () => {
   });
 
   // -------------------------------------------------------------------------
-  // RBAC guard is wired to the company switch route
+  // Permission guard is wired to the company switch route
   // -------------------------------------------------------------------------
-  describe('RBAC guard enforcement', () => {
-    it('denies user with invalid role via RBAC guard (proves guard is applied)', async () => {
-      // Mock resolveUserRole to return an invalid role string.
-      // Company-context sets request.userRole = 'BOGUS' (it doesn't validate).
-      // The RBAC guard then catches it with 'Insufficient permissions'.
-      setupMocks({
-        roles: { [CURRENT_COMPANY_ID]: 'BOGUS' },
-      });
+  describe('permission guard enforcement', () => {
+    it('denies user with no access group permissions (proves guard is applied)', async () => {
+      setupMocks();
+
+      // Override: user has no access groups → resolvePermissions returns empty
+      mockPrisma.userAccessGroup.findMany.mockResolvedValue([]);
 
       app = await buildTestApp();
 
@@ -372,6 +393,58 @@ describe('POST /system/companies/:id/switch', () => {
       expect(body.success).toBe(false);
       expect(body.error.code).toBe('FORBIDDEN');
       expect(body.error.message).toBe('Insufficient permissions');
+    });
+
+    it('denies user whose access group lacks canAccess for the resource', async () => {
+      setupMocks();
+
+      // Override: access group exists but canAccess is false for the resource
+      mockPrisma.accessGroupPermission.findMany.mockResolvedValue([
+        {
+          resourceCode: 'system.company-profile',
+          canAccess: false,
+          canView: false,
+          canNew: false,
+          canEdit: false,
+          canDelete: false,
+        },
+      ]);
+
+      app = await buildTestApp();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/system/companies/${CURRENT_COMPANY_ID}/switch`,
+        headers: authHeaders(),
+      });
+
+      expect(res.statusCode).toBe(403);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.code).toBe('FORBIDDEN');
+      expect(body.error.message).toBe('Insufficient permissions');
+    });
+
+    it('allows SUPER_ADMIN to bypass permission guard', async () => {
+      setupMocks({
+        companies: { [TARGET_COMPANY_ID]: { name: 'Target Company', isActive: true } },
+        roles: { [CURRENT_COMPANY_ID]: 'SUPER_ADMIN', [TARGET_COMPANY_ID]: 'SUPER_ADMIN' },
+      });
+
+      // Even with no access groups, SUPER_ADMIN should pass the guard
+      mockPrisma.userAccessGroup.findMany.mockResolvedValue([]);
+
+      app = await buildTestApp();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/system/companies/${TARGET_COMPANY_ID}/switch`,
+        headers: authHeaders(),
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
     });
   });
 });

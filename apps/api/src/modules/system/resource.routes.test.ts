@@ -11,6 +11,9 @@ const { mockPrisma, mockResolveUserRole } = vi.hoisted(() => ({
     user: { findUnique: vi.fn() },
     companyProfile: { findUnique: vi.fn() },
     resource: { findMany: vi.fn() },
+    userAccessGroup: { findMany: vi.fn() },
+    accessGroupPermission: { findMany: vi.fn() },
+    accessGroupFieldOverride: { findMany: vi.fn() },
   },
   mockResolveUserRole: vi.fn(),
 }));
@@ -40,6 +43,7 @@ vi.mock('@nexa/db', () => ({
 import { jwtVerifyPlugin } from '../../core/auth/jwt-verify.hook.js';
 import { companyContextPlugin } from '../../core/middleware/company-context.js';
 import { registerErrorHandler } from '../../core/middleware/error-handler.js';
+import { permissionCache } from '../../core/rbac/index.js';
 import { zodValidatorCompiler, zodSerializerCompiler } from '../../core/validation/index.js';
 import { resourceRoutesPlugin } from './resource.routes.js';
 import {
@@ -85,8 +89,10 @@ async function buildTestApp(): Promise<FastifyInstance> {
   return app;
 }
 
-function setupMocks(config: { role?: string } = {}) {
+function setupMocks(config: { role?: string; withPermissions?: boolean } = {}) {
   const resolvedRole = config.role ?? 'ADMIN';
+  const withPermissions = config.withPermissions ?? true;
+
   mockPrisma.user.findUnique.mockResolvedValue({
     companyId: TEST_COMPANY_ID,
     isActive: true,
@@ -96,6 +102,24 @@ function setupMocks(config: { role?: string } = {}) {
     isActive: true,
   });
   mockResolveUserRole.mockResolvedValue(resolvedRole);
+
+  // Permission resolution mocks (used by createPermissionGuard → resolvePermissions)
+  if (withPermissions) {
+    mockPrisma.userAccessGroup.findMany.mockResolvedValue([{ accessGroupId: 'mock-group-id' }]);
+    mockPrisma.accessGroupPermission.findMany.mockResolvedValue([
+      {
+        resourceCode: 'system.access-groups.list',
+        canAccess: true,
+        canView: true,
+        canNew: true,
+        canEdit: true,
+        canDelete: true,
+      },
+    ]);
+    mockPrisma.accessGroupFieldOverride.findMany.mockResolvedValue([]);
+  } else {
+    mockPrisma.userAccessGroup.findMany.mockResolvedValue([]);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -110,6 +134,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
+  permissionCache.clear();
   vi.clearAllMocks();
 });
 
@@ -210,8 +235,8 @@ describe('Resource routes', () => {
       );
     });
 
-    it('denies STAFF role with 403', async () => {
-      setupMocks({ role: 'STAFF' });
+    it('denies user with no permissions with 403', async () => {
+      setupMocks({ role: 'STAFF', withPermissions: false });
 
       app = await buildTestApp();
       const res = await app.inject({

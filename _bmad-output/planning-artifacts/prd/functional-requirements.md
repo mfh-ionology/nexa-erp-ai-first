@@ -130,7 +130,7 @@
 ## Administration & Configuration
 
 - FR80: Administrators can create, edit, and deactivate user accounts with role assignment
-- FR81: Administrators can assign roles (SUPER_ADMIN, ADMIN, MANAGER, STAFF, VIEWER) with module-level access gating
+- FR81: Administrators can assign tenant-level roles (SUPER_ADMIN, ADMIN) for platform bypass and user/access-group management authority, and assign one or more access groups per user per company for granular page, action, and field permissions
 - FR82: Administrators can enable/disable modules per tenant configuration
 - FR83: Administrators can configure per-module settings (payment terms defaults, VAT schemes, number series, currency, etc.)
 - FR84: Administrators can manage integration connections (bank feeds, HMRC, payroll API) with health monitoring
@@ -257,9 +257,16 @@
 
 ## Company-Specific RBAC
 
-- FR175: Administrators can assign users a global role that applies across all companies within the tenant
-- FR176: Administrators can assign per-company role overrides that take precedence over the global role for specific companies (e.g., ADMIN globally but VIEWER for Company 3)
-- FR177: The system must resolve user permissions by checking for a company-specific role first, then falling back to the global role, with no access granted if neither exists
+- FR175: Administrators can create custom access groups with per-resource permissions (canAccess, canNew, canView, canEdit, canDelete) scoped to a company, and assign one or more access groups to each user per company
+- FR176: Users can be assigned multiple access groups per company, with the effective permission set derived from the union of all assigned groups
+- FR177: The system must resolve permissions using a most-permissive-wins strategy — when a user belongs to multiple access groups, each permission flag (canAccess, canNew, canView, canEdit, canDelete) is the logical OR across all groups, and SUPER_ADMIN bypasses the permission matrix entirely
+- FR227: The system must maintain a Resource registry table as the single source of truth for all controllable pages, reports, settings, and maintenances, with each resource identified by a dot-notation code (e.g., `sales.orders.list`), module grouping, resource type (PAGE, REPORT, SETTING, MAINTENANCE), and sort order
+- FR228: Administrators can configure field-level visibility overrides per access group per resource, with three states — VISIBLE, READ_ONLY, HIDDEN — where fields default to VISIBLE when no override exists, and the most-permissive-wins rule applies across groups (VISIBLE > READ_ONLY > HIDDEN)
+- FR229: The system must ship pre-built access groups (Full Access, Finance Manager, Finance Clerk, Sales Manager, Sales Staff, Purchase Manager, Purchase Clerk, Warehouse Staff, HR Manager, HR Viewer, Report Viewer, Read Only) seeded on company creation, marked as system groups (cannot be deleted but can be modified and cloned by administrators)
+- FR230: The system must support a default data file (JSON) for company creation that defines the resource registry, pre-built access groups with their permissions and field overrides, and other company defaults (VAT codes, payment terms, number series, currencies), with import/export endpoints for administrators to customise and share configurations
+- FR231: Module access must be derived from access group permissions — a module is accessible to a user if any resource within that module has canAccess: true in any of the user's assigned access groups, replacing the previous per-user module toggle
+- FR232: The existing UserRole enum (SUPER_ADMIN, ADMIN, MANAGER, STAFF, VIEWER) must be retained but its meaning narrowed: SUPER_ADMIN provides platform-level permission bypass, ADMIN grants user and access group management authority, and the remaining values (MANAGER, STAFF, VIEWER) are retained for backward compatibility but no longer drive page, action, or field permissions
+- FR233: The system must cache resolved permissions per user per company (cache key: permissions:{userId}:{companyId}) with a 60-second TTL, invalidating the cache on access group edits, user-group assignment changes, or resource changes
 
 ## i18n / Localization Infrastructure
 

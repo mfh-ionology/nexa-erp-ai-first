@@ -42,6 +42,7 @@ export interface AccessTokenPayload extends JWTPayload {
   sub: string;
   tenantId: string;
   role: string;
+  /** @deprecated Module access is now derived from granular RBAC permissions. Kept for backward compatibility. */
   enabledModules: string[];
 }
 

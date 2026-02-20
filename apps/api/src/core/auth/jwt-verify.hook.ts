@@ -14,6 +14,7 @@ declare module 'fastify' {
     tenantId: string;
     companyId: string;
     userRole: string;
+    /** @deprecated Use granular RBAC permissions via createPermissionGuard instead. Will be removed once all routes are migrated. */
     enabledModules: string[];
   }
 }
@@ -96,6 +97,7 @@ const jwtVerifyPluginFn = async (fastify: FastifyInstance): Promise<void> => {
       if (typeof payload.role !== 'string' || payload.role.length === 0) {
         throw new Error('Missing or invalid role claim');
       }
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- backward compat: enabledModules kept until full RBAC migration
       if (!Array.isArray(payload.enabledModules)) {
         throw new Error('Missing or invalid enabledModules claim');
       }
@@ -103,6 +105,7 @@ const jwtVerifyPluginFn = async (fastify: FastifyInstance): Promise<void> => {
       request.userId = payload.sub;
       request.tenantId = payload.tenantId;
       request.userRole = payload.role;
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- backward compat: enabledModules kept until full RBAC migration
       request.enabledModules = payload.enabledModules;
     } catch {
       throw new AuthError('UNAUTHORIZED', 'Authentication required', 401);

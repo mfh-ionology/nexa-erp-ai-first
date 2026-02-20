@@ -9,7 +9,7 @@
 - UK payroll via external API (Staffology/PayRun.io)
 - All coding via Claude Opus 4.6
 - Docker/Kubernetes deployment
-- RBAC with 5 roles + module gating
+- Granular RBAC with Access Groups + Resource Permission Matrix (replaces fixed 5-role hierarchy)
 
 **Critical Decisions (made in this section):**
 1. Application architecture: Modular monolith vs microservices
@@ -536,7 +536,7 @@ The System module is the **foundation layer** that all other modules depend on. 
 | Departments | Department model | DB | YES | Reference entity |
 | Countries | Country model | DB | YES | ISO codes, currency defaults |
 | Locking / Global Locking | PeriodLock (already in §2.5) | DB | YES | Period-based transaction locks |
-| Access Groups | Role + Permission (already in §3) | DB | YES | RBAC with 5 roles |
+| Access Groups | Resource + AccessGroup + AccessGroupPermission + AccessGroupFieldOverride + UserAccessGroup (§3b) | DB | YES | Granular RBAC: per-resource, per-action, per-field permissions via Access Groups. Multiple groups per user, most-permissive-wins. See design doc: `docs/plans/2026-02-19-granular-rbac-access-groups-design.md` |
 | Password Security | Auth config (already in §3) | DB | YES | Password rules, MFA |
 | VAT Reg. Number Masks | VatCode.validationMask | DB | YES | Regex per country |
 | Sub-ledger Control Accounts | **DEPRECATED** → `AccountMapping` (§2.13) | DB | YES | `SubLedgerControl` replaced by `AccountMapping` (27 mapping types with dept scoping). See §2.13. |
@@ -663,6 +663,139 @@ model UserCompanyRole {
 }
 
 // RBAC resolution: 1) company-specific role, 2) global role (companyId=NULL), 3) no access
+// NOTE: UserCompanyRole.role meaning narrows under granular RBAC (§3b):
+//   SUPER_ADMIN = platform-level bypass (skips permission matrix entirely)
+//   ADMIN = can manage users, access groups, company settings
+//   MANAGER/STAFF/VIEWER = retained for backward compat, but page/action permissions
+//   are now driven by AccessGroup assignments, not these role values.
+
+// ═══════════════════════════════════════════════
+// GRANULAR RBAC — Access Groups & Permissions (§3b)
+// Design doc: docs/plans/2026-02-19-granular-rbac-access-groups-design.md
+// Epic: E2b (Granular RBAC & Access Groups)
+// ═══════════════════════════════════════════════
+
+enum ResourceType {
+  PAGE
+  REPORT
+  SETTING
+  MAINTENANCE
+
+  @@map("resource_type")
+}
+
+enum FieldVisibility {
+  VISIBLE
+  READ_ONLY
+  HIDDEN
+
+  @@map("field_visibility")
+}
+
+// Registry of all controllable pages, reports, settings, and maintenances.
+// Seeded per module epic via company-defaults.json. Not company-scoped (global to system).
+model Resource {
+  id          String       @id @default(uuid())
+  code        String       @unique                         // Dot-notation: "sales.orders.list"
+  name        String                                       // Human-readable: "Sales Orders"
+  module      String                                       // Module grouping: "sales", "finance", "system"
+  type        ResourceType                                 // PAGE, REPORT, SETTING, MAINTENANCE
+  parentCode  String?      @map("parent_code")             // Parent resource (detail → list)
+  sortOrder   Int          @default(0) @map("sort_order")  // Display order in admin UI
+  icon        String?                                      // Icon key for navigation rendering
+  description String?                                      // Help text for admin UI and AI context
+  isActive    Boolean      @default(true) @map("is_active")
+
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  permissions AccessGroupPermission[]
+  fieldOverrides AccessGroupFieldOverride[]
+
+  @@index([module, sortOrder], map: "idx_resources_module_sort")
+  @@map("resources")
+}
+
+// User-defined or system-seeded role definitions. Replaces fixed UserRole enum for permission purposes.
+model AccessGroup {
+  id          String   @id @default(uuid())
+  companyId   String   @map("company_id")                  // FK → Company
+  code        String                                       // Unique per company: "SALES_MGR"
+  name        String                                       // Display name: "Sales Manager"
+  description String?                                      // Purpose description
+  isSystem    Boolean  @default(false) @map("is_system")   // Pre-built (can't delete, can modify)
+  isActive    Boolean  @default(true) @map("is_active")
+
+  createdBy   String   @map("created_by")
+  updatedBy   String   @map("updated_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  company     Company  @relation(fields: [companyId], references: [id])
+  permissions AccessGroupPermission[]
+  fieldOverrides AccessGroupFieldOverride[]
+  userAssignments UserAccessGroup[]
+
+  @@unique([companyId, code], map: "uq_access_group_company_code")
+  @@map("access_groups")
+}
+
+// Permission matrix — one row per resource per access group.
+model AccessGroupPermission {
+  id             String   @id @default(uuid())
+  accessGroupId  String   @map("access_group_id")          // FK → AccessGroup
+  resourceCode   String   @map("resource_code")            // FK → Resource.code
+  canAccess      Boolean  @default(false) @map("can_access")
+  canNew         Boolean  @default(false) @map("can_new")
+  canView        Boolean  @default(false) @map("can_view")
+  canEdit        Boolean  @default(false) @map("can_edit")
+  canDelete      Boolean  @default(false) @map("can_delete")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  accessGroup    AccessGroup @relation(fields: [accessGroupId], references: [id])
+  resource       Resource    @relation(fields: [resourceCode], references: [code])
+
+  @@unique([accessGroupId, resourceCode], map: "uq_access_group_permission")
+  @@map("access_group_permissions")
+}
+
+// Sparse field-level visibility overrides per access group per resource.
+model AccessGroupFieldOverride {
+  id             String          @id @default(uuid())
+  accessGroupId  String          @map("access_group_id")
+  resourceCode   String          @map("resource_code")
+  fieldPath      String          @map("field_path")        // e.g., "costPrice", "margin"
+  visibility     FieldVisibility                            // VISIBLE, READ_ONLY, HIDDEN
+
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  accessGroup    AccessGroup     @relation(fields: [accessGroupId], references: [id])
+  resource       Resource        @relation(fields: [resourceCode], references: [code])
+
+  @@unique([accessGroupId, resourceCode, fieldPath], map: "uq_field_override")
+  @@map("access_group_field_overrides")
+}
+
+// Many-to-many: access group assignments to users, scoped per company.
+model UserAccessGroup {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  accessGroupId  String   @map("access_group_id")
+  companyId      String   @map("company_id")
+
+  assignedBy     String   @map("assigned_by")              // Audit: who assigned this
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user           User         @relation(fields: [userId], references: [id])
+  accessGroup    AccessGroup  @relation(fields: [accessGroupId], references: [id])
+  company        Company      @relation(fields: [companyId], references: [id])
+
+  @@unique([userId, accessGroupId, companyId], map: "uq_user_access_group")
+  @@map("user_access_groups")
+}
 
 model Currency {
   code                  String   @id @db.VarChar(3)      // ISO 4217: GBP, USD, EUR
@@ -17882,7 +18015,7 @@ Service Orders, Timekeeper, and Quotation Extensions are targeted for **Story 9+
 | **Auth method** | JWT (access + refresh tokens) | Stateless API auth, works with database-per-tenant routing. Access token (15min), refresh token (7 days) in httpOnly cookie. |
 | **Password hashing** | Argon2id | OWASP recommended, memory-hard (resistant to GPU attacks). More secure than bcrypt. |
 | **MFA** | TOTP (RFC 6238) | Google Authenticator / Authy compatible. Required for ADMIN and above (NFR10). |
-| **Session management** | Stateless JWT + Redis for refresh token revocation | JWT contains: userId, tenantId, role, modules[]. Redis stores refresh tokens for revocation. |
+| **Session management** | Stateless JWT + Redis for refresh token revocation | JWT contains: userId, tenantId, companyId, adminRole (SUPER_ADMIN/ADMIN/null). Page/action permissions resolved at runtime from Access Group assignments (cached in Redis, 60s TTL). Redis stores refresh tokens for revocation. |
 | **API security** | Helmet + CORS + rate limiting (per tenant) | Rate limit: 100 req/min per user, 5000 req/min per tenant. Failed login: 5 attempts / 15min (NFR15). |
 | **Encryption** | AES-256 at rest, TLS 1.3 in transit | Per NFR8. Integration credentials encrypted with per-tenant key. |
 | **CSRF** | Double-submit cookie pattern | Not needed for pure API (JWT in header), but required if using httpOnly cookies for auth. |
@@ -17902,6 +18035,97 @@ Service Orders, Timekeeper, and Quotation Extensions are targeted for **Story 9+
 2. Fastify `onRequest` hook extracts tenantId
 3. TenantDatabaseManager returns cached PrismaClient for that tenant
 4. Request-scoped decorator provides `request.db` (the tenant's PrismaClient)
+
+## 3b. Granular RBAC — Access Groups & Resource Permissions
+
+> **Design document:** `docs/plans/2026-02-19-granular-rbac-access-groups-design.md`
+> **Epic:** E2b (inserted after E2, before E3)
+> **Status:** Approved (2026-02-19)
+
+**Decision: Replace fixed 5-role hierarchy with granular Access Group + Resource Permission Matrix**
+
+The original RBAC system used a fixed 5-level role hierarchy (`SUPER_ADMIN > ADMIN > MANAGER > STAFF > VIEWER`) with one role per user per company. This is insufficient for a production ERP where different users need different access to different pages/registers/reports, field-level visibility control is required, and admins need to create custom roles without code changes.
+
+HansaWorld had a granular AccessVc (Access Rights) register with per-item, per-action, per-field permissions. Nexa ERP implements equivalent granularity adapted for a modern web application.
+
+**Rationale:**
+- Fixed roles cannot express "sales staff who can create orders but not see cost prices"
+- HansaWorld had per-item, per-field access control — Nexa must match this for production use
+- Reports, settings, and maintenances need individual access control
+- Admins must create custom roles without developer intervention
+
+**Key Design Elements:**
+
+| Element | Description |
+|---------|-------------|
+| **Resource table** | Global registry of all controllable pages, reports, settings, maintenances (dot-notation codes e.g. `sales.orders.list`) |
+| **AccessGroup** | Company-scoped, user-defined or system-seeded permission groups (replaces fixed UserRole for access control) |
+| **AccessGroupPermission** | Per-resource per-group permission matrix: `canAccess`, `canNew`, `canView`, `canEdit`, `canDelete` |
+| **AccessGroupFieldOverride** | Sparse field-level visibility: `VISIBLE`, `READ_ONLY`, `HIDDEN` per field per resource per group |
+| **UserAccessGroup** | Many-to-many: users assigned 1+ access groups per company |
+| **SUPER_ADMIN bypass** | `UserCompanyRole.role = SUPER_ADMIN` skips the permission matrix entirely |
+| **Most-permissive-wins** | When a user belongs to multiple groups, permissions are OR-merged across groups |
+| **Default data file** | `packages/db/default-data/company-defaults.json` — JSON imported on company creation; includes resources, access groups, permissions, VAT codes, payment terms, number series, currencies |
+
+**Permission Resolution Algorithm:**
+
+```
+hasPermission(userId, companyId, resourceCode, action):
+  1. If user has SUPER_ADMIN role → ALLOW (bypass)
+  2. Get user's access groups for this company
+  3. Get AccessGroupPermission rows for those groups + resourceCode
+  4. Merge across groups — most permissive wins:
+     canAccess = OR(all canAccess), canNew = OR(all canNew), etc.
+  5. If canAccess = false → DENY
+  6. If action specified and corresponding flag = false → DENY
+  7. → ALLOW
+```
+
+**Field Visibility Resolution:**
+
+```
+getFieldVisibility(userId, companyId, resourceCode, fieldPath):
+  1. If SUPER_ADMIN → VISIBLE
+  2. Get AccessGroupFieldOverride rows for user's groups + resourceCode + fieldPath
+  3. If no overrides → VISIBLE (default)
+  4. Merge: most permissive wins (VISIBLE > READ_ONLY > HIDDEN)
+```
+
+**Caching:** Redis key `permissions:{userId}:{companyId}`, 60s TTL, invalidated on access group edit / user group assignment change / resource change.
+
+**Pre-built Access Groups (seeded via company-defaults.json):**
+
+| Code | Name | Purpose |
+|------|------|---------|
+| `FULL_ACCESS` | Full Access | Everything enabled — auto-assigned to company creator |
+| `FINANCE_MANAGER` | Finance Manager | Full GL, AR, AP, bank, reports. No HR/Manufacturing |
+| `FINANCE_CLERK` | Finance Clerk | Create/view invoices, receipts, payments. No GL journals, no delete |
+| `SALES_MANAGER` | Sales Manager | Full sales orders, quotes, customers, sales reports |
+| `SALES_STAFF` | Sales Staff | Create/view orders and quotes. No delete, no cost price fields |
+| `PURCHASE_MANAGER` | Purchase Manager | Full POs, suppliers, goods receipts |
+| `PURCHASE_CLERK` | Purchase Clerk | Create/view POs. No delete, no supplier credit limit fields |
+| `WAREHOUSE_STAFF` | Warehouse Staff | Goods receipt, stock takes, transfers. No pricing fields |
+| `HR_MANAGER` | HR Manager | Full employee, payroll, leave management |
+| `HR_VIEWER` | HR Viewer | View employee records, no salary fields |
+| `REPORT_VIEWER` | Report Viewer | All reports read-only, no transactional pages |
+| `READ_ONLY` | Read Only | View access to all pages, no create/edit/delete |
+
+All seeded with `isSystem: true` (cannot be deleted, can be modified and cloned).
+
+**Progressive Module Adoption:** Each module epic (E14 Finance, E16 Sales, etc.) will: (1) add its resources to the Resource table via Prisma migration, (2) add resources + default permissions to `company-defaults.json`, (3) use `createPermissionGuard()` on all routes, (4) define field overrides for sensitive fields in default access groups.
+
+**Migration from E2:**
+
+| Current | New | Action |
+|---------|-----|--------|
+| `UserRole` enum | Stays | Meaning narrows to admin privilege level |
+| `UserCompanyRole` table | Stays | `SUPER_ADMIN` bypass + `ADMIN` for user management |
+| `createRbacGuard()` | Deprecated | Replaced by `createPermissionGuard()` |
+| `enabledModules` on User | Removed | Derived from access group permissions |
+| No Resource table | `Resource` table | New — seeded per module epic |
+| No field control | `AccessGroupFieldOverride` | New — sparse |
+
+**Prisma models:** See System Module Prisma Models section (§3b models: `Resource`, `AccessGroup`, `AccessGroupPermission`, `AccessGroupFieldOverride`, `UserAccessGroup`, enums `ResourceType`, `FieldVisibility`).
 
 ## 4. API & Communication Patterns
 

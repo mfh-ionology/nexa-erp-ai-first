@@ -6,7 +6,7 @@ import Fastify from 'fastify';
 // Mock @nexa/db — vi.hoisted ensures variables exist when vi.mock is hoisted
 // ---------------------------------------------------------------------------
 
-const { mockPrisma, mockResolveUserRole } = vi.hoisted(() => ({
+const { mockPrisma, mockResolveUserRole, mockLoadDefaultData } = vi.hoisted(() => ({
   mockPrisma: {
     user: { findUnique: vi.fn() },
     userCompanyRole: { create: vi.fn() },
@@ -16,14 +16,21 @@ const { mockPrisma, mockResolveUserRole } = vi.hoisted(() => ({
       update: vi.fn(),
     },
     numberSeries: { createMany: vi.fn() },
+    userAccessGroup: { findMany: vi.fn(), create: vi.fn() },
+    accessGroup: { create: vi.fn() },
+    accessGroupPermission: { findMany: vi.fn(), createMany: vi.fn() },
+    accessGroupFieldOverride: { findMany: vi.fn(), createMany: vi.fn() },
+    resource: { findMany: vi.fn() },
     $transaction: vi.fn(),
   },
   mockResolveUserRole: vi.fn(),
+  mockLoadDefaultData: vi.fn(),
 }));
 
 vi.mock('@nexa/db', () => ({
   prisma: mockPrisma,
   resolveUserRole: mockResolveUserRole,
+  loadDefaultData: mockLoadDefaultData,
   UserRole: {
     SUPER_ADMIN: 'SUPER_ADMIN',
     ADMIN: 'ADMIN',
@@ -54,6 +61,7 @@ import {
   TEST_USER_ID,
   TEST_COMPANY_ID,
 } from '../../test-utils/jwt.js';
+import { permissionCache } from '../../core/rbac/index.js';
 
 // ---------------------------------------------------------------------------
 // Test constants
@@ -132,9 +140,14 @@ async function buildTestApp(): Promise<FastifyInstance> {
 
 /**
  * Configure mocks for the company-context middleware and service calls.
+ *
+ * @param config.role — role returned by resolveUserRole (for company-context middleware)
+ * @param config.hasPermissions — whether to grant full permissions (default true).
+ *   When false, userAccessGroup returns [] so the user has no permissions at all.
  */
-function setupMocks(config: { role?: string } = {}) {
+function setupMocks(config: { role?: string; hasPermissions?: boolean } = {}) {
   const resolvedRole = config.role ?? 'ADMIN';
+  const hasPermissions = config.hasPermissions ?? true;
 
   // Company-context middleware: look up requesting user
   mockPrisma.user.findUnique.mockResolvedValue({
@@ -147,6 +160,63 @@ function setupMocks(config: { role?: string } = {}) {
   mockPrisma.companyProfile.findUnique.mockResolvedValue(sampleCompanyProfile());
 
   mockResolveUserRole.mockResolvedValue(resolvedRole);
+
+  // Permission resolution (used by createPermissionGuard)
+  if (hasPermissions) {
+    mockPrisma.userAccessGroup.findMany.mockResolvedValue([{ accessGroupId: 'mock-group-id' }]);
+    mockPrisma.accessGroupPermission.findMany.mockResolvedValue([
+      {
+        resourceCode: 'system.company-profile',
+        canAccess: true,
+        canView: true,
+        canNew: true,
+        canEdit: true,
+        canDelete: true,
+      },
+    ]);
+    mockPrisma.accessGroupFieldOverride.findMany.mockResolvedValue([]);
+    mockPrisma.resource.findMany.mockResolvedValue([
+      { code: 'system.company-profile', module: 'system' },
+    ]);
+  } else {
+    // No access groups → no permissions at all
+    mockPrisma.userAccessGroup.findMany.mockResolvedValue([]);
+    mockPrisma.accessGroupPermission.findMany.mockResolvedValue([]);
+    mockPrisma.accessGroupFieldOverride.findMany.mockResolvedValue([]);
+  }
+
+  // loadDefaultData: return minimal defaults for company creation
+  mockLoadDefaultData.mockReturnValue({
+    accessGroups: [
+      {
+        code: 'FULL_ACCESS',
+        name: 'Full Access',
+        description: 'Full access to all modules',
+        isSystem: true,
+        permissions: [
+          {
+            resourceCode: 'system.company-profile',
+            canAccess: true,
+            canNew: true,
+            canView: true,
+            canEdit: true,
+            canDelete: true,
+          },
+        ],
+        fieldOverrides: [],
+      },
+    ],
+  });
+
+  // accessGroup.create: return a mock group with an id
+  mockPrisma.accessGroup.create.mockResolvedValue({ id: 'mock-full-access-group-id' });
+
+  // accessGroupPermission.createMany / accessGroupFieldOverride.createMany (for seeding)
+  mockPrisma.accessGroupPermission.createMany.mockResolvedValue({ count: 1 });
+  mockPrisma.accessGroupFieldOverride.createMany.mockResolvedValue({ count: 0 });
+
+  // userAccessGroup.create: for assigning FULL_ACCESS group to creating user
+  mockPrisma.userAccessGroup.create.mockResolvedValue({});
 
   // $transaction: call the callback with mockPrisma as the tx object
   mockPrisma.$transaction.mockImplementation(
@@ -167,6 +237,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  permissionCache.clear();
 });
 
 // ---------------------------------------------------------------------------
@@ -358,9 +429,9 @@ describe('Company Profile routes', () => {
       }
     });
 
-    // 10.6 — STAFF role → 403 FORBIDDEN
-    it('denies STAFF role with 403 FORBIDDEN (10.6)', async () => {
-      setupMocks({ role: 'STAFF' });
+    // 10.6 — User with no permissions → 403 FORBIDDEN
+    it('denies user with no permissions with 403 FORBIDDEN (10.6)', async () => {
+      setupMocks({ role: 'STAFF', hasPermissions: false });
 
       app = await buildTestApp();
 

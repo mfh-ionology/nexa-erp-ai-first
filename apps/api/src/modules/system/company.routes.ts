@@ -1,12 +1,12 @@
 import type { FastifyInstance } from 'fastify';
-import { prisma, resolveUserRole, UserRole } from '@nexa/db';
+import { prisma, resolveUserRole } from '@nexa/db';
 
 import { companySwitchParamsSchema, companySwitchResponseSchema } from './company.schema.js';
 import type { CompanySwitchParams, CompanySwitchResponse } from './company.schema.js';
 import { AuthError } from '../../core/errors/index.js';
 import { sendSuccess } from '../../core/utils/response.js';
 import { successEnvelope } from '../../core/schemas/envelope.js';
-import { createRbacGuard } from '../../core/rbac/index.js';
+import { createPermissionGuard } from '../../core/rbac/index.js';
 
 // ---------------------------------------------------------------------------
 // System company routes plugin
@@ -24,7 +24,7 @@ async function companyRoutes(fastify: FastifyInstance): Promise<void> {
         params: companySwitchParamsSchema,
         response: { 200: successEnvelope(companySwitchResponseSchema) },
       },
-      preHandler: createRbacGuard({ minimumRole: UserRole.VIEWER }),
+      preHandler: createPermissionGuard('system.company-profile'),
     },
     async (request, reply) => {
       const { id: targetCompanyId } = request.params;

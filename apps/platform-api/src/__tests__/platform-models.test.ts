@@ -131,6 +131,8 @@ async function createPlatformUser(email?: string): Promise<string> {
         '$argon2id$v=19$m=65536,t=3,p=4$dGVzdHNhbHQxMjM0NTY$YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXo',
       displayName: 'Test Admin',
       role: PlatformRole.PLATFORM_ADMIN,
+      createdBy: 'SYSTEM',
+      updatedBy: 'SYSTEM',
     },
   });
   platformUserIds.push(user.id);

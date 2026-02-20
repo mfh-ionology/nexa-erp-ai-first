@@ -19,6 +19,14 @@ const { mockPrisma, mockResolveUserRole } = vi.hoisted(() => ({
       create: vi.fn(),
       updateMany: vi.fn(),
     },
+    userAccessGroup: {
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+      createMany: vi.fn(),
+    },
+    accessGroupPermission: { findMany: vi.fn() },
+    accessGroupFieldOverride: { findMany: vi.fn() },
+    resource: { findMany: vi.fn() },
     companyProfile: { findUnique: vi.fn() },
     refreshToken: { updateMany: vi.fn() },
     $transaction: vi.fn(),
@@ -56,6 +64,7 @@ import { companyContextPlugin } from '../../core/middleware/company-context.js';
 import { registerErrorHandler } from '../../core/middleware/error-handler.js';
 import { zodValidatorCompiler, zodSerializerCompiler } from '../../core/validation/index.js';
 import { userRoutesPlugin } from './user.routes.js';
+import { permissionCache } from '../../core/rbac/index.js';
 import {
   makeTestJwt,
   authHeaders,
@@ -108,11 +117,16 @@ async function buildTestApp(): Promise<FastifyInstance> {
  * Configure argument-based mocks for the company-context middleware and
  * common Prisma operations. Uses mockImplementation to handle multiple
  * callers (company-context + service) inspecting different user IDs.
+ *
+ * Permission guard mocks: configures userAccessGroup, accessGroupPermission,
+ * and accessGroupFieldOverride to grant full access by default. Set
+ * config.denyPermissions to true to simulate no access groups (permission denial).
  */
 function setupMocks(
   config: {
     role?: string;
     targetUserResult?: Record<string, unknown> | null;
+    denyPermissions?: boolean;
   } = {},
 ) {
   const resolvedRole = config.role ?? 'ADMIN';
@@ -135,9 +149,50 @@ function setupMocks(
   mockPrisma.companyProfile.findUnique.mockResolvedValue({ isActive: true });
   mockResolveUserRole.mockResolvedValue(resolvedRole);
 
-  // $transaction: call the callback with mockPrisma as the tx object
+  // ---------------------------------------------------------------------------
+  // Permission guard: userAccessGroup + accessGroupPermission + field overrides
+  // ---------------------------------------------------------------------------
+  if (config.denyPermissions) {
+    // No access groups → no permissions → guard returns 403
+    mockPrisma.userAccessGroup.findMany.mockResolvedValue([]);
+  } else {
+    // Default: full access to system.users.list and system.users.detail
+    mockPrisma.userAccessGroup.findMany.mockResolvedValue([{ accessGroupId: 'mock-group-id' }]);
+    mockPrisma.accessGroupPermission.findMany.mockResolvedValue([
+      {
+        resourceCode: 'system.users.list',
+        canAccess: true,
+        canView: true,
+        canNew: true,
+        canEdit: true,
+        canDelete: true,
+      },
+      {
+        resourceCode: 'system.users.detail',
+        canAccess: true,
+        canView: true,
+        canNew: true,
+        canEdit: true,
+        canDelete: true,
+      },
+    ]);
+    mockPrisma.accessGroupFieldOverride.findMany.mockResolvedValue([]);
+    mockPrisma.resource.findMany.mockResolvedValue([
+      { code: 'system.users.list', module: 'SYSTEM' },
+      { code: 'system.users.detail', module: 'SYSTEM' },
+    ]);
+  }
+
+  // $transaction: call the callback with mockPrisma as the tx object,
+  // or if an array is passed (batched transaction), resolve all promises
   mockPrisma.$transaction.mockImplementation(
-    async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => fn(mockPrisma),
+    async (fnOrArray: ((tx: typeof mockPrisma) => Promise<unknown>) | unknown[]) => {
+      if (typeof fnOrArray === 'function') {
+        return fnOrArray(mockPrisma);
+      }
+      // Batched transaction: resolve all operations
+      return Promise.all(fnOrArray);
+    },
   );
 }
 
@@ -154,6 +209,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  permissionCache.clear();
 });
 
 // ---------------------------------------------------------------------------
@@ -234,8 +290,8 @@ describe('User CRUD routes', () => {
       expect(res.statusCode).toBe(201);
     });
 
-    it('denies STAFF role with 403 FORBIDDEN (9.3)', async () => {
-      setupMocks({ role: 'STAFF' });
+    it('denies user without permissions with 403 FORBIDDEN (9.3)', async () => {
+      setupMocks({ denyPermissions: true });
 
       app = await buildTestApp();
 
