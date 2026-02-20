@@ -32,7 +32,7 @@ import {
   updateUserModules,
   deactivateUser,
 } from './user.service.js';
-import { createPermissionGuard, permissionCache } from '../../core/rbac/index.js';
+import { createRbacGuard, permissionCache } from '../../core/rbac/index.js';
 import { sendSuccess } from '../../core/utils/response.js';
 import { successEnvelope } from '../../core/schemas/envelope.js';
 import { extractRequestContext } from '../../core/types/request-context.js';
@@ -75,7 +75,7 @@ async function userRoutes(fastify: FastifyInstance): Promise<void> {
         body: createUserRequestSchema,
         response: { 201: successEnvelope(userResponseSchema) },
       },
-      preHandler: createPermissionGuard('system.users.list', 'new'),
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
       // Security: non-SUPER_ADMIN users cannot create SUPER_ADMIN users
@@ -98,7 +98,7 @@ async function userRoutes(fastify: FastifyInstance): Promise<void> {
         querystring: userListQuerySchema,
         response: { 200: userListEnvelope },
       },
-      preHandler: createPermissionGuard('system.users.list', 'view'),
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
       const { data, meta } = await listUsers(prisma, request.companyId, request.query);
@@ -116,7 +116,7 @@ async function userRoutes(fastify: FastifyInstance): Promise<void> {
         params: userParamsSchema,
         response: { 200: successEnvelope(userResponseSchema) },
       },
-      preHandler: createPermissionGuard('system.users.detail', 'view'),
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
       const user = await getUserById(prisma, request.params.id, request.companyId);
@@ -135,7 +135,7 @@ async function userRoutes(fastify: FastifyInstance): Promise<void> {
         body: updateUserRequestSchema,
         response: { 200: successEnvelope(userResponseSchema) },
       },
-      preHandler: createPermissionGuard('system.users.detail', 'edit'),
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
       const ctx = extractRequestContext(request);
@@ -161,7 +161,7 @@ async function userRoutes(fastify: FastifyInstance): Promise<void> {
         body: updateUserRoleRequestSchema,
         response: { 200: successEnvelope(roleUpdateResponseSchema) },
       },
-      preHandler: createPermissionGuard('system.users.detail', 'edit'),
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
       // Security: non-SUPER_ADMIN users cannot assign SUPER_ADMIN role
@@ -191,7 +191,7 @@ async function userRoutes(fastify: FastifyInstance): Promise<void> {
         body: updateUserModulesRequestSchema,
         response: { 200: successEnvelope(userResponseSchema) },
       },
-      preHandler: createPermissionGuard('system.users.detail', 'edit'),
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
       const ctx = extractRequestContext(request);
@@ -216,7 +216,7 @@ async function userRoutes(fastify: FastifyInstance): Promise<void> {
         params: userParamsSchema,
         response: { 200: successEnvelope(userResponseSchema) },
       },
-      preHandler: createPermissionGuard('system.users.detail', 'delete'),
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
       const ctx = extractRequestContext(request);
@@ -235,7 +235,7 @@ async function userRoutes(fastify: FastifyInstance): Promise<void> {
         params: userParamsSchema,
         response: { 200: successEnvelope(userAccessGroupResponseSchema.array()) },
       },
-      preHandler: createPermissionGuard('system.users.detail', 'view'),
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
       const assignments = await prisma.userAccessGroup.findMany({
@@ -257,7 +257,7 @@ async function userRoutes(fastify: FastifyInstance): Promise<void> {
         params: userParamsSchema,
         body: replaceUserAccessGroupsRequestSchema,
       },
-      preHandler: createPermissionGuard('system.users.detail', 'edit'),
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
       const { id: targetUserId } = request.params;

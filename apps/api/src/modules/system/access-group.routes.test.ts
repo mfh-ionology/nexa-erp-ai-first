@@ -17,9 +17,6 @@ const { mockPrisma, mockResolveUserRole } = vi.hoisted(() => ({
       create: vi.fn(),
       update: vi.fn(),
     },
-    userAccessGroup: {
-      findMany: vi.fn(),
-    },
     accessGroupPermission: {
       deleteMany: vi.fn(),
       createMany: vi.fn(),
@@ -28,9 +25,6 @@ const { mockPrisma, mockResolveUserRole } = vi.hoisted(() => ({
     accessGroupFieldOverride: {
       deleteMany: vi.fn(),
       createMany: vi.fn(),
-      findMany: vi.fn(),
-    },
-    resource: {
       findMany: vi.fn(),
     },
     $transaction: vi.fn(),
@@ -63,7 +57,6 @@ import { jwtVerifyPlugin } from '../../core/auth/jwt-verify.hook.js';
 import { companyContextPlugin } from '../../core/middleware/company-context.js';
 import { registerErrorHandler } from '../../core/middleware/error-handler.js';
 import { zodValidatorCompiler, zodSerializerCompiler } from '../../core/validation/index.js';
-import { permissionCache } from '../../core/rbac/index.js';
 import { accessGroupRoutesPlugin } from './access-group.routes.js';
 import {
   makeTestJwt,
@@ -111,10 +104,8 @@ async function buildTestApp(): Promise<FastifyInstance> {
   return app;
 }
 
-function setupMocks(config: { role?: string; hasPermissions?: boolean } = {}) {
+function setupMocks(config: { role?: string } = {}) {
   const resolvedRole = config.role ?? 'ADMIN';
-  const hasPermissions = config.hasPermissions !== false;
-
   mockPrisma.user.findUnique.mockResolvedValue({
     companyId: TEST_COMPANY_ID,
     isActive: true,
@@ -125,36 +116,6 @@ function setupMocks(config: { role?: string; hasPermissions?: boolean } = {}) {
   });
   mockResolveUserRole.mockResolvedValue(resolvedRole);
   mockPrisma.$transaction.mockImplementation(async (commands: unknown[]) => commands);
-
-  // Permission resolution mocks (used by createPermissionGuard → resolvePermissions)
-  if (hasPermissions) {
-    mockPrisma.userAccessGroup.findMany.mockResolvedValue([{ accessGroupId: 'mock-group-id' }]);
-    mockPrisma.accessGroupPermission.findMany.mockResolvedValue([
-      {
-        resourceCode: 'system.access-groups.list',
-        canAccess: true,
-        canView: true,
-        canNew: true,
-        canEdit: true,
-        canDelete: true,
-      },
-      {
-        resourceCode: 'system.access-groups.detail',
-        canAccess: true,
-        canView: true,
-        canNew: true,
-        canEdit: true,
-        canDelete: true,
-      },
-    ]);
-    mockPrisma.accessGroupFieldOverride.findMany.mockResolvedValue([]);
-    mockPrisma.resource.findMany.mockResolvedValue([
-      { code: 'system.access-groups.list', module: 'system' },
-      { code: 'system.access-groups.detail', module: 'system' },
-    ]);
-  } else {
-    mockPrisma.userAccessGroup.findMany.mockResolvedValue([]);
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -170,7 +131,6 @@ beforeAll(async () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  permissionCache.clear();
 });
 
 // ---------------------------------------------------------------------------
@@ -210,8 +170,8 @@ describe('Access Group routes', () => {
       expect(body.data).toHaveLength(2);
     });
 
-    it('denies user without permissions with 403', async () => {
-      setupMocks({ hasPermissions: false });
+    it('denies STAFF role with 403', async () => {
+      setupMocks({ role: 'STAFF' });
 
       app = await buildTestApp();
       const res = await app.inject({
@@ -358,30 +318,7 @@ describe('Access Group routes', () => {
           canDelete: false,
         },
       ];
-      // The first findMany call is from resolvePermissions (permission guard) —
-      // setupMocks already configured it via mockResolvedValue.
-      // The second findMany call is from the route handler (replacePermissions service)
-      // returning the updated permissions. We chain it after the guard's call.
-      mockPrisma.accessGroupPermission.findMany
-        .mockResolvedValueOnce([
-          {
-            resourceCode: 'system.access-groups.list',
-            canAccess: true,
-            canView: true,
-            canNew: true,
-            canEdit: true,
-            canDelete: true,
-          },
-          {
-            resourceCode: 'system.access-groups.detail',
-            canAccess: true,
-            canView: true,
-            canNew: true,
-            canEdit: true,
-            canDelete: true,
-          },
-        ])
-        .mockResolvedValueOnce(newPerms);
+      mockPrisma.accessGroupPermission.findMany.mockResolvedValue(newPerms);
 
       app = await buildTestApp();
       const res = await app.inject({

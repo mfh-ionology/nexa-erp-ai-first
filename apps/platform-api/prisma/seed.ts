@@ -205,8 +205,6 @@ async function seedPlatformAdmin() {
       role: PlatformRole.PLATFORM_ADMIN,
       isActive: true,
       mfaEnabled: false,
-      createdBy: 'SYSTEM',
-      updatedBy: 'SYSTEM',
     },
   });
   console.log('Seeded platform admin (admin@nexa-platform.local)');

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { prisma } from '@nexa/db';
+import { prisma, UserRole } from '@nexa/db';
 
 import {
   createAccessGroupRequestSchema,
@@ -24,7 +24,7 @@ import {
   replacePermissions,
   replaceFieldOverrides,
 } from './access-group.service.js';
-import { createPermissionGuard } from '../../core/rbac/index.js';
+import { createRbacGuard } from '../../core/rbac/index.js';
 import { sendSuccess } from '../../core/utils/response.js';
 import { successEnvelope } from '../../core/schemas/envelope.js';
 import { extractRequestContext } from '../../core/types/request-context.js';
@@ -44,7 +44,7 @@ async function accessGroupRoutes(fastify: FastifyInstance): Promise<void> {
       schema: {
         response: { 200: successEnvelope(accessGroupSummarySchema.array()) },
       },
-      preHandler: createPermissionGuard('system.access-groups.list', 'view'),
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
       const groups = await listAccessGroups(prisma, request.companyId);
@@ -61,7 +61,7 @@ async function accessGroupRoutes(fastify: FastifyInstance): Promise<void> {
       schema: {
         response: { 200: successEnvelope(accessGroupDetailSchema) },
       },
-      preHandler: createPermissionGuard('system.access-groups.detail', 'view'),
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
       const group = await getAccessGroup(prisma, request.companyId, request.params.id);
@@ -79,7 +79,7 @@ async function accessGroupRoutes(fastify: FastifyInstance): Promise<void> {
         body: createAccessGroupRequestSchema,
         response: { 201: successEnvelope(accessGroupDetailSchema) },
       },
-      preHandler: createPermissionGuard('system.access-groups.list', 'new'),
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
       const ctx = extractRequestContext(request);
@@ -98,7 +98,7 @@ async function accessGroupRoutes(fastify: FastifyInstance): Promise<void> {
         body: updateAccessGroupRequestSchema,
         response: { 200: successEnvelope(accessGroupDetailSchema) },
       },
-      preHandler: createPermissionGuard('system.access-groups.detail', 'edit'),
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
       const ctx = extractRequestContext(request);
@@ -119,7 +119,7 @@ async function accessGroupRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.delete<{ Params: { id: string } }>(
     '/access-groups/:id',
     {
-      preHandler: createPermissionGuard('system.access-groups.detail', 'delete'),
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
       await deleteAccessGroup(prisma, request.companyId, request.params.id);
@@ -136,7 +136,7 @@ async function accessGroupRoutes(fastify: FastifyInstance): Promise<void> {
       schema: {
         body: replacePermissionsRequestSchema,
       },
-      preHandler: createPermissionGuard('system.access-groups.detail', 'edit'),
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
       const permissions = await replacePermissions(
@@ -158,7 +158,7 @@ async function accessGroupRoutes(fastify: FastifyInstance): Promise<void> {
       schema: {
         body: replaceFieldOverridesRequestSchema,
       },
-      preHandler: createPermissionGuard('system.access-groups.detail', 'edit'),
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
       const overrides = await replaceFieldOverrides(

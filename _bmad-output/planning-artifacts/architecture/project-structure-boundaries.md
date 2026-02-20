@@ -25,12 +25,9 @@ nexa-erp-ai-first/
 │   │   │   │   │   ├── mfa.service.ts           # TOTP generation/verification
 │   │   │   │   │   └── auth.schema.ts
 │   │   │   │   ├── rbac/
-│   │   │   │   │   ├── permission.guard.ts      # Fastify preHandler: createPermissionGuard(resourceCode, action)
-│   │   │   │   │   ├── field-filter.hook.ts     # Fastify onSend: filterFieldsByPermission(resourceCode)
-│   │   │   │   │   ├── permission.service.ts    # Permission resolution + Redis caching (60s TTL)
-│   │   │   │   │   ├── rbac.guard.ts            # DEPRECATED — legacy role-based guard (kept for migration)
-│   │   │   │   │   ├── rbac.service.ts          # DEPRECATED — legacy permission evaluation
-│   │   │   │   │   └── rbac.types.ts            # Role, Permission, AccessGroup, Resource types
+│   │   │   │   │   ├── rbac.guard.ts            # Fastify hook: role + module check
+│   │   │   │   │   ├── rbac.service.ts          # Permission evaluation
+│   │   │   │   │   └── rbac.types.ts            # Role, Permission, ModuleAccess types
 │   │   │   │   ├── tenant/
 │   │   │   │   │   ├── tenant-db.manager.ts     # PrismaClient factory (per-tenant)
 │   │   │   │   │   ├── tenant.middleware.ts      # Extracts tenantId from JWT, attaches db
@@ -339,11 +336,7 @@ nexa-erp-ai-first/
 │   │   ├── prisma/
 │   │   │   ├── schema.prisma              # Main schema (or split per module)
 │   │   │   ├── migrations/                # Versioned migrations
-│   │   │   └── seed.ts                    # Default data: calls loadDefaults() for new companies
-│   │   ├── default-data/                  # Declarative default data (JSON, no code changes needed)
-│   │   │   ├── company-defaults.json      # Standard UK SME defaults (resources, access groups, VAT codes, payment terms, number series, currencies)
-│   │   │   ├── README.md                  # Format documentation and extension guide
-│   │   │   └── [future: company-defaults-retail.json, company-defaults-manufacturing.json]
+│   │   │   └── seed.ts                    # Default data: CoA template, settings, admin user
 │   │   ├── src/
 │   │   │   ├── index.ts                   # Re-exports PrismaClient and types
 │   │   │   └── client.ts                  # PrismaClient instantiation helper
@@ -384,7 +377,7 @@ nexa-erp-ai-first/
 │   │   │   ├── constants/
 │   │   │   │   ├── error-codes.ts         # All error codes
 │   │   │   │   ├── status-enums.ts        # DocumentStatus, PaymentMethod, etc.
-│   │   │   │   ├── roles.ts              # AdminRole definitions (SUPER_ADMIN, ADMIN), resource action types
+│   │   │   │   ├── roles.ts              # Role definitions, module permissions
 │   │   │   │   └── modules.ts            # Module identifiers
 │   │   │   └── utils/
 │   │   │       ├── money.ts              # Decimal arithmetic helpers
@@ -500,7 +493,7 @@ Modules NEVER:
 | Concern | Location |
 |---------|----------|
 | Auth/JWT/MFA | `api/src/core/auth/` |
-| Granular RBAC (Access Groups + Resource Permissions) | `api/src/core/rbac/` (permission.guard.ts, field-filter.hook.ts, permission.service.ts) + `web/src/components/layout/module-guard.tsx` + `packages/db/default-data/company-defaults.json` |
+| RBAC + Module gating | `api/src/core/rbac/` + `web/src/components/layout/module-guard.tsx` |
 | Tenant DB routing | `api/src/core/tenant/` |
 | Audit trail | `api/src/core/audit/` |
 | Event bus | `api/src/core/events/` |

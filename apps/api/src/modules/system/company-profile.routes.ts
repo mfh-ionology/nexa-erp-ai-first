@@ -1,26 +1,21 @@
 import type { FastifyInstance } from 'fastify';
-import { prisma } from '@nexa/db';
+import { prisma, UserRole } from '@nexa/db';
 
 import {
   createCompanyProfileRequestSchema,
   updateCompanyProfileRequestSchema,
   companyProfileResponseSchema,
-  importDefaultsRequestSchema,
-  importDefaultsResponseSchema,
 } from './company-profile.schema.js';
 import type {
   CreateCompanyProfileRequest,
   UpdateCompanyProfileRequest,
-  ImportDefaultsRequest,
 } from './company-profile.schema.js';
 import {
   getCompanyProfile,
   createCompanyProfile,
   updateCompanyProfile,
-  exportDefaults,
-  importDefaults,
 } from './company-profile.service.js';
-import { createPermissionGuard } from '../../core/rbac/index.js';
+import { createRbacGuard } from '../../core/rbac/index.js';
 import { sendSuccess } from '../../core/utils/response.js';
 import { successEnvelope } from '../../core/schemas/envelope.js';
 import { extractRequestContext } from '../../core/types/request-context.js';
@@ -40,7 +35,7 @@ async function companyProfileRoutes(fastify: FastifyInstance): Promise<void> {
       schema: {
         response: { 200: successEnvelope(companyProfileResponseSchema) },
       },
-      preHandler: createPermissionGuard('system.company-profile', 'view'),
+      preHandler: createRbacGuard({ minimumRole: UserRole.VIEWER }),
     },
     async (request, reply) => {
       const profile = await getCompanyProfile(prisma, request.companyId);
@@ -58,7 +53,7 @@ async function companyProfileRoutes(fastify: FastifyInstance): Promise<void> {
         body: createCompanyProfileRequestSchema,
         response: { 201: successEnvelope(companyProfileResponseSchema) },
       },
-      preHandler: createPermissionGuard('system.company-profile', 'new'),
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
       const ctx = extractRequestContext(request);
@@ -77,45 +72,12 @@ async function companyProfileRoutes(fastify: FastifyInstance): Promise<void> {
         body: updateCompanyProfileRequestSchema,
         response: { 200: successEnvelope(companyProfileResponseSchema) },
       },
-      preHandler: createPermissionGuard('system.company-profile', 'edit'),
+      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
     },
     async (request, reply) => {
       const ctx = extractRequestContext(request);
       const profile = await updateCompanyProfile(prisma, request.companyId, request.body, ctx);
       return sendSuccess(reply, profile);
-    },
-  );
-
-  // -------------------------------------------------------------------------
-  // GET /company-profile/export-defaults — export access groups as JSON
-  // -------------------------------------------------------------------------
-  fastify.get(
-    '/company-profile/export-defaults',
-    {
-      preHandler: createPermissionGuard('system.company-profile', 'edit'),
-    },
-    async (request, reply) => {
-      const data = await exportDefaults(prisma, request.companyId);
-      return sendSuccess(reply, data);
-    },
-  );
-
-  // -------------------------------------------------------------------------
-  // POST /company-profile/import-defaults — import access groups (upsert)
-  // -------------------------------------------------------------------------
-  fastify.post<{ Body: ImportDefaultsRequest }>(
-    '/company-profile/import-defaults',
-    {
-      schema: {
-        body: importDefaultsRequestSchema,
-        response: { 200: successEnvelope(importDefaultsResponseSchema) },
-      },
-      preHandler: createPermissionGuard('system.company-profile', 'edit'),
-    },
-    async (request, reply) => {
-      const ctx = extractRequestContext(request);
-      const result = await importDefaults(prisma, request.companyId, request.body, ctx);
-      return sendSuccess(reply, result);
     },
   );
 }
