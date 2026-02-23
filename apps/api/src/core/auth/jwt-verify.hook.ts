@@ -3,9 +3,10 @@ import fp from 'fastify-plugin';
 
 import { verifyAccessToken } from './auth.service.js';
 import { AuthError } from '../errors/index.js';
+import type { EffectivePermissions } from '../rbac/permission.types.js';
 
 // ---------------------------------------------------------------------------
-// Fastify type augmentation (Task 6.2)
+// Fastify type augmentation (Task 6.2 + E2b-4 Task 5.11)
 // ---------------------------------------------------------------------------
 
 declare module 'fastify' {
@@ -15,6 +16,7 @@ declare module 'fastify' {
     companyId: string;
     userRole: string;
     enabledModules: string[];
+    permissions: EffectivePermissions | null;
   }
 }
 
@@ -29,6 +31,7 @@ const PUBLIC_ROUTES = new Set([
   '/auth/password/reset-request',
   '/auth/password/reset',
   '/health',
+  '/webhooks/platform',
 ]);
 
 // Prefixes that legitimately serve sub-paths (e.g. /documentation/json)
@@ -62,6 +65,18 @@ const jwtVerifyPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     setter(value: string[]) {
       // eslint-disable-next-line @typescript-eslint/naming-convention -- Fastify internal storage property
       (this as unknown as { _enabledModules?: string[] })._enabledModules = value;
+    },
+  });
+
+  // E2b-4: permissions decorator — set by createPermissionGuard, null by default
+  fastify.decorateRequest('permissions', {
+    getter() {
+      // eslint-disable-next-line @typescript-eslint/naming-convention -- Fastify internal storage property
+      return (this as unknown as { _permissions?: EffectivePermissions | null })._permissions ?? null;
+    },
+    setter(value: EffectivePermissions | null) {
+      // eslint-disable-next-line @typescript-eslint/naming-convention -- Fastify internal storage property
+      (this as unknown as { _permissions?: EffectivePermissions | null })._permissions = value;
     },
   });
 

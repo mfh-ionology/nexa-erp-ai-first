@@ -5,8 +5,10 @@ export class AuthError extends AppError {
     code: string = 'UNAUTHORIZED',
     message: string = 'Authentication required',
     statusCode: 401 | 403 = 401,
+    messageKey?: string,
+    messageParams?: Record<string, string>,
   ) {
-    super(code, message, statusCode);
+    super(code, message, statusCode, undefined, messageKey, messageParams);
     this.name = 'AuthError';
   }
 }

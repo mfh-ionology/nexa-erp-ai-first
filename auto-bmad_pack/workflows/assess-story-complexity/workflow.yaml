@@ -1,0 +1,52 @@
+name: assess-story-complexity
+description: "Pre-validate story complexity before dev execution. Returns risk assessment and split recommendations."
+author: "BMad Orchestrator"
+
+# Input parameters - passed by bash script
+inputs:
+  story_file_path: "" # Required: path to story markdown file
+
+# Output format - JSON written to stdout
+output_format: json
+output_schema:
+  status: "green|yellow|red"
+  overall_risk: "low|medium|high|critical"
+  estimated_total_turns: number
+  tasks:
+    - task_number: number
+      task_title: string
+      subtask_count: number
+      estimated_turns: number
+      risk_level: "green|yellow|red"
+      flags: string[]
+      split_recommendation:
+        should_split: boolean
+        strategy: string
+        suggested_groups: object[]
+
+# Thresholds for risk assessment (PER-TASK, not total story)
+thresholds:
+  # Per-task subtask thresholds
+  subtasks_green: 12     # <12 subtasks = green
+  subtasks_yellow: 20    # 12-20 subtasks = yellow
+  subtasks_red: 20       # >20 subtasks = red
+  # Per-task turn thresholds
+  turns_green: 120       # <120 turns = green
+  turns_yellow: 200      # 120-200 turns = yellow
+  turns_red: 200         # >200 turns = red
+  # Turn calculation
+  turn_base: 30          # Base turns per task
+  turn_per_subtask: 8    # Additional turns per subtask
+  turn_cap: 200          # Maximum turns per task
+  # Total story thresholds (sum of all tasks)
+  total_turns_green: 400   # Total story <400 turns = green
+  total_turns_yellow: 800  # Total story 400-800 turns = yellow
+  total_turns_red: 800     # Total story >800 turns = red (but only if ALSO has red tasks)
+
+# Workflow components
+installed_path: "{project-root}/auto-bmad_pack/workflows/assess-story-complexity"
+instructions: "{installed_path}/instructions.md"
+
+# No template - this is an action workflow that outputs JSON
+template: false
+standalone: true

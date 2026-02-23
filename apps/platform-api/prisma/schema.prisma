@@ -64,13 +64,14 @@ model Tenant {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  plan            Plan                   @relation(fields: [planId], references: [id])
-  moduleOverrides TenantModuleOverride[]
-  featureFlags    TenantFeatureFlag[]
-  aiQuota         TenantAiQuota?
-  aiUsageRecords  TenantAiUsage[]
-  billing         TenantBilling?
-  impersonations  ImpersonationSession[]
+  plan                  Plan                        @relation(fields: [planId], references: [id])
+  moduleOverrides       TenantModuleOverride[]
+  featureFlags          TenantFeatureFlag[]
+  aiQuota               TenantAiQuota?
+  aiUsageRecords        TenantAiUsage[]
+  providerCredentials   TenantProviderCredential[]
+  billing               TenantBilling?
+  impersonations        ImpersonationSession[]
 
   @@index([status], map: "idx_tenants_status")
   @@index([planId], map: "idx_tenants_plan_id")
@@ -153,11 +154,16 @@ model TenantAiUsage {
   userId           String   @map("user_id") @db.VarChar(100)
   featureKey       String   @map("feature_key") @db.VarChar(100)
   model            String   @map("model") @db.VarChar(100)
+  provider         String   @map("provider") @db.VarChar(50)
   promptTokens     Int      @map("prompt_tokens")
   completionTokens Int      @map("completion_tokens")
   totalTokens      Int      @map("total_tokens")
   costEstimate     Decimal  @map("cost_estimate") @db.Decimal(10, 6)
   requestId        String   @unique @map("request_id") @db.VarChar(100)
+  isByok           Boolean  @default(false) @map("is_byok")
+  latencyMs        Int?     @map("latency_ms")
+  fallbackUsed     Boolean  @default(false) @map("fallback_used")
+  fallbackFrom     String?  @map("fallback_from") @db.VarChar(100)
   timestamp        DateTime @default(now()) @map("timestamp")
 
   // Append-only: createdAt only, NO updatedAt (matches PlatformAuditLog pattern)
@@ -168,6 +174,21 @@ model TenantAiUsage {
   @@index([tenantId, timestamp], map: "idx_tenant_ai_usage_tenant_timestamp")
   @@index([tenantId, featureKey], map: "idx_tenant_ai_usage_tenant_feature")
   @@map("tenant_ai_usage")
+}
+
+model TenantProviderCredential {
+  id           String   @id @default(uuid()) @map("id")
+  tenantId     String   @map("tenant_id")
+  providerId   String   @map("provider_id") @db.VarChar(50)
+  encryptedKey String   @map("encrypted_key")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, providerId], map: "uq_tenant_provider_credentials_tenant_provider")
+  @@map("tenant_provider_credentials")
 }
 
 model TenantBilling {
@@ -205,6 +226,7 @@ model PlatformUser {
 
   auditLogs      PlatformAuditLog[]
   impersonations ImpersonationSession[]
+  refreshTokens  PlatformRefreshToken[]
 
   @@map("platform_users")
 }
@@ -248,4 +270,21 @@ model ImpersonationSession {
 
   @@index([tenantId, startedAt], map: "idx_impersonation_sessions_tenant_started")
   @@map("impersonation_sessions")
+}
+
+model PlatformRefreshToken {
+  id             String    @id @default(uuid()) @map("id")
+  platformUserId String    @map("platform_user_id")
+  tokenHash      String    @map("token_hash")
+  expiresAt      DateTime  @map("expires_at")
+  ipAddress      String?   @map("ip_address")
+  userAgent      String?   @map("user_agent")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  revokedAt      DateTime? @map("revoked_at")
+
+  platformUser PlatformUser @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+
+  @@unique([tokenHash], map: "uq_platform_refresh_tokens_token_hash")
+  @@index([platformUserId, revokedAt], map: "idx_platform_refresh_tokens_user_revoked")
+  @@map("platform_refresh_tokens")
 }

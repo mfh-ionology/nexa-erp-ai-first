@@ -29,11 +29,12 @@ import {
   updateUserModules,
   deactivateUser,
 } from './user.service.js';
-import { createRbacGuard } from '../../core/rbac/index.js';
+import { createPermissionGuard, filterFieldsByPermission } from '../../core/rbac/index.js';
 import { sendSuccess } from '../../core/utils/response.js';
 import { successEnvelope } from '../../core/schemas/envelope.js';
 import { extractRequestContext } from '../../core/types/request-context.js';
 import { AuthError } from '../../core/errors/index.js';
+import { tServer } from '@nexa/i18n/server';
 
 // ---------------------------------------------------------------------------
 // Response schemas for pagination
@@ -72,12 +73,12 @@ async function userRoutes(fastify: FastifyInstance): Promise<void> {
         body: createUserRequestSchema,
         response: { 201: successEnvelope(userResponseSchema) },
       },
-      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
+      preHandler: createPermissionGuard('system.users.list', 'new'),
     },
     async (request, reply) => {
       // Security: non-SUPER_ADMIN users cannot create SUPER_ADMIN users
       if (request.body.role === UserRole.SUPER_ADMIN && request.userRole !== UserRole.SUPER_ADMIN) {
-        throw new AuthError('FORBIDDEN', 'Insufficient privileges to assign SUPER_ADMIN role', 403);
+        throw new AuthError('FORBIDDEN', tServer('errors:FORBIDDEN_SUPER_ADMIN'), 403, 'errors:FORBIDDEN_SUPER_ADMIN');
       }
       const ctx = extractRequestContext(request);
       const user = await createUser(prisma, { ...request.body, companyId: request.companyId }, ctx);
@@ -95,7 +96,7 @@ async function userRoutes(fastify: FastifyInstance): Promise<void> {
         querystring: userListQuerySchema,
         response: { 200: userListEnvelope },
       },
-      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
+      preHandler: createPermissionGuard('system.users.list', 'view'),
     },
     async (request, reply) => {
       const { data, meta } = await listUsers(prisma, request.companyId, request.query);
@@ -113,7 +114,8 @@ async function userRoutes(fastify: FastifyInstance): Promise<void> {
         params: userParamsSchema,
         response: { 200: successEnvelope(userResponseSchema) },
       },
-      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
+      preHandler: createPermissionGuard('system.users.detail', 'view'),
+      onSend: filterFieldsByPermission('system.users.detail'),
     },
     async (request, reply) => {
       const user = await getUserById(prisma, request.params.id, request.companyId);
@@ -132,7 +134,7 @@ async function userRoutes(fastify: FastifyInstance): Promise<void> {
         body: updateUserRequestSchema,
         response: { 200: successEnvelope(userResponseSchema) },
       },
-      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
+      preHandler: createPermissionGuard('system.users.detail', 'edit'),
     },
     async (request, reply) => {
       const ctx = extractRequestContext(request);
@@ -158,12 +160,12 @@ async function userRoutes(fastify: FastifyInstance): Promise<void> {
         body: updateUserRoleRequestSchema,
         response: { 200: successEnvelope(roleUpdateResponseSchema) },
       },
-      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
+      preHandler: createPermissionGuard('system.users.detail', 'edit'),
     },
     async (request, reply) => {
       // Security: non-SUPER_ADMIN users cannot assign SUPER_ADMIN role
       if (request.body.role === UserRole.SUPER_ADMIN && request.userRole !== UserRole.SUPER_ADMIN) {
-        throw new AuthError('FORBIDDEN', 'Insufficient privileges to assign SUPER_ADMIN role', 403);
+        throw new AuthError('FORBIDDEN', tServer('errors:FORBIDDEN_SUPER_ADMIN'), 403, 'errors:FORBIDDEN_SUPER_ADMIN');
       }
       const ctx = extractRequestContext(request);
       const result = await updateUserRole(
@@ -188,7 +190,7 @@ async function userRoutes(fastify: FastifyInstance): Promise<void> {
         body: updateUserModulesRequestSchema,
         response: { 200: successEnvelope(userResponseSchema) },
       },
-      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
+      preHandler: createPermissionGuard('system.users.detail', 'edit'),
     },
     async (request, reply) => {
       const ctx = extractRequestContext(request);
@@ -213,7 +215,7 @@ async function userRoutes(fastify: FastifyInstance): Promise<void> {
         params: userParamsSchema,
         response: { 200: successEnvelope(userResponseSchema) },
       },
-      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
+      preHandler: createPermissionGuard('system.users.detail', 'delete'),
     },
     async (request, reply) => {
       const ctx = extractRequestContext(request);

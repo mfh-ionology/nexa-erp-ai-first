@@ -5,8 +5,10 @@ export class DomainError extends AppError {
     code: string = 'BUSINESS_RULE_VIOLATION',
     message: string = 'A business rule was violated',
     details?: Record<string, string[]>,
+    messageKey?: string,
+    messageParams?: Record<string, string>,
   ) {
-    super(code, message, 422, details);
+    super(code, message, 422, details, messageKey, messageParams);
     this.name = 'DomainError';
   }
 }

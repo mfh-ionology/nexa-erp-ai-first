@@ -3,6 +3,7 @@ import type { FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastif
 import { UserRole } from '@nexa/db';
 
 import { AuthError } from '../errors/index.js';
+import { tServer } from '@nexa/i18n/server';
 import { hasMinimumRole, ROLE_LEVEL, type RbacGuardOptions } from './rbac.types.js';
 
 /**
@@ -10,6 +11,10 @@ import { hasMinimumRole, ROLE_LEVEL, type RbacGuardOptions } from './rbac.types.
  *
  * The guard reads `request.userRole` (already resolved by company-context middleware)
  * and compares it against the configured minimum role. No additional DB queries.
+ *
+ * @deprecated Use `createPermissionGuard(resourceCode, action?)` from `./permission.guard.js`
+ * instead for granular per-resource, per-action permission checks. This flat role-hierarchy
+ * guard is retained for backward compatibility only and will be removed in a future release.
  */
 export function createRbacGuard(options: RbacGuardOptions): preHandlerHookHandler {
   // eslint-disable-next-line @typescript-eslint/no-misused-promises -- Fastify preHandler accepts async functions
@@ -17,20 +22,20 @@ export function createRbacGuard(options: RbacGuardOptions): preHandlerHookHandle
     // 2.4 — No role means company-context middleware was bypassed
     if (!request.userRole) {
       // TODO: E3 — emit rbac.denied event
-      throw new AuthError('FORBIDDEN', 'Insufficient permissions', 403);
+      throw new AuthError('FORBIDDEN', tServer('errors:FORBIDDEN'), 403, 'errors:FORBIDDEN');
     }
 
     // 2.5 — Validate role is a known UserRole before comparing
     if (!(request.userRole in ROLE_LEVEL)) {
       // TODO: E3 — emit rbac.denied event
-      throw new AuthError('FORBIDDEN', 'Insufficient permissions', 403);
+      throw new AuthError('FORBIDDEN', tServer('errors:FORBIDDEN'), 403, 'errors:FORBIDDEN');
     }
 
     // 2.6 — Check role hierarchy
     const userRole = request.userRole as UserRole;
     if (!hasMinimumRole(userRole, options.minimumRole)) {
       // TODO: E3 — emit rbac.denied event
-      throw new AuthError('FORBIDDEN', 'Insufficient permissions', 403);
+      throw new AuthError('FORBIDDEN', tServer('errors:FORBIDDEN'), 403, 'errors:FORBIDDEN');
     }
 
     // 2.7 — Module gating (optional) — SUPER_ADMIN bypasses module checks
@@ -39,7 +44,7 @@ export function createRbacGuard(options: RbacGuardOptions): preHandlerHookHandle
       const userModules = request.enabledModules.map((m) => m.toUpperCase());
       if (!userModules.includes(requiredModule)) {
         // TODO: E3 — emit rbac.denied event
-        throw new AuthError('MODULE_NOT_ENABLED', 'You do not have access to this module', 403);
+        throw new AuthError('MODULE_NOT_ENABLED', tServer('errors:MODULE_NOT_ENABLED'), 403, 'errors:MODULE_NOT_ENABLED');
       }
     }
   };

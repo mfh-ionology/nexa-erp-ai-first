@@ -1,0 +1,39 @@
+name: validate-task-completion
+description: "Post-task validation to assess completion and recommend next action for the orchestrator"
+author: "BMad Orchestrator"
+
+# Input parameters - passed by bash script
+inputs:
+  story_file_path: ""   # Required: path to story markdown file
+  log_file_path: ""     # Required: path to dev execution log file
+  task_number: ""       # Required: which task was just executed (e.g., "1", "4a")
+  failure_type: ""      # Required: "success" | "max_turns" | "error" | "timeout"
+  turns_used: ""        # Optional: how many turns were used
+
+# Output format - JSON written to stdout
+output_format: json
+output_schema:
+  action: "continue|retry|retry_with_more|split|escalate|fix_tests"
+  reason: string
+  details:
+    subtasks_total: number
+    subtasks_completed: number
+    progress_percentage: number
+    recommended_turns: number
+    issues_found: string[]
+    next_task: string
+
+# Decision thresholds
+thresholds:
+  retry_progress_min: 50      # >50% progress allows retry_with_more
+  retry_multiplier: 2         # Double turns on retry
+  max_retry_turns: 200        # Cap retries at 200 turns
+  escalate_after_retries: 2   # Escalate after 2 failed retries
+
+# Workflow components
+installed_path: "{project-root}/auto-bmad_pack/workflows/validate-task-completion"
+instructions: "{installed_path}/instructions.md"
+
+# No template - this is an action workflow that outputs JSON
+template: false
+standalone: true

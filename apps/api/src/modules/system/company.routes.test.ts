@@ -7,13 +7,24 @@ import { SignJWT } from 'jose';
 // Mock @nexa/db — vi.hoisted ensures variables exist when vi.mock is hoisted
 // ---------------------------------------------------------------------------
 
-const { mockPrisma, mockResolveUserRole } = vi.hoisted(() => ({
+const { mockPrisma, mockResolveUserRole, mockPermissionService } = vi.hoisted(() => ({
   mockPrisma: {
     user: { findUnique: vi.fn(), update: vi.fn() },
     userCompanyRole: { findUnique: vi.fn(), findFirst: vi.fn() },
     companyProfile: { findUnique: vi.fn() },
   },
   mockResolveUserRole: vi.fn(),
+  mockPermissionService: {
+    getEffectivePermissions: vi.fn(),
+    hasPermission: vi.fn(),
+    invalidateUser: vi.fn(),
+    invalidateGroup: vi.fn(),
+    invalidateAll: vi.fn(),
+    clearCache: vi.fn(),
+    getCacheSize: vi.fn(),
+    deriveEnabledModules: vi.fn(),
+    getFieldVisibility: vi.fn(),
+  },
 }));
 
 vi.mock('@nexa/db', () => ({
@@ -26,6 +37,12 @@ vi.mock('@nexa/db', () => ({
     STAFF: 'STAFF',
     VIEWER: 'VIEWER',
   },
+}));
+
+vi.mock('../../core/rbac/permission.service.js', () => ({
+  permissionService: mockPermissionService,
+  PermissionService: vi.fn(),
+  ACTION_FLAG_MAP: { new: 'canNew', view: 'canView', edit: 'canEdit', delete: 'canDelete' },
 }));
 
 // ---------------------------------------------------------------------------
@@ -132,6 +149,22 @@ function setupMocks(
   if (config.userUpdate !== false) {
     mockPrisma.user.update.mockResolvedValue({});
   }
+
+  // Configure permission service: role-aware mock for permission guard
+  mockPermissionService.getEffectivePermissions.mockImplementation(
+    async (_prisma: unknown, _userId: string, _companyId: string, userRole: string) => {
+      const hasAccess = ['ADMIN', 'MANAGER'].includes(userRole);
+      const fullPerm = { canAccess: true, canNew: true, canView: true, canEdit: true, canDelete: true };
+      return {
+        permissions: hasAccess ? { 'system.company-profile.detail': fullPerm } : {},
+        fieldOverrides: {},
+        accessGroups: [],
+        role: userRole,
+        isSuperAdmin: false,
+        enabledModules: hasAccess ? ['system'] : [],
+      };
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -371,7 +404,7 @@ describe('POST /system/companies/:id/switch', () => {
       const body = res.json();
       expect(body.success).toBe(false);
       expect(body.error.code).toBe('FORBIDDEN');
-      expect(body.error.message).toBe('Insufficient permissions');
+      expect(body.error.message).toBe('You do not have permission to perform this action');
     });
   });
 });

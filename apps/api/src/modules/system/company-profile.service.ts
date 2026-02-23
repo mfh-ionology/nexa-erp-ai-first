@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@nexa/db';
-import { UserRole } from '@nexa/db';
+import { UserRole, loadDefaultAccessGroups, assignFullAccessGroup } from '@nexa/db';
 import type { RequestContext } from '../../core/types/request-context.js';
 import type {
   CreateCompanyProfileRequest,
@@ -67,6 +67,10 @@ export async function createCompanyProfile(
         })),
       });
     }
+
+    // Seed default access groups and assign FULL_ACCESS to the creator
+    await loadDefaultAccessGroups(tx, company.id, ctx.userId);
+    await assignFullAccessGroup(tx, company.id, ctx.userId);
 
     // Grant the creating user ADMIN access to the new company
     await tx.userCompanyRole.create({

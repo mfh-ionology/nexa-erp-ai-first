@@ -121,6 +121,7 @@ describe('createUser', () => {
     companyId: TEST_COMPANY_ID,
     role: 'ADMIN',
     enabledModules: ['FINANCE'],
+    locale: 'en',
   };
 
   it('hashes password with Argon2id before storing (11.2)', async () => {

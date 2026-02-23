@@ -25,5 +25,6 @@ export type {
   TenantBilling,
   PlatformUser,
   PlatformAuditLog,
+  PlatformRefreshToken,
   ImpersonationSession,
 } from '../generated/platform-prisma/client';

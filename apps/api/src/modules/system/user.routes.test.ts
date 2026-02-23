@@ -6,7 +6,7 @@ import Fastify from 'fastify';
 // Mock @nexa/db — vi.hoisted ensures variables exist when vi.mock is hoisted
 // ---------------------------------------------------------------------------
 
-const { mockPrisma, mockResolveUserRole } = vi.hoisted(() => ({
+const { mockPrisma, mockResolveUserRole, mockPermissionService } = vi.hoisted(() => ({
   mockPrisma: {
     user: {
       findUnique: vi.fn(),
@@ -24,6 +24,17 @@ const { mockPrisma, mockResolveUserRole } = vi.hoisted(() => ({
     $transaction: vi.fn(),
   },
   mockResolveUserRole: vi.fn(),
+  mockPermissionService: {
+    getEffectivePermissions: vi.fn(),
+    hasPermission: vi.fn(),
+    invalidateUser: vi.fn(),
+    invalidateGroup: vi.fn(),
+    invalidateAll: vi.fn(),
+    clearCache: vi.fn(),
+    getCacheSize: vi.fn(),
+    deriveEnabledModules: vi.fn(),
+    getFieldVisibility: vi.fn(),
+  },
 }));
 
 vi.mock('@nexa/db', () => ({
@@ -35,6 +46,17 @@ vi.mock('@nexa/db', () => ({
     MANAGER: 'MANAGER',
     STAFF: 'STAFF',
     VIEWER: 'VIEWER',
+  },
+}));
+
+vi.mock('../../core/rbac/permission.service.js', () => ({
+  permissionService: mockPermissionService,
+  PermissionService: vi.fn(),
+  ACTION_FLAG_MAP: {
+    new: 'canNew',
+    view: 'canView',
+    edit: 'canEdit',
+    delete: 'canDelete',
   },
 }));
 
@@ -82,6 +104,7 @@ function sampleUser(overrides: Record<string, unknown> = {}) {
     lastName: 'Doe',
     companyId: TEST_COMPANY_ID,
     enabledModules: ['FINANCE'],
+    locale: 'en',
     isActive: true,
     mfaEnabled: false,
     lastLoginAt: null,
@@ -139,6 +162,32 @@ function setupMocks(
   mockPrisma.$transaction.mockImplementation(
     async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => fn(mockPrisma),
   );
+
+  // Configure permission service mock
+  if (resolvedRole === 'SUPER_ADMIN') {
+    // Guard calls getEffectivePermissions even for SUPER_ADMIN (to populate request.permissions)
+    mockPermissionService.getEffectivePermissions.mockResolvedValue({
+      permissions: {},
+      fieldOverrides: {},
+      accessGroups: [],
+      role: resolvedRole,
+      isSuperAdmin: true,
+      enabledModules: ['system'],
+    });
+  } else {
+    const hasAccess = ['ADMIN', 'MANAGER'].includes(resolvedRole);
+    const fullPerm = { canAccess: true, canNew: true, canView: true, canEdit: true, canDelete: true };
+    mockPermissionService.getEffectivePermissions.mockResolvedValue({
+      permissions: hasAccess
+        ? { 'system.users.list': fullPerm, 'system.users.detail': fullPerm }
+        : {},
+      fieldOverrides: {},
+      accessGroups: hasAccess ? [{ id: 'ag-1', code: 'FULL_ACCESS', name: 'Full Access' }] : [],
+      role: resolvedRole,
+      isSuperAdmin: false,
+      enabledModules: hasAccess ? ['system'] : [],
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,9 @@
 import type { FastifyReply } from 'fastify';
 
+import { tServer } from '@nexa/i18n/server';
+
 import { AppError } from '../errors/index.js';
+import type { ErrorEnvelope } from '../schemas/envelope.js';
 
 interface SuccessEnvelope<T> {
   success: true;
@@ -8,17 +11,8 @@ interface SuccessEnvelope<T> {
   meta?: PaginationMeta;
 }
 
-interface ErrorEnvelope {
-  success: false;
-  error: {
-    code: string;
-    message: string;
-    details?: Record<string, string[]>;
-  };
-}
-
 export interface PaginationMeta {
-  cursor?: string;
+  cursor?: string | null;
   hasMore?: boolean;
   total?: number;
 }
@@ -55,6 +49,12 @@ export function sendError(reply: FastifyReply, error: Error): FastifyReply {
       success: false,
       error: { code: error.code, message: error.message },
     };
+    if (error.messageKey) {
+      envelope.error.messageKey = error.messageKey;
+    }
+    if (error.messageParams && Object.keys(error.messageParams).length > 0) {
+      envelope.error.messageParams = error.messageParams;
+    }
     if (error.details && Object.keys(error.details).length > 0) {
       envelope.error.details = error.details;
     }
@@ -65,7 +65,8 @@ export function sendError(reply: FastifyReply, error: Error): FastifyReply {
     success: false,
     error: {
       code: 'INTERNAL_ERROR',
-      message: 'An unexpected error occurred',
+      message: tServer('errors:SERVER_ERROR'),
+      messageKey: 'errors:SERVER_ERROR',
     },
   } satisfies ErrorEnvelope);
 }

@@ -109,7 +109,7 @@ describe('createRbacGuard', () => {
     const body = res.json<ErrorResponse>();
     expect(body.success).toBe(false);
     expect(body.error.code).toBe('FORBIDDEN');
-    expect(body.error.message).toBe('Insufficient permissions');
+    expect(body.error.message).toBe('You do not have permission to perform this action');
   });
 
   // 3.3 — VIEWER denied on STAFF-minimum route → 403
@@ -228,7 +228,7 @@ describe('createRbacGuard', () => {
     expect(res.statusCode).toBe(403);
     const body = res.json<ErrorResponse>();
     expect(body.error.code).toBe('FORBIDDEN');
-    expect(body.error.message).toBe('Insufficient permissions');
+    expect(body.error.message).toBe('You do not have permission to perform this action');
   });
 
   // Invalid role value → 403 with 'Invalid role' message
@@ -250,7 +250,7 @@ describe('createRbacGuard', () => {
     expect(res.statusCode).toBe(403);
     const body = res.json<ErrorResponse>();
     expect(body.error.code).toBe('FORBIDDEN');
-    expect(body.error.message).toBe('Insufficient permissions');
+    expect(body.error.message).toBe('You do not have permission to perform this action');
   });
 
   // 3.8 — module gating: user without module → 403 MODULE_NOT_ENABLED (AC #5)
@@ -280,7 +280,7 @@ describe('createRbacGuard', () => {
     expect(res.statusCode).toBe(403);
     const body = res.json<ErrorResponse>();
     expect(body.error.code).toBe('MODULE_NOT_ENABLED');
-    expect(body.error.message).toBe('You do not have access to this module');
+    expect(body.error.message).toBe('This module is not enabled for your account');
   });
 
   // 3.9 — module gating: user with correct module → passes

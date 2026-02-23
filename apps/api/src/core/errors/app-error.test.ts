@@ -28,6 +28,26 @@ describe('AppError', () => {
     const error = new AppError('TEST', 'msg', 400);
     expect(error.details).toBeUndefined();
   });
+
+  it('stores messageKey and messageParams when provided', () => {
+    const error = new AppError(
+      'TEST_ERROR',
+      'Something failed',
+      500,
+      undefined,
+      'errors:TEST_ERROR',
+      { field: 'email' },
+    );
+
+    expect(error.messageKey).toBe('errors:TEST_ERROR');
+    expect(error.messageParams).toEqual({ field: 'email' });
+  });
+
+  it('omits messageKey and messageParams when not provided', () => {
+    const error = new AppError('TEST', 'msg', 400);
+    expect(error.messageKey).toBeUndefined();
+    expect(error.messageParams).toBeUndefined();
+  });
 });
 
 describe('DomainError', () => {
@@ -49,6 +69,19 @@ describe('DomainError', () => {
     expect(error.statusCode).toBe(422);
     expect(error.details).toEqual(details);
   });
+
+  it('passes through messageKey and messageParams', () => {
+    const error = new DomainError(
+      'PERIOD_LOCKED',
+      'Period is locked',
+      undefined,
+      'errors:PERIOD_LOCKED',
+      { period: '2026-01' },
+    );
+
+    expect(error.messageKey).toBe('errors:PERIOD_LOCKED');
+    expect(error.messageParams).toEqual({ period: '2026-01' });
+  });
 });
 
 describe('AuthError', () => {
@@ -68,6 +101,18 @@ describe('AuthError', () => {
     expect(error.statusCode).toBe(403);
     expect(error.message).toBe('Access denied');
   });
+
+  it('passes through messageKey and messageParams', () => {
+    const error = new AuthError(
+      'INVALID_CREDENTIALS',
+      'Invalid email or password',
+      401,
+      'errors:AUTH_INVALID_CREDENTIALS',
+    );
+
+    expect(error.messageKey).toBe('errors:AUTH_INVALID_CREDENTIALS');
+    expect(error.messageParams).toBeUndefined();
+  });
 });
 
 describe('NotFoundError', () => {
@@ -86,6 +131,18 @@ describe('NotFoundError', () => {
     expect(error.code).toBe('INVOICE_NOT_FOUND');
     expect(error.message).toBe('Invoice not found');
     expect(error.statusCode).toBe(404);
+  });
+
+  it('passes through messageKey and messageParams', () => {
+    const error = new NotFoundError(
+      'USER_NOT_FOUND',
+      'User not found',
+      'errors:USER_NOT_FOUND',
+      { id: '123' },
+    );
+
+    expect(error.messageKey).toBe('errors:USER_NOT_FOUND');
+    expect(error.messageParams).toEqual({ id: '123' });
   });
 });
 
@@ -108,6 +165,19 @@ describe('ValidationError', () => {
 
     expect(error.code).toBe('VALIDATION_ERROR');
     expect(error.statusCode).toBe(400);
+    expect(error.details).toEqual(details);
+  });
+
+  it('passes through messageKey and messageParams', () => {
+    const details = { email: ['must be a valid email'] };
+    const error = new ValidationError(
+      'Validation failed',
+      details,
+      'errors:VALIDATION_ERROR',
+    );
+
+    expect(error.messageKey).toBe('errors:VALIDATION_ERROR');
+    expect(error.messageParams).toBeUndefined();
     expect(error.details).toEqual(details);
   });
 });

@@ -148,7 +148,8 @@ describe('sendError', () => {
       success: false,
       error: {
         code: 'INTERNAL_ERROR',
-        message: 'An unexpected error occurred',
+        message: 'An internal server error occurred',
+        messageKey: 'errors:SERVER_ERROR',
       },
     });
   });

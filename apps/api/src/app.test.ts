@@ -33,6 +33,17 @@ vi.mock('@nexa/db', () => ({
     FLAT_RATE: 'FLAT_RATE',
     CASH: 'CASH',
   },
+  ResourceType: {
+    PAGE: 'PAGE',
+    REPORT: 'REPORT',
+    SETTING: 'SETTING',
+    MAINTENANCE: 'MAINTENANCE',
+  },
+  FieldVisibility: {
+    VISIBLE: 'VISIBLE',
+    READ_ONLY: 'READ_ONLY',
+    HIDDEN: 'HIDDEN',
+  },
 }));
 
 // Mock argon2 to avoid native module issues in unit tests
@@ -476,7 +487,8 @@ describe('Integration test suite (Task 12)', () => {
         success: false,
         error: {
           code: 'INTERNAL_ERROR',
-          message: 'An unexpected error occurred',
+          message: 'An internal server error occurred',
+          messageKey: 'errors:SERVER_ERROR',
         },
       });
     });

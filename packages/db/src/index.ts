@@ -20,6 +20,22 @@ export type {
   User,
   RefreshToken,
   NumberSeries,
+  Resource,
+  AccessGroup,
+  AccessGroupPermission,
+  AccessGroupFieldOverride,
+  UserAccessGroup,
+  AuditLog,
+  AiModel,
+  AiPrompt,
+  AiPromptVersion,
+  AiAgent,
+  AiSkill,
+  AiConversation,
+  AiMessage,
+  AiFeedback,
+  AiUsage,
+  AiEval,
 } from '../generated/prisma/client';
 
 // Enums
@@ -34,6 +50,8 @@ export {
   SharingMode,
   UserRole,
   ViewScope,
+  ResourceType,
+  FieldVisibility,
 } from '../generated/prisma/client';
 
 // Utilities
@@ -48,3 +66,9 @@ export {
   NumberSeriesNotFoundError,
   NumberSeriesInactiveError,
 } from './services/number-series.service';
+
+export {
+  loadDefaultResources,
+  loadDefaultAccessGroups,
+  assignFullAccessGroup,
+} from './services/default-data-loader.service';

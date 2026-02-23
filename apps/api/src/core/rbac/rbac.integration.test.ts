@@ -8,7 +8,7 @@ import { SignJWT } from 'jose';
 // Mock @nexa/db — vi.hoisted ensures variables exist when vi.mock is hoisted
 // ---------------------------------------------------------------------------
 
-const { mockPrisma, mockResolveUserRole } = vi.hoisted(() => ({
+const { mockPrisma, mockResolveUserRole, mockPermissionService } = vi.hoisted(() => ({
   mockPrisma: {
     user: { findUnique: vi.fn(), update: vi.fn() },
     refreshToken: {
@@ -20,6 +20,17 @@ const { mockPrisma, mockResolveUserRole } = vi.hoisted(() => ({
     companyProfile: { findUnique: vi.fn() },
   },
   mockResolveUserRole: vi.fn(),
+  mockPermissionService: {
+    getEffectivePermissions: vi.fn(),
+    hasPermission: vi.fn(),
+    invalidateUser: vi.fn(),
+    invalidateGroup: vi.fn(),
+    invalidateAll: vi.fn(),
+    clearCache: vi.fn(),
+    getCacheSize: vi.fn(),
+    deriveEnabledModules: vi.fn(),
+    getFieldVisibility: vi.fn(),
+  },
 }));
 
 vi.mock('@nexa/db', () => ({
@@ -43,6 +54,19 @@ vi.mock('argon2', () => ({
   },
 }));
 
+// Mock permission service — createPermissionGuard depends on it
+vi.mock('./permission.service.js', () => ({
+  permissionService: mockPermissionService,
+  PermissionService: vi.fn(),
+  ACTION_FLAG_MAP: {
+    access: 'canAccess',
+    new: 'canNew',
+    view: 'canView',
+    edit: 'canEdit',
+    delete: 'canDelete',
+  },
+}));
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -52,6 +76,7 @@ import { companyContextPlugin } from '../middleware/company-context.js';
 import { authRoutesPlugin } from '../auth/auth.routes.js';
 import { registerErrorHandler } from '../middleware/error-handler.js';
 import { zodValidatorCompiler, zodSerializerCompiler } from '../validation/index.js';
+import { eventBusPlugin } from '../events/event-bus.plugin.js';
 import { createRbacGuard } from './index.js';
 import { UserRole } from '@nexa/db';
 
@@ -103,6 +128,7 @@ async function makeTestJwt(
  *   - user exists and is active
  *   - company exists and is active
  *   - resolveUserRole returns the specified role
+ *   - permissionService returns appropriate permissions for the role
  */
 function setupCompanyContext(role: string) {
   mockPrisma.user.findUnique.mockResolvedValueOnce({
@@ -111,6 +137,20 @@ function setupCompanyContext(role: string) {
   });
   mockPrisma.companyProfile.findUnique.mockResolvedValue({ isActive: true });
   mockResolveUserRole.mockResolvedValue(role);
+
+  // Configure permission service mock for createPermissionGuard
+  const hasAccess = ['SUPER_ADMIN', 'ADMIN'].includes(role);
+  const fullPerm = { canAccess: true, canNew: true, canView: true, canEdit: true, canDelete: true };
+  mockPermissionService.getEffectivePermissions.mockResolvedValue({
+    permissions: hasAccess
+      ? { 'system.users.detail': fullPerm }
+      : {},
+    fieldOverrides: {},
+    accessGroups: hasAccess ? [{ id: 'ag-1', code: 'FULL_ACCESS', name: 'Full Access' }] : [],
+    role,
+    isSuperAdmin: role === 'SUPER_ADMIN',
+    enabledModules: hasAccess ? ['system'] : [],
+  });
 }
 
 /**
@@ -122,6 +162,7 @@ async function buildTestApp(): Promise<FastifyInstance> {
   app.setValidatorCompiler(zodValidatorCompiler);
   app.setSerializerCompiler(zodSerializerCompiler);
   await app.register(cookie);
+  await app.register(eventBusPlugin);
   registerErrorHandler(app);
 
   // Middleware pipeline matching production order
@@ -188,6 +229,7 @@ describe('RBAC integration tests', () => {
       const body = res.json<ErrorBody>();
       expect(body.success).toBe(false);
       expect(body.error.code).toBe('FORBIDDEN');
+      // createPermissionGuard (which replaced createRbacGuard on this route) uses hardcoded message
       expect(body.error.message).toBe('Insufficient permissions');
 
       // Route handler should NOT have been reached — no user update attempted
@@ -220,6 +262,16 @@ describe('RBAC integration tests', () => {
       });
       mockPrisma.companyProfile.findUnique.mockResolvedValue({ isActive: true });
       mockResolveUserRole.mockResolvedValue('ADMIN');
+      // Permission guard needs effective permissions for ADMIN
+      const fullPerm = { canAccess: true, canNew: true, canView: true, canEdit: true, canDelete: true };
+      mockPermissionService.getEffectivePermissions.mockResolvedValue({
+        permissions: { 'system.users.detail': fullPerm },
+        fieldOverrides: {},
+        accessGroups: [{ id: 'ag-1', code: 'FULL_ACCESS', name: 'Full Access' }],
+        role: 'ADMIN',
+        isSuperAdmin: false,
+        enabledModules: ['system'],
+      });
       mockPrisma.user.update.mockResolvedValue({});
       mockPrisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
 
@@ -280,7 +332,7 @@ describe('RBAC integration tests', () => {
       const body = res.json<ErrorBody>();
       expect(body.success).toBe(false);
       expect(body.error.code).toBe('FORBIDDEN');
-      expect(body.error.message).toBe('Insufficient permissions');
+      expect(body.error.message).toBe('You do not have permission to perform this action');
     });
   });
 });

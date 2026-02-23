@@ -23,12 +23,43 @@ export interface MfaResetEvent {
   resetByUserId: string;
 }
 
+export interface AccessGroupCreatedEvent {
+  groupId: string;
+  companyId: string;
+  code: string;
+  name: string;
+  createdBy: string;
+}
+
+export interface AccessGroupUpdatedEvent {
+  groupId: string;
+  companyId: string;
+  changedBy: string;
+}
+
+export interface AccessGroupDeletedEvent {
+  groupId: string;
+  companyId: string;
+  deletedBy: string;
+}
+
+export interface UserAccessGroupsAssignedEvent {
+  userId: string;
+  companyId: string;
+  groupIds: string[];
+  assignedBy: string;
+}
+
 /* eslint-disable @typescript-eslint/naming-convention -- domain event names use dotted notation */
 export interface AppEventMap {
   'user.login': UserLoginEvent;
   'user.mfa.setup': MfaSetupEvent;
   'user.mfa.enabled': MfaEnabledEvent;
   'user.mfa.reset': MfaResetEvent;
+  'accessGroup.created': AccessGroupCreatedEvent;
+  'accessGroup.updated': AccessGroupUpdatedEvent;
+  'accessGroup.deleted': AccessGroupDeletedEvent;
+  'user.accessGroups.assigned': UserAccessGroupsAssignedEvent;
 }
 /* eslint-enable @typescript-eslint/naming-convention */
 
@@ -36,6 +67,7 @@ export interface AppEventMap {
 // Typed EventEmitter wrapper
 // ---------------------------------------------------------------------------
 
+/** @deprecated Use EventBus from event-bus.ts instead */
 class TypedEventEmitter {
   private emitter = new EventEmitter();
 
@@ -64,5 +96,6 @@ class TypedEventEmitter {
   }
 }
 
-// Singleton instance — placeholder until E3 event bus
+/** @deprecated Use EventBus from event-bus.ts instead. Will be removed after all usages are confirmed migrated. */
+// eslint-disable-next-line @typescript-eslint/no-deprecated -- intentional: retained for migration safety
 export const appEvents = new TypedEventEmitter();

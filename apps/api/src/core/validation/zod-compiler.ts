@@ -1,16 +1,26 @@
 import type { FastifySchema, FastifySchemaCompiler, FastifySerializerCompiler } from 'fastify';
 import type { ZodType } from 'zod';
 
+import { mapZodIssueToTranslationKey, tServer } from '@nexa/i18n/server';
+
 import { ValidationError } from '../errors/index.js';
 
 /**
  * Extract field-level errors from Zod issues into Record<string, string[]>.
- * Maps each issue's path to a dot-separated key with its error message.
+ * Maps each issue to a translation key via `mapZodIssueToTranslationKey()`,
+ * then resolves to an English string via `tServer()`.
  */
 export function extractFieldErrors(
   issues: ReadonlyArray<{
+    readonly code: string;
     readonly path: PropertyKey[];
     readonly message: string;
+    readonly minimum?: number | bigint;
+    readonly maximum?: number | bigint;
+    readonly origin?: string;
+    readonly format?: string;
+    readonly type?: string;
+    readonly received?: string;
   }>,
 ): Record<string, string[]> {
   const fieldErrors: Record<string, string[]> = {};
@@ -19,7 +29,8 @@ export function extractFieldErrors(
     if (!fieldErrors[key]) {
       fieldErrors[key] = [];
     }
-    fieldErrors[key].push(issue.message);
+    const translationMsg = mapZodIssueToTranslationKey(issue);
+    fieldErrors[key].push(tServer(translationMsg.key, translationMsg.params));
   }
   return fieldErrors;
 }
@@ -37,7 +48,11 @@ export const zodValidatorCompiler: FastifySchemaCompiler<ZodType> = ({ schema })
       return { value: result.data };
     }
     const fieldErrors = extractFieldErrors(result.error.issues);
-    return { error: new ValidationError('Validation failed', fieldErrors) };
+    return { error: new ValidationError(
+      tServer('errors:VALIDATION_ERROR'),
+      fieldErrors,
+      'errors:VALIDATION_ERROR',
+    ) };
   };
 };
 

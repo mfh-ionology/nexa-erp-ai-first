@@ -3,6 +3,7 @@ import fp from 'fastify-plugin';
 
 import { prisma, resolveUserRole } from '@nexa/db';
 import { AuthError, ValidationError } from '../errors/index.js';
+import { tServer } from '@nexa/i18n/server';
 
 // ---------------------------------------------------------------------------
 // UUID v4 format validation
@@ -37,7 +38,7 @@ const companyContextPluginFn = async (fastify: FastifyInstance): Promise<void> =
     });
 
     if (!user || !user.isActive) {
-      throw new AuthError('UNAUTHORIZED', 'Authentication required', 401);
+      throw new AuthError('UNAUTHORIZED', tServer('errors:UNAUTHORIZED'), 401, 'errors:UNAUTHORIZED');
     }
 
     // 3.5 — Read X-Company-ID header (may be string[] if sent multiple times)
@@ -49,7 +50,7 @@ const companyContextPluginFn = async (fastify: FastifyInstance): Promise<void> =
     if (headerValue) {
       // 3.6 — Validate UUID format
       if (!UUID_RE.test(headerValue)) {
-        throw new ValidationError('X-Company-ID header must be a valid UUID');
+        throw new ValidationError(tServer('validation:invalidUuid', { field: 'X-Company-ID' }), undefined, 'validation:invalidUuid', { field: 'X-Company-ID' });
       }
       companyId = headerValue;
     } else {
@@ -57,8 +58,9 @@ const companyContextPluginFn = async (fastify: FastifyInstance): Promise<void> =
       if (!user.companyId) {
         throw new AuthError(
           'COMPANY_ACCESS_DENIED',
-          'No default company assigned to this user',
+          tServer('errors:COMPANY_NO_DEFAULT'),
           403,
+          'errors:COMPANY_NO_DEFAULT',
         );
       }
 
@@ -74,7 +76,7 @@ const companyContextPluginFn = async (fastify: FastifyInstance): Promise<void> =
     });
 
     if (!company || !company.isActive) {
-      throw new AuthError('COMPANY_ACCESS_DENIED', 'You do not have access to this company', 403);
+      throw new AuthError('COMPANY_ACCESS_DENIED', tServer('errors:COMPANY_ACCESS_DENIED'), 403, 'errors:COMPANY_ACCESS_DENIED');
     }
 
     // 3.8 — Verify user has access to the target company
@@ -82,7 +84,7 @@ const companyContextPluginFn = async (fastify: FastifyInstance): Promise<void> =
 
     // 3.9 — If no access, deny
     if (!role) {
-      throw new AuthError('COMPANY_ACCESS_DENIED', 'You do not have access to this company', 403);
+      throw new AuthError('COMPANY_ACCESS_DENIED', tServer('errors:COMPANY_ACCESS_DENIED'), 403, 'errors:COMPANY_ACCESS_DENIED');
     }
 
     // 3.6 / 3.10 — Set request context

@@ -18,6 +18,8 @@ interface ErrorResponse {
   error: {
     code: string;
     message: string;
+    messageKey?: string;
+    messageParams?: Record<string, string>;
     details?: Record<string, string[]>;
   };
 }
@@ -195,7 +197,7 @@ describe('error-handler', () => {
       const body = res.json<ErrorResponse>();
       expect(body.success).toBe(false);
       expect(body.error.code).toBe('VALIDATION_ERROR');
-      expect(body.error.message).toBe('Validation failed');
+      expect(body.error.message).toBe('Please correct the errors below');
       expect(body.error.details).toBeDefined();
       expect(body.error.details!.email).toBeDefined();
       expect(body.error.details!.name).toBeDefined();
@@ -246,7 +248,8 @@ describe('error-handler', () => {
         success: false,
         error: {
           code: 'INTERNAL_ERROR',
-          message: 'An unexpected error occurred',
+          message: 'An internal server error occurred',
+          messageKey: 'errors:SERVER_ERROR',
         },
       });
 
@@ -264,7 +267,7 @@ describe('error-handler', () => {
 
       expect(res.statusCode).toBe(500);
       const body = res.json<ErrorResponse>();
-      expect(body.error.message).toBe('An unexpected error occurred');
+      expect(body.error.message).toBe('An internal server error occurred');
       expect(body.error).not.toHaveProperty('stack');
       expect(body.error).not.toHaveProperty('details');
 
@@ -281,7 +284,7 @@ describe('error-handler', () => {
       const res = await app.inject({ method: 'GET', url: '/test' });
 
       const body = res.json<ErrorResponse>();
-      expect(body.error.message).toBe('An unexpected error occurred');
+      expect(body.error.message).toBe('An internal server error occurred');
       expect(JSON.stringify(body)).not.toContain('postgres');
 
       await app.close();
@@ -309,6 +312,7 @@ describe('error-handler', () => {
       const body = res.json<ErrorResponse>();
       expect(body.error.code).toBe('RATE_LIMITED');
       expect(body.error.code).not.toContain('FST_');
+      expect(body.error.messageKey).toBe('errors:RATE_LIMITED');
 
       await app.close();
     });
@@ -333,6 +337,7 @@ describe('error-handler', () => {
       const body = res.json<ErrorResponse>();
       expect(body.error.code).toBe('NOT_FOUND');
       expect(body.error.code).not.toContain('FST_');
+      expect(body.error.messageKey).toBe('errors:NOT_FOUND');
 
       await app.close();
     });
@@ -355,7 +360,8 @@ describe('error-handler', () => {
       expect(res.statusCode).toBe(503);
       const body = res.json<ErrorResponse>();
       expect(body.error.code).toBe('INTERNAL_ERROR');
-      expect(body.error.message).toBe('An unexpected error occurred');
+      expect(body.error.message).toBe('An internal server error occurred');
+      expect(body.error.messageKey).toBe('errors:SERVER_ERROR');
       expect(JSON.stringify(body)).not.toContain('Internal server detail');
 
       await app.close();
@@ -390,6 +396,164 @@ describe('error-handler', () => {
         expect(typeof body.error.code).toBe('string');
         expect(typeof body.error.message).toBe('string');
       }
+
+      await app.close();
+    });
+  });
+
+  describe('messageKey and messageParams in envelope', () => {
+    it('includes messageKey and messageParams when present on AppError', async () => {
+      const app = buildTestApp();
+      app.get('/test', () => {
+        throw new AppError(
+          'CONFLICT',
+          'Resource already exists',
+          409,
+          undefined,
+          'errors:CONFLICT',
+          { resource: 'User' },
+        );
+      });
+      await app.ready();
+
+      const res = await app.inject({ method: 'GET', url: '/test' });
+
+      expect(res.statusCode).toBe(409);
+      const body = res.json<ErrorResponse>();
+      expect(body).toEqual({
+        success: false,
+        error: {
+          code: 'CONFLICT',
+          message: 'Resource already exists',
+          messageKey: 'errors:CONFLICT',
+          messageParams: { resource: 'User' },
+        },
+      });
+
+      await app.close();
+    });
+
+    it('includes messageKey without messageParams when only key is set', async () => {
+      const app = buildTestApp();
+      app.get('/test', () => {
+        throw new AuthError(
+          'UNAUTHORIZED',
+          'Authentication required',
+          401,
+          'errors:UNAUTHORIZED',
+        );
+      });
+      await app.ready();
+
+      const res = await app.inject({ method: 'GET', url: '/test' });
+
+      expect(res.statusCode).toBe(401);
+      const body = res.json<ErrorResponse>();
+      expect(body.error.messageKey).toBe('errors:UNAUTHORIZED');
+      expect(body.error).not.toHaveProperty('messageParams');
+
+      await app.close();
+    });
+
+    it('omits messageKey from envelope when not set on error', async () => {
+      const app = buildTestApp();
+      app.get('/test', () => {
+        throw new NotFoundError('NOT_FOUND', 'Invoice not found');
+      });
+      await app.ready();
+
+      const res = await app.inject({ method: 'GET', url: '/test' });
+
+      const body = res.json<ErrorResponse>();
+      expect(body.error).not.toHaveProperty('messageKey');
+      expect(body.error).not.toHaveProperty('messageParams');
+
+      await app.close();
+    });
+
+    it('passes messageKey through for ValidationError subclass', async () => {
+      const app = buildTestApp();
+      app.get('/test', () => {
+        throw new ValidationError(
+          'Bad input',
+          { name: ['Required'] },
+          'errors:VALIDATION_ERROR',
+        );
+      });
+      await app.ready();
+
+      const res = await app.inject({ method: 'GET', url: '/test' });
+
+      expect(res.statusCode).toBe(400);
+      const body = res.json<ErrorResponse>();
+      expect(body.error.messageKey).toBe('errors:VALIDATION_ERROR');
+      expect(body.error.details).toEqual({ name: ['Required'] });
+
+      await app.close();
+    });
+
+    it('passes messageKey through for DomainError with params', async () => {
+      const app = buildTestApp();
+      app.get('/test', () => {
+        throw new DomainError(
+          'PERIOD_LOCKED',
+          'Period is locked',
+          { period: ['Cannot post to locked period'] },
+          'errors:BUSINESS_RULE_VIOLATION',
+          { period: '2024-01' },
+        );
+      });
+      await app.ready();
+
+      const res = await app.inject({ method: 'GET', url: '/test' });
+
+      expect(res.statusCode).toBe(422);
+      const body = res.json<ErrorResponse>();
+      expect(body.error.messageKey).toBe('errors:BUSINESS_RULE_VIOLATION');
+      expect(body.error.messageParams).toEqual({ period: '2024-01' });
+      expect(body.error.details).toEqual({ period: ['Cannot post to locked period'] });
+
+      await app.close();
+    });
+
+    it('uses tServer-resolved message for 500 errors instead of hardcoded string', async () => {
+      const app = buildTestApp();
+      app.get('/test', () => {
+        throw new Error('Something broke');
+      });
+      await app.ready();
+
+      const res = await app.inject({ method: 'GET', url: '/test' });
+
+      expect(res.statusCode).toBe(500);
+      const body = res.json<ErrorResponse>();
+      // tServer('errors:SERVER_ERROR') resolves to the translation from errors.json
+      expect(body.error.message).toBe('An internal server error occurred');
+      expect(body.error.messageKey).toBe('errors:SERVER_ERROR');
+
+      await app.close();
+    });
+
+    it('uses tServer-resolved message for Fastify 5xx errors', async () => {
+      const app = buildTestApp();
+      app.get('/test', () => {
+        const err = new Error('Internal detail') as Error & {
+          statusCode: number;
+          code: string;
+        };
+        err.statusCode = 502;
+        err.code = 'FST_ERR_SOMETHING';
+        throw err;
+      });
+      await app.ready();
+
+      const res = await app.inject({ method: 'GET', url: '/test' });
+
+      expect(res.statusCode).toBe(502);
+      const body = res.json<ErrorResponse>();
+      expect(body.error.message).toBe('An internal server error occurred');
+      expect(body.error.messageKey).toBe('errors:SERVER_ERROR');
+      expect(JSON.stringify(body)).not.toContain('Internal detail');
 
       await app.close();
     });

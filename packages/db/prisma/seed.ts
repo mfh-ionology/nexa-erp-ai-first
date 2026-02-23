@@ -1,6 +1,7 @@
 import { PrismaClient, UserRole, VatType } from '../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { randomBytes, scryptSync } from 'crypto';
+import { loadDefaultResources, loadDefaultAccessGroups, assignFullAccessGroup } from '../src/services/default-data-loader.service.js';
 
 // Seed uses DIRECT_URL (bypasses PgBouncer) for reliable transactional seeding.
 // Runtime client (src/client.ts) uses DATABASE_URL via PgBouncer instead.
@@ -202,6 +203,7 @@ async function seedDefaultUser() {
       lastName: 'User',
       isActive: true,
       companyId: DEFAULT_COMPANY_ID,
+      locale: 'en',
       updatedBy: 'system-seed',
     },
     create: {
@@ -213,6 +215,7 @@ async function seedDefaultUser() {
       companyId: DEFAULT_COMPANY_ID,
       isActive: true,
       enabledModules: [],
+      locale: 'en',
       createdBy: 'system-seed',
       updatedBy: 'system-seed',
     },
@@ -243,6 +246,294 @@ async function seedDefaultUser() {
 }
 
 // ---------------------------------------------------------------------------
+// AI Seed Data — E5.1 Task 9
+// ---------------------------------------------------------------------------
+
+// Well-known deterministic UUIDs for AI entities (used as upsert keys via name)
+const AI_MODELS = [
+  {
+    name: 'claude-opus-4-6',
+    provider: 'anthropic',
+    modelId: 'claude-opus-4-6',
+    displayName: 'Claude Opus 4.6',
+    maxInputTokens: 200000,
+    maxOutputTokens: 16384,
+    costPerMInput: 15.0,
+    costPerMOutput: 75.0,
+    capabilities: ['completion', 'streaming', 'tool_use', 'vision', 'structured_output'],
+    isActive: true,
+    isDefault: false,
+    config: { timeout: 60000, maxTokens: 16384 },
+    routingTags: ['reasoning', 'complex'],
+    fallbackModelName: 'claude-sonnet-4-5',
+  },
+  {
+    name: 'claude-sonnet-4-5',
+    provider: 'anthropic',
+    modelId: 'claude-sonnet-4-5',
+    displayName: 'Claude Sonnet 4.5',
+    maxInputTokens: 200000,
+    maxOutputTokens: 8192,
+    costPerMInput: 3.0,
+    costPerMOutput: 15.0,
+    capabilities: ['completion', 'streaming', 'tool_use', 'vision', 'structured_output'],
+    isActive: true,
+    isDefault: true,
+    config: { timeout: 30000, maxTokens: 8192 },
+    routingTags: ['standard', 'chat', 'briefing', 'vision'],
+    fallbackModelName: null,
+  },
+  {
+    name: 'claude-haiku-4-5',
+    provider: 'anthropic',
+    modelId: 'claude-haiku-4-5',
+    displayName: 'Claude Haiku 4.5',
+    maxInputTokens: 200000,
+    maxOutputTokens: 4096,
+    costPerMInput: 0.8,
+    costPerMOutput: 4.0,
+    capabilities: ['completion', 'streaming', 'tool_use', 'structured_output'],
+    isActive: true,
+    isDefault: false,
+    config: { timeout: 15000, maxTokens: 4096 },
+    routingTags: ['cheap', 'fast'],
+    fallbackModelName: null,
+  },
+];
+
+const CHAT_ROUTER_SYSTEM_PROMPT = `You are Nexa, an AI assistant for Nexa ERP — an AI-first ERP system for UK SMEs.
+
+Your role is to understand the user's intent and route their request to the appropriate specialist agent or respond directly for simple queries.
+
+## Intent Classification
+
+Analyse the user's message and classify it into one of these intents:
+- **create_invoice** — User wants to create a customer invoice
+- **create_order** — User wants to create a sales order or purchase order
+- **query** — User is asking a question about data (customers, invoices, stock levels, etc.)
+- **briefing** — User wants a summary or briefing (daily, financial, etc.)
+- **chat** — General conversation or help request
+- **navigate** — User wants to go to a specific page or record
+
+## Response Format
+
+Always respond in JSON:
+{
+  "intent": "<classified intent>",
+  "confidence": <0.0-1.0>,
+  "answer": "<direct response if you can answer immediately>",
+  "followUp": "<clarifying question if intent is ambiguous>"
+}
+
+## Context Awareness
+
+You have access to the user's current page, recent entities, and company context. Use this to provide contextually relevant responses. For example, if the user is viewing a customer record and says "create an invoice", you should infer they want to invoice that customer.
+
+## Guardrails
+
+- NEVER execute financial transactions directly — always propose actions for user confirmation
+- NEVER fabricate data — if you don't know, say so
+- Always be concise and professional
+- Use British English spelling conventions`;
+
+const CHAT_ROUTER_USER_TEMPLATE = `User: {{userMessage}}
+
+Context:
+- Current page: {{currentPage}}
+- Current entity: {{currentEntityType}} {{currentEntityId}}
+- Company: {{companyName}}
+- Date: {{currentDate}}`;
+
+async function seedAiModels() {
+  // First pass: create all models without fallback relations
+  for (const m of AI_MODELS) {
+    await prisma.aiModel.upsert({
+      where: { name: m.name },
+      update: {
+        provider: m.provider,
+        modelId: m.modelId,
+        displayName: m.displayName,
+        maxInputTokens: m.maxInputTokens,
+        maxOutputTokens: m.maxOutputTokens,
+        costPerMInput: m.costPerMInput,
+        costPerMOutput: m.costPerMOutput,
+        capabilities: m.capabilities,
+        isActive: m.isActive,
+        isDefault: m.isDefault,
+        config: m.config,
+        routingTags: m.routingTags,
+      },
+      create: {
+        name: m.name,
+        provider: m.provider,
+        modelId: m.modelId,
+        displayName: m.displayName,
+        maxInputTokens: m.maxInputTokens,
+        maxOutputTokens: m.maxOutputTokens,
+        costPerMInput: m.costPerMInput,
+        costPerMOutput: m.costPerMOutput,
+        capabilities: m.capabilities,
+        isActive: m.isActive,
+        isDefault: m.isDefault,
+        config: m.config,
+        routingTags: m.routingTags,
+      },
+    });
+  }
+
+  // Second pass: set fallback relations
+  for (const m of AI_MODELS) {
+    if (m.fallbackModelName) {
+      const fallback = await prisma.aiModel.findUnique({
+        where: { name: m.fallbackModelName },
+        select: { id: true },
+      });
+      if (fallback) {
+        await prisma.aiModel.update({
+          where: { name: m.name },
+          data: { fallbackModelId: fallback.id },
+        });
+      }
+    }
+  }
+
+  console.log(`Seeded ${AI_MODELS.length} AI models`);
+}
+
+async function seedAiPromptAndAgent() {
+  // Seed chat-router prompt
+  const prompt = await prisma.aiPrompt.upsert({
+    where: { name: 'chat-router' },
+    update: {
+      description: 'System prompt for the default chat-router intent recognition agent',
+      category: 'system',
+      systemPrompt: CHAT_ROUTER_SYSTEM_PROMPT,
+      userTemplate: CHAT_ROUTER_USER_TEMPLATE,
+      parameters: {
+        userMessage: { type: 'userInput' },
+        currentPage: { type: 'userInput' },
+        currentEntityType: { type: 'userInput' },
+        currentEntityId: { type: 'userInput' },
+        companyName: { type: 'context', path: 'tenant.companyName' },
+        currentDate: { type: 'computed', fn: 'currentDate' },
+      },
+      outputFormat: {
+        type: 'json',
+        schema: {
+          intent: 'string',
+          confidence: 'number',
+          answer: 'string?',
+          followUp: 'string?',
+        },
+      },
+    },
+    create: {
+      name: 'chat-router',
+      description: 'System prompt for the default chat-router intent recognition agent',
+      category: 'system',
+      systemPrompt: CHAT_ROUTER_SYSTEM_PROMPT,
+      userTemplate: CHAT_ROUTER_USER_TEMPLATE,
+      parameters: {
+        userMessage: { type: 'userInput' },
+        currentPage: { type: 'userInput' },
+        currentEntityType: { type: 'userInput' },
+        currentEntityId: { type: 'userInput' },
+        companyName: { type: 'context', path: 'tenant.companyName' },
+        currentDate: { type: 'computed', fn: 'currentDate' },
+      },
+      outputFormat: {
+        type: 'json',
+        schema: {
+          intent: 'string',
+          confidence: 'number',
+          answer: 'string?',
+          followUp: 'string?',
+        },
+      },
+      createdBy: 'system-seed',
+    },
+  });
+
+  // Seed initial prompt version (version 1)
+  const existingVersion = await prisma.aiPromptVersion.findUnique({
+    where: {
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      promptId_version: { promptId: prompt.id, version: 1 },
+    },
+    select: { id: true },
+  });
+
+  if (!existingVersion) {
+    await prisma.aiPromptVersion.create({
+      data: {
+        promptId: prompt.id,
+        version: 1,
+        systemPrompt: CHAT_ROUTER_SYSTEM_PROMPT,
+        userTemplate: CHAT_ROUTER_USER_TEMPLATE,
+        parameters: {
+          userMessage: { type: 'userInput' },
+          currentPage: { type: 'userInput' },
+          currentEntityType: { type: 'userInput' },
+          currentEntityId: { type: 'userInput' },
+          companyName: { type: 'context', path: 'tenant.companyName' },
+          currentDate: { type: 'computed', fn: 'currentDate' },
+        },
+        changeReason: 'Initial version',
+        createdBy: 'system-seed',
+      },
+    });
+  }
+
+  console.log('Seeded chat-router prompt + version 1');
+
+  // Seed chat-router agent — uses the default model (Sonnet) via routingTags
+  await prisma.aiAgent.upsert({
+    where: { name: 'chat-router' },
+    update: {
+      displayName: 'Chat Router',
+      description: 'Default intent recognition agent that routes user messages to specialist agents',
+      routingTags: ['standard', 'chat'],
+      promptId: prompt.id,
+      tools: [],
+      guardrails: {
+        rules: [
+          { type: 'no_auto_execute', description: 'Never auto-execute financial transactions' },
+          { type: 'no_data_fabrication', description: 'Never fabricate data' },
+        ],
+      },
+      triggerConfig: {
+        type: 'default_fallback',
+        description: 'Catches all messages that do not match a specific agent trigger',
+      },
+      maxTurns: 5,
+      isActive: true,
+    },
+    create: {
+      name: 'chat-router',
+      displayName: 'Chat Router',
+      description: 'Default intent recognition agent that routes user messages to specialist agents',
+      routingTags: ['standard', 'chat'],
+      promptId: prompt.id,
+      tools: [],
+      guardrails: {
+        rules: [
+          { type: 'no_auto_execute', description: 'Never auto-execute financial transactions' },
+          { type: 'no_data_fabrication', description: 'Never fabricate data' },
+        ],
+      },
+      triggerConfig: {
+        type: 'default_fallback',
+        description: 'Catches all messages that do not match a specific agent trigger',
+      },
+      maxTurns: 5,
+      isActive: true,
+    },
+  });
+
+  console.log('Seeded chat-router agent');
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -255,6 +546,11 @@ async function main() {
   await seedVatCodes();
   await seedPaymentTerms();
   await seedDefaultUser();
+  await loadDefaultResources(prisma);
+  await loadDefaultAccessGroups(prisma, DEFAULT_COMPANY_ID, DEFAULT_USER_ID);
+  await assignFullAccessGroup(prisma, DEFAULT_COMPANY_ID, DEFAULT_USER_ID);
+  await seedAiModels();
+  await seedAiPromptAndAgent();
   console.log('Seeding complete.');
 }
 

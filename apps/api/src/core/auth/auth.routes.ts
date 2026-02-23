@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type {} from '@fastify/cookie';
 import { prisma, UserRole } from '@nexa/db';
+import { tServer } from '@nexa/i18n/server';
 
 import {
   loginRequestSchema,
@@ -39,10 +40,9 @@ import {
   getAccessTokenExpirySeconds,
 } from './auth.service.js';
 import { isLocked, recordFailedAttempt, resetAttempts } from './login-rate-limiter.js';
-import { AppError, AuthError } from '../errors/index.js';
+import { AppError, AuthError, NotFoundError } from '../errors/index.js';
 import { sendSuccess } from '../utils/response.js';
-import { appEvents } from '../events/event-emitter.js';
-import { createRbacGuard } from '../rbac/index.js';
+import { createPermissionGuard } from '../rbac/index.js';
 
 // ---------------------------------------------------------------------------
 // Cookie configuration
@@ -95,8 +95,10 @@ async function authRoutes(fastify: FastifyInstance): Promise<void> {
       if (isLocked(email)) {
         throw new AppError(
           'ACCOUNT_LOCKED',
-          'Account temporarily locked due to too many failed login attempts',
+          tServer('errors:ACCOUNT_LOCKED'),
           423,
+          undefined,
+          'errors:ACCOUNT_LOCKED',
         );
       }
 
@@ -111,14 +113,14 @@ async function authRoutes(fastify: FastifyInstance): Promise<void> {
       if (!user || !user.isActive) {
         await verifyPassword(await getDummyHash(), password);
         recordFailedAttempt(email);
-        throw new AuthError('INVALID_CREDENTIALS', 'Invalid email or password', 401);
+        throw new AuthError('INVALID_CREDENTIALS', tServer('errors:AUTH_INVALID_CREDENTIALS'), 401, 'errors:AUTH_INVALID_CREDENTIALS');
       }
 
       // 4. Verify password
       const passwordValid = await verifyPassword(user.passwordHash, password);
       if (!passwordValid) {
         recordFailedAttempt(email);
-        throw new AuthError('INVALID_CREDENTIALS', 'Invalid email or password', 401);
+        throw new AuthError('INVALID_CREDENTIALS', tServer('errors:AUTH_INVALID_CREDENTIALS'), 401, 'errors:AUTH_INVALID_CREDENTIALS');
       }
 
       // 5. MFA check
@@ -134,8 +136,10 @@ async function authRoutes(fastify: FastifyInstance): Promise<void> {
         if (!user.mfaSecret) {
           throw new AppError(
             'MFA_SETUP_REQUIRED',
-            'MFA configuration is incomplete, please contact an administrator',
+            tServer('errors:MFA_SETUP_REQUIRED'),
             400,
+            undefined,
+            'errors:MFA_SETUP_REQUIRED',
           );
         }
 
@@ -143,7 +147,7 @@ async function authRoutes(fastify: FastifyInstance): Promise<void> {
         const mfaValid = verifyTotpToken(user.mfaSecret, mfaToken);
         if (!mfaValid) {
           recordFailedAttempt(email);
-          throw new AuthError('MFA_INVALID', 'Invalid MFA token', 401);
+          throw new AuthError('MFA_INVALID', tServer('errors:MFA_INVALID'), 401, 'errors:MFA_INVALID');
         }
         mfaVerified = true;
       }
@@ -154,7 +158,7 @@ async function authRoutes(fastify: FastifyInstance): Promise<void> {
       // 7. Resolve role
       const role = await resolveUserRole(prisma, user.id, user.companyId);
       if (!role) {
-        throw new AuthError('FORBIDDEN', 'No role assigned for this company', 403);
+        throw new AuthError('FORBIDDEN', tServer('errors:FORBIDDEN'), 403, 'errors:FORBIDDEN');
       }
 
       // 8. Parse enabledModules (Prisma Json type — validate elements are strings)
@@ -188,17 +192,13 @@ async function authRoutes(fastify: FastifyInstance): Promise<void> {
         data: { lastLoginAt: new Date() },
       });
 
-      // 12. Emit user.login event (non-critical — must not fail the login)
-      try {
-        appEvents.emit('user.login', {
-          userId: user.id,
-          loginMethod: mfaVerified ? 'password+mfa' : 'password',
-          ipAddress: request.ip,
-        });
-      } catch {
-        // Listener errors must not propagate to the client
-        request.log.error('user.login event listener threw an error');
-      }
+      // 12. Emit user.login event (EventBus handles error isolation internally)
+      request.server.eventBus.emit('user.login', {
+        userId: user.id,
+        companyId: user.companyId,
+        loginMethod: mfaVerified ? 'password+mfa' : 'password',
+        ipAddress: request.ip,
+      });
 
       // 13. Set httpOnly cookie
       void reply.setCookie(COOKIE_NAME, refreshToken, getCookieOptions());
@@ -214,6 +214,7 @@ async function authRoutes(fastify: FastifyInstance): Promise<void> {
           lastName: user.lastName,
           role,
           enabledModules,
+          locale: user.locale,
           tenantId,
           tenantName: user.company.name,
           mfaEnabled: user.mfaEnabled,
@@ -231,7 +232,7 @@ async function authRoutes(fastify: FastifyInstance): Promise<void> {
     // 1. Read refresh token from httpOnly cookie
     const rawToken = request.cookies[COOKIE_NAME];
     if (!rawToken) {
-      throw new AuthError('UNAUTHORIZED', 'Authentication required', 401);
+      throw new AuthError('UNAUTHORIZED', tServer('errors:UNAUTHORIZED'), 401, 'errors:UNAUTHORIZED');
     }
 
     // 2. Hash and look up in DB
@@ -240,7 +241,7 @@ async function authRoutes(fastify: FastifyInstance): Promise<void> {
 
     // 3. Not found, expired, or revoked
     if (!existing) {
-      throw new AuthError('UNAUTHORIZED', 'Authentication required', 401);
+      throw new AuthError('UNAUTHORIZED', tServer('errors:UNAUTHORIZED'), 401, 'errors:UNAUTHORIZED');
     }
 
     // 4. Revoke old refresh token
@@ -251,13 +252,13 @@ async function authRoutes(fastify: FastifyInstance): Promise<void> {
       where: { id: existing.userId },
     });
     if (!user || !user.isActive) {
-      throw new AuthError('UNAUTHORIZED', 'Authentication required', 401);
+      throw new AuthError('UNAUTHORIZED', tServer('errors:UNAUTHORIZED'), 401, 'errors:UNAUTHORIZED');
     }
 
     // 6. Resolve role for new token
     const role = await resolveUserRole(prisma, user.id, user.companyId);
     if (!role) {
-      throw new AuthError('FORBIDDEN', 'No role assigned for this company', 403);
+      throw new AuthError('FORBIDDEN', tServer('errors:FORBIDDEN'), 403, 'errors:FORBIDDEN');
     }
 
     const enabledModules = Array.isArray(user.enabledModules)
@@ -317,7 +318,7 @@ async function authRoutes(fastify: FastifyInstance): Promise<void> {
     });
 
     // 4. Return response
-    const logoutResponse: LogoutResponse = { message: 'Logged out' };
+    const logoutResponse: LogoutResponse = { message: tServer('common:loggedOut') };
     return sendSuccess(reply, logoutResponse);
   });
 
@@ -336,12 +337,12 @@ async function authRoutes(fastify: FastifyInstance): Promise<void> {
       // 2. Load user from DB
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (!user || !user.isActive) {
-        throw new AuthError('UNAUTHORIZED', 'Authentication required', 401);
+        throw new AuthError('UNAUTHORIZED', tServer('errors:UNAUTHORIZED'), 401, 'errors:UNAUTHORIZED');
       }
 
       // 3. Check if MFA is already enabled
       if (user.mfaEnabled) {
-        throw new AppError('MFA_ALREADY_ENABLED', 'MFA is already enabled on this account', 409);
+        throw new AppError('MFA_ALREADY_ENABLED', tServer('errors:MFA_ALREADY_ENABLED'), 409, undefined, 'errors:MFA_ALREADY_ENABLED');
       }
 
       // 4. Generate TOTP secret (overwrites any pending unverified secret)
@@ -353,12 +354,8 @@ async function authRoutes(fastify: FastifyInstance): Promise<void> {
         data: { mfaSecret: secret, mfaEnabled: false },
       });
 
-      // 7. Emit MFA setup event (non-critical)
-      try {
-        appEvents.emit('user.mfa.setup', { userId });
-      } catch {
-        request.log.error('user.mfa.setup event listener threw an error');
-      }
+      // 7. Emit MFA setup event (EventBus handles error isolation internally)
+      request.server.eventBus.emit('user.mfa.setup', { userId, companyId: request.companyId });
 
       // 8. Return secret and URI
       const mfaSetupResponse: MfaSetupResponse = { secret, uri };
@@ -384,21 +381,23 @@ async function authRoutes(fastify: FastifyInstance): Promise<void> {
       // 2. Rate limit MFA verify attempts per user
       const rateLimitKey = `mfa-verify:${userId}`;
       if (isLocked(rateLimitKey)) {
-        throw new AppError('ACCOUNT_LOCKED', 'Too many failed MFA verification attempts', 423);
+        throw new AppError('ACCOUNT_LOCKED', tServer('errors:ACCOUNT_LOCKED'), 423, undefined, 'errors:ACCOUNT_LOCKED');
       }
 
       // 3. Load user from DB
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (!user || !user.isActive) {
-        throw new AuthError('UNAUTHORIZED', 'Authentication required', 401);
+        throw new AuthError('UNAUTHORIZED', tServer('errors:UNAUTHORIZED'), 401, 'errors:UNAUTHORIZED');
       }
 
       // 4. Verify MFA setup was initiated (mfaSecret exists)
       if (!user.mfaSecret) {
         throw new AppError(
           'MFA_SETUP_REQUIRED',
-          'MFA setup must be initiated before verification',
+          tServer('errors:MFA_SETUP_REQUIRED'),
           400,
+          undefined,
+          'errors:MFA_SETUP_REQUIRED',
         );
       }
 
@@ -407,7 +406,7 @@ async function authRoutes(fastify: FastifyInstance): Promise<void> {
       const isValid = verifyTotpToken(user.mfaSecret, token);
       if (!isValid) {
         recordFailedAttempt(rateLimitKey);
-        throw new AuthError('MFA_INVALID', 'Invalid MFA token', 401);
+        throw new AuthError('MFA_INVALID', tServer('errors:MFA_INVALID'), 401, 'errors:MFA_INVALID');
       }
 
       // 6. Reset rate limiter on success
@@ -419,15 +418,11 @@ async function authRoutes(fastify: FastifyInstance): Promise<void> {
         data: { mfaEnabled: true },
       });
 
-      // 8. Emit MFA enabled event (non-critical)
-      try {
-        appEvents.emit('user.mfa.enabled', { userId });
-      } catch {
-        request.log.error('user.mfa.enabled event listener threw an error');
-      }
+      // 8. Emit MFA enabled event (EventBus handles error isolation internally)
+      request.server.eventBus.emit('user.mfa.enabled', { userId, companyId: request.companyId });
 
       // 9. Return success
-      const mfaVerifyResponse: MfaVerifyResponse = { message: 'MFA enabled successfully' };
+      const mfaVerifyResponse: MfaVerifyResponse = { message: tServer('common:mfaEnabled') };
       return sendSuccess(reply, mfaVerifyResponse);
     },
   );
@@ -442,7 +437,7 @@ async function authRoutes(fastify: FastifyInstance): Promise<void> {
         body: mfaResetRequestSchema,
         response: { 200: successEnvelope(mfaResetResponseSchema) },
       },
-      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
+      preHandler: createPermissionGuard('system.users.detail', 'edit'),
     },
     async (request, reply) => {
       // 1. Extract target userId from request body
@@ -450,19 +445,19 @@ async function authRoutes(fastify: FastifyInstance): Promise<void> {
 
       // 3. Block self-reset — admins must not disable their own MFA
       if (userId === request.userId) {
-        throw new AuthError('FORBIDDEN', 'Cannot reset your own MFA', 403);
+        throw new AuthError('FORBIDDEN', tServer('errors:MFA_CANNOT_RESET_SELF'), 403, 'errors:MFA_CANNOT_RESET_SELF');
       }
 
       // 4. Verify target user exists
       const targetUser = await prisma.user.findUnique({ where: { id: userId } });
       if (!targetUser) {
-        throw new AppError('USER_NOT_FOUND', 'User not found', 404);
+        throw new NotFoundError('USER_NOT_FOUND', tServer('errors:USER_NOT_FOUND'), 'errors:USER_NOT_FOUND');
       }
 
       // 5. Tenant scoping — company-scoped ADMINs can only reset users in their own company.
       //    SUPER_ADMIN (cross-company role) can reset any user.
       if (request.userRole !== UserRole.SUPER_ADMIN && targetUser.companyId !== request.tenantId) {
-        throw new AuthError('FORBIDDEN', 'Cannot reset MFA for users outside your company', 403);
+        throw new AuthError('FORBIDDEN', tServer('errors:MFA_CROSS_COMPANY'), 403, 'errors:MFA_CROSS_COMPANY');
       }
 
       // 6. Clear MFA on target user
@@ -474,18 +469,15 @@ async function authRoutes(fastify: FastifyInstance): Promise<void> {
       // 7. Revoke all existing sessions for the target user (force re-authentication)
       await revokeAllUserTokens(prisma, userId);
 
-      // 8. Emit MFA reset event (non-critical)
-      try {
-        appEvents.emit('user.mfa.reset', {
-          targetUserId: userId,
-          resetByUserId: request.userId,
-        });
-      } catch {
-        request.log.error('user.mfa.reset event listener threw an error');
-      }
+      // 8. Emit MFA reset event (EventBus handles error isolation internally)
+      request.server.eventBus.emit('user.mfa.reset', {
+        targetUserId: userId,
+        resetByUserId: request.userId,
+        companyId: request.companyId,
+      });
 
       // 9. Return success
-      const mfaResetResponse: MfaResetResponse = { message: 'MFA reset successfully' };
+      const mfaResetResponse: MfaResetResponse = { message: tServer('common:mfaReset') };
       return sendSuccess(reply, mfaResetResponse);
     },
   );

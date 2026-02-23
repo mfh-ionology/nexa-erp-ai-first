@@ -117,6 +117,28 @@ describe('User model', () => {
     ).rejects.toThrow();
   });
 
+  it('has locale column with default value "en"', async () => {
+    const companyId = await createCompany('Locale column test');
+    const userId = await createUser(companyId);
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+
+    expect(user).not.toBeNull();
+    expect(user!.locale).toBe('en');
+  });
+
+  it('allows updating the locale field', async () => {
+    const companyId = await createCompany('Locale update test');
+    const userId = await createUser(companyId);
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { locale: 'en-GB' },
+    });
+
+    expect(updated.locale).toBe('en-GB');
+  });
+
   it("onDelete Restrict: cannot delete company that is a user's default", async () => {
     const companyId = await createCompany('Restrict delete test');
     await createUser(companyId);

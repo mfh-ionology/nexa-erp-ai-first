@@ -21,52 +21,142 @@ interface ErrorResponse {
   error: {
     code: string;
     message: string;
+    messageKey?: string;
     details?: Record<string, string[]>;
   };
 }
 
 describe('extractFieldErrors', () => {
-  it('maps issues to field-level errors by path', () => {
+  it('maps issues to field-level errors with translated messages', () => {
     const issues = [
-      { path: ['name'], message: 'Required' },
-      { path: ['email'], message: 'Invalid email' },
-      { path: ['email'], message: 'Too short' },
+      { code: 'invalid_type', path: ['name'], message: 'Required', origin: 'string' },
+      { code: 'invalid_format', path: ['email'], message: 'Invalid email', format: 'email', origin: 'string' },
+      { code: 'too_small', path: ['email'], message: 'Too short', origin: 'string', minimum: 3 },
     ];
 
     const result = extractFieldErrors(issues);
 
-    expect(result).toEqual({
-      name: ['Required'],
-      email: ['Invalid email', 'Too short'],
-    });
+    expect(result.name).toBeDefined();
+    expect(result.name!.length).toBe(1);
+    // invalid_type → validation:required → "name is required"
+    expect(result.name![0]).toContain('is required');
+
+    expect(result.email).toBeDefined();
+    expect(result.email!.length).toBe(2);
+    // invalid_format (email) → validation:email → "Please enter a valid email address"
+    expect(result.email![0]).toContain('valid email');
+    // too_small (string) → validation:minLength → "email must be at least 3 characters"
+    expect(result.email![1]).toContain('at least');
   });
 
   it('uses dot notation for nested paths', () => {
     const issues = [
-      { path: ['address', 'street'], message: 'Required' },
-      { path: ['items', 0, 'quantity'], message: 'Must be positive' },
+      { code: 'invalid_type', path: ['address', 'street'], message: 'Required' },
+      { code: 'too_small', path: ['items', 0, 'quantity'], message: 'Must be positive', origin: 'number', minimum: 1 },
     ];
 
     const result = extractFieldErrors(issues);
 
-    expect(result).toEqual({
-      'address.street': ['Required'],
-      'items.0.quantity': ['Must be positive'],
-    });
+    expect(result['address.street']).toBeDefined();
+    expect(result['items.0.quantity']).toBeDefined();
+    // Field name derived from last path segment: 'street', 'quantity'
+    expect(result['address.street']![0]).toContain('is required');
+    expect(result['items.0.quantity']![0]).toContain('at least');
   });
 
   it('uses _root key for path-less issues', () => {
-    const issues = [{ path: [], message: 'Invalid input' }];
+    const issues = [{ code: 'custom', path: [], message: 'Invalid input' }];
 
     const result = extractFieldErrors(issues);
 
-    expect(result).toEqual({
-      _root: ['Invalid input'],
-    });
+    expect(result._root).toBeDefined();
+    expect(result._root!.length).toBe(1);
+    // 'Invalid input' doesn't look like a translation key → validation:invalid
+    expect(result._root![0]).toContain('invalid');
   });
 
   it('returns empty object for no issues', () => {
     expect(extractFieldErrors([])).toEqual({});
+  });
+
+  it('produces translated messages for too_small string issues', () => {
+    const issues = [
+      { code: 'too_small', path: ['name'], message: 'Too small', origin: 'string', minimum: 2 },
+    ];
+
+    const result = extractFieldErrors(issues);
+
+    // validation:minLength → "name must be at least 2 characters"
+    expect(result.name![0]).toContain('at least');
+    expect(result.name![0]).toContain('2');
+  });
+
+  it('produces translated messages for too_big string issues', () => {
+    const issues = [
+      { code: 'too_big', path: ['name'], message: 'Too big', origin: 'string', maximum: 100 },
+    ];
+
+    const result = extractFieldErrors(issues);
+
+    // validation:maxLength → "name must not exceed 100 characters"
+    expect(result.name![0]).toContain('exceed');
+    expect(result.name![0]).toContain('100');
+  });
+
+  it('produces translated messages for too_small number issues', () => {
+    const issues = [
+      { code: 'too_small', path: ['age'], message: 'Too small', origin: 'number', minimum: 0 },
+    ];
+
+    const result = extractFieldErrors(issues);
+
+    // validation:min → "age must be at least 0"
+    expect(result.age![0]).toContain('at least');
+  });
+
+  it('produces translated messages for too_big number issues', () => {
+    const issues = [
+      { code: 'too_big', path: ['age'], message: 'Too big', origin: 'number', maximum: 150 },
+    ];
+
+    const result = extractFieldErrors(issues);
+
+    // validation:max → "age must not exceed 150"
+    expect(result.age![0]).toContain('exceed');
+    expect(result.age![0]).toContain('150');
+  });
+
+  it('produces translated messages for invalid_format email issues', () => {
+    const issues = [
+      { code: 'invalid_format', path: ['email'], message: 'Invalid email', format: 'email', origin: 'string' },
+    ];
+
+    const result = extractFieldErrors(issues);
+
+    // validation:email → "Please enter a valid email address"
+    expect(result.email![0]).toContain('valid email');
+  });
+
+  it('produces translated messages for invalid_format regex issues', () => {
+    const issues = [
+      { code: 'invalid_format', path: ['code'], message: 'Invalid string', format: 'regex', origin: 'string' },
+    ];
+
+    const result = extractFieldErrors(issues);
+
+    // validation:pattern → "code format is invalid"
+    expect(result.code![0]).toContain('invalid');
+  });
+
+  it('uses custom message as translation key when it looks like one', () => {
+    const issues = [
+      { code: 'custom', path: ['field'], message: 'validation:unique' },
+    ];
+
+    const result = extractFieldErrors(issues);
+
+    // validation:unique → "field already exists"
+    expect(result.field![0]).toContain('already exists');
   });
 });
 
@@ -102,12 +192,38 @@ describe('zodValidatorCompiler', () => {
     expect(result.error.details!['age']).toBeDefined();
   });
 
+  it('returns ValidationError with messageKey for invalid data', () => {
+    const result = validate({ name: '', age: -1 }) as {
+      error: ValidationError;
+    };
+
+    expect(result.error.messageKey).toBe('errors:VALIDATION_ERROR');
+  });
+
+  it('returns ValidationError with translated message', () => {
+    const result = validate({ name: '', age: -1 }) as {
+      error: ValidationError;
+    };
+
+    // errors:VALIDATION_ERROR → "Please correct the errors below"
+    expect(result.error.message).toBe('Please correct the errors below');
+  });
+
   it('returns ValidationError for missing required fields', () => {
     const result = validate({}) as { error: ValidationError };
 
     expect(result.error).toBeInstanceOf(ValidationError);
     expect(result.error.details).toBeDefined();
     expect(Object.keys(result.error.details!).length).toBeGreaterThan(0);
+  });
+
+  it('returns translated field errors for missing required fields', () => {
+    const result = validate({}) as { error: ValidationError };
+
+    // invalid_type → validation:required → "X is required"
+    for (const messages of Object.values(result.error.details!)) {
+      expect(messages[0]).toContain('is required');
+    }
   });
 
   it('strips unknown fields from output value', () => {
@@ -193,6 +309,7 @@ describe('Fastify Zod validation integration', () => {
             error: {
               code: cause.code,
               message: cause.message,
+              messageKey: cause.messageKey,
               details: cause.details,
             },
           });
@@ -204,6 +321,7 @@ describe('Fastify Zod validation integration', () => {
           error: {
             code: error.code,
             message: error.message,
+            messageKey: error.messageKey,
             details: error.details,
           },
         });
@@ -266,6 +384,24 @@ describe('Fastify Zod validation integration', () => {
     await app.close();
   });
 
+  it('returns translated validation message and messageKey', async () => {
+    const app = buildTestApp();
+    await app.ready();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/test',
+      payload: { email: 'bad', name: 'X', age: 200 },
+    });
+
+    expect(response.statusCode).toBe(400);
+    const body = response.json<ErrorResponse>();
+    expect(body.error.message).toBe('Please correct the errors below');
+    expect(body.error.messageKey).toBe('errors:VALIDATION_ERROR');
+
+    await app.close();
+  });
+
   it('returns 400 with field errors for missing required fields', async () => {
     const app = buildTestApp();
     await app.ready();
@@ -286,7 +422,7 @@ describe('Fastify Zod validation integration', () => {
     await app.close();
   });
 
-  it('returns 400 with specific field error messages', async () => {
+  it('returns translated field error messages', async () => {
     const app = buildTestApp();
     await app.ready();
 
@@ -300,11 +436,41 @@ describe('Fastify Zod validation integration', () => {
     const body = response.json<ErrorResponse>();
     const details = body.error.details!;
 
-    // Each field should have at least one error message string
+    // Each field should have translated error messages
     for (const field of ['email', 'name', 'age']) {
       expect(Array.isArray(details[field])).toBe(true);
       expect(details[field]!.length).toBeGreaterThan(0);
       expect(typeof details[field]![0]).toBe('string');
+    }
+
+    // email: invalid_format (email) → "Please enter a valid email address"
+    expect(details.email![0]).toContain('valid email');
+    // name: too_small (string, min=2) → "name must be at least 2 characters"
+    expect(details.name![0]).toContain('at least');
+    // age: too_big (number, max=150) → "age must not exceed 150"
+    expect(details.age![0]).toContain('exceed');
+
+    await app.close();
+  });
+
+  it('returns translated required messages for missing fields', async () => {
+    const app = buildTestApp();
+    await app.ready();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/test',
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(400);
+    const body = response.json<ErrorResponse>();
+    const details = body.error.details!;
+
+    // All missing fields should produce "X is required" messages
+    for (const field of ['email', 'name', 'age']) {
+      expect(details[field]).toBeDefined();
+      expect(details[field]![0]).toContain('is required');
     }
 
     await app.close();

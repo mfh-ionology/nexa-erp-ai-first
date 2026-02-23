@@ -21,6 +21,17 @@ vi.mock('@nexa/db', () => ({
     FLAT_RATE: 'FLAT_RATE',
     CASH: 'CASH',
   },
+  ResourceType: {
+    PAGE: 'PAGE',
+    REPORT: 'REPORT',
+    SETTING: 'SETTING',
+    MAINTENANCE: 'MAINTENANCE',
+  },
+  FieldVisibility: {
+    VISIBLE: 'VISIBLE',
+    READ_ONLY: 'READ_ONLY',
+    HIDDEN: 'HIDDEN',
+  },
 }));
 
 // Mock argon2 to avoid native module issues in unit tests

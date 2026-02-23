@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { prisma, UserRole } from '@nexa/db';
+import { prisma } from '@nexa/db';
 
 import {
   createCompanyProfileRequestSchema,
@@ -15,7 +15,7 @@ import {
   createCompanyProfile,
   updateCompanyProfile,
 } from './company-profile.service.js';
-import { createRbacGuard } from '../../core/rbac/index.js';
+import { createPermissionGuard, filterFieldsByPermission } from '../../core/rbac/index.js';
 import { sendSuccess } from '../../core/utils/response.js';
 import { successEnvelope } from '../../core/schemas/envelope.js';
 import { extractRequestContext } from '../../core/types/request-context.js';
@@ -35,7 +35,8 @@ async function companyProfileRoutes(fastify: FastifyInstance): Promise<void> {
       schema: {
         response: { 200: successEnvelope(companyProfileResponseSchema) },
       },
-      preHandler: createRbacGuard({ minimumRole: UserRole.VIEWER }),
+      preHandler: createPermissionGuard('system.company-profile.detail', 'view'),
+      onSend: filterFieldsByPermission('system.company-profile.detail'),
     },
     async (request, reply) => {
       const profile = await getCompanyProfile(prisma, request.companyId);
@@ -53,7 +54,7 @@ async function companyProfileRoutes(fastify: FastifyInstance): Promise<void> {
         body: createCompanyProfileRequestSchema,
         response: { 201: successEnvelope(companyProfileResponseSchema) },
       },
-      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
+      preHandler: createPermissionGuard('system.company-profile.detail', 'new'),
     },
     async (request, reply) => {
       const ctx = extractRequestContext(request);
@@ -72,7 +73,7 @@ async function companyProfileRoutes(fastify: FastifyInstance): Promise<void> {
         body: updateCompanyProfileRequestSchema,
         response: { 200: successEnvelope(companyProfileResponseSchema) },
       },
-      preHandler: createRbacGuard({ minimumRole: UserRole.ADMIN }),
+      preHandler: createPermissionGuard('system.company-profile.detail', 'edit'),
     },
     async (request, reply) => {
       const ctx = extractRequestContext(request);

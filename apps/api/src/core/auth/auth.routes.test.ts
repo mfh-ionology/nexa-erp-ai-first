@@ -4,7 +4,8 @@ import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 
 import { _clearAll } from './login-rate-limiter.js';
-import { appEvents } from '../events/event-emitter.js';
+import { eventBus } from '../events/event-bus.js';
+import { eventBusPlugin } from '../events/event-bus.plugin.js';
 
 // ---------------------------------------------------------------------------
 // Mock constants
@@ -88,6 +89,7 @@ function makeTestUser(overrides: Record<string, unknown> = {}) {
     isActive: true,
     lastLoginAt: null,
     enabledModules: ['FINANCE', 'SALES'],
+    locale: 'en',
     createdAt: new Date(),
     updatedAt: new Date(),
     createdBy: 'system',
@@ -109,6 +111,7 @@ async function buildTestApp(): Promise<FastifyInstance> {
   app.setValidatorCompiler(zodValidatorCompiler);
   app.setSerializerCompiler(zodSerializerCompiler);
   await app.register(cookie);
+  await app.register(eventBusPlugin);
   registerErrorHandler(app);
   await app.register(authRoutesPlugin, { prefix: '/auth' });
   await app.ready();
@@ -189,6 +192,7 @@ describe('auth routes', () => {
         lastName: 'User',
         role: 'SUPER_ADMIN',
         enabledModules: ['FINANCE', 'SALES'],
+        locale: 'en',
         tenantId: TEST_COMPANY_ID,
         tenantName: 'Test Company Ltd',
         mfaEnabled: false,
@@ -234,6 +238,7 @@ describe('auth routes', () => {
       expect(body.success).toBe(false);
       expect(body.error.code).toBe('INVALID_CREDENTIALS');
       expect(body.error.message).toBe('Invalid email or password');
+      expect(body.error.messageKey).toBe('errors:AUTH_INVALID_CREDENTIALS');
     });
 
     it('returns 401 INVALID_CREDENTIALS for wrong password (same error message)', async () => {
@@ -254,6 +259,7 @@ describe('auth routes', () => {
       expect(body.error.code).toBe('INVALID_CREDENTIALS');
       // Same message for both wrong email and wrong password
       expect(body.error.message).toBe('Invalid email or password');
+      expect(body.error.messageKey).toBe('errors:AUTH_INVALID_CREDENTIALS');
     });
 
     it('returns 401 for inactive user', async () => {
@@ -270,6 +276,7 @@ describe('auth routes', () => {
       expect(res.statusCode).toBe(401);
       const body = res.json();
       expect(body.error.code).toBe('INVALID_CREDENTIALS');
+      expect(body.error.messageKey).toBe('errors:AUTH_INVALID_CREDENTIALS');
     });
 
     it('returns 400 for invalid request body (missing email)', async () => {
@@ -314,6 +321,7 @@ describe('auth routes', () => {
       expect(res.statusCode).toBe(423);
       const body = res.json();
       expect(body.error.code).toBe('ACCOUNT_LOCKED');
+      expect(body.error.messageKey).toBe('errors:ACCOUNT_LOCKED');
     });
 
     it('returns 423 ACCOUNT_LOCKED after 5 failed attempts', async () => {
@@ -342,6 +350,7 @@ describe('auth routes', () => {
       const body = res.json();
       expect(body.success).toBe(false);
       expect(body.error.code).toBe('ACCOUNT_LOCKED');
+      expect(body.error.messageKey).toBe('errors:ACCOUNT_LOCKED');
     });
 
     it('updates lastLoginAt on successful login', async () => {
@@ -403,7 +412,7 @@ describe('auth routes', () => {
       mockCreateRefreshToken.mockResolvedValue({});
 
       const eventSpy = vi.fn();
-      appEvents.on('user.login', eventSpy);
+      eventBus.on('user.login', eventSpy);
 
       try {
         await app.inject({
@@ -412,14 +421,18 @@ describe('auth routes', () => {
           payload: { email: TEST_EMAIL, password: TEST_PASSWORD },
         });
 
+        // EventBus handlers are async (queueMicrotask) — flush microtasks
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
         expect(eventSpy).toHaveBeenCalledOnce();
         expect(eventSpy).toHaveBeenCalledWith({
           userId: TEST_USER_ID,
+          companyId: TEST_COMPANY_ID,
           loginMethod: 'password',
           ipAddress: expect.any(String),
         });
       } finally {
-        appEvents.off('user.login', eventSpy);
+        eventBus.off('user.login', eventSpy);
       }
     });
   });
@@ -488,6 +501,7 @@ describe('auth routes', () => {
       expect(res.statusCode).toBe(401);
       const body = res.json();
       expect(body.error.code).toBe('UNAUTHORIZED');
+      expect(body.error.messageKey).toBe('errors:UNAUTHORIZED');
     });
 
     it('returns 401 with old/revoked token', async () => {
@@ -505,6 +519,7 @@ describe('auth routes', () => {
       expect(res.statusCode).toBe(401);
       const body = res.json();
       expect(body.error.code).toBe('UNAUTHORIZED');
+      expect(body.error.messageKey).toBe('errors:UNAUTHORIZED');
     });
 
     it('sets new httpOnly cookie on refresh', async () => {

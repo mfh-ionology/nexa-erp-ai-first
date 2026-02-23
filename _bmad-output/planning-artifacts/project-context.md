@@ -154,12 +154,14 @@ t('validation.required', { field: t('field.customerName') })
 ```
 
 **Implementation:**
-- Translation files stored per locale: `locales/en.json`, `locales/fr.json`, etc.
+- Translation files stored per locale per namespace: `packages/i18n/locales/en/common.json`, `packages/i18n/locales/en/validation.json`, etc. (directory-per-locale, file-per-namespace)
+- Core namespaces: `common`, `validation`, `navigation`, `errors` — business modules add their own (e.g., `finance`, `sales`) via `i18next.addResourceBundle()` or by extending the `TranslationNamespace` type
 - Default locale: `en` (English-first for UK MVP)
 - User selects language in profile settings
 - Company can set default language
-- Fallback chain: user language → company language → `en`
+- Fallback chain: user language → company language → `en` (implemented via `resolveLocale()` in `@nexa/i18n`)
 - Number/date/currency formatting via `Intl` API based on locale
+- Pluralisation: i18next `_one`/`_other` suffix convention (e.g., `itemCount_one`, `itemCount_other`)
 
 **Scope for MVP:** English only, but ALL strings go through the translation system so adding languages later requires zero code changes — only new translation files.
 

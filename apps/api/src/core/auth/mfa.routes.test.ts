@@ -5,7 +5,8 @@ import cookie from '@fastify/cookie';
 import * as OTPAuth from 'otpauth';
 
 import { _clearAll } from './login-rate-limiter.js';
-import { appEvents } from '../events/event-emitter.js';
+import { eventBus } from '../events/event-bus.js';
+import { eventBusPlugin } from '../events/event-bus.plugin.js';
 
 // ---------------------------------------------------------------------------
 // Mock constants
@@ -55,6 +56,25 @@ vi.mock('@nexa/db', () => ({
     STAFF: 'STAFF',
     VIEWER: 'VIEWER',
   },
+}));
+
+// Mock permission service to prevent real DB calls from permission guard
+const mockPermissionService = vi.hoisted(() => ({
+  getEffectivePermissions: vi.fn(),
+  hasPermission: vi.fn(),
+  invalidateUser: vi.fn(),
+  invalidateGroup: vi.fn(),
+  invalidateAll: vi.fn(),
+  clearCache: vi.fn(),
+  getCacheSize: vi.fn(),
+  deriveEnabledModules: vi.fn(),
+  getFieldVisibility: vi.fn(),
+}));
+
+vi.mock('../rbac/permission.service.js', () => ({
+  permissionService: mockPermissionService,
+  PermissionService: vi.fn(),
+  ACTION_FLAG_MAP: { new: 'canNew', view: 'canView', edit: 'canEdit', delete: 'canDelete' },
 }));
 
 // Mock argon2 for speed (no real Argon2id hashing in tests)
@@ -159,8 +179,16 @@ async function buildTestApp(): Promise<FastifyInstance> {
   app.setValidatorCompiler(zodValidatorCompiler);
   app.setSerializerCompiler(zodSerializerCompiler);
   await app.register(cookie);
+  await app.register(eventBusPlugin);
   registerErrorHandler(app);
   await app.register(jwtVerifyPlugin);
+  // Simulate company-context middleware: set companyId from tenantId for testing
+  // (In production, companyContextPlugin resolves companyId via DB + X-Company-ID header)
+  app.addHook('onRequest', async (request) => {
+    if (request.userId) {
+      request.companyId = request.tenantId;
+    }
+  });
   await app.register(authRoutesPlugin, { prefix: '/auth' });
   await app.ready();
   return app;
@@ -177,6 +205,23 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+
+  // Configure permission service: role-aware mock for permission guard
+  // ADMIN/MANAGER get full permissions, STAFF/VIEWER get empty (denied)
+  mockPermissionService.getEffectivePermissions.mockImplementation(
+    async (_prisma: unknown, _userId: string, _companyId: string, userRole: string) => {
+      const hasAccess = ['ADMIN', 'MANAGER'].includes(userRole);
+      const fullPerm = { canAccess: true, canNew: true, canView: true, canEdit: true, canDelete: true };
+      return {
+        permissions: hasAccess ? { 'system.users.detail': fullPerm } : {},
+        fieldOverrides: {},
+        accessGroups: [],
+        role: userRole,
+        isSuperAdmin: false,
+        enabledModules: hasAccess ? ['system'] : [],
+      };
+    },
+  );
   _clearAll();
 });
 
@@ -250,6 +295,7 @@ describe('MFA routes', () => {
       const body = res.json();
       expect(body.success).toBe(false);
       expect(body.error.code).toBe('MFA_ALREADY_ENABLED');
+      expect(body.error.messageKey).toBe('errors:MFA_ALREADY_ENABLED');
     });
 
     it('allows re-setup when setup was started but not verified (overwrites pending secret)', async () => {
@@ -291,7 +337,7 @@ describe('MFA routes', () => {
       mockUpdateUser.mockResolvedValue(makeTestUser());
 
       const eventSpy = vi.fn();
-      appEvents.on('user.mfa.setup', eventSpy);
+      eventBus.on('user.mfa.setup', eventSpy);
 
       try {
         await app.inject({
@@ -300,10 +346,13 @@ describe('MFA routes', () => {
           headers: { authorization: `Bearer ${token}` },
         });
 
+        // EventBus handlers are async (queueMicrotask) — flush microtasks
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
         expect(eventSpy).toHaveBeenCalledOnce();
-        expect(eventSpy).toHaveBeenCalledWith({ userId: TEST_USER_ID });
+        expect(eventSpy).toHaveBeenCalledWith({ userId: TEST_USER_ID, companyId: TEST_COMPANY_ID });
       } finally {
-        appEvents.off('user.mfa.setup', eventSpy);
+        eventBus.off('user.mfa.setup', eventSpy);
       }
     });
   });
@@ -382,6 +431,7 @@ describe('MFA routes', () => {
       const body = res.json();
       expect(body.success).toBe(false);
       expect(body.error.code).toBe('MFA_INVALID');
+      expect(body.error.messageKey).toBe('errors:MFA_INVALID');
     });
 
     it('returns 400 MFA_SETUP_REQUIRED without prior setup', async () => {
@@ -401,6 +451,7 @@ describe('MFA routes', () => {
       const body = res.json();
       expect(body.success).toBe(false);
       expect(body.error.code).toBe('MFA_SETUP_REQUIRED');
+      expect(body.error.messageKey).toBe('errors:MFA_SETUP_REQUIRED');
     });
 
     it('emits user.mfa.enabled event on successful verification', async () => {
@@ -415,7 +466,7 @@ describe('MFA routes', () => {
       const totpCode = generateValidTotpCode(secret);
 
       const eventSpy = vi.fn();
-      appEvents.on('user.mfa.enabled', eventSpy);
+      eventBus.on('user.mfa.enabled', eventSpy);
 
       try {
         await app.inject({
@@ -425,10 +476,13 @@ describe('MFA routes', () => {
           payload: { token: totpCode },
         });
 
+        // EventBus handlers are async (queueMicrotask) — flush microtasks
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
         expect(eventSpy).toHaveBeenCalledOnce();
-        expect(eventSpy).toHaveBeenCalledWith({ userId: TEST_USER_ID });
+        expect(eventSpy).toHaveBeenCalledWith({ userId: TEST_USER_ID, companyId: TEST_COMPANY_ID });
       } finally {
-        appEvents.off('user.mfa.enabled', eventSpy);
+        eventBus.off('user.mfa.enabled', eventSpy);
       }
     });
   });
@@ -506,6 +560,7 @@ describe('MFA routes', () => {
       const body = res.json();
       expect(body.success).toBe(false);
       expect(body.error.code).toBe('MFA_SETUP_REQUIRED');
+      expect(body.error.messageKey).toBe('errors:MFA_SETUP_REQUIRED');
     });
 
     it('emits user.login with loginMethod password+mfa when MFA verified', async () => {
@@ -521,7 +576,7 @@ describe('MFA routes', () => {
       mockCreateRefreshToken.mockResolvedValue({});
 
       const eventSpy = vi.fn();
-      appEvents.on('user.login', eventSpy);
+      eventBus.on('user.login', eventSpy);
 
       try {
         await app.inject({
@@ -530,12 +585,15 @@ describe('MFA routes', () => {
           payload: { email: TEST_EMAIL, password: TEST_PASSWORD, mfaToken: totpCode },
         });
 
+        // EventBus handlers are async (queueMicrotask) — flush microtasks
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
         expect(eventSpy).toHaveBeenCalledOnce();
         expect(eventSpy).toHaveBeenCalledWith(
           expect.objectContaining({ loginMethod: 'password+mfa' }),
         );
       } finally {
-        appEvents.off('user.login', eventSpy);
+        eventBus.off('user.login', eventSpy);
       }
     });
 
@@ -558,6 +616,7 @@ describe('MFA routes', () => {
       const body = res.json();
       expect(body.success).toBe(false);
       expect(body.error.code).toBe('MFA_INVALID');
+      expect(body.error.messageKey).toBe('errors:MFA_INVALID');
     });
 
     it('locks account after 5 failed MFA token attempts during login', async () => {
@@ -688,6 +747,7 @@ describe('MFA routes', () => {
       expect(body.success).toBe(false);
       expect(body.error.code).toBe('FORBIDDEN');
       expect(body.error.message).toContain('own MFA');
+      expect(body.error.messageKey).toBe('errors:MFA_CANNOT_RESET_SELF');
 
       // Verify no DB operations were attempted
       expect(mockFindUniqueUser).not.toHaveBeenCalled();
@@ -720,6 +780,7 @@ describe('MFA routes', () => {
       expect(body.success).toBe(false);
       expect(body.error.code).toBe('FORBIDDEN');
       expect(body.error.message).toContain('outside your company');
+      expect(body.error.messageKey).toBe('errors:MFA_CROSS_COMPANY');
 
       // Verify MFA was NOT cleared
       expect(mockUpdateUser).not.toHaveBeenCalled();

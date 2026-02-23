@@ -4,24 +4,29 @@
 
 Whenever requirements, features, or architectural decisions are **added, modified, or removed**, ALL of the following documents MUST be updated to stay in sync:
 
-### Core Specification Documents
+### Core Specification Documents (sharded into folders)
 
-1. **PRD** — `_bmad-output/planning-artifacts/prd.md`
-2. **Architecture** — `_bmad-output/planning-artifacts/architecture.md`
-3. **UX Design Specification** — `_bmad-output/planning-artifacts/ux-design-specification.md`
+1. **PRD** — `_bmad-output/planning-artifacts/prd/` (index.md + sharded sections)
+2. **Architecture** — `_bmad-output/planning-artifacts/architecture/` (index.md + sharded sections)
+3. **UX Design Specification** — `_bmad-output/planning-artifacts/ux-design-specification/` (index.md + sharded sections)
 
 ### Reference Documents (Implementation Detail)
 
-4. **API Contracts** — `_bmad-output/planning-artifacts/api-contracts.md`
-5. **State Machine Reference** — `_bmad-output/planning-artifacts/state-machine-reference.md`
+4. **API Contracts** — `_bmad-output/planning-artifacts/api-contracts/` (sharded by module)
+5. **Data Models** — `_bmad-output/planning-artifacts/data-models/` (sharded by module)
 6. **Event Catalog** — `_bmad-output/planning-artifacts/event-catalog.md`
-7. **Data Models** — `_bmad-output/planning-artifacts/data-models.md`
+7. **State Machine Reference** — `_bmad-output/planning-artifacts/state-machine-reference.md`
 8. **Business Rules Compendium** — `_bmad-output/planning-artifacts/business-rules-compendium.md`
 
 ### Cross-Cutting & Tracking
 
 9. **Project Context** — `_bmad-output/planning-artifacts/project-context.md` (architectural decisions, cross-cutting patterns)
 10. **Traceability Workbook** — `_bmad-output/planning-artifacts/Nexa-ERP-Traceability-Workbook-v1.xlsx` (regenerate via `scripts/generate-traceability-workbook.py` after updating the script data)
+
+### Epic & Story Registry
+
+11. **Epic Files** — `_bmad-output/implementation-artifacts/epics/` (epic-E0.md, epic-E1.md, etc.)
+12. **Current Epic Stories** — `_bmad-output/planning-artifacts/epics.md` (active epic being worked on)
 
 No document should contradict another. If a feature is removed from the PRD, it must also be removed from all other documents. If a new FR/NFR is added, it must appear in all relevant documents. The Project Context document is the authoritative source for cross-cutting architectural decisions (multi-company, i18n, RBAC, etc.).
 
@@ -34,6 +39,21 @@ No document should contradict another. If a feature is removed from the PRD, it 
 - 11 MVP modules: System, Finance, AR, AP, Sales, Purchasing, Inventory, CRM, HR/Payroll, Manufacturing, Reporting
 - Build sequence: E0-E26+ (Tier 0: Foundation, Tier 1: Core Platform, Tier 2: First Business Module, Tier 3: Business Modules)
 - Cross-cutting patterns: companyId scoping, i18n translation keys, typed event emission, mobile adaptation — see `project-context.md`
+
+## BMAD Workflow Rule (MANDATORY)
+
+Under NO circumstances should any coding be done for any Epic without using the BMAD method. All Epic implementation MUST go through the full BMAD orchestrated workflow (`auto-bmad_pack/scripts/v7-orchestrated-epic.sh`), which includes:
+
+1. **Story creation** — via the Story Manager (SM) agent
+2. **Story complexity assessment** — automatic task breakdown
+3. **Code implementation** — via the Developer (Dev) agent, task by task
+4. **Task validation** — after each task completion
+5. **Code review** — adversarial review of each story
+6. **Test review** — via the Test Architect (TEA) agent
+7. **Post-completion verification** — file and artifact updates
+8. **Retrospective** — after epic completion
+
+No ad-hoc coding, no manual implementation plans, no skipping the BMAD pipeline. If the orchestrated script is not available or fails, fix the script — do not bypass it.
 
 ## Epic Page Approval Gate (MANDATORY)
 
@@ -50,11 +70,11 @@ This ensures every screen gets genuine design thinking (not bulk fill-in) and Mo
 
 When the **Story Manager (SM)**, **Developer (Dev)**, or **Test Architect (TEA)** agents create stories, acceptance criteria, or test plans, they MUST reference ALL 8 key specification documents:
 
-1. **PRD** — `_bmad-output/planning-artifacts/prd.md`
-2. **Architecture** — `_bmad-output/planning-artifacts/architecture.md`
-3. **UX Design Specification** — `_bmad-output/planning-artifacts/ux-design-specification.md`
-4. **API Contracts** — `_bmad-output/planning-artifacts/api-contracts.md`
-5. **Data Models** — `_bmad-output/planning-artifacts/data-models.md`
+1. **PRD** — `_bmad-output/planning-artifacts/prd/` (index.md + sharded sections)
+2. **Architecture** — `_bmad-output/planning-artifacts/architecture/` (index.md + sharded sections)
+3. **UX Design Specification** — `_bmad-output/planning-artifacts/ux-design-specification/` (index.md + sharded sections)
+4. **API Contracts** — `_bmad-output/planning-artifacts/api-contracts/` (sharded by module)
+5. **Data Models** — `_bmad-output/planning-artifacts/data-models/` (sharded by module)
 6. **Event Catalog** — `_bmad-output/planning-artifacts/event-catalog.md`
 7. **State Machine Reference** — `_bmad-output/planning-artifacts/state-machine-reference.md`
 8. **Business Rules Compendium** — `_bmad-output/planning-artifacts/business-rules-compendium.md`
@@ -76,6 +96,20 @@ gh auth switch --user mfshussein
 ```
 
 This ensures pushes authenticate against the correct GitHub account. Always run this before pushing.
+
+## Orchestrator Script Launch Rule (MANDATORY)
+
+When launching `v7-orchestrated-epic.sh` or `v7-post-epic-test-runner.sh` from within a Claude Code session, you **MUST** unset the `CLAUDECODE` environment variable. Claude Code sets this variable, and the orchestrator scripts spawn child Claude Code processes that will refuse to run if they detect they're nested inside another Claude Code session.
+
+```bash
+# CORRECT — launch from within Claude Code:
+nohup env -u CLAUDECODE bash auto-bmad_pack/scripts/v7-orchestrated-epic.sh E4 --run-tests > /tmp/e4-orchestrator.log 2>&1 &
+
+# WRONG — will fail with "cannot be launched inside another Claude Code session":
+nohup bash auto-bmad_pack/scripts/v7-orchestrated-epic.sh E4 --run-tests > /tmp/e4-orchestrator.log 2>&1 &
+```
+
+This applies to any BMAD script that spawns `claude` subprocesses.
 
 ## Prisma Migration Rules (MANDATORY)
 
@@ -103,6 +137,40 @@ If a story retry subprocess needs to regenerate code, it must preserve existing 
 
 - Spec-pack: `docs/spec-pack/`
 - Planning artifacts: `_bmad-output/planning-artifacts/`
+- Implementation artifacts: `_bmad-output/implementation-artifacts/`
 - Legacy HAL source: `legacy-src/c8520240417/`
 - BMAD commands: `.claude/commands/`
 - Scripts: `scripts/`
+- Module architecture detail: `_bmad-output/planning-artifacts/arch-sections/` (per-module, supplementary — consult when working on specific business module epics E14+)
+- Archive (old/superseded): `_bmad-output/archive/` (do NOT reference for current work)
+
+## Canonical Documents (ALWAYS CONSULT)
+
+When creating epics, stories, acceptance criteria, test plans, or doing any implementation work, these are the authoritative source documents. Always cross-reference them:
+
+### Core Specifications (sharded folders — read index.md first)
+
+| Document | Path |
+|----------|------|
+| PRD | `_bmad-output/planning-artifacts/prd/` |
+| Architecture | `_bmad-output/planning-artifacts/architecture/` |
+| UX Design Specification | `_bmad-output/planning-artifacts/ux-design-specification/` |
+| API Contracts | `_bmad-output/planning-artifacts/api-contracts/` |
+| Data Models | `_bmad-output/planning-artifacts/data-models/` |
+
+### Reference Documents (single files)
+
+| Document | Path |
+|----------|------|
+| Event Catalog | `_bmad-output/planning-artifacts/event-catalog.md` |
+| State Machine Reference | `_bmad-output/planning-artifacts/state-machine-reference.md` |
+| Business Rules Compendium | `_bmad-output/planning-artifacts/business-rules-compendium.md` |
+| Project Context | `_bmad-output/planning-artifacts/project-context.md` |
+
+### Implementation Tracking
+
+| Document | Path |
+|----------|------|
+| Epic Registry | `_bmad-output/implementation-artifacts/epics/` |
+| Active Epic Stories | `_bmad-output/planning-artifacts/epics.md` |
+| Sprint Status | `_bmad-output/implementation-artifacts/sprint-status.yaml` |

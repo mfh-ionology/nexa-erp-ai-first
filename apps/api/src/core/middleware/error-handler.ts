@@ -1,18 +1,9 @@
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
-import { AppError, ValidationError } from '../errors/index.js';
+import { tServer } from '@nexa/i18n/server';
 
-/**
- * Standard error response envelope per API Contracts.
- */
-interface ErrorEnvelope {
-  success: false;
-  error: {
-    code: string;
-    message: string;
-    details?: Record<string, string[]>;
-  };
-}
+import { AppError, ValidationError } from '../errors/index.js';
+import type { ErrorEnvelope } from '../schemas/envelope.js';
 
 /**
  * Map HTTP status codes to clean API error codes per Architecture error code convention.
@@ -47,11 +38,19 @@ function buildErrorEnvelope(
   code: string,
   message: string,
   details?: Record<string, string[]>,
+  messageKey?: string,
+  messageParams?: Record<string, string>,
 ): ErrorEnvelope {
   const envelope: ErrorEnvelope = {
     success: false,
     error: { code, message },
   };
+  if (messageKey) {
+    envelope.error.messageKey = messageKey;
+  }
+  if (messageParams && Object.keys(messageParams).length > 0) {
+    envelope.error.messageParams = messageParams;
+  }
   if (details && Object.keys(details).length > 0) {
     envelope.error.details = details;
   }
@@ -80,10 +79,27 @@ export function registerErrorHandler(fastify: FastifyInstance): void {
         if (cause instanceof ValidationError) {
           return reply
             .status(400)
-            .send(buildErrorEnvelope(cause.code, cause.message, cause.details));
+            .send(
+              buildErrorEnvelope(
+                cause.code,
+                cause.message,
+                cause.details,
+                cause.messageKey,
+                cause.messageParams,
+              ),
+            );
         }
         // Fallback for non-Zod validation errors (shouldn't happen, but be safe)
-        return reply.status(400).send(buildErrorEnvelope('VALIDATION_ERROR', 'Validation failed'));
+        return reply
+          .status(400)
+          .send(
+            buildErrorEnvelope(
+              'VALIDATION_ERROR',
+              tServer('errors:VALIDATION_ERROR'),
+              undefined,
+              'errors:VALIDATION_ERROR',
+            ),
+          );
       }
 
       // 2. Direct AppError instances (thrown from route handlers / services)
@@ -93,7 +109,15 @@ export function registerErrorHandler(fastify: FastifyInstance): void {
         }
         return reply
           .status(error.statusCode)
-          .send(buildErrorEnvelope(error.code, error.message, error.details));
+          .send(
+            buildErrorEnvelope(
+              error.code,
+              error.message,
+              error.details,
+              error.messageKey,
+              error.messageParams,
+            ),
+          );
       }
 
       // 3. Fastify errors with statusCode (e.g. 404 from Fastify itself, rate limit 429)
@@ -104,16 +128,19 @@ export function registerErrorHandler(fastify: FastifyInstance): void {
           request.log.error({ err: error }, error.message);
         }
         const code = mapStatusToErrorCode(statusCode);
-        // For 5xx, use generic message to avoid leaking internals
-        const message = statusCode >= 500 ? 'An unexpected error occurred' : error.message;
-        return reply.status(statusCode).send(buildErrorEnvelope(code, message));
+        // For 5xx, use generic message to avoid leaking internals.
+        // For 4xx, resolve the mapped error code to a translated message via errors:<CODE>.
+        const errorKey = `errors:${code}`;
+        const message = statusCode >= 500 ? tServer('errors:SERVER_ERROR') : error.message;
+        const messageKey = statusCode >= 500 ? 'errors:SERVER_ERROR' : errorKey;
+        return reply.status(statusCode).send(buildErrorEnvelope(code, message, undefined, messageKey));
       }
 
       // 4. Unknown / unexpected errors — log full stack, return generic 500
       request.log.error({ err: error }, error.message);
       return reply
         .status(500)
-        .send(buildErrorEnvelope('INTERNAL_ERROR', 'An unexpected error occurred'));
+        .send(buildErrorEnvelope('INTERNAL_ERROR', tServer('errors:SERVER_ERROR'), undefined, 'errors:SERVER_ERROR'));
     },
   );
 }

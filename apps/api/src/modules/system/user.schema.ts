@@ -21,6 +21,10 @@ const VALID_MODULES = [
 
 const moduleSchema = z.enum(VALID_MODULES);
 
+// BCP 47 locale pattern: 2-3 letter language, optional region/script subtags
+// Examples: "en", "en-GB", "fr", "zh-Hans"
+const localeSchema = z.string().min(2).max(10).regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/);
+
 // ---------------------------------------------------------------------------
 // Request Schemas
 // ---------------------------------------------------------------------------
@@ -32,11 +36,13 @@ export const createUserRequestSchema = z.object({
   lastName: z.string().min(1),
   role: z.enum(UserRole),
   enabledModules: z.array(moduleSchema).default([]),
+  locale: localeSchema.default('en'),
 });
 
 export const updateUserRequestSchema = z.object({
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
+  locale: localeSchema.optional(),
 });
 
 export const updateUserRoleRequestSchema = z.object({
@@ -78,6 +84,7 @@ export const userResponseSchema = z.object({
   lastName: z.string(),
   role: z.enum(UserRole).nullable(),
   enabledModules: z.array(z.string()),
+  locale: z.string(),
   isActive: z.boolean(),
   mfaEnabled: z.boolean(),
   lastLoginAt: z.date().nullable(),

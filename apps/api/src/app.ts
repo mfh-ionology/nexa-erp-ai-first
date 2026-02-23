@@ -20,6 +20,13 @@ import { jwtVerifyPlugin } from './core/auth/jwt-verify.hook.js';
 import { authRoutesPlugin } from './core/auth/auth.routes.js';
 import { companyContextPlugin } from './core/middleware/company-context.js';
 import { systemModulePlugin } from './modules/system/index.js';
+import { registerPermissionCacheListeners } from './core/rbac/index.js';
+import { eventBusPlugin } from './core/events/event-bus.plugin.js';
+import { auditPlugin } from './core/audit/audit.plugin.js';
+import { deadLetterPlugin } from './core/events/dead-letter.plugin.js';
+import { platformClientPlugin } from './core/platform/platform-client.plugin.js';
+import { platformWebhookPlugin } from './core/webhooks/platform-webhook.routes.js';
+import { aiPlugin } from './ai/index.js';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -43,9 +50,13 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
  * 9. @fastify/cookie
  * 10. JWT verification hook
  * 11. Company context middleware (depends on JWT verify)
- * 12. @fastify/swagger
- * 13. @fastify/swagger-ui
- * 14. Routes (health, auth, system)
+ * 12. Event bus plugin (decorates fastify.eventBus — before routes)
+ * 13. Audit trail plugin (subscribes to eventBus — after event-bus, before routes)
+ * 14. Dead-letter plugin (retry + DLQ — after event-bus and audit, before routes)
+ * 15. @fastify/swagger
+ * 16. @fastify/swagger-ui
+ * 17. AI module plugin (optional — degrades gracefully if config missing)
+ * 18. Routes (health, auth, system)
  */
 export async function buildApp(opts: { logger?: boolean | Record<string, unknown> } = {}) {
   const fastify = Fastify({
@@ -91,6 +102,21 @@ export async function buildApp(opts: { logger?: boolean | Record<string, unknown
   // -- Company context middleware (after JWT verify — depends on userId/tenantId)
   await fastify.register(companyContextPlugin);
 
+  // -- Event bus (after logger setup, before routes — all route handlers can access request.server.eventBus)
+  await fastify.register(eventBusPlugin);
+
+  // -- Audit trail (subscribes to eventBus events — must come after event-bus, before routes)
+  await fastify.register(auditPlugin);
+
+  // -- Dead-letter queue + retry (depends on event-bus — after audit, before routes)
+  await fastify.register(deadLetterPlugin);
+
+  // -- Platform Client SDK (singleton — before webhook route)
+  await fastify.register(platformClientPlugin);
+
+  // -- Platform webhook listener (service-token auth, bypasses JWT)
+  await fastify.register(platformWebhookPlugin);
+
   // -- OpenAPI / Swagger
   await fastify.register(swagger, {
     openapi: {
@@ -116,10 +142,16 @@ export async function buildApp(opts: { logger?: boolean | Record<string, unknown
     });
   });
 
+  // -- AI module (optional — degrades gracefully if AI Gateway config missing)
+  await fastify.register(aiPlugin, { prefix: '/ai' });
+
   // -- Routes
   await fastify.register(healthRoutesPlugin);
   await fastify.register(authRoutesPlugin, { prefix: '/auth' });
   await fastify.register(systemModulePlugin, { prefix: '/system' });
+
+  // -- Permission cache invalidation event listeners (E2b-4)
+  registerPermissionCacheListeners(fastify.eventBus);
 
   return fastify;
 }

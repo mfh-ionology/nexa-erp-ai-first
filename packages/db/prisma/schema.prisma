@@ -274,13 +274,13 @@ model CompanyProfile {
   website String? @map("website")
 
   // Configuration
-  timezone           String @default("Europe/London") @map("timezone")
-  weekStart          Int    @default(1) @map("week_start")
-  dateFormat         String @default("DD/MM/YYYY") @map("date_format")
-  decimalSeparator   String @default(".") @map("decimal_separator")
-  thousandsSeparator String @default(",") @map("thousands_separator")
+  timezone           String    @default("Europe/London") @map("timezone")
+  weekStart          Int       @default(1) @map("week_start")
+  dateFormat         String    @default("DD/MM/YYYY") @map("date_format")
+  decimalSeparator   String    @default(".") @map("decimal_separator")
+  thousandsSeparator String    @default(",") @map("thousands_separator")
   vatScheme          VatScheme @default(STANDARD) @map("vat_scheme")
-  defaultLanguage    String @default("en") @map("default_language")
+  defaultLanguage    String    @default("en") @map("default_language")
 
   // Tax Agent
   taxAgentName  String? @map("tax_agent_name")
@@ -297,20 +297,24 @@ model CompanyProfile {
   updatedBy String   @map("updated_by")
 
   // Relations
-  baseCurrency    Currency       @relation(fields: [baseCurrencyCode], references: [code])
-  country         Country        @relation(fields: [countryCode], references: [code])
-  exchangeRates   ExchangeRate[]
-  departments     Department[]
-  paymentTerms    PaymentTerms[]
-  vatCodes        VatCode[]
-  tags            Tag[]
-  bankHolidays    BankHoliday[]
-  systemSettings  SystemSetting[]
+  baseCurrency         Currency              @relation(fields: [baseCurrencyCode], references: [code])
+  country              Country               @relation(fields: [countryCode], references: [code])
+  exchangeRates        ExchangeRate[]
+  departments          Department[]
+  paymentTerms         PaymentTerms[]
+  vatCodes             VatCode[]
+  tags                 Tag[]
+  bankHolidays         BankHoliday[]
+  systemSettings       SystemSetting[]
   sharingRulesAsSource RegisterSharingRule[] @relation("SharingSource")
   sharingRulesAsTarget RegisterSharingRule[] @relation("SharingTarget")
   userCompanyRoles     UserCompanyRole[]
   users                User[]
   numberSeries         NumberSeries[]
+  accessGroups         AccessGroup[]
+  userAccessGroups     UserAccessGroup[]
+  auditLogs            AuditLog[]
+  aiConversations      AiConversation[]
 
   @@index([baseCurrencyCode], map: "idx_company_profiles_base_currency_code")
   @@index([countryCode], map: "idx_company_profiles_country_code")
@@ -349,7 +353,7 @@ model SystemSetting {
   key       String           @map("key")
   value     String           @map("value") // JSON-serialised
   valueType SettingValueType @map("value_type")
-  category  SettingCategory   @map("category")
+  category  SettingCategory  @map("category")
 
   // Audit
   createdAt DateTime @default(now()) @map("created_at")
@@ -418,18 +422,18 @@ enum ViewScope {
 }
 
 model UserCompanyRole {
-  id        String    @id @default(uuid()) @map("id")
-  userId    String    @map("user_id")
-  companyId String?   @map("company_id")
-  role      UserRole  @map("role")
+  id        String   @id @default(uuid()) @map("id")
+  userId    String   @map("user_id")
+  companyId String?  @map("company_id")
+  role      UserRole @map("role")
 
   // Audit
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  company   CompanyProfile? @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company CompanyProfile? @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, companyId], map: "uq_user_company_role")
   // NOTE: Partial index for global role uniqueness added via raw SQL in migration:
@@ -453,6 +457,7 @@ model User {
   isActive       Boolean   @default(true) @map("is_active")
   lastLoginAt    DateTime? @map("last_login_at")
   enabledModules Json      @default("[]") @map("enabled_modules")
+  locale         String    @default("en") @map("locale") @db.VarChar(10)
 
   // Audit
   createdAt DateTime @default(now()) @map("created_at")
@@ -465,6 +470,8 @@ model User {
   companyRoles       UserCompanyRole[]
   refreshTokens      RefreshToken[]
   managedDepartments Department[]      @relation("DepartmentManager")
+  userAccessGroups   UserAccessGroup[]
+  aiConversations    AiConversation[]
 
   @@unique([email], map: "uq_users_email")
   @@index([companyId], map: "idx_users_company_id")
@@ -515,4 +522,433 @@ model NumberSeries {
   @@index([companyId], map: "idx_number_series_company_id")
   @@index([companyId, isActive], map: "idx_number_series_company_active")
   @@map("number_series")
+}
+
+// ---------------------------------------------------------------------------
+// Granular RBAC — E2b.2
+// ---------------------------------------------------------------------------
+
+enum FieldVisibility {
+  VISIBLE
+  READ_ONLY
+  HIDDEN
+
+  @@map("field_visibility")
+}
+
+// ---------------------------------------------------------------------------
+// Resource Registry — E2b.1
+// ---------------------------------------------------------------------------
+// Resource is a GLOBAL table (no companyId). It defines all controllable
+// pages, reports, settings, and maintenances in the system. This is one of
+// the few exceptions to the "companyId on every table" rule (Architecture §3b,
+// Data Models §3.1).
+
+enum ResourceType {
+  PAGE
+  REPORT
+  SETTING
+  MAINTENANCE
+
+  @@map("resource_type")
+}
+
+model Resource {
+  id          String       @id @default(uuid()) @map("id")
+  code        String       @unique @map("code") @db.VarChar(100)
+  name        String       @map("name") @db.VarChar(255)
+  module      String       @map("module") @db.VarChar(50)
+  type        ResourceType @map("type")
+  parentCode  String?      @map("parent_code") @db.VarChar(100)
+  sortOrder   Int          @default(0) @map("sort_order")
+  icon        String?      @map("icon") @db.VarChar(100)
+  description String?      @map("description") @db.Text
+  isActive    Boolean      @default(true) @map("is_active")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Self-relation for hierarchy
+  parent   Resource?  @relation("ResourceHierarchy", fields: [parentCode], references: [code])
+  children Resource[] @relation("ResourceHierarchy")
+
+  // Granular RBAC relations (E2b.2)
+  permissions    AccessGroupPermission[]
+  fieldOverrides AccessGroupFieldOverride[]
+
+  @@index([module, sortOrder], map: "idx_resources_module_sort")
+  @@index([type], map: "idx_resources_type")
+  @@map("resources")
+}
+
+// ---------------------------------------------------------------------------
+// Access Group Models — E2b.2
+// ---------------------------------------------------------------------------
+
+model AccessGroup {
+  id          String  @id @default(uuid()) @map("id")
+  companyId   String  @map("company_id")
+  code        String  @map("code") @db.VarChar(50)
+  name        String  @map("name") @db.VarChar(255)
+  description String? @map("description") @db.Text
+  isSystem    Boolean @default(false) @map("is_system")
+  isActive    Boolean @default(true) @map("is_active")
+  createdBy   String  @map("created_by")
+  updatedBy   String  @map("updated_by")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  company          CompanyProfile             @relation(fields: [companyId], references: [id])
+  permissions      AccessGroupPermission[]
+  fieldOverrides   AccessGroupFieldOverride[]
+  userAccessGroups UserAccessGroup[]
+
+  @@unique([companyId, code], map: "uq_access_groups_company_code")
+  @@index([companyId, isActive], map: "idx_access_groups_company_active")
+  @@map("access_groups")
+}
+
+model AccessGroupPermission {
+  id            String  @id @default(uuid()) @map("id")
+  accessGroupId String  @map("access_group_id")
+  resourceCode  String  @map("resource_code") @db.VarChar(100)
+  canAccess     Boolean @default(false) @map("can_access")
+  canNew        Boolean @default(false) @map("can_new")
+  canView       Boolean @default(false) @map("can_view")
+  canEdit       Boolean @default(false) @map("can_edit")
+  canDelete     Boolean @default(false) @map("can_delete")
+
+  // Relations
+  accessGroup AccessGroup @relation(fields: [accessGroupId], references: [id], onDelete: Cascade)
+  resource    Resource    @relation(fields: [resourceCode], references: [code])
+
+  @@unique([accessGroupId, resourceCode], map: "uq_access_group_permissions_group_resource")
+  @@map("access_group_permissions")
+}
+
+model AccessGroupFieldOverride {
+  id            String          @id @default(uuid()) @map("id")
+  accessGroupId String          @map("access_group_id")
+  resourceCode  String          @map("resource_code") @db.VarChar(100)
+  fieldPath     String          @map("field_path") @db.VarChar(255)
+  visibility    FieldVisibility @map("visibility")
+
+  // Relations
+  accessGroup AccessGroup @relation(fields: [accessGroupId], references: [id], onDelete: Cascade)
+  resource    Resource    @relation(fields: [resourceCode], references: [code])
+
+  @@unique([accessGroupId, resourceCode, fieldPath], map: "uq_access_group_field_overrides_group_resource_field")
+  @@map("access_group_field_overrides")
+}
+
+model UserAccessGroup {
+  id            String   @id @default(uuid()) @map("id")
+  userId        String   @map("user_id")
+  accessGroupId String   @map("access_group_id")
+  companyId     String   @map("company_id")
+  assignedBy    String   @map("assigned_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations — Cascade on user/accessGroup matches UserCompanyRole.user pattern;
+  // users are soft-deleted (isActive=false), so hard-delete cascade is a safety net only.
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessGroup AccessGroup    @relation(fields: [accessGroupId], references: [id], onDelete: Cascade)
+  company     CompanyProfile @relation(fields: [companyId], references: [id])
+
+  @@unique([userId, accessGroupId, companyId], map: "uq_user_access_groups_user_group_company")
+  @@index([userId, companyId], map: "idx_user_access_groups_user_company")
+  @@map("user_access_groups")
+}
+
+// ---------------------------------------------------------------------------
+// Audit Trail — E3.2 (Architecture §2.6, IMP-003)
+// ---------------------------------------------------------------------------
+// Append-only audit log. NO updatedAt/updatedBy by design.
+// PostgreSQL RULES enforce immutability at the database level (added in migration).
+
+model AuditLog {
+  id            String   @id @default(uuid()) @map("id")
+  companyId     String   @map("company_id")
+  entityType    String   @map("entity_type")
+  entityId      String   @map("entity_id")
+  action        String   @map("action")
+  beforeData    Json?    @map("before_data")
+  afterData     Json?    @map("after_data")
+  userId        String   @map("user_id")
+  isAiAction    Boolean  @default(false) @map("is_ai_action")
+  aiConfidence  Decimal? @map("ai_confidence") @db.Decimal(5, 4)
+  correlationId String?  @map("correlation_id")
+  timestamp     DateTime @default(now()) @map("timestamp")
+
+  // Relations
+  company CompanyProfile @relation(fields: [companyId], references: [id])
+
+  @@index([companyId, entityType, entityId], map: "idx_audit_logs_company_entity")
+  @@index([companyId, userId, timestamp], map: "idx_audit_logs_company_user_time")
+  @@index([companyId, timestamp], map: "idx_audit_logs_company_time")
+  @@index([companyId, action], map: "idx_audit_logs_company_action")
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// AI Infrastructure Models — E5.1 AI Service Layer
+// ---------------------------------------------------------------------------
+// AI models are cross-cutting infrastructure, not a business module.
+// AiMessage and AiFeedback are append-only (no updatedAt).
+// AiPromptVersion is immutable version history (no updatedAt).
+// All tenant-scoped entities use companyId FK.
+// ---------------------------------------------------------------------------
+
+model AiModel {
+  id              String   @id @default(uuid()) @map("id")
+  name            String   @unique(map: "uq_ai_models_name") @map("name")
+  provider        String   @map("provider")
+  modelId         String   @map("model_id")
+  displayName     String   @map("display_name")
+  maxInputTokens  Int      @map("max_input_tokens")
+  maxOutputTokens Int      @map("max_output_tokens")
+  costPerMInput   Decimal  @map("cost_per_m_input") @db.Decimal(10, 4)
+  costPerMOutput  Decimal  @map("cost_per_m_output") @db.Decimal(10, 4)
+  capabilities    Json     @map("capabilities")
+  isActive        Boolean  @default(true) @map("is_active")
+  isDefault       Boolean  @default(false) @map("is_default")
+  config          Json?    @map("config")
+  fallbackModelId String?  @map("fallback_model_id")
+  routingTags     String[] @map("routing_tags")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Self-relation for fallback
+  fallbackModel AiModel?  @relation("AiModelFallback", fields: [fallbackModelId], references: [id])
+  fallbackOf    AiModel[] @relation("AiModelFallback")
+
+  // Reverse relations
+  agents   AiAgent[]
+  messages AiMessage[]
+  usage    AiUsage[]
+
+  @@map("ai_models")
+}
+
+model AiPrompt {
+  id            String  @id @default(uuid()) @map("id")
+  name          String  @unique(map: "uq_ai_prompts_name") @map("name")
+  description   String? @map("description")
+  category      String  @map("category")
+  systemPrompt  String  @map("system_prompt") @db.Text
+  userTemplate  String  @map("user_template") @db.Text
+  parameters    Json    @map("parameters")
+  outputFormat  Json?   @map("output_format")
+  activeVersion Int     @default(1) @map("active_version")
+  isActive      Boolean @default(true) @map("is_active")
+  createdBy     String  @map("created_by")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  versions AiPromptVersion[]
+  agents   AiAgent[]
+
+  @@map("ai_prompts")
+}
+
+model AiPromptVersion {
+  id           String  @id @default(uuid()) @map("id")
+  promptId     String  @map("prompt_id")
+  version      Int     @map("version")
+  systemPrompt String  @map("system_prompt") @db.Text
+  userTemplate String  @map("user_template") @db.Text
+  parameters   Json    @map("parameters")
+  changeReason String? @map("change_reason")
+  createdBy    String  @map("created_by")
+
+  // Append-only — version history, no updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  prompt AiPrompt @relation(fields: [promptId], references: [id])
+
+  @@unique([promptId, version], map: "uq_ai_prompt_versions_prompt_version")
+  @@map("ai_prompt_versions")
+}
+
+model AiAgent {
+  id            String   @id @default(uuid()) @map("id")
+  name          String   @unique(map: "uq_ai_agents_name") @map("name")
+  displayName   String   @map("display_name")
+  description   String?  @map("description")
+  modelId       String?  @map("model_id")
+  routingTags   String[] @map("routing_tags")
+  promptId      String   @map("prompt_id")
+  tools         Json     @map("tools")
+  guardrails    Json     @map("guardrails")
+  triggerConfig Json     @map("trigger_config")
+  maxTurns      Int      @default(10) @map("max_turns")
+  isActive      Boolean  @default(true) @map("is_active")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  model  AiModel? @relation(fields: [modelId], references: [id])
+  prompt AiPrompt @relation(fields: [promptId], references: [id])
+
+  // Reverse relations
+  conversations AiConversation[]
+  usage         AiUsage[]
+  evals         AiEval[]
+
+  @@map("ai_agents")
+}
+
+model AiSkill {
+  id            String   @id @default(uuid()) @map("id")
+  name          String   @unique(map: "uq_ai_skills_name") @map("name")
+  displayName   String   @map("display_name")
+  description   String?  @map("description")
+  category      String   @map("category")
+  instructions  String   @map("instructions") @db.Text
+  keywords      String[] @map("keywords")
+  inputSchema   Json     @map("input_schema")
+  outputType    String   @map("output_type")
+  requiredTools String[] @map("required_tools")
+  isActive      Boolean  @default(true) @map("is_active")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("ai_skills")
+}
+
+model AiConversation {
+  id        String    @id @default(uuid()) @map("id")
+  userId    String    @map("user_id")
+  agentId   String?   @map("agent_id")
+  channel   String    @map("channel")
+  title     String?   @map("title") @db.VarChar(255)
+  status    String    @default("active") @map("status")
+  startedAt DateTime  @default(now()) @map("started_at")
+  endedAt   DateTime? @map("ended_at")
+  companyId String    @map("company_id")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user    User           @relation(fields: [userId], references: [id])
+  agent   AiAgent?       @relation(fields: [agentId], references: [id])
+  company CompanyProfile @relation(fields: [companyId], references: [id])
+
+  // Reverse relations
+  messages AiMessage[]
+
+  @@index([userId, startedAt], map: "idx_ai_conversations_user_started")
+  @@index([companyId], map: "idx_ai_conversations_company_id")
+  @@map("ai_conversations")
+}
+
+model AiMessage {
+  id              String   @id @default(uuid()) @map("id")
+  conversationId  String   @map("conversation_id")
+  role            String   @map("role")
+  content         String   @map("content") @db.Text
+  toolCalls       Json?    @map("tool_calls")
+  toolResults     Json?    @map("tool_results")
+  modelId         String?  @map("model_id")
+  promptVersionId String?  @map("prompt_version_id")
+  inputTokens     Int?     @map("input_tokens")
+  outputTokens    Int?     @map("output_tokens")
+  latencyMs       Int?     @map("latency_ms")
+  confidence      Decimal? @map("confidence") @db.Decimal(3, 2)
+
+  // Append-only — no updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  conversation AiConversation @relation(fields: [conversationId], references: [id])
+  model        AiModel?       @relation(fields: [modelId], references: [id])
+
+  // Reverse relations
+  feedback AiFeedback?
+
+  @@index([conversationId, createdAt], map: "idx_ai_messages_conversation_created")
+  @@map("ai_messages")
+}
+
+model AiFeedback {
+  id           String  @id @default(uuid()) @map("id")
+  messageId    String  @unique(map: "uq_ai_feedback_message_id") @map("message_id")
+  userId       String  @map("user_id")
+  rating       Int     @map("rating")
+  editedFields Json?   @map("edited_fields")
+  wasApproved  Boolean @map("was_approved")
+  comment      String? @map("comment") @db.Text
+
+  // Append-only — no updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  message AiMessage @relation(fields: [messageId], references: [id])
+
+  @@index([userId, createdAt], map: "idx_ai_feedback_user_created")
+  @@map("ai_feedback")
+}
+
+model AiUsage {
+  id           String   @id @default(uuid()) @map("id")
+  tenantId     String   @map("tenant_id")
+  modelId      String   @map("model_id")
+  agentId      String?  @map("agent_id")
+  date         DateTime @map("date") @db.Date
+  requestCount Int      @map("request_count")
+  inputTokens  Int      @map("input_tokens")
+  outputTokens Int      @map("output_tokens")
+  totalCost    Decimal  @map("total_cost") @db.Decimal(10, 4)
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  model AiModel  @relation(fields: [modelId], references: [id])
+  agent AiAgent? @relation(fields: [agentId], references: [id])
+
+  @@unique([tenantId, modelId, agentId, date], map: "uq_ai_usage_tenant_model_agent_date")
+  // NOTE: Partial unique index for NULL agentId added via raw SQL in migration:
+  // CREATE UNIQUE INDEX "uq_ai_usage_tenant_model_date_no_agent" ON "ai_usage" ("tenant_id", "model_id", "date") WHERE "agent_id" IS NULL;
+  @@map("ai_usage")
+}
+
+model AiEval {
+  id               String   @id @default(uuid()) @map("id")
+  agentId          String   @map("agent_id")
+  promptVersion    Int      @map("prompt_version")
+  evalDate         DateTime @map("eval_date") @db.Date
+  sampleSize       Int      @map("sample_size")
+  accuracy         Decimal  @map("accuracy") @db.Decimal(5, 2)
+  approvalRate     Decimal  @map("approval_rate") @db.Decimal(5, 2)
+  avgLatencyMs     Int      @map("avg_latency_ms")
+  avgCostPerAction Decimal  @map("avg_cost_per_action") @db.Decimal(10, 4)
+  metrics          Json     @map("metrics")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  agent AiAgent @relation(fields: [agentId], references: [id])
+
+  @@index([agentId, evalDate], map: "idx_ai_evals_agent_eval_date")
+  @@map("ai_evals")
 }

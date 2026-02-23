@@ -36,6 +36,7 @@ const userProfileSchema = z.object({
   lastName: z.string(),
   role: z.enum(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF', 'VIEWER']),
   enabledModules: z.array(z.string()),
+  locale: z.string(),
   tenantId: z.string(),
   tenantName: z.string(),
   mfaEnabled: z.boolean(),

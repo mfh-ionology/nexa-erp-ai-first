@@ -6,7 +6,7 @@ import Fastify from 'fastify';
 // Mock @nexa/db — vi.hoisted ensures variables exist when vi.mock is hoisted
 // ---------------------------------------------------------------------------
 
-const { mockPrisma, mockResolveUserRole } = vi.hoisted(() => ({
+const { mockPrisma, mockResolveUserRole, mockLoadDefaultAccessGroups, mockAssignFullAccessGroup, mockPermissionService } = vi.hoisted(() => ({
   mockPrisma: {
     user: { findUnique: vi.fn() },
     userCompanyRole: { create: vi.fn() },
@@ -16,14 +16,32 @@ const { mockPrisma, mockResolveUserRole } = vi.hoisted(() => ({
       update: vi.fn(),
     },
     numberSeries: { createMany: vi.fn() },
+    accessGroup: { findUnique: vi.fn(), upsert: vi.fn() },
+    accessGroupPermission: { deleteMany: vi.fn(), createMany: vi.fn() },
+    userAccessGroup: { create: vi.fn() },
     $transaction: vi.fn(),
   },
   mockResolveUserRole: vi.fn(),
+  mockLoadDefaultAccessGroups: vi.fn().mockResolvedValue({ created: 12, updated: 0 }),
+  mockAssignFullAccessGroup: vi.fn().mockResolvedValue(undefined),
+  mockPermissionService: {
+    getEffectivePermissions: vi.fn(),
+    hasPermission: vi.fn(),
+    invalidateUser: vi.fn(),
+    invalidateGroup: vi.fn(),
+    invalidateAll: vi.fn(),
+    clearCache: vi.fn(),
+    getCacheSize: vi.fn(),
+    deriveEnabledModules: vi.fn(),
+    getFieldVisibility: vi.fn(),
+  },
 }));
 
 vi.mock('@nexa/db', () => ({
   prisma: mockPrisma,
   resolveUserRole: mockResolveUserRole,
+  loadDefaultAccessGroups: mockLoadDefaultAccessGroups,
+  assignFullAccessGroup: mockAssignFullAccessGroup,
   UserRole: {
     SUPER_ADMIN: 'SUPER_ADMIN',
     ADMIN: 'ADMIN',
@@ -35,6 +53,17 @@ vi.mock('@nexa/db', () => ({
     STANDARD: 'STANDARD',
     FLAT_RATE: 'FLAT_RATE',
     CASH: 'CASH',
+  },
+}));
+
+vi.mock('../../core/rbac/permission.service.js', () => ({
+  permissionService: mockPermissionService,
+  PermissionService: vi.fn(),
+  ACTION_FLAG_MAP: {
+    new: 'canNew',
+    view: 'canView',
+    edit: 'canEdit',
+    delete: 'canDelete',
   },
 }));
 
@@ -152,6 +181,36 @@ function setupMocks(config: { role?: string } = {}) {
   mockPrisma.$transaction.mockImplementation(
     async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => fn(mockPrisma),
   );
+
+  // Configure permission service mock
+  if (resolvedRole === 'SUPER_ADMIN') {
+    // Guard calls getEffectivePermissions even for SUPER_ADMIN (to populate request.permissions)
+    mockPermissionService.getEffectivePermissions.mockResolvedValue({
+      permissions: {},
+      fieldOverrides: {},
+      accessGroups: [],
+      role: resolvedRole,
+      isSuperAdmin: true,
+      enabledModules: ['system'],
+    });
+  } else {
+    const fullPerm = { canAccess: true, canNew: true, canView: true, canEdit: true, canDelete: true };
+    const viewOnlyPerm = { canAccess: true, canNew: false, canView: true, canEdit: false, canDelete: false };
+    const hasAccess = ['ADMIN', 'MANAGER'].includes(resolvedRole);
+    const isViewer = resolvedRole === 'VIEWER';
+    mockPermissionService.getEffectivePermissions.mockResolvedValue({
+      permissions: hasAccess
+        ? { 'system.company-profile.detail': fullPerm }
+        : isViewer
+          ? { 'system.company-profile.detail': viewOnlyPerm }
+          : {},
+      fieldOverrides: {},
+      accessGroups: hasAccess ? [{ id: 'ag-1', code: 'FULL_ACCESS', name: 'Full Access' }] : [],
+      role: resolvedRole,
+      isSuperAdmin: false,
+      enabledModules: hasAccess || isViewer ? ['system'] : [],
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -238,6 +297,47 @@ describe('Company Profile routes', () => {
       expect(body.success).toBe(true);
       expect(body.data.id).toBe(TEST_COMPANY_ID);
     });
+
+    // E2b-5 — Field filtering via onSend hook
+    it('strips HIDDEN fields and annotates READ_ONLY via onSend hook (E2b-5)', async () => {
+      setupMocks();
+
+      // Override the mock to include field overrides for the company-profile resource
+      mockPermissionService.getEffectivePermissions.mockResolvedValue({
+        permissions: {
+          'system.company-profile.detail': {
+            canAccess: true, canNew: true, canView: true, canEdit: true, canDelete: true,
+          },
+        },
+        fieldOverrides: {
+          'system.company-profile.detail': {
+            vatNumber: 'HIDDEN',
+            registrationNumber: 'READ_ONLY',
+          },
+        },
+        accessGroups: [{ id: 'ag-1', code: 'FULL_ACCESS', name: 'Full Access' }],
+        role: 'ADMIN',
+        isSuperAdmin: false,
+        enabledModules: ['system'],
+      });
+
+      app = await buildTestApp();
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/system/company-profile',
+        headers: authHeaders(testJwt),
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      // vatNumber should be stripped (HIDDEN)
+      expect(body.data.vatNumber).toBeUndefined();
+      // registrationNumber should be present (READ_ONLY) with _fieldMeta
+      expect(body.data.registrationNumber).toBe('12345678');
+      expect(body._fieldMeta).toEqual({ registrationNumber: 'readOnly' });
+    });
   });
 
   // =========================================================================
@@ -297,6 +397,18 @@ describe('Company Profile routes', () => {
           role: 'ADMIN',
         },
       });
+
+      // Verify default access groups and FULL_ACCESS assignment were seeded
+      expect(mockLoadDefaultAccessGroups).toHaveBeenCalledWith(
+        mockPrisma,
+        NEW_COMPANY_ID,
+        TEST_USER_ID,
+      );
+      expect(mockAssignFullAccessGroup).toHaveBeenCalledWith(
+        mockPrisma,
+        NEW_COMPANY_ID,
+        TEST_USER_ID,
+      );
     });
 
     // 10.4 — Verifies all 9 default NumberSeries records exist

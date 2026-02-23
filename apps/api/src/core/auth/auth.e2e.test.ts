@@ -58,6 +58,36 @@ vi.mock('@nexa/db', () => ({
     FLAT_RATE: 'FLAT_RATE',
     CASH: 'CASH',
   },
+  ResourceType: {
+    PAGE: 'PAGE',
+    REPORT: 'REPORT',
+    SETTING: 'SETTING',
+    MAINTENANCE: 'MAINTENANCE',
+  },
+  FieldVisibility: {
+    VISIBLE: 'VISIBLE',
+    READ_ONLY: 'READ_ONLY',
+    HIDDEN: 'HIDDEN',
+  },
+}));
+
+// Mock permission service to prevent real DB calls from permission guard
+const mockPermissionService = vi.hoisted(() => ({
+  getEffectivePermissions: vi.fn(),
+  hasPermission: vi.fn(),
+  invalidateUser: vi.fn(),
+  invalidateGroup: vi.fn(),
+  invalidateAll: vi.fn(),
+  clearCache: vi.fn(),
+  getCacheSize: vi.fn(),
+  deriveEnabledModules: vi.fn(),
+  getFieldVisibility: vi.fn(),
+}));
+
+vi.mock('../rbac/permission.service.js', () => ({
+  permissionService: mockPermissionService,
+  PermissionService: vi.fn(),
+  ACTION_FLAG_MAP: { new: 'canNew', view: 'canView', edit: 'canEdit', delete: 'canDelete' },
 }));
 
 // Mock argon2 for speed (no real Argon2id hashing in tests)
@@ -91,6 +121,7 @@ function makeTestUser(overrides: Record<string, unknown> = {}) {
     isActive: true,
     lastLoginAt: null,
     enabledModules: ['FINANCE', 'SALES'],
+    locale: 'en',
     createdAt: new Date(),
     updatedAt: new Date(),
     createdBy: 'system',
@@ -155,6 +186,22 @@ beforeAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   _clearAll();
+
+  // Provide a sensible default for the permission service mock so that any
+  // route going through createPermissionGuard won't crash with undefined
+  const fullPerm = { canAccess: true, canNew: true, canView: true, canEdit: true, canDelete: true };
+  mockPermissionService.getEffectivePermissions.mockResolvedValue({
+    permissions: {
+      'system.users.list': fullPerm,
+      'system.users.detail': fullPerm,
+      'system.company-profile.detail': fullPerm,
+    },
+    fieldOverrides: {},
+    accessGroups: [{ id: 'ag-1', code: 'FULL_ACCESS', name: 'Full Access' }],
+    role: 'SUPER_ADMIN',
+    isSuperAdmin: true,
+    enabledModules: ['system'],
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -344,6 +391,7 @@ describe('E2E auth flow (Task 9)', () => {
         lastName: 'User',
         role: 'SUPER_ADMIN',
         enabledModules: ['FINANCE', 'SALES'],
+        locale: 'en',
         tenantId: TEST_COMPANY_ID,
         tenantName: 'Test Company Ltd',
         mfaEnabled: false,

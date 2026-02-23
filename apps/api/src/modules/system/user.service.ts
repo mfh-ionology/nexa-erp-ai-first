@@ -5,6 +5,7 @@ import type { CreateUserRequest, UserListQuery } from './user.schema.js';
 import { hashPassword } from '../../core/auth/auth.service.js';
 import { revokeAllUserTokens } from '../../core/auth/auth.service.js';
 import { AppError, DomainError, NotFoundError } from '../../core/errors/index.js';
+import { tServer } from '@nexa/i18n/server';
 import type { PaginationMeta } from '../../core/utils/response.js';
 
 // ---------------------------------------------------------------------------
@@ -18,6 +19,7 @@ const userSelect = {
   lastName: true,
   companyId: true,
   enabledModules: true,
+  locale: true,
   isActive: true,
   mfaEnabled: true,
   lastLoginAt: true,
@@ -46,6 +48,7 @@ export async function createUser(
           lastName: data.lastName,
           companyId: data.companyId,
           enabledModules: data.enabledModules,
+          locale: data.locale,
           createdBy: ctx.userId,
           updatedBy: ctx.userId,
         },
@@ -73,7 +76,7 @@ export async function createUser(
       'code' in error &&
       (error as { code: string }).code === 'P2002'
     ) {
-      throw new AppError('DUPLICATE_EMAIL', 'A user with this email already exists', 409);
+      throw new AppError('DUPLICATE_EMAIL', tServer('errors:DUPLICATE_EMAIL'), 409, undefined, 'errors:DUPLICATE_EMAIL');
     }
     throw error;
   }
@@ -148,7 +151,7 @@ export async function getUserById(prisma: PrismaClient, id: string, companyId: s
   });
 
   if (!user || user.companyId !== companyId) {
-    throw new NotFoundError('NOT_FOUND', 'User not found');
+    throw new NotFoundError('NOT_FOUND', tServer('errors:USER_NOT_FOUND'), 'errors:USER_NOT_FOUND');
   }
 
   const { companyRoles, ...rest } = user;
@@ -163,7 +166,7 @@ export async function updateUser(
   prisma: PrismaClient,
   id: string,
   companyId: string,
-  data: { firstName?: string; lastName?: string },
+  data: { firstName?: string; lastName?: string; locale?: string },
   ctx: RequestContext,
 ) {
   const existing = await prisma.user.findUnique({
@@ -172,7 +175,7 @@ export async function updateUser(
   });
 
   if (!existing || existing.companyId !== companyId) {
-    throw new NotFoundError('NOT_FOUND', 'User not found');
+    throw new NotFoundError('NOT_FOUND', tServer('errors:USER_NOT_FOUND'), 'errors:USER_NOT_FOUND');
   }
 
   const updated = await prisma.user.update({
@@ -213,7 +216,7 @@ export async function updateUserRole(
   });
 
   if (!existing || existing.companyId !== companyId) {
-    throw new NotFoundError('NOT_FOUND', 'User not found');
+    throw new NotFoundError('NOT_FOUND', tServer('errors:USER_NOT_FOUND'), 'errors:USER_NOT_FOUND');
   }
 
   // Prisma upsert doesn't support null in composite unique keys.
@@ -252,7 +255,7 @@ export async function updateUserModules(
   });
 
   if (!existing || existing.companyId !== companyId) {
-    throw new NotFoundError('NOT_FOUND', 'User not found');
+    throw new NotFoundError('NOT_FOUND', tServer('errors:USER_NOT_FOUND'), 'errors:USER_NOT_FOUND');
   }
 
   const updated = await prisma.user.update({
@@ -288,7 +291,7 @@ export async function deactivateUser(
 ) {
   // Security: prevent self-deactivation to avoid orphaning the company
   if (id === ctx.userId) {
-    throw new DomainError('SELF_DEACTIVATION', 'Cannot deactivate your own account');
+    throw new DomainError('SELF_DEACTIVATION', tServer('errors:SELF_DEACTIVATION'), undefined, 'errors:SELF_DEACTIVATION');
   }
 
   const existing = await prisma.user.findUnique({
@@ -297,7 +300,7 @@ export async function deactivateUser(
   });
 
   if (!existing || existing.companyId !== companyId) {
-    throw new NotFoundError('NOT_FOUND', 'User not found');
+    throw new NotFoundError('NOT_FOUND', tServer('errors:USER_NOT_FOUND'), 'errors:USER_NOT_FOUND');
   }
 
   const updated = await prisma.$transaction(async (tx) => {
