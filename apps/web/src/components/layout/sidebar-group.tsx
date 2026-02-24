@@ -108,7 +108,7 @@ export function SidebarGroup({
       <div
         className={cn(
           'overflow-hidden transition-[max-height] duration-200 ease-out',
-          isExpanded ? 'max-h-96' : 'max-h-0',
+          isExpanded ? 'max-h-[2000px]' : 'max-h-0',
         )}
       >
         <div className="ml-2 space-y-0.5 py-1">
