@@ -219,10 +219,10 @@ function MessageBubble({
       >
         <div
           className={cn(
-            'rounded-2xl px-3 py-2 text-sm',
+            'rounded-lg px-3 py-2 text-sm',
             isUser
-              ? 'rounded-br-md bg-primary text-primary-foreground'
-              : 'rounded-bl-md bg-muted',
+              ? 'bg-primary text-white'
+              : 'bg-muted text-foreground',
           )}
         >
           <p className="whitespace-pre-wrap break-words">{message.content}</p>

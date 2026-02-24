@@ -13,7 +13,7 @@ function FinancePage() {
 
   return (
     <section aria-labelledby="finance-heading">
-      <h1 id="finance-heading" className="text-2xl font-semibold text-text">
+      <h1 id="finance-heading" className="page-title">
         {t('navigation:finance')}
       </h1>
     </section>

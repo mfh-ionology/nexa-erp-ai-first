@@ -15,7 +15,7 @@ function PurchasingPage() {
     <section aria-labelledby="purchasing-heading">
       <h1
         id="purchasing-heading"
-        className="text-2xl font-semibold text-text"
+        className="page-title"
       >
         {t('navigation:purchasing')}
       </h1>

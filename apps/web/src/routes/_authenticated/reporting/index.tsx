@@ -15,7 +15,7 @@ function ReportingPage() {
     <section aria-labelledby="reporting-heading">
       <h1
         id="reporting-heading"
-        className="text-2xl font-semibold text-text"
+        className="page-title"
       >
         {t('navigation:reporting')}
       </h1>

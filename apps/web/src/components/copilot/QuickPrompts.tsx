@@ -101,8 +101,8 @@ export function QuickPrompts() {
         {filteredPrompts.map((prompt) => (
           <Badge
             key={prompt.labelKey}
-            variant="outline"
-            className="shrink-0 cursor-pointer select-none whitespace-nowrap hover:bg-accent hover:text-accent-foreground"
+            variant="secondary"
+            className="shrink-0 cursor-pointer select-none whitespace-nowrap bg-[#ede9fe] text-[#6d28d9] hover:bg-[#ddd6fe] rounded-full text-sm font-medium px-3 py-1"
             role="button"
             tabIndex={0}
             onClick={() => handleChipClick(prompt)}

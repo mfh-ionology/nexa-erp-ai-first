@@ -59,6 +59,14 @@ export async function hashPassword(password: string): Promise<string> {
 }
 
 export async function verifyPassword(hash: string, password: string): Promise<boolean> {
+  // Support legacy scrypt hashes from the seed script (format: "scrypt:<salt>:<hash>")
+  if (hash.startsWith('scrypt:')) {
+    const { scryptSync } = await import('node:crypto');
+    const [, salt, storedHash] = hash.split(':');
+    if (!salt || !storedHash) return false;
+    const derived = scryptSync(password, salt, 64).toString('hex');
+    return derived === storedHash;
+  }
   return argon2.verify(hash, password);
 }
 

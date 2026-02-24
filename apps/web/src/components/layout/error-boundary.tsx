@@ -77,11 +77,11 @@ function ErrorFallback({ onReload }: { onReload: () => void }) {
       <div className="text-center">
         <h1
           id="error-boundary-heading"
-          className="text-4xl font-bold text-text"
+          className="text-4xl font-bold text-foreground"
         >
           500
         </h1>
-        <p className="mt-2 text-lg text-text-muted">
+        <p className="mt-2 text-lg text-muted-foreground">
           {t('common:somethingWentWrong', 'Something went wrong')}
         </p>
         <Button onClick={onReload} className="mt-6">

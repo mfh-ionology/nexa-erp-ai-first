@@ -65,7 +65,7 @@ export function SidebarGroup({
               onClick={handleCollapsedClick}
               className={cn(
                 'flex w-full items-center justify-center rounded-md p-2',
-                'text-text-muted hover:bg-background hover:text-text',
+                'text-muted-foreground hover:bg-accent',
                 'outline-none focus-visible:ring-2 focus-visible:ring-primary',
               )}
               aria-label={label}
@@ -89,18 +89,17 @@ export function SidebarGroup({
         onClick={onToggle}
         onKeyDown={handleKeyDown}
         className={cn(
-          'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold',
-          'text-text hover:bg-background',
+          'flex w-full items-center gap-3 rounded-lg px-3 py-2 font-display text-sm font-semibold',
+          'text-foreground hover:bg-accent',
           'outline-none focus-visible:ring-2 focus-visible:ring-primary',
         )}
-        style={{ fontFamily: 'var(--font-display)' }}
         aria-expanded={isExpanded}
       >
-        {Icon && <Icon className="size-5 shrink-0 text-text-muted" />}
+        {Icon && <Icon className="size-5 shrink-0 text-muted-foreground" />}
         <span className="flex-1 truncate text-left">{label}</span>
         <ChevronDown
           className={cn(
-            'size-4 shrink-0 text-text-muted transition-transform duration-200',
+            'size-4 shrink-0 text-muted-foreground transition-transform duration-200',
             isExpanded && 'rotate-180',
           )}
         />

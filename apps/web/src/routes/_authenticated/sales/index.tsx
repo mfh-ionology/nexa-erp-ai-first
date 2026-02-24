@@ -13,7 +13,7 @@ function SalesPage() {
 
   return (
     <section aria-labelledby="sales-heading">
-      <h1 id="sales-heading" className="text-2xl font-semibold text-text">
+      <h1 id="sales-heading" className="page-title">
         {t('navigation:sales')}
       </h1>
     </section>

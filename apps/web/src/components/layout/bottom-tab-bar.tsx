@@ -46,7 +46,7 @@ export function BottomTabBar() {
         className={cn(
           'flex flex-col items-center gap-0.5 px-3 py-1 text-[10px]',
           'outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:rounded-md',
-          isHome ? 'text-primary' : 'text-text-muted',
+          isHome ? 'text-primary' : 'text-muted-foreground',
         )}
         aria-current={isHome ? 'page' : undefined}
       >
@@ -59,7 +59,7 @@ export function BottomTabBar() {
         type="button"
         onClick={handleModulesTab}
         className={cn(
-          'flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] text-text-muted',
+          'flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] text-muted-foreground',
           'outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:rounded-md',
         )}
         aria-label={t('navigation:modules')}
@@ -74,7 +74,7 @@ export function BottomTabBar() {
         onClick={toggleCopilot}
         disabled
         className={cn(
-          'flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] text-text-muted',
+          'flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] text-muted-foreground',
           'outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:rounded-md',
           'disabled:opacity-50',
         )}
@@ -88,7 +88,7 @@ export function BottomTabBar() {
       <Link
         to="/"
         className={cn(
-          'flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] text-text-muted',
+          'flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] text-muted-foreground',
           'outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:rounded-md',
         )}
         aria-label={t('navigation:notifications')}
@@ -101,7 +101,7 @@ export function BottomTabBar() {
       <Link
         to={'/system/profile' as string}
         className={cn(
-          'flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] text-text-muted',
+          'flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] text-muted-foreground',
           'outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:rounded-md',
         )}
         aria-label={t('navigation:myProfile')}

@@ -150,8 +150,7 @@ export function CompanySwitcher({ isCollapsed }: CompanySwitcherProps) {
         </div>
         {!isCollapsed && activeCompany && (
           <span
-            className="truncate text-sm font-semibold text-sidebar-foreground"
-            style={{ fontFamily: 'var(--font-display)' }}
+            className="truncate font-display text-sm font-semibold text-sidebar-foreground"
           >
             {activeCompany.name}
           </span>
@@ -183,9 +182,8 @@ export function CompanySwitcher({ isCollapsed }: CompanySwitcherProps) {
           {!isCollapsed && (
             <>
               <span
-                className="flex-1 truncate text-left text-sm font-semibold text-sidebar-foreground"
-                style={{ fontFamily: 'var(--font-display)' }}
-              >
+                className="flex-1 truncate text-left font-display text-sm font-semibold text-sidebar-foreground"
+                  >
                 {activeCompany?.name ?? t('navigation:companySwitcher')}
               </span>
               {isSwitching ? (

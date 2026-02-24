@@ -27,10 +27,10 @@ export function NotFound() {
       aria-labelledby="not-found-heading"
     >
       <div className="text-center">
-        <h1 id="not-found-heading" className="text-4xl font-bold text-text">
+        <h1 id="not-found-heading" className="text-4xl font-bold text-foreground">
           404
         </h1>
-        <p className="mt-2 text-lg text-text-muted">
+        <p className="mt-2 text-lg text-muted-foreground">
           {t('errors:pageNotFound')}
         </p>
         <Link

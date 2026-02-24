@@ -22,6 +22,13 @@ export default defineConfig({
     outDir: 'dist',
   },
   server: {
-    port: 3000,
+    port: 5173,
+    proxy: {
+      '/api/v1': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/v1/, ''),
+      },
+    },
   },
 });

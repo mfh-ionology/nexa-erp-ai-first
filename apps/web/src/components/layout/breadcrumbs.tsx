@@ -83,7 +83,7 @@ export function Breadcrumbs() {
       aria-label={t('navigation:breadcrumb')}
       className="shrink-0 border-b border-border bg-surface px-4 py-2"
     >
-      <ol className="flex items-center gap-1 text-sm text-text-muted">
+      <ol className="flex items-center gap-1 text-sm text-muted-foreground">
         {crumbs.map((crumb, index) => {
           const label = crumb.labelKey
             ? t(crumb.labelKey)
@@ -93,13 +93,13 @@ export function Breadcrumbs() {
             <li key={crumb.path} className="flex items-center gap-1">
               {index > 0 && (
                 <ChevronRight
-                  className="size-3.5 shrink-0 text-text-muted"
+                  className="size-3.5 shrink-0 text-muted-foreground"
                   aria-hidden="true"
                 />
               )}
               {crumb.isCurrent ? (
                 <span
-                  className="font-medium text-text"
+                  className="font-medium text-foreground"
                   aria-current="page"
                 >
                   {label}
@@ -108,7 +108,7 @@ export function Breadcrumbs() {
                 <Link
                   to={crumb.path}
                   className={cn(
-                    'hover:text-text transition-colors',
+                    'hover:text-foreground transition-colors',
                     'outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:rounded-sm',
                   )}
                 >

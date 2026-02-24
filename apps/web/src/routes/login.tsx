@@ -7,6 +7,7 @@ import { Loader2 } from 'lucide-react';
 import { useI18n } from '@nexa/i18n';
 
 import { Button } from '@/components/ui/button';
+import { NexaLogo } from '@/components/ui/nexa-logo';
 import {
   Card,
   CardContent,
@@ -108,14 +109,15 @@ function LoginPageShell({ children }: { children: React.ReactNode }) {
     >
       <div className="w-full max-w-md">
         {/* Logo / branding */}
-        <div className="mb-8 text-center">
+        <div className="mb-8 flex flex-col items-center text-center">
+          <NexaLogo size="lg" className="mb-3" />
           <h1
-            className="font-display text-3xl font-bold tracking-tight text-primary"
+            className="font-display text-2xl font-bold tracking-tight text-primary"
             aria-hidden="true"
           >
             {t('common:appName')}
           </h1>
-          <p className="mt-1 text-sm text-text-muted">{t('common:appTagline')}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t('common:appTagline')}</p>
         </div>
         {children}
       </div>

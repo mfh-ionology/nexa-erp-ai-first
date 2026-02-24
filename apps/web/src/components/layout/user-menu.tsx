@@ -71,8 +71,8 @@ export function UserMenu() {
         className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary"
         aria-label={t('navigation:userMenu')}
       >
-        <Avatar>
-          <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
+        <Avatar className="size-8">
+          <AvatarFallback className="bg-[#ede9fe] text-primary text-sm font-semibold">
             {initials}
           </AvatarFallback>
         </Avatar>

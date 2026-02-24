@@ -34,11 +34,11 @@ export function SidebarItem({ item, isCollapsed }: SidebarItemProps) {
     <Link
       to={item.path}
       className={cn(
-        'group flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+        'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
         'outline-none focus-visible:ring-2 focus-visible:ring-primary',
         isActive
-          ? 'border-l-2 border-primary bg-background font-semibold text-primary'
-          : 'text-text-muted hover:bg-background hover:text-text',
+          ? 'bg-primary text-white font-semibold'
+          : 'text-muted-foreground hover:bg-accent',
         isCollapsed && 'justify-center px-0',
       )}
       aria-current={isActive ? 'page' : undefined}
@@ -46,8 +46,8 @@ export function SidebarItem({ item, isCollapsed }: SidebarItemProps) {
       {Icon && (
         <Icon
           className={cn(
-            'size-4 shrink-0',
-            isActive ? 'text-primary' : 'text-text-muted group-hover:text-text',
+            'size-5 shrink-0',
+            isActive ? 'text-white' : 'text-muted-foreground group-hover:text-foreground',
           )}
         />
       )}

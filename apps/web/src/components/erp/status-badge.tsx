@@ -138,7 +138,7 @@ export function StatusBadge({
     <Badge
       variant="outline"
       className={cn(
-        'border-transparent font-medium',
+        'border-transparent font-semibold rounded-full',
         SIZE_CLASSES[size],
       )}
       style={{

@@ -143,7 +143,7 @@ export function CopilotDrawer() {
           aria-label={t('copilot.drawerLabel')}
           tabIndex={-1}
           className={cn(
-            'fixed inset-0 z-50 flex flex-col bg-background outline-none',
+            'fixed inset-0 z-50 flex flex-col bg-surface outline-none',
             !prefersReducedMotion && 'animate-in slide-in-from-right duration-200',
           )}
         >
@@ -196,9 +196,11 @@ export function CopilotDrawer() {
       aria-label={t('copilot.drawerLabel')}
       tabIndex={-1}
       className={cn(
-        'flex h-full shrink-0 flex-col overflow-hidden border-l border-border bg-background outline-none',
+        'flex h-full shrink-0 flex-col overflow-hidden border-l border-border bg-surface outline-none',
         animationClasses,
-        isDrawerOpen ? 'w-[380px] xl:w-[420px]' : 'w-0 border-l-0',
+        isDrawerOpen
+          ? cn('w-[380px] xl:w-[420px]', !prefersReducedMotion && 'animate-pulse-border')
+          : 'w-0 border-l-0',
       )}
     >
       {isDrawerOpen && (

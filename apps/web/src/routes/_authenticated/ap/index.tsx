@@ -13,7 +13,7 @@ function ApPage() {
 
   return (
     <section aria-labelledby="ap-heading">
-      <h1 id="ap-heading" className="text-2xl font-semibold text-text">
+      <h1 id="ap-heading" className="page-title">
         {t('navigation:ap')}
       </h1>
     </section>

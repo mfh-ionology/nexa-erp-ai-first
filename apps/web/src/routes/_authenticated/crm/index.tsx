@@ -13,7 +13,7 @@ function CrmPage() {
 
   return (
     <section aria-labelledby="crm-heading">
-      <h1 id="crm-heading" className="text-2xl font-semibold text-text">
+      <h1 id="crm-heading" className="page-title">
         {t('navigation:crm')}
       </h1>
     </section>

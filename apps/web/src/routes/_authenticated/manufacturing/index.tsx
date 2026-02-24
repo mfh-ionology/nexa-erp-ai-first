@@ -15,7 +15,7 @@ function ManufacturingPage() {
     <section aria-labelledby="manufacturing-heading">
       <h1
         id="manufacturing-heading"
-        className="text-2xl font-semibold text-text"
+        className="page-title"
       >
         {t('navigation:manufacturing')}
       </h1>

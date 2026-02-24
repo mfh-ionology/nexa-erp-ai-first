@@ -13,7 +13,7 @@ function HrPage() {
 
   return (
     <section aria-labelledby="hr-heading">
-      <h1 id="hr-heading" className="text-2xl font-semibold text-text">
+      <h1 id="hr-heading" className="page-title">
         {t('navigation:hr')}
       </h1>
     </section>

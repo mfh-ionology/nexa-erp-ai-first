@@ -111,6 +111,20 @@ nohup bash auto-bmad_pack/scripts/v7-orchestrated-epic.sh E4 --run-tests > /tmp/
 
 This applies to any BMAD script that spawns `claude` subprocesses.
 
+## Visual Design Fidelity Rule (MANDATORY)
+
+All frontend code MUST match the approved **Concept D** prototype (`_bmad-output/planning-artifacts/ux-prototypes/concept-d-purple-copilot.html`). Stock/generic Shadcn UI defaults are NOT acceptable. Key requirements:
+
+- **Cards**: 12px radius, custom shadow, purple-tinted hover shadow
+- **Buttons**: Primary `#7c3aed`, hover `#5b21b6`, 8px radius
+- **Sidebar**: Active item purple bg + white text, hover `#f5f3ff`
+- **Header**: 56px, purple "N" logo mark, centered search
+- **Typography**: Plus Jakarta Sans (headings), Inter (body), JetBrains Mono (amounts/codes)
+- **Background**: `#f4f2ff` (light purple), NOT white or grey
+- **Animations**: fadeInUp, slideIn, stepIn with `prefers-reduced-motion` respect
+
+Before marking any frontend story as complete, open the Concept D prototype HTML side-by-side with the running app and verify visual parity. See `ux-design-specification/ux-quality-contract.md` §4 for full checklist.
+
 ## Prisma Migration Rules (MANDATORY)
 
 - **NEVER use `prisma db push`** — always use `prisma migrate dev`. Using `db push` corrupts migration state and causes subsequent `migrate dev` to fail with drift detection errors.

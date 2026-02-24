@@ -17,6 +17,7 @@ import { Bell, Menu, MessageSquare, Search, X } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { NexaLogo } from '@/components/ui/nexa-logo';
 import {
   Tooltip,
   TooltipContent,
@@ -66,6 +67,9 @@ export function AppHeader() {
         >
           <Menu className="size-5" />
         </Button>
+
+        {/* ── Logo mark (desktop only) ─────────────────────────── */}
+        <NexaLogo size="sm" className="hidden md:flex" />
 
         {/* ── Search / Command palette ────────────────────────── */}
         {/* Desktop: UnifiedSearch always visible */}

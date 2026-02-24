@@ -15,7 +15,7 @@ function InventoryPage() {
     <section aria-labelledby="inventory-heading">
       <h1
         id="inventory-heading"
-        className="text-2xl font-semibold text-text"
+        className="page-title"
       >
         {t('navigation:inventory')}
       </h1>

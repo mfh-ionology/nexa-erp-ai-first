@@ -21,17 +21,17 @@ function AccessDeniedPage() {
       <div className="text-center max-w-md">
         <h1
           id="access-denied-heading"
-          className="text-4xl font-bold text-text"
+          className="text-4xl font-bold text-foreground"
         >
           403
         </h1>
-        <p className="mt-2 text-lg text-text-muted">
+        <p className="mt-2 text-lg text-muted-foreground">
           {t('errors:accessDenied')}
         </p>
-        <p className="mt-2 text-sm text-text-muted">
+        <p className="mt-2 text-sm text-muted-foreground">
           {t('errors:accessDeniedDescription')}
         </p>
-        <p className="mt-4 text-sm font-medium text-text-muted">
+        <p className="mt-4 text-sm font-medium text-muted-foreground">
           {t('errors:contactAdmin')}
         </p>
         <Link

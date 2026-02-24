@@ -17,7 +17,7 @@ function DashboardPage() {
       className="flex h-full items-center justify-center"
       aria-labelledby="dashboard-heading"
     >
-      <h1 id="dashboard-heading" className="text-2xl font-semibold text-text">
+      <h1 id="dashboard-heading" className="page-title">
         {t('navigation:dashboard')}
       </h1>
     </section>

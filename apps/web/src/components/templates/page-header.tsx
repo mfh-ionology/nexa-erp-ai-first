@@ -10,7 +10,6 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
 
 import type { BreadcrumbSegment } from './types';
 
@@ -70,15 +69,12 @@ export function PageHeader({
           ) : (
             <>
               <h1
-                className={cn(
-                  'text-2xl font-semibold tracking-tight text-text truncate',
-                  'font-[var(--font-display)]',
-                )}
+                className="page-title truncate"
               >
                 {title}
               </h1>
               {subtitle && (
-                <span className="text-sm text-text-muted truncate">
+                <span className="text-sm text-muted-foreground truncate">
                   {subtitle}
                 </span>
               )}

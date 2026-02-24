@@ -13,7 +13,7 @@ function SystemPage() {
 
   return (
     <section aria-labelledby="system-heading">
-      <h1 id="system-heading" className="text-2xl font-semibold text-text">
+      <h1 id="system-heading" className="page-title">
         {t('navigation:system')}
       </h1>
     </section>

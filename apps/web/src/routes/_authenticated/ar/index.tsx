@@ -13,7 +13,7 @@ function ArPage() {
 
   return (
     <section aria-labelledby="ar-heading">
-      <h1 id="ar-heading" className="text-2xl font-semibold text-text">
+      <h1 id="ar-heading" className="page-title">
         {t('navigation:ar')}
       </h1>
     </section>
