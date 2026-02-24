@@ -33,6 +33,9 @@ export type { I18nProviderProps } from './I18nProvider.js';
 // React hooks
 export { useTranslation, useI18n, useLocale } from './hooks.js';
 
+// Zod error → translation key mapping (pure utility, no server deps)
+export { mapZodIssueToTranslationKey } from './zod-error-map.js';
+
 // Format hooks (locale-bound wrappers around @nexa/shared formatters)
 export {
   useFormatCurrency,

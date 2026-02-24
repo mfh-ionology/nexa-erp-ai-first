@@ -1,0 +1,340 @@
+import { type ReactNode, useCallback, useMemo, useState } from 'react';
+import type { CellContext, ColumnDef } from '@tanstack/react-table';
+import { flexRender } from '@tanstack/react-table';
+import {
+  Loader2,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Sparkles,
+} from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { usePermission } from '@/hooks/use-permissions';
+import { cn } from '@/lib/utils';
+
+import { useI18n } from '@nexa/i18n';
+
+import { BatchActionBar } from './batch-action-bar';
+import { DataTable } from './data-table';
+import { PageHeader } from './page-header';
+import type { EntityListPageProps, OverflowAction } from './types';
+
+/**
+ * T1: Entity List Page template.
+ *
+ * Provides a standardised list view with search, filtering, sorting,
+ * row selection, batch actions, and cursor-based pagination.
+ */
+export function EntityListPage<TData>({
+  // BaseTemplateProps
+  title,
+  subtitle,
+  breadcrumbs,
+  isLoading = false,
+  // EntityListPage-specific props
+  columns,
+  data,
+  entityType: _entityType,
+  resourceCode,
+  hasMore = false,
+  onLoadMore,
+  isLoadingMore = false,
+  searchValue = '',
+  onSearchChange,
+  filterSlot,
+  savedViewSlot,
+  canCreate = false,
+  onCreateNew,
+  batchActions = [],
+  onRowClick,
+  getRowId,
+  overflowActions = [],
+}: EntityListPageProps<TData>) {
+  const { t } = useI18n();
+  const breakpoint = useBreakpoint();
+
+  // --- Permission gating via resourceCode ---
+  const resourcePerms = usePermission(resourceCode ?? '');
+  const effectiveCanCreate = canCreate && (!resourceCode || resourcePerms.canNew);
+
+  const filteredBatchActions = useMemo(() => {
+    if (!resourceCode) return batchActions;
+    return batchActions.filter((action) => {
+      if (!action.permissionAction) return true;
+      return resourcePerms[action.permissionAction];
+    });
+  }, [resourceCode, batchActions, resourcePerms]);
+
+  // Internal selection state
+  const [selectedRowIds, setSelectedRowIds] = useState<Record<string, boolean>>({});
+
+  const selectedIds = useMemo(
+    () => Object.keys(selectedRowIds).filter((id) => selectedRowIds[id]),
+    [selectedRowIds],
+  );
+
+  const clearSelection = useCallback(() => {
+    setSelectedRowIds({});
+  }, []);
+
+  // Group overflow actions by section
+  const groupedOverflow = useMemo(() => {
+    const sections = new Map<string, OverflowAction[]>();
+    for (const action of overflowActions) {
+      const section = action.section ?? '_default';
+      const group = sections.get(section) ?? [];
+      group.push(action);
+      sections.set(section, group);
+    }
+    return sections;
+  }, [overflowActions]);
+
+  // --- Header action bar ---
+  const headerActions = (
+    <div className="flex items-center gap-2">
+      {effectiveCanCreate && breakpoint !== 'phone' && (
+        <Button onClick={onCreateNew} size="sm">
+          <Plus className="size-4" />
+          {t('new')}
+        </Button>
+      )}
+
+      {/* AI placeholder button */}
+      <Button variant="ghost" size="icon-sm" aria-label="AI">
+        <Sparkles className="size-4" />
+      </Button>
+
+      {/* Overflow menu */}
+      {overflowActions.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('actions')}
+            >
+              <MoreHorizontal className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {Array.from(groupedOverflow.entries()).map(
+              ([section, actions], sectionIdx) => (
+                <div key={section}>
+                  {sectionIdx > 0 && <DropdownMenuSeparator />}
+                  {section !== '_default' && (
+                    <DropdownMenuLabel>{section}</DropdownMenuLabel>
+                  )}
+                  {actions.map((action) => (
+                    <DropdownMenuItem
+                      key={action.key}
+                      onClick={action.onAction}
+                    >
+                      {t(action.labelKey)}
+                    </DropdownMenuItem>
+                  ))}
+                </div>
+              ),
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
+  );
+
+  // --- Phone card view renderer ---
+  const renderMobileCards = (rows: TData[], cols: ColumnDef<TData, unknown>[]) => {
+    if (rows.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground" role="status">
+          <p className="text-sm">{t('noResults')}</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {rows.map((row, index) => {
+          const rowId = getRowId ? getRowId(row) : String(index);
+          return (
+            <Card
+              key={rowId}
+              className={cn(
+                'cursor-pointer transition-colors hover:bg-muted/50',
+                selectedRowIds[rowId] && 'ring-2 ring-primary',
+              )}
+              onClick={() => onRowClick?.(row)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onRowClick?.(row);
+                }
+              }}
+              tabIndex={0}
+              role="article"
+            >
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">
+                  {/* Render first column as card title */}
+                  {cols[0] && 'accessorKey' in cols[0]
+                    ? String(
+                        (row as Record<string, unknown>)[
+                          cols[0].accessorKey as string
+                        ] ?? '',
+                      )
+                    : `${t('row')} ${index + 1}`}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                  {cols.slice(1).map((col, colIdx) => {
+                    const accessorKey =
+                      'accessorKey' in col
+                        ? (col.accessorKey as string)
+                        : null;
+                    if (!accessorKey) return null;
+                    const value = (row as Record<string, unknown>)[accessorKey];
+                    const header =
+                      typeof col.header === 'string' ? col.header : accessorKey;
+
+                    // Use column cell renderer when available for consistent formatting
+                    let rendered: ReactNode;
+                    if (typeof col.cell === 'function') {
+                      const cellCtx = {
+                        getValue: () => value,
+                        row: { original: row },
+                      } as unknown as CellContext<TData, unknown>;
+                      rendered = flexRender(col.cell, cellCtx);
+                    } else {
+                      rendered = String(value ?? '');
+                    }
+
+                    return (
+                      <div key={accessorKey ?? colIdx}>
+                        <dt className="text-muted-foreground text-xs">
+                          {header}
+                        </dt>
+                        <dd className="truncate">{rendered}</dd>
+                      </div>
+                    );
+                  })}
+                </dl>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    );
+  };
+
+  return (
+    <main className="flex flex-col gap-4" aria-label={title}>
+      {/* Page header with breadcrumbs, title, and actions */}
+      <PageHeader
+        title={title}
+        subtitle={subtitle}
+        breadcrumbs={breadcrumbs}
+        actionBarSlot={headerActions}
+        isLoading={isLoading}
+      />
+
+      {/* Toolbar: Saved View | Search | Filter */}
+      <div
+        className={cn(
+          'flex gap-3',
+          breakpoint === 'phone' ? 'flex-col' : 'flex-row items-center',
+        )}
+      >
+        {savedViewSlot}
+
+        {onSearchChange && (
+          <div className="relative flex-1 max-w-sm">
+            <Search
+              className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              value={searchValue}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder={t('search')}
+              className="pl-9"
+              aria-label={t('search')}
+            />
+          </div>
+        )}
+
+        {filterSlot}
+      </div>
+
+      {/* Data display: Table on desktop/tablet, cards on phone */}
+      {breakpoint === 'phone' ? (
+        renderMobileCards(data, columns)
+      ) : (
+        <DataTable
+          columns={columns}
+          data={data}
+          onRowClick={onRowClick}
+          getRowId={getRowId}
+          enableSelection={filteredBatchActions.length > 0}
+          enableSorting
+          isLoading={isLoading}
+          selectedRowIds={selectedRowIds}
+          onSelectionChange={setSelectedRowIds}
+        />
+      )}
+
+      {/* Cursor-based pagination: Load More */}
+      {hasMore && (
+        <div className="flex justify-center py-4">
+          <Button
+            variant="outline"
+            onClick={onLoadMore}
+            disabled={isLoadingMore}
+          >
+            {isLoadingMore && (
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            )}
+            {t('loadMore')}
+          </Button>
+        </div>
+      )}
+
+      {/* Batch action bar — appears when rows are selected */}
+      {filteredBatchActions.length > 0 && selectedIds.length > 0 && (
+        <BatchActionBar
+          selectedCount={selectedIds.length}
+          actions={filteredBatchActions}
+          onClear={clearSelection}
+          selectedIds={selectedIds}
+        />
+      )}
+
+      {/* Floating action button for phone — [+ New] */}
+      {effectiveCanCreate && breakpoint === 'phone' && (
+        <Button
+          className="fixed bottom-6 right-6 z-30 size-14 rounded-full shadow-lg"
+          onClick={onCreateNew}
+          aria-label={t('new')}
+        >
+          <Plus className="size-6" />
+        </Button>
+      )}
+    </main>
+  );
+}

@@ -31,5 +31,6 @@ export function I18nProvider({
     }
   }, [userLocale, companyLocale]);
 
-  return <I18nextProvider i18n={i18n}>{children}</I18nextProvider>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dual @types/react (v18 RN + v19 web) in pnpm store
+  return <I18nextProvider i18n={i18n}>{children as any}</I18nextProvider>;
 }

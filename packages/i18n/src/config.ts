@@ -22,6 +22,7 @@ export const TRANSLATION_NAMESPACES: readonly CoreTranslationNamespace[] = [
   'navigation',
   'errors',
   'system',
+  'mobile',
 ] as const;
 
 /**
@@ -83,6 +84,8 @@ export function buildInitOptions(overrides?: Partial<InitOptions>): InitOptions 
     fallbackLng: 'en',
     ns: [...TRANSLATION_NAMESPACES],
     defaultNS: DEFAULT_NAMESPACE,
+
+    keySeparator: false, // navigation.json uses flat dotted keys like "finance.chartOfAccounts"
 
     interpolation: {
       escapeValue: false, // React handles XSS
