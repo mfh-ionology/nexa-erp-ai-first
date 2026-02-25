@@ -1,11 +1,7 @@
 import { Outlet, useRouterState } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef } from 'react';
 
-import {
-  Sheet,
-  SheetContent,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { useBreakpoint, usePrefersReducedMotion } from '@/hooks/use-breakpoint';
 import { usePageContext } from '@/hooks/use-page-context';
 import { cn } from '@/lib/utils';
@@ -19,15 +15,13 @@ import { CopilotMinimisedPill } from '@/components/copilot/CopilotMinimisedPill'
 import { AppHeader } from './app-header';
 import { AppSidebar } from './app-sidebar';
 import { BottomTabBar } from './bottom-tab-bar';
-import { Breadcrumbs } from './breadcrumbs';
 
 /**
  * Top-level app shell that composes:
  *   - Skip-to-content link
  *   - `<AppSidebar>` (desktop/tablet inline, mobile off-canvas Sheet)
  *   - `<AppHeader>`
- *   - `<Breadcrumbs>`
- *   - `<main>` content area with `<Outlet />`
+ *   - `<main>` content area with `<Outlet />` (breadcrumbs rendered by page templates)
  *
  * Responsive breakpoints (from UX Design Spec):
  *   - Desktop  (>=1024px): Full sidebar (256px), icon + label
@@ -38,8 +32,7 @@ export function AppLayout() {
   const { t } = useI18n();
   const breakpoint = useBreakpoint();
   const prefersReducedMotion = usePrefersReducedMotion();
-  const { isOpen, isCollapsed, isHoverExpanded, toggle, setHoverExpanded } =
-    useSidebarStore();
+  const { isOpen, isCollapsed, isHoverExpanded, toggle, setHoverExpanded } = useSidebarStore();
 
   // Keep copilot store context in sync with current route
   usePageContext();
@@ -87,9 +80,9 @@ export function AppLayout() {
     }
   }, [pathname, isMobile, isOpen, toggle, setHoverExpanded]);
 
-  const transitionClasses = prefersReducedMotion
-    ? ''
-    : 'transition-[width] duration-200 ease-out';
+  /* eslint-disable i18next/no-literal-string -- CSS class names, not user-facing text */
+  const transitionClasses = prefersReducedMotion ? '' : 'transition-[width] duration-200 ease-out';
+  /* eslint-enable i18next/no-literal-string */
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -108,19 +101,14 @@ export function AppLayout() {
 
       {/* ── Desktop/Tablet sidebar (inline, >=768px) ─────── */}
       {!isMobile && (
+        // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- hover zone for sidebar expand/collapse, not interactive content
         <div
           className={cn('relative shrink-0', transitionClasses)}
           onMouseEnter={handleSidebarMouseEnter}
           onMouseLeave={handleSidebarMouseLeave}
         >
           {/* Inline sidebar (takes up layout space) */}
-          <aside
-            className={cn(
-              'h-full',
-              transitionClasses,
-              isCollapsed ? 'w-16' : 'w-64',
-            )}
-          >
+          <aside className={cn('h-full', transitionClasses, isCollapsed ? 'w-16' : 'w-64')}>
             {!isHoverExpanded && <AppSidebar />}
           </aside>
 
@@ -146,14 +134,8 @@ export function AppLayout() {
             if (!open && isOpen) toggle();
           }}
         >
-          <SheetContent
-            side="left"
-            showCloseButton={false}
-            className="w-64 p-0"
-          >
-            <SheetTitle className="sr-only">
-              {t('navigation:sidebar')}
-            </SheetTitle>
+          <SheetContent side="left" showCloseButton={false} className="w-64 p-0">
+            <SheetTitle className="sr-only">{t('navigation:sidebar')}</SheetTitle>
             <AppSidebar forceExpanded />
           </SheetContent>
         </Sheet>
@@ -162,13 +144,15 @@ export function AppLayout() {
       {/* ── Main content area ────────────────────────────── */}
       <div className="flex flex-1 flex-col overflow-hidden">
         <AppHeader />
-        {!isMobile && <Breadcrumbs />}
         <div className="flex flex-1 overflow-hidden">
           <main
             id="main-content"
             role="main"
             aria-label={t('navigation:mainContent')}
-            className={cn('flex-1 overflow-auto', prefersReducedMotion ? '' : 'transition-[width] duration-200 ease-out')}
+            className={cn(
+              'flex-1 overflow-auto p-6',
+              prefersReducedMotion ? '' : 'transition-[width] duration-200 ease-out',
+            )}
           >
             <Outlet />
           </main>

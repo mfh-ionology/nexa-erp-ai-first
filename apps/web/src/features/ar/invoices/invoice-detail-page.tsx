@@ -47,27 +47,27 @@ const lineItems = [
 
 const timeline = [
   {
-    label: 'Created',
+    labelKey: 'status.created',
     date: '17 Feb 2026, 09:15',
     by: 'Sarah Chen',
     color: '#9ca3af',
     pulse: false,
   },
   {
-    label: 'Submitted',
+    labelKey: 'status.submitted',
     date: '17 Feb 2026, 10:30',
     by: 'Sarah Chen',
     color: '#3b82f6',
     pulse: false,
   },
   {
-    label: 'Approved',
+    labelKey: 'status.approved',
     date: '17 Feb 2026, 14:20',
     by: 'David Morris',
     color: '#10b981',
     pulse: false,
   },
-  { label: 'Overdue', date: '19 Mar 2026', by: 'System', color: '#ef4444', pulse: true },
+  { labelKey: 'status.overdue', date: '19 Mar 2026', by: 'System', color: '#ef4444', pulse: true },
 ];
 
 /* ── Component ──────────────────────────────────────────────── */
@@ -317,7 +317,7 @@ export function InvoiceDetailPage() {
                   />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-sm font-medium text-foreground">{item.label}</span>
+                  <span className="text-sm font-medium text-foreground">{t(item.labelKey)}</span>
                   <span className="text-xs text-muted-foreground">{item.date}</span>
                   <span className="text-xs text-muted-foreground">{item.by}</span>
                 </div>

@@ -14,7 +14,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { usePermission } from '@/hooks/use-permissions';
 import { cn } from '@/lib/utils';
@@ -48,6 +47,7 @@ export function EntityListPage<TData>({
   isLoadingMore = false,
   searchValue = '',
   onSearchChange,
+  searchPlaceholder,
   filterSlot,
   savedViewSlot,
   canCreate = false,
@@ -233,25 +233,23 @@ export function EntityListPage<TData>({
       {(onSearchChange || filterSlot || savedViewSlot) && (
         <div
           className={cn(
-            'flex items-center gap-3 rounded-lg border border-border/60 bg-card px-4 py-2.5 animate-fade-in-up delay-2',
+            'flex items-center gap-3 animate-fade-in-up delay-2',
             breakpoint === 'phone' && 'flex-col items-stretch',
           )}
         >
           {savedViewSlot}
 
           {onSearchChange && (
-            <div className="relative flex-1 max-w-sm">
-              <Search
-                className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60"
-                aria-hidden="true"
-              />
-              <Input
+            <div className="flex flex-1 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-sm">
+              <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <input
+                type="text"
                 value={searchValue}
                 onChange={(e) => {
                   onSearchChange(e.target.value);
                 }}
-                placeholder={t('search')}
-                className="pl-9 border-0 bg-muted/40 shadow-none focus-visible:bg-background focus-visible:ring-1"
+                placeholder={searchPlaceholder ?? t('search')}
+                className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
                 aria-label={t('search')}
               />
             </div>

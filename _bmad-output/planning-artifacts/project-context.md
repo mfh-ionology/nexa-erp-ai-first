@@ -367,3 +367,71 @@ All agents should consult these documents:
 12. **8-Document Rule** — SM, Dev, and TEA agents must reference ALL 8 key specification documents (PRD, Architecture, UX Design Specification, API Contracts, Data Models, Event Catalog, State Machine Reference, Business Rules Compendium) when creating stories, acceptance criteria, or test plans
 13. **Visual Design Fidelity Rule (Concept D)** — All frontend components MUST match the approved Concept D prototype (`_bmad-output/planning-artifacts/ux-prototypes/concept-d-purple-copilot.html`). This means: (a) Shadcn UI components must be restyled to use the purple theme, not stock defaults; (b) typography must use Plus Jakarta Sans for headings, Inter for body, JetBrains Mono for amounts/codes; (c) cards must use 12px radius, custom shadows with purple-tinted hover; (d) animations (fadeInUp, slideIn, stepIn) must be present with `prefers-reduced-motion` respect; (e) the sidebar, header, and Co-Pilot drawer must visually match the prototype. Dev agents must open the prototype HTML in a browser and verify visual parity before marking any frontend story as complete.
 14. **Login Page Branding** — The login page must include the purple "N" logo mark, "Nexa ERP" in Plus Jakarta Sans bold, and use the full Concept D visual language (purple primary button, branded card styling, `#f4f2ff` background). No generic/unstyled login pages.
+15. **Per-Epic AI Integration Section** — Every epic MUST include an "AI Integration" section defining: (a) tools/functions the AI gains; (b) context injected into the system prompt; (c) example user queries the AI should handle. This ensures the Co-Pilot grows capability with each epic.
+
+## 12. AI-First Integration Pattern
+
+Nexa is an **AI-first ERP**. The Co-Pilot is not an add-on — it is a primary interaction mode. Every module must be designed so the AI can operate it on behalf of the user.
+
+### Approach: Dynamic Tool Definitions + Context (No Fine-Tuning)
+
+Fine-tuning is expensive, fragile, and hard to update. Instead, Nexa uses:
+
+1. **Tool/Function Calling** — Each epic registers tools the AI can invoke via the AI Gateway. Tools are typed TypeScript functions with JSON Schema parameter definitions. Example: `open_entity_list(viewKey: string, savedViewName?: string)`, `apply_filter(viewKey: string, conditions: FilterCondition[])`.
+
+2. **Dynamic System Context** — On each AI session, the system prompt is built dynamically from live database metadata:
+   - Available modules (from `data_views`)
+   - User's saved views per module (names + group names)
+   - User's favourites and defaults
+   - User's role and permissions (from resolved access groups)
+   - User's memories (from E5b memory management)
+   - Available actions per entity type
+
+3. **RAG for Deep Knowledge** — For complex domain questions ("how do I reconcile a bank statement?"), the AI retrieves relevant help documentation via vector search.
+
+4. **Semantic Search for Fuzzy Matching** — When the user says "show me overdue invoices view", the AI calls `search_views(query)` which performs fuzzy matching on saved view names. Results include confidence scores:
+   - Score > 0.8: execute immediately
+   - Score 0.5-0.8: present options to user
+   - Score < 0.5: offer to create ad-hoc filter instead
+
+### Per-Epic AI Tool Registry
+
+Each epic adds entries to the **AI Tool Registry** (`ai_tool_definitions` seed data or runtime config). Example for E7:
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `open_entity_list` | `viewKey`, `savedViewName?` | Navigate to an entity list page, optionally with a named saved view |
+| `search_views` | `query` | Fuzzy-match user intent to saved view names |
+| `apply_filter` | `viewKey`, `conditions[]` | Apply ad-hoc filter conditions to a list page |
+| `list_saved_views` | `viewKey?` | List available saved views (all scopes visible to user) |
+| `create_saved_view` | `name`, `viewKey`, `conditions[]`, `sortConfig[]` | Create a new saved view from natural language |
+
+### Fallback Behaviour
+
+When the AI cannot match a user request to existing data:
+1. **View not found** → Try fuzzy match → If no match, offer to create an ad-hoc filter
+2. **Entity not found** → Clarify which module/entity type the user means
+3. **Action not permitted** → Explain the permission requirement, suggest contacting admin
+4. **Ambiguous request** → Present top 2-3 interpretations and ask user to choose
+
+## 13. Metadata-Driven DataTable Pattern
+
+The `data_view_fields` table is the **automation engine** for all list pages. It defines every column, filter, sort option, and LOV dropdown for every entity list. When a new business module is added (e.g., E14 Finance, E17 AR), developers:
+
+1. Add a `DataView` row (e.g., `viewKey: 'JOURNAL_ENTRIES'`)
+2. Seed `DataViewField` rows for each column (field key, type, visibility, filter settings, LOV config)
+3. Done — the T1 Entity List template auto-generates all filter UI, column management, sort options, and LOV dropdowns from the metadata
+
+### 3-Tier LOV Strategy
+
+| Tier | LOV Type | When Loaded | Example |
+|------|----------|-------------|---------|
+| Static | `STATIC` | Never loaded — inline JSON values in `lovStaticValues` | Status enums, Yes/No, Priority levels |
+| Global | `GLOBAL` | Once on login, cached in Zustand store | Currencies, Departments, VAT Codes |
+| View-Specific | `VIEW_SPECIFIC` | Lazy-loaded when filter modal opens, via batch endpoint | Customer names, Item codes, Employee names |
+
+For VIEW_SPECIFIC LOVs with >50 items, search is server-side with debounce. The `lovSearchMin` field controls the character threshold before search triggers.
+
+### Bundled Init Endpoint
+
+`GET /views/init?viewKey=INVOICES` returns everything in one call: data_view, fields, date_presets, saved_views, user_column_preferences. This avoids the waterfall problem of 4-5 sequential API calls on page mount. Redis caches metadata with 1hr TTL; user-specific data is always fresh.

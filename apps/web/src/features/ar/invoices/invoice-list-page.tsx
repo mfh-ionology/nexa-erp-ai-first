@@ -127,12 +127,12 @@ const invoices: Invoice[] = [
   },
 ];
 
-const STATUS_LABELS: Record<InvoiceStatus, string> = {
-  overdue: 'Overdue',
-  dueSoon: 'Due Soon',
-  paid: 'Paid',
-  draft: 'Draft',
-  posted: 'Posted',
+const STATUS_LABEL_KEYS: Record<InvoiceStatus, string> = {
+  overdue: 'status.overdue',
+  dueSoon: 'status.dueSoon',
+  paid: 'status.paid',
+  draft: 'status.draft',
+  posted: 'status.posted',
 };
 
 const statusStyles: Record<InvoiceStatus, { bg: string; text: string; border: string }> = {
@@ -496,7 +496,7 @@ export function InvoiceListPage() {
                           borderColor: style.border,
                         }}
                       >
-                        {STATUS_LABELS[inv.status]}
+                        {t(STATUS_LABEL_KEYS[inv.status])}
                       </span>
                     </TableCell>
                     <TableCell className="px-4 py-3.5">

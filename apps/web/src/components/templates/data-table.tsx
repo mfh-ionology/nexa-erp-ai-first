@@ -137,10 +137,15 @@ export function DataTable<TData>({
   // Loading skeleton state
   if (isLoading) {
     return (
-      <div className="w-full" role="grid" aria-busy="true" aria-label={t('loading')}>
+      <div
+        className="w-full overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
+        role="grid"
+        aria-busy="true"
+        aria-label={t('loading')}
+      >
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="bg-[rgba(107,114,128,0.04)] hover:bg-[rgba(107,114,128,0.04)]">
               {allColumns.map((col, i) => (
                 <TableHead key={('id' in col ? col.id : null) ?? `col-${i}`}>
                   <Skeleton className="h-3.5 w-20" />
@@ -150,7 +155,7 @@ export function DataTable<TData>({
           </TableHeader>
           <TableBody>
             {Array.from({ length: skeletonRowCount }).map((_, rowIdx) => (
-              <TableRow key={`skeleton-${rowIdx}`}>
+              <TableRow key={`skeleton-${rowIdx}`} className="border-border/60">
                 {allColumns.map((col, colIdx) => (
                   <TableCell key={`skeleton-${rowIdx}-${('id' in col ? col.id : null) ?? colIdx}`}>
                     <Skeleton
@@ -172,10 +177,10 @@ export function DataTable<TData>({
   // Empty state
   if (data.length === 0) {
     return (
-      <div className="w-full">
+      <div className="w-full overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="bg-[rgba(107,114,128,0.04)] hover:bg-[rgba(107,114,128,0.04)]">
               {table
                 .getHeaderGroups()
                 .map((headerGroup) =>
@@ -205,11 +210,17 @@ export function DataTable<TData>({
   }
 
   return (
-    <div className="w-full" role="grid">
+    <div
+      className="w-full overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
+      role="grid"
+    >
       <Table>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
+            <TableRow
+              key={headerGroup.id}
+              className="bg-[rgba(107,114,128,0.04)] hover:bg-[rgba(107,114,128,0.04)]"
+            >
               {headerGroup.headers.map((header) => {
                 const canSort = header.column.getCanSort();
                 const sorted = header.column.getIsSorted();
@@ -269,7 +280,7 @@ export function DataTable<TData>({
               key={row.id}
               data-state={row.getIsSelected() ? 'selected' : undefined}
               aria-selected={row.getIsSelected() || undefined}
-              className={cn(onRowClick && 'cursor-pointer')}
+              className={cn('border-border/60', onRowClick && 'cursor-pointer')}
               onClick={() => onRowClick?.(row.original)}
               onKeyDown={(e) => {
                 if (onRowClick && (e.key === 'Enter' || e.key === ' ')) {

@@ -22,7 +22,7 @@ export interface BreadcrumbSegment {
 /** T1: EntityListPage props */
 export interface EntityListPageProps<TData> extends BaseTemplateProps {
   /** Column definitions for TanStack Table */
-  columns: ColumnDef<TData, unknown>[];
+  columns: ColumnDef<TData>[];
   /** Data rows */
   data: TData[];
   /** Entity type identifier (for query keys, i18n) */
@@ -42,6 +42,8 @@ export interface EntityListPageProps<TData> extends BaseTemplateProps {
   searchValue?: string;
   /** Search change handler */
   onSearchChange?: (value: string) => void;
+  /** Custom search placeholder text */
+  searchPlaceholder?: string;
   /** Slot for filter bar content */
   filterSlot?: React.ReactNode;
   /** Slot for saved view selector */
@@ -135,7 +137,7 @@ export interface HeaderLinesPageProps<TLine> extends BaseTemplateProps {
   /** Header tab change handler */
   onHeaderTabChange?: (tabKey: string) => void;
   /** Line item column definitions */
-  lineColumns: ColumnDef<TLine, unknown>[];
+  lineColumns: ColumnDef<TLine>[];
   /** Line items data */
   lines: TLine[];
   /** Callback to add a new line */
@@ -291,7 +293,7 @@ export interface ReportPageProps<TResult> extends BaseTemplateProps {
   /** Whether the report has been run */
   hasResults?: boolean;
   /** Result column definitions */
-  resultColumns?: ColumnDef<TResult, unknown>[];
+  resultColumns?: ColumnDef<TResult>[];
   /** Result data rows */
   resultData?: TResult[];
   /** AI summary text slot */

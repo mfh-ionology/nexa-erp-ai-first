@@ -70,6 +70,7 @@ const CASH_FLOW_THRESHOLD = 40000;
 
 function CashFlowDot(props: { cx?: number; cy?: number; payload?: { value: number } }) {
   const { cx, cy, payload } = props;
+  // Infinity fallback: treat missing data as non-critical (show purple dot, not red)
   const isCritical = (payload?.value ?? Infinity) <= CASH_FLOW_THRESHOLD;
   return (
     <Dot

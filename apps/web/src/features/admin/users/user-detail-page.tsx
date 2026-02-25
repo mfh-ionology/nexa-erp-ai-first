@@ -270,6 +270,8 @@ export function UserDetailPage({ id }: UserDetailPageProps) {
                   'reporting',
                 ] as const
               ).map((mod) => {
+                // PLACEHOLDER: Simplified role-based permissions for display.
+                // Real permissions are driven by Access Groups (resolved in E2b).
                 const isSuperAdmin = user.role === 'SUPER_ADMIN';
                 const isAdmin = user.role === 'ADMIN';
                 const isManager = user.role === 'MANAGER';

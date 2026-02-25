@@ -174,6 +174,7 @@ export function UserListPage() {
       isLoading={isLoading}
       searchValue={search}
       onSearchChange={setSearch}
+      searchPlaceholder="Search users by name or email..."
       canCreate={false}
       onRowClick={(row) =>
         void navigate({ to: '/system/users/$id' as string, params: { id: row.id } })
