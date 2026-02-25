@@ -1,7 +1,9 @@
+/* eslint-disable i18next/no-literal-string */
 import { createFileRoute } from '@tanstack/react-router';
+import { Users } from 'lucide-react';
 
-import { useI18n } from '@nexa/i18n';
 import { createModuleBeforeLoad } from '@/lib/route-guards';
+import { ModulePlaceholder } from '@/components/templates/module-placeholder';
 
 export const Route = createFileRoute('/_authenticated/crm/')({
   beforeLoad: createModuleBeforeLoad('crm'),
@@ -9,13 +11,17 @@ export const Route = createFileRoute('/_authenticated/crm/')({
 });
 
 function CrmPage() {
-  const { t } = useI18n();
-
   return (
-    <section aria-labelledby="crm-heading">
-      <h1 id="crm-heading" className="page-title">
-        {t('navigation:crm')}
-      </h1>
-    </section>
+    <ModulePlaceholder
+      moduleKey="crm"
+      icon={Users}
+      descriptionKey="modules.crm.description"
+      features={[
+        'modules.crm.features.leads',
+        'modules.crm.features.opportunities',
+        'modules.crm.features.campaigns',
+        'modules.crm.features.contacts',
+      ]}
+    />
   );
 }

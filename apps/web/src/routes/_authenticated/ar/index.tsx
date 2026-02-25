@@ -1,7 +1,9 @@
+/* eslint-disable i18next/no-literal-string */
 import { createFileRoute } from '@tanstack/react-router';
+import { Receipt } from 'lucide-react';
 
-import { useI18n } from '@nexa/i18n';
 import { createModuleBeforeLoad } from '@/lib/route-guards';
+import { ModulePlaceholder } from '@/components/templates/module-placeholder';
 
 export const Route = createFileRoute('/_authenticated/ar/')({
   beforeLoad: createModuleBeforeLoad('ar'),
@@ -9,13 +11,18 @@ export const Route = createFileRoute('/_authenticated/ar/')({
 });
 
 function ArPage() {
-  const { t } = useI18n();
-
   return (
-    <section aria-labelledby="ar-heading">
-      <h1 id="ar-heading" className="page-title">
-        {t('navigation:ar')}
-      </h1>
-    </section>
+    <ModulePlaceholder
+      moduleKey="ar"
+      icon={Receipt}
+      descriptionKey="modules.ar.description"
+      features={[
+        'modules.ar.features.customers',
+        'modules.ar.features.invoices',
+        'modules.ar.features.payments',
+        'modules.ar.features.creditNotes',
+        'modules.ar.features.statements',
+      ]}
+    />
   );
 }

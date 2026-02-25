@@ -1,7 +1,9 @@
+/* eslint-disable i18next/no-literal-string */
 import { createFileRoute } from '@tanstack/react-router';
+import { Landmark } from 'lucide-react';
 
-import { useI18n } from '@nexa/i18n';
 import { createModuleBeforeLoad } from '@/lib/route-guards';
+import { ModulePlaceholder } from '@/components/templates/module-placeholder';
 
 export const Route = createFileRoute('/_authenticated/finance/')({
   beforeLoad: createModuleBeforeLoad('finance'),
@@ -9,13 +11,18 @@ export const Route = createFileRoute('/_authenticated/finance/')({
 });
 
 function FinancePage() {
-  const { t } = useI18n();
-
   return (
-    <section aria-labelledby="finance-heading">
-      <h1 id="finance-heading" className="page-title">
-        {t('navigation:finance')}
-      </h1>
-    </section>
+    <ModulePlaceholder
+      moduleKey="finance"
+      icon={Landmark}
+      descriptionKey="modules.finance.description"
+      features={[
+        'modules.finance.features.chartOfAccounts',
+        'modules.finance.features.journalEntries',
+        'modules.finance.features.periodClose',
+        'modules.finance.features.bankReconciliation',
+        'modules.finance.features.budgets',
+      ]}
+    />
   );
 }

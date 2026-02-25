@@ -1,7 +1,9 @@
+/* eslint-disable i18next/no-literal-string */
 import { createFileRoute } from '@tanstack/react-router';
+import { ShoppingCart } from 'lucide-react';
 
-import { useI18n } from '@nexa/i18n';
 import { createModuleBeforeLoad } from '@/lib/route-guards';
+import { ModulePlaceholder } from '@/components/templates/module-placeholder';
 
 export const Route = createFileRoute('/_authenticated/sales/')({
   beforeLoad: createModuleBeforeLoad('sales'),
@@ -9,13 +11,16 @@ export const Route = createFileRoute('/_authenticated/sales/')({
 });
 
 function SalesPage() {
-  const { t } = useI18n();
-
   return (
-    <section aria-labelledby="sales-heading">
-      <h1 id="sales-heading" className="page-title">
-        {t('navigation:sales')}
-      </h1>
-    </section>
+    <ModulePlaceholder
+      moduleKey="sales"
+      icon={ShoppingCart}
+      descriptionKey="modules.sales.description"
+      features={[
+        'modules.sales.features.quotes',
+        'modules.sales.features.orders',
+        'modules.sales.features.deliveryNotes',
+      ]}
+    />
   );
 }

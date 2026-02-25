@@ -1,7 +1,9 @@
+/* eslint-disable i18next/no-literal-string */
 import { createFileRoute } from '@tanstack/react-router';
+import { Factory } from 'lucide-react';
 
-import { useI18n } from '@nexa/i18n';
 import { createModuleBeforeLoad } from '@/lib/route-guards';
+import { ModulePlaceholder } from '@/components/templates/module-placeholder';
 
 export const Route = createFileRoute('/_authenticated/manufacturing/')({
   beforeLoad: createModuleBeforeLoad('manufacturing'),
@@ -9,16 +11,17 @@ export const Route = createFileRoute('/_authenticated/manufacturing/')({
 });
 
 function ManufacturingPage() {
-  const { t } = useI18n();
-
   return (
-    <section aria-labelledby="manufacturing-heading">
-      <h1
-        id="manufacturing-heading"
-        className="page-title"
-      >
-        {t('navigation:manufacturing')}
-      </h1>
-    </section>
+    <ModulePlaceholder
+      moduleKey="manufacturing"
+      icon={Factory}
+      descriptionKey="modules.manufacturing.description"
+      features={[
+        'modules.manufacturing.features.recipes',
+        'modules.manufacturing.features.workOrders',
+        'modules.manufacturing.features.machines',
+        'modules.manufacturing.features.mrp',
+      ]}
+    />
   );
 }

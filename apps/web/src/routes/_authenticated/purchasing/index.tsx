@@ -1,7 +1,9 @@
+/* eslint-disable i18next/no-literal-string */
 import { createFileRoute } from '@tanstack/react-router';
+import { Package } from 'lucide-react';
 
-import { useI18n } from '@nexa/i18n';
 import { createModuleBeforeLoad } from '@/lib/route-guards';
+import { ModulePlaceholder } from '@/components/templates/module-placeholder';
 
 export const Route = createFileRoute('/_authenticated/purchasing/')({
   beforeLoad: createModuleBeforeLoad('purchasing'),
@@ -9,16 +11,15 @@ export const Route = createFileRoute('/_authenticated/purchasing/')({
 });
 
 function PurchasingPage() {
-  const { t } = useI18n();
-
   return (
-    <section aria-labelledby="purchasing-heading">
-      <h1
-        id="purchasing-heading"
-        className="page-title"
-      >
-        {t('navigation:purchasing')}
-      </h1>
-    </section>
+    <ModulePlaceholder
+      moduleKey="purchasing"
+      icon={Package}
+      descriptionKey="modules.purchasing.description"
+      features={[
+        'modules.purchasing.features.purchaseOrders',
+        'modules.purchasing.features.goodsReceipts',
+      ]}
+    />
   );
 }

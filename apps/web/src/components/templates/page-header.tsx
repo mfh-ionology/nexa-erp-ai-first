@@ -39,7 +39,7 @@ export function PageHeader({
   return (
     <header className="space-y-2">
       {breadcrumbs.length > 0 && (
-        <Breadcrumb>
+        <Breadcrumb className="animate-fade-in-up delay-1">
           <BreadcrumbList>
             {breadcrumbs.map((segment, index) => {
               const isLast = index === breadcrumbs.length - 1;
@@ -62,32 +62,22 @@ export function PageHeader({
         </Breadcrumb>
       )}
 
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-4 animate-fade-in-up delay-2">
         <div className="flex items-center gap-3 min-w-0">
           {isLoading ? (
             <Skeleton className="h-8 w-48" />
           ) : (
             <>
-              <h1
-                className="page-title truncate"
-              >
-                {title}
-              </h1>
+              <h1 className="page-title truncate">{title}</h1>
               {subtitle && (
-                <span className="text-sm text-muted-foreground truncate">
-                  {subtitle}
-                </span>
+                <span className="text-sm text-muted-foreground truncate">{subtitle}</span>
               )}
               {statusBadge}
             </>
           )}
         </div>
 
-        {actionBarSlot && (
-          <div className="flex items-center gap-2 shrink-0">
-            {actionBarSlot}
-          </div>
-        )}
+        {actionBarSlot && <div className="flex items-center gap-2 shrink-0">{actionBarSlot}</div>}
       </div>
     </header>
   );

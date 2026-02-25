@@ -1,7 +1,9 @@
+/* eslint-disable i18next/no-literal-string */
 import { createFileRoute } from '@tanstack/react-router';
+import { UserCog } from 'lucide-react';
 
-import { useI18n } from '@nexa/i18n';
 import { createModuleBeforeLoad } from '@/lib/route-guards';
+import { ModulePlaceholder } from '@/components/templates/module-placeholder';
 
 export const Route = createFileRoute('/_authenticated/hr/')({
   beforeLoad: createModuleBeforeLoad('hr'),
@@ -9,13 +11,18 @@ export const Route = createFileRoute('/_authenticated/hr/')({
 });
 
 function HrPage() {
-  const { t } = useI18n();
-
   return (
-    <section aria-labelledby="hr-heading">
-      <h1 id="hr-heading" className="page-title">
-        {t('navigation:hr')}
-      </h1>
-    </section>
+    <ModulePlaceholder
+      moduleKey="hr"
+      icon={UserCog}
+      descriptionKey="modules.hr.description"
+      features={[
+        'modules.hr.features.employees',
+        'modules.hr.features.contracts',
+        'modules.hr.features.leave',
+        'modules.hr.features.payroll',
+        'modules.hr.features.appraisals',
+      ]}
+    />
   );
 }

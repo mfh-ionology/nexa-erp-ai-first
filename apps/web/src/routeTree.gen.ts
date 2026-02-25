@@ -31,9 +31,11 @@ import { Route as AuthenticatedSystemCompaniesRouteImport } from './routes/_auth
 import { Route as AuthenticatedSystemAccessGroupsRouteImport } from './routes/_authenticated/system/access-groups'
 import { Route as AuthenticatedSystemUsersIndexRouteImport } from './routes/_authenticated/system/users/index'
 import { Route as AuthenticatedSystemAccessGroupsIndexRouteImport } from './routes/_authenticated/system/access-groups/index'
+import { Route as AuthenticatedArInvoicesIndexRouteImport } from './routes/_authenticated/ar/invoices/index'
 import { Route as AuthenticatedSystemUsersIdRouteImport } from './routes/_authenticated/system/users/$id'
 import { Route as AuthenticatedSystemAccessGroupsNewRouteImport } from './routes/_authenticated/system/access-groups/new'
 import { Route as AuthenticatedSystemAccessGroupsIdRouteImport } from './routes/_authenticated/system/access-groups/$id'
+import { Route as AuthenticatedArInvoicesIdRouteImport } from './routes/_authenticated/ar/invoices/$id'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -157,6 +159,12 @@ const AuthenticatedSystemAccessGroupsIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedSystemAccessGroupsRoute,
   } as any)
+const AuthenticatedArInvoicesIndexRoute =
+  AuthenticatedArInvoicesIndexRouteImport.update({
+    id: '/ar/invoices/',
+    path: '/ar/invoices/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedSystemUsersIdRoute =
   AuthenticatedSystemUsersIdRouteImport.update({
     id: '/$id',
@@ -174,6 +182,12 @@ const AuthenticatedSystemAccessGroupsIdRoute =
     id: '/$id',
     path: '/$id',
     getParentRoute: () => AuthenticatedSystemAccessGroupsRoute,
+  } as any)
+const AuthenticatedArInvoicesIdRoute =
+  AuthenticatedArInvoicesIdRouteImport.update({
+    id: '/ar/invoices/$id',
+    path: '/ar/invoices/$id',
+    getParentRoute: () => AuthenticatedRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -196,9 +210,11 @@ export interface FileRoutesByFullPath {
   '/reporting/': typeof AuthenticatedReportingIndexRoute
   '/sales/': typeof AuthenticatedSalesIndexRoute
   '/system/': typeof AuthenticatedSystemIndexRoute
+  '/ar/invoices/$id': typeof AuthenticatedArInvoicesIdRoute
   '/system/access-groups/$id': typeof AuthenticatedSystemAccessGroupsIdRoute
   '/system/access-groups/new': typeof AuthenticatedSystemAccessGroupsNewRoute
   '/system/users/$id': typeof AuthenticatedSystemUsersIdRoute
+  '/ar/invoices/': typeof AuthenticatedArInvoicesIndexRoute
   '/system/access-groups/': typeof AuthenticatedSystemAccessGroupsIndexRoute
   '/system/users/': typeof AuthenticatedSystemUsersIndexRoute
 }
@@ -220,9 +236,11 @@ export interface FileRoutesByTo {
   '/reporting': typeof AuthenticatedReportingIndexRoute
   '/sales': typeof AuthenticatedSalesIndexRoute
   '/system': typeof AuthenticatedSystemIndexRoute
+  '/ar/invoices/$id': typeof AuthenticatedArInvoicesIdRoute
   '/system/access-groups/$id': typeof AuthenticatedSystemAccessGroupsIdRoute
   '/system/access-groups/new': typeof AuthenticatedSystemAccessGroupsNewRoute
   '/system/users/$id': typeof AuthenticatedSystemUsersIdRoute
+  '/ar/invoices': typeof AuthenticatedArInvoicesIndexRoute
   '/system/access-groups': typeof AuthenticatedSystemAccessGroupsIndexRoute
   '/system/users': typeof AuthenticatedSystemUsersIndexRoute
 }
@@ -248,9 +266,11 @@ export interface FileRoutesById {
   '/_authenticated/reporting/': typeof AuthenticatedReportingIndexRoute
   '/_authenticated/sales/': typeof AuthenticatedSalesIndexRoute
   '/_authenticated/system/': typeof AuthenticatedSystemIndexRoute
+  '/_authenticated/ar/invoices/$id': typeof AuthenticatedArInvoicesIdRoute
   '/_authenticated/system/access-groups/$id': typeof AuthenticatedSystemAccessGroupsIdRoute
   '/_authenticated/system/access-groups/new': typeof AuthenticatedSystemAccessGroupsNewRoute
   '/_authenticated/system/users/$id': typeof AuthenticatedSystemUsersIdRoute
+  '/_authenticated/ar/invoices/': typeof AuthenticatedArInvoicesIndexRoute
   '/_authenticated/system/access-groups/': typeof AuthenticatedSystemAccessGroupsIndexRoute
   '/_authenticated/system/users/': typeof AuthenticatedSystemUsersIndexRoute
 }
@@ -276,9 +296,11 @@ export interface FileRouteTypes {
     | '/reporting/'
     | '/sales/'
     | '/system/'
+    | '/ar/invoices/$id'
     | '/system/access-groups/$id'
     | '/system/access-groups/new'
     | '/system/users/$id'
+    | '/ar/invoices/'
     | '/system/access-groups/'
     | '/system/users/'
   fileRoutesByTo: FileRoutesByTo
@@ -300,9 +322,11 @@ export interface FileRouteTypes {
     | '/reporting'
     | '/sales'
     | '/system'
+    | '/ar/invoices/$id'
     | '/system/access-groups/$id'
     | '/system/access-groups/new'
     | '/system/users/$id'
+    | '/ar/invoices'
     | '/system/access-groups'
     | '/system/users'
   id:
@@ -327,9 +351,11 @@ export interface FileRouteTypes {
     | '/_authenticated/reporting/'
     | '/_authenticated/sales/'
     | '/_authenticated/system/'
+    | '/_authenticated/ar/invoices/$id'
     | '/_authenticated/system/access-groups/$id'
     | '/_authenticated/system/access-groups/new'
     | '/_authenticated/system/users/$id'
+    | '/_authenticated/ar/invoices/'
     | '/_authenticated/system/access-groups/'
     | '/_authenticated/system/users/'
   fileRoutesById: FileRoutesById
@@ -496,6 +522,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSystemAccessGroupsIndexRouteImport
       parentRoute: typeof AuthenticatedSystemAccessGroupsRoute
     }
+    '/_authenticated/ar/invoices/': {
+      id: '/_authenticated/ar/invoices/'
+      path: '/ar/invoices'
+      fullPath: '/ar/invoices/'
+      preLoaderRoute: typeof AuthenticatedArInvoicesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/system/users/$id': {
       id: '/_authenticated/system/users/$id'
       path: '/$id'
@@ -516,6 +549,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/system/access-groups/$id'
       preLoaderRoute: typeof AuthenticatedSystemAccessGroupsIdRouteImport
       parentRoute: typeof AuthenticatedSystemAccessGroupsRoute
+    }
+    '/_authenticated/ar/invoices/$id': {
+      id: '/_authenticated/ar/invoices/$id'
+      path: '/ar/invoices/$id'
+      fullPath: '/ar/invoices/$id'
+      preLoaderRoute: typeof AuthenticatedArInvoicesIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
   }
 }
@@ -575,6 +615,8 @@ interface AuthenticatedRouteChildren {
   AuthenticatedReportingIndexRoute: typeof AuthenticatedReportingIndexRoute
   AuthenticatedSalesIndexRoute: typeof AuthenticatedSalesIndexRoute
   AuthenticatedSystemIndexRoute: typeof AuthenticatedSystemIndexRoute
+  AuthenticatedArInvoicesIdRoute: typeof AuthenticatedArInvoicesIdRoute
+  AuthenticatedArInvoicesIndexRoute: typeof AuthenticatedArInvoicesIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -596,6 +638,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedReportingIndexRoute: AuthenticatedReportingIndexRoute,
   AuthenticatedSalesIndexRoute: AuthenticatedSalesIndexRoute,
   AuthenticatedSystemIndexRoute: AuthenticatedSystemIndexRoute,
+  AuthenticatedArInvoicesIdRoute: AuthenticatedArInvoicesIdRoute,
+  AuthenticatedArInvoicesIndexRoute: AuthenticatedArInvoicesIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

@@ -1,7 +1,9 @@
+/* eslint-disable i18next/no-literal-string */
 import { createFileRoute } from '@tanstack/react-router';
+import { Warehouse } from 'lucide-react';
 
-import { useI18n } from '@nexa/i18n';
 import { createModuleBeforeLoad } from '@/lib/route-guards';
+import { ModulePlaceholder } from '@/components/templates/module-placeholder';
 
 export const Route = createFileRoute('/_authenticated/inventory/')({
   beforeLoad: createModuleBeforeLoad('inventory'),
@@ -9,16 +11,17 @@ export const Route = createFileRoute('/_authenticated/inventory/')({
 });
 
 function InventoryPage() {
-  const { t } = useI18n();
-
   return (
-    <section aria-labelledby="inventory-heading">
-      <h1
-        id="inventory-heading"
-        className="page-title"
-      >
-        {t('navigation:inventory')}
-      </h1>
-    </section>
+    <ModulePlaceholder
+      moduleKey="inventory"
+      icon={Warehouse}
+      descriptionKey="modules.inventory.description"
+      features={[
+        'modules.inventory.features.items',
+        'modules.inventory.features.warehouses',
+        'modules.inventory.features.stockMovements',
+        'modules.inventory.features.stockTakes',
+      ]}
+    />
   );
 }

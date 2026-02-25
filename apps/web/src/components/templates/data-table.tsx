@@ -1,3 +1,4 @@
+/* eslint-disable i18next/no-literal-string, @typescript-eslint/restrict-template-expressions, react-hooks/incompatible-library */
 import { useCallback, useState } from 'react';
 import {
   flexRender,
@@ -10,7 +11,7 @@ import {
   type SortingState,
   type Updater,
 } from '@tanstack/react-table';
-import { ArrowDown, ArrowUp, ArrowUpDown, SearchX } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronsUpDown, SearchX } from 'lucide-react';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -28,7 +29,7 @@ import { useI18n } from '@nexa/i18n';
 
 export interface DataTableProps<TData> {
   /** Column definitions for TanStack Table */
-  columns: ColumnDef<TData, unknown>[];
+  columns: ColumnDef<TData>[];
   /** Data rows */
   data: TData[];
   /** Callback when a row is clicked */
@@ -73,9 +74,7 @@ export function DataTable<TData>({
   const handleSelectionChange = useCallback(
     (updater: Updater<RowSelectionState>) => {
       if (onSelectionChange) {
-        const resolved = typeof updater === 'function'
-          ? updater(selectedRowIds ?? {})
-          : updater;
+        const resolved = typeof updater === 'function' ? updater(selectedRowIds ?? {}) : updater;
         onSelectionChange(resolved);
       } else {
         setInternalSelection(updater);
@@ -85,7 +84,7 @@ export function DataTable<TData>({
   );
 
   // Prepend selection checkbox column if enabled
-  const allColumns: ColumnDef<TData, unknown>[] = enableSelection
+  const allColumns: ColumnDef<TData>[] = enableSelection
     ? [
         {
           id: '_select',
@@ -95,20 +94,22 @@ export function DataTable<TData>({
                 table.getIsAllPageRowsSelected() ||
                 (table.getIsSomePageRowsSelected() && 'indeterminate')
               }
-              onCheckedChange={(value) =>
-                table.toggleAllPageRowsSelected(!!value)
-              }
+              onCheckedChange={(value) => {
+                table.toggleAllPageRowsSelected(!!value);
+              }}
               aria-label={t('selectAll') || 'Select all'}
             />
           ),
           cell: ({ row }) => (
             <Checkbox
               checked={row.getIsSelected()}
-              onCheckedChange={(value) => row.toggleSelected(!!value)}
-              aria-label={
-                t('selectRow') || `Select row ${row.index + 1}`
-              }
-              onClick={(e) => e.stopPropagation()}
+              onCheckedChange={(value) => {
+                row.toggleSelected(!!value);
+              }}
+              aria-label={t('selectRow') || `Select row ${row.index + 1}`}
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
             />
           ),
           enableSorting: false,
@@ -142,7 +143,7 @@ export function DataTable<TData>({
             <TableRow>
               {allColumns.map((col, i) => (
                 <TableHead key={('id' in col ? col.id : null) ?? `col-${i}`}>
-                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-3.5 w-20" />
                 </TableHead>
               ))}
             </TableRow>
@@ -151,10 +152,13 @@ export function DataTable<TData>({
             {Array.from({ length: skeletonRowCount }).map((_, rowIdx) => (
               <TableRow key={`skeleton-${rowIdx}`}>
                 {allColumns.map((col, colIdx) => (
-                  <TableCell
-                    key={`skeleton-${rowIdx}-${('id' in col ? col.id : null) ?? colIdx}`}
-                  >
-                    <Skeleton className="h-4 w-full" />
+                  <TableCell key={`skeleton-${rowIdx}-${('id' in col ? col.id : null) ?? colIdx}`}>
+                    <Skeleton
+                      className={cn(
+                        'h-4',
+                        colIdx === 0 ? 'w-32' : colIdx === allColumns.length - 1 ? 'w-20' : 'w-24',
+                      )}
+                    />
                   </TableCell>
                 ))}
               </TableRow>
@@ -172,27 +176,29 @@ export function DataTable<TData>({
         <Table>
           <TableHeader>
             <TableRow>
-              {table.getHeaderGroups().map((headerGroup) =>
-                headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext(),
-                        )}
-                  </TableHead>
-                )),
-              )}
+              {table
+                .getHeaderGroups()
+                .map((headerGroup) =>
+                  headerGroup.headers.map((header) => (
+                    <TableHead key={header.id}>
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.header, header.getContext())}
+                    </TableHead>
+                  )),
+                )}
             </TableRow>
           </TableHeader>
         </Table>
         <div
-          className="flex flex-col items-center justify-center py-12 text-muted-foreground"
+          className="flex flex-col items-center justify-center py-20 text-muted-foreground"
           role="status"
         >
-          <SearchX className="mb-3 size-10 opacity-40" aria-hidden="true" />
-          <p className="text-sm">{t('noResults')}</p>
+          <div className="flex size-14 items-center justify-center rounded-full bg-muted/60">
+            <SearchX className="size-6" aria-hidden="true" />
+          </div>
+          <p className="mt-4 text-sm font-medium">{t('noResults')}</p>
+          <p className="mt-1 text-xs text-muted-foreground/70">{t('noResultsHint')}</p>
         </div>
       </div>
     );
@@ -220,12 +226,8 @@ export function DataTable<TData>({
                             ? 'none'
                             : undefined
                     }
-                    className={cn(canSort && 'cursor-pointer select-none')}
-                    onClick={
-                      canSort
-                        ? header.column.getToggleSortingHandler()
-                        : undefined
-                    }
+                    className={cn(canSort && 'cursor-pointer select-none group/sort')}
+                    onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
                     onKeyDown={
                       canSort
                         ? (e) => {
@@ -239,21 +241,18 @@ export function DataTable<TData>({
                     tabIndex={canSort ? 0 : undefined}
                     role={canSort ? 'columnheader' : undefined}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5">
                       {header.isPlaceholder
                         ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext(),
-                          )}
+                        : flexRender(header.column.columnDef.header, header.getContext())}
                       {canSort && (
-                        <span className="ml-1" aria-hidden="true">
+                        <span className="inline-flex" aria-hidden="true">
                           {sorted === 'asc' ? (
-                            <ArrowUp className="size-3.5" />
+                            <ArrowUp className="size-3.5 text-foreground" />
                           ) : sorted === 'desc' ? (
-                            <ArrowDown className="size-3.5" />
+                            <ArrowDown className="size-3.5 text-foreground" />
                           ) : (
-                            <ArrowUpDown className="size-3.5 opacity-40" />
+                            <ChevronsUpDown className="size-3.5 opacity-0 group-hover/sort:opacity-50 transition-opacity" />
                           )}
                         </span>
                       )}
@@ -273,10 +272,7 @@ export function DataTable<TData>({
               className={cn(onRowClick && 'cursor-pointer')}
               onClick={() => onRowClick?.(row.original)}
               onKeyDown={(e) => {
-                if (
-                  onRowClick &&
-                  (e.key === 'Enter' || e.key === ' ')
-                ) {
+                if (onRowClick && (e.key === 'Enter' || e.key === ' ')) {
                   e.preventDefault();
                   onRowClick(row.original);
                 }

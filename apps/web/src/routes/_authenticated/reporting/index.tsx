@@ -1,7 +1,9 @@
+/* eslint-disable i18next/no-literal-string */
 import { createFileRoute } from '@tanstack/react-router';
+import { BarChart3 } from 'lucide-react';
 
-import { useI18n } from '@nexa/i18n';
 import { createModuleBeforeLoad } from '@/lib/route-guards';
+import { ModulePlaceholder } from '@/components/templates/module-placeholder';
 
 export const Route = createFileRoute('/_authenticated/reporting/')({
   beforeLoad: createModuleBeforeLoad('reporting'),
@@ -9,16 +11,15 @@ export const Route = createFileRoute('/_authenticated/reporting/')({
 });
 
 function ReportingPage() {
-  const { t } = useI18n();
-
   return (
-    <section aria-labelledby="reporting-heading">
-      <h1
-        id="reporting-heading"
-        className="page-title"
-      >
-        {t('navigation:reporting')}
-      </h1>
-    </section>
+    <ModulePlaceholder
+      moduleKey="reporting"
+      icon={BarChart3}
+      descriptionKey="modules.reporting.description"
+      features={[
+        'modules.reporting.features.financialReports',
+        'modules.reporting.features.customDashboards',
+      ]}
+    />
   );
 }

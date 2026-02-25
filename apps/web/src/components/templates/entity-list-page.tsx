@@ -1,21 +1,11 @@
+/* eslint-disable i18next/no-literal-string, @typescript-eslint/no-base-to-string, @typescript-eslint/restrict-template-expressions, @typescript-eslint/no-unnecessary-condition */
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import type { CellContext, ColumnDef } from '@tanstack/react-table';
 import { flexRender } from '@tanstack/react-table';
-import {
-  Loader2,
-  MoreHorizontal,
-  Plus,
-  Search,
-  Sparkles,
-} from 'lucide-react';
+import { Loader2, MoreHorizontal, Plus, Search, Sparkles } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -125,33 +115,22 @@ export function EntityListPage<TData>({
       {overflowActions.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t('actions')}
-            >
+            <Button variant="ghost" size="icon-sm" aria-label={t('actions')}>
               <MoreHorizontal className="size-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {Array.from(groupedOverflow.entries()).map(
-              ([section, actions], sectionIdx) => (
-                <div key={section}>
-                  {sectionIdx > 0 && <DropdownMenuSeparator />}
-                  {section !== '_default' && (
-                    <DropdownMenuLabel>{section}</DropdownMenuLabel>
-                  )}
-                  {actions.map((action) => (
-                    <DropdownMenuItem
-                      key={action.key}
-                      onClick={action.onAction}
-                    >
-                      {t(action.labelKey)}
-                    </DropdownMenuItem>
-                  ))}
-                </div>
-              ),
-            )}
+            {Array.from(groupedOverflow.entries()).map(([section, actions], sectionIdx) => (
+              <div key={section}>
+                {sectionIdx > 0 && <DropdownMenuSeparator />}
+                {section !== '_default' && <DropdownMenuLabel>{section}</DropdownMenuLabel>}
+                {actions.map((action) => (
+                  <DropdownMenuItem key={action.key} onClick={action.onAction}>
+                    {t(action.labelKey)}
+                  </DropdownMenuItem>
+                ))}
+              </div>
+            ))}
           </DropdownMenuContent>
         </DropdownMenu>
       )}
@@ -159,11 +138,17 @@ export function EntityListPage<TData>({
   );
 
   // --- Phone card view renderer ---
-  const renderMobileCards = (rows: TData[], cols: ColumnDef<TData, unknown>[]) => {
+  const renderMobileCards = (rows: TData[], cols: ColumnDef<TData>[]) => {
     if (rows.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground" role="status">
-          <p className="text-sm">{t('noResults')}</p>
+        <div
+          className="flex flex-col items-center justify-center py-20 text-muted-foreground"
+          role="status"
+        >
+          <div className="flex size-14 items-center justify-center rounded-full bg-muted/60">
+            <Search className="size-6" />
+          </div>
+          <p className="mt-4 text-sm font-medium">{t('noResults')}</p>
         </div>
       );
     }
@@ -193,25 +178,17 @@ export function EntityListPage<TData>({
                 <CardTitle className="text-sm">
                   {/* Render first column as card title */}
                   {cols[0] && 'accessorKey' in cols[0]
-                    ? String(
-                        (row as Record<string, unknown>)[
-                          cols[0].accessorKey as string
-                        ] ?? '',
-                      )
+                    ? String((row as Record<string, unknown>)[cols[0].accessorKey as string] ?? '')
                     : `${t('row')} ${index + 1}`}
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
                 <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                   {cols.slice(1).map((col, colIdx) => {
-                    const accessorKey =
-                      'accessorKey' in col
-                        ? (col.accessorKey as string)
-                        : null;
+                    const accessorKey = 'accessorKey' in col ? (col.accessorKey as string) : null;
                     if (!accessorKey) return null;
                     const value = (row as Record<string, unknown>)[accessorKey];
-                    const header =
-                      typeof col.header === 'string' ? col.header : accessorKey;
+                    const header = typeof col.header === 'string' ? col.header : accessorKey;
 
                     // Use column cell renderer when available for consistent formatting
                     let rendered: ReactNode;
@@ -227,9 +204,7 @@ export function EntityListPage<TData>({
 
                     return (
                       <div key={accessorKey ?? colIdx}>
-                        <dt className="text-muted-foreground text-xs">
-                          {header}
-                        </dt>
+                        <dt className="text-muted-foreground text-xs">{header}</dt>
                         <dd className="truncate">{rendered}</dd>
                       </div>
                     );
@@ -244,7 +219,7 @@ export function EntityListPage<TData>({
   };
 
   return (
-    <main className="flex flex-col gap-4" aria-label={title}>
+    <main className="flex flex-col gap-6" aria-label={title}>
       {/* Page header with breadcrumbs, title, and actions */}
       <PageHeader
         title={title}
@@ -254,66 +229,77 @@ export function EntityListPage<TData>({
         isLoading={isLoading}
       />
 
-      {/* Toolbar: Saved View | Search | Filter */}
-      <div
-        className={cn(
-          'flex gap-3',
-          breakpoint === 'phone' ? 'flex-col' : 'flex-row items-center',
-        )}
-      >
-        {savedViewSlot}
+      {/* Toolbar: Search | Filter — in a subtle card strip */}
+      {(onSearchChange || filterSlot || savedViewSlot) && (
+        <div
+          className={cn(
+            'flex items-center gap-3 rounded-lg border border-border/60 bg-card px-4 py-2.5 animate-fade-in-up delay-2',
+            breakpoint === 'phone' && 'flex-col items-stretch',
+          )}
+        >
+          {savedViewSlot}
 
-        {onSearchChange && (
-          <div className="relative flex-1 max-w-sm">
-            <Search
-              className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              value={searchValue}
-              onChange={(e) => onSearchChange(e.target.value)}
-              placeholder={t('search')}
-              className="pl-9"
-              aria-label={t('search')}
-            />
-          </div>
-        )}
+          {onSearchChange && (
+            <div className="relative flex-1 max-w-sm">
+              <Search
+                className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60"
+                aria-hidden="true"
+              />
+              <Input
+                value={searchValue}
+                onChange={(e) => {
+                  onSearchChange(e.target.value);
+                }}
+                placeholder={t('search')}
+                className="pl-9 border-0 bg-muted/40 shadow-none focus-visible:bg-background focus-visible:ring-1"
+                aria-label={t('search')}
+              />
+            </div>
+          )}
 
-        {filterSlot}
-      </div>
-
-      {/* Data display: Table on desktop/tablet, cards on phone */}
-      {breakpoint === 'phone' ? (
-        renderMobileCards(data, columns)
-      ) : (
-        <DataTable
-          columns={columns}
-          data={data}
-          onRowClick={onRowClick}
-          getRowId={getRowId}
-          enableSelection={filteredBatchActions.length > 0}
-          enableSorting
-          isLoading={isLoading}
-          selectedRowIds={selectedRowIds}
-          onSelectionChange={setSelectedRowIds}
-        />
-      )}
-
-      {/* Cursor-based pagination: Load More */}
-      {hasMore && (
-        <div className="flex justify-center py-4">
-          <Button
-            variant="outline"
-            onClick={onLoadMore}
-            disabled={isLoadingMore}
-          >
-            {isLoadingMore && (
-              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-            )}
-            {t('loadMore')}
-          </Button>
+          {filterSlot}
         </div>
       )}
+
+      {/* Data display: Table on desktop/tablet, cards on phone */}
+      <div className="flex flex-col gap-3 animate-fade-in-up delay-3">
+        {breakpoint === 'phone' ? (
+          renderMobileCards(data, columns)
+        ) : (
+          <DataTable
+            columns={columns}
+            data={data}
+            onRowClick={onRowClick}
+            getRowId={getRowId}
+            enableSelection={filteredBatchActions.length > 0}
+            enableSorting
+            isLoading={isLoading}
+            selectedRowIds={selectedRowIds}
+            onSelectionChange={setSelectedRowIds}
+          />
+        )}
+
+        {/* Record count + Load More */}
+        {!isLoading && data.length > 0 && (
+          <div className="flex items-center justify-between px-1">
+            <p className="text-xs text-muted-foreground">
+              {t('recordCount', { count: data.length })}
+            </p>
+            {hasMore && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onLoadMore}
+                disabled={isLoadingMore}
+                className="text-xs"
+              >
+                {isLoadingMore && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+                {t('loadMore')}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Batch action bar — appears when rows are selected */}
       {filteredBatchActions.length > 0 && selectedIds.length > 0 && (
