@@ -55,6 +55,24 @@ Under NO circumstances should any coding be done for any Epic without using the 
 
 No ad-hoc coding, no manual implementation plans, no skipping the BMAD pipeline. If the orchestrated script is not available or fails, fix the script — do not bypass it.
 
+## Pre-Epic Frontend Design Gate (MANDATORY)
+
+Before running the orchestrator for any epic with frontend stories, run the **Pre-Epic Frontend Design Gate** workflow:
+
+```
+/bmad-bmm-pre-epic-frontend-design {EPIC_ID}
+```
+
+This workflow:
+
+1. **Analyses** the epic's UI requirements — identifies all pages, maps to templates (T1-T8), identifies new components needed
+2. **Generates a v0 prompt** — complete Concept D design system base + epic-specific screen definitions
+3. **Pauses for Mohammed's approval** — he reviews, optionally runs in v0, commits reference components
+
+Output is saved to `_bmad-output/implementation-artifacts/pre-epic-designs/`. Only after approval should the orchestrator (`v7-orchestrated-epic.sh`) be launched.
+
+Skip this for backend-only epics (no UI stories).
+
 ## Epic Page Approval Gate (MANDATORY)
 
 Before starting implementation of ANY Epic, the following process MUST be completed:
@@ -164,27 +182,27 @@ When creating epics, stories, acceptance criteria, test plans, or doing any impl
 
 ### Core Specifications (sharded folders — read index.md first)
 
-| Document | Path |
-|----------|------|
-| PRD | `_bmad-output/planning-artifacts/prd/` |
-| Architecture | `_bmad-output/planning-artifacts/architecture/` |
+| Document                | Path                                                       |
+| ----------------------- | ---------------------------------------------------------- |
+| PRD                     | `_bmad-output/planning-artifacts/prd/`                     |
+| Architecture            | `_bmad-output/planning-artifacts/architecture/`            |
 | UX Design Specification | `_bmad-output/planning-artifacts/ux-design-specification/` |
-| API Contracts | `_bmad-output/planning-artifacts/api-contracts/` |
-| Data Models | `_bmad-output/planning-artifacts/data-models/` |
+| API Contracts           | `_bmad-output/planning-artifacts/api-contracts/`           |
+| Data Models             | `_bmad-output/planning-artifacts/data-models/`             |
 
 ### Reference Documents (single files)
 
-| Document | Path |
-|----------|------|
-| Event Catalog | `_bmad-output/planning-artifacts/event-catalog.md` |
-| State Machine Reference | `_bmad-output/planning-artifacts/state-machine-reference.md` |
+| Document                  | Path                                                           |
+| ------------------------- | -------------------------------------------------------------- |
+| Event Catalog             | `_bmad-output/planning-artifacts/event-catalog.md`             |
+| State Machine Reference   | `_bmad-output/planning-artifacts/state-machine-reference.md`   |
 | Business Rules Compendium | `_bmad-output/planning-artifacts/business-rules-compendium.md` |
-| Project Context | `_bmad-output/planning-artifacts/project-context.md` |
+| Project Context           | `_bmad-output/planning-artifacts/project-context.md`           |
 
 ### Implementation Tracking
 
-| Document | Path |
-|----------|------|
-| Epic Registry | `_bmad-output/implementation-artifacts/epics/` |
-| Active Epic Stories | `_bmad-output/planning-artifacts/epics.md` |
-| Sprint Status | `_bmad-output/implementation-artifacts/sprint-status.yaml` |
+| Document            | Path                                                       |
+| ------------------- | ---------------------------------------------------------- |
+| Epic Registry       | `_bmad-output/implementation-artifacts/epics/`             |
+| Active Epic Stories | `_bmad-output/planning-artifacts/epics.md`                 |
+| Sprint Status       | `_bmad-output/implementation-artifacts/sprint-status.yaml` |

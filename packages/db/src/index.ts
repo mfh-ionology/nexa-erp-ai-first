@@ -36,6 +36,12 @@ export type {
   AiFeedback,
   AiUsage,
   AiEval,
+  DataView,
+  DataViewField,
+  DateRangePreset,
+  UserColumnPreference,
+  SavedView,
+  SavedViewCondition,
 } from '../generated/prisma/client';
 
 // Enums
@@ -52,6 +58,10 @@ export {
   ViewScope,
   ResourceType,
   FieldVisibility,
+  FieldDataType,
+  LovType,
+  PinPosition,
+  FilterOperator,
 } from '../generated/prisma/client';
 
 // Utilities

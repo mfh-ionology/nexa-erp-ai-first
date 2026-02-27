@@ -1,4 +1,5 @@
 import type { ColumnDef } from '@tanstack/react-table';
+import type { FilterConditionState, SortRuleState } from '@/features/views/types';
 
 /** Common props shared by all page templates */
 export interface BaseTemplateProps {
@@ -27,6 +28,10 @@ export interface EntityListPageProps<TData> extends BaseTemplateProps {
   data: TData[];
   /** Entity type identifier (for query keys, i18n) */
   entityType: string;
+  /** Optional view key — when provided, enables the metadata-driven DataTable
+   *  with auto-generated columns from DataView metadata, SavedViewSelector,
+   *  ViewsColumnsButton, column resize, and column pinning. */
+  viewKey?: string;
   /** Resource code for permission gating (e.g., 'sales.orders.list').
    *  When provided, [+ New] is hidden if canNew=false, batch actions are
    *  filtered by their permissionAction, and resourceCode is available
@@ -60,6 +65,14 @@ export interface EntityListPageProps<TData> extends BaseTemplateProps {
   getRowId?: (row: TData) => string;
   /** Overflow menu items for the list page [... More] */
   overflowActions?: OverflowAction[];
+  /** Callback when filters are applied via the Filter & Sort modal.
+   *  Receives serialised filter conditions for the data fetching hook to
+   *  include in API calls. Only relevant when viewKey is provided. */
+  onFilterChange?: (
+    conditions: FilterConditionState[],
+    sortRules: SortRuleState[],
+    filterLogic: 'AND' | 'OR',
+  ) => void;
 }
 
 export interface BatchAction {

@@ -32,8 +32,7 @@ export const queryKeys = {
       params
         ? ([...queryKeys.system.all, 'access-groups', 'infinite', params] as const)
         : ([...queryKeys.system.all, 'access-groups', 'infinite'] as const),
-    accessGroup: (id: string) =>
-      [...queryKeys.system.all, 'access-groups', id] as const,
+    accessGroup: (id: string) => [...queryKeys.system.all, 'access-groups', id] as const,
     users: (params?: Record<string, unknown>) =>
       params
         ? ([...queryKeys.system.all, 'users', params] as const)
@@ -42,11 +41,19 @@ export const queryKeys = {
       params
         ? ([...queryKeys.system.all, 'users', 'infinite', params] as const)
         : ([...queryKeys.system.all, 'users', 'infinite'] as const),
-    user: (id: string) =>
-      [...queryKeys.system.all, 'users', id] as const,
+    user: (id: string) => [...queryKeys.system.all, 'users', id] as const,
     userAccessGroups: (userId: string) =>
       [...queryKeys.system.all, 'users', userId, 'access-groups'] as const,
     exportDefaults: () => [...queryKeys.system.all, 'export-defaults'] as const,
+  },
+  views: {
+    all: ['views'] as const,
+    init: (viewKey: string) => [...queryKeys.views.all, 'init', viewKey] as const,
+    saved: (viewKey: string) => [...queryKeys.views.all, 'saved', viewKey] as const,
+    favourites: () => [...queryKeys.views.all, 'favourites'] as const,
+    columns: (viewKey: string) => [...queryKeys.views.all, 'columns', viewKey] as const,
+    lov: (fieldId: string) => [...queryKeys.views.all, 'lov', fieldId] as const,
+    lovBatch: (viewKey: string) => [...queryKeys.views.all, 'lov', 'batch', viewKey] as const,
   },
   // Future modules add their keys here
 } as const;

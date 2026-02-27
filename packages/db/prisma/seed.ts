@@ -1,7 +1,12 @@
 import { PrismaClient, UserRole, VatType } from '../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { randomBytes, scryptSync } from 'crypto';
-import { loadDefaultResources, loadDefaultAccessGroups, assignFullAccessGroup } from '../src/services/default-data-loader.service.js';
+import {
+  loadDefaultResources,
+  loadDefaultAccessGroups,
+  assignFullAccessGroup,
+} from '../src/services/default-data-loader.service.js';
+import { seedDataViews } from './seeds/data-views.seed.js';
 
 // Seed uses DIRECT_URL (bypasses PgBouncer) for reliable transactional seeding.
 // Runtime client (src/client.ts) uses DATABASE_URL via PgBouncer instead.
@@ -457,7 +462,6 @@ async function seedAiPromptAndAgent() {
   // Seed initial prompt version (version 1)
   const existingVersion = await prisma.aiPromptVersion.findUnique({
     where: {
-      // eslint-disable-next-line @typescript-eslint/naming-convention
       promptId_version: { promptId: prompt.id, version: 1 },
     },
     select: { id: true },
@@ -491,7 +495,8 @@ async function seedAiPromptAndAgent() {
     where: { name: 'chat-router' },
     update: {
       displayName: 'Chat Router',
-      description: 'Default intent recognition agent that routes user messages to specialist agents',
+      description:
+        'Default intent recognition agent that routes user messages to specialist agents',
       routingTags: ['standard', 'chat'],
       promptId: prompt.id,
       tools: [],
@@ -511,7 +516,8 @@ async function seedAiPromptAndAgent() {
     create: {
       name: 'chat-router',
       displayName: 'Chat Router',
-      description: 'Default intent recognition agent that routes user messages to specialist agents',
+      description:
+        'Default intent recognition agent that routes user messages to specialist agents',
       routingTags: ['standard', 'chat'],
       promptId: prompt.id,
       tools: [],
@@ -551,6 +557,7 @@ async function main() {
   await assignFullAccessGroup(prisma, DEFAULT_COMPANY_ID, DEFAULT_USER_ID);
   await seedAiModels();
   await seedAiPromptAndAgent();
+  await seedDataViews(prisma, DEFAULT_COMPANY_ID);
   console.log('Seeding complete.');
 }
 

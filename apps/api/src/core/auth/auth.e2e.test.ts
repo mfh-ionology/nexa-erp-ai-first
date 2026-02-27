@@ -69,6 +69,32 @@ vi.mock('@nexa/db', () => ({
     READ_ONLY: 'READ_ONLY',
     HIDDEN: 'HIDDEN',
   },
+  ViewScope: {
+    PERSONAL: 'PERSONAL',
+    ROLE: 'ROLE',
+    GLOBAL: 'GLOBAL',
+  },
+  PinPosition: {
+    NONE: 'NONE',
+    LEFT: 'LEFT',
+    RIGHT: 'RIGHT',
+  },
+  FilterOperator: {
+    EQUALS: 'EQUALS',
+    NOT_EQUALS: 'NOT_EQUALS',
+    CONTAINS: 'CONTAINS',
+    STARTS_WITH: 'STARTS_WITH',
+    ENDS_WITH: 'ENDS_WITH',
+    GT: 'GT',
+    GTE: 'GTE',
+    LT: 'LT',
+    LTE: 'LTE',
+    BETWEEN: 'BETWEEN',
+    IN: 'IN',
+    NOT_IN: 'NOT_IN',
+    IS_EMPTY: 'IS_EMPTY',
+    IS_NOT_EMPTY: 'IS_NOT_EMPTY',
+  },
 }));
 
 // Mock permission service to prevent real DB calls from permission guard

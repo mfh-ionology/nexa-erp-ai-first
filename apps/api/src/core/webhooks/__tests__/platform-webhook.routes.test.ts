@@ -60,6 +60,32 @@ vi.mock('@nexa/db', () => ({
     READ_ONLY: 'READ_ONLY',
     HIDDEN: 'HIDDEN',
   },
+  ViewScope: {
+    PERSONAL: 'PERSONAL',
+    ROLE: 'ROLE',
+    GLOBAL: 'GLOBAL',
+  },
+  PinPosition: {
+    NONE: 'NONE',
+    LEFT: 'LEFT',
+    RIGHT: 'RIGHT',
+  },
+  FilterOperator: {
+    EQUALS: 'EQUALS',
+    NOT_EQUALS: 'NOT_EQUALS',
+    CONTAINS: 'CONTAINS',
+    STARTS_WITH: 'STARTS_WITH',
+    ENDS_WITH: 'ENDS_WITH',
+    GT: 'GT',
+    GTE: 'GTE',
+    LT: 'LT',
+    LTE: 'LTE',
+    BETWEEN: 'BETWEEN',
+    IN: 'IN',
+    NOT_IN: 'NOT_IN',
+    IS_EMPTY: 'IS_EMPTY',
+    IS_NOT_EMPTY: 'IS_NOT_EMPTY',
+  },
 }));
 
 // Mock argon2 to avoid native module issues in unit tests
@@ -91,7 +117,10 @@ import { buildApp } from '../../../app.js';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeWebhookPayload(event: string, tenantId: string = '550e8400-e29b-41d4-a716-446655440000') {
+function makeWebhookPayload(
+  event: string,
+  tenantId: string = '550e8400-e29b-41d4-a716-446655440000',
+) {
   return {
     event,
     timestamp: new Date().toISOString(),
@@ -278,7 +307,7 @@ describe('POST /webhooks/platform (Task 6)', () => {
     });
 
     expect(res.statusCode).toBe(401);
-    const json = res.json() as { success: boolean; error: { code: string } };
+    const json = res.json();
     expect(json.success).toBe(false);
     expect(json.error.code).toBe('UNAUTHORIZED');
     expect(mockInvalidateCache).not.toHaveBeenCalled();
@@ -298,7 +327,7 @@ describe('POST /webhooks/platform (Task 6)', () => {
     });
 
     expect(res.statusCode).toBe(401);
-    const json = res.json() as { success: boolean; error: { code: string } };
+    const json = res.json();
     expect(json.success).toBe(false);
     expect(json.error.code).toBe('UNAUTHORIZED');
   });

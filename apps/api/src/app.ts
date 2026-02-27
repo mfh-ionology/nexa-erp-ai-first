@@ -20,6 +20,8 @@ import { jwtVerifyPlugin } from './core/auth/jwt-verify.hook.js';
 import { authRoutesPlugin } from './core/auth/auth.routes.js';
 import { companyContextPlugin } from './core/middleware/company-context.js';
 import { systemModulePlugin } from './modules/system/index.js';
+import { viewsModulePlugin } from './core/views/index.js';
+import { redisPlugin } from './core/redis/redis.plugin.js';
 import { registerPermissionCacheListeners } from './core/rbac/index.js';
 import { eventBusPlugin } from './core/events/event-bus.plugin.js';
 import { auditPlugin } from './core/audit/audit.plugin.js';
@@ -56,7 +58,7 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
  * 15. @fastify/swagger
  * 16. @fastify/swagger-ui
  * 17. AI module plugin (optional — degrades gracefully if config missing)
- * 18. Routes (health, auth, system)
+ * 18. Routes (health, auth, system, views)
  */
 export async function buildApp(opts: { logger?: boolean | Record<string, unknown> } = {}) {
   const fastify = Fastify({
@@ -142,6 +144,9 @@ export async function buildApp(opts: { logger?: boolean | Record<string, unknown
     });
   });
 
+  // -- Shared Redis instance (required by views module for metadata caching)
+  await fastify.register(redisPlugin);
+
   // -- AI module (optional — degrades gracefully if AI Gateway config missing)
   await fastify.register(aiPlugin, { prefix: '/ai' });
 
@@ -149,6 +154,7 @@ export async function buildApp(opts: { logger?: boolean | Record<string, unknown
   await fastify.register(healthRoutesPlugin);
   await fastify.register(authRoutesPlugin, { prefix: '/auth' });
   await fastify.register(systemModulePlugin, { prefix: '/system' });
+  await fastify.register(viewsModulePlugin, { prefix: '/views' });
 
   // -- Permission cache invalidation event listeners (E2b-4)
   registerPermissionCacheListeners(fastify.eventBus);

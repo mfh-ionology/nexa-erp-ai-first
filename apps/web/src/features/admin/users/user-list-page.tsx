@@ -169,12 +169,13 @@ export function UserListPage() {
       title={t('users.title')}
       breadcrumbs={breadcrumbs}
       entityType="user"
+      viewKey="USERS"
       columns={columns}
       data={users}
       isLoading={isLoading}
       searchValue={search}
       onSearchChange={setSearch}
-      searchPlaceholder="Search users by name or email..."
+      searchPlaceholder={t('users.searchPlaceholder')}
       canCreate={false}
       onRowClick={(row) =>
         void navigate({ to: '/system/users/$id' as string, params: { id: row.id } })

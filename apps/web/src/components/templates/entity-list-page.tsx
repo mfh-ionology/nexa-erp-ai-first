@@ -14,6 +14,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  useViewState,
+  useViewMutations,
+  useColumnMutations,
+  useFilterState,
+  SavedViewSelector,
+  ViewsColumnsButton,
+  FilterSortButton,
+  MetadataDataTable,
+} from '@/features/views';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { usePermission } from '@/hooks/use-permissions';
 import { cn } from '@/lib/utils';
@@ -25,13 +35,120 @@ import { DataTable } from './data-table';
 import { PageHeader } from './page-header';
 import type { EntityListPageProps, OverflowAction } from './types';
 
+import type { ViewState } from '@/features/views/hooks/use-view-state';
+
+// ---------------------------------------------------------------------------
+// Internal metadata config — passed from MetadataEntityListPage to the layout
+// ---------------------------------------------------------------------------
+
+/** @internal — not part of public API. Only used between MetadataEntityListPage and EntityListPageContent. */
+interface MetadataConfig {
+  viewKey: string;
+  viewState: ViewState;
+  onColumnWidthChange: (fieldId: string, width: number) => void;
+  activeFilterCount: number;
+}
+
+/** Internal-only props for EntityListPageContent — extends the public props with the metadata config. */
+type InternalEntityListPageProps<TData> = EntityListPageProps<TData> & {
+  /** @internal */ metadataConfig?: MetadataConfig;
+};
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
 /**
  * T1: Entity List Page template.
  *
  * Provides a standardised list view with search, filtering, sorting,
  * row selection, batch actions, and cursor-based pagination.
+ *
+ * When `viewKey` is provided, enables the metadata-driven DataTable with
+ * auto-generated columns, SavedViewSelector, ViewsColumnsButton, column
+ * resize, and column pinning.
  */
-export function EntityListPage<TData>({
+export function EntityListPage<TData>(props: EntityListPageProps<TData>) {
+  if (props.viewKey) {
+    return <MetadataEntityListPage {...props} viewKey={props.viewKey} />;
+  }
+  return <EntityListPageContent {...props} />;
+}
+
+// ---------------------------------------------------------------------------
+// Metadata wrapper — calls view hooks, injects toolbar + metadata config
+// ---------------------------------------------------------------------------
+
+function MetadataEntityListPage<TData>({
+  viewKey,
+  savedViewSlot: _existingSavedViewSlot,
+  onFilterChange,
+  ...rest
+}: Omit<EntityListPageProps<TData>, 'viewKey'> & { viewKey: string }) {
+  const { t } = useI18n();
+  const viewState = useViewState(viewKey);
+  const mutations = useViewMutations(viewKey, t);
+  const columnMutations = useColumnMutations(viewKey);
+  const filterState = useFilterState(viewState);
+
+  // Handle filter application — updates viewState and notifies parent
+  const handleFilterApply = useCallback(
+    (result: ReturnType<typeof filterState.applyFilters>) => {
+      viewState.applyFilters(result.conditions, result.sortRules, result.filterLogic);
+      onFilterChange?.(result.conditions, result.sortRules, result.filterLogic);
+    },
+    [viewState, onFilterChange],
+  );
+
+  // Build the saved view toolbar elements
+  const viewToolbar = viewState.dataView ? (
+    <div className="flex items-center gap-2">
+      <SavedViewSelector viewState={viewState} />
+      <ViewsColumnsButton
+        viewKey={viewKey}
+        viewState={viewState}
+        mutations={mutations}
+        columnMutations={columnMutations}
+      />
+      <FilterSortButton
+        viewKey={viewKey}
+        viewState={viewState}
+        filterState={filterState}
+        onApply={handleFilterApply}
+      />
+    </div>
+  ) : null;
+
+  // Use metadata-generated columns when available,
+  // fall back to prop columns during loading or if metadata yields no columns
+  const effectiveColumns =
+    viewState.tanstackColumns.length > 0
+      ? (viewState.tanstackColumns as ColumnDef<TData>[])
+      : rest.columns;
+
+  const mdConfig: MetadataConfig = {
+    viewKey,
+    viewState,
+    onColumnWidthChange: columnMutations.debouncedUpdateWidth,
+    activeFilterCount: viewState.activeFilterCount,
+  };
+
+  return (
+    <EntityListPageContent
+      {...rest}
+      columns={effectiveColumns}
+      isLoading={rest.isLoading || viewState.isLoading}
+      savedViewSlot={viewToolbar}
+      metadataConfig={mdConfig}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Core layout — used by both plain and metadata modes
+// ---------------------------------------------------------------------------
+
+function EntityListPageContent<TData>({
   // BaseTemplateProps
   title,
   subtitle,
@@ -56,7 +173,9 @@ export function EntityListPage<TData>({
   onRowClick,
   getRowId,
   overflowActions = [],
-}: EntityListPageProps<TData>) {
+  // Internal metadata config (not part of public API)
+  metadataConfig,
+}: InternalEntityListPageProps<TData>) {
   const { t } = useI18n();
   const breakpoint = useBreakpoint();
 
@@ -218,6 +337,9 @@ export function EntityListPage<TData>({
     );
   };
 
+  // Show toolbar when there's search, filter, saved view, or metadata mode
+  const showToolbar = onSearchChange || filterSlot || savedViewSlot;
+
   return (
     <main className="flex flex-col gap-6" aria-label={title}>
       {/* Page header with breadcrumbs, title, and actions */}
@@ -229,8 +351,8 @@ export function EntityListPage<TData>({
         isLoading={isLoading}
       />
 
-      {/* Toolbar: Search | Filter — in a subtle card strip */}
-      {(onSearchChange || filterSlot || savedViewSlot) && (
+      {/* Toolbar: SavedViewSelector | Search | ViewsColumnsButton | Filter */}
+      {showToolbar && (
         <div
           className={cn(
             'flex items-center gap-3 animate-fade-in-up delay-2',
@@ -263,6 +385,20 @@ export function EntityListPage<TData>({
       <div className="flex flex-col gap-3 animate-fade-in-up delay-3">
         {breakpoint === 'phone' ? (
           renderMobileCards(data, columns)
+        ) : metadataConfig ? (
+          <MetadataDataTable
+            columns={columns}
+            columnState={metadataConfig.viewState.columnState}
+            data={data}
+            onRowClick={onRowClick}
+            getRowId={getRowId}
+            enableSelection={filteredBatchActions.length > 0}
+            enableSorting
+            isLoading={isLoading}
+            selectedRowIds={selectedRowIds}
+            onSelectionChange={setSelectedRowIds}
+            onColumnWidthChange={metadataConfig.onColumnWidthChange}
+          />
         ) : (
           <DataTable
             columns={columns}

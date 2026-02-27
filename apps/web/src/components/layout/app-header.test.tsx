@@ -12,8 +12,19 @@ import { useCopilotStore } from '@/stores/copilot-store';
 const mockNavigate = vi.fn();
 
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children, to, ...props }: { children: React.ReactNode; to: string; [key: string]: unknown }) => (
-    <a href={to} {...props}>{children}</a>
+  // eslint-disable-next-line @typescript-eslint/naming-convention -- React component
+  Link: ({
+    children,
+    to,
+    ...props
+  }: {
+    children: React.ReactNode;
+    to: string;
+    [key: string]: unknown;
+  }) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
   ),
   useNavigate: () => mockNavigate,
   useRouterState: () => ({
@@ -23,6 +34,11 @@ vi.mock('@tanstack/react-router', () => ({
 
 vi.mock('@/lib/auth-api', () => ({
   logout: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/features/views/components/favourites-dropdown', () => ({
+  // eslint-disable-next-line @typescript-eslint/naming-convention -- React component
+  FavouritesDropdown: () => <button data-testid="favourites-dropdown">Favourites</button>,
 }));
 
 import { AppHeader } from './app-header';
@@ -237,17 +253,13 @@ describe('AppHeader', () => {
     const searchButtons = screen.getAllByRole('button', {
       name: 'common:searchPlaceholder',
     });
-    const mobileSearchBtn = searchButtons.find(
-      (btn) => btn.className.includes('md:hidden'),
-    );
+    const mobileSearchBtn = searchButtons.find((btn) => btn.className.includes('md:hidden'));
 
     if (mobileSearchBtn) {
       await user.click(mobileSearchBtn);
 
       // A close button should appear
-      expect(
-        screen.getByRole('button', { name: 'common:close' }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'common:close' })).toBeInTheDocument();
     }
   });
 });

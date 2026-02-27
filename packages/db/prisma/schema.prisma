@@ -315,6 +315,9 @@ model CompanyProfile {
   userAccessGroups     UserAccessGroup[]
   auditLogs            AuditLog[]
   aiConversations      AiConversation[]
+  dataViews            DataView[]
+  dateRangePresets     DateRangePreset[]
+  savedViews           SavedView[]
 
   @@index([baseCurrencyCode], map: "idx_company_profiles_base_currency_code")
   @@index([countryCode], map: "idx_company_profiles_country_code")
@@ -421,6 +424,53 @@ enum ViewScope {
   @@map("view_scope")
 }
 
+enum FieldDataType {
+  STRING
+  NUMBER
+  DATE
+  BOOLEAN
+  ENUM
+  CURRENCY
+
+  @@map("field_data_type")
+}
+
+enum LovType {
+  NONE
+  STATIC
+  GLOBAL
+  VIEW_SPECIFIC
+
+  @@map("lov_type")
+}
+
+enum PinPosition {
+  NONE
+  LEFT
+  RIGHT
+
+  @@map("pin_position")
+}
+
+enum FilterOperator {
+  EQUALS
+  NOT_EQUALS
+  CONTAINS
+  STARTS_WITH
+  ENDS_WITH
+  GT
+  GTE
+  LT
+  LTE
+  BETWEEN
+  IN
+  NOT_IN
+  IS_EMPTY
+  IS_NOT_EMPTY
+
+  @@map("filter_operator")
+}
+
 model UserCompanyRole {
   id        String   @id @default(uuid()) @map("id")
   userId    String   @map("user_id")
@@ -469,9 +519,11 @@ model User {
   company            CompanyProfile    @relation(fields: [companyId], references: [id], onDelete: Restrict)
   companyRoles       UserCompanyRole[]
   refreshTokens      RefreshToken[]
-  managedDepartments Department[]      @relation("DepartmentManager")
+  managedDepartments Department[]            @relation("DepartmentManager")
   userAccessGroups   UserAccessGroup[]
   aiConversations    AiConversation[]
+  columnPreferences  UserColumnPreference[]
+  savedViews         SavedView[]
 
   @@unique([email], map: "uq_users_email")
   @@index([companyId], map: "idx_users_company_id")
@@ -606,6 +658,7 @@ model AccessGroup {
   permissions      AccessGroupPermission[]
   fieldOverrides   AccessGroupFieldOverride[]
   userAccessGroups UserAccessGroup[]
+  savedViews       SavedView[]
 
   @@unique([companyId, code], map: "uq_access_groups_company_code")
   @@index([companyId, isActive], map: "idx_access_groups_company_active")
@@ -951,4 +1004,154 @@ model AiEval {
 
   @@index([agentId, evalDate], map: "idx_ai_evals_agent_eval_date")
   @@map("ai_evals")
+}
+
+// ---------------------------------------------------------------------------
+// Metadata-Driven DataTable Infrastructure — E7.1
+// ---------------------------------------------------------------------------
+// 3-tier architecture:
+//   1. Metadata Layer: DataView + DataViewField + DateRangePreset
+//   2. User Personalisation Layer: UserColumnPreference + SavedView
+//   3. Filter Persistence Layer: SavedViewCondition
+// ---------------------------------------------------------------------------
+
+model DataView {
+  id               String   @id @default(uuid())
+  companyId        String   @map("company_id")
+  viewKey          String   @map("view_key") @db.VarChar(50)
+  viewName         String   @map("view_name") @db.VarChar(100)
+  entityTable      String   @map("entity_table") @db.VarChar(100)
+  idField          String   @map("id_field") @db.VarChar(50)
+  defaultSortField String   @map("default_sort_field") @db.VarChar(50)
+  defaultSortDir   String   @map("default_sort_dir") @db.VarChar(4) @default("DESC")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdBy        String   @default("system") @map("created_by")
+  updatedBy        String   @default("system") @map("updated_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  company    CompanyProfile  @relation(fields: [companyId], references: [id])
+  fields     DataViewField[]
+  savedViews SavedView[]
+
+  @@unique([companyId, viewKey], map: "uq_data_views_company_view_key")
+  @@map("data_views")
+}
+
+model DataViewField {
+  id                 String        @id @default(uuid())
+  dataViewId         String        @map("data_view_id")
+  fieldKey           String        @map("field_key") @db.VarChar(100)
+  fieldLabel         String        @map("field_label") @db.VarChar(100)
+  fieldType          FieldDataType @map("field_type")
+  defaultVisible     Boolean       @default(true) @map("default_visible")
+  defaultOrder       Int           @map("default_order")
+  defaultWidth       Int           @default(150) @map("default_width")
+  sortable           Boolean       @default(true)
+  filterable         Boolean       @default(true)
+  advancedFilterOnly Boolean       @default(false) @map("advanced_filter_only")
+  pinnable           Boolean       @default(true)
+  lovType            LovType       @default(NONE) @map("lov_type")
+  lovScope           String?       @map("lov_scope") @db.VarChar(50)
+  lovStaticValues    Json?         @map("lov_static_values") @db.JsonB
+  lovDependsOn       String?       @map("lov_depends_on") @db.VarChar(100)
+  lovSearchMin       Int           @default(0) @map("lov_search_min")
+  isActive           Boolean       @default(true) @map("is_active")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  dataView              DataView               @relation(fields: [dataViewId], references: [id], onDelete: Cascade)
+  userColumnPreferences UserColumnPreference[]
+  savedViewConditions   SavedViewCondition[]
+
+  @@unique([dataViewId, fieldKey], map: "uq_data_view_fields_view_field_key")
+  @@index([dataViewId, defaultOrder], map: "idx_data_view_fields_view_order")
+  @@map("data_view_fields")
+}
+
+model DateRangePreset {
+  id          String   @id @default(uuid())
+  companyId   String   @map("company_id")
+  presetKey   String   @map("preset_key") @db.VarChar(30)
+  presetName  String   @map("preset_name") @db.VarChar(50)
+  orderInList Int      @map("order_in_list")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  company             CompanyProfile       @relation(fields: [companyId], references: [id])
+  savedViewConditions SavedViewCondition[]
+
+  @@unique([companyId, presetKey], map: "uq_date_range_presets_company_key")
+  @@map("date_range_presets")
+}
+
+model UserColumnPreference {
+  id              String      @id @default(uuid())
+  userId          String      @map("user_id")
+  dataViewFieldId String      @map("data_view_field_id")
+  visible         Boolean     @default(true)
+  displayOrder    Int         @map("display_order")
+  width           Int
+  pinned          PinPosition @default(NONE)
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dataViewField DataViewField @relation(fields: [dataViewFieldId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dataViewFieldId], map: "uq_user_column_prefs_user_field")
+  @@map("user_column_preferences")
+}
+
+model SavedView {
+  id             String    @id @default(uuid())
+  companyId      String    @map("company_id")
+  dataViewId     String    @map("data_view_id")
+  name           String    @db.VarChar(100)
+  groupName      String    @map("group_name") @db.VarChar(100)
+  scope          ViewScope @default(PERSONAL)
+  roleId         String?   @map("role_id")
+  createdBy      String    @map("created_by")
+  isFavourite    Boolean   @default(false) @map("is_favourite")
+  favouriteOrder Int       @default(0) @map("favourite_order")
+  isDefault      Boolean   @default(false) @map("is_default")
+  filterLogic    String    @default("AND") @map("filter_logic") @db.VarChar(3)
+  sortConfig     Json      @map("sort_config") @db.JsonB
+  columnConfig   Json      @map("column_config") @db.JsonB
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  company    CompanyProfile       @relation(fields: [companyId], references: [id])
+  dataView   DataView             @relation(fields: [dataViewId], references: [id], onDelete: Cascade)
+  creator    User                 @relation(fields: [createdBy], references: [id])
+  role       AccessGroup?         @relation(fields: [roleId], references: [id])
+  conditions SavedViewCondition[]
+
+  @@unique([companyId, dataViewId, createdBy, name], map: "uq_saved_views_company_view_user_name")
+  @@index([companyId, dataViewId, scope], map: "idx_saved_views_company_view_scope")
+  @@map("saved_views")
+}
+
+model SavedViewCondition {
+  id              String         @id @default(uuid())
+  savedViewId     String         @map("saved_view_id")
+  dataViewFieldId String         @map("data_view_field_id")
+  operator        FilterOperator
+  value           String?        @db.Text
+  valueList       Json?          @map("value_list") @db.JsonB
+  datePresetId    String?        @map("date_preset_id")
+  groupId         Int            @default(0) @map("group_id")
+  groupLogic      String         @default("AND") @map("group_logic") @db.VarChar(3)
+  outerLogic      String         @default("AND") @map("outer_logic") @db.VarChar(3)
+  conditionOrder  Int            @map("condition_order")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  savedView     SavedView        @relation(fields: [savedViewId], references: [id], onDelete: Cascade)
+  dataViewField DataViewField    @relation(fields: [dataViewFieldId], references: [id])
+  datePreset    DateRangePreset? @relation(fields: [datePresetId], references: [id])
+
+  @@index([savedViewId, conditionOrder], map: "idx_saved_view_conditions_view_order")
+  @@map("saved_view_conditions")
 }

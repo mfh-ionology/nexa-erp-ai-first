@@ -12,6 +12,7 @@ import { useSidebarStore } from '@/stores/sidebar-store';
 import { useI18n, useLocale } from '@nexa/i18n';
 
 import { UnifiedSearch } from '../header/UnifiedSearch';
+import { FavouritesDropdown } from '@/features/views/components/favourites-dropdown';
 import { UserMenu } from './user-menu';
 
 export function AppHeader() {
@@ -143,6 +144,9 @@ export function AppHeader() {
             </TooltipTrigger>
             <TooltipContent>{t('navigation:notifications')}</TooltipContent>
           </Tooltip>
+
+          {/* Favourites star dropdown */}
+          <FavouritesDropdown />
 
           {/* User avatar menu */}
           <UserMenu />

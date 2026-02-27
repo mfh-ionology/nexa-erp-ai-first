@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/naming-convention -- React component mocks use PascalCase */
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as React from 'react';
 
 import type { UserListItem } from './api/types';
 
@@ -14,10 +16,8 @@ vi.mock('@/hooks/use-breakpoint', () => ({
 const mockNavigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
-  Link: (props: Record<string, unknown>) => {
-    const React = require('react');
-    return React.createElement('a', { href: props.to }, props.children);
-  },
+  Link: (props: Record<string, unknown>) =>
+    React.createElement('a', { href: props.to as string }, props.children),
 }));
 
 // --- Mock auth store ---
@@ -27,12 +27,78 @@ vi.mock('@/stores/auth-store', () => ({
   ),
 }));
 
+// --- Mock view hooks (needed because UserListPage passes viewKey="USERS" to EntityListPage) ---
+vi.mock('@/features/views', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const React = await import('react');
+  return {
+    ...actual,
+    useViewState: () => ({
+      dataView: undefined,
+      fields: [],
+      savedViews: [],
+      datePresets: [],
+      columnState: [],
+      tanstackColumns: [],
+      activeFilters: [],
+      activeSortRules: [],
+      filterLogic: 'AND',
+      activeFilterCount: 0,
+      activeViewId: null,
+      isDirty: false,
+      isLoading: false,
+      error: null,
+      setActiveView: vi.fn(),
+      updateColumnState: vi.fn(),
+      reorderColumns: vi.fn(),
+      toggleColumnVisibility: vi.fn(),
+      setColumnPin: vi.fn(),
+      markClean: vi.fn(),
+      applyFilters: vi.fn(),
+      clearFilters: vi.fn(),
+    }),
+    useViewMutations: () => ({
+      createView: { mutate: vi.fn(), isPending: false },
+      updateView: { mutate: vi.fn(), isPending: false },
+      replaceView: { mutate: vi.fn(), isPending: false },
+      removeView: { mutate: vi.fn(), isPending: false },
+      toggleFav: { mutate: vi.fn(), isPending: false },
+      setDef: { mutate: vi.fn(), isPending: false },
+    }),
+    useColumnMutations: () => ({
+      bulkUpdate: { mutate: vi.fn(), isPending: false },
+      debouncedUpdateWidth: vi.fn(),
+    }),
+    useFilterState: () => ({
+      conditions: [],
+      sortRules: [],
+      filterMode: 'simple',
+      filterLogic: 'AND',
+      isDirty: false,
+      addCondition: vi.fn(),
+      removeCondition: vi.fn(),
+      updateCondition: vi.fn(),
+      addSortRule: vi.fn(),
+      removeSortRule: vi.fn(),
+      updateSortRule: vi.fn(),
+      reorderSortRules: vi.fn(),
+      setFilterMode: vi.fn(),
+      setFilterLogic: vi.fn(),
+      applyFilters: vi.fn().mockReturnValue({ conditions: [], sortRules: [], filterLogic: 'AND' }),
+      resetFilters: vi.fn(),
+    }),
+    SavedViewSelector: () => React.createElement('div', { 'data-testid': 'saved-view-selector' }),
+    ViewsColumnsButton: () => React.createElement('div', { 'data-testid': 'views-columns-button' }),
+    FilterSortButton: () => React.createElement('div', { 'data-testid': 'filter-sort-button' }),
+  };
+});
+
 // --- Mock useUsers ---
 const mockFetchNextPage = vi.fn();
 const mockUseUsers = vi.fn();
 
 vi.mock('./api/use-users', () => ({
-  useUsers: (...args: unknown[]) => mockUseUsers(...args),
+  useUsers: (...args: unknown[]) => mockUseUsers(...args) as unknown,
 }));
 
 // --- Test data ---
@@ -102,11 +168,10 @@ describe('UserListPage', () => {
       expect(screen.getByText('navigation:system')).toBeInTheDocument();
     });
 
-    it('renders data table with 6 columns (name, email, role, accessGroups, status, lastLogin)', async () => {
+    it('renders data table with 5 columns (name, role, accessGroups, status, lastLogin)', async () => {
       await renderPage();
 
       expect(screen.getByText('users.column.name')).toBeInTheDocument();
-      expect(screen.getByText('users.column.email')).toBeInTheDocument();
       expect(screen.getByText('users.column.role')).toBeInTheDocument();
       expect(screen.getByText('users.column.accessGroups')).toBeInTheDocument();
       expect(screen.getByText('users.column.status')).toBeInTheDocument();
@@ -182,7 +247,7 @@ describe('UserListPage', () => {
       await user.type(searchInput, 'john');
 
       // Advance past debounce (300ms) wrapped in act for state update
-      await act(async () => {
+      act(() => {
         vi.advanceTimersByTime(350);
       });
 
@@ -235,7 +300,7 @@ describe('UserListPage', () => {
       await user.click(row!);
 
       expect(mockNavigate).toHaveBeenCalledWith(
-        expect.objectContaining({ to: '/system/users/user-1' }),
+        expect.objectContaining({ to: '/system/users/$id', params: { id: 'user-1' } }),
       );
     });
   });
