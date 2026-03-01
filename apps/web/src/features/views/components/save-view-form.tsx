@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { useI18n } from '@nexa/i18n';
 
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
@@ -26,6 +27,7 @@ const saveViewSchema = z.object({
   groupName: z.string().min(1).max(100),
   scope: z.enum(['PERSONAL', 'ROLE', 'GLOBAL']),
   roleId: z.string().optional(),
+  isFavourite: z.boolean().default(false),
 });
 
 type SaveViewFormValues = z.infer<typeof saveViewSchema>;
@@ -57,6 +59,7 @@ export function SaveViewForm({
       groupName: '',
       scope: 'PERSONAL' as ViewScope,
       roleId: undefined,
+      isFavourite: false,
     },
   });
 
@@ -81,6 +84,7 @@ export function SaveViewForm({
       name: values.name.trim(),
       groupName: values.groupName.trim(),
       scope: values.scope,
+      isFavourite: values.isFavourite,
       ...(values.scope === 'ROLE' && values.roleId ? { roleId: values.roleId } : {}),
       filterLogic: viewState.filterLogic,
       sortConfig: viewState.activeSortRules.map((r) => ({
@@ -155,6 +159,26 @@ export function SaveViewForm({
                 />
               </FormControl>
               <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Add to favourites checkbox */}
+        <FormField
+          control={form.control}
+          name="isFavourite"
+          render={({ field }) => (
+            <FormItem className="flex items-center gap-2 space-y-0">
+              <FormControl>
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  id="is-favourite"
+                />
+              </FormControl>
+              <FormLabel htmlFor="is-favourite" className="text-sm font-normal cursor-pointer">
+                {t('views.form.addToFavourites')}
+              </FormLabel>
             </FormItem>
           )}
         />

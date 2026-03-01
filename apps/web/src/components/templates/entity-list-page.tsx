@@ -19,10 +19,13 @@ import {
   useViewMutations,
   useColumnMutations,
   useFilterState,
-  SavedViewSelector,
-  ViewsColumnsButton,
-  FilterSortButton,
   MetadataDataTable,
+  ColumnsButton,
+  QuickFilterButton,
+  AdvancedFilterButton,
+  ViewsBar,
+  SaveViewButton,
+  DeleteViewButton,
 } from '@/features/views';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { usePermission } from '@/hooks/use-permissions';
@@ -97,25 +100,34 @@ function MetadataEntityListPage<TData>({
       viewState.applyFilters(result.conditions, result.sortRules, result.filterLogic);
       onFilterChange?.(result.conditions, result.sortRules, result.filterLogic);
     },
-    [viewState, onFilterChange],
+    [viewState, onFilterChange, filterState],
   );
 
-  // Build the saved view toolbar elements
-  const viewToolbar = viewState.dataView ? (
+  // Build the two-row toolbar: Row 1 buttons + Row 2 views bar
+  const toolbarButtons = viewState.dataView ? (
     <div className="flex items-center gap-2">
-      <SavedViewSelector viewState={viewState} />
-      <ViewsColumnsButton
+      <ColumnsButton viewState={viewState} columnMutations={columnMutations} />
+      <QuickFilterButton
         viewKey={viewKey}
         viewState={viewState}
-        mutations={mutations}
-        columnMutations={columnMutations}
+        filterState={filterState}
+        onApply={handleFilterApply}
+        entityName={rest.title}
       />
-      <FilterSortButton
+      <AdvancedFilterButton
         viewKey={viewKey}
         viewState={viewState}
         filterState={filterState}
         onApply={handleFilterApply}
       />
+    </div>
+  ) : null;
+
+  const viewsBarSlot = viewState.dataView ? (
+    <div className="flex items-center gap-2">
+      <ViewsBar viewState={viewState} />
+      <SaveViewButton viewKey={viewKey} viewState={viewState} mutations={mutations} />
+      <DeleteViewButton viewState={viewState} mutations={mutations} />
     </div>
   ) : null;
 
@@ -138,7 +150,8 @@ function MetadataEntityListPage<TData>({
       {...rest}
       columns={effectiveColumns}
       isLoading={rest.isLoading || viewState.isLoading}
-      savedViewSlot={viewToolbar}
+      savedViewSlot={viewsBarSlot}
+      filterSlot={toolbarButtons}
       metadataConfig={mdConfig}
     />
   );
@@ -351,33 +364,37 @@ function EntityListPageContent<TData>({
         isLoading={isLoading}
       />
 
-      {/* Toolbar: SavedViewSelector | Search | ViewsColumnsButton | Filter */}
+      {/* Toolbar: Row 1 (Search + buttons) + Row 2 (Views bar) */}
       {showToolbar && (
-        <div
-          className={cn(
-            'flex items-center gap-3 animate-fade-in-up delay-2',
-            breakpoint === 'phone' && 'flex-col items-stretch',
-          )}
-        >
-          {savedViewSlot}
+        <div className="flex flex-col gap-2 animate-fade-in-up delay-2">
+          {/* Row 1: Search + filter/column buttons */}
+          <div
+            className={cn(
+              'flex items-center gap-3',
+              breakpoint === 'phone' && 'flex-col items-stretch',
+            )}
+          >
+            {onSearchChange && (
+              <div className="flex flex-1 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-sm">
+                <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <input
+                  type="text"
+                  value={searchValue}
+                  onChange={(e) => {
+                    onSearchChange(e.target.value);
+                  }}
+                  placeholder={searchPlaceholder ?? t('search')}
+                  className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
+                  aria-label={t('search')}
+                />
+              </div>
+            )}
 
-          {onSearchChange && (
-            <div className="flex flex-1 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-sm">
-              <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <input
-                type="text"
-                value={searchValue}
-                onChange={(e) => {
-                  onSearchChange(e.target.value);
-                }}
-                placeholder={searchPlaceholder ?? t('search')}
-                className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
-                aria-label={t('search')}
-              />
-            </div>
-          )}
+            {filterSlot}
+          </div>
 
-          {filterSlot}
+          {/* Row 2: Views bar / saved view selector */}
+          {savedViewSlot && <div className="flex items-center gap-2">{savedViewSlot}</div>}
         </div>
       )}
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ListFilter } from 'lucide-react';
+import { Filter } from 'lucide-react';
 import { useI18n } from '@nexa/i18n';
 
 import { Badge } from '@/components/ui/badge';
@@ -7,22 +7,25 @@ import { Button } from '@/components/ui/button';
 
 import type { FilterStateReturn } from '../hooks/use-filter-state';
 import type { ViewState } from '../hooks/use-view-state';
-import { FilterSortModal } from './filter-sort-modal';
+import { QuickFilterModal } from './quick-filter-modal';
 
-interface FilterSortButtonProps {
+interface QuickFilterButtonProps {
   viewKey: string;
   viewState: ViewState;
   filterState: FilterStateReturn;
   /** Called after filters are applied */
   onApply?: (result: ReturnType<FilterStateReturn['applyFilters']>) => void;
+  /** Entity display name for the modal title */
+  entityName?: string;
 }
 
-export function FilterSortButton({
+export function QuickFilterButton({
   viewKey,
   viewState,
   filterState,
   onApply,
-}: FilterSortButtonProps) {
+  entityName,
+}: QuickFilterButtonProps) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
 
@@ -37,11 +40,11 @@ export function FilterSortButton({
         onClick={() => {
           setOpen(true);
         }}
-        aria-label={t('views.filterAndSort')}
+        aria-label={t('filter')}
         className="relative"
       >
-        <ListFilter className="size-4" />
-        <span className="hidden sm:inline">{t('views.filterAndSort')}</span>
+        <Filter className="size-4" />
+        <span className="hidden sm:inline">{t('filter')}</span>
         {activeCount > 0 && (
           <Badge className="ml-1 size-5 rounded-full p-0 text-[10px] leading-none">
             {activeCount}
@@ -49,13 +52,14 @@ export function FilterSortButton({
         )}
       </Button>
 
-      <FilterSortModal
+      <QuickFilterModal
         open={open}
         onOpenChange={setOpen}
         viewKey={viewKey}
         viewState={viewState}
         filterState={filterState}
         onApply={onApply}
+        entityName={entityName}
       />
     </>
   );

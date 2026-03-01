@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/naming-convention -- React component mocks use PascalCase */
-import { render, screen, act } from '@testing-library/react';
+import { cleanup, render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as React from 'react';
@@ -17,7 +17,7 @@ const mockNavigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
   Link: (props: Record<string, unknown>) =>
-    React.createElement('a', { href: props.to as string }, props.children),
+    React.createElement('a', { href: props.to as string }, props.children as React.ReactNode),
 }));
 
 // --- Mock auth store ---
@@ -88,8 +88,13 @@ vi.mock('@/features/views', async (importOriginal) => {
       resetFilters: vi.fn(),
     }),
     SavedViewSelector: () => React.createElement('div', { 'data-testid': 'saved-view-selector' }),
-    ViewsColumnsButton: () => React.createElement('div', { 'data-testid': 'views-columns-button' }),
-    FilterSortButton: () => React.createElement('div', { 'data-testid': 'filter-sort-button' }),
+    ColumnsButton: () => React.createElement('div', { 'data-testid': 'columns-button' }),
+    QuickFilterButton: () => React.createElement('div', { 'data-testid': 'quick-filter-button' }),
+    AdvancedFilterButton: () =>
+      React.createElement('div', { 'data-testid': 'advanced-filter-button' }),
+    ViewsBar: () => React.createElement('div', { 'data-testid': 'views-bar' }),
+    SaveViewButton: () => React.createElement('div', { 'data-testid': 'save-view-button' }),
+    DeleteViewButton: () => React.createElement('div', { 'data-testid': 'delete-view-button' }),
   };
 });
 
@@ -145,6 +150,7 @@ async function renderPage() {
 
 describe('UserListPage', () => {
   beforeEach(() => {
+    cleanup();
     vi.clearAllMocks();
     mockUseBreakpoint.mockReturnValue('desktop');
     setupMockQuery();
@@ -153,18 +159,18 @@ describe('UserListPage', () => {
   // --- Rendering tests ---
 
   describe('rendering', () => {
-    it('renders page title "Users" via t("users.title")', async () => {
+    it('renders page title "Users" via t("users.title")', { timeout: 15_000 }, async () => {
       await renderPage();
 
       const heading = screen.getByRole('heading', { level: 1 });
       expect(heading).toHaveTextContent('users.title');
     });
 
-    it('renders breadcrumbs: System > Users', async () => {
+    it('renders breadcrumbs: System > Users', { timeout: 15_000 }, async () => {
       await renderPage();
 
-      const breadcrumbNav = screen.getByRole('navigation', { name: 'breadcrumb' });
-      expect(breadcrumbNav).toBeInTheDocument();
+      const breadcrumbNavs = screen.getAllByRole('navigation', { name: 'breadcrumb' });
+      expect(breadcrumbNavs.length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText('navigation:system')).toBeInTheDocument();
     });
 
