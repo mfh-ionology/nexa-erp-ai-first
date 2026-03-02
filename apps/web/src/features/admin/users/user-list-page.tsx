@@ -7,7 +7,7 @@
  * Users are created via auth registration so canCreate is false.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useNavigate } from '@tanstack/react-router';
 
@@ -16,6 +16,9 @@ import { EntityListPage } from '@/components/templates/entity-list-page';
 import { cn } from '@/lib/utils';
 
 import { useI18n, useFormatDate } from '@nexa/i18n';
+
+import type { FilterConditionState, SortRuleState } from '@/features/views/types';
+import { serializeConditionsForApi, serializeSortForApi } from '@/features/views';
 
 import type { UserListItem, UserRole } from './api/types';
 import { useUsers } from './api/use-users';
@@ -30,7 +33,7 @@ function getAvatarColor(name: string): string {
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]!;
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length] ?? '#7c3aed';
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -53,12 +56,43 @@ export function UserListPage() {
     };
   }, [search]);
 
+  // --- E7.5: Filter state from metadata-driven filter system ---
+  const [filterConditions, setFilterConditions] = useState<string | undefined>();
+  const [filterLogic, setFilterLogic] = useState<'AND' | 'OR'>('AND');
+  const [sortField, setSortField] = useState<string | undefined>();
+  const [sortDir, setSortDir] = useState<'asc' | 'desc' | undefined>();
+
+  const handleFilterChange = useCallback(
+    (conditions: FilterConditionState[], sortRules: SortRuleState[], logic: 'AND' | 'OR') => {
+      // Serialize conditions to JSON for API query params
+      const serialized = serializeConditionsForApi(conditions);
+      setFilterConditions(serialized.length > 0 ? JSON.stringify(serialized) : undefined);
+      setFilterLogic(logic);
+
+      // Use first sort rule for server-side sorting
+      const serializedSort = serializeSortForApi(sortRules);
+      const firstSort = serializedSort[0];
+      if (firstSort) {
+        setSortField(firstSort.field);
+        setSortDir(firstSort.direction.toLowerCase() as 'asc' | 'desc');
+      } else {
+        setSortField(undefined);
+        setSortDir(undefined);
+      }
+    },
+    [],
+  );
+
   // --- Data fetching ---
   const queryParams = useMemo(() => {
     const params: Record<string, string | boolean> = {};
     if (debouncedSearch) params.search = debouncedSearch;
+    if (filterConditions) params.conditions = filterConditions;
+    if (filterLogic !== 'AND') params.filterLogic = filterLogic;
+    if (sortField) params.sortField = sortField;
+    if (sortDir) params.sortDir = sortDir;
     return params;
-  }, [debouncedSearch]);
+  }, [debouncedSearch, filterConditions, filterLogic, sortField, sortDir]);
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useUsers(queryParams);
 
@@ -185,6 +219,7 @@ export function UserListPage() {
       isLoadingMore={isFetchingNextPage}
       getRowId={(row) => row.id}
       batchActions={[]}
+      onFilterChange={handleFilterChange}
     />
   );
 }

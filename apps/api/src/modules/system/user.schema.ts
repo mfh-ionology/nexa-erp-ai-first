@@ -23,7 +23,11 @@ const moduleSchema = z.enum(VALID_MODULES);
 
 // BCP 47 locale pattern: 2-3 letter language, optional region/script subtags
 // Examples: "en", "en-GB", "fr", "zh-Hans"
-const localeSchema = z.string().min(2).max(10).regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/);
+const localeSchema = z
+  .string()
+  .min(2)
+  .max(10)
+  .regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/);
 
 // ---------------------------------------------------------------------------
 // Request Schemas
@@ -71,6 +75,11 @@ export const userListQuerySchema = z.object({
     .enum(['true', 'false'])
     .transform((v) => v === 'true')
     .optional(),
+  // E7.5: Generic filter condition support (JSON-encoded FilterCondition[])
+  conditions: z.string().optional(),
+  filterLogic: z.enum(['AND', 'OR']).default('AND'),
+  sortField: z.string().optional(),
+  sortDir: z.enum(['asc', 'desc']).optional(),
 });
 
 // ---------------------------------------------------------------------------

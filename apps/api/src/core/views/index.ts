@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 
 import { viewRoutesPlugin } from './views.routes.js';
 
+export { applyViewFilters } from './apply-view-filters.js';
+
 // ---------------------------------------------------------------------------
 // Views module Fastify plugin
 // Registers all views routes under the /views prefix.

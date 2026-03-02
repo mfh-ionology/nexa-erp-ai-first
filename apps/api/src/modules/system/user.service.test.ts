@@ -233,6 +233,7 @@ describe('listUsers', () => {
     limit: 20,
     sort: 'createdAt' as const,
     order: 'asc' as const,
+    filterLogic: 'AND' as const,
     cursor: undefined,
     search: undefined,
     isActive: undefined,
@@ -326,6 +327,41 @@ describe('listUsers', () => {
           companyId: TEST_COMPANY_ID,
           isActive: true,
         }),
+      }),
+    );
+  });
+
+  it('uses sortField/sortDir for orderBy when provided (E7.5)', async () => {
+    mockPrisma.user.findMany.mockResolvedValue([]);
+    mockPrisma.user.count.mockResolvedValue(0);
+
+    await listUsers(mockPrisma as never, TEST_COMPANY_ID, {
+      ...defaultQuery,
+      sortField: 'email',
+      sortDir: 'desc',
+    });
+
+    expect(mockPrisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: { email: 'desc' },
+      }),
+    );
+  });
+
+  it('ignores sortField if not in allowed columns (E7.5 security)', async () => {
+    mockPrisma.user.findMany.mockResolvedValue([]);
+    mockPrisma.user.count.mockResolvedValue(0);
+
+    await listUsers(mockPrisma as never, TEST_COMPANY_ID, {
+      ...defaultQuery,
+      sortField: 'passwordHash',
+      sortDir: 'asc',
+    });
+
+    // Should fall back to default sort, NOT sort by passwordHash
+    expect(mockPrisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: { createdAt: 'asc' },
       }),
     );
   });

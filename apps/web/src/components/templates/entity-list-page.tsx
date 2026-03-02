@@ -1,5 +1,5 @@
 /* eslint-disable i18next/no-literal-string, @typescript-eslint/no-base-to-string, @typescript-eslint/restrict-template-expressions, @typescript-eslint/no-unnecessary-condition */
-import { type ReactNode, useCallback, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import type { CellContext, ColumnDef } from '@tanstack/react-table';
 import { flexRender } from '@tanstack/react-table';
 import { Loader2, MoreHorizontal, Plus, Search, Sparkles } from 'lucide-react';
@@ -95,13 +95,18 @@ function MetadataEntityListPage<TData>({
   const filterState = useFilterState(viewState);
 
   // Handle filter application — updates viewState and notifies parent
+  const applyFiltersToViewState = viewState.applyFilters;
   const handleFilterApply = useCallback(
     (result: ReturnType<typeof filterState.applyFilters>) => {
-      viewState.applyFilters(result.conditions, result.sortRules, result.filterLogic);
-      onFilterChange?.(result.conditions, result.sortRules, result.filterLogic);
+      applyFiltersToViewState(result.conditions, result.sortRules, result.filterLogic);
     },
-    [viewState, onFilterChange, filterState],
+    [applyFiltersToViewState, filterState.applyFilters],
   );
+
+  // E7.5: Reactively notify parent whenever activeFilters change (from Apply, saved view load, or default view init)
+  useEffect(() => {
+    onFilterChange?.(viewState.activeFilters, viewState.activeSortRules, viewState.filterLogic);
+  }, [viewState.activeFilters, viewState.activeSortRules, viewState.filterLogic, onFilterChange]);
 
   // Build the two-row toolbar: Row 1 buttons + Row 2 views bar
   const toolbarButtons = viewState.dataView ? (

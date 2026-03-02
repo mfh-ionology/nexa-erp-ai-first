@@ -56,6 +56,11 @@ export interface UserListParams {
   limit?: number;
   search?: string;
   isActive?: boolean;
+  // E7.5: Generic filter condition support
+  conditions?: string;
+  filterLogic?: string;
+  sortField?: string;
+  sortDir?: string;
 }
 
 // --- List response ---

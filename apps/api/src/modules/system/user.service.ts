@@ -7,6 +7,7 @@ import { revokeAllUserTokens } from '../../core/auth/auth.service.js';
 import { AppError, DomainError, NotFoundError } from '../../core/errors/index.js';
 import { tServer } from '@nexa/i18n/server';
 import type { PaginationMeta } from '../../core/utils/response.js';
+import { applyViewFilters } from '../../core/views/apply-view-filters.js';
 
 // ---------------------------------------------------------------------------
 // Shared select — excludes sensitive fields from all queries
@@ -76,7 +77,13 @@ export async function createUser(
       'code' in error &&
       (error as { code: string }).code === 'P2002'
     ) {
-      throw new AppError('DUPLICATE_EMAIL', tServer('errors:DUPLICATE_EMAIL'), 409, undefined, 'errors:DUPLICATE_EMAIL');
+      throw new AppError(
+        'DUPLICATE_EMAIL',
+        tServer('errors:DUPLICATE_EMAIL'),
+        409,
+        undefined,
+        'errors:DUPLICATE_EMAIL',
+      );
     }
     throw error;
   }
@@ -87,8 +94,20 @@ export async function createUser(
 // ---------------------------------------------------------------------------
 
 export async function listUsers(prisma: PrismaClient, companyId: string, query: UserListQuery) {
-  const { cursor, limit, sort, order, search, isActive } = query;
+  const {
+    cursor,
+    limit,
+    sort,
+    order,
+    search,
+    isActive,
+    conditions,
+    filterLogic,
+    sortField,
+    sortDir,
+  } = query;
 
+  // Base where clause — always scoped by companyId
   const where: Record<string, unknown> = { companyId };
   if (isActive !== undefined) {
     where.isActive = isActive;
@@ -101,12 +120,32 @@ export async function listUsers(prisma: PrismaClient, companyId: string, query: 
     ];
   }
 
+  // E7.5: Merge metadata-driven filter conditions into where clause
+  if (conditions) {
+    const filterWhere = await applyViewFilters(prisma, companyId, 'USERS', conditions, filterLogic);
+    // Merge filter conditions using AND — preserves companyId scoping
+    if (Object.keys(filterWhere).length > 0) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? (where.AND as Record<string, unknown>[]) : []),
+        filterWhere,
+      ];
+    }
+  }
+
+  // E7.5: Use sortField/sortDir when provided, fall back to legacy sort/order
+  // Security: only allow sorting on columns exposed by userSelect (never passwordHash, mfaSecret, etc.)
+  const allowedSortFields = new Set(Object.keys(userSelect));
+  const orderBy =
+    sortField && allowedSortFields.has(sortField)
+      ? { [sortField]: sortDir ?? 'asc' }
+      : { [sort]: order };
+
   const [users, total] = await Promise.all([
     prisma.user.findMany({
       where,
       take: limit + 1,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-      orderBy: { [sort]: order },
+      orderBy,
       select: {
         ...userSelect,
         companyRoles: {
@@ -291,7 +330,12 @@ export async function deactivateUser(
 ) {
   // Security: prevent self-deactivation to avoid orphaning the company
   if (id === ctx.userId) {
-    throw new DomainError('SELF_DEACTIVATION', tServer('errors:SELF_DEACTIVATION'), undefined, 'errors:SELF_DEACTIVATION');
+    throw new DomainError(
+      'SELF_DEACTIVATION',
+      tServer('errors:SELF_DEACTIVATION'),
+      undefined,
+      'errors:SELF_DEACTIVATION',
+    );
   }
 
   const existing = await prisma.user.findUnique({

@@ -104,18 +104,31 @@ export function useFilterState(viewState: ViewState): FilterStateReturn {
     return viewState.savedViews.find((v) => v.id === viewState.activeViewId) ?? null;
   }, [viewState.activeViewId, viewState.savedViews]);
 
-  // Initial conditions derived from the active view
-  const initialConditions = useMemo(
-    () => deserializeConditions(activeView?.conditions ?? [], viewState.fields ?? []),
-    [activeView?.conditions, viewState.fields],
-  );
+  // E7.5: Initial conditions — priority:
+  //   1. Active saved view's persisted conditions (if view selected AND has conditions)
+  //   2. viewState.activeFilters (live applied filters, e.g., after ad-hoc Apply)
+  //   3. Empty (no filters)
+  const initialConditions = useMemo(() => {
+    if (activeView && activeView.conditions.length > 0) {
+      return deserializeConditions(activeView.conditions, viewState.fields ?? []);
+    }
+    if (viewState.activeFilters.length > 0) {
+      return viewState.activeFilters;
+    }
+    return [];
+  }, [activeView, viewState.fields, viewState.activeFilters]);
 
-  const initialSortRules = useMemo(
-    () => deserializeSortRules(activeView?.sortConfig ?? [], viewState.fields ?? []),
-    [activeView?.sortConfig, viewState.fields],
-  );
+  const initialSortRules = useMemo(() => {
+    if (activeView && activeView.sortConfig.length > 0) {
+      return deserializeSortRules(activeView.sortConfig, viewState.fields ?? []);
+    }
+    if (viewState.activeSortRules.length > 0) {
+      return viewState.activeSortRules;
+    }
+    return [];
+  }, [activeView, viewState.fields, viewState.activeSortRules]);
 
-  const initialFilterLogic = activeView?.filterLogic ?? 'AND';
+  const initialFilterLogic = activeView?.filterLogic ?? viewState.filterLogic;
 
   // Local editing state
   const [conditions, setConditions] = useState<FilterConditionState[]>(initialConditions);
