@@ -56,6 +56,9 @@ import { PromptRenderer } from './prompt-renderer.js';
 import { AdminModelService } from './admin/admin-model.service.js';
 import { AdminPromptService } from './admin/admin-prompt.service.js';
 import { AdminDashboardService } from './admin/admin-dashboard.service.js';
+import { AdminAgentService } from './admin/admin-agent.service.js';
+import { AdminSkillService } from './admin/admin-skill.service.js';
+import { AdminTriggerTestService } from './admin/admin-trigger-test.service.js';
 import { adminRoutesPlugin } from './admin/admin.routes.js';
 import { registerViewsQueryHandlers } from './tools/views-query-handlers.js';
 import { PatternDetectionService } from './pattern-detection.service.js';
@@ -108,6 +111,9 @@ declare module 'fastify' {
     aiAdminModelService: AdminModelService | null;
     aiAdminPromptService: AdminPromptService | null;
     aiAdminDashboardService: AdminDashboardService | null;
+    aiAdminAgentService: AdminAgentService | null;
+    aiAdminSkillService: AdminSkillService | null;
+    aiAdminTriggerTestService: AdminTriggerTestService | null;
   }
 }
 
@@ -250,6 +256,9 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     fastify.decorate('aiAdminModelService', null);
     fastify.decorate('aiAdminPromptService', null);
     fastify.decorate('aiAdminDashboardService', null);
+    fastify.decorate('aiAdminAgentService', null);
+    fastify.decorate('aiAdminSkillService', null);
+    fastify.decorate('aiAdminTriggerTestService', null);
     // Still register routes — they will return 503 when orchestrator/service is null
     await fastify.register(aiRoutesPlugin);
     await fastify.register(predictionRoutesPlugin);
@@ -669,6 +678,14 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     fastify.decorate('aiAdminPromptService', adminPromptService);
     fastify.decorate('aiAdminDashboardService', adminDashboardService);
 
+    // Create AI admin agent/skill/trigger services (E5c-4 Task 5.3)
+    const adminAgentService = new AdminAgentService(prisma, logger);
+    const adminSkillService = new AdminSkillService(prisma, logger);
+    const adminTriggerTestService = new AdminTriggerTestService(prisma, logger);
+    fastify.decorate('aiAdminAgentService', adminAgentService);
+    fastify.decorate('aiAdminSkillService', adminSkillService);
+    fastify.decorate('aiAdminTriggerTestService', adminTriggerTestService);
+
     // Register audit mapping for AI action execution (AC: #5, NFR22)
     registerAuditMapping('ai.action.executed', (payload) => ({
       companyId: payload.companyId,
@@ -739,6 +756,9 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     fastify.decorate('aiAdminModelService', null);
     fastify.decorate('aiAdminPromptService', null);
     fastify.decorate('aiAdminDashboardService', null);
+    fastify.decorate('aiAdminAgentService', null);
+    fastify.decorate('aiAdminSkillService', null);
+    fastify.decorate('aiAdminTriggerTestService', null);
     // Still register routes — they will return 503 when orchestrator/service is null
     await fastify.register(aiRoutesPlugin);
     await fastify.register(predictionRoutesPlugin);

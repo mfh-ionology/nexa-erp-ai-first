@@ -9,7 +9,7 @@
 
 import { useMemo } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Brain, Bot, Zap, Workflow, Database, FileCode, ArrowRight } from 'lucide-react';
+import { Brain, Bot, Zap, Workflow, Database, FileCode, Wand2, ArrowRight } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 
 import {
@@ -111,8 +111,9 @@ function DashboardSkeleton() {
       </div>
       <Skeleton className="h-[340px] rounded-xl" />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Skeleton className="h-[88px] rounded-xl" />
-        <Skeleton className="h-[88px] rounded-xl" />
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-[88px] rounded-xl" />
+        ))}
       </div>
     </div>
   );
@@ -167,13 +168,20 @@ export function AiConfigDashboard() {
             <SummaryCard
               icon={<Workflow className="size-5" />}
               title="Automations"
-              value={
-                <span className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                    {dashboard?.automations.active ?? 0} active
+              value={(dashboard?.automations.active ?? 0) + (dashboard?.automations.paused ?? 0)}
+              subtitle={
+                <span className="space-y-1">
+                  <span className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                      {dashboard?.automations.active ?? 0} active
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                      {dashboard?.automations.paused ?? 0} paused
+                    </span>
                   </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                    {dashboard?.automations.paused ?? 0} paused
+                  <span className="block text-[11px] text-muted-foreground">
+                    Last 24h: {dashboard?.automations.last24hRuns?.success ?? 0} succeeded,{' '}
+                    {dashboard?.automations.last24hRuns?.failed ?? 0} failed
                   </span>
                 </span>
               }
@@ -199,6 +207,27 @@ export function AiConfigDashboard() {
               description="Edit prompt templates, manage versions, and test variable rendering"
               onClick={() => void navigate({ to: '/ai/admin/prompts' as string })}
               delay={400}
+            />
+            <NavCard
+              icon={<Bot className="size-5" />}
+              title="Agent Configuration"
+              description="Configure AI agents, models, tools, and guardrails"
+              onClick={() => void navigate({ to: '/ai/admin/agents' as string })}
+              delay={450}
+            />
+            <NavCard
+              icon={<Wand2 className="size-5" />}
+              title="Skill Packs"
+              description="Manage skill packs, trigger phrases, and orchestration patterns"
+              onClick={() => void navigate({ to: '/ai/admin/skills' as string })}
+              delay={500}
+            />
+            <NavCard
+              icon={<Workflow className="size-5" />}
+              title="Automations"
+              description="Build and manage autonomous AI workflows with chained agent steps"
+              onClick={() => void navigate({ to: '/ai/admin/automations' as string })}
+              delay={550}
             />
           </div>
         </>

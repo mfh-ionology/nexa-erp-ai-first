@@ -227,7 +227,7 @@ describe('AutomationService', () => {
         'user-1',
         makeCreateInput({
           triggerType: 'SCHEDULED',
-          schedule: { cronExpression: '0 7 * * 1-5', timezone: 'Europe/London' },
+          schedule: { cronExpression: '0 7 * * 1-5', timezone: 'Europe/London', isPaused: false },
         }),
       );
 

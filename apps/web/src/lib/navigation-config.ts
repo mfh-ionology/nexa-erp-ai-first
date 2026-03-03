@@ -373,6 +373,27 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         path: '/ai/admin/prompts',
         resourceCode: 'system.settings.detail',
       },
+      {
+        key: 'ai.admin.agents',
+        labelKey: 'navigation:ai.admin.agents',
+        icon: 'Bot',
+        path: '/ai/admin/agents',
+        resourceCode: 'system.settings.detail',
+      },
+      {
+        key: 'ai.admin.skills',
+        labelKey: 'navigation:ai.admin.skills',
+        icon: 'Wand2',
+        path: '/ai/admin/skills',
+        resourceCode: 'system.settings.detail',
+      },
+      {
+        key: 'ai.admin.automations',
+        labelKey: 'navigation:ai.admin.automations',
+        icon: 'Workflow',
+        path: '/ai/admin/automations',
+        resourceCode: 'system.settings.detail',
+      },
     ],
   },
   {

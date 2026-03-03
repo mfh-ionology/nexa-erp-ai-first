@@ -32,6 +32,11 @@ const DEFAULT_COMPANY_ID = '00000000-0000-4000-a000-000000000001';
 // Well-known deterministic UUID for the default admin user (used as upsert key)
 const DEFAULT_USER_ID = '00000000-0000-4000-a000-000000000002';
 
+// Additional test users for RBAC testing
+const STAFF_USER_ID = '00000000-0000-4000-a000-000000000010';
+const MANAGER_USER_ID = '00000000-0000-4000-a000-000000000011';
+const VIEWER_USER_ID = '00000000-0000-4000-a000-000000000012';
+
 const currencies = [
   { code: 'GBP', name: 'British Pound Sterling', symbol: '£', minorUnit: 2 },
   { code: 'EUR', name: 'Euro', symbol: '€', minorUnit: 2 },
@@ -252,6 +257,86 @@ async function seedDefaultUser() {
   }
 
   console.log('Seeded default admin user + global SUPER_ADMIN role');
+}
+
+async function seedTestUsers() {
+  const salt = randomBytes(16).toString('hex');
+  const hash = scryptSync('NexaDev2026!', salt, 64).toString('hex');
+  const passwordHash = `scrypt:${salt}:${hash}`;
+
+  const testUsers = [
+    {
+      id: STAFF_USER_ID,
+      email: 'staff@nexa-erp.dev',
+      firstName: 'Staff',
+      lastName: 'User',
+      role: UserRole.STAFF,
+    },
+    {
+      id: MANAGER_USER_ID,
+      email: 'manager@nexa-erp.dev',
+      firstName: 'Manager',
+      lastName: 'User',
+      role: UserRole.MANAGER,
+    },
+    {
+      id: VIEWER_USER_ID,
+      email: 'viewer@nexa-erp.dev',
+      firstName: 'Viewer',
+      lastName: 'User',
+      role: UserRole.VIEWER,
+    },
+  ];
+
+  for (const u of testUsers) {
+    await prisma.user.upsert({
+      where: { id: u.id },
+      update: {
+        email: u.email,
+        passwordHash,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        isActive: true,
+        companyId: DEFAULT_COMPANY_ID,
+        locale: 'en',
+        updatedBy: 'system-seed',
+      },
+      create: {
+        id: u.id,
+        email: u.email,
+        passwordHash,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        companyId: DEFAULT_COMPANY_ID,
+        isActive: true,
+        enabledModules: [],
+        locale: 'en',
+        createdBy: 'system-seed',
+        updatedBy: 'system-seed',
+      },
+    });
+
+    // Company-scoped role
+    const existingRole = await prisma.userCompanyRole.findFirst({
+      where: { userId: u.id, companyId: DEFAULT_COMPANY_ID },
+    });
+    if (existingRole) {
+      await prisma.userCompanyRole.update({
+        where: { id: existingRole.id },
+        data: { role: u.role },
+      });
+    } else {
+      await prisma.userCompanyRole.create({
+        data: {
+          userId: u.id,
+          companyId: DEFAULT_COMPANY_ID,
+          role: u.role,
+        },
+      });
+    }
+  }
+
+  console.log(`Seeded ${testUsers.length} test users (STAFF, MANAGER, VIEWER)`);
 }
 
 // ---------------------------------------------------------------------------
@@ -644,6 +729,7 @@ async function main() {
   await seedVatCodes();
   await seedPaymentTerms();
   await seedDefaultUser();
+  await seedTestUsers();
   await loadDefaultResources(prisma);
   await loadDefaultAccessGroups(prisma, DEFAULT_COMPANY_ID, DEFAULT_USER_ID);
   await assignFullAccessGroup(prisma, DEFAULT_COMPANY_ID, DEFAULT_USER_ID);

@@ -57,6 +57,7 @@ const automationScheduleInputSchema = z.object({
       { message: 'Invalid cron expression' },
     ),
   timezone: z.string().max(50).default('Europe/London'),
+  isPaused: z.boolean().optional().default(false),
 });
 
 // ─── Request schemas ────────────────────────────────────────────────────────
@@ -206,7 +207,9 @@ export const automationListItemSchema = z.object({
   maxDurationMs: z.number(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  stepCount: z.number(),
   lastRunStatus: z.string().nullable(),
+  lastRunAt: z.string().nullable(),
   schedule: automationScheduleResponseSchema.nullable(),
 });
 

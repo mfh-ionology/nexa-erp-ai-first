@@ -264,6 +264,10 @@ export const dashboardSummarySchema = z.object({
   automations: z.object({
     active: z.number(),
     paused: z.number(),
+    last24hRuns: z.object({
+      success: z.number(),
+      failed: z.number(),
+    }),
   }),
   dailyTokenUsage: z.array(
     z.object({
@@ -299,6 +303,17 @@ export const agentIdParamsSchema = z.object({
   id: z.string().uuid(),
 });
 
+// ─── Agent guardrails schema ──────────────────────────────────────────────
+
+const agentGuardrailsSchema = z.object({
+  canRead: z.array(z.string()).default([]),
+  canWrite: z.array(z.string()).default([]),
+  requiresApproval: z.boolean().default(false),
+  maxAmountWithoutApproval: z.string().optional(),
+  blockedOperations: z.array(z.string()).default([]),
+  dataScope: z.enum(['own', 'module', 'all']).default('own'),
+});
+
 // ─── Agent request schemas ─────────────────────────────────────────────────
 
 export const createAgentSchema = z.object({
@@ -309,7 +324,7 @@ export const createAgentSchema = z.object({
   promptId: z.string().uuid(),
   routingTags: z.array(z.string()).default([]),
   tools: z.unknown().default([]),
-  guardrails: z.unknown().default({
+  guardrails: agentGuardrailsSchema.default({
     canRead: [],
     canWrite: [],
     requiresApproval: false,
@@ -329,7 +344,7 @@ export const updateAgentSchema = z.object({
   promptId: z.string().uuid().optional(),
   routingTags: z.array(z.string()).optional(),
   tools: z.unknown().optional(),
-  guardrails: z.unknown().optional(),
+  guardrails: agentGuardrailsSchema.optional(),
   triggerConfig: z.unknown().optional(),
   maxTurns: z.number().int().min(1).max(50).optional(),
   isActive: z.boolean().optional(),
@@ -456,7 +471,7 @@ export const agentDetailSchema = agentListItemSchema.extend({
   prompt: z.object({
     id: z.string(),
     name: z.string(),
-    displayName: z.string().nullable(),
+    description: z.string().nullable(),
     category: z.string(),
   }),
   automationStepCount: z.number(),
@@ -493,6 +508,16 @@ export const skillDetailSchema = skillListItemSchema.extend({
   examples: z.unknown().nullable(),
   contextCount: z.number(),
   overrideCount: z.number(),
+});
+
+export const skillsGroupedResponseSchema = z.object({
+  groups: z.array(
+    z.object({
+      moduleKey: z.string().nullable(),
+      skills: z.array(skillListItemSchema),
+    }),
+  ),
+  totalCount: z.number(),
 });
 
 // ─── Test trigger response schema ──────────────────────────────────────────

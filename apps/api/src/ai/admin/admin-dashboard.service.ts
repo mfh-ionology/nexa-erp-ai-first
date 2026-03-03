@@ -23,6 +23,10 @@ export interface DashboardSummary {
   automations: {
     active: number;
     paused: number;
+    last24hRuns: {
+      success: number;
+      failed: number;
+    };
   };
   dailyTokenUsage: Array<{
     date: string;
@@ -46,6 +50,9 @@ export class AdminDashboardService {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
 
+    const last24h = new Date();
+    last24h.setHours(last24h.getHours() - 24);
+
     // Run all independent queries in parallel
     const [
       activeModelCount,
@@ -54,6 +61,8 @@ export class AdminDashboardService {
       skillsByModule,
       activeAutomationCount,
       pausedAutomationCount,
+      successRunCount,
+      failedRunCount,
       dailyUsage,
     ] = await Promise.all([
       // Active models (global)
@@ -93,6 +102,24 @@ export class AdminDashboardService {
           companyId,
           isActive: true,
           schedule: { isPaused: true },
+        },
+      }),
+
+      // Successful automation runs in last 24h
+      this.db.aiAutomationRun.count({
+        where: {
+          automation: { companyId },
+          status: 'COMPLETED',
+          createdAt: { gte: last24h },
+        },
+      }),
+
+      // Failed automation runs in last 24h
+      this.db.aiAutomationRun.count({
+        where: {
+          automation: { companyId },
+          status: 'FAILED',
+          createdAt: { gte: last24h },
         },
       }),
 
@@ -149,6 +176,10 @@ export class AdminDashboardService {
       automations: {
         active: activeAutomationCount,
         paused: pausedAutomationCount,
+        last24hRuns: {
+          success: successRunCount,
+          failed: failedRunCount,
+        },
       },
       dailyTokenUsage: formattedDailyUsage,
     };

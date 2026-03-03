@@ -110,5 +110,46 @@ export const queryKeys = {
     promptVersions: (id: string) => [...queryKeys.aiAdmin.all, 'prompts', id, 'versions'] as const,
     promptVersion: (id: string, version: number) =>
       [...queryKeys.aiAdmin.all, 'prompts', id, 'versions', version] as const,
+    agents: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'agents', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'agents'] as const),
+    agentsInfinite: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'agents', 'infinite', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'agents', 'infinite'] as const),
+    agent: (id: string) => [...queryKeys.aiAdmin.all, 'agents', id] as const,
+    skills: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'skills', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'skills'] as const),
+    skillsInfinite: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'skills', 'infinite', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'skills', 'infinite'] as const),
+    skillsGrouped: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'skills', 'grouped', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'skills', 'grouped'] as const),
+    skill: (id: string) => [...queryKeys.aiAdmin.all, 'skills', id] as const,
+    automations: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'automations', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'automations'] as const),
+    automationsInfinite: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'automations', 'infinite', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'automations', 'infinite'] as const),
+    automation: (id: string) => [...queryKeys.aiAdmin.all, 'automations', id] as const,
+    automationRuns: (automationId: string, params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'automations', automationId, 'runs', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'automations', automationId, 'runs'] as const),
+    automationRun: (runId: string) =>
+      [...queryKeys.aiAdmin.all, 'automations', 'runs', runId] as const,
+    automationVariables: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'variables', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'variables'] as const),
   },
 } as const;

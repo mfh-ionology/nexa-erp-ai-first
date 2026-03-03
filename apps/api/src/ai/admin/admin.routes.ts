@@ -13,6 +13,9 @@ import { successEnvelope } from '../../core/schemas/envelope.js';
 import type { AdminModelService } from './admin-model.service.js';
 import type { AdminPromptService } from './admin-prompt.service.js';
 import type { AdminDashboardService } from './admin-dashboard.service.js';
+import type { AdminAgentService } from './admin-agent.service.js';
+import type { AdminSkillService } from './admin-skill.service.js';
+import type { AdminTriggerTestService } from './admin-trigger-test.service.js';
 import {
   modelIdParamsSchema,
   promptIdParamsSchema,
@@ -41,6 +44,28 @@ import {
   type ListPromptsQuery,
   type TestPromptInput,
   type DashboardQuery,
+  agentIdParamsSchema,
+  createAgentSchema,
+  updateAgentSchema,
+  listAgentsQuerySchema,
+  agentListItemSchema,
+  agentDetailSchema,
+  skillIdParamsSchema,
+  skillListItemSchema,
+  createSkillSchema,
+  updateSkillSchema,
+  listSkillsQuerySchema,
+  testTriggerSchema,
+  skillDetailSchema,
+  skillsGroupedResponseSchema,
+  testTriggerResultSchema,
+  type CreateAgentInput,
+  type UpdateAgentInput,
+  type ListAgentsQuery,
+  type CreateSkillInput,
+  type UpdateSkillInput,
+  type ListSkillsQuery,
+  type TestTriggerInput,
 } from './admin.schemas.js';
 
 // ---------------------------------------------------------------------------
@@ -74,6 +99,36 @@ async function adminRoutes(fastify: FastifyInstance): Promise<void> {
   ): asserts svc is AdminDashboardService {
     if (!svc) {
       throw Object.assign(new Error('AI admin dashboard service is not available'), {
+        statusCode: 503,
+      });
+    }
+  }
+
+  function assertAgentService(
+    svc: AdminAgentService | null | undefined,
+  ): asserts svc is AdminAgentService {
+    if (!svc) {
+      throw Object.assign(new Error('AI admin agent service is not available'), {
+        statusCode: 503,
+      });
+    }
+  }
+
+  function assertSkillService(
+    svc: AdminSkillService | null | undefined,
+  ): asserts svc is AdminSkillService {
+    if (!svc) {
+      throw Object.assign(new Error('AI admin skill service is not available'), {
+        statusCode: 503,
+      });
+    }
+  }
+
+  function assertTriggerTestService(
+    svc: AdminTriggerTestService | null | undefined,
+  ): asserts svc is AdminTriggerTestService {
+    if (!svc) {
+      throw Object.assign(new Error('AI admin trigger test service is not available'), {
         statusCode: 503,
       });
     }
@@ -404,6 +459,238 @@ async function adminRoutes(fastify: FastifyInstance): Promise<void> {
       );
 
       return sendSuccess(reply, result);
+    },
+  );
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Agent endpoints
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ─── GET /agents — List agents ────────────────────────────────────────
+  fastify.get<{ Querystring: ListAgentsQuery }>(
+    '/agents',
+    {
+      schema: {
+        querystring: listAgentsQuerySchema,
+        response: { 200: successEnvelope(z.array(agentListItemSchema)) },
+      },
+      preHandler: adminGuard,
+    },
+    async (request, reply) => {
+      assertAgentService(fastify.aiAdminAgentService);
+
+      const { data, meta } = await fastify.aiAdminAgentService.listAgents(request.query);
+
+      return sendSuccess(reply, data, meta);
+    },
+  );
+
+  // ─── POST /agents — Create agent ─────────────────────────────────────
+  fastify.post<{ Body: CreateAgentInput }>(
+    '/agents',
+    {
+      schema: {
+        body: createAgentSchema,
+        response: { 201: successEnvelope(agentDetailSchema) },
+      },
+      preHandler: adminGuard,
+    },
+    async (request, reply) => {
+      assertAgentService(fastify.aiAdminAgentService);
+
+      const result = await fastify.aiAdminAgentService.createAgent(request.body);
+
+      return sendSuccess(reply, result, undefined, 201);
+    },
+  );
+
+  // ─── GET /agents/:id — Get agent detail ──────────────────────────────
+  fastify.get<{ Params: z.infer<typeof agentIdParamsSchema> }>(
+    '/agents/:id',
+    {
+      schema: {
+        params: agentIdParamsSchema,
+        response: { 200: successEnvelope(agentDetailSchema) },
+      },
+      preHandler: adminGuard,
+    },
+    async (request, reply) => {
+      assertAgentService(fastify.aiAdminAgentService);
+
+      const agent = await fastify.aiAdminAgentService.getAgent(request.params.id);
+
+      return sendSuccess(reply, agent);
+    },
+  );
+
+  // ─── PATCH /agents/:id — Update agent ────────────────────────────────
+  fastify.patch<{
+    Params: z.infer<typeof agentIdParamsSchema>;
+    Body: UpdateAgentInput;
+  }>(
+    '/agents/:id',
+    {
+      schema: {
+        params: agentIdParamsSchema,
+        body: updateAgentSchema,
+        response: { 200: successEnvelope(agentDetailSchema) },
+      },
+      preHandler: adminGuard,
+    },
+    async (request, reply) => {
+      assertAgentService(fastify.aiAdminAgentService);
+
+      const agent = await fastify.aiAdminAgentService.updateAgent(request.params.id, request.body);
+
+      return sendSuccess(reply, agent);
+    },
+  );
+
+  // ─── DELETE /agents/:id — Delete agent ───────────────────────────────
+  fastify.delete<{ Params: z.infer<typeof agentIdParamsSchema> }>(
+    '/agents/:id',
+    {
+      schema: {
+        params: agentIdParamsSchema,
+      },
+      preHandler: adminGuard,
+    },
+    async (request, reply) => {
+      assertAgentService(fastify.aiAdminAgentService);
+
+      await fastify.aiAdminAgentService.deleteAgent(request.params.id);
+
+      return reply.status(204).send();
+    },
+  );
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Skill endpoints
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ─── GET /skills — List skills (flat or grouped) ──────────────────────
+  fastify.get<{ Querystring: ListSkillsQuery }>(
+    '/skills',
+    {
+      schema: {
+        querystring: listSkillsQuerySchema,
+        response: {
+          200: successEnvelope(
+            z.union([z.array(skillListItemSchema), skillsGroupedResponseSchema]),
+          ),
+        },
+      },
+      preHandler: adminGuard,
+    },
+    async (request, reply) => {
+      assertSkillService(fastify.aiAdminSkillService);
+
+      if (request.query.grouped) {
+        const result = await fastify.aiAdminSkillService.listSkillsGrouped(request.query);
+        return sendSuccess(reply, result);
+      }
+
+      const { data, meta } = await fastify.aiAdminSkillService.listSkills(request.query);
+
+      return sendSuccess(reply, data, meta);
+    },
+  );
+
+  // ─── POST /skills — Create skill ─────────────────────────────────────
+  fastify.post<{ Body: CreateSkillInput }>(
+    '/skills',
+    {
+      schema: {
+        body: createSkillSchema,
+        response: { 201: successEnvelope(skillDetailSchema) },
+      },
+      preHandler: adminGuard,
+    },
+    async (request, reply) => {
+      assertSkillService(fastify.aiAdminSkillService);
+
+      const result = await fastify.aiAdminSkillService.createSkill(request.body);
+
+      return sendSuccess(reply, result, undefined, 201);
+    },
+  );
+
+  // ─── POST /skills/test-trigger — Test trigger simulation ─────────────
+  fastify.post<{ Body: TestTriggerInput }>(
+    '/skills/test-trigger',
+    {
+      schema: {
+        body: testTriggerSchema,
+        response: { 200: successEnvelope(testTriggerResultSchema) },
+      },
+      preHandler: adminGuard,
+    },
+    async (request, reply) => {
+      assertTriggerTestService(fastify.aiAdminTriggerTestService);
+
+      const result = await fastify.aiAdminTriggerTestService.testTrigger(request.body.phrase);
+
+      return sendSuccess(reply, result);
+    },
+  );
+
+  // ─── GET /skills/:id — Get skill detail ──────────────────────────────
+  fastify.get<{ Params: z.infer<typeof skillIdParamsSchema> }>(
+    '/skills/:id',
+    {
+      schema: {
+        params: skillIdParamsSchema,
+        response: { 200: successEnvelope(skillDetailSchema) },
+      },
+      preHandler: adminGuard,
+    },
+    async (request, reply) => {
+      assertSkillService(fastify.aiAdminSkillService);
+
+      const skill = await fastify.aiAdminSkillService.getSkill(request.params.id);
+
+      return sendSuccess(reply, skill);
+    },
+  );
+
+  // ─── PATCH /skills/:id — Update skill ────────────────────────────────
+  fastify.patch<{
+    Params: z.infer<typeof skillIdParamsSchema>;
+    Body: UpdateSkillInput;
+  }>(
+    '/skills/:id',
+    {
+      schema: {
+        params: skillIdParamsSchema,
+        body: updateSkillSchema,
+        response: { 200: successEnvelope(skillDetailSchema) },
+      },
+      preHandler: adminGuard,
+    },
+    async (request, reply) => {
+      assertSkillService(fastify.aiAdminSkillService);
+
+      const skill = await fastify.aiAdminSkillService.updateSkill(request.params.id, request.body);
+
+      return sendSuccess(reply, skill);
+    },
+  );
+
+  // ─── PATCH /skills/:id/deactivate — Soft-delete (deactivate) skill ──
+  fastify.patch<{ Params: z.infer<typeof skillIdParamsSchema> }>(
+    '/skills/:id/deactivate',
+    {
+      schema: {
+        params: skillIdParamsSchema,
+        response: { 200: successEnvelope(skillDetailSchema) },
+      },
+      preHandler: adminGuard,
+    },
+    async (request, reply) => {
+      assertSkillService(fastify.aiAdminSkillService);
+
+      const skill = await fastify.aiAdminSkillService.deleteSkill(request.params.id);
+
+      return sendSuccess(reply, skill);
     },
   );
 }

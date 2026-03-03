@@ -73,10 +73,11 @@ const automationListSelect = {
       isPaused: true,
     },
   },
+  _count: { select: { steps: true } },
   runs: {
     take: 1,
     orderBy: { createdAt: 'desc' as const },
-    select: { status: true },
+    select: { status: true, startedAt: true, completedAt: true },
   },
 } satisfies Prisma.AiAutomationSelect;
 
@@ -217,6 +218,7 @@ export class AutomationService {
                   create: {
                     cronExpression: data.schedule.cronExpression,
                     timezone: data.schedule.timezone,
+                    isPaused: data.schedule.isPaused ?? false,
                   },
                 },
               }
@@ -402,6 +404,7 @@ export class AutomationService {
             update: {
               cronExpression: data.schedule.cronExpression,
               timezone: data.schedule.timezone,
+              ...(data.schedule.isPaused !== undefined && { isPaused: data.schedule.isPaused }),
             },
           };
         } else {
@@ -409,6 +412,7 @@ export class AutomationService {
             create: {
               cronExpression: data.schedule.cronExpression,
               timezone: data.schedule.timezone,
+              isPaused: data.schedule.isPaused ?? false,
             },
           };
         }
@@ -1065,7 +1069,12 @@ export class AutomationService {
       maxDurationMs: item.maxDurationMs,
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
+      stepCount: item._count?.steps ?? 0,
       lastRunStatus: item.runs?.[0]?.status ?? null,
+      lastRunAt:
+        item.runs?.[0]?.completedAt?.toISOString() ??
+        item.runs?.[0]?.startedAt?.toISOString() ??
+        null,
       schedule: item.schedule
         ? {
             id: item.schedule.id,
