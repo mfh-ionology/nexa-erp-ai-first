@@ -1,7 +1,7 @@
 import { buildApp } from './app.js';
 import { getPlatformPrisma } from './client.js';
 
-const DEFAULT_PORT = 3001;
+const DEFAULT_PORT = 5101;
 
 async function start() {
   const port = Number(process.env.PLATFORM_PORT) || DEFAULT_PORT;

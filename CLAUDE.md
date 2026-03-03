@@ -165,6 +165,18 @@ When working on a story, do NOT delete or overwrite files created by previous st
 
 If a story retry subprocess needs to regenerate code, it must preserve existing exports and utilities from prior stories.
 
+## Dev Environment Ports (MANDATORY)
+
+All development servers MUST use ports in the range **5100–5200**. Do NOT use default framework ports (e.g. Vite's 5173, Fastify's 3000). Assigned ports:
+
+| Service      | Port |
+| ------------ | ---- |
+| API          | 5100 |
+| Platform API | 5101 |
+| Web (Vite)   | 5110 |
+
+When adding new services, assign the next available port within the 5100–5200 range.
+
 ## Key Directories
 
 - Spec-pack: `docs/spec-pack/`

@@ -110,7 +110,7 @@ export class WebhookServiceImpl {
   constructor(logger?: WebhookLogger) {
     this.logger = logger ?? console;
     // PLATFORM_WEBHOOK_BASE_URL overrides the default URL derivation.
-    // In dev, set to e.g. "http://localhost:3000" to avoid real DNS lookups.
+    // In dev, set to e.g. "http://localhost:5100" to avoid real DNS lookups.
     this.baseUrl = process.env.PLATFORM_WEBHOOK_BASE_URL || undefined;
     this.serviceToken = process.env.PLATFORM_SERVICE_TOKEN ?? '';
     if (!this.serviceToken) {
@@ -183,13 +183,8 @@ export class WebhookServiceImpl {
           throw fetchErr;
         }
       } catch (err) {
-        const isAbort =
-          err instanceof Error && err.name === 'AbortError';
-        const errMsg = isAbort
-          ? 'timeout'
-          : err instanceof Error
-            ? err.message
-            : String(err);
+        const isAbort = err instanceof Error && err.name === 'AbortError';
+        const errMsg = isAbort ? 'timeout' : err instanceof Error ? err.message : String(err);
 
         this.logger.error(
           `[webhook] ${event} to ${url} attempt ${attempt}/${MAX_ATTEMPTS} failed: ${errMsg}`,

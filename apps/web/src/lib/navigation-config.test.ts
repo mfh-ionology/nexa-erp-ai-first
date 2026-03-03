@@ -1,15 +1,11 @@
 import { describe, it, expect } from 'vitest';
 
-import {
-  NAVIGATION_MODULES,
-  getFilteredModules,
-} from './navigation-config';
+import { NAVIGATION_MODULES, getFilteredModules } from './navigation-config';
 
 describe('NAVIGATION_MODULES', () => {
-  it('contains all 11 MVP modules', () => {
+  it('contains all 11 MVP modules plus AI', () => {
     const keys = NAVIGATION_MODULES.map((m) => m.key);
     expect(keys).toEqual([
-      'system',
       'finance',
       'ar',
       'ap',
@@ -20,6 +16,8 @@ describe('NAVIGATION_MODULES', () => {
       'hr',
       'manufacturing',
       'reporting',
+      'ai',
+      'system',
     ]);
   });
 
@@ -107,10 +105,11 @@ describe('getFilteredModules', () => {
 
   it('preserves module order from NAVIGATION_MODULES', () => {
     // Pass modules in reverse order — result should still follow NAVIGATION_MODULES order
+    // AI module also appears because all its items are alwaysVisible
     const result = getFilteredModules(['reporting', 'finance', 'system']);
     const keys = result.map((m) => m.key);
 
-    expect(keys).toEqual(['system', 'finance', 'reporting']);
+    expect(keys).toEqual(['finance', 'reporting', 'ai', 'system']);
   });
 });
 
@@ -239,9 +238,9 @@ describe('getFilteredModules — item-level filtering', () => {
     const systemModule = result.find((m) => m.key === 'system');
 
     // System module still appears because of alwaysVisible items (e.g., myPermissions)
-    const alwaysVisibleItems = NAVIGATION_MODULES
-      .find((m) => m.key === 'system')!
-      .items.filter((i) => i.alwaysVisible);
+    const alwaysVisibleItems = NAVIGATION_MODULES.find((m) => m.key === 'system')!.items.filter(
+      (i) => i.alwaysVisible,
+    );
 
     if (alwaysVisibleItems.length > 0) {
       expect(systemModule).toBeDefined();

@@ -7,6 +7,9 @@ import {
   assignFullAccessGroup,
 } from '../src/services/default-data-loader.service.js';
 import { seedDataViews } from './seeds/data-views.seed.js';
+import { seedViewsSkillPack } from './seeds/skill-packs/views.js';
+import { seedViewsModuleKnowledge } from './seeds/module-knowledge/views.js';
+import { seedViewsEntityTriggers } from './seeds/entity-triggers/views.js';
 
 // Seed uses DIRECT_URL (bypasses PgBouncer) for reliable transactional seeding.
 // Runtime client (src/client.ts) uses DATABASE_URL via PgBouncer instead.
@@ -537,6 +540,94 @@ async function seedAiPromptAndAgent() {
   });
 
   console.log('Seeded chat-router agent');
+
+  // ── Seed conversation-summariser prompt (E5b-1 Task 3.2) ──────────────
+  const SUMMARISATION_SYSTEM_PROMPT = `You are a conversation summariser for Nexa ERP. Summarise this conversation into key decisions, actions taken, and context. Be concise. Focus on facts the user would want remembered.
+
+Return a JSON object with this exact structure:
+{
+  "summary": "A concise paragraph summarising the key points of the conversation.",
+  "topics": ["topic1", "topic2"],
+  "decisionsCount": 0,
+  "actionsCount": 0
+}
+
+Rules:
+- "summary" must be under 500 words
+- "topics" should be 1-5 short tags (e.g., "invoicing", "customer setup", "payment terms")
+- "decisionsCount" is the number of decisions made during the conversation
+- "actionsCount" is the number of actions taken (records created, settings changed, etc.)
+- Return ONLY valid JSON, no markdown fences or extra text`;
+
+  const SUMMARISATION_USER_TEMPLATE = `Summarise the following conversation:\n\n{{conversationTranscript}}`;
+
+  const summaryPrompt = await prisma.aiPrompt.upsert({
+    where: { name: 'conversation-summariser' },
+    update: {
+      description: 'Summarises completed AI conversations into key decisions, actions, and context',
+      category: 'memory_management',
+      systemPrompt: SUMMARISATION_SYSTEM_PROMPT,
+      userTemplate: SUMMARISATION_USER_TEMPLATE,
+      parameters: {
+        conversationTranscript: { type: 'userInput' },
+      },
+      outputFormat: {
+        type: 'json',
+        schema: {
+          summary: 'string',
+          topics: 'string[]',
+          decisionsCount: 'number',
+          actionsCount: 'number',
+        },
+      },
+    },
+    create: {
+      name: 'conversation-summariser',
+      description: 'Summarises completed AI conversations into key decisions, actions, and context',
+      category: 'memory_management',
+      systemPrompt: SUMMARISATION_SYSTEM_PROMPT,
+      userTemplate: SUMMARISATION_USER_TEMPLATE,
+      parameters: {
+        conversationTranscript: { type: 'userInput' },
+      },
+      outputFormat: {
+        type: 'json',
+        schema: {
+          summary: 'string',
+          topics: 'string[]',
+          decisionsCount: 'number',
+          actionsCount: 'number',
+        },
+      },
+      createdBy: 'system-seed',
+    },
+  });
+
+  // Seed initial prompt version (version 1) for conversation-summariser
+  const existingSummaryVersion = await prisma.aiPromptVersion.findUnique({
+    where: {
+      promptId_version: { promptId: summaryPrompt.id, version: 1 },
+    },
+    select: { id: true },
+  });
+
+  if (!existingSummaryVersion) {
+    await prisma.aiPromptVersion.create({
+      data: {
+        promptId: summaryPrompt.id,
+        version: 1,
+        systemPrompt: SUMMARISATION_SYSTEM_PROMPT,
+        userTemplate: SUMMARISATION_USER_TEMPLATE,
+        parameters: {
+          conversationTranscript: { type: 'userInput' },
+        },
+        changeReason: 'Initial version',
+        createdBy: 'system-seed',
+      },
+    });
+  }
+
+  console.log('Seeded conversation-summariser prompt + version 1');
 }
 
 // ---------------------------------------------------------------------------
@@ -558,6 +649,24 @@ async function main() {
   await seedAiModels();
   await seedAiPromptAndAgent();
   await seedDataViews(prisma, DEFAULT_COMPANY_ID);
+
+  // ── AI Skill Pack, Module Knowledge & Entity Triggers — E5b-6 ────────
+  try {
+    await seedViewsSkillPack(prisma);
+  } catch (e) {
+    console.error('Failed to seed views skill pack:', e);
+  }
+  try {
+    await seedViewsModuleKnowledge(prisma);
+  } catch (e) {
+    console.error('Failed to seed views module knowledge:', e);
+  }
+  try {
+    await seedViewsEntityTriggers(prisma);
+  } catch (e) {
+    console.error('Failed to seed views entity triggers:', e);
+  }
+
   console.log('Seeding complete.');
 }
 

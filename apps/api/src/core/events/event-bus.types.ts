@@ -486,7 +486,12 @@ export interface BusinessEvents {
   'agreement.invoiced': { agreementId: string; invoiceId: string; totalAmount: string };
   'agreement.closed': { agreementId: string; customerId: string };
   'agreement.cancelled': { agreementId: string; customerId: string; cancelDate: string };
-  'contract.approved': { contractId: string; customerId: string; startDate: string; endDate: string };
+  'contract.approved': {
+    contractId: string;
+    customerId: string;
+    startDate: string;
+    endDate: string;
+  };
   'contract.invoiced': { contractId: string; invoiceId: string; totalAmount: string };
   'contract.renewed': { contractId: string; newContractId: string; customerId: string };
   'contract.expired': { contractId: string; customerId: string; endDate: string };
@@ -584,6 +589,114 @@ export interface BusinessEvents {
     userId: string;
     tenantId: string;
     intent: string;
+  };
+  'ai.memory.created': {
+    memoryId: string;
+    userId: string;
+    companyId: string;
+    category: string;
+    source: string;
+  };
+  'ai.memory.updated': {
+    memoryId: string;
+    userId: string;
+    companyId: string;
+    category: string;
+    previousSource: string;
+    newSource: string;
+    reason: 'CORRECTION' | 'MERGE' | 'CONFLICT_RESOLUTION';
+  };
+  'ai.memory.deleted': {
+    memoryId: string;
+    userId: string;
+    companyId: string;
+  };
+  'ai.memory.bulk_deleted': {
+    memoryIds: string[];
+    userId: string;
+    companyId: string;
+    count: number;
+  };
+  'ai.conversation.summarised': {
+    summaryId: string;
+    conversationId: string;
+    userId: string;
+    companyId: string;
+  };
+  'ai.skill.packLoaded': {
+    moduleKey: string;
+    skillCount: number;
+    userId: string;
+    companyId: string;
+  };
+  'ai.skill.activated': {
+    skillKey: string;
+    moduleKey: string;
+    userId: string;
+    companyId: string;
+    confidence: number;
+  };
+  'ai.skill.created': {
+    skillId: string;
+    name: string;
+    moduleKey: string | null;
+  };
+  'ai.skill.updated': {
+    skillId: string;
+    name: string;
+  };
+  'ai.skill.deleted': {
+    skillId: string;
+    name: string;
+  };
+  'ai.knowledge.created': {
+    knowledgeId: string;
+    moduleKey: string;
+    title: string;
+  };
+  'ai.knowledge.updated': {
+    knowledgeId: string;
+    title: string;
+  };
+  'ai.knowledge.deleted': {
+    knowledgeId: string;
+    title: string;
+  };
+  'ai.entityTrigger.created': {
+    triggerId: string;
+    moduleKey: string;
+    triggerWord: string;
+  };
+  'ai.entityTrigger.updated': {
+    triggerId: string;
+    triggerWord: string;
+  };
+  'ai.entityTrigger.deleted': {
+    triggerId: string;
+    triggerWord: string;
+  };
+  'ai.skillOverride.upserted': {
+    overrideId: string;
+    skillId: string;
+    companyId: string;
+  };
+  'ai.skillOverride.deleted': {
+    skillId: string;
+    companyId: string;
+  };
+  'ai.tool.queryExecuted': {
+    toolName: string;
+    moduleKey: string;
+    userId: string;
+    companyId: string;
+    resultRowCount: number;
+    latencyMs: number;
+  };
+  'ai.entityMention.resolved': {
+    conversationId: string;
+    userId: string;
+    companyId: string;
+    mentions: Array<{ type: string; id: string; name: string }>;
   };
 
   // ── Document Understanding ──────────────────────────────

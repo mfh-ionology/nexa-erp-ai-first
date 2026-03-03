@@ -9,6 +9,7 @@ import validationEn from '../locales/en/validation.json';
 import navigationEn from '../locales/en/navigation.json';
 import errorsEn from '../locales/en/errors.json';
 import systemEn from '../locales/en/system.json';
+import aiEn from '../locales/en/ai.json';
 
 /**
  * Pre-configured i18next singleton with:
@@ -28,6 +29,7 @@ export const i18nReady: Promise<TFunction> = i18n.use(initReactI18next).init(
         navigation: navigationEn,
         errors: errorsEn,
         system: systemEn,
+        ai: aiEn,
       },
     },
     react: {

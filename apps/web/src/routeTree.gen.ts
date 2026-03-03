@@ -8,274 +8,276 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
-import { Route as R403RouteImport } from './routes/403'
-import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
-import { Route as AuthenticatedSystemIndexRouteImport } from './routes/_authenticated/system/index'
-import { Route as AuthenticatedSalesIndexRouteImport } from './routes/_authenticated/sales/index'
-import { Route as AuthenticatedReportingIndexRouteImport } from './routes/_authenticated/reporting/index'
-import { Route as AuthenticatedPurchasingIndexRouteImport } from './routes/_authenticated/purchasing/index'
-import { Route as AuthenticatedManufacturingIndexRouteImport } from './routes/_authenticated/manufacturing/index'
-import { Route as AuthenticatedInventoryIndexRouteImport } from './routes/_authenticated/inventory/index'
-import { Route as AuthenticatedHrIndexRouteImport } from './routes/_authenticated/hr/index'
-import { Route as AuthenticatedFinanceIndexRouteImport } from './routes/_authenticated/finance/index'
-import { Route as AuthenticatedCrmIndexRouteImport } from './routes/_authenticated/crm/index'
-import { Route as AuthenticatedArIndexRouteImport } from './routes/_authenticated/ar/index'
-import { Route as AuthenticatedApIndexRouteImport } from './routes/_authenticated/ap/index'
-import { Route as AuthenticatedSystemUsersRouteImport } from './routes/_authenticated/system/users'
-import { Route as AuthenticatedSystemResourcesRouteImport } from './routes/_authenticated/system/resources'
-import { Route as AuthenticatedSystemMyPermissionsRouteImport } from './routes/_authenticated/system/my-permissions'
-import { Route as AuthenticatedSystemCompaniesRouteImport } from './routes/_authenticated/system/companies'
-import { Route as AuthenticatedSystemAccessGroupsRouteImport } from './routes/_authenticated/system/access-groups'
-import { Route as AuthenticatedSystemUsersIndexRouteImport } from './routes/_authenticated/system/users/index'
-import { Route as AuthenticatedSystemAccessGroupsIndexRouteImport } from './routes/_authenticated/system/access-groups/index'
-import { Route as AuthenticatedArInvoicesIndexRouteImport } from './routes/_authenticated/ar/invoices/index'
-import { Route as AuthenticatedSystemUsersIdRouteImport } from './routes/_authenticated/system/users/$id'
-import { Route as AuthenticatedSystemAccessGroupsNewRouteImport } from './routes/_authenticated/system/access-groups/new'
-import { Route as AuthenticatedSystemAccessGroupsIdRouteImport } from './routes/_authenticated/system/access-groups/$id'
-import { Route as AuthenticatedArInvoicesIdRouteImport } from './routes/_authenticated/ar/invoices/$id'
+import { Route as rootRouteImport } from './routes/__root';
+import { Route as LoginRouteImport } from './routes/login';
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated';
+import { Route as R403RouteImport } from './routes/403';
+import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index';
+import { Route as AuthenticatedSystemIndexRouteImport } from './routes/_authenticated/system/index';
+import { Route as AuthenticatedSalesIndexRouteImport } from './routes/_authenticated/sales/index';
+import { Route as AuthenticatedReportingIndexRouteImport } from './routes/_authenticated/reporting/index';
+import { Route as AuthenticatedPurchasingIndexRouteImport } from './routes/_authenticated/purchasing/index';
+import { Route as AuthenticatedManufacturingIndexRouteImport } from './routes/_authenticated/manufacturing/index';
+import { Route as AuthenticatedInventoryIndexRouteImport } from './routes/_authenticated/inventory/index';
+import { Route as AuthenticatedHrIndexRouteImport } from './routes/_authenticated/hr/index';
+import { Route as AuthenticatedFinanceIndexRouteImport } from './routes/_authenticated/finance/index';
+import { Route as AuthenticatedCrmIndexRouteImport } from './routes/_authenticated/crm/index';
+import { Route as AuthenticatedArIndexRouteImport } from './routes/_authenticated/ar/index';
+import { Route as AuthenticatedApIndexRouteImport } from './routes/_authenticated/ap/index';
+import { Route as AuthenticatedSystemUsersRouteImport } from './routes/_authenticated/system/users';
+import { Route as AuthenticatedSystemResourcesRouteImport } from './routes/_authenticated/system/resources';
+import { Route as AuthenticatedSystemMyPermissionsRouteImport } from './routes/_authenticated/system/my-permissions';
+import { Route as AuthenticatedSystemCompaniesRouteImport } from './routes/_authenticated/system/companies';
+import { Route as AuthenticatedSystemAccessGroupsRouteImport } from './routes/_authenticated/system/access-groups';
+import { Route as AuthenticatedSystemUsersIndexRouteImport } from './routes/_authenticated/system/users/index';
+import { Route as AuthenticatedSystemAccessGroupsIndexRouteImport } from './routes/_authenticated/system/access-groups/index';
+import { Route as AuthenticatedArInvoicesIndexRouteImport } from './routes/_authenticated/ar/invoices/index';
+import { Route as AuthenticatedAiSkillsIndexRouteImport } from './routes/_authenticated/ai/skills/index';
+import { Route as AuthenticatedAiMemoryIndexRouteImport } from './routes/_authenticated/ai/memory/index';
+import { Route as AuthenticatedSystemUsersIdRouteImport } from './routes/_authenticated/system/users/$id';
+import { Route as AuthenticatedSystemAccessGroupsNewRouteImport } from './routes/_authenticated/system/access-groups/new';
+import { Route as AuthenticatedSystemAccessGroupsIdRouteImport } from './routes/_authenticated/system/access-groups/$id';
+import { Route as AuthenticatedArInvoicesIdRouteImport } from './routes/_authenticated/ar/invoices/$id';
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const R403Route = R403RouteImport.update({
   id: '/403',
   path: '/403',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedSystemIndexRoute =
-  AuthenticatedSystemIndexRouteImport.update({
-    id: '/system/',
-    path: '/system/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
+} as any);
+const AuthenticatedSystemIndexRoute = AuthenticatedSystemIndexRouteImport.update({
+  id: '/system/',
+  path: '/system/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
 const AuthenticatedSalesIndexRoute = AuthenticatedSalesIndexRouteImport.update({
   id: '/sales/',
   path: '/sales/',
   getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedReportingIndexRoute =
-  AuthenticatedReportingIndexRouteImport.update({
-    id: '/reporting/',
-    path: '/reporting/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedPurchasingIndexRoute =
-  AuthenticatedPurchasingIndexRouteImport.update({
-    id: '/purchasing/',
-    path: '/purchasing/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedManufacturingIndexRoute =
-  AuthenticatedManufacturingIndexRouteImport.update({
-    id: '/manufacturing/',
-    path: '/manufacturing/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedInventoryIndexRoute =
-  AuthenticatedInventoryIndexRouteImport.update({
-    id: '/inventory/',
-    path: '/inventory/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
+} as any);
+const AuthenticatedReportingIndexRoute = AuthenticatedReportingIndexRouteImport.update({
+  id: '/reporting/',
+  path: '/reporting/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedPurchasingIndexRoute = AuthenticatedPurchasingIndexRouteImport.update({
+  id: '/purchasing/',
+  path: '/purchasing/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedManufacturingIndexRoute = AuthenticatedManufacturingIndexRouteImport.update({
+  id: '/manufacturing/',
+  path: '/manufacturing/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedInventoryIndexRoute = AuthenticatedInventoryIndexRouteImport.update({
+  id: '/inventory/',
+  path: '/inventory/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
 const AuthenticatedHrIndexRoute = AuthenticatedHrIndexRouteImport.update({
   id: '/hr/',
   path: '/hr/',
   getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedFinanceIndexRoute =
-  AuthenticatedFinanceIndexRouteImport.update({
-    id: '/finance/',
-    path: '/finance/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
+} as any);
+const AuthenticatedFinanceIndexRoute = AuthenticatedFinanceIndexRouteImport.update({
+  id: '/finance/',
+  path: '/finance/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
 const AuthenticatedCrmIndexRoute = AuthenticatedCrmIndexRouteImport.update({
   id: '/crm/',
   path: '/crm/',
   getParentRoute: () => AuthenticatedRoute,
-} as any)
+} as any);
 const AuthenticatedArIndexRoute = AuthenticatedArIndexRouteImport.update({
   id: '/ar/',
   path: '/ar/',
   getParentRoute: () => AuthenticatedRoute,
-} as any)
+} as any);
 const AuthenticatedApIndexRoute = AuthenticatedApIndexRouteImport.update({
   id: '/ap/',
   path: '/ap/',
   getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedSystemUsersRoute =
-  AuthenticatedSystemUsersRouteImport.update({
-    id: '/system/users',
-    path: '/system/users',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedSystemResourcesRoute =
-  AuthenticatedSystemResourcesRouteImport.update({
-    id: '/system/resources',
-    path: '/system/resources',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedSystemMyPermissionsRoute =
-  AuthenticatedSystemMyPermissionsRouteImport.update({
-    id: '/system/my-permissions',
-    path: '/system/my-permissions',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedSystemCompaniesRoute =
-  AuthenticatedSystemCompaniesRouteImport.update({
-    id: '/system/companies',
-    path: '/system/companies',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedSystemAccessGroupsRoute =
-  AuthenticatedSystemAccessGroupsRouteImport.update({
-    id: '/system/access-groups',
-    path: '/system/access-groups',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedSystemUsersIndexRoute =
-  AuthenticatedSystemUsersIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => AuthenticatedSystemUsersRoute,
-  } as any)
+} as any);
+const AuthenticatedSystemUsersRoute = AuthenticatedSystemUsersRouteImport.update({
+  id: '/system/users',
+  path: '/system/users',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedSystemResourcesRoute = AuthenticatedSystemResourcesRouteImport.update({
+  id: '/system/resources',
+  path: '/system/resources',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedSystemMyPermissionsRoute = AuthenticatedSystemMyPermissionsRouteImport.update({
+  id: '/system/my-permissions',
+  path: '/system/my-permissions',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedSystemCompaniesRoute = AuthenticatedSystemCompaniesRouteImport.update({
+  id: '/system/companies',
+  path: '/system/companies',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedSystemAccessGroupsRoute = AuthenticatedSystemAccessGroupsRouteImport.update({
+  id: '/system/access-groups',
+  path: '/system/access-groups',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedSystemUsersIndexRoute = AuthenticatedSystemUsersIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedSystemUsersRoute,
+} as any);
 const AuthenticatedSystemAccessGroupsIndexRoute =
   AuthenticatedSystemAccessGroupsIndexRouteImport.update({
     id: '/',
     path: '/',
     getParentRoute: () => AuthenticatedSystemAccessGroupsRoute,
-  } as any)
-const AuthenticatedArInvoicesIndexRoute =
-  AuthenticatedArInvoicesIndexRouteImport.update({
-    id: '/ar/invoices/',
-    path: '/ar/invoices/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedSystemUsersIdRoute =
-  AuthenticatedSystemUsersIdRouteImport.update({
-    id: '/$id',
-    path: '/$id',
-    getParentRoute: () => AuthenticatedSystemUsersRoute,
-  } as any)
+  } as any);
+const AuthenticatedArInvoicesIndexRoute = AuthenticatedArInvoicesIndexRouteImport.update({
+  id: '/ar/invoices/',
+  path: '/ar/invoices/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedAiSkillsIndexRoute = AuthenticatedAiSkillsIndexRouteImport.update({
+  id: '/ai/skills/',
+  path: '/ai/skills/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedAiMemoryIndexRoute = AuthenticatedAiMemoryIndexRouteImport.update({
+  id: '/ai/memory/',
+  path: '/ai/memory/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedSystemUsersIdRoute = AuthenticatedSystemUsersIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AuthenticatedSystemUsersRoute,
+} as any);
 const AuthenticatedSystemAccessGroupsNewRoute =
   AuthenticatedSystemAccessGroupsNewRouteImport.update({
     id: '/new',
     path: '/new',
     getParentRoute: () => AuthenticatedSystemAccessGroupsRoute,
-  } as any)
-const AuthenticatedSystemAccessGroupsIdRoute =
-  AuthenticatedSystemAccessGroupsIdRouteImport.update({
-    id: '/$id',
-    path: '/$id',
-    getParentRoute: () => AuthenticatedSystemAccessGroupsRoute,
-  } as any)
-const AuthenticatedArInvoicesIdRoute =
-  AuthenticatedArInvoicesIdRouteImport.update({
-    id: '/ar/invoices/$id',
-    path: '/ar/invoices/$id',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
+  } as any);
+const AuthenticatedSystemAccessGroupsIdRoute = AuthenticatedSystemAccessGroupsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AuthenticatedSystemAccessGroupsRoute,
+} as any);
+const AuthenticatedArInvoicesIdRoute = AuthenticatedArInvoicesIdRouteImport.update({
+  id: '/ar/invoices/$id',
+  path: '/ar/invoices/$id',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
 
 export interface FileRoutesByFullPath {
-  '/403': typeof R403Route
-  '/': typeof AuthenticatedIndexRoute
-  '/login': typeof LoginRoute
-  '/system/access-groups': typeof AuthenticatedSystemAccessGroupsRouteWithChildren
-  '/system/companies': typeof AuthenticatedSystemCompaniesRoute
-  '/system/my-permissions': typeof AuthenticatedSystemMyPermissionsRoute
-  '/system/resources': typeof AuthenticatedSystemResourcesRoute
-  '/system/users': typeof AuthenticatedSystemUsersRouteWithChildren
-  '/ap/': typeof AuthenticatedApIndexRoute
-  '/ar/': typeof AuthenticatedArIndexRoute
-  '/crm/': typeof AuthenticatedCrmIndexRoute
-  '/finance/': typeof AuthenticatedFinanceIndexRoute
-  '/hr/': typeof AuthenticatedHrIndexRoute
-  '/inventory/': typeof AuthenticatedInventoryIndexRoute
-  '/manufacturing/': typeof AuthenticatedManufacturingIndexRoute
-  '/purchasing/': typeof AuthenticatedPurchasingIndexRoute
-  '/reporting/': typeof AuthenticatedReportingIndexRoute
-  '/sales/': typeof AuthenticatedSalesIndexRoute
-  '/system/': typeof AuthenticatedSystemIndexRoute
-  '/ar/invoices/$id': typeof AuthenticatedArInvoicesIdRoute
-  '/system/access-groups/$id': typeof AuthenticatedSystemAccessGroupsIdRoute
-  '/system/access-groups/new': typeof AuthenticatedSystemAccessGroupsNewRoute
-  '/system/users/$id': typeof AuthenticatedSystemUsersIdRoute
-  '/ar/invoices/': typeof AuthenticatedArInvoicesIndexRoute
-  '/system/access-groups/': typeof AuthenticatedSystemAccessGroupsIndexRoute
-  '/system/users/': typeof AuthenticatedSystemUsersIndexRoute
+  '/403': typeof R403Route;
+  '/': typeof AuthenticatedIndexRoute;
+  '/login': typeof LoginRoute;
+  '/system/access-groups': typeof AuthenticatedSystemAccessGroupsRouteWithChildren;
+  '/system/companies': typeof AuthenticatedSystemCompaniesRoute;
+  '/system/my-permissions': typeof AuthenticatedSystemMyPermissionsRoute;
+  '/system/resources': typeof AuthenticatedSystemResourcesRoute;
+  '/system/users': typeof AuthenticatedSystemUsersRouteWithChildren;
+  '/ap/': typeof AuthenticatedApIndexRoute;
+  '/ar/': typeof AuthenticatedArIndexRoute;
+  '/crm/': typeof AuthenticatedCrmIndexRoute;
+  '/finance/': typeof AuthenticatedFinanceIndexRoute;
+  '/hr/': typeof AuthenticatedHrIndexRoute;
+  '/inventory/': typeof AuthenticatedInventoryIndexRoute;
+  '/manufacturing/': typeof AuthenticatedManufacturingIndexRoute;
+  '/purchasing/': typeof AuthenticatedPurchasingIndexRoute;
+  '/reporting/': typeof AuthenticatedReportingIndexRoute;
+  '/sales/': typeof AuthenticatedSalesIndexRoute;
+  '/system/': typeof AuthenticatedSystemIndexRoute;
+  '/ar/invoices/$id': typeof AuthenticatedArInvoicesIdRoute;
+  '/system/access-groups/$id': typeof AuthenticatedSystemAccessGroupsIdRoute;
+  '/system/access-groups/new': typeof AuthenticatedSystemAccessGroupsNewRoute;
+  '/system/users/$id': typeof AuthenticatedSystemUsersIdRoute;
+  '/ai/memory/': typeof AuthenticatedAiMemoryIndexRoute;
+  '/ai/skills/': typeof AuthenticatedAiSkillsIndexRoute;
+  '/ar/invoices/': typeof AuthenticatedArInvoicesIndexRoute;
+  '/system/access-groups/': typeof AuthenticatedSystemAccessGroupsIndexRoute;
+  '/system/users/': typeof AuthenticatedSystemUsersIndexRoute;
 }
 export interface FileRoutesByTo {
-  '/403': typeof R403Route
-  '/login': typeof LoginRoute
-  '/': typeof AuthenticatedIndexRoute
-  '/system/companies': typeof AuthenticatedSystemCompaniesRoute
-  '/system/my-permissions': typeof AuthenticatedSystemMyPermissionsRoute
-  '/system/resources': typeof AuthenticatedSystemResourcesRoute
-  '/ap': typeof AuthenticatedApIndexRoute
-  '/ar': typeof AuthenticatedArIndexRoute
-  '/crm': typeof AuthenticatedCrmIndexRoute
-  '/finance': typeof AuthenticatedFinanceIndexRoute
-  '/hr': typeof AuthenticatedHrIndexRoute
-  '/inventory': typeof AuthenticatedInventoryIndexRoute
-  '/manufacturing': typeof AuthenticatedManufacturingIndexRoute
-  '/purchasing': typeof AuthenticatedPurchasingIndexRoute
-  '/reporting': typeof AuthenticatedReportingIndexRoute
-  '/sales': typeof AuthenticatedSalesIndexRoute
-  '/system': typeof AuthenticatedSystemIndexRoute
-  '/ar/invoices/$id': typeof AuthenticatedArInvoicesIdRoute
-  '/system/access-groups/$id': typeof AuthenticatedSystemAccessGroupsIdRoute
-  '/system/access-groups/new': typeof AuthenticatedSystemAccessGroupsNewRoute
-  '/system/users/$id': typeof AuthenticatedSystemUsersIdRoute
-  '/ar/invoices': typeof AuthenticatedArInvoicesIndexRoute
-  '/system/access-groups': typeof AuthenticatedSystemAccessGroupsIndexRoute
-  '/system/users': typeof AuthenticatedSystemUsersIndexRoute
+  '/403': typeof R403Route;
+  '/login': typeof LoginRoute;
+  '/': typeof AuthenticatedIndexRoute;
+  '/system/companies': typeof AuthenticatedSystemCompaniesRoute;
+  '/system/my-permissions': typeof AuthenticatedSystemMyPermissionsRoute;
+  '/system/resources': typeof AuthenticatedSystemResourcesRoute;
+  '/ap': typeof AuthenticatedApIndexRoute;
+  '/ar': typeof AuthenticatedArIndexRoute;
+  '/crm': typeof AuthenticatedCrmIndexRoute;
+  '/finance': typeof AuthenticatedFinanceIndexRoute;
+  '/hr': typeof AuthenticatedHrIndexRoute;
+  '/inventory': typeof AuthenticatedInventoryIndexRoute;
+  '/manufacturing': typeof AuthenticatedManufacturingIndexRoute;
+  '/purchasing': typeof AuthenticatedPurchasingIndexRoute;
+  '/reporting': typeof AuthenticatedReportingIndexRoute;
+  '/sales': typeof AuthenticatedSalesIndexRoute;
+  '/system': typeof AuthenticatedSystemIndexRoute;
+  '/ar/invoices/$id': typeof AuthenticatedArInvoicesIdRoute;
+  '/system/access-groups/$id': typeof AuthenticatedSystemAccessGroupsIdRoute;
+  '/system/access-groups/new': typeof AuthenticatedSystemAccessGroupsNewRoute;
+  '/system/users/$id': typeof AuthenticatedSystemUsersIdRoute;
+  '/ai/memory': typeof AuthenticatedAiMemoryIndexRoute;
+  '/ai/skills': typeof AuthenticatedAiSkillsIndexRoute;
+  '/ar/invoices': typeof AuthenticatedArInvoicesIndexRoute;
+  '/system/access-groups': typeof AuthenticatedSystemAccessGroupsIndexRoute;
+  '/system/users': typeof AuthenticatedSystemUsersIndexRoute;
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport
-  '/403': typeof R403Route
-  '/_authenticated': typeof AuthenticatedRouteWithChildren
-  '/login': typeof LoginRoute
-  '/_authenticated/': typeof AuthenticatedIndexRoute
-  '/_authenticated/system/access-groups': typeof AuthenticatedSystemAccessGroupsRouteWithChildren
-  '/_authenticated/system/companies': typeof AuthenticatedSystemCompaniesRoute
-  '/_authenticated/system/my-permissions': typeof AuthenticatedSystemMyPermissionsRoute
-  '/_authenticated/system/resources': typeof AuthenticatedSystemResourcesRoute
-  '/_authenticated/system/users': typeof AuthenticatedSystemUsersRouteWithChildren
-  '/_authenticated/ap/': typeof AuthenticatedApIndexRoute
-  '/_authenticated/ar/': typeof AuthenticatedArIndexRoute
-  '/_authenticated/crm/': typeof AuthenticatedCrmIndexRoute
-  '/_authenticated/finance/': typeof AuthenticatedFinanceIndexRoute
-  '/_authenticated/hr/': typeof AuthenticatedHrIndexRoute
-  '/_authenticated/inventory/': typeof AuthenticatedInventoryIndexRoute
-  '/_authenticated/manufacturing/': typeof AuthenticatedManufacturingIndexRoute
-  '/_authenticated/purchasing/': typeof AuthenticatedPurchasingIndexRoute
-  '/_authenticated/reporting/': typeof AuthenticatedReportingIndexRoute
-  '/_authenticated/sales/': typeof AuthenticatedSalesIndexRoute
-  '/_authenticated/system/': typeof AuthenticatedSystemIndexRoute
-  '/_authenticated/ar/invoices/$id': typeof AuthenticatedArInvoicesIdRoute
-  '/_authenticated/system/access-groups/$id': typeof AuthenticatedSystemAccessGroupsIdRoute
-  '/_authenticated/system/access-groups/new': typeof AuthenticatedSystemAccessGroupsNewRoute
-  '/_authenticated/system/users/$id': typeof AuthenticatedSystemUsersIdRoute
-  '/_authenticated/ar/invoices/': typeof AuthenticatedArInvoicesIndexRoute
-  '/_authenticated/system/access-groups/': typeof AuthenticatedSystemAccessGroupsIndexRoute
-  '/_authenticated/system/users/': typeof AuthenticatedSystemUsersIndexRoute
+  __root__: typeof rootRouteImport;
+  '/403': typeof R403Route;
+  '/_authenticated': typeof AuthenticatedRouteWithChildren;
+  '/login': typeof LoginRoute;
+  '/_authenticated/': typeof AuthenticatedIndexRoute;
+  '/_authenticated/system/access-groups': typeof AuthenticatedSystemAccessGroupsRouteWithChildren;
+  '/_authenticated/system/companies': typeof AuthenticatedSystemCompaniesRoute;
+  '/_authenticated/system/my-permissions': typeof AuthenticatedSystemMyPermissionsRoute;
+  '/_authenticated/system/resources': typeof AuthenticatedSystemResourcesRoute;
+  '/_authenticated/system/users': typeof AuthenticatedSystemUsersRouteWithChildren;
+  '/_authenticated/ap/': typeof AuthenticatedApIndexRoute;
+  '/_authenticated/ar/': typeof AuthenticatedArIndexRoute;
+  '/_authenticated/crm/': typeof AuthenticatedCrmIndexRoute;
+  '/_authenticated/finance/': typeof AuthenticatedFinanceIndexRoute;
+  '/_authenticated/hr/': typeof AuthenticatedHrIndexRoute;
+  '/_authenticated/inventory/': typeof AuthenticatedInventoryIndexRoute;
+  '/_authenticated/manufacturing/': typeof AuthenticatedManufacturingIndexRoute;
+  '/_authenticated/purchasing/': typeof AuthenticatedPurchasingIndexRoute;
+  '/_authenticated/reporting/': typeof AuthenticatedReportingIndexRoute;
+  '/_authenticated/sales/': typeof AuthenticatedSalesIndexRoute;
+  '/_authenticated/system/': typeof AuthenticatedSystemIndexRoute;
+  '/_authenticated/ar/invoices/$id': typeof AuthenticatedArInvoicesIdRoute;
+  '/_authenticated/system/access-groups/$id': typeof AuthenticatedSystemAccessGroupsIdRoute;
+  '/_authenticated/system/access-groups/new': typeof AuthenticatedSystemAccessGroupsNewRoute;
+  '/_authenticated/system/users/$id': typeof AuthenticatedSystemUsersIdRoute;
+  '/_authenticated/ai/memory/': typeof AuthenticatedAiMemoryIndexRoute;
+  '/_authenticated/ai/skills/': typeof AuthenticatedAiSkillsIndexRoute;
+  '/_authenticated/ar/invoices/': typeof AuthenticatedArInvoicesIndexRoute;
+  '/_authenticated/system/access-groups/': typeof AuthenticatedSystemAccessGroupsIndexRoute;
+  '/_authenticated/system/users/': typeof AuthenticatedSystemUsersIndexRoute;
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
+  fileRoutesByFullPath: FileRoutesByFullPath;
   fullPaths:
     | '/403'
     | '/'
@@ -300,10 +302,12 @@ export interface FileRouteTypes {
     | '/system/access-groups/$id'
     | '/system/access-groups/new'
     | '/system/users/$id'
+    | '/ai/memory/'
+    | '/ai/skills/'
     | '/ar/invoices/'
     | '/system/access-groups/'
-    | '/system/users/'
-  fileRoutesByTo: FileRoutesByTo
+    | '/system/users/';
+  fileRoutesByTo: FileRoutesByTo;
   to:
     | '/403'
     | '/login'
@@ -326,9 +330,11 @@ export interface FileRouteTypes {
     | '/system/access-groups/$id'
     | '/system/access-groups/new'
     | '/system/users/$id'
+    | '/ai/memory'
+    | '/ai/skills'
     | '/ar/invoices'
     | '/system/access-groups'
-    | '/system/users'
+    | '/system/users';
   id:
     | '__root__'
     | '/403'
@@ -355,274 +361,285 @@ export interface FileRouteTypes {
     | '/_authenticated/system/access-groups/$id'
     | '/_authenticated/system/access-groups/new'
     | '/_authenticated/system/users/$id'
+    | '/_authenticated/ai/memory/'
+    | '/_authenticated/ai/skills/'
     | '/_authenticated/ar/invoices/'
     | '/_authenticated/system/access-groups/'
-    | '/_authenticated/system/users/'
-  fileRoutesById: FileRoutesById
+    | '/_authenticated/system/users/';
+  fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
-  R403Route: typeof R403Route
-  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
-  LoginRoute: typeof LoginRoute
+  R403Route: typeof R403Route;
+  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren;
+  LoginRoute: typeof LoginRoute;
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
     '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
+      id: '/login';
+      path: '/login';
+      fullPath: '/login';
+      preLoaderRoute: typeof LoginRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     '/_authenticated': {
-      id: '/_authenticated'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedRouteImport
-      parentRoute: typeof rootRouteImport
-    }
+      id: '/_authenticated';
+      path: '';
+      fullPath: '/';
+      preLoaderRoute: typeof AuthenticatedRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     '/403': {
-      id: '/403'
-      path: '/403'
-      fullPath: '/403'
-      preLoaderRoute: typeof R403RouteImport
-      parentRoute: typeof rootRouteImport
-    }
+      id: '/403';
+      path: '/403';
+      fullPath: '/403';
+      preLoaderRoute: typeof R403RouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     '/_authenticated/': {
-      id: '/_authenticated/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
+      id: '/_authenticated/';
+      path: '/';
+      fullPath: '/';
+      preLoaderRoute: typeof AuthenticatedIndexRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/system/': {
-      id: '/_authenticated/system/'
-      path: '/system'
-      fullPath: '/system/'
-      preLoaderRoute: typeof AuthenticatedSystemIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
+      id: '/_authenticated/system/';
+      path: '/system';
+      fullPath: '/system/';
+      preLoaderRoute: typeof AuthenticatedSystemIndexRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/sales/': {
-      id: '/_authenticated/sales/'
-      path: '/sales'
-      fullPath: '/sales/'
-      preLoaderRoute: typeof AuthenticatedSalesIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
+      id: '/_authenticated/sales/';
+      path: '/sales';
+      fullPath: '/sales/';
+      preLoaderRoute: typeof AuthenticatedSalesIndexRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/reporting/': {
-      id: '/_authenticated/reporting/'
-      path: '/reporting'
-      fullPath: '/reporting/'
-      preLoaderRoute: typeof AuthenticatedReportingIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
+      id: '/_authenticated/reporting/';
+      path: '/reporting';
+      fullPath: '/reporting/';
+      preLoaderRoute: typeof AuthenticatedReportingIndexRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/purchasing/': {
-      id: '/_authenticated/purchasing/'
-      path: '/purchasing'
-      fullPath: '/purchasing/'
-      preLoaderRoute: typeof AuthenticatedPurchasingIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
+      id: '/_authenticated/purchasing/';
+      path: '/purchasing';
+      fullPath: '/purchasing/';
+      preLoaderRoute: typeof AuthenticatedPurchasingIndexRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/manufacturing/': {
-      id: '/_authenticated/manufacturing/'
-      path: '/manufacturing'
-      fullPath: '/manufacturing/'
-      preLoaderRoute: typeof AuthenticatedManufacturingIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
+      id: '/_authenticated/manufacturing/';
+      path: '/manufacturing';
+      fullPath: '/manufacturing/';
+      preLoaderRoute: typeof AuthenticatedManufacturingIndexRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/inventory/': {
-      id: '/_authenticated/inventory/'
-      path: '/inventory'
-      fullPath: '/inventory/'
-      preLoaderRoute: typeof AuthenticatedInventoryIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
+      id: '/_authenticated/inventory/';
+      path: '/inventory';
+      fullPath: '/inventory/';
+      preLoaderRoute: typeof AuthenticatedInventoryIndexRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/hr/': {
-      id: '/_authenticated/hr/'
-      path: '/hr'
-      fullPath: '/hr/'
-      preLoaderRoute: typeof AuthenticatedHrIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
+      id: '/_authenticated/hr/';
+      path: '/hr';
+      fullPath: '/hr/';
+      preLoaderRoute: typeof AuthenticatedHrIndexRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/finance/': {
-      id: '/_authenticated/finance/'
-      path: '/finance'
-      fullPath: '/finance/'
-      preLoaderRoute: typeof AuthenticatedFinanceIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
+      id: '/_authenticated/finance/';
+      path: '/finance';
+      fullPath: '/finance/';
+      preLoaderRoute: typeof AuthenticatedFinanceIndexRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/crm/': {
-      id: '/_authenticated/crm/'
-      path: '/crm'
-      fullPath: '/crm/'
-      preLoaderRoute: typeof AuthenticatedCrmIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
+      id: '/_authenticated/crm/';
+      path: '/crm';
+      fullPath: '/crm/';
+      preLoaderRoute: typeof AuthenticatedCrmIndexRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/ar/': {
-      id: '/_authenticated/ar/'
-      path: '/ar'
-      fullPath: '/ar/'
-      preLoaderRoute: typeof AuthenticatedArIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
+      id: '/_authenticated/ar/';
+      path: '/ar';
+      fullPath: '/ar/';
+      preLoaderRoute: typeof AuthenticatedArIndexRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/ap/': {
-      id: '/_authenticated/ap/'
-      path: '/ap'
-      fullPath: '/ap/'
-      preLoaderRoute: typeof AuthenticatedApIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
+      id: '/_authenticated/ap/';
+      path: '/ap';
+      fullPath: '/ap/';
+      preLoaderRoute: typeof AuthenticatedApIndexRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/system/users': {
-      id: '/_authenticated/system/users'
-      path: '/system/users'
-      fullPath: '/system/users'
-      preLoaderRoute: typeof AuthenticatedSystemUsersRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
+      id: '/_authenticated/system/users';
+      path: '/system/users';
+      fullPath: '/system/users';
+      preLoaderRoute: typeof AuthenticatedSystemUsersRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/system/resources': {
-      id: '/_authenticated/system/resources'
-      path: '/system/resources'
-      fullPath: '/system/resources'
-      preLoaderRoute: typeof AuthenticatedSystemResourcesRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
+      id: '/_authenticated/system/resources';
+      path: '/system/resources';
+      fullPath: '/system/resources';
+      preLoaderRoute: typeof AuthenticatedSystemResourcesRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/system/my-permissions': {
-      id: '/_authenticated/system/my-permissions'
-      path: '/system/my-permissions'
-      fullPath: '/system/my-permissions'
-      preLoaderRoute: typeof AuthenticatedSystemMyPermissionsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
+      id: '/_authenticated/system/my-permissions';
+      path: '/system/my-permissions';
+      fullPath: '/system/my-permissions';
+      preLoaderRoute: typeof AuthenticatedSystemMyPermissionsRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/system/companies': {
-      id: '/_authenticated/system/companies'
-      path: '/system/companies'
-      fullPath: '/system/companies'
-      preLoaderRoute: typeof AuthenticatedSystemCompaniesRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
+      id: '/_authenticated/system/companies';
+      path: '/system/companies';
+      fullPath: '/system/companies';
+      preLoaderRoute: typeof AuthenticatedSystemCompaniesRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/system/access-groups': {
-      id: '/_authenticated/system/access-groups'
-      path: '/system/access-groups'
-      fullPath: '/system/access-groups'
-      preLoaderRoute: typeof AuthenticatedSystemAccessGroupsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
+      id: '/_authenticated/system/access-groups';
+      path: '/system/access-groups';
+      fullPath: '/system/access-groups';
+      preLoaderRoute: typeof AuthenticatedSystemAccessGroupsRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/system/users/': {
-      id: '/_authenticated/system/users/'
-      path: '/'
-      fullPath: '/system/users/'
-      preLoaderRoute: typeof AuthenticatedSystemUsersIndexRouteImport
-      parentRoute: typeof AuthenticatedSystemUsersRoute
-    }
+      id: '/_authenticated/system/users/';
+      path: '/';
+      fullPath: '/system/users/';
+      preLoaderRoute: typeof AuthenticatedSystemUsersIndexRouteImport;
+      parentRoute: typeof AuthenticatedSystemUsersRoute;
+    };
     '/_authenticated/system/access-groups/': {
-      id: '/_authenticated/system/access-groups/'
-      path: '/'
-      fullPath: '/system/access-groups/'
-      preLoaderRoute: typeof AuthenticatedSystemAccessGroupsIndexRouteImport
-      parentRoute: typeof AuthenticatedSystemAccessGroupsRoute
-    }
+      id: '/_authenticated/system/access-groups/';
+      path: '/';
+      fullPath: '/system/access-groups/';
+      preLoaderRoute: typeof AuthenticatedSystemAccessGroupsIndexRouteImport;
+      parentRoute: typeof AuthenticatedSystemAccessGroupsRoute;
+    };
     '/_authenticated/ar/invoices/': {
-      id: '/_authenticated/ar/invoices/'
-      path: '/ar/invoices'
-      fullPath: '/ar/invoices/'
-      preLoaderRoute: typeof AuthenticatedArInvoicesIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
+      id: '/_authenticated/ar/invoices/';
+      path: '/ar/invoices';
+      fullPath: '/ar/invoices/';
+      preLoaderRoute: typeof AuthenticatedArInvoicesIndexRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/ai/skills/': {
+      id: '/_authenticated/ai/skills/';
+      path: '/ai/skills';
+      fullPath: '/ai/skills/';
+      preLoaderRoute: typeof AuthenticatedAiSkillsIndexRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/ai/memory/': {
+      id: '/_authenticated/ai/memory/';
+      path: '/ai/memory';
+      fullPath: '/ai/memory/';
+      preLoaderRoute: typeof AuthenticatedAiMemoryIndexRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/system/users/$id': {
-      id: '/_authenticated/system/users/$id'
-      path: '/$id'
-      fullPath: '/system/users/$id'
-      preLoaderRoute: typeof AuthenticatedSystemUsersIdRouteImport
-      parentRoute: typeof AuthenticatedSystemUsersRoute
-    }
+      id: '/_authenticated/system/users/$id';
+      path: '/$id';
+      fullPath: '/system/users/$id';
+      preLoaderRoute: typeof AuthenticatedSystemUsersIdRouteImport;
+      parentRoute: typeof AuthenticatedSystemUsersRoute;
+    };
     '/_authenticated/system/access-groups/new': {
-      id: '/_authenticated/system/access-groups/new'
-      path: '/new'
-      fullPath: '/system/access-groups/new'
-      preLoaderRoute: typeof AuthenticatedSystemAccessGroupsNewRouteImport
-      parentRoute: typeof AuthenticatedSystemAccessGroupsRoute
-    }
+      id: '/_authenticated/system/access-groups/new';
+      path: '/new';
+      fullPath: '/system/access-groups/new';
+      preLoaderRoute: typeof AuthenticatedSystemAccessGroupsNewRouteImport;
+      parentRoute: typeof AuthenticatedSystemAccessGroupsRoute;
+    };
     '/_authenticated/system/access-groups/$id': {
-      id: '/_authenticated/system/access-groups/$id'
-      path: '/$id'
-      fullPath: '/system/access-groups/$id'
-      preLoaderRoute: typeof AuthenticatedSystemAccessGroupsIdRouteImport
-      parentRoute: typeof AuthenticatedSystemAccessGroupsRoute
-    }
+      id: '/_authenticated/system/access-groups/$id';
+      path: '/$id';
+      fullPath: '/system/access-groups/$id';
+      preLoaderRoute: typeof AuthenticatedSystemAccessGroupsIdRouteImport;
+      parentRoute: typeof AuthenticatedSystemAccessGroupsRoute;
+    };
     '/_authenticated/ar/invoices/$id': {
-      id: '/_authenticated/ar/invoices/$id'
-      path: '/ar/invoices/$id'
-      fullPath: '/ar/invoices/$id'
-      preLoaderRoute: typeof AuthenticatedArInvoicesIdRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
+      id: '/_authenticated/ar/invoices/$id';
+      path: '/ar/invoices/$id';
+      fullPath: '/ar/invoices/$id';
+      preLoaderRoute: typeof AuthenticatedArInvoicesIdRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
   }
 }
 
 interface AuthenticatedSystemAccessGroupsRouteChildren {
-  AuthenticatedSystemAccessGroupsIdRoute: typeof AuthenticatedSystemAccessGroupsIdRoute
-  AuthenticatedSystemAccessGroupsNewRoute: typeof AuthenticatedSystemAccessGroupsNewRoute
-  AuthenticatedSystemAccessGroupsIndexRoute: typeof AuthenticatedSystemAccessGroupsIndexRoute
+  AuthenticatedSystemAccessGroupsIdRoute: typeof AuthenticatedSystemAccessGroupsIdRoute;
+  AuthenticatedSystemAccessGroupsNewRoute: typeof AuthenticatedSystemAccessGroupsNewRoute;
+  AuthenticatedSystemAccessGroupsIndexRoute: typeof AuthenticatedSystemAccessGroupsIndexRoute;
 }
 
-const AuthenticatedSystemAccessGroupsRouteChildren: AuthenticatedSystemAccessGroupsRouteChildren =
-  {
-    AuthenticatedSystemAccessGroupsIdRoute:
-      AuthenticatedSystemAccessGroupsIdRoute,
-    AuthenticatedSystemAccessGroupsNewRoute:
-      AuthenticatedSystemAccessGroupsNewRoute,
-    AuthenticatedSystemAccessGroupsIndexRoute:
-      AuthenticatedSystemAccessGroupsIndexRoute,
-  }
+const AuthenticatedSystemAccessGroupsRouteChildren: AuthenticatedSystemAccessGroupsRouteChildren = {
+  AuthenticatedSystemAccessGroupsIdRoute: AuthenticatedSystemAccessGroupsIdRoute,
+  AuthenticatedSystemAccessGroupsNewRoute: AuthenticatedSystemAccessGroupsNewRoute,
+  AuthenticatedSystemAccessGroupsIndexRoute: AuthenticatedSystemAccessGroupsIndexRoute,
+};
 
 const AuthenticatedSystemAccessGroupsRouteWithChildren =
   AuthenticatedSystemAccessGroupsRoute._addFileChildren(
     AuthenticatedSystemAccessGroupsRouteChildren,
-  )
+  );
 
 interface AuthenticatedSystemUsersRouteChildren {
-  AuthenticatedSystemUsersIdRoute: typeof AuthenticatedSystemUsersIdRoute
-  AuthenticatedSystemUsersIndexRoute: typeof AuthenticatedSystemUsersIndexRoute
+  AuthenticatedSystemUsersIdRoute: typeof AuthenticatedSystemUsersIdRoute;
+  AuthenticatedSystemUsersIndexRoute: typeof AuthenticatedSystemUsersIndexRoute;
 }
 
-const AuthenticatedSystemUsersRouteChildren: AuthenticatedSystemUsersRouteChildren =
-  {
-    AuthenticatedSystemUsersIdRoute: AuthenticatedSystemUsersIdRoute,
-    AuthenticatedSystemUsersIndexRoute: AuthenticatedSystemUsersIndexRoute,
-  }
+const AuthenticatedSystemUsersRouteChildren: AuthenticatedSystemUsersRouteChildren = {
+  AuthenticatedSystemUsersIdRoute: AuthenticatedSystemUsersIdRoute,
+  AuthenticatedSystemUsersIndexRoute: AuthenticatedSystemUsersIndexRoute,
+};
 
-const AuthenticatedSystemUsersRouteWithChildren =
-  AuthenticatedSystemUsersRoute._addFileChildren(
-    AuthenticatedSystemUsersRouteChildren,
-  )
+const AuthenticatedSystemUsersRouteWithChildren = AuthenticatedSystemUsersRoute._addFileChildren(
+  AuthenticatedSystemUsersRouteChildren,
+);
 
 interface AuthenticatedRouteChildren {
-  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
-  AuthenticatedSystemAccessGroupsRoute: typeof AuthenticatedSystemAccessGroupsRouteWithChildren
-  AuthenticatedSystemCompaniesRoute: typeof AuthenticatedSystemCompaniesRoute
-  AuthenticatedSystemMyPermissionsRoute: typeof AuthenticatedSystemMyPermissionsRoute
-  AuthenticatedSystemResourcesRoute: typeof AuthenticatedSystemResourcesRoute
-  AuthenticatedSystemUsersRoute: typeof AuthenticatedSystemUsersRouteWithChildren
-  AuthenticatedApIndexRoute: typeof AuthenticatedApIndexRoute
-  AuthenticatedArIndexRoute: typeof AuthenticatedArIndexRoute
-  AuthenticatedCrmIndexRoute: typeof AuthenticatedCrmIndexRoute
-  AuthenticatedFinanceIndexRoute: typeof AuthenticatedFinanceIndexRoute
-  AuthenticatedHrIndexRoute: typeof AuthenticatedHrIndexRoute
-  AuthenticatedInventoryIndexRoute: typeof AuthenticatedInventoryIndexRoute
-  AuthenticatedManufacturingIndexRoute: typeof AuthenticatedManufacturingIndexRoute
-  AuthenticatedPurchasingIndexRoute: typeof AuthenticatedPurchasingIndexRoute
-  AuthenticatedReportingIndexRoute: typeof AuthenticatedReportingIndexRoute
-  AuthenticatedSalesIndexRoute: typeof AuthenticatedSalesIndexRoute
-  AuthenticatedSystemIndexRoute: typeof AuthenticatedSystemIndexRoute
-  AuthenticatedArInvoicesIdRoute: typeof AuthenticatedArInvoicesIdRoute
-  AuthenticatedArInvoicesIndexRoute: typeof AuthenticatedArInvoicesIndexRoute
+  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute;
+  AuthenticatedSystemAccessGroupsRoute: typeof AuthenticatedSystemAccessGroupsRouteWithChildren;
+  AuthenticatedSystemCompaniesRoute: typeof AuthenticatedSystemCompaniesRoute;
+  AuthenticatedSystemMyPermissionsRoute: typeof AuthenticatedSystemMyPermissionsRoute;
+  AuthenticatedSystemResourcesRoute: typeof AuthenticatedSystemResourcesRoute;
+  AuthenticatedSystemUsersRoute: typeof AuthenticatedSystemUsersRouteWithChildren;
+  AuthenticatedApIndexRoute: typeof AuthenticatedApIndexRoute;
+  AuthenticatedArIndexRoute: typeof AuthenticatedArIndexRoute;
+  AuthenticatedCrmIndexRoute: typeof AuthenticatedCrmIndexRoute;
+  AuthenticatedFinanceIndexRoute: typeof AuthenticatedFinanceIndexRoute;
+  AuthenticatedHrIndexRoute: typeof AuthenticatedHrIndexRoute;
+  AuthenticatedInventoryIndexRoute: typeof AuthenticatedInventoryIndexRoute;
+  AuthenticatedManufacturingIndexRoute: typeof AuthenticatedManufacturingIndexRoute;
+  AuthenticatedPurchasingIndexRoute: typeof AuthenticatedPurchasingIndexRoute;
+  AuthenticatedReportingIndexRoute: typeof AuthenticatedReportingIndexRoute;
+  AuthenticatedSalesIndexRoute: typeof AuthenticatedSalesIndexRoute;
+  AuthenticatedSystemIndexRoute: typeof AuthenticatedSystemIndexRoute;
+  AuthenticatedArInvoicesIdRoute: typeof AuthenticatedArInvoicesIdRoute;
+  AuthenticatedAiMemoryIndexRoute: typeof AuthenticatedAiMemoryIndexRoute;
+  AuthenticatedAiSkillsIndexRoute: typeof AuthenticatedAiSkillsIndexRoute;
+  AuthenticatedArInvoicesIndexRoute: typeof AuthenticatedArInvoicesIndexRoute;
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
-  AuthenticatedSystemAccessGroupsRoute:
-    AuthenticatedSystemAccessGroupsRouteWithChildren,
+  AuthenticatedSystemAccessGroupsRoute: AuthenticatedSystemAccessGroupsRouteWithChildren,
   AuthenticatedSystemCompaniesRoute: AuthenticatedSystemCompaniesRoute,
   AuthenticatedSystemMyPermissionsRoute: AuthenticatedSystemMyPermissionsRoute,
   AuthenticatedSystemResourcesRoute: AuthenticatedSystemResourcesRoute,
@@ -639,18 +656,20 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedSalesIndexRoute: AuthenticatedSalesIndexRoute,
   AuthenticatedSystemIndexRoute: AuthenticatedSystemIndexRoute,
   AuthenticatedArInvoicesIdRoute: AuthenticatedArInvoicesIdRoute,
+  AuthenticatedAiMemoryIndexRoute: AuthenticatedAiMemoryIndexRoute,
+  AuthenticatedAiSkillsIndexRoute: AuthenticatedAiSkillsIndexRoute,
   AuthenticatedArInvoicesIndexRoute: AuthenticatedArInvoicesIndexRoute,
-}
+};
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
   AuthenticatedRouteChildren,
-)
+);
 
 const rootRouteChildren: RootRouteChildren = {
   R403Route: R403Route,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   LoginRoute: LoginRoute,
-}
+};
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>()
+  ._addFileTypes<FileRouteTypes>();

@@ -1,5 +1,8 @@
--- CreateEnum
-CREATE TYPE "view_scope" AS ENUM ('PERSONAL', 'ROLE', 'GLOBAL');
+-- CreateEnum (idempotent — view_scope already exists from init migration)
+DO $$ BEGIN
+  CREATE TYPE "view_scope" AS ENUM ('PERSONAL', 'ROLE', 'GLOBAL');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- CreateEnum
 CREATE TYPE "field_data_type" AS ENUM ('STRING', 'NUMBER', 'DATE', 'BOOLEAN', 'ENUM', 'CURRENCY');

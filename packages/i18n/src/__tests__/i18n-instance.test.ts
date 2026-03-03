@@ -59,7 +59,7 @@ describe('i18n instance', () => {
 
       // navigation
       expect(i18n.exists('navigation:dashboard')).toBe(true);
-      expect(i18n.exists('navigation:settings')).toBe(true);
+      expect(i18n.exists('navigation:system.settings')).toBe(true);
 
       // errors
       expect(i18n.exists('errors:NOT_FOUND')).toBe(true);
@@ -85,9 +85,7 @@ describe('i18n instance', () => {
       expect(i18n.t('common:delete')).toBe('Delete');
       expect(i18n.t('common:loading')).toBe('Loading...');
       expect(i18n.t('common:noResults')).toBe('No results found');
-      expect(i18n.t('common:confirmDelete')).toBe(
-        'Are you sure you want to delete this item?',
-      );
+      expect(i18n.t('common:confirmDelete')).toBe('Are you sure you want to delete this item?');
     });
 
     it('resolves interpolation: t("validation:required", { field: "Email" })', async () => {
@@ -118,9 +116,7 @@ describe('i18n instance', () => {
     it('resolves error keys correctly', async () => {
       const i18n = await singletonInstance();
 
-      expect(i18n.t('errors:AUTH_INVALID_CREDENTIALS')).toBe(
-        'Invalid email or password',
-      );
+      expect(i18n.t('errors:AUTH_INVALID_CREDENTIALS')).toBe('Invalid email or password');
       expect(i18n.t('errors:AUTH_TOKEN_EXPIRED')).toBe(
         'Your session has expired. Please log in again',
       );
@@ -131,9 +127,7 @@ describe('i18n instance', () => {
 
       // "required" exists in both common and validation with different values
       expect(i18n.t('common:required')).toBe('Required');
-      expect(i18n.t('validation:required', { field: 'Name' })).toBe(
-        'Name is required',
-      );
+      expect(i18n.t('validation:required', { field: 'Name' })).toBe('Name is required');
     });
   });
 
@@ -198,9 +192,7 @@ describe('i18n instance', () => {
 
       instance.t('totallyMissingKey');
 
-      expect(warnSpy).toHaveBeenCalledWith(
-        '[i18n] Missing key: common:totallyMissingKey',
-      );
+      expect(warnSpy).toHaveBeenCalledWith('[i18n] Missing key: common:totallyMissingKey');
 
       warnSpy.mockRestore();
     });

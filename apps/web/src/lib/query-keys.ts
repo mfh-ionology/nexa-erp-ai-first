@@ -55,5 +55,13 @@ export const queryKeys = {
     lov: (fieldId: string) => [...queryKeys.views.all, 'lov', fieldId] as const,
     lovBatch: (viewKey: string) => [...queryKeys.views.all, 'lov', 'batch', viewKey] as const,
   },
-  // Future modules add their keys here
+  ai: {
+    all: ['ai'] as const,
+    memories: () => [...queryKeys.ai.all, 'memories'] as const,
+    memorySettings: () => [...queryKeys.ai.all, 'memory-settings'] as const,
+    skills: () => [...queryKeys.ai.all, 'skills'] as const,
+    entityTriggers: () => [...queryKeys.ai.all, 'entity-triggers'] as const,
+    entitySearch: (type: string | null, q: string, scopeBy?: string, scopeValue?: string) =>
+      [...queryKeys.ai.all, 'entity-search', type, q, scopeBy, scopeValue] as const,
+  },
 } as const;

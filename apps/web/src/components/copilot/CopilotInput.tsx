@@ -1,67 +1,52 @@
-import { useCallback, useRef, useState } from 'react';
-import { SendHorizontal, Upload } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { cn } from '@/lib/utils';
 import { useCopilotStore } from '@/stores/copilot-store';
+import { useAiChat } from '@/hooks/use-ai-chat';
+import { EntityMentionInput } from '@/features/ai/entity-mentions/entity-mention-input';
+import type { EntityMention } from '@/features/ai/entity-mentions/types';
 
 import { useI18n } from '@nexa/i18n';
 
 // ── Component ────────────────────────────────────────────────────────────────
 
 /**
- * CopilotInput — multi-line text input with send button and file drop zone.
+ * CopilotInput — wraps EntityMentionInput with copilot store integration
+ * and file drop zone.
  *
- * - Enter submits the message; Shift+Enter inserts a new line
- * - Auto-resizes from 1 row to max 4 rows
- * - File drag-and-drop shows a visual overlay (stub for MVP)
- * - Submit is disabled while streaming or when input is empty
+ * Replaces the plain textarea with entity-mention-aware input that supports
+ * trigger word detection, autocomplete, and structured entity references.
+ *
+ * When the AI WebSocket is connected, messages (including entity mentions) are
+ * sent over the wire via useAiChat.sendMessage. Otherwise falls back to the
+ * store-level placeholder. (ISSUE #6 fix)
  */
 export function CopilotInput() {
   const { t } = useI18n();
-  const pendingInput = useCopilotStore((s) => s.pendingInput);
-  const setPendingInput = useCopilotStore((s) => s.setPendingInput);
   const submitUserMessage = useCopilotStore((s) => s.submitUserMessage);
   const isStreaming = useCopilotStore((s) => s.isStreaming);
+  const { sendMessage, isConnected } = useAiChat();
 
   const [isDragOver, setIsDragOver] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const canSubmit = pendingInput.trim().length > 0 && !isStreaming;
+  const handleSend = useCallback(
+    (text: string, mentions: EntityMention[]) => {
+      if (isStreaming) return;
+      const mentionsOrUndefined = mentions.length > 0 ? mentions : undefined;
 
-  const handleSubmit = useCallback(() => {
-    const text = pendingInput.trim();
-    if (!text || isStreaming) return;
+      // Always update local store state (adds user message + opens drawer)
+      submitUserMessage(text, mentionsOrUndefined);
 
-    // Submit message (adds user msg, opens drawer, queues placeholder response)
-    submitUserMessage(text);
-
-    // Clear input
-    setPendingInput('');
-
-    // Reset textarea height
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
-  }, [pendingInput, isStreaming, submitUserMessage, setPendingInput]);
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setPendingInput(e.target.value);
-
-    // Auto-resize: reset height then set to scrollHeight (capped at 4 rows ≈ 96px)
-    const textarea = e.target;
-    textarea.style.height = 'auto';
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 96)}px`;
-  };
+      // When WebSocket is connected, also forward to the AI backend
+      // with structured entity mentions. The store's placeholder response
+      // will be superseded by the real streaming response from the server.
+      if (isConnected) {
+        sendMessage(text, mentionsOrUndefined);
+      }
+    },
+    [isStreaming, submitUserMessage, sendMessage, isConnected],
+  );
 
   // ── Drag & drop handlers (stub for MVP) ──────────────────────────────────
 
@@ -101,32 +86,11 @@ export function CopilotInput() {
         </div>
       )}
 
-      <div className="flex items-end gap-2">
-        <Textarea
-          ref={textareaRef}
-          value={pendingInput}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          placeholder={t('copilot.inputPlaceholder')}
-          aria-label={t('copilot.inputAriaLabel')}
-          disabled={isStreaming}
-          rows={1}
-          className={cn(
-            'min-h-[36px] max-h-[96px] resize-none border-0 bg-muted/50 px-3 py-2 text-sm shadow-none',
-            'focus-visible:ring-1 focus-visible:ring-ring',
-          )}
-        />
-        <Button
-          variant="default"
-          size="icon-sm"
-          onClick={handleSubmit}
-          disabled={!canSubmit}
-          aria-label={t('copilot.send')}
-          className="shrink-0"
-        >
-          <SendHorizontal className="size-4" />
-        </Button>
-      </div>
+      <EntityMentionInput
+        onSend={handleSend}
+        disabled={isStreaming}
+        placeholder={t('copilot.inputPlaceholder')}
+      />
     </div>
   );
 }

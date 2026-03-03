@@ -90,6 +90,33 @@ export async function createUser(
 }
 
 // ---------------------------------------------------------------------------
+// listUsers — filter transform for relation fields
+// ---------------------------------------------------------------------------
+
+/**
+ * Rewrites filter conditions that target relation fields not directly on User.
+ * - `role` → `companyRoles: { some: { role: <clause>, companyId: null } }`
+ *
+ * Recursively transforms AND/OR arrays so nested conditions are also handled.
+ */
+function transformUserFilters(filterWhere: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(filterWhere)) {
+    if (key === 'role') {
+      // role lives on UserCompanyRole — rewrite to a relation filter
+      result.companyRoles = { some: { role: value, companyId: null } };
+    } else if ((key === 'AND' || key === 'OR') && Array.isArray(value)) {
+      result[key] = (value as Record<string, unknown>[]).map(transformUserFilters);
+    } else {
+      result[key] = value;
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // listUsers
 // ---------------------------------------------------------------------------
 
@@ -122,7 +149,9 @@ export async function listUsers(prisma: PrismaClient, companyId: string, query: 
 
   // E7.5: Merge metadata-driven filter conditions into where clause
   if (conditions) {
-    const filterWhere = await applyViewFilters(prisma, companyId, 'USERS', conditions, filterLogic);
+    let filterWhere = await applyViewFilters(prisma, companyId, 'USERS', conditions, filterLogic);
+    // Transform relation-based fields (role lives on UserCompanyRole, not User)
+    filterWhere = transformUserFilters(filterWhere);
     // Merge filter conditions using AND — preserves companyId scoping
     if (Object.keys(filterWhere).length > 0) {
       where.AND = [

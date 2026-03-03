@@ -1,6 +1,7 @@
 import { Link, useRouterState } from '@tanstack/react-router';
 import {
   BarChart3,
+  Brain,
   Briefcase,
   ChevronLeft,
   ChevronRight,
@@ -13,7 +14,9 @@ import {
   Settings,
   Shield,
   ShoppingCart,
+  Sun,
   Users as UsersIcon,
+  Wand2,
   Warehouse,
 } from 'lucide-react';
 
@@ -89,6 +92,15 @@ const NAV_GROUPS: NavGroup[] = [
         icon: BarChart3,
         moduleKey: 'reporting',
       },
+    ],
+  },
+  {
+    titleKey: 'navigation:ai',
+    showDivider: true,
+    items: [
+      { path: '/ai/briefing', labelKey: 'navigation:ai.briefing', icon: Sun, moduleKey: null },
+      { path: '/ai/memory', labelKey: 'navigation:ai.memory', icon: Brain, moduleKey: null },
+      { path: '/ai/skills', labelKey: 'navigation:ai.skills', icon: Wand2, moduleKey: null },
     ],
   },
   {

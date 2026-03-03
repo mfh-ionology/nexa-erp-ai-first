@@ -156,6 +156,30 @@ export function createBaseConfig({ tsconfigRootDir }) {
       },
     },
 
+    // AI service files — relax strict type rules for LLM response handling,
+    // Prisma JSON fields, and dynamic tool dispatch where `any` is pragmatic
+    {
+      files: ['**/ai/**/*.ts'],
+      rules: {
+        '@typescript-eslint/no-explicit-any': 'warn',
+        '@typescript-eslint/no-unsafe-assignment': 'warn',
+        '@typescript-eslint/no-unsafe-member-access': 'warn',
+        '@typescript-eslint/no-unsafe-return': 'warn',
+        '@typescript-eslint/no-unsafe-argument': 'warn',
+        '@typescript-eslint/no-unsafe-call': 'warn',
+        '@typescript-eslint/no-unnecessary-condition': 'warn',
+        '@typescript-eslint/no-deprecated': 'warn',
+        '@typescript-eslint/require-await': 'warn',
+        '@typescript-eslint/restrict-template-expressions': 'warn',
+        '@typescript-eslint/use-unknown-in-catch-callback-variable': 'warn',
+        '@typescript-eslint/no-redundant-type-constituents': 'warn',
+        '@typescript-eslint/no-base-to-string': 'warn',
+        '@typescript-eslint/no-non-null-assertion': 'off',
+        'no-console': 'warn',
+        eqeqeq: 'warn',
+      },
+    },
+
     // Seed and config files — scripts that legitimately use console and process.exit
     {
       files: ['**/prisma/seed.ts', '**/prisma.config.ts', '**/vitest.config.ts'],

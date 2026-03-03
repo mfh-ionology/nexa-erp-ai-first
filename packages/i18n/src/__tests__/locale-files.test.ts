@@ -62,13 +62,20 @@ describe('locale files', () => {
           for (const key of Object.keys(translations)) {
             // Keys should be camelCase, SCREAMING_SNAKE_CASE (for error codes),
             // or camelCase with i18next plural suffix (_one, _other, _zero, _few, _many, _two)
+            // Keys may be simple camelCase, dot-separated segments (e.g. "system.users", "memory.settings.enableAiMemory",
+            // "accessGroups.fieldOverrides.visibility.VISIBLE"), SCREAMING_SNAKE_CASE (for error codes),
+            // or camelCase with i18next plural suffixes
+            const segment = '[a-zA-Z][a-zA-Z0-9_]*';
             const isCamelCase = /^[a-z][a-zA-Z0-9]*$/.test(key);
+            const isDottedKey = new RegExp(`^${segment}(\\.${segment})*$`).test(key);
             const isScreamingSnakeCase = /^[A-Z][A-Z0-9_]*$/.test(key);
-            const isCamelCaseWithPluralSuffix = /^[a-z][a-zA-Z0-9]*_(one|other|zero|few|many|two)$/.test(key);
+            const isCamelCaseWithPluralSuffix = new RegExp(
+              `^${segment}(\\.${segment})*_(one|other|zero|few|many|two)$`,
+            ).test(key);
 
             expect(
-              isCamelCase || isScreamingSnakeCase || isCamelCaseWithPluralSuffix,
-              `Key "${key}" in ${locale}/${namespace}.json does not follow camelCase, SCREAMING_SNAKE_CASE, or camelCase_pluralSuffix convention`,
+              isCamelCase || isDottedKey || isScreamingSnakeCase || isCamelCaseWithPluralSuffix,
+              `Key "${key}" in ${locale}/${namespace}.json does not follow camelCase, dotted.key, SCREAMING_SNAKE_CASE, or camelCase_pluralSuffix convention`,
             ).toBe(true);
           }
         });
@@ -110,12 +117,8 @@ describe('locale files', () => {
 
         for (const [namespace, referenceKeys] of Object.entries(referenceData)) {
           const localeKeys = localeData[namespace] ?? {};
-          const missingKeys = Object.keys(referenceKeys).filter(
-            (k) => !(k in localeKeys),
-          );
-          const extraKeys = Object.keys(localeKeys).filter(
-            (k) => !(k in referenceKeys),
-          );
+          const missingKeys = Object.keys(referenceKeys).filter((k) => !(k in localeKeys));
+          const extraKeys = Object.keys(localeKeys).filter((k) => !(k in referenceKeys));
 
           expect(
             missingKeys,
@@ -131,11 +134,13 @@ describe('locale files', () => {
   });
 
   describe('expected namespaces exist', () => {
-    it('en locale has common, validation, navigation, errors, and system namespaces', () => {
+    it('en locale has all expected namespaces', () => {
       const namespaces = readLocaleFiles('en');
       expect(Object.keys(namespaces).sort()).toEqual([
+        'ai',
         'common',
         'errors',
+        'mobile',
         'navigation',
         'system',
         'validation',
@@ -149,9 +154,24 @@ describe('locale files', () => {
     it('common.json has core UI labels', () => {
       const common = enData.common;
       const expectedKeys = [
-        'save', 'cancel', 'delete', 'confirm', 'create', 'edit',
-        'close', 'back', 'next', 'search', 'filter', 'loading',
-        'submit', 'reset', 'yes', 'no', 'actions', 'status',
+        'save',
+        'cancel',
+        'delete',
+        'confirm',
+        'create',
+        'edit',
+        'close',
+        'back',
+        'next',
+        'search',
+        'filter',
+        'loading',
+        'submit',
+        'reset',
+        'yes',
+        'no',
+        'actions',
+        'status',
       ];
       for (const key of expectedKeys) {
         expect(common, `Missing key "${key}" in common.json`).toHaveProperty(key);
@@ -161,8 +181,14 @@ describe('locale files', () => {
     it('validation.json has validation message templates', () => {
       const validation = enData.validation;
       const expectedKeys = [
-        'required', 'minLength', 'maxLength', 'email',
-        'numeric', 'positive', 'integer', 'unique',
+        'required',
+        'minLength',
+        'maxLength',
+        'email',
+        'numeric',
+        'positive',
+        'integer',
+        'unique',
       ];
       for (const key of expectedKeys) {
         expect(validation, `Missing key "${key}" in validation.json`).toHaveProperty(key);
@@ -172,8 +198,14 @@ describe('locale files', () => {
     it('navigation.json has module navigation labels', () => {
       const navigation = enData.navigation;
       const expectedKeys = [
-        'dashboard', 'system', 'settings', 'users',
-        'finance', 'sales', 'purchasing', 'inventory',
+        'dashboard',
+        'system',
+        'system.settings',
+        'system.users',
+        'finance',
+        'sales',
+        'purchasing',
+        'inventory',
       ];
       for (const key of expectedKeys) {
         expect(navigation, `Missing key "${key}" in navigation.json`).toHaveProperty(key);
@@ -183,9 +215,12 @@ describe('locale files', () => {
     it('errors.json has error code messages', () => {
       const errors = enData.errors;
       const expectedKeys = [
-        'AUTH_INVALID_CREDENTIALS', 'AUTH_TOKEN_EXPIRED',
-        'NOT_FOUND', 'SERVER_ERROR',
-        'NETWORK_ERROR', 'VALIDATION_ERROR',
+        'AUTH_INVALID_CREDENTIALS',
+        'AUTH_TOKEN_EXPIRED',
+        'NOT_FOUND',
+        'SERVER_ERROR',
+        'NETWORK_ERROR',
+        'VALIDATION_ERROR',
       ];
       for (const key of expectedKeys) {
         expect(errors, `Missing key "${key}" in errors.json`).toHaveProperty(key);

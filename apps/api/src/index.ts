@@ -1,6 +1,6 @@
 import { buildApp } from './app.js';
 
-const DEFAULT_PORT = 3000;
+const DEFAULT_PORT = 5100;
 
 async function start(): Promise<void> {
   const port = Number(process.env.PORT) || DEFAULT_PORT;

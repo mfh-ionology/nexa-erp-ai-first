@@ -29,41 +29,6 @@ export interface NavigationModule {
 
 export const NAVIGATION_MODULES: NavigationModule[] = [
   {
-    key: 'system',
-    labelKey: 'navigation:system',
-    icon: 'Settings',
-    items: [
-      {
-        key: 'system.users',
-        labelKey: 'navigation:system.users',
-        icon: 'Users',
-        path: '/system/users',
-        resourceCode: 'system.users.list',
-      },
-      {
-        key: 'system.companies',
-        labelKey: 'navigation:system.companies',
-        icon: 'Building2',
-        path: '/system/companies',
-        resourceCode: 'system.company-profile.detail',
-      },
-      {
-        key: 'system.settings',
-        labelKey: 'navigation:system.settings',
-        icon: 'Settings',
-        path: '/system/settings',
-      },
-      {
-        key: 'system.myPermissions',
-        labelKey: 'navigation:system.myPermissions',
-        icon: 'Shield',
-        path: '/system/my-permissions',
-        // No resourceCode — accessible to all authenticated users
-        alwaysVisible: true,
-      },
-    ],
-  },
-  {
     key: 'finance',
     labelKey: 'navigation:finance',
     icon: 'Landmark',
@@ -361,6 +326,69 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
       },
     ],
   },
+  {
+    key: 'ai',
+    labelKey: 'navigation:ai',
+    icon: 'Bot',
+    items: [
+      {
+        key: 'ai.briefing',
+        labelKey: 'navigation:ai.briefing',
+        icon: 'Sun',
+        path: '/ai/briefing',
+        alwaysVisible: true,
+      },
+      {
+        key: 'ai.memory',
+        labelKey: 'navigation:ai.memory',
+        icon: 'Brain',
+        path: '/ai/memory',
+        alwaysVisible: true,
+      },
+      {
+        key: 'ai.skills',
+        labelKey: 'navigation:ai.skills',
+        icon: 'Wand2',
+        path: '/ai/skills',
+        alwaysVisible: true,
+      },
+    ],
+  },
+  {
+    key: 'system',
+    labelKey: 'navigation:system',
+    icon: 'Settings',
+    items: [
+      {
+        key: 'system.users',
+        labelKey: 'navigation:system.users',
+        icon: 'Users',
+        path: '/system/users',
+        resourceCode: 'system.users.list',
+      },
+      {
+        key: 'system.companies',
+        labelKey: 'navigation:system.companies',
+        icon: 'Building2',
+        path: '/system/companies',
+        resourceCode: 'system.company-profile.detail',
+      },
+      {
+        key: 'system.settings',
+        labelKey: 'navigation:system.settings',
+        icon: 'Settings',
+        path: '/system/settings',
+      },
+      {
+        key: 'system.myPermissions',
+        labelKey: 'navigation:system.myPermissions',
+        icon: 'Shield',
+        path: '/system/my-permissions',
+        // No resourceCode — accessible to all authenticated users
+        alwaysVisible: true,
+      },
+    ],
+  },
 ];
 
 /**
@@ -380,21 +408,19 @@ export function getFilteredModules(
 ): NavigationModule[] {
   if (isSuperAdmin) return NAVIGATION_MODULES;
 
-  return NAVIGATION_MODULES
-    .map((mod) => {
-      const moduleEnabled = enabledModules.includes(mod.key);
-      return {
-        ...mod,
-        items: mod.items.filter((item) => {
-          // Always-visible items bypass all filtering
-          if (item.alwaysVisible) return true;
-          // If the module is not enabled, hide all non-alwaysVisible items
-          if (!moduleEnabled) return false;
-          // Within an enabled module, filter by resourceCode
-          if (!item.resourceCode) return true; // no resource code = visible
-          return modulePermissions?.[item.resourceCode]?.canAccess === true;
-        }),
-      };
-    })
-    .filter((mod) => mod.items.length > 0);
+  return NAVIGATION_MODULES.map((mod) => {
+    const moduleEnabled = enabledModules.includes(mod.key);
+    return {
+      ...mod,
+      items: mod.items.filter((item) => {
+        // Always-visible items bypass all filtering
+        if (item.alwaysVisible) return true;
+        // If the module is not enabled, hide all non-alwaysVisible items
+        if (!moduleEnabled) return false;
+        // Within an enabled module, filter by resourceCode
+        if (!item.resourceCode) return true; // no resource code = visible
+        return modulePermissions?.[item.resourceCode]?.canAccess === true;
+      }),
+    };
+  }).filter((mod) => mod.items.length > 0);
 }

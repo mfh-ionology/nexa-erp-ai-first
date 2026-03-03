@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 import { useAuthStore } from '@/stores/auth-store';
-import {
-  useCopilotStore,
-  type ChatMessage,
-  type ConnectionStatus,
-} from '@/stores/copilot-store';
+import { useCopilotStore, type ChatMessage, type ConnectionStatus } from '@/stores/copilot-store';
+import type { EntityMention } from '@/features/ai/entity-mentions/types';
 
 // ── WebSocket message types (aligned with API contracts §3.6) ────────────────
 
@@ -16,16 +13,12 @@ export interface AiChatClientMessage {
   actionId?: string;
   /** Client-generated placeholder ID so the server echoes it back as messageId */
   placeholderMessageId?: string;
+  /** Structured entity mentions referenced in the message (E5b-7) */
+  entityMentions?: Array<{ type: string; id: string; name: string }>;
 }
 
 export interface AiChatServerMessage {
-  type:
-    | 'stream_chunk'
-    | 'stream_end'
-    | 'text'
-    | 'action_proposal'
-    | 'record_created'
-    | 'error';
+  type: 'stream_chunk' | 'stream_end' | 'text' | 'action_proposal' | 'record_created' | 'error';
   messageId?: string;
   sessionId?: string;
   content?: string;
@@ -51,7 +44,7 @@ function getWsUrl(): string {
 // ── Hook return type ─────────────────────────────────────────────────────────
 
 export interface UseAiChatReturn {
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string, mentions?: EntityMention[]) => void;
   confirmAction: (actionId: string) => void;
   rejectAction: (actionId: string) => void;
   connectionStatus: ConnectionStatus;
@@ -200,10 +193,7 @@ export function useAiChat(): UseAiChatReturn {
       setConnectionStatus('disconnected');
       reconnectAttemptRef.current = attempt + 1;
 
-      const backoffMs = Math.min(
-        BACKOFF_BASE_MS * Math.pow(2, attempt),
-        BACKOFF_MAX_MS,
-      );
+      const backoffMs = Math.min(BACKOFF_BASE_MS * Math.pow(2, attempt), BACKOFF_MAX_MS);
 
       reconnectTimerRef.current = setTimeout(() => {
         connect();
@@ -237,7 +227,7 @@ export function useAiChat(): UseAiChatReturn {
   // ── Public API ──────────────────────────────────────────────────────────
 
   const sendMessage = useCallback(
-    (content: string) => {
+    (content: string, mentions?: EntityMention[]) => {
       const ws = wsRef.current;
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
@@ -261,6 +251,10 @@ export function useAiChat(): UseAiChatReturn {
         sessionId,
         content,
         placeholderMessageId: streamingMsgId,
+        entityMentions:
+          mentions && mentions.length > 0
+            ? mentions.map((m) => ({ type: m.type, id: m.id, name: m.name }))
+            : undefined,
       };
       ws.send(JSON.stringify(msg));
     },

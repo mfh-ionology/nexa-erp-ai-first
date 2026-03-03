@@ -5,15 +5,21 @@ import {
   createCompanyProfileRequestSchema,
   updateCompanyProfileRequestSchema,
   companyProfileResponseSchema,
+  exportDefaultsResponseSchema,
+  importDefaultsRequestSchema,
+  importDefaultsResponseSchema,
 } from './company-profile.schema.js';
 import type {
   CreateCompanyProfileRequest,
   UpdateCompanyProfileRequest,
+  ImportDefaultsRequest,
 } from './company-profile.schema.js';
 import {
   getCompanyProfile,
   createCompanyProfile,
   updateCompanyProfile,
+  exportPermissionConfig,
+  importPermissionConfig,
 } from './company-profile.service.js';
 import { createPermissionGuard, filterFieldsByPermission } from '../../core/rbac/index.js';
 import { sendSuccess } from '../../core/utils/response.js';
@@ -24,7 +30,6 @@ import { extractRequestContext } from '../../core/types/request-context.js';
 // Company Profile routes plugin
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/require-await -- Fastify plugin signature requires async
 async function companyProfileRoutes(fastify: FastifyInstance): Promise<void> {
   // -------------------------------------------------------------------------
   // GET /company-profile — get current company profile
@@ -79,6 +84,53 @@ async function companyProfileRoutes(fastify: FastifyInstance): Promise<void> {
       const ctx = extractRequestContext(request);
       const profile = await updateCompanyProfile(prisma, request.companyId, request.body, ctx);
       return sendSuccess(reply, profile);
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // GET /company-profile/export-defaults — export permission config as JSON
+  // -------------------------------------------------------------------------
+  fastify.get(
+    '/company-profile/export-defaults',
+    {
+      schema: {
+        response: { 200: successEnvelope(exportDefaultsResponseSchema) },
+      },
+      preHandler: createPermissionGuard('system.company-profile.detail', 'edit'),
+    },
+    async (request, reply) => {
+      const exported = await exportPermissionConfig(prisma, request.companyId);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      void reply.header(
+        'Content-Disposition',
+        `attachment; filename="company-defaults-${dateStr}.json"`,
+      );
+      return sendSuccess(reply, exported);
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // POST /company-profile/import-defaults — import permission config from JSON
+  // -------------------------------------------------------------------------
+  fastify.post<{ Body: ImportDefaultsRequest }>(
+    '/company-profile/import-defaults',
+    {
+      schema: {
+        body: importDefaultsRequestSchema,
+        response: { 200: successEnvelope(importDefaultsResponseSchema) },
+      },
+      preHandler: createPermissionGuard('system.company-profile.detail', 'edit'),
+    },
+    async (request, reply) => {
+      const ctx = extractRequestContext(request);
+      const result = await importPermissionConfig(
+        prisma,
+        request.server.eventBus,
+        ctx.companyId,
+        request.body,
+        ctx.userId,
+      );
+      return sendSuccess(reply, result);
     },
   );
 }

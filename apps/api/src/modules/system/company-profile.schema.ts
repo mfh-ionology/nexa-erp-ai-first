@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { VatScheme } from '@nexa/db';
+import { VatScheme, FieldVisibility } from '@nexa/db';
 
 // ---------------------------------------------------------------------------
 // Request Schemas
@@ -103,9 +103,81 @@ export const companyProfileResponseSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Export Defaults — Response Schema
+// ---------------------------------------------------------------------------
+
+const permissionEntrySchema = z.object({
+  resourceCode: z.string(),
+  canAccess: z.boolean(),
+  canNew: z.boolean(),
+  canView: z.boolean(),
+  canEdit: z.boolean(),
+  canDelete: z.boolean(),
+});
+
+const fieldOverrideEntrySchema = z.object({
+  resourceCode: z.string(),
+  fieldPath: z.string(),
+  visibility: z.enum(FieldVisibility),
+});
+
+const accessGroupExportSchema = z.object({
+  code: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  isSystem: z.boolean(),
+  permissions: z.array(permissionEntrySchema),
+  fieldOverrides: z.array(fieldOverrideEntrySchema),
+});
+
+export const exportDefaultsResponseSchema = z.object({
+  version: z.string(),
+  exportedAt: z.string(),
+  exportedFrom: z.string(),
+  accessGroups: z.array(accessGroupExportSchema),
+});
+
+// ---------------------------------------------------------------------------
+// Import Defaults — Request Schema
+// ---------------------------------------------------------------------------
+
+const accessGroupImportSchema = z.object({
+  code: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().nullable().optional(),
+  isSystem: z.boolean().optional(), // Ignored on import — preserved from existing
+  permissions: z.array(permissionEntrySchema),
+  fieldOverrides: z.array(fieldOverrideEntrySchema).default([]),
+});
+
+export const importDefaultsRequestSchema = z.object({
+  version: z.string().optional(),
+  dryRun: z.boolean().default(false),
+  accessGroups: z.array(accessGroupImportSchema).min(1),
+});
+
+// ---------------------------------------------------------------------------
+// Import Defaults — Response Schema
+// ---------------------------------------------------------------------------
+
+export const importDefaultsResponseSchema = z.object({
+  status: z.enum(['APPLIED', 'DRY_RUN']),
+  summary: z.object({
+    accessGroupsCreated: z.number(),
+    accessGroupsUpdated: z.number(),
+    permissionsSet: z.number(),
+    fieldOverridesSet: z.number(),
+  }),
+  warnings: z.array(z.string()),
+});
+
+// ---------------------------------------------------------------------------
 // Inferred TypeScript Types
 // ---------------------------------------------------------------------------
 
 export type CreateCompanyProfileRequest = z.infer<typeof createCompanyProfileRequestSchema>;
 export type UpdateCompanyProfileRequest = z.infer<typeof updateCompanyProfileRequestSchema>;
 export type CompanyProfileResponse = z.infer<typeof companyProfileResponseSchema>;
+export type ExportDefaultsResponse = z.infer<typeof exportDefaultsResponseSchema>;
+export type ImportDefaultsRequest = z.infer<typeof importDefaultsRequestSchema>;
+export type ImportDefaultsResponse = z.infer<typeof importDefaultsResponseSchema>;

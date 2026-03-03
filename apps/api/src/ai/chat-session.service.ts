@@ -42,11 +42,24 @@ export interface AiConversationWithMeta {
 
 // ─── Service ────────────────────────────────────────────────────────────────
 
+export type SessionEndCallback = (conversationId: string) => void | Promise<void>;
+
 export class ChatSessionService {
+  private onSessionEndCallbacks: SessionEndCallback[] = [];
+
   constructor(
     private db: PrismaClient,
     private logger: Logger,
   ) {}
+
+  /**
+   * Register a callback to be invoked when a session ends.
+   * Used by ConversationSummaryService to trigger summarisation.
+   * Callbacks are fire-and-forget — failures are logged but do not block session end.
+   */
+  onSessionEnd(callback: SessionEndCallback): void {
+    this.onSessionEndCallbacks.push(callback);
+  }
 
   /**
    * Create a new chat session (AiConversation).
@@ -109,10 +122,7 @@ export class ChatSessionService {
         return { data: [], nextCursor: null };
       }
       cursorCondition = {
-        OR: [
-          { startedAt: { lt: parsed.date } },
-          { startedAt: parsed.date, id: { lt: parsed.id } },
-        ],
+        OR: [{ startedAt: { lt: parsed.date } }, { startedAt: parsed.date, id: { lt: parsed.id } }],
       };
     }
 
@@ -149,9 +159,8 @@ export class ChatSessionService {
     }));
 
     const lastItem = items[items.length - 1];
-    const nextCursor = hasMore && lastItem
-      ? encodeCompoundCursor(lastItem.startedAt, lastItem.id)
-      : null;
+    const nextCursor =
+      hasMore && lastItem ? encodeCompoundCursor(lastItem.startedAt, lastItem.id) : null;
 
     return { data, nextCursor };
   }
@@ -291,10 +300,27 @@ export class ChatSessionService {
       },
     });
 
-    this.logger.info(
-      { sessionId, userId, companyId },
-      'Chat session ended',
-    );
+    this.logger.info({ sessionId, userId, companyId }, 'Chat session ended');
+
+    // Fire-and-forget: invoke session end callbacks (e.g., conversation summarisation)
+    for (const callback of this.onSessionEndCallbacks) {
+      try {
+        const result = callback(sessionId);
+        if (result && typeof (result as Promise<void>).catch === 'function') {
+          (result as Promise<void>).catch((err) => {
+            this.logger.warn(
+              { sessionId, error: (err as Error).message },
+              'Session end callback failed (non-blocking)',
+            );
+          });
+        }
+      } catch (err) {
+        this.logger.warn(
+          { sessionId, error: (err as Error).message },
+          'Session end callback threw (non-blocking)',
+        );
+      }
+    }
   }
 }
 

@@ -4,8 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Mock @nexa/db & argon2 — vi.hoisted ensures variables exist when vi.mock is hoisted
 // ---------------------------------------------------------------------------
 
-const { mockPrisma, mockArgon2Hash } = vi.hoisted(() => ({
+const { mockPrisma, mockArgon2Hash, mockApplyViewFilters } = vi.hoisted(() => ({
   mockArgon2Hash: vi.fn().mockResolvedValue('$argon2id$hashed-password'),
+  mockApplyViewFilters: vi.fn().mockResolvedValue({}),
   mockPrisma: {
     user: {
       findUnique: vi.fn(),
@@ -32,6 +33,10 @@ vi.mock('argon2', () => ({
     hash: mockArgon2Hash,
     argon2id: 2,
   },
+}));
+
+vi.mock('../../core/views/apply-view-filters.js', () => ({
+  applyViewFilters: mockApplyViewFilters,
 }));
 
 vi.mock('@nexa/db', () => ({
@@ -362,6 +367,57 @@ describe('listUsers', () => {
     expect(mockPrisma.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         orderBy: { createdAt: 'asc' },
+      }),
+    );
+  });
+
+  it('transforms role filter to companyRoles relation query (E7.5 fix)', async () => {
+    // applyViewFilters returns { role: { in: ['ADMIN'] } } — which is invalid
+    // because role is on UserCompanyRole, not User.
+    // transformUserFilters should rewrite it to a relation query.
+    mockApplyViewFilters.mockResolvedValueOnce({ role: { in: ['ADMIN'] } });
+    mockPrisma.user.findMany.mockResolvedValue([]);
+    mockPrisma.user.count.mockResolvedValue(0);
+
+    await listUsers(mockPrisma as never, TEST_COMPANY_ID, {
+      ...defaultQuery,
+      conditions: '[{"dataViewFieldId":"f1","operator":"IN","valueList":["ADMIN"]}]',
+    });
+
+    expect(mockPrisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          AND: [{ companyRoles: { some: { role: { in: ['ADMIN'] }, companyId: null } } }],
+        }),
+      }),
+    );
+  });
+
+  it('transforms role inside AND/OR arrays (E7.5 fix)', async () => {
+    // Simulate two conditions with AND: role IN ['STAFF'] AND isActive = true
+    mockApplyViewFilters.mockResolvedValueOnce({
+      AND: [{ role: { in: ['STAFF'] } }, { isActive: { equals: true } }],
+    });
+    mockPrisma.user.findMany.mockResolvedValue([]);
+    mockPrisma.user.count.mockResolvedValue(0);
+
+    await listUsers(mockPrisma as never, TEST_COMPANY_ID, {
+      ...defaultQuery,
+      conditions: '[{"dataViewFieldId":"f1"},{"dataViewFieldId":"f2"}]',
+    });
+
+    expect(mockPrisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          AND: [
+            {
+              AND: [
+                { companyRoles: { some: { role: { in: ['STAFF'] }, companyId: null } } },
+                { isActive: { equals: true } },
+              ],
+            },
+          ],
+        }),
       }),
     );
   });

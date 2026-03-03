@@ -2,29 +2,30 @@ import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@nexa/db';
 import type { Logger } from 'pino';
 import type Redis from 'ioredis';
-import type {
-  AiGateway,
-} from '@nexa/ai-gateway';
-import type {
-  AiGatewayRequest,
-  Message,
-  Tool,
-} from '@nexa/ai-gateway';
-import {
-  AiQuotaExceededError,
-  ProviderUnavailableError,
-  ProviderError,
-} from '@nexa/ai-gateway';
+import type { AiGateway } from '@nexa/ai-gateway';
+import type { AiGatewayRequest, Message, Tool } from '@nexa/ai-gateway';
+import { AiQuotaExceededError, ProviderUnavailableError, ProviderError } from '@nexa/ai-gateway';
 import type { EventBus } from '../core/events/event-bus.js';
 import type { PromptManager } from './prompt-manager.js';
 import type { ResponseParser } from './response-parser.js';
 import type { ActionPlanner } from './action-planner.js';
+import type { MemoryInjectionService } from './memory-injection.service.js';
+import type { DynamicContextService } from './dynamic-context.service.js';
+import type { PatternDetectionService } from './pattern-detection.service.js';
+import type { MemoryParserService } from './memory-parser.service.js';
+import type { MemoryCitationService } from './memory-citation.service.js';
+import type {
+  PreCompactionService,
+  AiMessage as PreCompactionMessage,
+} from './pre-compaction.service.js';
+import type { MemoryRecord } from './memory.service.js';
 import type {
   AgentGuardrails,
   AiRequest,
   AiRequestContext,
   AiResponse,
   AiStreamChunk,
+  EntityMentionRef,
 } from './ai.types.js';
 import { AiAgentNotFoundError } from './ai.errors.js';
 
@@ -41,6 +42,24 @@ export class AiOrchestrator {
   /** ActionPlanner for guardrail evaluation of action proposals (nullable for graceful degradation) */
   private actionPlanner: ActionPlanner | null = null;
 
+  /** MemoryInjectionService for <user_context> assembly (nullable for graceful degradation) */
+  private memoryInjection: MemoryInjectionService | null = null;
+
+  /** DynamicContextService for skill-aware context assembly (nullable for graceful degradation) */
+  private dynamicContext: DynamicContextService | null = null;
+
+  /** PatternDetectionService for implicit learning from user actions (nullable for graceful degradation) */
+  private patternDetection: PatternDetectionService | null = null;
+
+  /** MemoryParserService for detecting explicit memory intents in user messages (nullable for graceful degradation) */
+  private memoryParser: MemoryParserService | null = null;
+
+  /** MemoryCitationService for citation tracking after AI responses (nullable for graceful degradation, E5b-3 Task 3) */
+  private memoryCitation: MemoryCitationService | null = null;
+
+  /** PreCompactionService for extracting facts before context trimming (nullable for graceful degradation, E5b-3 Task 7) */
+  private preCompaction: PreCompactionService | null = null;
+
   constructor(
     private aiGateway: AiGateway,
     private promptManager: PromptManager,
@@ -54,6 +73,36 @@ export class AiOrchestrator {
   /** Set the ActionPlanner instance (called during plugin initialization) */
   setActionPlanner(planner: ActionPlanner): void {
     this.actionPlanner = planner;
+  }
+
+  /** Set the MemoryInjectionService instance (called during plugin initialization) */
+  setMemoryInjection(service: MemoryInjectionService): void {
+    this.memoryInjection = service;
+  }
+
+  /** Set the DynamicContextService instance (called during plugin initialization) */
+  setDynamicContext(service: DynamicContextService): void {
+    this.dynamicContext = service;
+  }
+
+  /** Set the PatternDetectionService instance (called during plugin initialization, E5b-3) */
+  setPatternDetection(service: PatternDetectionService): void {
+    this.patternDetection = service;
+  }
+
+  /** Set the MemoryParserService instance (called during plugin initialization, E5b-3 Task 2) */
+  setMemoryParser(service: MemoryParserService): void {
+    this.memoryParser = service;
+  }
+
+  /** Set the MemoryCitationService instance (called during plugin initialization, E5b-3 Task 3) */
+  setMemoryCitation(service: MemoryCitationService): void {
+    this.memoryCitation = service;
+  }
+
+  /** Set the PreCompactionService instance (called during plugin initialization, E5b-3 Task 7) */
+  setPreCompaction(service: PreCompactionService): void {
+    this.preCompaction = service;
   }
 
   /**
@@ -87,9 +136,110 @@ export class AiOrchestrator {
         request.userMessage,
       );
 
+      // 3b. Dynamic context assembly OR basic memory injection
+      let dynamicTools: Tool[] | undefined;
+      if (this.dynamicContext) {
+        // Skill-aware context assembly (includes memories, skills, knowledge, permissions, screen)
+        const assembled = await this.dynamicContext.assembleInteractive({
+          userId: request.context.userId,
+          companyId: request.context.companyId,
+          userMessage: request.userMessage,
+          screenContext: request.context.currentPage
+            ? {
+                url: request.context.currentPage,
+                entityType: request.context.currentEntityType,
+                entityId: request.context.currentEntityId,
+              }
+            : undefined,
+          basePrompt: resolved.systemPrompt,
+        });
+
+        resolved.systemPrompt = assembled.systemPrompt;
+        dynamicTools = assembled.tools.map((t) => ({
+          name: t.name,
+          description: t.description,
+          inputSchema: t.inputSchema as unknown as Record<string, unknown>,
+        }));
+
+        this.logger.info(
+          {
+            skillChain: assembled.skillChain,
+            tokenBreakdown: assembled.tokenBreakdown,
+            toolCount: dynamicTools.length,
+          },
+          'Dynamic context assembled for process()',
+        );
+
+        // Record skill activations for pattern detection (E5b-3 Task 1.4)
+        if (
+          this.patternDetection &&
+          assembled.skillChain.l2Activated &&
+          assembled.skillChain.l1Skill
+        ) {
+          try {
+            this.patternDetection.recordAction(request.context.userId, request.context.companyId, {
+              actionType: 'skill_activation',
+              entityType: assembled.skillChain.l1Skill,
+              metadata: { module: assembled.skillChain.l0Module },
+            });
+          } catch {
+            // Silent — pattern detection failures must not break the AI flow
+          }
+        }
+      } else {
+        // Fallback: basic memory injection only (E5b-1 behaviour)
+        resolved.systemPrompt = await this.injectMemoryContext(
+          resolved.systemPrompt,
+          request.context.userId,
+          request.context.companyId,
+          [request.userMessage],
+        );
+      }
+
+      // 3c. Memory intent detection (E5b-3 Task 2.3)
+      // Check for explicit memory instructions before calling the AI Gateway
+      let memoryConfirmation: string | null = null;
+      if (this.memoryParser) {
+        try {
+          const intent = this.memoryParser.parseForMemoryIntent(request.userMessage, '');
+          if (intent) {
+            const result = await this.memoryParser.processMemoryIntent(
+              request.context.userId,
+              request.context.companyId,
+              intent,
+            );
+
+            if (result.message) {
+              // Build a confirmation instruction for the AI to relay naturally
+              memoryConfirmation = this.buildMemoryConfirmation(intent.type, result.message);
+            }
+          }
+        } catch (error) {
+          // Silent — memory parsing failures must not break the AI flow (IMP-006)
+          this.logger.warn(
+            { error: (error as Error).message, userId: request.context.userId },
+            'Memory intent parsing failed, proceeding without memory processing',
+          );
+        }
+      }
+
+      // Inject memory confirmation into system prompt so AI can acknowledge it
+      if (memoryConfirmation) {
+        resolved.systemPrompt += `\n\n<memory_update>\n${memoryConfirmation}\n</memory_update>`;
+      }
+
+      // 3d. Entity mention processing (E5b-7 Task 10.1)
+      // Append structured entity references to the user prompt so the AI sees exact IDs
+      resolved.userPrompt = this.formatEntityMentions(resolved.userPrompt, request.entityMentions);
+
       // 4. Load conversation history (verify tenant + user ownership)
       const conversationHistory = request.conversationId
-        ? await this.loadConversationHistory(request.conversationId, agent, request.context.companyId, request.context.userId)
+        ? await this.loadConversationHistory(
+            request.conversationId,
+            agent,
+            request.context.companyId,
+            request.context.userId,
+          )
         : [];
 
       // 5. Build gateway request
@@ -99,6 +249,11 @@ export class AiOrchestrator {
         request,
         conversationHistory,
       );
+
+      // Override tools with dynamic skill-specific tools when available
+      if (dynamicTools && dynamicTools.length > 0) {
+        gatewayRequest.tools = dynamicTools;
+      }
 
       // 6. Call AI Gateway
       const gatewayResponse = await this.aiGateway.complete(gatewayRequest);
@@ -112,11 +267,23 @@ export class AiOrchestrator {
       }
 
       // 8. Ensure conversation exists (needed before ActionPlanner for conversationId)
-      const conversationId = request.conversationId ?? await this.ensureConversation(
-        request.context.userId,
-        request.context.companyId,
-        agent.id,
-      );
+      const conversationId =
+        request.conversationId ??
+        (await this.ensureConversation(
+          request.context.userId,
+          request.context.companyId,
+          agent.id,
+        ));
+
+      // 8b. Emit entity mention resolved event (E5b-7 Task 10.2)
+      if (request.entityMentions && request.entityMentions.length > 0) {
+        this.emitEntityMentionResolved(
+          conversationId,
+          request.context.userId,
+          request.context.companyId,
+          request.entityMentions,
+        );
+      }
 
       // 9. If action proposal detected, enrich with guardrails via ActionPlanner
       if (aiResponse.type === 'action_proposal' && aiResponse.action) {
@@ -157,6 +324,22 @@ export class AiOrchestrator {
         }
       }
 
+      // 9b. Record tool call action for pattern detection (E5b-3 Task 1.4)
+      if (gatewayResponse.toolCalls && this.patternDetection) {
+        try {
+          for (const tc of gatewayResponse.toolCalls as Array<{ name: string; input?: unknown }>) {
+            const entityType = this.inferEntityTypeFromToolName(tc.name);
+            this.patternDetection.recordAction(request.context.userId, request.context.companyId, {
+              actionType: tc.name,
+              entityType,
+              metadata: tc.input as Record<string, unknown> | undefined,
+            });
+          }
+        } catch {
+          // Silent — pattern detection failures must not break the AI flow (IMP-006)
+        }
+      }
+
       // 10. Persist messages
       await this.persistMessage(conversationId, 'user', request.userMessage, {});
 
@@ -169,6 +352,17 @@ export class AiOrchestrator {
         toolCalls: gatewayResponse.toolCalls ?? undefined,
         promptVersionId: String(loaded.promptVersion),
       });
+
+      // 11. Citation tracking — detect which injected memories were cited in the response (E5b-3 Task 3.2)
+      if (this.memoryCitation && aiResponse.content) {
+        this.trackCitedMemories(
+          request.context.userId,
+          request.context.companyId,
+          aiResponse.content,
+        ).catch(() => {
+          // Fire-and-forget — citation tracking failures are silent (IMP-006)
+        });
+      }
 
       return aiResponse;
     } catch (error) {
@@ -190,10 +384,45 @@ export class AiOrchestrator {
     routingTags?: string[];
     context: AiRequestContext;
     intent: string;
+    /** Optional: module key for AUTONOMOUS context assembly */
+    moduleKey?: string;
+    /** Optional: skill name for AUTONOMOUS context assembly */
+    skillName?: string;
+    /** Optional: input data for AUTONOMOUS context assembly */
+    inputData?: Record<string, unknown>;
   }): Promise<AiResponse> {
     try {
+      let finalSystemPrompt = params.systemPrompt;
+      let autonomousTools: Tool[] | undefined;
+
+      // Apply AUTONOMOUS context assembly when DynamicContextService is available and moduleKey is provided
+      if (this.dynamicContext && params.moduleKey) {
+        const assembled = await this.dynamicContext.assembleAutonomous({
+          moduleKey: params.moduleKey,
+          skillName: params.skillName,
+          inputData: params.inputData ?? {},
+          basePrompt: params.systemPrompt,
+        });
+
+        finalSystemPrompt = assembled.systemPrompt;
+        autonomousTools = assembled.tools.map((t) => ({
+          name: t.name,
+          description: t.description,
+          inputSchema: t.inputSchema as unknown as Record<string, unknown>,
+        }));
+
+        this.logger.info(
+          {
+            skillChain: assembled.skillChain,
+            tokenBreakdown: assembled.tokenBreakdown,
+            toolCount: autonomousTools.length,
+          },
+          'Dynamic context assembled for processDirect() (AUTONOMOUS)',
+        );
+      }
+
       const messages: Message[] = [
-        { role: 'system', content: params.systemPrompt },
+        { role: 'system', content: finalSystemPrompt },
         { role: 'user', content: params.userMessage },
       ];
 
@@ -203,6 +432,7 @@ export class AiOrchestrator {
         featureKey: `ai.${params.intent}`,
         messages,
         routingTags: params.routingTags,
+        tools: autonomousTools && autonomousTools.length > 0 ? autonomousTools : undefined,
         stream: false,
       };
 
@@ -244,9 +474,101 @@ export class AiOrchestrator {
         request.userMessage,
       );
 
+      // 3b. Dynamic context assembly OR basic memory injection
+      let dynamicStreamTools: Tool[] | undefined;
+      if (this.dynamicContext) {
+        const assembled = await this.dynamicContext.assembleInteractive({
+          userId: request.context.userId,
+          companyId: request.context.companyId,
+          userMessage: request.userMessage,
+          screenContext: request.context.currentPage
+            ? {
+                url: request.context.currentPage,
+                entityType: request.context.currentEntityType,
+                entityId: request.context.currentEntityId,
+              }
+            : undefined,
+          basePrompt: resolved.systemPrompt,
+        });
+
+        resolved.systemPrompt = assembled.systemPrompt;
+        dynamicStreamTools = assembled.tools.map((t) => ({
+          name: t.name,
+          description: t.description,
+          inputSchema: t.inputSchema as unknown as Record<string, unknown>,
+        }));
+
+        this.logger.info(
+          {
+            skillChain: assembled.skillChain,
+            tokenBreakdown: assembled.tokenBreakdown,
+            toolCount: dynamicStreamTools.length,
+          },
+          'Dynamic context assembled for processStream()',
+        );
+
+        // Record skill activations for pattern detection (E5b-3 Task 1.4)
+        if (
+          this.patternDetection &&
+          assembled.skillChain.l2Activated &&
+          assembled.skillChain.l1Skill
+        ) {
+          try {
+            this.patternDetection.recordAction(request.context.userId, request.context.companyId, {
+              actionType: 'skill_activation',
+              entityType: assembled.skillChain.l1Skill,
+              metadata: { module: assembled.skillChain.l0Module },
+            });
+          } catch {
+            // Silent — pattern detection failures must not break the AI flow
+          }
+        }
+      } else {
+        resolved.systemPrompt = await this.injectMemoryContext(
+          resolved.systemPrompt,
+          request.context.userId,
+          request.context.companyId,
+          [request.userMessage],
+        );
+      }
+
+      // 3c. Memory intent detection for streaming (E5b-3 Task 2.3)
+      let streamMemoryConfirmation: string | null = null;
+      if (this.memoryParser) {
+        try {
+          const intent = this.memoryParser.parseForMemoryIntent(request.userMessage, '');
+          if (intent) {
+            const result = await this.memoryParser.processMemoryIntent(
+              request.context.userId,
+              request.context.companyId,
+              intent,
+            );
+
+            if (result.message) {
+              streamMemoryConfirmation = this.buildMemoryConfirmation(intent.type, result.message);
+            }
+          }
+        } catch {
+          // Silent — memory parsing failures must not break the AI flow (IMP-006)
+        }
+      }
+
+      if (streamMemoryConfirmation) {
+        resolved.systemPrompt += `\n\n<memory_update>\n${streamMemoryConfirmation}\n</memory_update>`;
+      }
+
+      // 3d. Entity mention processing (E5b-7 Task 10.1)
+      // Append structured entity references to the user prompt so the AI sees exact IDs
+      resolved.userPrompt = this.formatEntityMentions(resolved.userPrompt, request.entityMentions);
+
       // 4. Load conversation history (verify tenant + user ownership)
       const conversationHistory = request.conversationId
-        ? await this.loadConversationHistory(request.conversationId, agent, request.context.companyId, request.context.userId)
+        ? await this.loadConversationHistory(
+            request.conversationId,
+            agent,
+            request.context.companyId,
+            request.context.userId,
+          )
         : [];
 
       // 5. Build gateway request with stream: true
@@ -257,6 +579,11 @@ export class AiOrchestrator {
         conversationHistory,
       );
       gatewayRequest.stream = true;
+
+      // Override tools with dynamic skill-specific tools when available
+      if (dynamicStreamTools && dynamicStreamTools.length > 0) {
+        gatewayRequest.tools = dynamicStreamTools;
+      }
 
       // 6. Stream from AI Gateway, accumulating content and tool calls for persistence
       const streamStartTime = Date.now();
@@ -297,11 +624,23 @@ export class AiOrchestrator {
       };
 
       // 7. Persist messages after stream completes
-      const conversationId = request.conversationId ?? await this.ensureConversation(
-        request.context.userId,
-        request.context.companyId,
-        agent.id,
-      );
+      const conversationId =
+        request.conversationId ??
+        (await this.ensureConversation(
+          request.context.userId,
+          request.context.companyId,
+          agent.id,
+        ));
+
+      // 7b. Emit entity mention resolved event (E5b-7 Task 10.2)
+      if (request.entityMentions && request.entityMentions.length > 0) {
+        this.emitEntityMentionResolved(
+          conversationId,
+          request.context.userId,
+          request.context.companyId,
+          request.entityMentions,
+        );
+      }
 
       await this.persistMessage(conversationId, 'user', request.userMessage, {});
 
@@ -342,6 +681,31 @@ export class AiOrchestrator {
         }
         // If blocked, don't emit — the conversational content already streamed
       }
+
+      // 9. Citation tracking for streamed response (E5b-3 Task 3.2)
+      if (this.memoryCitation && accumulatedContent) {
+        this.trackCitedMemories(
+          request.context.userId,
+          request.context.companyId,
+          accumulatedContent,
+        ).catch(() => {
+          // Fire-and-forget — citation tracking failures are silent (IMP-006)
+        });
+      }
+
+      // 10. Record action for pattern detection (E5b-3 Task 1.4)
+      if (lastToolCall && this.patternDetection) {
+        try {
+          const entityType = this.inferEntityTypeFromToolName(lastToolCall.name);
+          this.patternDetection.recordAction(request.context.userId, request.context.companyId, {
+            actionType: lastToolCall.name,
+            entityType,
+            metadata: lastToolCall.input as Record<string, unknown> | undefined,
+          });
+        } catch {
+          // Silent — pattern detection failures must not break the AI flow (IMP-006)
+        }
+      }
     } catch (error) {
       // Graceful degradation — yield error chunk, never throw
       const degraded = this.handleDegradation(error as Error, request);
@@ -349,6 +713,109 @@ export class AiOrchestrator {
         type: 'error',
         error: degraded.content ?? (error as Error).message,
       };
+    }
+  }
+
+  // ─── Memory Citation Tracking (E5b-3 Task 3.2) ────────────────────────────
+
+  /**
+   * Detect which injected memories were cited in the AI response
+   * and update their lastAccessedAt. Fire-and-forget — never throws.
+   *
+   * Uses cached memories from MemoryInjectionService to avoid a redundant DB fetch.
+   */
+  private async trackCitedMemories(
+    userId: string,
+    companyId: string,
+    aiResponseContent: string,
+  ): Promise<void> {
+    if (!this.memoryCitation) return;
+
+    try {
+      // Use cached memories from injection step instead of re-fetching from DB
+      const memoryRecords: MemoryRecord[] = this.memoryInjection
+        ? this.memoryInjection.getLastInjectedMemories(userId, companyId)
+        : [];
+
+      if (memoryRecords.length === 0) return;
+
+      const citedIds = this.memoryCitation.detectCitedMemories(memoryRecords, aiResponseContent);
+      if (citedIds.length > 0) {
+        await this.memoryCitation.trackMemoryAccess(citedIds);
+      }
+    } catch (error) {
+      this.logger.debug(
+        { error: (error as Error).message, userId },
+        'Citation tracking failed — non-critical, skipping',
+      );
+    }
+  }
+
+  // ─── Memory Injection (E5b-1) ──────────────────────────────────────────────
+
+  /**
+   * Prepend user memory context to the system prompt.
+   * Graceful degradation: if injection fails, returns the original prompt unchanged.
+   */
+  private async injectMemoryContext(
+    systemPrompt: string,
+    userId: string,
+    companyId: string,
+    recentMessages?: string[],
+  ): Promise<string> {
+    if (!this.memoryInjection) return systemPrompt;
+
+    try {
+      const userContext = await this.memoryInjection.assembleUserContext(
+        userId,
+        companyId,
+        recentMessages,
+      );
+      if (!userContext) return systemPrompt;
+      return userContext + '\n\n' + systemPrompt;
+    } catch (error) {
+      this.logger.warn(
+        { error: (error as Error).message, userId, companyId },
+        'Memory injection failed, proceeding without user context',
+      );
+      return systemPrompt;
+    }
+  }
+
+  // ─── Entity Mention Processing (E5b-7 Task 10) ────────────────────────────
+
+  /**
+   * Format entity mentions as a structured context block appended after the user message.
+   * Enables the AI to use exact entity IDs when calling tools (no ambiguity).
+   * Returns the original message unchanged if no mentions are present.
+   */
+  private formatEntityMentions(userMessage: string, mentions?: EntityMentionRef[]): string {
+    if (!mentions || mentions.length === 0) return userMessage;
+
+    const refs = mentions.map((m) => `${m.type} "${m.name}" (${m.id})`).join(', ');
+
+    return `${userMessage}\n\n[Referenced entities: ${refs}]`;
+  }
+
+  /**
+   * Emit ai.entityMention.resolved event when entity mentions are present.
+   * Fire-and-forget — failures are logged but do not break the AI flow (IMP-006).
+   */
+  private emitEntityMentionResolved(
+    conversationId: string,
+    userId: string,
+    companyId: string,
+    mentions: EntityMentionRef[],
+  ): void {
+    try {
+      this.eventBus.emit('ai.entityMention.resolved', {
+        conversationId,
+        userId,
+        companyId,
+        mentions: mentions.map((m) => ({ type: m.type, id: m.id, name: m.name })),
+      });
+    } catch {
+      // Silent — entity mention event failures must not break the AI flow (IMP-006)
     }
   }
 
@@ -395,9 +862,7 @@ export class AiOrchestrator {
 
       const keywords = config.keywords as string[] | undefined;
       if (keywords && Array.isArray(keywords)) {
-        const matched = keywords.some((kw: string) =>
-          messageLower.includes(kw.toLowerCase()),
-        );
+        const matched = keywords.some((kw: string) => messageLower.includes(kw.toLowerCase()));
         if (matched) {
           return this.toResolvedAgent(agent);
         }
@@ -480,9 +945,42 @@ export class AiOrchestrator {
       content: m.content,
     }));
 
-    // Apply token limit trimming
+    // Apply token limit trimming with pre-compaction flush (E5b-3 Task 7.4)
     if (agent.maxInputTokens) {
-      history = this.trimHistoryByTokens(history, agent.maxInputTokens);
+      const trimmed = this.trimHistoryByTokens(history, agent.maxInputTokens);
+
+      // If messages were trimmed and PreCompactionService is available,
+      // extract facts from the trimmed messages before losing them
+      if (trimmed.length < history.length && this.preCompaction) {
+        // Identify which messages were removed (those in history but not in trimmed)
+        const keptSet = new Set(trimmed);
+        const removedMessages: PreCompactionMessage[] = history
+          .filter((m) => !keptSet.has(m))
+          .map((m) => ({
+            role: m.role,
+            content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+          }));
+
+        if (removedMessages.length > 0) {
+          // Await pre-compaction: AC #6 requires extraction BEFORE trimming completes.
+          // Failures are caught and logged but do not block conversation loading.
+          try {
+            await this.preCompaction.extractAndFlush(userId, companyId, removedMessages);
+          } catch (error) {
+            this.logger.warn(
+              {
+                error: (error as Error).message,
+                userId,
+                companyId,
+                removedCount: removedMessages.length,
+              },
+              'Pre-compaction flush failed — proceeding without memory extraction',
+            );
+          }
+        }
+      }
+
+      history = trimmed;
     }
 
     return history;
@@ -523,9 +1021,10 @@ export class AiOrchestrator {
     for (let i = 0; i < history.length; i++) {
       if (totalTokens > budget && !protectedIndices.has(i)) {
         // Skip this message
-        const content = typeof history[i]!.content === 'string'
-          ? history[i]!.content
-          : JSON.stringify(history[i]!.content);
+        const content =
+          typeof history[i]!.content === 'string'
+            ? history[i]!.content
+            : JSON.stringify(history[i]!.content);
         totalTokens -= Math.ceil((content as string).length / CHARS_PER_TOKEN);
         skipped++;
       } else {
@@ -686,7 +1185,8 @@ export class AiOrchestrator {
         type: 'error',
         messageId,
         errorCode: 'AI_DEGRADED',
-        content: 'AI service is temporarily unavailable. Please use the traditional interface or try again later.',
+        content:
+          'AI service is temporarily unavailable. Please use the traditional interface or try again later.',
       };
     }
 
@@ -715,10 +1215,7 @@ export class AiOrchestrator {
 
     // Agent/prompt not found errors
     if (error instanceof AiAgentNotFoundError) {
-      this.logger.warn(
-        { error: error.message },
-        'AI agent not found',
-      );
+      this.logger.warn({ error: error.message }, 'AI agent not found');
 
       return {
         type: 'error',
@@ -768,13 +1265,49 @@ export class AiOrchestrator {
     }
 
     return {
-      canRead: Array.isArray(raw.canRead) ? raw.canRead as string[] : [],
-      canWrite: Array.isArray(raw.canWrite) ? raw.canWrite as string[] : [],
+      canRead: Array.isArray(raw.canRead) ? (raw.canRead as string[]) : [],
+      canWrite: Array.isArray(raw.canWrite) ? (raw.canWrite as string[]) : [],
       requiresApproval: typeof raw.requiresApproval === 'boolean' ? raw.requiresApproval : true,
-      maxAmountWithoutApproval: typeof raw.maxAmountWithoutApproval === 'string' ? raw.maxAmountWithoutApproval : undefined,
-      blockedOperations: Array.isArray(raw.blockedOperations) ? raw.blockedOperations as string[] : [],
-      dataScope: (raw.dataScope === 'own' || raw.dataScope === 'module' || raw.dataScope === 'all') ? raw.dataScope : 'own',
+      maxAmountWithoutApproval:
+        typeof raw.maxAmountWithoutApproval === 'string' ? raw.maxAmountWithoutApproval : undefined,
+      blockedOperations: Array.isArray(raw.blockedOperations)
+        ? (raw.blockedOperations as string[])
+        : [],
+      dataScope:
+        raw.dataScope === 'own' || raw.dataScope === 'module' || raw.dataScope === 'all'
+          ? raw.dataScope
+          : 'own',
     };
+  }
+
+  // ─── Memory Confirmation (E5b-3 Task 2.3) ─────────────────────────────────
+
+  /**
+   * Build a natural-language confirmation instruction for the AI to acknowledge
+   * a memory operation (create, correct, forget).
+   */
+  private buildMemoryConfirmation(_intentType: string, resultMessage: string): string {
+    const [code, ...contentParts] = resultMessage.split(':');
+    const content = contentParts.join(':');
+
+    switch (code) {
+      case 'MEMORY_CREATED':
+        return `You just saved a new memory for the user: "${content}". Acknowledge this briefly (e.g., "I'll remember that...").`;
+      case 'MEMORY_MERGED':
+        return `A memory about "${content}" already existed and was updated with the new information. Acknowledge this briefly.`;
+      case 'MEMORY_CORRECTED':
+        return `You updated the user's previous preference/instruction to: "${content}". Acknowledge the correction briefly.`;
+      case 'MEMORY_FORGOTTEN':
+        return `You forgot the user's preference about: "${content}". Acknowledge this briefly (e.g., "I've forgotten...").`;
+      case 'MEMORY_NOT_FOUND':
+        return `The user asked to forget something about "${content}", but no matching memory was found. Let them know.`;
+      case 'MEMORY_DISABLED':
+        return 'The user asked you to remember something, but memory is disabled in their settings. Let them know they can enable it in settings.';
+      case 'CATEGORY_DISABLED':
+        return `The user asked you to remember something, but the ${content} memory category is disabled in their settings.`;
+      default:
+        return '';
+    }
   }
 
   /**

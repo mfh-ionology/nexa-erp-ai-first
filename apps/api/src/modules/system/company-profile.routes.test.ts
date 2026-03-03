@@ -6,7 +6,14 @@ import Fastify from 'fastify';
 // Mock @nexa/db — vi.hoisted ensures variables exist when vi.mock is hoisted
 // ---------------------------------------------------------------------------
 
-const { mockPrisma, mockResolveUserRole, mockLoadDefaultAccessGroups, mockAssignFullAccessGroup, mockPermissionService } = vi.hoisted(() => ({
+const {
+  mockPrisma,
+  mockResolveUserRole,
+  mockLoadDefaultAccessGroups,
+  mockAssignFullAccessGroup,
+  mockPermissionService,
+  mockEventBus,
+} = vi.hoisted(() => ({
   mockPrisma: {
     user: { findUnique: vi.fn() },
     userCompanyRole: { create: vi.fn() },
@@ -16,11 +23,13 @@ const { mockPrisma, mockResolveUserRole, mockLoadDefaultAccessGroups, mockAssign
       update: vi.fn(),
     },
     numberSeries: { createMany: vi.fn() },
-    accessGroup: { findUnique: vi.fn(), upsert: vi.fn() },
+    accessGroup: { findUnique: vi.fn(), findMany: vi.fn(), upsert: vi.fn() },
     accessGroupPermission: { deleteMany: vi.fn(), createMany: vi.fn() },
+    accessGroupFieldOverride: { deleteMany: vi.fn(), createMany: vi.fn() },
     userAccessGroup: { create: vi.fn() },
     $transaction: vi.fn(),
   },
+  mockEventBus: { emit: vi.fn() },
   mockResolveUserRole: vi.fn(),
   mockLoadDefaultAccessGroups: vi.fn().mockResolvedValue({ created: 12, updated: 0 }),
   mockAssignFullAccessGroup: vi.fn().mockResolvedValue(undefined),
@@ -53,6 +62,11 @@ vi.mock('@nexa/db', () => ({
     STANDARD: 'STANDARD',
     FLAT_RATE: 'FLAT_RATE',
     CASH: 'CASH',
+  },
+  FieldVisibility: {
+    VISIBLE: 'VISIBLE',
+    READ_ONLY: 'READ_ONLY',
+    HIDDEN: 'HIDDEN',
   },
 }));
 
@@ -152,6 +166,7 @@ async function buildTestApp(): Promise<FastifyInstance> {
   app.setValidatorCompiler(zodValidatorCompiler);
   app.setSerializerCompiler(zodSerializerCompiler);
   registerErrorHandler(app);
+  app.decorate('eventBus', mockEventBus as unknown as FastifyInstance['eventBus']);
   await app.register(jwtVerifyPlugin);
   await app.register(companyContextPlugin);
   await app.register(companyProfileRoutesPlugin, { prefix: '/system' });
@@ -194,8 +209,20 @@ function setupMocks(config: { role?: string } = {}) {
       enabledModules: ['system'],
     });
   } else {
-    const fullPerm = { canAccess: true, canNew: true, canView: true, canEdit: true, canDelete: true };
-    const viewOnlyPerm = { canAccess: true, canNew: false, canView: true, canEdit: false, canDelete: false };
+    const fullPerm = {
+      canAccess: true,
+      canNew: true,
+      canView: true,
+      canEdit: true,
+      canDelete: true,
+    };
+    const viewOnlyPerm = {
+      canAccess: true,
+      canNew: false,
+      canView: true,
+      canEdit: false,
+      canDelete: false,
+    };
     const hasAccess = ['ADMIN', 'MANAGER'].includes(resolvedRole);
     const isViewer = resolvedRole === 'VIEWER';
     mockPermissionService.getEffectivePermissions.mockResolvedValue({
@@ -306,7 +333,11 @@ describe('Company Profile routes', () => {
       mockPermissionService.getEffectivePermissions.mockResolvedValue({
         permissions: {
           'system.company-profile.detail': {
-            canAccess: true, canNew: true, canView: true, canEdit: true, canDelete: true,
+            canAccess: true,
+            canNew: true,
+            canView: true,
+            canEdit: true,
+            canDelete: true,
           },
         },
         fieldOverrides: {
@@ -531,6 +562,424 @@ describe('Company Profile routes', () => {
           }),
         }),
       );
+    });
+  });
+
+  // =========================================================================
+  // GET /system/company-profile/export-defaults
+  // =========================================================================
+
+  describe('GET /system/company-profile/export-defaults', () => {
+    const sampleGroups = [
+      {
+        id: 'ag-1',
+        companyId: TEST_COMPANY_ID,
+        code: 'FULL_ACCESS',
+        name: 'Full Access',
+        description: 'All permissions',
+        isSystem: true,
+        isActive: true,
+        createdBy: TEST_USER_ID,
+        updatedBy: TEST_USER_ID,
+        permissions: [
+          {
+            resourceCode: 'system.users.list',
+            canAccess: true,
+            canNew: true,
+            canView: true,
+            canEdit: true,
+            canDelete: true,
+          },
+        ],
+        fieldOverrides: [
+          { resourceCode: 'system.users.detail', fieldPath: 'salary', visibility: 'HIDDEN' },
+        ],
+      },
+      {
+        id: 'ag-2',
+        companyId: TEST_COMPANY_ID,
+        code: 'READ_ONLY',
+        name: 'Read Only',
+        description: 'View-only access',
+        isSystem: true,
+        isActive: true,
+        createdBy: TEST_USER_ID,
+        updatedBy: TEST_USER_ID,
+        permissions: [
+          {
+            resourceCode: 'system.users.list',
+            canAccess: true,
+            canNew: false,
+            canView: true,
+            canEdit: false,
+            canDelete: false,
+          },
+        ],
+        fieldOverrides: [],
+      },
+    ];
+
+    it('returns 200 with exported access groups, permissions, and field overrides (AC #1)', async () => {
+      setupMocks();
+      mockPrisma.accessGroup.findMany.mockResolvedValue(sampleGroups);
+
+      app = await buildTestApp();
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/system/company-profile/export-defaults',
+        headers: authHeaders(testJwt),
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.version).toBe('1.0.0');
+      expect(body.data.exportedAt).toBeDefined();
+      expect(body.data.exportedFrom).toBe('Acme Ltd');
+      expect(body.data.accessGroups).toHaveLength(2);
+      expect(body.data.accessGroups[0].code).toBe('FULL_ACCESS');
+      expect(body.data.accessGroups[0].permissions).toHaveLength(1);
+      expect(body.data.accessGroups[0].fieldOverrides).toHaveLength(1);
+      expect(body.data.accessGroups[0].fieldOverrides[0].visibility).toBe('HIDDEN');
+      expect(body.data.accessGroups[1].code).toBe('READ_ONLY');
+      expect(body.data.accessGroups[1].fieldOverrides).toHaveLength(0);
+
+      // Verify Content-Disposition header
+      expect(res.headers['content-disposition']).toMatch(
+        /^attachment; filename="company-defaults-\d{4}-\d{2}-\d{2}\.json"$/,
+      );
+    });
+
+    it('queries only active access groups and returns empty array when none exist', async () => {
+      setupMocks();
+      mockPrisma.accessGroup.findMany.mockResolvedValue([]);
+
+      app = await buildTestApp();
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/system/company-profile/export-defaults',
+        headers: authHeaders(testJwt),
+      });
+
+      expect(mockPrisma.accessGroup.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { companyId: TEST_COMPANY_ID, isActive: true },
+        }),
+      );
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.data.accessGroups).toEqual([]);
+    });
+
+    it('returns 403 for STAFF role (AC #7)', async () => {
+      setupMocks({ role: 'STAFF' });
+
+      app = await buildTestApp();
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/system/company-profile/export-defaults',
+        headers: authHeaders(testJwt),
+      });
+
+      expect(res.statusCode).toBe(403);
+    });
+  });
+
+  // =========================================================================
+  // POST /system/company-profile/import-defaults
+  // =========================================================================
+
+  describe('POST /system/company-profile/import-defaults', () => {
+    const validImportPayload = {
+      version: '1.0.0',
+      dryRun: false,
+      accessGroups: [
+        {
+          code: 'SALES_STAFF',
+          name: 'Sales Staff',
+          description: 'Sales team access',
+          permissions: [
+            {
+              resourceCode: 'sales.orders.list',
+              canAccess: true,
+              canNew: true,
+              canView: true,
+              canEdit: true,
+              canDelete: false,
+            },
+          ],
+          fieldOverrides: [
+            { resourceCode: 'sales.orders.detail', fieldPath: 'costPrice', visibility: 'HIDDEN' },
+          ],
+        },
+      ],
+    };
+
+    function setupImportMocks(existing: { id: string; isSystem: boolean } | null = null) {
+      const groupId = existing?.id ?? 'new-group-id';
+      mockPrisma.accessGroup.findUnique.mockResolvedValue(existing);
+      mockPrisma.accessGroup.upsert.mockResolvedValue({
+        id: groupId,
+        companyId: TEST_COMPANY_ID,
+        code: 'SALES_STAFF',
+        name: 'Sales Staff',
+      });
+      mockPrisma.accessGroupPermission.deleteMany.mockResolvedValue({ count: 0 });
+      mockPrisma.accessGroupPermission.createMany.mockResolvedValue({ count: 1 });
+      mockPrisma.accessGroupFieldOverride.deleteMany.mockResolvedValue({ count: 0 });
+      mockPrisma.accessGroupFieldOverride.createMany.mockResolvedValue({ count: 1 });
+    }
+
+    it('creates new access groups and returns counts (AC #2)', async () => {
+      setupMocks();
+      setupImportMocks(null); // No existing group
+
+      app = await buildTestApp();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/system/company-profile/import-defaults',
+        headers: authHeaders(testJwt),
+        payload: validImportPayload,
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.status).toBe('APPLIED');
+      expect(body.data.summary.accessGroupsCreated).toBe(1);
+      expect(body.data.summary.accessGroupsUpdated).toBe(0);
+      expect(body.data.summary.permissionsSet).toBe(1);
+      expect(body.data.summary.fieldOverridesSet).toBe(1);
+    });
+
+    it('updates existing access groups matched by code (AC #2, #4)', async () => {
+      setupMocks();
+      setupImportMocks({ id: 'existing-ag-id', isSystem: true });
+
+      app = await buildTestApp();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/system/company-profile/import-defaults',
+        headers: authHeaders(testJwt),
+        payload: validImportPayload,
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.data.summary.accessGroupsCreated).toBe(0);
+      expect(body.data.summary.accessGroupsUpdated).toBe(1);
+
+      // Verify upsert does NOT update isSystem
+      const upsertCall = mockPrisma.accessGroup.upsert.mock.calls[0]![0];
+      expect(upsertCall.update).not.toHaveProperty('isSystem');
+    });
+
+    it('handles multiple access groups with mix of new and existing', async () => {
+      setupMocks();
+      // First group exists, second is new
+      mockPrisma.accessGroup.findUnique
+        .mockResolvedValueOnce({ id: 'existing-ag', isSystem: true })
+        .mockResolvedValueOnce(null);
+      mockPrisma.accessGroup.upsert
+        .mockResolvedValueOnce({
+          id: 'existing-ag',
+          companyId: TEST_COMPANY_ID,
+          code: 'SALES',
+          name: 'Sales',
+        })
+        .mockResolvedValueOnce({
+          id: 'new-ag',
+          companyId: TEST_COMPANY_ID,
+          code: 'WAREHOUSE',
+          name: 'Warehouse',
+        });
+      mockPrisma.accessGroupPermission.deleteMany.mockResolvedValue({ count: 0 });
+      mockPrisma.accessGroupPermission.createMany.mockResolvedValue({ count: 1 });
+      mockPrisma.accessGroupFieldOverride.deleteMany.mockResolvedValue({ count: 0 });
+      mockPrisma.accessGroupFieldOverride.createMany.mockResolvedValue({ count: 0 });
+
+      app = await buildTestApp();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/system/company-profile/import-defaults',
+        headers: authHeaders(testJwt),
+        payload: {
+          accessGroups: [
+            {
+              code: 'SALES',
+              name: 'Sales',
+              permissions: [
+                {
+                  resourceCode: 'sales.orders.list',
+                  canAccess: true,
+                  canNew: true,
+                  canView: true,
+                  canEdit: true,
+                  canDelete: false,
+                },
+              ],
+              fieldOverrides: [],
+            },
+            {
+              code: 'WAREHOUSE',
+              name: 'Warehouse',
+              permissions: [
+                {
+                  resourceCode: 'inventory.items.list',
+                  canAccess: true,
+                  canNew: false,
+                  canView: true,
+                  canEdit: false,
+                  canDelete: false,
+                },
+              ],
+              fieldOverrides: [],
+            },
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.data.status).toBe('APPLIED');
+      expect(body.data.summary.accessGroupsCreated).toBe(1);
+      expect(body.data.summary.accessGroupsUpdated).toBe(1);
+      expect(body.data.summary.permissionsSet).toBe(2);
+    });
+
+    it('returns DRY_RUN status without modifying database when dryRun is true (AC #3)', async () => {
+      setupMocks();
+      // For dryRun, the transaction should throw DryRunAbort and catch it
+      mockPrisma.$transaction.mockImplementation(
+        async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => {
+          try {
+            return await fn(mockPrisma);
+          } catch (err: unknown) {
+            // Re-throw to let the service's .catch handler process it
+            throw err;
+          }
+        },
+      );
+      setupImportMocks(null);
+
+      app = await buildTestApp();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/system/company-profile/import-defaults',
+        headers: authHeaders(testJwt),
+        payload: { ...validImportPayload, dryRun: true },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.data.status).toBe('DRY_RUN');
+      expect(body.data.summary.accessGroupsCreated).toBe(1);
+
+      // Event should NOT be emitted for dryRun
+      expect(mockEventBus.emit).not.toHaveBeenCalled();
+    });
+
+    it('returns DRY_RUN with updated counts when group already exists (AC #3, #4)', async () => {
+      setupMocks();
+      mockPrisma.$transaction.mockImplementation(
+        async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => {
+          try {
+            return await fn(mockPrisma);
+          } catch (err: unknown) {
+            throw err;
+          }
+        },
+      );
+      setupImportMocks({ id: 'existing-ag-id', isSystem: true });
+
+      app = await buildTestApp();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/system/company-profile/import-defaults',
+        headers: authHeaders(testJwt),
+        payload: { ...validImportPayload, dryRun: true },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.data.status).toBe('DRY_RUN');
+      expect(body.data.summary.accessGroupsUpdated).toBe(1);
+      expect(body.data.summary.accessGroupsCreated).toBe(0);
+      expect(mockEventBus.emit).not.toHaveBeenCalled();
+    });
+
+    it('emits company.defaultData.imported event after successful import (AC #5)', async () => {
+      setupMocks();
+      setupImportMocks(null);
+
+      app = await buildTestApp();
+
+      await app.inject({
+        method: 'POST',
+        url: '/system/company-profile/import-defaults',
+        headers: authHeaders(testJwt),
+        payload: validImportPayload,
+      });
+
+      expect(mockEventBus.emit).toHaveBeenCalledWith('company.defaultData.imported', {
+        companyId: TEST_COMPANY_ID,
+        importedBy: TEST_USER_ID,
+        version: '1.0.0',
+      });
+    });
+
+    it('returns 400 for invalid payload (AC #6)', async () => {
+      setupMocks();
+
+      app = await buildTestApp();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/system/company-profile/import-defaults',
+        headers: authHeaders(testJwt),
+        payload: { accessGroups: [] }, // min(1) violated
+      });
+
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 400 for missing accessGroups field (AC #6)', async () => {
+      setupMocks();
+
+      app = await buildTestApp();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/system/company-profile/import-defaults',
+        headers: authHeaders(testJwt),
+        payload: { version: '1.0.0' },
+      });
+
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 403 for STAFF role (AC #7)', async () => {
+      setupMocks({ role: 'STAFF' });
+
+      app = await buildTestApp();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/system/company-profile/import-defaults',
+        headers: authHeaders(testJwt),
+        payload: validImportPayload,
+      });
+
+      expect(res.statusCode).toBe(403);
     });
   });
 });

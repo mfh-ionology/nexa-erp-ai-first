@@ -314,10 +314,14 @@ model CompanyProfile {
   accessGroups         AccessGroup[]
   userAccessGroups     UserAccessGroup[]
   auditLogs            AuditLog[]
-  aiConversations      AiConversation[]
-  dataViews            DataView[]
-  dateRangePresets     DateRangePreset[]
-  savedViews           SavedView[]
+  aiSkillOverrides       AiSkillOverride[]
+  aiConversations        AiConversation[]
+  aiMemories             AiMemory[]
+  aiMemorySettings       AiMemorySettings[]
+  aiConversationSummaries AiConversationSummary[]
+  dataViews              DataView[]
+  dateRangePresets       DateRangePreset[]
+  savedViews             SavedView[]
 
   @@index([baseCurrencyCode], map: "idx_company_profiles_base_currency_code")
   @@index([countryCode], map: "idx_company_profiles_country_code")
@@ -521,9 +525,12 @@ model User {
   refreshTokens      RefreshToken[]
   managedDepartments Department[]            @relation("DepartmentManager")
   userAccessGroups   UserAccessGroup[]
-  aiConversations    AiConversation[]
-  columnPreferences  UserColumnPreference[]
-  savedViews         SavedView[]
+  aiConversations        AiConversation[]
+  aiMemories             AiMemory[]
+  aiMemorySettings       AiMemorySettings[]
+  aiConversationSummaries AiConversationSummary[]
+  columnPreferences      UserColumnPreference[]
+  savedViews             SavedView[]
 
   @@unique([email], map: "uq_users_email")
   @@index([companyId], map: "idx_users_company_id")
@@ -869,18 +876,103 @@ model AiSkill {
   displayName   String   @map("display_name")
   description   String?  @map("description")
   category      String   @map("category")
-  instructions  String   @map("instructions") @db.Text
-  keywords      String[] @map("keywords")
+  skillContent  String   @map("skill_content") @db.Text
+  triggerPhrases String[] @map("trigger_phrases")
   inputSchema   Json     @map("input_schema")
   outputType    String   @map("output_type")
   requiredTools String[] @map("required_tools")
   isActive      Boolean  @default(true) @map("is_active")
 
+  // E5b-2: Enhanced skill registry fields
+  moduleKey            String?  @map("module_key")
+  packKey              String?  @map("pack_key")
+  negativeTriggers     String[] @map("negative_triggers")
+  contextRequired      String[] @map("context_required")
+  orchestrationPattern String?  @map("orchestration_pattern")
+  parameters           Json?    @map("parameters")
+  examples             Json?    @map("examples")
+  priority             Int      @default(100) @map("priority")
+  version              Int      @default(1) @map("version")
+
   // Audit
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  // Relations (E5b-2)
+  contexts  AiSkillContext[]
+  overrides AiSkillOverride[]
+
+  @@index([moduleKey, isActive], map: "idx_ai_skills_module")
   @@map("ai_skills")
+}
+
+model AiSkillContext {
+  id              String   @id @default(uuid()) @map("id")
+  skillId         String   @map("skill_id")
+  contextKey      String   @map("context_key") @db.VarChar(255)
+  contextQuery    String   @map("context_query") @db.Text
+  tokenBudget     Int      @default(500) @map("token_budget")
+  cacheTtlSeconds Int      @default(300) @map("cache_ttl_seconds")
+  isRequired      Boolean  @default(false) @map("is_required")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  skill AiSkill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@map("ai_skill_contexts")
+  @@index([skillId], map: "idx_skill_contexts_skill")
+}
+
+model AiModuleKnowledge {
+  id            String   @id @default(uuid()) @map("id")
+  moduleKey     String   @map("module_key")
+  knowledgeType String   @map("knowledge_type")
+  title         String   @db.VarChar(500)
+  content       String   @db.Text
+  priority      Int      @default(100) @map("priority")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("ai_module_knowledge")
+  @@index([moduleKey, knowledgeType, isActive], map: "idx_module_knowledge")
+}
+
+model AiSkillOverride {
+  id                     String   @id @default(uuid()) @map("id")
+  skillId                String   @map("skill_id")
+  companyId              String   @map("company_id")
+  isActive               Boolean? @map("is_active")
+  triggerPhrasesOverride String[] @map("trigger_phrases_override")
+  priorityOverride       Int?     @map("priority_override")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  skill   AiSkill        @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  company CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("ai_skill_overrides")
+  @@unique([skillId, companyId], map: "uq_skill_override")
+}
+
+model AiEntityTrigger {
+  id             String   @id @default(uuid()) @map("id")
+  moduleKey      String   @map("module_key")
+  triggerWord    String   @map("trigger_word")
+  entityType     String   @map("entity_type")
+  searchEndpoint String   @map("search_endpoint")
+  displayField   String   @map("display_field")
+  subtitleField  String?  @map("subtitle_field")
+  scopeBy        String?  @map("scope_by")
+  icon           String?
+  priority       Int      @default(100) @map("priority")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("ai_entity_triggers")
+  @@unique([moduleKey, triggerWord], map: "uq_entity_trigger")
+  @@index([isActive], map: "idx_entity_triggers_active")
 }
 
 model AiConversation {
@@ -904,7 +996,8 @@ model AiConversation {
   company CompanyProfile @relation(fields: [companyId], references: [id])
 
   // Reverse relations
-  messages AiMessage[]
+  messages  AiMessage[]
+  summaries AiConversationSummary[]
 
   @@index([userId, startedAt], map: "idx_ai_conversations_user_started")
   @@index([companyId], map: "idx_ai_conversations_company_id")
@@ -1004,6 +1097,83 @@ model AiEval {
 
   @@index([agentId, evalDate], map: "idx_ai_evals_agent_eval_date")
   @@map("ai_evals")
+}
+
+// ---------------------------------------------------------------------------
+// AI Memory Infrastructure — E5b.1
+// ---------------------------------------------------------------------------
+
+model AiMemory {
+  id             String    @id @default(uuid()) @map("id")
+  userId         String    @map("user_id")
+  companyId      String    @map("company_id")
+  category       String    @map("category") // PREFERENCE, WORKFLOW, ENTITY_CONTEXT, DECISION, INSTRUCTION
+  content        String    @map("content") @db.Text
+  source         String    @map("source") // EXPLICIT, IMPLICIT
+  importance     Decimal   @default(1.0) @map("importance") @db.Decimal(5, 2)
+  lastAccessedAt DateTime  @default(now()) @map("last_accessed_at")
+  metadata       Json?     @map("metadata")
+
+  // Vector search columns — managed via raw SQL in migration (Prisma doesn't support pgvector natively)
+  embedding    Unsupported("vector(1536)")? @map("embedding")
+  searchVector Unsupported("tsvector")?     @map("search_vector")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user    User           @relation(fields: [userId], references: [id])
+  company CompanyProfile @relation(fields: [companyId], references: [id])
+
+  @@index([userId, companyId, category], map: "idx_ai_memories_user_company_category")
+  @@index([userId, companyId, importance(sort: Desc)], map: "idx_ai_memories_user_company_importance")
+  @@index([userId, companyId, lastAccessedAt], map: "idx_ai_memories_user_company_accessed")
+  @@map("ai_memories")
+}
+
+model AiConversationSummary {
+  id              String   @id @default(uuid()) @map("id")
+  userId          String   @map("user_id")
+  companyId       String   @map("company_id")
+  conversationId  String   @map("conversation_id")
+  summary         String   @map("summary") @db.Text
+  topics          String[] @map("topics")
+  decisionsCount  Int      @default(0) @map("decisions_count")
+  actionsCount    Int      @default(0) @map("actions_count")
+
+  // Append-only — no updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user         User           @relation(fields: [userId], references: [id])
+  company      CompanyProfile @relation(fields: [companyId], references: [id])
+  conversation AiConversation @relation(fields: [conversationId], references: [id])
+
+  @@index([userId, companyId, createdAt(sort: Desc)], map: "idx_ai_conv_summaries_user_company_created")
+  @@map("ai_conversation_summaries")
+}
+
+model AiMemorySettings {
+  id                String   @id @default(uuid()) @map("id")
+  userId            String   @map("user_id")
+  companyId         String   @map("company_id")
+  isEnabled         Boolean  @default(true) @map("is_enabled")
+  enabledCategories String[] @default(["PREFERENCE", "WORKFLOW", "ENTITY_CONTEXT", "DECISION", "INSTRUCTION"]) @map("enabled_categories")
+  retentionDays     Int      @default(365) @map("retention_days")
+  maxMemories       Int      @default(500) @map("max_memories")
+  decayHalfLifeDays Int      @default(30) @map("decay_half_life_days")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user    User           @relation(fields: [userId], references: [id])
+  company CompanyProfile @relation(fields: [companyId], references: [id])
+
+  @@unique([userId, companyId], map: "uq_ai_memory_settings_user_company")
+  @@map("ai_memory_settings")
 }
 
 // ---------------------------------------------------------------------------

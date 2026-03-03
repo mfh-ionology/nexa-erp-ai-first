@@ -133,7 +133,9 @@ export function SaveViewButton({ viewKey, viewState, mutations }: SaveViewButton
             <Button variant="outline" size="sm" onClick={handleSaveAsNewFromConfirm}>
               {t('views.save.saveAsNew')}
             </Button>
-            <AlertDialogAction onClick={handleReplace}>{t('views.save.replace')}</AlertDialogAction>
+            <AlertDialogAction onClick={handleReplace}>
+              {t('views.save.replace', { name: activeView?.name ?? '' })}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -3,6 +3,9 @@
 // Singleton client
 export { prisma, PrismaClient } from './client';
 
+// Prisma namespace (for PrismaClientKnownRequestError, etc.)
+export { Prisma } from '../generated/prisma/client';
+
 // Model types (re-exported for consumer convenience)
 export type {
   Currency,

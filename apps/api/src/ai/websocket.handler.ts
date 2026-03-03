@@ -11,10 +11,7 @@ import type { AiOrchestrator } from './orchestrator.js';
 import type { ChatSessionService } from './chat-session.service.js';
 import type { ActionPlanner } from './action-planner.js';
 import type { AiRequest, AiStreamChunk, IActionExecutor } from './ai.types.js';
-import {
-  AiActionNotFoundError,
-  AiActionForbiddenError,
-} from './ai.errors.js';
+import { AiActionNotFoundError, AiActionForbiddenError } from './ai.errors.js';
 
 // UUID v4 format validation (matches company-context middleware)
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -34,6 +31,17 @@ const chatMessageSchema = z.object({
   currentPage: z.string().max(500).optional(),
   currentEntityType: z.string().max(100).optional(),
   currentEntityId: z.string().max(100).optional(),
+  // Structured entity references from inline entity mentions (E5b-7)
+  entityMentions: z
+    .array(
+      z.object({
+        type: z.string().min(1).max(100),
+        id: z.string().min(1).max(200),
+        name: z.string().min(1).max(500),
+      }),
+    )
+    .max(20)
+    .optional(),
 });
 
 const actionConfirmSchema = z.object({
@@ -71,7 +79,7 @@ export interface AiChatServerMessage {
   sessionId: string;
   messageId: string;
   content?: string;
-  messageKey?: string;          // i18n translation key for content (used on text messages)
+  messageKey?: string; // i18n translation key for content (used on text messages)
   action?: {
     id: string;
     type: string;
@@ -174,19 +182,20 @@ export class AiWebSocketHandler {
    * JWT authentication middleware for Socket.io.
    * Extracts JWT from handshake auth or query, verifies, and attaches user context.
    */
-  private async authenticateSocket(
-    socket: Socket,
-    next: (err?: Error) => void,
-  ): Promise<void> {
+  private async authenticateSocket(socket: Socket, next: (err?: Error) => void): Promise<void> {
     try {
       // Extract JWT from auth object or query parameter
       const token =
-        (socket.handshake.auth as Record<string, unknown>)?.token as string | undefined
-        ?? socket.handshake.query?.token as string | undefined;
+        ((socket.handshake.auth as Record<string, unknown>)?.token as string | undefined) ??
+        (socket.handshake.query?.token as string | undefined);
 
       if (!token) {
         const err = new Error('Authentication required');
-        (err as any).data = { message: 'Authentication required', code: 'AUTH_REQUIRED', messageKey: 'auth.error.required' };
+        (err as any).data = {
+          message: 'Authentication required',
+          code: 'AUTH_REQUIRED',
+          messageKey: 'auth.error.required',
+        };
         return next(err);
       }
 
@@ -209,19 +218,28 @@ export class AiWebSocketHandler {
 
       // ── Validate companyId (mirrors company-context middleware) ─────────
       // companyId comes from the client handshake auth (required for multi-company)
-      const rawCompanyId = (socket.handshake.auth as Record<string, unknown>)?.companyId as string | undefined
-        ?? socket.handshake.query?.companyId as string | undefined;
+      const rawCompanyId =
+        ((socket.handshake.auth as Record<string, unknown>)?.companyId as string | undefined) ??
+        (socket.handshake.query?.companyId as string | undefined);
 
       if (!rawCompanyId) {
         const err = new Error('Company context required');
-        (err as any).data = { message: 'Company context required', code: 'AUTH_REQUIRED', messageKey: 'auth.error.companyRequired' };
+        (err as any).data = {
+          message: 'Company context required',
+          code: 'AUTH_REQUIRED',
+          messageKey: 'auth.error.companyRequired',
+        };
         return next(err);
       }
 
       // Validate UUID format
       if (!UUID_RE.test(rawCompanyId)) {
         const err = new Error('Invalid company ID format');
-        (err as any).data = { message: 'Invalid company ID format', code: 'VALIDATION_ERROR', messageKey: 'validation.invalidUuid' };
+        (err as any).data = {
+          message: 'Invalid company ID format',
+          code: 'VALIDATION_ERROR',
+          messageKey: 'validation.invalidUuid',
+        };
         return next(err);
       }
 
@@ -233,7 +251,11 @@ export class AiWebSocketHandler {
 
       if (!user || !user.isActive) {
         const err = new Error('Authentication required');
-        (err as any).data = { message: 'User not found or inactive', code: 'AUTH_REQUIRED', messageKey: 'auth.error.required' };
+        (err as any).data = {
+          message: 'User not found or inactive',
+          code: 'AUTH_REQUIRED',
+          messageKey: 'auth.error.required',
+        };
         return next(err);
       }
 
@@ -245,7 +267,11 @@ export class AiWebSocketHandler {
 
       if (!company || !company.isActive) {
         const err = new Error('Company access denied');
-        (err as any).data = { message: 'Company not found or inactive', code: 'FORBIDDEN', messageKey: 'auth.error.companyAccessDenied' };
+        (err as any).data = {
+          message: 'Company not found or inactive',
+          code: 'FORBIDDEN',
+          messageKey: 'auth.error.companyAccessDenied',
+        };
         return next(err);
       }
 
@@ -253,7 +279,11 @@ export class AiWebSocketHandler {
       const resolvedRole = await resolveUserRole(tenantPrisma, payload.sub, rawCompanyId);
       if (!resolvedRole) {
         const err = new Error('Company access denied');
-        (err as any).data = { message: 'No access to this company', code: 'FORBIDDEN', messageKey: 'auth.error.companyAccessDenied' };
+        (err as any).data = {
+          message: 'No access to this company',
+          code: 'FORBIDDEN',
+          messageKey: 'auth.error.companyAccessDenied',
+        };
         return next(err);
       }
 
@@ -269,7 +299,11 @@ export class AiWebSocketHandler {
 
       if (!hasPermission) {
         const err = new Error('Insufficient permissions');
-        (err as any).data = { message: 'Insufficient permissions for AI chat', code: 'FORBIDDEN', messageKey: 'auth.error.forbidden' };
+        (err as any).data = {
+          message: 'Insufficient permissions for AI chat',
+          code: 'FORBIDDEN',
+          messageKey: 'auth.error.forbidden',
+        };
         return next(err);
       }
 
@@ -286,7 +320,11 @@ export class AiWebSocketHandler {
       next();
     } catch {
       const err = new Error('Authentication required');
-      (err as any).data = { message: 'Authentication required', code: 'AUTH_REQUIRED', messageKey: 'auth.error.required' };
+      (err as any).data = {
+        message: 'Authentication required',
+        code: 'AUTH_REQUIRED',
+        messageKey: 'auth.error.required',
+      };
       next(err);
     }
   }
@@ -554,8 +592,9 @@ export class AiWebSocketHandler {
           currentPage: msg.currentPage,
           currentEntityType: msg.currentEntityType,
           currentEntityId: msg.currentEntityId,
-          locale: (socket.handshake.headers['accept-language']?.split(',')[0]?.trim()) || 'en-GB',
+          locale: socket.handshake.headers['accept-language']?.split(',')[0]?.trim() || 'en-GB',
         },
+        entityMentions: msg.entityMentions,
       };
 
       // Stream response chunks from orchestrator
@@ -575,7 +614,12 @@ export class AiWebSocketHandler {
       // 7.1: Auto-generate title from first message for new sessions
       if (isNewSession && chatSessionService && msg.content) {
         try {
-          await chatSessionService.generateTitle(sessionId, msg.content, authData.userId, authData.companyId);
+          await chatSessionService.generateTitle(
+            sessionId,
+            msg.content,
+            authData.userId,
+            authData.companyId,
+          );
         } catch (error) {
           // Title generation failure is non-critical — log and continue
           this.logger.warn(
@@ -666,14 +710,16 @@ export class AiWebSocketHandler {
           type: 'action_proposal',
           sessionId,
           messageId,
-          action: chunk.action ? {
-            id: chunk.action.id,
-            type: chunk.action.type,
-            description: chunk.action.description,
-            entityType: chunk.action.entityType,
-            previewData: chunk.action.previewData,
-            confidence: chunk.action.confidence,
-          } : undefined,
+          action: chunk.action
+            ? {
+                id: chunk.action.id,
+                type: chunk.action.type,
+                description: chunk.action.description,
+                entityType: chunk.action.entityType,
+                previewData: chunk.action.previewData,
+                confidence: chunk.action.confidence,
+              }
+            : undefined,
         };
         socket.emit('chat:response', proposalMsg);
         break;

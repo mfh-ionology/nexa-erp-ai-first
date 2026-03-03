@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import type { EntityMention } from '@/features/ai/entity-mentions/types';
+
 // ── Chat message types (aligned with AiChatServerMessage WS contract §2.6) ──
 
 export interface ChatMessageAction {
@@ -57,6 +59,8 @@ export interface ChatMessage {
   actionProposal?: ActionProposal;
   /** Inline data cards in AI messages */
   dataCards?: DataCard[];
+  /** Entity mentions referenced in the message (E5b-7 Task 9) */
+  entityMentions?: EntityMention[];
 }
 
 export interface ChatSession {
@@ -122,7 +126,7 @@ export interface CopilotState {
    * Submit a user message and add a placeholder AI response.
    * Centralises the pattern used by CopilotInput, QuickPrompts, and UnifiedSearch.
    */
-  submitUserMessage: (content: string) => void;
+  submitUserMessage: (content: string, mentions?: EntityMention[]) => void;
 }
 
 export const useCopilotStore = create<CopilotState>()((set, get) => ({
@@ -157,8 +161,7 @@ export const useCopilotStore = create<CopilotState>()((set, get) => ({
   setConnectionStatus: (status) => set({ connectionStatus: status }),
 
   // Chat actions
-  addMessage: (message) =>
-    set((s) => ({ messages: [...s.messages, message] })),
+  addMessage: (message) => set((s) => ({ messages: [...s.messages, message] })),
 
   appendStreamChunk: (messageId, chunk) =>
     set((s) => ({
@@ -169,22 +172,17 @@ export const useCopilotStore = create<CopilotState>()((set, get) => ({
 
   updateStreamingMessage: (messageId, content) =>
     set((s) => ({
-      messages: s.messages.map((m) =>
-        m.id === messageId ? { ...m, content } : m,
-      ),
+      messages: s.messages.map((m) => (m.id === messageId ? { ...m, content } : m)),
     })),
 
   completeStreamingMessage: (messageId) =>
     set((s) => ({
-      messages: s.messages.map((m) =>
-        m.id === messageId ? { ...m, isStreaming: false } : m,
-      ),
+      messages: s.messages.map((m) => (m.id === messageId ? { ...m, isStreaming: false } : m)),
     })),
 
   setSessions: (sessions) => set({ sessions }),
 
-  createSession: (session) =>
-    set((s) => ({ sessions: [session, ...s.sessions] })),
+  createSession: (session) => set((s) => ({ sessions: [session, ...s.sessions] })),
 
   switchToSession: (sessionId) => {
     const state = get();
@@ -214,7 +212,7 @@ export const useCopilotStore = create<CopilotState>()((set, get) => ({
 
   clearMessages: () => set({ messages: [] }),
 
-  submitUserMessage: (content) => {
+  submitUserMessage: (content, mentions) => {
     const state = get();
     if (!content.trim() || state.isStreaming) return;
 
@@ -227,6 +225,7 @@ export const useCopilotStore = create<CopilotState>()((set, get) => ({
       role: 'user',
       content: content.trim(),
       timestamp: new Date().toISOString(),
+      entityMentions: mentions && mentions.length > 0 ? mentions : undefined,
     };
 
     set((s) => ({ messages: [...s.messages, userMessage] }));

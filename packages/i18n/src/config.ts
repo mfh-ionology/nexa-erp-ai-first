@@ -1,10 +1,6 @@
 import i18next, { type i18n, type InitOptions, type Resource } from 'i18next';
 
-import type {
-  CoreTranslationNamespace,
-  SupportedLocale,
-  TranslationNamespace,
-} from './types.js';
+import type { CoreTranslationNamespace, SupportedLocale, TranslationNamespace } from './types.js';
 
 /** Default locale — English. */
 export const DEFAULT_LOCALE: SupportedLocale = 'en';
@@ -23,14 +19,13 @@ export const TRANSLATION_NAMESPACES: readonly CoreTranslationNamespace[] = [
   'errors',
   'system',
   'mobile',
+  'ai',
 ] as const;
 
 /**
  * Check whether a locale string is in the supported set (exact match).
  */
-export function isSupportedLocale(
-  locale: string | undefined,
-): locale is SupportedLocale {
+export function isSupportedLocale(locale: string | undefined): locale is SupportedLocale {
   if (!locale) return false;
   return (SUPPORTED_LOCALES as readonly string[]).includes(locale);
 }
@@ -41,9 +36,7 @@ export function isSupportedLocale(
  *
  * Returns the matched SupportedLocale or undefined.
  */
-export function matchSupportedLocale(
-  locale: string | undefined,
-): SupportedLocale | undefined {
+export function matchSupportedLocale(locale: string | undefined): SupportedLocale | undefined {
   if (!locale) return undefined;
   if (isSupportedLocale(locale)) return locale;
   // Try language prefix (e.g., 'en-GB' → 'en')
@@ -61,18 +54,11 @@ export function matchSupportedLocale(
  * Exported for standalone testing and reuse from non-React code
  * (e.g., SSR, backend utilities).
  */
-export function resolveLocale(
-  userLocale?: string,
-  companyLocale?: string,
-): SupportedLocale {
-  return matchSupportedLocale(userLocale)
-    ?? matchSupportedLocale(companyLocale)
-    ?? 'en';
+export function resolveLocale(userLocale?: string, companyLocale?: string): SupportedLocale {
+  return matchSupportedLocale(userLocale) ?? matchSupportedLocale(companyLocale) ?? 'en';
 }
 
-const isDev =
-  typeof process !== 'undefined' &&
-  process.env?.NODE_ENV !== 'production';
+const isDev = typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production';
 
 /**
  * Shared i18next init options — single source of truth consumed by

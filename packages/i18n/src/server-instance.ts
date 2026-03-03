@@ -12,6 +12,7 @@ import validationEn from '../locales/en/validation.json';
 import navigationEn from '../locales/en/navigation.json';
 import errorsEn from '../locales/en/errors.json';
 import systemEn from '../locales/en/system.json';
+import aiEn from '../locales/en/ai.json';
 
 /**
  * Server-side i18next instance with bundled English resources.
@@ -35,6 +36,7 @@ serverInstance
           navigation: navigationEn,
           errors: errorsEn,
           system: systemEn,
+          ai: aiEn,
         },
       },
     }),
@@ -54,10 +56,7 @@ serverInstance
  * tServer('validation:required', { field: 'Email' })
  * // → 'Email is required'
  */
-export function tServer(
-  key: string,
-  params?: Record<string, string>,
-): string {
+export function tServer(key: string, params?: Record<string, string>): string {
   return serverInstance.t(key, params) as string;
 }
 

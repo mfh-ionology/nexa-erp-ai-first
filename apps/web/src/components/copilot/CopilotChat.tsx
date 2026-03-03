@@ -1,22 +1,11 @@
 import { useEffect, useRef } from 'react';
-import {
-  Bot,
-  ExternalLink,
-  FileText,
-  Sparkles,
-} from 'lucide-react';
+import { Bot, ExternalLink, FileText, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link, useNavigate } from '@tanstack/react-router';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -27,6 +16,7 @@ import {
   type ChatRecordLink,
   type ActionProposal,
 } from '@/stores/copilot-store';
+import { EntityChip } from '@/features/ai/entity-mentions/entity-chip';
 
 import { useI18n } from '@nexa/i18n';
 
@@ -95,18 +85,10 @@ function ActionButton({
 }) {
   const { t } = useI18n();
   const variant =
-    action.type === 'navigate'
-      ? 'link'
-      : action.type === 'execute'
-        ? 'default'
-        : 'outline';
+    action.type === 'navigate' ? 'link' : action.type === 'execute' ? 'default' : 'outline';
 
   return (
-    <Button
-      variant={variant}
-      size="xs"
-      onClick={() => onClick(action)}
-    >
+    <Button variant={variant} size="xs" onClick={() => onClick(action)}>
       {action.labelKey ? t(action.labelKey) : action.label}
     </Button>
   );
@@ -114,11 +96,7 @@ function ActionButton({
 
 // ── Action proposal card (BR-COM-013) ────────────────────────────────────────
 
-function ActionProposalCard({
-  proposal,
-}: {
-  proposal: ActionProposal;
-}) {
+function ActionProposalCard({ proposal }: { proposal: ActionProposal }) {
   const { t } = useI18n();
 
   const handleApprove = () => {
@@ -150,8 +128,7 @@ function ActionProposalCard({
               .slice(0, 3)
               .map(([key, value]) => (
                 <div key={key}>
-                  <span className="font-medium">{key}:</span>{' '}
-                  {String(value)}
+                  <span className="font-medium">{key}:</span> {String(value)}
                 </div>
               ))}
           </div>
@@ -190,20 +167,13 @@ function MessageBubble({
   });
 
   return (
-    <div
-      className={cn(
-        'flex gap-2',
-        isUser ? 'flex-row-reverse' : 'flex-row',
-      )}
-    >
+    <div className={cn('flex gap-2', isUser ? 'flex-row-reverse' : 'flex-row')}>
       {/* Avatar */}
       <Avatar size="sm" className="mt-0.5 shrink-0">
         <AvatarFallback
           className={cn(
             'text-[10px]',
-            isUser
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-muted text-muted-foreground',
+            isUser ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
           )}
         >
           {isUser ? userInitials : <Sparkles className="size-3" />}
@@ -211,20 +181,25 @@ function MessageBubble({
       </Avatar>
 
       {/* Message content */}
-      <div
-        className={cn(
-          'flex max-w-[85%] flex-col gap-1',
-          isUser ? 'items-end' : 'items-start',
-        )}
-      >
+      <div className={cn('flex max-w-[85%] flex-col gap-1', isUser ? 'items-end' : 'items-start')}>
         <div
           className={cn(
             'rounded-lg px-3 py-2 text-sm',
-            isUser
-              ? 'bg-primary text-white'
-              : 'bg-muted text-foreground',
+            isUser ? 'bg-primary text-white' : 'bg-muted text-foreground',
           )}
         >
+          {/* Entity mention chips (E5b-7 Task 9.4) */}
+          {message.entityMentions && message.entityMentions.length > 0 && (
+            <div className="mb-1.5 flex flex-wrap gap-1">
+              {message.entityMentions.map((mention) => (
+                <EntityChip
+                  key={mention.id}
+                  entity={mention}
+                  variant={isUser ? 'user-message' : 'assistant-message'}
+                />
+              ))}
+            </div>
+          )}
           <p className="whitespace-pre-wrap break-words">{message.content}</p>
           {message.isStreaming && (
             <span className="ml-1">
@@ -238,10 +213,7 @@ function MessageBubble({
         {message.recordLinks && message.recordLinks.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {message.recordLinks.map((link) => (
-              <RecordLinkChip
-                key={`${link.entityType}-${link.entityId}`}
-                link={link}
-              />
+              <RecordLinkChip key={`${link.entityType}-${link.entityId}`} link={link} />
             ))}
           </div>
         )}
@@ -250,19 +222,13 @@ function MessageBubble({
         {message.actions && message.actions.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {message.actions.map((action) => (
-              <ActionButton
-                key={action.id}
-                action={action}
-                onClick={onActionClick}
-              />
+              <ActionButton key={action.id} action={action} onClick={onActionClick} />
             ))}
           </div>
         )}
 
         {/* Action proposal (BR-COM-013) */}
-        {message.actionProposal && (
-          <ActionProposalCard proposal={message.actionProposal} />
-        )}
+        {message.actionProposal && <ActionProposalCard proposal={message.actionProposal} />}
 
         {/* Data cards (Task 6.5) */}
         {message.dataCards && message.dataCards.length > 0 && (
@@ -291,9 +257,7 @@ function EmptyState() {
         <div className="flex size-10 items-center justify-center rounded-full bg-primary/10">
           <Sparkles className="size-5 text-primary" />
         </div>
-        <p className="max-w-[250px] text-sm text-muted-foreground">
-          {t('copilot.emptyState')}
-        </p>
+        <p className="max-w-[250px] text-sm text-muted-foreground">{t('copilot.emptyState')}</p>
       </div>
     </div>
   );
