@@ -19,6 +19,8 @@ import type {
   AiMessage as PreCompactionMessage,
 } from './pre-compaction.service.js';
 import type { MemoryRecord } from './memory.service.js';
+import type { PromptRenderer } from './prompt-renderer.js';
+import type { VariableResolutionContext } from './automation/variable-resolver.js';
 import type {
   AgentGuardrails,
   AiRequest,
@@ -59,6 +61,9 @@ export class AiOrchestrator {
 
   /** PreCompactionService for extracting facts before context trimming (nullable for graceful degradation, E5b-3 Task 7) */
   private preCompaction: PreCompactionService | null = null;
+
+  /** PromptRenderer for resolving AiPromptVariable-based variables in prompts (nullable for graceful degradation, E5c-2 Task 8) */
+  private promptRenderer: PromptRenderer | null = null;
 
   constructor(
     private aiGateway: AiGateway,
@@ -105,6 +110,11 @@ export class AiOrchestrator {
     this.preCompaction = service;
   }
 
+  /** Set the PromptRenderer instance for AiPromptVariable resolution (called during plugin initialization, E5c-2 Task 8) */
+  setPromptRenderer(renderer: PromptRenderer): void {
+    this.promptRenderer = renderer;
+  }
+
   /**
    * Main entry point — process an AI request end-to-end.
    *
@@ -135,6 +145,16 @@ export class AiOrchestrator {
         request.context,
         request.userMessage,
       );
+
+      // 3a. Resolve AiPromptVariable-based variables via PromptRenderer (E5c-2 Task 8)
+      const varResolved = await this.resolvePromptVariables(
+        loaded.promptId,
+        resolved.systemPrompt,
+        resolved.userPrompt,
+        request.context,
+      );
+      resolved.systemPrompt = varResolved.systemPrompt;
+      resolved.userPrompt = varResolved.userPrompt;
 
       // 3b. Dynamic context assembly OR basic memory injection
       let dynamicTools: Tool[] | undefined;
@@ -473,6 +493,16 @@ export class AiOrchestrator {
         request.context,
         request.userMessage,
       );
+
+      // 3a. Resolve AiPromptVariable-based variables via PromptRenderer (E5c-2 Task 8)
+      const streamVarResolved = await this.resolvePromptVariables(
+        loaded.promptId,
+        resolved.systemPrompt,
+        resolved.userPrompt,
+        request.context,
+      );
+      resolved.systemPrompt = streamVarResolved.systemPrompt;
+      resolved.userPrompt = streamVarResolved.userPrompt;
 
       // 3b. Dynamic context assembly OR basic memory injection
       let dynamicStreamTools: Tool[] | undefined;
@@ -816,6 +846,78 @@ export class AiOrchestrator {
       });
     } catch {
       // Silent — entity mention event failures must not break the AI flow (IMP-006)
+    }
+  }
+
+  // ─── Prompt Variable Resolution (E5c-2 Task 8) ─────────────────────────────
+
+  /**
+   * Resolve AiPromptVariable-based variables in already-resolved prompt templates.
+   * Loads AiPromptVariables for the prompt and applies PromptRenderer's variable
+   * resolution on top of the PromptManager's basic parameter resolution.
+   *
+   * Graceful degradation: if PromptRenderer is not available or resolution fails,
+   * returns the original templates unchanged (IMP-006).
+   */
+  private async resolvePromptVariables(
+    promptId: string,
+    systemPrompt: string,
+    userPrompt: string,
+    context: AiRequestContext,
+  ): Promise<{ systemPrompt: string; userPrompt: string }> {
+    if (!this.promptRenderer) {
+      return { systemPrompt, userPrompt };
+    }
+
+    try {
+      // Load AiPromptVariables for this prompt
+      const variables = await this.db.aiPromptVariable.findMany({
+        where: { promptId },
+      });
+
+      if (variables.length === 0) {
+        return { systemPrompt, userPrompt };
+      }
+
+      // Build VariableResolutionContext from the request context
+      const varContext: VariableResolutionContext = {
+        companyId: context.companyId,
+        userId: context.userId,
+        userName: context.userName,
+        userRole: context.userRole,
+        companyName: context.companyName,
+        baseCurrency: context.baseCurrency,
+        defaultCurrency: context.defaultCurrency,
+        entityId: context.currentEntityId,
+        entityType: context.currentEntityType,
+        pageContext: context.pageContext,
+        autonomous: false, // chat is always interactive mode
+      };
+
+      // Resolve variables in both templates
+      const renderedSystem = await this.promptRenderer.renderTemplate(
+        systemPrompt,
+        variables,
+        varContext,
+      );
+      const renderedUser = await this.promptRenderer.renderTemplate(
+        userPrompt,
+        variables,
+        varContext,
+      );
+
+      this.logger.debug(
+        { promptId, variableCount: variables.length },
+        'AiPromptVariable resolution applied to prompt templates',
+      );
+
+      return { systemPrompt: renderedSystem, userPrompt: renderedUser };
+    } catch (error) {
+      this.logger.warn(
+        { promptId, error: (error as Error).message },
+        'AiPromptVariable resolution failed, using original templates',
+      );
+      return { systemPrompt, userPrompt };
     }
   }
 

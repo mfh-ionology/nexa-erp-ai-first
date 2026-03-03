@@ -699,6 +699,35 @@ export interface BusinessEvents {
     mentions: Array<{ type: string; id: string; name: string }>;
   };
 
+  // ── AI Automation ────────────────────────────────────────
+  'ai.automation.triggered': {
+    automationId: string;
+    companyId: string;
+    triggerType: string;
+    triggeredBy: string;
+    runId: string;
+  };
+  'ai.automation.completed': {
+    automationId: string;
+    companyId: string;
+    runId: string;
+    totalTokens: number;
+    totalCost: number;
+    durationMs: number;
+  };
+  'ai.automation.failed': {
+    automationId: string;
+    companyId: string;
+    runId: string;
+    error: string;
+    stepOrder?: number;
+  };
+  'ai.automation.paused': {
+    automationId: string;
+    companyId: string;
+    consecutiveFailures: number;
+  };
+
   // ── Document Understanding ──────────────────────────────
   'document.processing.started': {
     ingestionId: string;
@@ -766,6 +795,161 @@ export interface BusinessEvents {
   };
 }
 /* eslint-enable @typescript-eslint/naming-convention */
+
+// ---------------------------------------------------------------------------
+// Runtime-available set of valid business event types
+// Used to validate event types at create/update time (e.g. automation eventType)
+// ---------------------------------------------------------------------------
+export const VALID_BUSINESS_EVENT_TYPES = new Set<string>([
+  // System
+  'user.login',
+  'user.mfa.setup',
+  'user.mfa.enabled',
+  'user.mfa.reset',
+  'settings.updated',
+  // Access Groups
+  'accessGroup.created',
+  'accessGroup.updated',
+  'accessGroup.deleted',
+  'user.accessGroups.assigned',
+  'user.accessGroups.revoked',
+  'company.defaultData.imported',
+  // Finance / GL
+  'journal.posted',
+  'journal.reversed',
+  'period.locked',
+  'period.unlocked',
+  'bank.transactions.imported',
+  // Inventory
+  'stock.movement.posted',
+  'stock.movement.reversed',
+  'stock.balance.updated',
+  'stock.reorder.triggered',
+  'stock.valuation.changed',
+  // AR
+  'invoice.created',
+  'invoice.approved',
+  'invoice.posted',
+  'invoice.voided',
+  'invoice.overdue',
+  'payment.posted',
+  // Sales
+  'quote.created',
+  'quote.sent',
+  'quote.accepted',
+  'quote.converted',
+  'quote.expired',
+  'order.confirmed',
+  'dispatch.shipped',
+  'sales.order.invoiced',
+  // Purchasing / AP
+  'purchase.order.approved',
+  'purchase.order.sent',
+  'goods.receipt.posted',
+  'bill.posted',
+  'bill.voided',
+  'supplier.payment.posted',
+  'bacs.run.submitted',
+  // Fixed Assets
+  'asset.acquired',
+  'depreciation.run.completed',
+  'depreciation.entry.posted',
+  'asset.disposed',
+  // CRM
+  'lead.converted',
+  'opportunity.won',
+  'opportunity.lost',
+  'campaign.activated',
+  'activity.created',
+  // HR / Payroll
+  'payroll.run.completed',
+  'employee.terminated',
+  'leave.approved',
+  'rti.submitted',
+  // Manufacturing
+  'production.order.created',
+  'production.started',
+  'production.finished',
+  'production.discarded',
+  'mrp.suggestions.generated',
+  // POS
+  'pos.sale.completed',
+  'pos.sale.transferred',
+  'pos.session.closed',
+  // Projects
+  'timesheet.approved',
+  'project.invoice.created',
+  // Contracts
+  'agreement.approved',
+  'agreement.charged',
+  'agreement.invoiced',
+  'agreement.closed',
+  'agreement.cancelled',
+  'contract.approved',
+  'contract.invoiced',
+  'contract.renewed',
+  'contract.expired',
+  'contract.cancelled',
+  'loan.approved',
+  'loan.signed',
+  'loan.activated',
+  'loan.disbursed',
+  'loan.invoiced',
+  'loan.paused',
+  'loan.resumed',
+  'loan.finished',
+  'loan.cancelled',
+  // Intercompany
+  'intercompany.transaction.created',
+  'intercompany.po.created',
+  // Approvals
+  'approval.requested',
+  'approval.completed',
+  'approval.rejected',
+  'approval.escalated',
+  'approval.forwarded',
+  'approval.cancelled',
+  'approval.autoEscalated',
+  // AI
+  'ai.action.executed',
+  'ai.degraded',
+  'ai.memory.created',
+  'ai.memory.updated',
+  'ai.memory.deleted',
+  'ai.memory.bulk_deleted',
+  'ai.conversation.summarised',
+  'ai.skill.packLoaded',
+  'ai.skill.activated',
+  'ai.skill.created',
+  'ai.skill.updated',
+  'ai.skill.deleted',
+  'ai.knowledge.created',
+  'ai.knowledge.updated',
+  'ai.knowledge.deleted',
+  'ai.entityTrigger.created',
+  'ai.entityTrigger.updated',
+  'ai.entityTrigger.deleted',
+  'ai.skillOverride.upserted',
+  'ai.skillOverride.deleted',
+  'ai.tool.queryExecuted',
+  'ai.entityMention.resolved',
+  // AI Automation
+  'ai.automation.triggered',
+  'ai.automation.completed',
+  'ai.automation.failed',
+  'ai.automation.paused',
+  // Document Understanding
+  'document.processing.started',
+  'document.extraction.completed',
+  'document.extraction.failed',
+  'document.matching.completed',
+  'document.review.required',
+  'document.approved',
+  'document.rejected',
+  // Communications
+  'notification.sent',
+  'email.sent',
+]);
 
 // ---------------------------------------------------------------------------
 // EventHandler type — callback signature for event subscribers

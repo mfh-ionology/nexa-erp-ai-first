@@ -45,6 +45,15 @@ export type {
   UserColumnPreference,
   SavedView,
   SavedViewCondition,
+  Attachment,
+  Note,
+  AiAutomation,
+  AiAutomationStep,
+  AiAutomationSchedule,
+  AiAutomationRun,
+  AiAutomationStepRun,
+  AiPromptVariable,
+  RecordLink,
 } from '../generated/prisma/client';
 
 // Enums
@@ -65,6 +74,8 @@ export {
   LovType,
   PinPosition,
   FilterOperator,
+  NoteType,
+  RecordLinkType,
 } from '../generated/prisma/client';
 
 // Utilities

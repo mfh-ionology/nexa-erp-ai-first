@@ -10,12 +10,7 @@ import { usePermission } from '@/hooks/use-permissions';
 import { getEntityActionConfig, getGlobalActions } from './action-config';
 import { OverflowMenu } from './OverflowMenu';
 import { useActionPermissions } from './use-action-permissions';
-import type {
-  ActionBarProps,
-  ActionDefinition,
-  OverflowAction,
-  PrimaryAction,
-} from './types';
+import type { ActionBarProps, ActionDefinition, OverflowAction, PrimaryAction } from './types';
 
 const MAX_PRIMARY_ACTIONS = 2;
 
@@ -205,7 +200,11 @@ export function ActionBar({
             size="sm"
             onClick={onAttachmentsClick}
             disabled={!onAttachmentsClick}
-            aria-label={t('actionBar.attachments')}
+            aria-label={
+              attachmentCount > 0
+                ? `${t('actionBar.attachments')} (${String(attachmentCount)})`
+                : t('actionBar.attachments')
+            }
             tabIndex={!onAttachmentsClick ? undefined : getTabIndex(buttonIdx++)}
           >
             <Paperclip />
@@ -221,7 +220,11 @@ export function ActionBar({
             size="sm"
             onClick={onLinksClick}
             disabled={!onLinksClick}
-            aria-label={t('actionBar.links')}
+            aria-label={
+              linkCount > 0
+                ? `${t('actionBar.links')} (${String(linkCount)})`
+                : t('actionBar.links')
+            }
             tabIndex={!onLinksClick ? undefined : getTabIndex(buttonIdx++)}
           >
             <Link2 />

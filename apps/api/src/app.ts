@@ -28,6 +28,7 @@ import { auditPlugin } from './core/audit/audit.plugin.js';
 import { deadLetterPlugin } from './core/events/dead-letter.plugin.js';
 import { platformClientPlugin } from './core/platform/platform-client.plugin.js';
 import { platformWebhookPlugin } from './core/webhooks/platform-webhook.routes.js';
+import { crossCuttingModulePlugin } from './modules/cross-cutting/index.js';
 import { aiPlugin } from './ai/index.js';
 import { createRequire } from 'node:module';
 
@@ -155,6 +156,7 @@ export async function buildApp(opts: { logger?: boolean | Record<string, unknown
   await fastify.register(authRoutesPlugin, { prefix: '/auth' });
   await fastify.register(systemModulePlugin, { prefix: '/system' });
   await fastify.register(viewsModulePlugin, { prefix: '/views' });
+  await fastify.register(crossCuttingModulePlugin);
 
   // -- Permission cache invalidation event listeners (E2b-4)
   registerPermissionCacheListeners(fastify.eventBus);

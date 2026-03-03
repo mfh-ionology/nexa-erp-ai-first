@@ -1,0 +1,1423 @@
+{
+  "epic_id": "E8",
+  "epic_title": "Attachments + Notes + Record Links",
+  "generated_at": "2026-03-03T12:00:00.000Z",
+  "frontend_url": "http://localhost:5110",
+  "prerequisites": [
+    "API server running on port 5100 with MinIO (S3) available on port 9000",
+    "At least one company and user seeded (STAFF and MANAGER roles)",
+    "At least one CustomerInvoice record seeded for entityType/entityId test targets",
+    "Cross-cutting panels wired to a record detail page (e.g., /ar/invoices/$id)",
+    "User authenticated with valid session"
+  ],
+  "test_entities": {
+    "record_page": "/ar/invoices/{invoiceId}",
+    "entity_type": "CustomerInvoice",
+    "entity_id": "{invoiceId}",
+    "resource_code": "CUSTOMER_INVOICES",
+    "second_entity_type": "Customer",
+    "second_entity_id": "{customerId}",
+    "test_file_pdf": "test-document.pdf",
+    "test_file_exe": "malicious.exe",
+    "test_file_large": "oversized-60mb.bin"
+  },
+  "total_journeys": 21,
+  "total_steps": 148,
+  "journeys": [
+    {
+      "id": "j1-attachment-upload-drag-drop",
+      "name": "Upload Attachment via Drag-and-Drop",
+      "description": "Test the full attachment upload flow: open panel via ActionBar, drag a PDF onto the upload zone, verify presign→S3→confirm orchestration completes, and the file appears in the attachment list with correct metadata.",
+      "priority": "critical",
+      "related_stories": ["E8.1", "E8.4"],
+      "acceptance_criteria": ["E8.1-AC1", "E8.1-AC2", "E8.1-AC3", "E8.4-AC1", "E8.4-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {},
+          "expected_result": "Invoice detail page loads with ActionBar visible",
+          "screenshot": true,
+          "visual_check": "Record detail page rendered with ActionBar showing Attachments button (paperclip icon) and Links button in the persistent tools zone"
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "ActionBar Attachments button",
+          "input_data": {},
+          "expected_result": "Attachments button visible in persistent tools zone with paperclip icon, no count badge (0 attachments)"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Attachments button in ActionBar persistent tools zone",
+          "input_data": {},
+          "expected_result": "AttachmentPanel Sheet slides in from the right side"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "AttachmentPanel Sheet",
+          "input_data": {},
+          "expected_result": "Sheet panel open with title 'Attachments', drag-drop upload zone visible with 'Click or drag files here' label, empty attachment list below",
+          "screenshot": true,
+          "visual_check": "Right-side Sheet panel (400px width) showing: header with 'Attachments' title, dashed-border FileUploadZone with upload icon and instruction text, empty state message below"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "FileUploadZone drop area (or hidden file input trigger)",
+          "input_data": {
+            "file": "test-document.pdf",
+            "mimeType": "application/pdf",
+            "fileSize": 245760
+          },
+          "expected_result": "File picker opens and file is selected, upload process begins automatically"
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "UploadProgressBar",
+          "input_data": {},
+          "expected_result": "Progress bar appears showing file name 'test-document.pdf', status transitions: presigning → uploading (with percentage) → confirming → complete",
+          "screenshot": true,
+          "visual_check": "UploadProgressBar visible with file name, animated progress bar filling, status text showing current phase of the presign→upload→confirm flow"
+        },
+        {
+          "step_number": 7,
+          "action": "verify_element",
+          "target": "AttachmentList first row",
+          "input_data": {},
+          "expected_result": "Attachment list refreshes and shows the uploaded file with: PDF file icon, name 'test-document.pdf', size '240 KB', relative date 'just now', download button, delete button (if MANAGER)"
+        },
+        {
+          "step_number": 8,
+          "action": "verify_text",
+          "target": "AttachmentPanel header badge",
+          "input_data": {},
+          "expected_result": "Badge shows '1' next to the Attachments title",
+          "screenshot": true,
+          "visual_check": "AttachmentPanel showing: header with count badge '1', FileUploadZone at top, below it the uploaded file row with PDF icon, filename, size '240 KB', timestamp, and action buttons (download/delete)"
+        },
+        {
+          "step_number": 9,
+          "action": "click",
+          "target": "Sheet close button (X)",
+          "input_data": {},
+          "expected_result": "AttachmentPanel closes"
+        },
+        {
+          "step_number": 10,
+          "action": "verify_element",
+          "target": "ActionBar Attachments button badge",
+          "input_data": {},
+          "expected_result": "ActionBar Attachments button now shows count badge '1'",
+          "screenshot": true,
+          "visual_check": "ActionBar persistent tools zone showing Attachments button with purple badge '(1)' next to the paperclip icon"
+        }
+      ]
+    },
+    {
+      "id": "j2-attachment-download",
+      "name": "Download an Attachment",
+      "description": "Test that clicking the download button on an attachment generates a presigned GET URL and opens it for the user to download the file.",
+      "priority": "critical",
+      "related_stories": ["E8.1", "E8.4"],
+      "acceptance_criteria": ["E8.1-AC4", "E8.4-AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {},
+          "expected_result": "Invoice detail page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Attachments button in ActionBar",
+          "input_data": {},
+          "expected_result": "AttachmentPanel opens showing previously uploaded file"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Download button (Download icon) on first attachment row",
+          "input_data": {},
+          "expected_result": "Download button (lucide Download icon) visible on the attachment row"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Download button on 'test-document.pdf' attachment",
+          "input_data": {},
+          "expected_result": "Browser initiates download via presigned S3 GET URL — a new tab opens or download begins (API call: GET /attachments/{id}/download returns presigned URL)"
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Network request to /attachments/{id}/download",
+          "input_data": {},
+          "expected_result": "API call returned 200 with downloadUrl, fileName, and mimeType in the response"
+        }
+      ]
+    },
+    {
+      "id": "j3-attachment-reject-executable",
+      "name": "Reject Executable File Upload",
+      "description": "Test that attempting to upload an executable file (.exe, .bat, .sh) is rejected with a validation error before the upload begins — client-side MIME/extension check in FileUploadZone.",
+      "priority": "critical",
+      "related_stories": ["E8.1", "E8.4"],
+      "acceptance_criteria": ["E8.1-AC5", "E8.4-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {},
+          "expected_result": "Invoice detail page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Attachments button in ActionBar",
+          "input_data": {},
+          "expected_result": "AttachmentPanel opens"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "FileUploadZone (file picker trigger)",
+          "input_data": {
+            "file": "malicious.exe",
+            "mimeType": "application/x-msdownload",
+            "fileSize": 1024
+          },
+          "expected_result": "File is rejected before upload begins — no presign API call made"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_text",
+          "target": "Validation error message in FileUploadZone",
+          "input_data": {},
+          "expected_result": "Error message displayed: file type not allowed (translation key: crossCutting.attachments.fileTypeNotAllowed)",
+          "screenshot": true,
+          "visual_check": "FileUploadZone showing red validation error text below the drop area indicating that .exe files are not permitted"
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "AttachmentList",
+          "input_data": {},
+          "expected_result": "No new attachment added — list remains unchanged"
+        }
+      ]
+    },
+    {
+      "id": "j4-attachment-reject-oversized",
+      "name": "Reject Oversized File Upload",
+      "description": "Test that a file exceeding the 50MB size limit is rejected with a validation error before the presign request is made.",
+      "priority": "high",
+      "related_stories": ["E8.1", "E8.4"],
+      "acceptance_criteria": ["E8.1-AC1", "E8.4-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {},
+          "expected_result": "Invoice detail page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Attachments button in ActionBar",
+          "input_data": {},
+          "expected_result": "AttachmentPanel opens"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "FileUploadZone (file picker trigger)",
+          "input_data": {
+            "file": "oversized-60mb.bin",
+            "mimeType": "application/octet-stream",
+            "fileSize": 62914560
+          },
+          "expected_result": "File rejected — exceeds 50MB maximum"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_text",
+          "target": "Validation error in FileUploadZone",
+          "input_data": {},
+          "expected_result": "Error message: file too large (translation key: crossCutting.attachments.fileTooLarge)",
+          "screenshot": true,
+          "visual_check": "FileUploadZone displaying red error text indicating file exceeds the maximum allowed size of 50 MB"
+        }
+      ]
+    },
+    {
+      "id": "j5-attachment-delete-manager",
+      "name": "Delete Attachment as MANAGER",
+      "description": "Test that a MANAGER-role user can delete an attachment, the S3 object is removed, and the list updates. Also verify STAFF users cannot see the delete button.",
+      "priority": "critical",
+      "related_stories": ["E8.1", "E8.4"],
+      "acceptance_criteria": ["E8.1-AC6", "E8.4-AC8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {
+            "auth_role": "MANAGER"
+          },
+          "expected_result": "Invoice detail page loads (logged in as MANAGER)"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Attachments button in ActionBar",
+          "input_data": {},
+          "expected_result": "AttachmentPanel opens with existing attachment visible"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Delete button (Trash2 icon) on attachment row",
+          "input_data": {},
+          "expected_result": "Delete button (red trash icon) visible for MANAGER user on attachment row",
+          "screenshot": true,
+          "visual_check": "Attachment row showing download button AND delete button (trash icon) — both action buttons visible for MANAGER role"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Delete button on 'test-document.pdf' attachment",
+          "input_data": {},
+          "expected_result": "Confirmation dialog appears: 'Are you sure you want to delete this attachment?'"
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Delete confirmation dialog",
+          "input_data": {},
+          "expected_result": "Dialog with confirm/cancel buttons visible",
+          "screenshot": true,
+          "visual_check": "Confirmation dialog overlaying the panel with warning text about permanent deletion and Confirm/Cancel buttons"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Confirm delete button in dialog",
+          "input_data": {},
+          "expected_result": "Attachment deleted — API call DELETE /attachments/{id} returns 200, list refreshes"
+        },
+        {
+          "step_number": 7,
+          "action": "verify_element",
+          "target": "AttachmentList empty state",
+          "input_data": {},
+          "expected_result": "Empty state shown: 'No attachments yet' with illustration",
+          "screenshot": true,
+          "visual_check": "AttachmentPanel showing empty state with icon and 'No attachments yet' message, count badge removed from header"
+        }
+      ]
+    },
+    {
+      "id": "j6-attachment-rbac-staff-no-delete",
+      "name": "STAFF User Cannot Delete Attachments",
+      "description": "Verify that a STAFF-role user can view and download attachments but the delete button is hidden per RBAC rules.",
+      "priority": "high",
+      "related_stories": ["E8.1", "E8.4"],
+      "acceptance_criteria": ["E8.4-AC8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {
+            "auth_role": "STAFF"
+          },
+          "expected_result": "Invoice detail page loads (logged in as STAFF)"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Attachments button in ActionBar",
+          "input_data": {},
+          "expected_result": "AttachmentPanel opens with attachment list"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Download button on attachment row",
+          "input_data": {},
+          "expected_result": "Download button IS visible"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Delete button absence on attachment row",
+          "input_data": {},
+          "expected_result": "Delete button is NOT visible — hidden for STAFF role (canDelete=false)",
+          "screenshot": true,
+          "visual_check": "Attachment row showing ONLY the download button — no trash/delete icon visible, confirming RBAC restriction"
+        }
+      ]
+    },
+    {
+      "id": "j7-note-create-general",
+      "name": "Create a General Note",
+      "description": "Test creating a GENERAL-type note via the AddNoteForm — verify it appears in the timeline with correct author, timestamp, and grey type badge.",
+      "priority": "critical",
+      "related_stories": ["E8.2", "E8.4"],
+      "acceptance_criteria": ["E8.2-AC1", "E8.4-AC3", "E8.4-AC4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {},
+          "expected_result": "Invoice detail page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Notes tab in the record detail page tabs",
+          "input_data": {},
+          "expected_result": "NotesPanel renders as tab content showing empty state or existing notes",
+          "screenshot": true,
+          "visual_check": "Notes tab panel visible with 'Add Note' button/form at the top, timeline area below (empty state if no notes yet)"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Add Note button (Plus icon)",
+          "input_data": {},
+          "expected_result": "AddNoteForm expands showing textarea and type selector"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Note type selector in AddNoteForm",
+          "input_data": {},
+          "expected_result": "Type selector shows options: General (default), Internal, Customer Visible — SYSTEM type NOT available"
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "AddNoteForm",
+          "input_data": {
+            "content": "Initial review completed. All line items verified against purchase order PO-2026-0015.",
+            "noteType": "GENERAL"
+          },
+          "expected_result": "Textarea filled, type set to General (default), Add Note button becomes enabled"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Add Note submit button",
+          "input_data": {},
+          "expected_result": "Note created via POST /notes API, form collapses, timeline refreshes"
+        },
+        {
+          "step_number": 7,
+          "action": "verify_element",
+          "target": "NoteCard in timeline",
+          "input_data": {},
+          "expected_result": "New note appears at top of timeline with: grey 'General' type badge, current user name, 'just now' timestamp, note content text",
+          "screenshot": true,
+          "visual_check": "Notes timeline showing the new note card with: grey badge labelled 'General', author name, relative timestamp 'just now', full note content text, timeline connector line on the left, overflow menu (three dots) for edit/pin actions"
+        }
+      ]
+    },
+    {
+      "id": "j8-note-create-typed",
+      "name": "Create Internal and Customer-Visible Notes",
+      "description": "Test creating notes with INTERNAL and CUSTOMER_VISIBLE types, verify colour-coded type badges match the design spec (Internal=blue, Customer Visible=green).",
+      "priority": "critical",
+      "related_stories": ["E8.2", "E8.4"],
+      "acceptance_criteria": ["E8.2-AC2", "E8.2-AC3", "E8.4-AC3", "E8.4-AC4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {},
+          "expected_result": "Invoice detail page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Notes tab",
+          "input_data": {},
+          "expected_result": "NotesPanel visible"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Add Note button",
+          "input_data": {},
+          "expected_result": "AddNoteForm expands"
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "AddNoteForm",
+          "input_data": {
+            "content": "Discuss payment terms with finance team before posting. Do not share externally.",
+            "noteType": "INTERNAL"
+          },
+          "expected_result": "Form filled with INTERNAL type selected"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Add Note submit button",
+          "input_data": {},
+          "expected_result": "Internal note created, appears in timeline"
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "Internal note in timeline",
+          "input_data": {},
+          "expected_result": "Note card shows blue 'Internal' type badge (bg-blue-100 text-blue-700)",
+          "screenshot": true,
+          "visual_check": "Timeline with new note showing BLUE badge labelled 'Internal', confirming the note type colour coding"
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Add Note button",
+          "input_data": {},
+          "expected_result": "AddNoteForm expands again"
+        },
+        {
+          "step_number": 8,
+          "action": "fill_form",
+          "target": "AddNoteForm",
+          "input_data": {
+            "content": "Your invoice has been received and is being processed. Expected payment within 30 days.",
+            "noteType": "CUSTOMER_VISIBLE"
+          },
+          "expected_result": "Form filled with CUSTOMER_VISIBLE type selected"
+        },
+        {
+          "step_number": 9,
+          "action": "click",
+          "target": "Add Note submit button",
+          "input_data": {},
+          "expected_result": "Customer Visible note created"
+        },
+        {
+          "step_number": 10,
+          "action": "verify_element",
+          "target": "Customer Visible note in timeline",
+          "input_data": {},
+          "expected_result": "Note card shows green 'Customer Visible' type badge (bg-green-100 text-green-700)",
+          "screenshot": true,
+          "visual_check": "Timeline now showing multiple notes with distinct colour-coded badges: newest 'Customer Visible' (GREEN badge) at top, then 'Internal' (BLUE badge), then 'General' (GREY badge) — all in reverse chronological order"
+        }
+      ]
+    },
+    {
+      "id": "j9-note-pin-unpin",
+      "name": "Pin and Unpin Notes",
+      "description": "Test pinning a note moves it to the top of the timeline regardless of creation date, and unpinning returns it to chronological position.",
+      "priority": "high",
+      "related_stories": ["E8.2", "E8.4"],
+      "acceptance_criteria": ["E8.2-AC5", "E8.2-AC8", "E8.4-AC3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {},
+          "expected_result": "Invoice detail page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Notes tab",
+          "input_data": {},
+          "expected_result": "NotesPanel shows existing notes in reverse chronological order"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Timeline note order",
+          "input_data": {},
+          "expected_result": "Notes ordered: Customer Visible (newest), Internal, General (oldest) — no pins yet"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Overflow menu (three dots) on the oldest 'General' note",
+          "input_data": {},
+          "expected_result": "Dropdown menu appears with: Edit, Pin, Delete options"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Pin option in overflow menu",
+          "input_data": {},
+          "expected_result": "Note is pinned — PATCH /notes/{id}/pin called, list reorders"
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "Timeline note order after pin",
+          "input_data": {},
+          "expected_result": "Pinned 'General' note now at TOP of timeline with pin icon, followed by Customer Visible, then Internal",
+          "screenshot": true,
+          "visual_check": "Timeline reordered: pinned note at top showing pin icon (lucide Pin) in the header, followed by unpinned notes in reverse chronological order"
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Overflow menu on the pinned 'General' note",
+          "input_data": {},
+          "expected_result": "Menu appears with 'Unpin' option (toggled from Pin)"
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Unpin option",
+          "input_data": {},
+          "expected_result": "Note unpinned, returns to chronological position at bottom"
+        },
+        {
+          "step_number": 9,
+          "action": "verify_element",
+          "target": "Timeline note order after unpin",
+          "input_data": {},
+          "expected_result": "Notes back to chronological order: Customer Visible, Internal, General — no pin icons"
+        }
+      ]
+    },
+    {
+      "id": "j10-note-edit-own",
+      "name": "Edit Own Note and Ownership Restriction",
+      "description": "Test that a user can edit their own note inline, but cannot edit notes created by other users (unless MANAGER). Also verify SYSTEM notes are always read-only.",
+      "priority": "critical",
+      "related_stories": ["E8.2", "E8.4"],
+      "acceptance_criteria": ["E8.2-AC6", "E8.4-AC8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {
+            "auth_role": "STAFF"
+          },
+          "expected_result": "Invoice detail page loads as STAFF user"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Notes tab",
+          "input_data": {},
+          "expected_result": "NotesPanel shows notes including ones created by current user"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Overflow menu on own note (created by current user)",
+          "input_data": {},
+          "expected_result": "Menu shows Edit, Pin options"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Edit option in overflow menu",
+          "input_data": {},
+          "expected_result": "Note card switches to edit mode — textarea appears with existing content, Save/Cancel buttons visible"
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Note edit textarea",
+          "input_data": {
+            "content": "Initial review completed. All line items verified. UPDATED: Discrepancy found on line 3."
+          },
+          "expected_result": "Textarea updated with new content"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Save button in edit mode",
+          "input_data": {},
+          "expected_result": "Note updated via PATCH /notes/{id}, card returns to view mode with updated content",
+          "screenshot": true,
+          "visual_check": "Note card back in view mode showing the updated content text, confirming the edit was saved"
+        },
+        {
+          "step_number": 7,
+          "action": "verify_element",
+          "target": "Overflow menu on note created by ANOTHER user",
+          "input_data": {},
+          "expected_result": "Edit option is NOT present in the menu (only Pin visible) — current STAFF user cannot edit other users' notes"
+        }
+      ]
+    },
+    {
+      "id": "j11-note-system-readonly",
+      "name": "System Notes Are Read-Only",
+      "description": "Verify that SYSTEM-type notes (generated by the system) are displayed with purple badge, italic styling, and no action buttons — completely read-only regardless of user role.",
+      "priority": "high",
+      "related_stories": ["E8.2", "E8.4"],
+      "acceptance_criteria": ["E8.2-AC4", "E8.2-AC6", "E8.4-AC3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {
+            "auth_role": "MANAGER",
+            "precondition": "A SYSTEM note exists on this record (e.g., 'Status changed to POSTED by AI')"
+          },
+          "expected_result": "Invoice detail page loads as MANAGER"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Notes tab",
+          "input_data": {},
+          "expected_result": "NotesPanel shows notes including a SYSTEM-type note"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "SYSTEM note card",
+          "input_data": {},
+          "expected_result": "System note displays with: purple 'System' badge (bg-purple-100 text-purple-700), italic text styling, NO overflow menu (no edit/delete/pin actions)",
+          "screenshot": true,
+          "visual_check": "System note card with PURPLE badge labelled 'System', italic content text, and NO action buttons — completely read-only even for MANAGER role"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Absence of overflow menu on SYSTEM note",
+          "input_data": {},
+          "expected_result": "No three-dots menu, no edit button, no delete button visible on the SYSTEM note card"
+        }
+      ]
+    },
+    {
+      "id": "j12-note-delete-manager",
+      "name": "Delete Note as MANAGER (Soft Delete)",
+      "description": "Test that a MANAGER can delete any note (soft delete), and the note disappears from the timeline. STAFF users should not see delete option.",
+      "priority": "high",
+      "related_stories": ["E8.2", "E8.4"],
+      "acceptance_criteria": ["E8.2-AC7", "E8.4-AC8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {
+            "auth_role": "MANAGER"
+          },
+          "expected_result": "Invoice detail page loads as MANAGER"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Notes tab",
+          "input_data": {},
+          "expected_result": "NotesPanel shows existing notes"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Overflow menu on any non-SYSTEM note",
+          "input_data": {},
+          "expected_result": "Menu shows Edit, Pin, Delete options (Delete visible because MANAGER)"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Delete option in overflow menu",
+          "input_data": {},
+          "expected_result": "Confirmation appears before deletion"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Confirm delete",
+          "input_data": {},
+          "expected_result": "Note soft-deleted via DELETE /notes/{id} (sets deletedAt), note removed from timeline",
+          "screenshot": true,
+          "visual_check": "Timeline updated with the deleted note removed, remaining notes visible in correct order"
+        }
+      ]
+    },
+    {
+      "id": "j13-link-create-manual",
+      "name": "Create a Manual Record Link",
+      "description": "Test the full record link creation flow: open LinksPanel, click Add Link, search for target entity, select link type, submit — verify the new link appears grouped by type.",
+      "priority": "critical",
+      "related_stories": ["E8.3", "E8.4"],
+      "acceptance_criteria": ["E8.3-AC1", "E8.4-AC5", "E8.4-AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {},
+          "expected_result": "Invoice detail page loads with ActionBar"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Links button in ActionBar persistent tools zone",
+          "input_data": {},
+          "expected_result": "LinksPanel Sheet opens from the right side"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "LinksPanel empty state",
+          "input_data": {},
+          "expected_result": "Empty state visible: 'No linked records yet' message with 'Add Link' call-to-action",
+          "screenshot": true,
+          "visual_check": "LinksPanel Sheet showing header 'Linked Records', empty state icon and message, 'Add Link' button at top"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Add Link button (Plus icon) in LinksPanel header",
+          "input_data": {},
+          "expected_result": "AddLinkForm Dialog opens as a modal overlay"
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "AddLinkForm Dialog",
+          "input_data": {},
+          "expected_result": "Dialog with three inputs: Entity Type selector, Entity Search input, Link Type selector — all initially empty, submit button disabled",
+          "screenshot": true,
+          "visual_check": "AddLinkForm modal dialog with: Entity Type dropdown, Entity Search text input (greyed out until type selected), Link Type dropdown, direction preview area, disabled 'Add Link' submit button"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Entity Type selector dropdown",
+          "input_data": {},
+          "expected_result": "Dropdown shows available entity types: Customer, Customer Invoice, Sales Order, Purchase Order, etc."
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Customer option in Entity Type dropdown",
+          "input_data": {
+            "value": "Customer"
+          },
+          "expected_result": "Entity Type set to 'Customer', Entity Search input becomes active"
+        },
+        {
+          "step_number": 8,
+          "action": "fill_form",
+          "target": "Entity Search typeahead input",
+          "input_data": {
+            "searchQuery": "Acme"
+          },
+          "expected_result": "Typeahead search fires after 300ms debounce, dropdown shows matching entities from GET /entities/search?type=Customer&q=Acme"
+        },
+        {
+          "step_number": 9,
+          "action": "verify_element",
+          "target": "Entity search results dropdown",
+          "input_data": {},
+          "expected_result": "Dropdown shows matching entities with displayName and optional subtitle",
+          "screenshot": true,
+          "visual_check": "Entity search dropdown visible below the input showing matching Customer records with display names (e.g., 'Acme Corporation') and subtitles"
+        },
+        {
+          "step_number": 10,
+          "action": "click",
+          "target": "First search result (e.g., 'Acme Corporation')",
+          "input_data": {},
+          "expected_result": "Entity selected, search input shows selected entity name"
+        },
+        {
+          "step_number": 11,
+          "action": "click",
+          "target": "Link Type selector dropdown",
+          "input_data": {},
+          "expected_result": "Dropdown shows: Created From, Fulfils, Payment For, Credit For, Related To, Parent / Child"
+        },
+        {
+          "step_number": 12,
+          "action": "click",
+          "target": "Related To option in Link Type dropdown",
+          "input_data": {
+            "value": "RELATES_TO"
+          },
+          "expected_result": "Link type set to RELATES_TO, direction preview shows: 'Customer Invoice → Customer'"
+        },
+        {
+          "step_number": 13,
+          "action": "verify_element",
+          "target": "Direction display in AddLinkForm",
+          "input_data": {},
+          "expected_result": "Direction preview shows 'Customer Invoice → Acme Corporation' with arrow indicator"
+        },
+        {
+          "step_number": 14,
+          "action": "click",
+          "target": "Add Link submit button (now enabled)",
+          "input_data": {},
+          "expected_result": "Record link created via POST /record-links, dialog closes, LinksPanel refreshes"
+        },
+        {
+          "step_number": 15,
+          "action": "verify_element",
+          "target": "LinksPanel with new link",
+          "input_data": {},
+          "expected_result": "LinksPanel shows 'Related To' group header with count (1), expanded to show the link item: Customer icon, 'Acme Corporation' reference, outgoing arrow (→), link to /crm/customers/{id}",
+          "screenshot": true,
+          "visual_check": "LinksPanel showing 'Related To' collapsible group expanded with one link item: entity type icon, display reference, direction arrow (→ outgoing), and the link count badge '(1)' in the panel header"
+        },
+        {
+          "step_number": 16,
+          "action": "click",
+          "target": "Sheet close button",
+          "input_data": {},
+          "expected_result": "LinksPanel closes"
+        },
+        {
+          "step_number": 17,
+          "action": "verify_element",
+          "target": "ActionBar Links button badge",
+          "input_data": {},
+          "expected_result": "Links button in ActionBar now shows count badge '(1)'",
+          "screenshot": true,
+          "visual_check": "ActionBar persistent tools showing Links button with badge '(1)' next to the link icon"
+        }
+      ]
+    },
+    {
+      "id": "j14-link-bidirectional-display",
+      "name": "View Bidirectional Record Links",
+      "description": "Test that the LinksPanel displays both outgoing and incoming links with correct direction indicators. A link created from another record pointing TO this one should show as 'incoming'.",
+      "priority": "critical",
+      "related_stories": ["E8.3", "E8.4"],
+      "acceptance_criteria": ["E8.3-AC3", "E8.4-AC5"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {
+            "precondition": "This invoice has both outgoing links (created FROM this record) and incoming links (other records linking TO this record)"
+          },
+          "expected_result": "Invoice detail page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Links button in ActionBar",
+          "input_data": {},
+          "expected_result": "LinksPanel opens showing all bidirectional links"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Outgoing link item",
+          "input_data": {},
+          "expected_result": "Outgoing link shows right arrow (→) direction indicator with 'outgoing' muted badge"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Incoming link item",
+          "input_data": {},
+          "expected_result": "Incoming link shows left arrow (←) direction indicator with 'incoming' muted badge"
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Link groups",
+          "input_data": {},
+          "expected_result": "Links grouped by type with Collapsible sections — each group header shows link type label and count",
+          "screenshot": true,
+          "visual_check": "LinksPanel showing multiple collapsible groups (e.g., 'Related To', 'Created From'), each with link items showing direction arrows (→ outgoing, ← incoming), entity icons, and display references"
+        }
+      ]
+    },
+    {
+      "id": "j15-link-navigate-to-related",
+      "name": "Navigate to Related Record from Link",
+      "description": "Test clicking a linked record navigates to that record's detail page via React Router.",
+      "priority": "high",
+      "related_stories": ["E8.4"],
+      "acceptance_criteria": ["E8.4-AC5"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {},
+          "expected_result": "Invoice detail page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Links button in ActionBar",
+          "input_data": {},
+          "expected_result": "LinksPanel opens with existing links"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Display reference link on a linked Customer record (e.g., 'Acme Corporation')",
+          "input_data": {},
+          "expected_result": "Browser navigates to the Customer detail page at /crm/customers/{customerId}",
+          "screenshot": true,
+          "visual_check": "Customer detail page loaded after clicking the link — confirms navigation from invoice record to related customer record works"
+        }
+      ]
+    },
+    {
+      "id": "j16-link-delete-manual-vs-system",
+      "name": "Delete Links with RBAC (Manual vs System)",
+      "description": "Test that STAFF can delete manual links but system-generated links require MANAGER role. Verify the delete button visibility respects these rules.",
+      "priority": "critical",
+      "related_stories": ["E8.3", "E8.4"],
+      "acceptance_criteria": ["E8.3-AC5", "E8.3-AC6", "E8.4-AC8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {
+            "auth_role": "STAFF",
+            "precondition": "Record has both manual and system-generated links"
+          },
+          "expected_result": "Invoice detail page loads as STAFF"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Links button in ActionBar",
+          "input_data": {},
+          "expected_result": "LinksPanel opens showing both manual and system links"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Delete button on manual link",
+          "input_data": {},
+          "expected_result": "Delete button (trash icon) visible on manual link for STAFF user"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Delete button absence on system-generated link",
+          "input_data": {},
+          "expected_result": "Delete button NOT visible on system-generated link for STAFF user — requires MANAGER",
+          "screenshot": true,
+          "visual_check": "LinksPanel showing: manual link WITH delete button visible, system-generated link WITHOUT delete button — demonstrating the RBAC difference"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Delete button on manual link",
+          "input_data": {},
+          "expected_result": "Confirmation dialog appears"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Confirm delete button",
+          "input_data": {},
+          "expected_result": "Manual link deleted via DELETE /record-links/{id}, link removed from panel, count badge updates"
+        },
+        {
+          "step_number": 7,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {
+            "auth_role": "MANAGER"
+          },
+          "expected_result": "Re-navigate as MANAGER"
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Links button in ActionBar",
+          "input_data": {},
+          "expected_result": "LinksPanel opens"
+        },
+        {
+          "step_number": 9,
+          "action": "verify_element",
+          "target": "Delete button on system-generated link",
+          "input_data": {},
+          "expected_result": "Delete button now visible on system-generated link for MANAGER user",
+          "screenshot": true,
+          "visual_check": "System-generated link now showing delete button for MANAGER role — confirms elevated permission allows system link deletion"
+        }
+      ]
+    },
+    {
+      "id": "j17-link-duplicate-rejection",
+      "name": "Reject Duplicate Record Link",
+      "description": "Test that creating a duplicate link (same source, target, and type) is rejected with a 409 Conflict error displayed to the user.",
+      "priority": "high",
+      "related_stories": ["E8.3"],
+      "acceptance_criteria": ["E8.3-AC7"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {
+            "precondition": "A RELATES_TO link to Customer already exists"
+          },
+          "expected_result": "Invoice detail page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Links button in ActionBar",
+          "input_data": {},
+          "expected_result": "LinksPanel opens showing existing RELATES_TO link"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Add Link button",
+          "input_data": {},
+          "expected_result": "AddLinkForm dialog opens"
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "AddLinkForm",
+          "input_data": {
+            "entityType": "Customer",
+            "entitySearch": "Acme",
+            "entitySelection": "Same customer as existing link",
+            "linkType": "RELATES_TO"
+          },
+          "expected_result": "Form filled with identical source/target/type as existing link"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Add Link submit button",
+          "input_data": {},
+          "expected_result": "API returns 409 Conflict, error toast displayed to user"
+        },
+        {
+          "step_number": 6,
+          "action": "verify_text",
+          "target": "Error toast notification",
+          "input_data": {},
+          "expected_result": "Toast shows duplicate link error message (translation key: crossCutting.links.duplicateLink)",
+          "screenshot": true,
+          "visual_check": "Error toast notification visible indicating that a link of this type already exists between these records"
+        }
+      ]
+    },
+    {
+      "id": "j18-actionbar-badge-counts",
+      "name": "ActionBar Badge Counts Update Correctly",
+      "description": "Test that attachment and link count badges in the ActionBar update in real-time as items are added and removed — badges show count when > 0 and hide when 0.",
+      "priority": "high",
+      "related_stories": ["E8.4"],
+      "acceptance_criteria": ["E8.4-AC1", "E8.4-AC5"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {
+            "precondition": "Record has 0 attachments and 0 links"
+          },
+          "expected_result": "Invoice detail page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "ActionBar Attachments button",
+          "input_data": {},
+          "expected_result": "Attachments button visible with NO count badge (count is 0)"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "ActionBar Links button",
+          "input_data": {},
+          "expected_result": "Links button visible with NO count badge (count is 0)",
+          "screenshot": true,
+          "visual_check": "ActionBar persistent tools zone showing both Attachments and Links buttons WITHOUT any count badges — both at zero"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Attachments button",
+          "input_data": {},
+          "expected_result": "Panel opens"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "FileUploadZone (upload a file)",
+          "input_data": {
+            "file": "test-document.pdf",
+            "mimeType": "application/pdf",
+            "fileSize": 245760
+          },
+          "expected_result": "File uploaded successfully"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Sheet close button",
+          "input_data": {},
+          "expected_result": "Panel closes"
+        },
+        {
+          "step_number": 7,
+          "action": "verify_element",
+          "target": "ActionBar Attachments button badge",
+          "input_data": {},
+          "expected_result": "Badge now shows '(1)' on Attachments button",
+          "screenshot": true,
+          "visual_check": "ActionBar showing Attachments button WITH badge '(1)' — Links button still without badge"
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Links button",
+          "input_data": {},
+          "expected_result": "LinksPanel opens"
+        },
+        {
+          "step_number": 9,
+          "action": "click",
+          "target": "Add Link button → complete add link flow",
+          "input_data": {
+            "entityType": "Customer",
+            "entitySearch": "Test Customer",
+            "linkType": "RELATES_TO"
+          },
+          "expected_result": "Link created"
+        },
+        {
+          "step_number": 10,
+          "action": "click",
+          "target": "Sheet close button",
+          "input_data": {},
+          "expected_result": "Panel closes"
+        },
+        {
+          "step_number": 11,
+          "action": "verify_element",
+          "target": "ActionBar both badges",
+          "input_data": {},
+          "expected_result": "Attachments badge '(1)' AND Links badge '(1)' both visible",
+          "screenshot": true,
+          "visual_check": "ActionBar persistent tools zone showing BOTH Attachments '(1)' and Links '(1)' count badges next to their respective icons"
+        }
+      ]
+    },
+    {
+      "id": "j19-mobile-responsive-panels",
+      "name": "Mobile Responsive Layout — Full-Screen Panels",
+      "description": "Test that on phone breakpoints, AttachmentPanel and LinksPanel render as full-screen overlay sheets instead of side panels, with a visible close button.",
+      "priority": "high",
+      "related_stories": ["E8.4"],
+      "acceptance_criteria": ["E8.4-AC7"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {
+            "viewport": {
+              "width": 375,
+              "height": 812
+            }
+          },
+          "expected_result": "Invoice detail page loads in mobile viewport"
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "ActionBar mobile layout",
+          "input_data": {},
+          "expected_result": "On phone, persistent tools zone is hidden — Attachments and Links available through overflow menu",
+          "screenshot": true,
+          "visual_check": "Mobile view of ActionBar showing only primary action button, persistent tools hidden behind overflow menu (hamburger/more)"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "ActionBar overflow menu button",
+          "input_data": {},
+          "expected_result": "Overflow menu opens showing Attachments and Links options with their counts"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Attachments option in overflow menu",
+          "input_data": {},
+          "expected_result": "AttachmentPanel opens as FULL-SCREEN overlay (not 400px side panel)"
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Full-screen AttachmentPanel",
+          "input_data": {},
+          "expected_result": "Panel takes full viewport width, close button (X) visible at top, upload zone and list fill the screen",
+          "screenshot": true,
+          "visual_check": "Full-screen AttachmentPanel overlay covering entire viewport on mobile — close button in top-right, FileUploadZone, and attachment list scrollable below"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Close button (X) on full-screen panel",
+          "input_data": {},
+          "expected_result": "Full-screen panel closes, returning to invoice detail page"
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Overflow menu → Links option",
+          "input_data": {},
+          "expected_result": "LinksPanel opens as FULL-SCREEN overlay"
+        },
+        {
+          "step_number": 8,
+          "action": "verify_element",
+          "target": "Full-screen LinksPanel",
+          "input_data": {},
+          "expected_result": "LinksPanel takes full viewport, Add Link button and grouped links visible, close button present",
+          "screenshot": true,
+          "visual_check": "Full-screen LinksPanel overlay on mobile — header with 'Linked Records' title and close button, Add Link button, link groups filling the screen"
+        }
+      ]
+    },
+    {
+      "id": "j20-keyboard-accessibility",
+      "name": "Keyboard Navigation — Panels and ActionBar",
+      "description": "Test that all interactive elements in cross-cutting panels are keyboard-navigable: Tab moves through elements, Enter/Space activates buttons, Escape closes panels (WCAG 2.1 AA / NFR27, NFR28).",
+      "priority": "high",
+      "related_stories": ["E8.4"],
+      "acceptance_criteria": ["E8.4-AC7"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {},
+          "expected_result": "Invoice detail page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "ActionBar Attachments button (keyboard: Tab to button, press Enter)",
+          "input_data": {
+            "keyboard_action": "Tab + Enter"
+          },
+          "expected_result": "AttachmentPanel opens via keyboard activation"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Focus trapped inside Sheet",
+          "input_data": {},
+          "expected_result": "Focus is trapped within the AttachmentPanel Sheet — Tab cycles through: close button, upload zone, attachment list items, action buttons"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "FileUploadZone keyboard activation",
+          "input_data": {
+            "keyboard_action": "Tab to upload zone, press Enter"
+          },
+          "expected_result": "FileUploadZone has role='button', tabIndex=0, and activates file picker on Enter/Space keypress"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Press Escape key",
+          "input_data": {
+            "keyboard_action": "Escape"
+          },
+          "expected_result": "AttachmentPanel Sheet closes, focus returns to Attachments button in ActionBar"
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "ActionBar roving tabindex",
+          "input_data": {
+            "keyboard_action": "Arrow keys (Left/Right)"
+          },
+          "expected_result": "Arrow keys move focus between ActionBar buttons (primary action, Attachments, Links) following WAI-ARIA toolbar pattern"
+        },
+        {
+          "step_number": 7,
+          "action": "verify_element",
+          "target": "ARIA labels on persistent tools",
+          "input_data": {},
+          "expected_result": "Attachments button has aria-label 'Attachments (N files)', Links button has aria-label 'Links (N records)' with correct counts"
+        }
+      ]
+    },
+    {
+      "id": "j21-note-system-type-blocked",
+      "name": "SYSTEM Note Type Not Available in UI",
+      "description": "Verify that the AddNoteForm type selector does not include SYSTEM as an option — users cannot create system notes through the UI.",
+      "priority": "high",
+      "related_stories": ["E8.2", "E8.4"],
+      "acceptance_criteria": ["E8.2-AC4", "E8.4-AC4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices/{invoiceId}",
+          "input_data": {},
+          "expected_result": "Invoice detail page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Notes tab",
+          "input_data": {},
+          "expected_result": "NotesPanel visible"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Add Note button",
+          "input_data": {},
+          "expected_result": "AddNoteForm expands"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Note type selector dropdown",
+          "input_data": {},
+          "expected_result": "Dropdown opens showing ONLY: General, Internal, Customer Visible"
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Absence of SYSTEM option",
+          "input_data": {},
+          "expected_result": "SYSTEM type is NOT listed in the dropdown — only General, Internal, Customer Visible options available",
+          "screenshot": true,
+          "visual_check": "Note type selector dropdown expanded showing exactly three options: 'General' (default/selected), 'Internal', 'Customer Visible' — no 'System' option"
+        }
+      ]
+    }
+  ]
+}

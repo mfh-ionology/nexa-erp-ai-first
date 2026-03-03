@@ -50,6 +50,13 @@ import { EntitySearchService } from './entity-search.service.js';
 import { entityTriggersRoutesPlugin } from './entity-triggers.routes.js';
 import { SkillOverrideService } from './skill-overrides.service.js';
 import { skillOverridesRoutesPlugin } from './skill-overrides.routes.js';
+import { automationRoutesPlugin } from './automation/automation.routes.js';
+import { AutomationService } from './automation/automation.service.js';
+import { PromptRenderer } from './prompt-renderer.js';
+import { AdminModelService } from './admin/admin-model.service.js';
+import { AdminPromptService } from './admin/admin-prompt.service.js';
+import { AdminDashboardService } from './admin/admin-dashboard.service.js';
+import { adminRoutesPlugin } from './admin/admin.routes.js';
 import { registerViewsQueryHandlers } from './tools/views-query-handlers.js';
 import { PatternDetectionService } from './pattern-detection.service.js';
 import { MemoryParserService } from './memory-parser.service.js';
@@ -96,6 +103,11 @@ declare module 'fastify' {
     aiMemoryCitation: MemoryCitationService | null;
     aiSemanticDedup: SemanticDedupService | null;
     aiPreCompaction: PreCompactionService | null;
+    aiAutomationService: AutomationService | null;
+    aiPromptRenderer: PromptRenderer | null;
+    aiAdminModelService: AdminModelService | null;
+    aiAdminPromptService: AdminPromptService | null;
+    aiAdminDashboardService: AdminDashboardService | null;
   }
 }
 
@@ -233,6 +245,11 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     fastify.decorate('aiMemoryCitation', null);
     fastify.decorate('aiSemanticDedup', null);
     fastify.decorate('aiPreCompaction', null);
+    fastify.decorate('aiAutomationService', null);
+    fastify.decorate('aiPromptRenderer', null);
+    fastify.decorate('aiAdminModelService', null);
+    fastify.decorate('aiAdminPromptService', null);
+    fastify.decorate('aiAdminDashboardService', null);
     // Still register routes — they will return 503 when orchestrator/service is null
     await fastify.register(aiRoutesPlugin);
     await fastify.register(predictionRoutesPlugin);
@@ -242,6 +259,8 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     await fastify.register(knowledgeRoutesPlugin);
     await fastify.register(entityTriggersRoutesPlugin);
     await fastify.register(skillOverridesRoutesPlugin);
+    await fastify.register(automationRoutesPlugin);
+    await fastify.register(adminRoutesPlugin, { prefix: '/admin' });
     return;
   }
 
@@ -624,6 +643,32 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     fastify.decorate('aiSemanticDedup', semanticDedupService);
     fastify.decorate('aiPreCompaction', preCompactionService);
 
+    // Create AutomationService (E5c-1 Task 10)
+    const automationService = new AutomationService({
+      db: prisma,
+      eventBus: fastify.eventBus,
+      logger,
+      scheduler: null, // AutomationSchedulerService created elsewhere if Redis is available
+      eventListener: null, // AutomationEventListener created elsewhere
+      executor: null, // AutomationExecutor requires full wiring — set later if available
+    });
+    fastify.decorate('aiAutomationService', automationService);
+
+    // Create PromptRenderer (E5c-2 Task 6)
+    const promptRenderer = new PromptRenderer(prisma, logger);
+    fastify.decorate('aiPromptRenderer', promptRenderer);
+
+    // Wire PromptRenderer into orchestrator for AiPromptVariable resolution (E5c-2 Task 8)
+    orchestrator.setPromptRenderer(promptRenderer);
+
+    // Create AI admin services (E5c-3 Task 5.2)
+    const adminModelService = new AdminModelService(prisma, logger);
+    const adminPromptService = new AdminPromptService(prisma, logger, promptRenderer);
+    const adminDashboardService = new AdminDashboardService(prisma, logger);
+    fastify.decorate('aiAdminModelService', adminModelService);
+    fastify.decorate('aiAdminPromptService', adminPromptService);
+    fastify.decorate('aiAdminDashboardService', adminDashboardService);
+
     // Register audit mapping for AI action execution (AC: #5, NFR22)
     registerAuditMapping('ai.action.executed', (payload) => ({
       companyId: payload.companyId,
@@ -645,6 +690,8 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     await fastify.register(knowledgeRoutesPlugin);
     await fastify.register(entityTriggersRoutesPlugin);
     await fastify.register(skillOverridesRoutesPlugin);
+    await fastify.register(automationRoutesPlugin);
+    await fastify.register(adminRoutesPlugin, { prefix: '/admin' });
 
     // Graceful shutdown — close WebSocket handler, schedulers, and Redis connection
     fastify.addHook('onClose', async () => {
@@ -687,6 +734,11 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     fastify.decorate('aiMemoryCitation', null);
     fastify.decorate('aiSemanticDedup', null);
     fastify.decorate('aiPreCompaction', null);
+    fastify.decorate('aiAutomationService', null);
+    fastify.decorate('aiPromptRenderer', null);
+    fastify.decorate('aiAdminModelService', null);
+    fastify.decorate('aiAdminPromptService', null);
+    fastify.decorate('aiAdminDashboardService', null);
     // Still register routes — they will return 503 when orchestrator/service is null
     await fastify.register(aiRoutesPlugin);
     await fastify.register(predictionRoutesPlugin);
@@ -696,6 +748,8 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     await fastify.register(knowledgeRoutesPlugin);
     await fastify.register(entityTriggersRoutesPlugin);
     await fastify.register(skillOverridesRoutesPlugin);
+    await fastify.register(automationRoutesPlugin);
+    await fastify.register(adminRoutesPlugin, { prefix: '/admin' });
   }
 };
 

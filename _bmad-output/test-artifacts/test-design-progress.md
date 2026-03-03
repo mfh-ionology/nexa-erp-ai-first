@@ -1,8 +1,8 @@
 ---
 stepsCompleted: ['step-01-detect-mode', 'step-02-load-context', 'step-03-risk-and-testability', 'step-04-coverage-plan', 'step-05-generate-output']
 lastStep: 'step-05-generate-output'
-lastSaved: '2026-03-01'
-lastEpic: 'E5b'
+lastSaved: '2026-03-03'
+lastEpic: 'E8'
 ---
 
 # Test Design Progress — Epic E1
@@ -481,3 +481,51 @@ lastEpic: 'E5b'
 
 ## Completion
 - Workflow complete: 2026-03-01
+
+---
+
+# Test Design Progress — Epic E8
+
+## Step 1: Mode Detection
+- **Mode**: Epic-Level (Phase 4)
+- **Reason**: User explicitly requested E8 epic-level test design; sprint-status.yaml exists
+- **Epic**: E8 — Attachments + Notes + Record Links
+
+## Step 2: Context Loading
+- **Config**: tea_use_playwright_utils=true, tea_browser_automation=auto, test_framework=playwright
+- **Artifacts loaded**:
+  - Epic E8 (4 stories: E8.1 Attachment Service, E8.2 Notes Service, E8.3 Record Links Service, E8.4 Cross-cutting UI Components)
+  - Architecture: §2.7 (S3/MinIO for file storage), §2.20 (cross-cutting note/link systems)
+  - PRD FRs: FR85 (attachments), FR87 (record links)
+  - PRD NFRs: NFR2 (CRUD <500ms), NFR27, NFR28
+  - API Contracts: §2.5 (Cross-cutting Infrastructure — presign, confirm, download, delete, notes CRUD, record-links CRUD)
+  - Data Models: §3.9 (Attachment, Note, RecordLink, NoteType enum, RecordLinkType enum)
+  - Business Rules: BR-SYS-006 to BR-SYS-010 (attachments), BR-SYS-013/BR-SYS-014 (polymorphic entity validation)
+  - Event Catalog: §15 (system-generated links via event handlers)
+  - UX Design Spec: ActionBar system (attachments/links as persistent tools with count badges)
+- **Knowledge fragments**: risk-governance.md, probability-impact.md, test-levels-framework.md, test-priorities-matrix.md
+- **Existing tests**: No E8-specific tests; 191+ unit/integration, 109+ E2E specs from prior epics
+
+## Step 3: Risk Assessment
+- **Total risks**: 9
+- **High-priority (>=6)**: 3 — R-001 (SEC: presigned URL leakage, score=6), R-002 (SEC: executable file bypass, score=6), R-003 (DATA: orphaned S3 objects, score=6)
+- **Medium (3-4)**: 4 — R-004 (DATA: polymorphic validation gap), R-005 (TECH: bidirectional link query perf), R-006 (BUS: SYSTEM note type enforcement), R-007 (TECH: presigned URL expiry race)
+- **Low (1-2)**: 2 — R-008 (OPS: MinIO/S3 config mismatch), R-009 (BUS: link type extensibility)
+
+## Step 4: Coverage Plan
+- **P0**: 12 tests (~15-25 hours) — presigned URL security, MIME validation, entity validation, data integrity
+- **P1**: 18 tests (~15-25 hours) — CRUD operations, multi-tenant scoping, E2E panel interactions
+- **P2**: 10 tests (~5-10 hours) — edge cases, validation boundaries
+- **P3**: 4 tests (~1-3 hours) — performance benchmarks
+- **Total**: 44 tests, ~36-63 hours (~1-2 weeks)
+- **Test levels**: Unit (MIME validation, direction logic), API (CRUD, security, entity validation), E2E (panels, drag-drop, ActionBar)
+- **Execution**: All tests on every PR (<12 min); performance benchmarks nightly
+
+## Step 5: Output Generation
+- **Output file**: `_bmad-output/test-artifacts/test-design-epic-E8.md`
+- **Validated against checklist**: All criteria passed
+- **No CLI sessions to clean up** (no browser exploration for E8)
+- **All artifacts stored in test-artifacts/**
+
+## Completion
+- Workflow complete: 2026-03-03

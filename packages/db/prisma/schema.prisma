@@ -322,6 +322,7 @@ model CompanyProfile {
   dataViews              DataView[]
   dateRangePresets       DateRangePreset[]
   savedViews             SavedView[]
+  automations            AiAutomation[]
 
   @@index([baseCurrencyCode], map: "idx_company_profiles_base_currency_code")
   @@index([countryCode], map: "idx_company_profiles_country_code")
@@ -531,6 +532,7 @@ model User {
   aiConversationSummaries AiConversationSummary[]
   columnPreferences      UserColumnPreference[]
   savedViews             SavedView[]
+  createdAutomations     AiAutomation[] @relation("UserCreatedAutomations")
 
   @@unique([email], map: "uq_users_email")
   @@index([companyId], map: "idx_users_company_id")
@@ -814,8 +816,9 @@ model AiPrompt {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  versions AiPromptVersion[]
-  agents   AiAgent[]
+  versions  AiPromptVersion[]
+  agents    AiAgent[]
+  variables AiPromptVariable[]
 
   @@map("ai_prompts")
 }
@@ -863,9 +866,11 @@ model AiAgent {
   prompt AiPrompt @relation(fields: [promptId], references: [id])
 
   // Reverse relations
-  conversations AiConversation[]
-  usage         AiUsage[]
-  evals         AiEval[]
+  conversations      AiConversation[]
+  usage              AiUsage[]
+  evals              AiEval[]
+  automationSteps    AiAutomationStep[]
+  automationStepRuns AiAutomationStepRun[]
 
   @@map("ai_agents")
 }
@@ -1177,6 +1182,176 @@ model AiMemorySettings {
 }
 
 // ---------------------------------------------------------------------------
+// AI Automation Infrastructure — E5c.1
+// ---------------------------------------------------------------------------
+// Goal-oriented automation engine: scheduled, event-triggered, and chained
+// workflows with sequential step execution and I/O piping.
+// AiAutomationRun and AiAutomationStepRun are append-only (no updatedAt).
+// ---------------------------------------------------------------------------
+
+model AiAutomation {
+  id                 String   @id @default(uuid()) @map("id")
+  companyId          String   @map("company_id")
+  name               String   @map("name") @db.VarChar(255)
+  description        String?  @map("description") @db.Text
+  triggerType        String   @map("trigger_type") // SCHEDULED, EVENT, CHAIN, MANUAL
+  eventType          String?  @map("event_type") @db.VarChar(255)
+  chainFromId        String?  @unique @map("chain_from_id")
+  chainNextId        String?  @unique @map("chain_next_id")
+  notificationConfig Json?    @map("notification_config")
+  maxTokenBudget     Int      @default(50000) @map("max_token_budget")
+  maxDurationMs      Int      @default(300000) @map("max_duration_ms")
+  isActive           Boolean  @default(true) @map("is_active")
+  createdById        String   @map("created_by_id")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  company   CompanyProfile @relation(fields: [companyId], references: [id])
+  createdBy User           @relation("UserCreatedAutomations", fields: [createdById], references: [id])
+
+  // Self-referential chain relations
+  chainFrom AiAutomation?  @relation("AutomationChainFrom", fields: [chainFromId], references: [id])
+  chainedBy AiAutomation?  @relation("AutomationChainFrom")
+  chainNext AiAutomation?  @relation("AutomationChainNext", fields: [chainNextId], references: [id])
+  chainedTo AiAutomation?  @relation("AutomationChainNext")
+
+  // Reverse relations
+  schedule AiAutomationSchedule?
+  steps    AiAutomationStep[]
+  runs     AiAutomationRun[]
+
+  @@index([companyId, isActive], map: "idx_ai_automations_company_active")
+  @@index([triggerType], map: "idx_ai_automations_trigger_type")
+  @@map("ai_automations")
+}
+
+model AiAutomationStep {
+  id           String @id @default(uuid()) @map("id")
+  automationId String @map("automation_id")
+  stepOrder    Int    @map("step_order")
+  agentId      String @map("agent_id")
+  goal         String @map("goal") @db.Text
+  inputConfig  Json   @map("input_config")
+  outputConfig Json   @map("output_config")
+  maxTurns     Int    @default(10) @map("max_turns")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  automation AiAutomation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  agent      AiAgent      @relation(fields: [agentId], references: [id])
+
+  // Reverse relations
+  stepRuns AiAutomationStepRun[]
+
+  @@unique([automationId, stepOrder], map: "uq_ai_automation_steps_automation_order")
+  @@map("ai_automation_steps")
+}
+
+model AiAutomationSchedule {
+  id             String    @id @default(uuid()) @map("id")
+  automationId   String    @unique @map("automation_id")
+  cronExpression String    @map("cron_expression") @db.VarChar(100)
+  timezone       String    @default("Europe/London") @map("timezone") @db.VarChar(50)
+  nextRunAt      DateTime? @map("next_run_at")
+  lastRunAt      DateTime? @map("last_run_at")
+  isPaused       Boolean   @default(false) @map("is_paused")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  automation AiAutomation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([nextRunAt, isPaused], map: "idx_ai_automation_schedules_next_run_paused")
+  @@map("ai_automation_schedules")
+}
+
+model AiAutomationRun {
+  id           String    @id @default(uuid()) @map("id")
+  automationId String    @map("automation_id")
+  triggeredBy  String    @map("triggered_by") // 'scheduler', 'event', 'chain', 'manual:{userId}'
+  status       String    @default("PENDING") @map("status") // PENDING, RUNNING, COMPLETED, FAILED, CANCELLED
+  startedAt    DateTime? @map("started_at")
+  completedAt  DateTime? @map("completed_at")
+  totalTokens  Int       @default(0) @map("total_tokens")
+  totalCost    Decimal   @default(0) @map("total_cost") @db.Decimal(10, 4)
+  result       Json?     @map("result")
+  error        String?   @map("error") @db.Text
+  retryOfRunId String?   @map("retry_of_run_id")
+
+  // Append-only — no updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  automation AiAutomation @relation(fields: [automationId], references: [id])
+
+  // Reverse relations
+  stepRuns AiAutomationStepRun[]
+
+  @@index([automationId, createdAt], map: "idx_ai_automation_runs_automation_created")
+  @@index([status], map: "idx_ai_automation_runs_status")
+  @@map("ai_automation_runs")
+}
+
+model AiAutomationStepRun {
+  id          String    @id @default(uuid()) @map("id")
+  runId       String    @map("run_id")
+  stepId      String    @map("step_id")
+  status      String    @default("PENDING") @map("status") // PENDING, RUNNING, COMPLETED, FAILED, SKIPPED
+  agentId     String    @map("agent_id")
+  modelId     String?   @map("model_id")
+  input       Json?     @map("input")
+  output      Json?     @map("output")
+  error       String?   @map("error") @db.Text
+  inputTokens  Int      @default(0) @map("input_tokens")
+  outputTokens Int      @default(0) @map("output_tokens")
+  latencyMs   Int?      @map("latency_ms")
+  turns       Int       @default(0) @map("turns")
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+
+  // Append-only — no updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  run   AiAutomationRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  step  AiAutomationStep @relation(fields: [stepId], references: [id])
+  agent AiAgent           @relation(fields: [agentId], references: [id])
+
+  @@index([runId, createdAt], map: "idx_ai_automation_step_runs_run_created")
+  @@map("ai_automation_step_runs")
+}
+
+model AiPromptVariable {
+  id           String  @id @default(uuid()) @map("id")
+  promptId     String  @map("prompt_id")
+  variableName String  @map("variable_name") @db.VarChar(100)
+  displayName  String  @map("display_name") @db.VarChar(255)
+  description  String? @map("description") @db.Text
+  sourceType   String  @map("source_type") // DB_FIELD, DB_QUERY, PAGE_FIELD, SYSTEM, CONSTANT, EXPRESSION
+  sourceConfig Json    @map("source_config")
+  defaultValue String? @map("default_value") @db.Text
+  isRequired   Boolean @default(false) @map("is_required")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  prompt AiPrompt @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  @@unique([promptId, variableName], map: "uq_ai_prompt_variables_prompt_variable")
+  @@map("ai_prompt_variables")
+}
+
+// ---------------------------------------------------------------------------
 // Metadata-Driven DataTable Infrastructure — E7.1
 // ---------------------------------------------------------------------------
 // 3-tier architecture:
@@ -1324,4 +1499,146 @@ model SavedViewCondition {
 
   @@index([savedViewId, conditionOrder], map: "idx_saved_view_conditions_view_order")
   @@map("saved_view_conditions")
+}
+
+// ---------------------------------------------------------------------------
+// Cross-Cutting Module — E8.1 Attachment (Architecture §2.20)
+// ---------------------------------------------------------------------------
+// Polymorphic file attachments. No companyId — company scope enforced through
+// parent entity validation (entityType + entityId checked against caller's
+// companyId on every operation). See Architecture §2.20.
+// ---------------------------------------------------------------------------
+
+model Attachment {
+  id            String   @id @default(uuid())
+
+  // ── Polymorphic Link ──
+  entityType    String   @map("entity_type") @db.VarChar(100)
+  entityId      String   @map("entity_id")
+
+  // ── File Metadata ──
+  fileName      String   @map("file_name") @db.VarChar(200)
+  fileSize      Int      @map("file_size")
+  mimeType      String   @map("mime_type") @db.VarChar(100)
+
+  // ── Storage Location ──
+  storageKey    String   @map("storage_key") @db.VarChar(500)
+  storageBucket String   @map("storage_bucket") @db.VarChar(100)
+
+  // ── Optional Description ──
+  description   String?  @db.VarChar(500)
+
+  // ── Upload Tracking ──
+  uploadedBy    String   @map("uploaded_by")
+  uploadedAt    DateTime @default(now()) @map("uploaded_at")
+
+  // ── Standard Fields ──
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("attachments")
+  @@index([entityType, entityId], map: "idx_attachments_entity")
+  @@index([uploadedBy], map: "idx_attachments_uploaded_by")
+}
+
+// ---------------------------------------------------------------------------
+// Note Type Enum — E8.2 Notes Service
+// ---------------------------------------------------------------------------
+
+enum NoteType {
+  GENERAL
+  INTERNAL
+  CUSTOMER_VISIBLE
+  SYSTEM
+
+  @@map("note_type")
+}
+
+// ---------------------------------------------------------------------------
+// Note Model — E8.2 Notes Service
+// ---------------------------------------------------------------------------
+// Polymorphic notes. No companyId — company scope enforced through parent
+// entity validation (entityType + entityId checked against caller's companyId
+// on every operation). See Architecture §2.20.
+// ---------------------------------------------------------------------------
+
+model Note {
+  id             String    @id @default(uuid())
+
+  // ── Polymorphic Link ──
+  entityType     String    @map("entity_type") @db.VarChar(100)
+  entityId       String    @map("entity_id")
+
+  // ── Note Content ──
+  noteType       NoteType  @default(GENERAL) @map("note_type")
+  classification String?   @map("classification") @db.VarChar(60)
+  title          String?   @map("title") @db.VarChar(200)
+  content        String    @map("content") @db.Text
+
+  // ── Flags ──
+  isPinned       Boolean   @default(false) @map("is_pinned")
+
+  // ── Soft Delete ──
+  deletedAt      DateTime? @map("deleted_at")
+
+  // ── Standard Fields ──
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  createdBy      String    @map("created_by")
+  updatedBy      String    @map("updated_by")
+
+  @@map("notes")
+  @@index([entityType, entityId, deletedAt], map: "idx_notes_entity_active")
+  @@index([noteType], map: "idx_notes_type")
+}
+
+// ---------------------------------------------------------------------------
+// Record Link Type Enum — E8.3 Record Links Service
+// ---------------------------------------------------------------------------
+
+enum RecordLinkType {
+  CREATED_FROM
+  FULFILLS
+  PAYMENT_FOR
+  CREDIT_FOR
+  RELATES_TO
+  PARENT_CHILD
+
+  @@map("record_link_type")
+}
+
+// ---------------------------------------------------------------------------
+// RecordLink Model — E8.3 Record Links Service (Architecture §2.20)
+// ---------------------------------------------------------------------------
+// Polymorphic record-to-record links. No companyId — company scope enforced
+// through parent entity validation on BOTH source and target entities.
+// See Architecture §2.20.
+// ---------------------------------------------------------------------------
+
+model RecordLink {
+  id                String         @id @default(uuid())
+
+  // ── Source Entity (Polymorphic) ──
+  sourceEntityType  String         @map("source_entity_type") @db.VarChar(100)
+  sourceEntityId    String         @map("source_entity_id")
+
+  // ── Target Entity (Polymorphic) ──
+  targetEntityType  String         @map("target_entity_type") @db.VarChar(100)
+  targetEntityId    String         @map("target_entity_id")
+
+  // ── Link Metadata ──
+  linkType          RecordLinkType @map("link_type")
+  isSystemGenerated Boolean        @default(false) @map("is_system_generated")
+  description       String?        @db.VarChar(500)
+
+  // ── Standard Fields ──
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  createdBy         String         @map("created_by")
+
+  @@map("record_links")
+  @@unique([sourceEntityType, sourceEntityId, targetEntityType, targetEntityId, linkType], map: "uq_record_links_source_target_type")
+  @@index([sourceEntityType, sourceEntityId], map: "idx_record_links_source")
+  @@index([targetEntityType, targetEntityId], map: "idx_record_links_target")
+  @@index([linkType], map: "idx_record_links_link_type")
 }

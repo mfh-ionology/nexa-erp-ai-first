@@ -1,0 +1,253 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - link "Skip to content" [ref=e4] [cursor=pointer]:
+        - /url: "#main-content"
+      - complementary [ref=e6]:
+        - navigation "Navigation" [ref=e7]:
+          - img [ref=e10]
+          - generic [ref=e17]:
+            - generic [ref=e18]:
+              - generic [ref=e19]: Main
+              - link "Dashboard" [ref=e21] [cursor=pointer]:
+                - /url: /
+                - img [ref=e22]
+                - text: Dashboard
+            - generic [ref=e27]:
+              - generic [ref=e28]: Operations
+              - generic [ref=e29]:
+                - link "Finance" [ref=e30] [cursor=pointer]:
+                  - /url: /finance
+                  - img [ref=e31]
+                  - text: Finance
+                - link "Accounts Receivable" [ref=e33] [cursor=pointer]:
+                  - /url: /ar
+                  - img [ref=e34]
+                  - text: Accounts Receivable
+                - link "Accounts Payable" [ref=e37] [cursor=pointer]:
+                  - /url: /ap
+                  - img [ref=e38]
+                  - text: Accounts Payable
+                - link "Sales" [ref=e41] [cursor=pointer]:
+                  - /url: /sales
+                  - img [ref=e42]
+                  - text: Sales
+                - link "Purchasing" [ref=e46] [cursor=pointer]:
+                  - /url: /purchasing
+                  - img [ref=e47]
+                  - text: Purchasing
+                - link "Inventory" [ref=e49] [cursor=pointer]:
+                  - /url: /inventory
+                  - img [ref=e50]
+                  - text: Inventory
+            - generic [ref=e53]:
+              - generic [ref=e54]: Other
+              - generic [ref=e55]:
+                - link "CRM" [ref=e56] [cursor=pointer]:
+                  - /url: /crm
+                  - img [ref=e57]
+                  - text: CRM
+                - link "HR & Payroll" [ref=e60] [cursor=pointer]:
+                  - /url: /hr
+                  - img [ref=e61]
+                  - text: HR & Payroll
+                - link "Manufacturing" [ref=e66] [cursor=pointer]:
+                  - /url: /manufacturing
+                  - img [ref=e67]
+                  - text: Manufacturing
+                - link "Reporting" [ref=e69] [cursor=pointer]:
+                  - /url: /reporting
+                  - img [ref=e70]
+                  - text: Reporting
+            - generic [ref=e72]:
+              - generic [ref=e74]: AI
+              - generic [ref=e75]:
+                - link "Morning Briefing" [ref=e76] [cursor=pointer]:
+                  - /url: /ai/briefing
+                  - img [ref=e77]
+                  - text: Morning Briefing
+                - link "My Memory" [ref=e83] [cursor=pointer]:
+                  - /url: /ai/memory
+                  - img [ref=e84]
+                  - text: My Memory
+                - link "Skills" [ref=e92] [cursor=pointer]:
+                  - /url: /ai/skills
+                  - img [ref=e93]
+                  - text: Skills
+                - link "AI Administration" [ref=e96] [cursor=pointer]:
+                  - /url: /ai/admin
+                  - img [ref=e97]
+                  - text: AI Administration
+                - link "Model Registry" [ref=e100] [cursor=pointer]:
+                  - /url: /ai/admin/models
+                  - img [ref=e101]
+                  - text: Model Registry
+                - link "Prompt Templates" [ref=e104] [cursor=pointer]:
+                  - /url: /ai/admin/prompts
+                  - img [ref=e105]
+                  - text: Prompt Templates
+            - generic [ref=e110]:
+              - generic [ref=e112]: Administration
+              - generic [ref=e113]:
+                - link "Settings" [ref=e114] [cursor=pointer]:
+                  - /url: /system/settings
+                  - img [ref=e115]
+                  - text: Settings
+                - link "Users" [ref=e118] [cursor=pointer]:
+                  - /url: /system/users
+                  - img [ref=e119]
+                  - text: Users
+                - link "Access Groups" [ref=e124] [cursor=pointer]:
+                  - /url: /system/access-groups
+                  - img [ref=e125]
+                  - text: Access Groups
+          - button "Collapse sidebar" [ref=e128]:
+            - img [ref=e129]
+      - generic [ref=e131]:
+        - banner [ref=e132]:
+          - combobox "Search or ask Nexa AI" [ref=e134] [cursor=pointer]:
+            - img [ref=e135]
+            - generic [ref=e138]:
+              - text: Search or Ask Nexa anything...
+              - generic:
+                - generic: ⌘
+                - text: K
+          - generic [ref=e139]:
+            - generic [ref=e140]: Tue, Mar 3, 2026
+            - button "Open Co-Pilot" [ref=e141]:
+              - img
+            - button "Notifications" [ref=e142]:
+              - img [ref=e143]
+              - generic [ref=e146]: "3"
+            - button "Favourites" [ref=e147]:
+              - img
+            - button "User menu" [ref=e148]:
+              - generic [ref=e150]: AU
+        - generic [ref=e151]:
+          - main "Main content" [ref=e152]:
+            - generic [ref=e153]:
+              - generic [ref=e154]:
+                - generic [ref=e155]:
+                  - heading "INV-2026-0042" [level=1] [ref=e156]
+                  - generic [ref=e157]: Overdue
+                - generic [ref=e158]:
+                  - button "Send Reminder" [ref=e159]:
+                    - img
+                    - text: Send Reminder
+                  - button "Print" [ref=e160]:
+                    - img
+                    - text: Print
+                  - button [ref=e161]:
+                    - img
+              - generic [ref=e163]:
+                - generic [ref=e164]:
+                  - generic [ref=e165]:
+                    - paragraph [ref=e166]: Customer
+                    - paragraph [ref=e167]: Acme Corp (AC-001)
+                  - generic [ref=e168]:
+                    - paragraph [ref=e169]: Address
+                    - paragraph [ref=e170]: 14 High Street, London EC2V 8AR
+                  - generic [ref=e171]:
+                    - paragraph [ref=e172]: Contact
+                    - paragraph [ref=e173]: James Walker, james@acmecorp.co.uk
+                - generic [ref=e174]:
+                  - generic [ref=e175]:
+                    - paragraph [ref=e176]: Invoice Date
+                    - paragraph [ref=e177]: 17/02/2026
+                  - generic [ref=e178]:
+                    - paragraph [ref=e179]: Due Date
+                    - paragraph [ref=e180]: 19/03/2026
+                  - generic [ref=e181]:
+                    - generic [ref=e182]:
+                      - paragraph [ref=e183]: Payment Terms
+                      - paragraph [ref=e184]: NET30
+                    - generic [ref=e185]:
+                      - paragraph [ref=e186]: Reference
+                      - paragraph [ref=e187]: PO-2026-0031
+              - generic [ref=e188]:
+                - generic [ref=e189]:
+                  - heading "Line Items" [level=3] [ref=e190]
+                  - button "Add Line" [ref=e191]:
+                    - img
+                    - text: Add Line
+                - table [ref=e194]:
+                  - rowgroup [ref=e195]:
+                    - row "Item Code Description Qty Unit Price VAT % Line Total" [ref=e196]:
+                      - columnheader "Item Code" [ref=e197]
+                      - columnheader "Description" [ref=e198]
+                      - columnheader "Qty" [ref=e199]
+                      - columnheader "Unit Price" [ref=e200]
+                      - columnheader "VAT %" [ref=e201]
+                      - columnheader "Line Total" [ref=e202]
+                  - rowgroup [ref=e203]:
+                    - row "WDG-A-PRM Widget-A Premium 50 £400.00 20% £20,000.00" [ref=e204]:
+                      - cell "WDG-A-PRM" [ref=e205]
+                      - cell "Widget-A Premium" [ref=e206]
+                      - cell "50" [ref=e207]
+                      - cell "£400.00" [ref=e208]
+                      - cell "20%" [ref=e209]
+                      - cell "£20,000.00" [ref=e210]
+                    - row "WDG-B-STD Widget-B Standard 100 £84.00 20% £8,400.00" [ref=e211]:
+                      - cell "WDG-B-STD" [ref=e212]
+                      - cell "Widget-B Standard" [ref=e213]
+                      - cell "100" [ref=e214]
+                      - cell "£84.00" [ref=e215]
+                      - cell "20%" [ref=e216]
+                      - cell "£8,400.00" [ref=e217]
+                - generic [ref=e219]:
+                  - generic [ref=e220]:
+                    - generic [ref=e221]: Subtotal
+                    - generic [ref=e222]: £28,400.00
+                  - generic [ref=e223]:
+                    - generic [ref=e224]: VAT (20%)
+                    - generic [ref=e225]: £5,680.00
+                  - generic [ref=e226]:
+                    - generic [ref=e227]: Total
+                    - generic [ref=e228]: £34,080.00
+              - generic [ref=e229]:
+                - generic [ref=e230]:
+                  - heading "Status Timeline" [level=3] [ref=e231]
+                  - generic [ref=e232]:
+                    - generic [ref=e237]:
+                      - generic [ref=e238]: Created
+                      - generic [ref=e239]: 17 Feb 2026, 09:15
+                      - generic [ref=e240]: Sarah Chen
+                    - generic [ref=e245]:
+                      - generic [ref=e246]: Submitted
+                      - generic [ref=e247]: 17 Feb 2026, 10:30
+                      - generic [ref=e248]: Sarah Chen
+                    - generic [ref=e253]:
+                      - generic [ref=e254]: Approved
+                      - generic [ref=e255]: 17 Feb 2026, 14:20
+                      - generic [ref=e256]: David Morris
+                    - generic [ref=e260]:
+                      - generic [ref=e261]: Overdue
+                      - generic [ref=e262]: 19 Mar 2026
+                      - generic [ref=e263]: System
+                - generic [ref=e264]:
+                  - generic [ref=e265]:
+                    - img [ref=e266]
+                    - generic [ref=e269]: AI Summary
+                  - paragraph [ref=e270]: "This invoice is 89 days overdue. Acme Corp has a 67% payment probability. Recommended action: Send formal payment demand."
+                  - generic [ref=e271]:
+                    - button "Send Reminder" [ref=e272]
+                    - button "Schedule Call" [ref=e273]
+          - complementary "AI Co-Pilot assistant"
+    - generic:
+      - contentinfo:
+        - button "Open TanStack Router Devtools" [ref=e274] [cursor=pointer]:
+          - generic [ref=e275]:
+            - img [ref=e277]
+            - img [ref=e312]
+          - generic [ref=e346]: "-"
+          - generic [ref=e347]: TanStack Router
+    - region "Notifications alt+T"
+    - generic [ref=e348]:
+      - img [ref=e350]
+      - button "Open Tanstack query devtools" [ref=e398] [cursor=pointer]:
+        - img [ref=e399]
+  - generic [ref=e447]: £25k
+```

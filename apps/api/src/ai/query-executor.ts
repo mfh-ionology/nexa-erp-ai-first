@@ -7,6 +7,7 @@ import type { QueryToolHandler, ToolDefinition } from '@nexa/ai-tools';
 import type { ToolRegistry } from '@nexa/ai-tools';
 import type { EventBus } from '../core/events/event-bus.js';
 import type { PermissionService } from '../core/rbac/permission.service.js';
+import { ToolParamValidator } from './automation/param-validator.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -138,15 +139,16 @@ export class QueryExecutor {
         }
       }
 
-      // 3b. Validate input against the tool's inputSchema (required fields)
-      if (definition?.inputSchema?.required) {
-        const missing = definition.inputSchema.required.filter((key) => !(key in input));
-        if (missing.length > 0) {
+      // 3b. Validate input against the tool's inputSchema (required + nested fields)
+      if (definition) {
+        const validator = new ToolParamValidator();
+        const validation = validator.validate({ id: '', name: toolName, input }, definition);
+        if (!validation.valid) {
           return {
             success: false,
             error: {
               code: 'INVALID_INPUT',
-              message: `Missing required input fields: ${missing.join(', ')}`,
+              message: validator.buildClarificationMessage(toolName, validation.missingParams),
             },
           };
         }

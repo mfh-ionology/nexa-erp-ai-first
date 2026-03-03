@@ -64,4 +64,51 @@ export const queryKeys = {
     entitySearch: (type: string | null, q: string, scopeBy?: string, scopeValue?: string) =>
       [...queryKeys.ai.all, 'entity-search', type, q, scopeBy, scopeValue] as const,
   },
+  attachments: {
+    all: ['attachments'] as const,
+    list: (entityType: string, entityId: string) =>
+      [...queryKeys.attachments.all, entityType, entityId] as const,
+    count: (entityType: string, entityId: string) =>
+      [...queryKeys.attachments.all, 'count', entityType, entityId] as const,
+  },
+  notes: {
+    all: ['notes'] as const,
+    list: (entityType: string, entityId: string) =>
+      [...queryKeys.notes.all, entityType, entityId] as const,
+  },
+  recordLinks: {
+    all: ['record-links'] as const,
+    list: (entityType: string, entityId: string) =>
+      [...queryKeys.recordLinks.all, entityType, entityId] as const,
+    count: (entityType: string, entityId: string) =>
+      [...queryKeys.recordLinks.all, 'count', entityType, entityId] as const,
+  },
+  aiAdmin: {
+    all: ['ai-admin'] as const,
+    dashboard: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'dashboard', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'dashboard'] as const),
+    models: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'models', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'models'] as const),
+    modelsInfinite: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'models', 'infinite', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'models', 'infinite'] as const),
+    model: (id: string) => [...queryKeys.aiAdmin.all, 'models', id] as const,
+    prompts: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'prompts', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'prompts'] as const),
+    promptsInfinite: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'prompts', 'infinite', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'prompts', 'infinite'] as const),
+    prompt: (id: string) => [...queryKeys.aiAdmin.all, 'prompts', id] as const,
+    promptVersions: (id: string) => [...queryKeys.aiAdmin.all, 'prompts', id, 'versions'] as const,
+    promptVersion: (id: string, version: number) =>
+      [...queryKeys.aiAdmin.all, 'prompts', id, 'versions', version] as const,
+  },
 } as const;

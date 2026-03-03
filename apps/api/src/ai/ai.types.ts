@@ -27,6 +27,18 @@ export interface AiRequestContext {
   currentEntityType?: string; // e.g., 'CustomerInvoice'
   currentEntityId?: string; // e.g., 'inv-uuid'
   locale: string; // e.g., 'en-GB'
+  /** User's display name — enriches SYSTEM variable resolution (E5c-2 Task 8) */
+  userName?: string;
+  /** User's role — enriches SYSTEM variable resolution (E5c-2 Task 8) */
+  userRole?: string;
+  /** Company display name — enriches SYSTEM variable resolution (E5c-2 Task 8) */
+  companyName?: string;
+  /** Company base currency — enriches SYSTEM variable resolution (E5c-2 Task 8) */
+  baseCurrency?: string;
+  /** Company default currency — enriches SYSTEM variable resolution (E5c-2 Task 8) */
+  defaultCurrency?: string;
+  /** Frontend page state from chat session — enables PAGE_FIELD variable resolution (E5c-2 Task 8) */
+  pageContext?: Record<string, unknown>;
 }
 
 // ─── AI Response Types ───────────────────────────────────────────────────────

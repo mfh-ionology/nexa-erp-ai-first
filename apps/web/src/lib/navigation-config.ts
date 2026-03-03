@@ -352,6 +352,27 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         path: '/ai/skills',
         alwaysVisible: true,
       },
+      {
+        key: 'ai.admin',
+        labelKey: 'navigation:ai.admin',
+        icon: 'Brain',
+        path: '/ai/admin',
+        resourceCode: 'system.settings.detail',
+      },
+      {
+        key: 'ai.admin.models',
+        labelKey: 'navigation:ai.admin.models',
+        icon: 'Cpu',
+        path: '/ai/admin/models',
+        resourceCode: 'system.settings.detail',
+      },
+      {
+        key: 'ai.admin.prompts',
+        labelKey: 'navigation:ai.admin.prompts',
+        icon: 'FileCode',
+        path: '/ai/admin/prompts',
+        resourceCode: 'system.settings.detail',
+      },
     ],
   },
   {

@@ -1,0 +1,1430 @@
+{
+  "epic_id": "E8",
+  "epic_title": "Attachments + Notes + Record Links",
+  "generated_at": "2026-03-03T12:00:00.000Z",
+  "total_test_cases": 68,
+  "api_base_url": "http://localhost:5100",
+  "auth_note": "All endpoints require authentication. Tests assume a valid JWT is provided via Authorization header. RBAC roles: VIEWER < STAFF < MANAGER < ADMIN.",
+  "valid_entity_types": ["Customer", "CustomerInvoice", "SalesOrder", "PurchaseOrder", "SupplierBill", "Employee", "JournalEntry", "InventoryItem", "GoodsReceiptNote", "SupplierPayment", "CustomerPayment", "CreditNote", "Dispatch", "Department", "VatCode", "PaymentTerms"],
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/attachments/presign",
+      "description": "Get presigned S3 upload URL with MIME type and file size validation (STAFF+)",
+      "story": "E8.1",
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "name": "Presign - happy path with PDF",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/attachments/presign",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "fileName": "invoice-2026.pdf",
+              "mimeType": "application/pdf",
+              "fileSize": 1048576
+            }
+          },
+          "expected": { "status": 200, "body_contains": ["uploadUrl", "storageKey", "bucket", "expiresIn"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Presign - happy path with image",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/attachments/presign",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "SalesOrder",
+              "entityId": "{{existing_sales_order_id}}",
+              "fileName": "photo.png",
+              "mimeType": "image/png",
+              "fileSize": 512000
+            }
+          },
+          "expected": { "status": 200, "body_contains": ["uploadUrl", "storageKey"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Presign - rejected MIME type (application/x-msdownload)",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/attachments/presign",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "fileName": "app.dll",
+              "mimeType": "application/x-msdownload",
+              "fileSize": 1024
+            }
+          },
+          "expected": { "status": 400, "body_contains": ["mimeTypeNotAllowed"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Presign - blocked extension (.exe)",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/attachments/presign",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "fileName": "malware.exe",
+              "mimeType": "application/pdf",
+              "fileSize": 1024
+            }
+          },
+          "expected": { "status": 400, "body_contains": ["fileTypeBlocked"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Presign - blocked extension (.bat)",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/attachments/presign",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "fileName": "script.bat",
+              "mimeType": "text/plain",
+              "fileSize": 256
+            }
+          },
+          "expected": { "status": 400, "body_contains": ["fileTypeBlocked"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Presign - file size exceeds maximum (>50MB default)",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/attachments/presign",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "fileName": "huge-file.pdf",
+              "mimeType": "application/pdf",
+              "fileSize": 52428801
+            }
+          },
+          "expected": { "status": 400, "body_contains": ["fileTooLarge"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Presign - invalid entity type",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/attachments/presign",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "NonExistentModel",
+              "entityId": "00000000-0000-0000-0000-000000000001",
+              "fileName": "doc.pdf",
+              "mimeType": "application/pdf",
+              "fileSize": 1024
+            }
+          },
+          "expected": { "status": 400, "body_contains": ["invalidType"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Presign - entity not found (valid type, non-existent ID)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/attachments/presign",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "Customer",
+              "entityId": "00000000-0000-0000-0000-999999999999",
+              "fileName": "doc.pdf",
+              "mimeType": "application/pdf",
+              "fileSize": 1024
+            }
+          },
+          "expected": { "status": 404, "body_contains": ["notFound"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Presign - missing required field (fileName)",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/attachments/presign",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "mimeType": "application/pdf",
+              "fileSize": 1024
+            }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Presign - invalid fileSize (negative number)",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/attachments/presign",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "fileName": "doc.pdf",
+              "mimeType": "application/pdf",
+              "fileSize": -1
+            }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Presign - VIEWER role denied (requires STAFF+)",
+          "type": "authorization",
+          "request": {
+            "method": "POST",
+            "url": "/attachments/presign",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" },
+            "body": {
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "fileName": "doc.pdf",
+              "mimeType": "application/pdf",
+              "fileSize": 1024
+            }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/attachments/confirm",
+      "description": "Confirm upload completion and create Attachment record (STAFF+)",
+      "story": "E8.1",
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "name": "Confirm - happy path",
+          "type": "happy_path",
+          "precondition": "Must first call presign and upload file to S3/MinIO",
+          "request": {
+            "method": "POST",
+            "url": "/attachments/confirm",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "storageKey": "{{tenant_id}}/Customer/{{existing_customer_id}}/{{uuid}}-invoice.pdf",
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "fileName": "invoice.pdf",
+              "fileSize": 1048576,
+              "mimeType": "application/pdf",
+              "description": "Monthly invoice"
+            }
+          },
+          "expected": { "status": 201, "body_contains": ["id", "entityType", "entityId", "fileName", "storageKey"] },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id, entity_type, entity_id, file_name, file_size, mime_type, storage_key, description FROM attachments WHERE storage_key = '{{storageKey}}'",
+            "expected": "Row exists with matching entityType, entityId, fileName, fileSize, mimeType"
+          }
+        },
+        {
+          "name": "Confirm - storage key does not match tenant/entity",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/attachments/confirm",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "storageKey": "wrong-tenant/Customer/{{existing_customer_id}}/file.pdf",
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "fileName": "file.pdf",
+              "fileSize": 1024,
+              "mimeType": "application/pdf"
+            }
+          },
+          "expected": { "status": 400, "body_contains": ["invalidStorageKey"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Confirm - object not found in S3",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/attachments/confirm",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "storageKey": "{{tenant_id}}/Customer/{{existing_customer_id}}/nonexistent-file.pdf",
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "fileName": "nonexistent-file.pdf",
+              "fileSize": 1024,
+              "mimeType": "application/pdf"
+            }
+          },
+          "expected": { "status": 400, "body_contains": ["objectNotFound"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Confirm - file size mismatch",
+          "type": "validation_error",
+          "precondition": "Upload a file of known size, then confirm with wrong fileSize",
+          "request": {
+            "method": "POST",
+            "url": "/attachments/confirm",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "storageKey": "{{presigned_storage_key}}",
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "fileName": "invoice.pdf",
+              "fileSize": 999999,
+              "mimeType": "application/pdf"
+            }
+          },
+          "expected": { "status": 400, "body_contains": ["fileSizeMismatch"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Confirm - MIME type mismatch",
+          "type": "validation_error",
+          "precondition": "Upload a PDF file, then confirm with wrong mimeType",
+          "request": {
+            "method": "POST",
+            "url": "/attachments/confirm",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "storageKey": "{{presigned_storage_key}}",
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "fileName": "invoice.pdf",
+              "fileSize": 1048576,
+              "mimeType": "image/png"
+            }
+          },
+          "expected": { "status": 400, "body_contains": ["mimeTypeMismatch"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Confirm - duplicate storageKey (already confirmed)",
+          "type": "edge_case",
+          "precondition": "Confirm the same storageKey twice",
+          "request": {
+            "method": "POST",
+            "url": "/attachments/confirm",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "storageKey": "{{already_confirmed_storage_key}}",
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "fileName": "invoice.pdf",
+              "fileSize": 1048576,
+              "mimeType": "application/pdf"
+            }
+          },
+          "expected": { "status": 400, "body_contains": ["alreadyConfirmed"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Confirm - blocked MIME type on confirm (defense-in-depth)",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/attachments/confirm",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "storageKey": "{{tenant_id}}/Customer/{{existing_customer_id}}/file.exe",
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "fileName": "file.exe",
+              "fileSize": 1024,
+              "mimeType": "application/x-msdownload"
+            }
+          },
+          "expected": { "status": 400, "body_contains": ["mimeTypeNotAllowed"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/attachments",
+      "description": "List attachments for a specific entity with pagination (VIEWER+)",
+      "story": "E8.1",
+      "minimum_role": "VIEWER",
+      "test_cases": [
+        {
+          "name": "List attachments - happy path with results",
+          "type": "happy_path",
+          "precondition": "Entity has at least one attachment",
+          "request": {
+            "method": "GET",
+            "url": "/attachments?entityType=Customer&entityId={{existing_customer_id}}",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 200, "body_contains": ["items", "total"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List attachments - empty list for entity with no attachments",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/attachments?entityType=Customer&entityId={{customer_with_no_attachments_id}}",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 200, "body_schema": { "items": [], "total": 0 } },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List attachments - pagination with limit and offset",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/attachments?entityType=Customer&entityId={{existing_customer_id}}&limit=2&offset=0",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 200, "body_contains": ["items", "total"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List attachments - missing entityType query param",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/attachments?entityId={{existing_customer_id}}",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List attachments - invalid entityId (not UUID)",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/attachments?entityType=Customer&entityId=not-a-uuid",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/attachments/:id/download",
+      "description": "Get presigned download URL for an attachment (VIEWER+)",
+      "story": "E8.1",
+      "minimum_role": "VIEWER",
+      "test_cases": [
+        {
+          "name": "Download - happy path",
+          "type": "happy_path",
+          "precondition": "Attachment exists in DB and S3",
+          "request": {
+            "method": "GET",
+            "url": "/attachments/{{existing_attachment_id}}/download",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 200, "body_contains": ["downloadUrl", "fileName", "mimeType"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Download - attachment not found",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/attachments/00000000-0000-0000-0000-999999999999/download",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 404, "body_contains": ["notFound"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Download - invalid ID format (not UUID)",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/attachments/not-a-uuid/download",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/attachments/:id",
+      "description": "Delete attachment (DB record + S3 object). Requires MANAGER+",
+      "story": "E8.1",
+      "minimum_role": "MANAGER",
+      "test_cases": [
+        {
+          "name": "Delete attachment - happy path",
+          "type": "happy_path",
+          "precondition": "Attachment exists",
+          "request": {
+            "method": "DELETE",
+            "url": "/attachments/{{attachment_to_delete_id}}",
+            "headers": { "Authorization": "Bearer {{manager_token}}" }
+          },
+          "expected": { "status": 200, "body_contains": ["id"] },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM attachments WHERE id = '{{attachment_to_delete_id}}'",
+            "expected": "Count = 0 (row deleted)"
+          }
+        },
+        {
+          "name": "Delete attachment - not found",
+          "type": "edge_case",
+          "request": {
+            "method": "DELETE",
+            "url": "/attachments/00000000-0000-0000-0000-999999999999",
+            "headers": { "Authorization": "Bearer {{manager_token}}" }
+          },
+          "expected": { "status": 404, "body_contains": ["notFound"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Delete attachment - STAFF role denied (requires MANAGER+)",
+          "type": "authorization",
+          "request": {
+            "method": "DELETE",
+            "url": "/attachments/{{existing_attachment_id}}",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Delete attachment - invalid ID format",
+          "type": "validation_error",
+          "request": {
+            "method": "DELETE",
+            "url": "/attachments/not-a-uuid",
+            "headers": { "Authorization": "Bearer {{manager_token}}" }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/notes",
+      "description": "Create a note on any business record (STAFF+). SYSTEM noteType rejected via API.",
+      "story": "E8.2",
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "name": "Create note - happy path (GENERAL)",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/notes",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "noteType": "GENERAL",
+              "content": "This is a test note for the customer record."
+            }
+          },
+          "expected": { "status": 201, "body_contains": ["id", "entityType", "entityId", "noteType", "content", "createdBy"] },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id, entity_type, entity_id, note_type, content, created_by FROM notes WHERE entity_type = 'Customer' AND entity_id = '{{existing_customer_id}}' ORDER BY created_at DESC LIMIT 1",
+            "expected": "Row exists with note_type=GENERAL, content matches, created_by matches staff userId"
+          }
+        },
+        {
+          "name": "Create note - happy path (INTERNAL)",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/notes",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "SalesOrder",
+              "entityId": "{{existing_sales_order_id}}",
+              "noteType": "INTERNAL",
+              "content": "Internal note: pricing approved by manager."
+            }
+          },
+          "expected": { "status": 201, "body_contains": ["id", "noteType"] },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT note_type FROM notes WHERE id = '{{response.id}}'",
+            "expected": "note_type = INTERNAL"
+          }
+        },
+        {
+          "name": "Create note - happy path (CUSTOMER_VISIBLE)",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/notes",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "noteType": "CUSTOMER_VISIBLE",
+              "content": "Dear customer, your order has been shipped."
+            }
+          },
+          "expected": { "status": 201, "body_contains": ["noteType"] },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT note_type FROM notes WHERE id = '{{response.id}}'",
+            "expected": "note_type = CUSTOMER_VISIBLE"
+          }
+        },
+        {
+          "name": "Create note - default noteType is GENERAL when omitted",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/notes",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "content": "Note without explicit type."
+            }
+          },
+          "expected": { "status": 201, "body_schema": { "noteType": "GENERAL" } },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create note - with optional title and classification",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/notes",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "noteType": "GENERAL",
+              "content": "Detailed follow-up note.",
+              "title": "Follow-up Call",
+              "classification": "sales"
+            }
+          },
+          "expected": { "status": 201, "body_contains": ["title", "classification"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create note - SYSTEM noteType rejected via API",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/notes",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "noteType": "SYSTEM",
+              "content": "Trying to create a system note via API."
+            }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create note - missing content",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/notes",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "noteType": "GENERAL"
+            }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create note - empty content string",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/notes",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "noteType": "GENERAL",
+              "content": ""
+            }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create note - content with dangerous HTML (XSS prevention)",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/notes",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "Customer",
+              "entityId": "{{existing_customer_id}}",
+              "noteType": "GENERAL",
+              "content": "<script>alert('xss')</script>"
+            }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create note - invalid entity type",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/notes",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "FakeEntity",
+              "entityId": "00000000-0000-0000-0000-000000000001",
+              "content": "Note for invalid entity."
+            }
+          },
+          "expected": { "status": 400, "body_contains": ["invalidType"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create note - entity not found",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/notes",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "entityType": "Customer",
+              "entityId": "00000000-0000-0000-0000-999999999999",
+              "content": "Note for non-existent customer."
+            }
+          },
+          "expected": { "status": 404, "body_contains": ["notFound"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/notes",
+      "description": "List notes for an entity, ordered by pinned first then newest. Supports noteType filter. (VIEWER+)",
+      "story": "E8.2",
+      "minimum_role": "VIEWER",
+      "test_cases": [
+        {
+          "name": "List notes - happy path",
+          "type": "happy_path",
+          "precondition": "Entity has notes",
+          "request": {
+            "method": "GET",
+            "url": "/notes?entityType=Customer&entityId={{existing_customer_id}}",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 200, "body_contains": ["items", "total"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List notes - empty results",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/notes?entityType=Customer&entityId={{customer_with_no_notes_id}}",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 200, "body_schema": { "items": [], "total": 0 } },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List notes - filter by noteType=INTERNAL",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/notes?entityType=Customer&entityId={{existing_customer_id}}&noteType=INTERNAL",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 200, "body_contains": ["items", "total"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List notes - pinned notes appear first",
+          "type": "happy_path",
+          "precondition": "Entity has both pinned and unpinned notes",
+          "request": {
+            "method": "GET",
+            "url": "/notes?entityType=Customer&entityId={{customer_with_pinned_notes_id}}",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 200, "body_assertion": "First item in items array has isPinned=true" },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List notes - pagination",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/notes?entityType=Customer&entityId={{existing_customer_id}}&limit=2&offset=0",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 200, "body_assertion": "items array length <= 2, total reflects all matching notes" },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List notes - soft-deleted notes excluded",
+          "type": "edge_case",
+          "precondition": "Entity has one active note and one soft-deleted note",
+          "request": {
+            "method": "GET",
+            "url": "/notes?entityType=Customer&entityId={{customer_with_deleted_note_id}}",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 200, "body_assertion": "Soft-deleted notes not in items array" },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/notes/:id",
+      "description": "Update note content/title/classification. Own notes only (MANAGER+ can edit others). SYSTEM notes read-only. (STAFF+)",
+      "story": "E8.2",
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "name": "Update note - happy path (own note, update content)",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/notes/{{own_note_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "content": "Updated note content." }
+          },
+          "expected": { "status": 200, "body_contains": ["id", "content"] },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT content, updated_by FROM notes WHERE id = '{{own_note_id}}'",
+            "expected": "content = 'Updated note content.', updated_by = staff userId"
+          }
+        },
+        {
+          "name": "Update note - happy path (update title only)",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/notes/{{own_note_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "title": "New Title" }
+          },
+          "expected": { "status": 200, "body_contains": ["title"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Update note - SYSTEM note is read-only",
+          "type": "validation_error",
+          "request": {
+            "method": "PATCH",
+            "url": "/notes/{{system_note_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": { "content": "Trying to edit system note." }
+          },
+          "expected": { "status": 400, "body_contains": ["systemNoteReadOnly"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Update note - non-owner STAFF denied",
+          "type": "authorization",
+          "request": {
+            "method": "PATCH",
+            "url": "/notes/{{other_users_note_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "content": "Trying to edit someone else's note." }
+          },
+          "expected": { "status": 403, "body_contains": ["notOwner"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Update note - MANAGER can edit other user's note",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/notes/{{other_users_note_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": { "content": "Manager editing someone else's note." }
+          },
+          "expected": { "status": 200, "body_contains": ["content"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Update note - empty body (no fields provided)",
+          "type": "validation_error",
+          "request": {
+            "method": "PATCH",
+            "url": "/notes/{{own_note_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {}
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Update note - not found",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/notes/00000000-0000-0000-0000-999999999999",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "content": "Update non-existent note." }
+          },
+          "expected": { "status": 404, "body_contains": ["notFound"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Update note - XSS content rejected",
+          "type": "validation_error",
+          "request": {
+            "method": "PATCH",
+            "url": "/notes/{{own_note_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "content": "<iframe src='evil.com'></iframe>" }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/notes/:id",
+      "description": "Soft-delete a note (sets deletedAt). SYSTEM notes cannot be deleted. (MANAGER+)",
+      "story": "E8.2",
+      "minimum_role": "MANAGER",
+      "test_cases": [
+        {
+          "name": "Delete note - happy path (soft delete)",
+          "type": "happy_path",
+          "request": {
+            "method": "DELETE",
+            "url": "/notes/{{note_to_delete_id}}",
+            "headers": { "Authorization": "Bearer {{manager_token}}" }
+          },
+          "expected": { "status": 200, "body_contains": ["id"] },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT deleted_at, updated_by FROM notes WHERE id = '{{note_to_delete_id}}'",
+            "expected": "deleted_at IS NOT NULL, updated_by = manager userId"
+          }
+        },
+        {
+          "name": "Delete note - SYSTEM note cannot be deleted",
+          "type": "validation_error",
+          "request": {
+            "method": "DELETE",
+            "url": "/notes/{{system_note_id}}",
+            "headers": { "Authorization": "Bearer {{manager_token}}" }
+          },
+          "expected": { "status": 400, "body_contains": ["systemNoteReadOnly"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Delete note - not found",
+          "type": "edge_case",
+          "request": {
+            "method": "DELETE",
+            "url": "/notes/00000000-0000-0000-0000-999999999999",
+            "headers": { "Authorization": "Bearer {{manager_token}}" }
+          },
+          "expected": { "status": 404, "body_contains": ["notFound"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Delete note - STAFF role denied (requires MANAGER+)",
+          "type": "authorization",
+          "request": {
+            "method": "DELETE",
+            "url": "/notes/{{note_to_delete_id}}",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Delete note - already soft-deleted note returns 404",
+          "type": "edge_case",
+          "precondition": "Note has already been soft-deleted",
+          "request": {
+            "method": "DELETE",
+            "url": "/notes/{{already_deleted_note_id}}",
+            "headers": { "Authorization": "Bearer {{manager_token}}" }
+          },
+          "expected": { "status": 404, "body_contains": ["notFound"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/notes/:id/pin",
+      "description": "Toggle pin/unpin on a note (STAFF+)",
+      "story": "E8.2",
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "name": "Pin note - happy path (pin unpinned note)",
+          "type": "happy_path",
+          "precondition": "Note exists with isPinned=false",
+          "request": {
+            "method": "PATCH",
+            "url": "/notes/{{unpinned_note_id}}/pin",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 200, "body_schema": { "isPinned": true } },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT is_pinned FROM notes WHERE id = '{{unpinned_note_id}}'",
+            "expected": "is_pinned = true"
+          }
+        },
+        {
+          "name": "Pin note - happy path (unpin pinned note)",
+          "type": "happy_path",
+          "precondition": "Note exists with isPinned=true",
+          "request": {
+            "method": "PATCH",
+            "url": "/notes/{{pinned_note_id}}/pin",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 200, "body_schema": { "isPinned": false } },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT is_pinned FROM notes WHERE id = '{{pinned_note_id}}'",
+            "expected": "is_pinned = false"
+          }
+        },
+        {
+          "name": "Pin note - not found",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/notes/00000000-0000-0000-0000-999999999999/pin",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 404, "body_contains": ["notFound"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/record-links",
+      "description": "Create a manual record link between two entities (STAFF+). Validates both entities exist, rejects self-links and duplicates.",
+      "story": "E8.3",
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "name": "Create record link - happy path (RELATES_TO)",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/record-links",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "sourceEntityType": "Customer",
+              "sourceEntityId": "{{existing_customer_id}}",
+              "targetEntityType": "SalesOrder",
+              "targetEntityId": "{{existing_sales_order_id}}",
+              "linkType": "RELATES_TO",
+              "description": "Related customer and sales order"
+            }
+          },
+          "expected": { "status": 201, "body_contains": ["id", "sourceEntityType", "sourceEntityId", "targetEntityType", "targetEntityId", "linkType", "isSystemGenerated"] },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id, source_entity_type, source_entity_id, target_entity_type, target_entity_id, link_type, is_system_generated, created_by FROM record_links WHERE id = '{{response.id}}'",
+            "expected": "Row exists, is_system_generated=false, link_type=RELATES_TO, created_by=staff userId"
+          }
+        },
+        {
+          "name": "Create record link - happy path (CREATED_FROM)",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/record-links",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "sourceEntityType": "CustomerInvoice",
+              "sourceEntityId": "{{existing_invoice_id}}",
+              "targetEntityType": "SalesOrder",
+              "targetEntityId": "{{existing_sales_order_id}}",
+              "linkType": "CREATED_FROM"
+            }
+          },
+          "expected": { "status": 201, "body_contains": ["id", "linkType"] },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT link_type FROM record_links WHERE id = '{{response.id}}'",
+            "expected": "link_type = CREATED_FROM"
+          }
+        },
+        {
+          "name": "Create record link - self-link rejected",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/record-links",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "sourceEntityType": "Customer",
+              "sourceEntityId": "{{existing_customer_id}}",
+              "targetEntityType": "Customer",
+              "targetEntityId": "{{existing_customer_id}}",
+              "linkType": "RELATES_TO"
+            }
+          },
+          "expected": { "status": 400, "body_contains": ["selfLinkNotAllowed"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create record link - duplicate link rejected (409)",
+          "type": "edge_case",
+          "precondition": "Same link already exists",
+          "request": {
+            "method": "POST",
+            "url": "/record-links",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "sourceEntityType": "Customer",
+              "sourceEntityId": "{{existing_customer_id}}",
+              "targetEntityType": "SalesOrder",
+              "targetEntityId": "{{existing_sales_order_id}}",
+              "linkType": "RELATES_TO"
+            }
+          },
+          "expected": { "status": 409, "body_contains": ["duplicateLink"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create record link - reverse RELATES_TO duplicate rejected (409)",
+          "type": "edge_case",
+          "precondition": "A RELATES_TO link from A->B already exists, now try B->A",
+          "request": {
+            "method": "POST",
+            "url": "/record-links",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "sourceEntityType": "SalesOrder",
+              "sourceEntityId": "{{existing_sales_order_id}}",
+              "targetEntityType": "Customer",
+              "targetEntityId": "{{existing_customer_id}}",
+              "linkType": "RELATES_TO"
+            }
+          },
+          "expected": { "status": 409, "body_contains": ["duplicateLink"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create record link - invalid source entity type",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/record-links",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "sourceEntityType": "InvalidType",
+              "sourceEntityId": "00000000-0000-0000-0000-000000000001",
+              "targetEntityType": "Customer",
+              "targetEntityId": "{{existing_customer_id}}",
+              "linkType": "RELATES_TO"
+            }
+          },
+          "expected": { "status": 400, "body_contains": ["invalidType"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create record link - source entity not found",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/record-links",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "sourceEntityType": "Customer",
+              "sourceEntityId": "00000000-0000-0000-0000-999999999999",
+              "targetEntityType": "SalesOrder",
+              "targetEntityId": "{{existing_sales_order_id}}",
+              "linkType": "RELATES_TO"
+            }
+          },
+          "expected": { "status": 404, "body_contains": ["notFound"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create record link - invalid linkType",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/record-links",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "sourceEntityType": "Customer",
+              "sourceEntityId": "{{existing_customer_id}}",
+              "targetEntityType": "SalesOrder",
+              "targetEntityId": "{{existing_sales_order_id}}",
+              "linkType": "INVALID_LINK_TYPE"
+            }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create record link - missing required fields",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/record-links",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "sourceEntityType": "Customer",
+              "sourceEntityId": "{{existing_customer_id}}"
+            }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/record-links",
+      "description": "List record links for an entity. Bidirectional query (entity as source or target). Supports direction and linkType filters. (VIEWER+)",
+      "story": "E8.3",
+      "minimum_role": "VIEWER",
+      "test_cases": [
+        {
+          "name": "List record links - happy path (direction=all)",
+          "type": "happy_path",
+          "precondition": "Entity has outgoing and incoming links",
+          "request": {
+            "method": "GET",
+            "url": "/record-links?entityType=Customer&entityId={{existing_customer_id}}",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 200, "body_contains": ["items", "total"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List record links - direction=outgoing only",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/record-links?entityType=Customer&entityId={{existing_customer_id}}&direction=outgoing",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 200, "body_assertion": "All items have direction='outgoing'" },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List record links - direction=incoming only",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/record-links?entityType=Customer&entityId={{existing_customer_id}}&direction=incoming",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 200, "body_assertion": "All items have direction='incoming'" },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List record links - filter by linkType",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/record-links?entityType=Customer&entityId={{existing_customer_id}}&linkType=RELATES_TO",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 200, "body_assertion": "All items have linkType='RELATES_TO'" },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List record links - empty results",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/record-links?entityType=Customer&entityId={{customer_with_no_links_id}}",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 200, "body_schema": { "items": [], "total": 0 } },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List record links - pagination",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/record-links?entityType=Customer&entityId={{existing_customer_id}}&limit=1&offset=0",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 200, "body_assertion": "items array length <= 1" },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List record links - missing entityType",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/record-links?entityId={{existing_customer_id}}",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/record-links/:id",
+      "description": "Delete a record link. Manual links: STAFF+. System-generated links: MANAGER+. Returns 204 No Content.",
+      "story": "E8.3",
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "name": "Delete record link - happy path (manual link, STAFF)",
+          "type": "happy_path",
+          "precondition": "Manual record link exists (isSystemGenerated=false)",
+          "request": {
+            "method": "DELETE",
+            "url": "/record-links/{{manual_link_id}}",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 204 },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM record_links WHERE id = '{{manual_link_id}}'",
+            "expected": "Count = 0 (row hard-deleted)"
+          }
+        },
+        {
+          "name": "Delete record link - system link with MANAGER (allowed)",
+          "type": "happy_path",
+          "precondition": "System-generated record link exists (isSystemGenerated=true)",
+          "request": {
+            "method": "DELETE",
+            "url": "/record-links/{{system_link_id}}",
+            "headers": { "Authorization": "Bearer {{manager_token}}" }
+          },
+          "expected": { "status": 204 },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM record_links WHERE id = '{{system_link_id}}'",
+            "expected": "Count = 0 (row hard-deleted)"
+          }
+        },
+        {
+          "name": "Delete record link - system link with STAFF denied",
+          "type": "authorization",
+          "precondition": "System-generated record link exists (isSystemGenerated=true)",
+          "request": {
+            "method": "DELETE",
+            "url": "/record-links/{{system_link_id_2}}",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 403, "body_contains": ["systemLinkDeleteForbidden"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Delete record link - not found",
+          "type": "edge_case",
+          "request": {
+            "method": "DELETE",
+            "url": "/record-links/00000000-0000-0000-0000-999999999999",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 404, "body_contains": ["notFound"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Delete record link - invalid ID format",
+          "type": "validation_error",
+          "request": {
+            "method": "DELETE",
+            "url": "/record-links/not-a-uuid",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    }
+  ],
+  "test_execution_order": [
+    "POST /attachments/presign (create presigned URL)",
+    "POST /attachments/confirm (confirm upload, creates DB record)",
+    "GET /attachments (list attachments)",
+    "GET /attachments/:id/download (get download URL)",
+    "DELETE /attachments/:id (delete attachment)",
+    "POST /notes (create notes)",
+    "GET /notes (list notes)",
+    "PATCH /notes/:id (update notes)",
+    "PATCH /notes/:id/pin (pin/unpin notes)",
+    "DELETE /notes/:id (soft-delete notes)",
+    "POST /record-links (create record links)",
+    "GET /record-links (list record links)",
+    "DELETE /record-links/:id (delete record links)"
+  ],
+  "test_data_requirements": {
+    "seed_entities": [
+      "At least 2 Customer records in the test company",
+      "At least 1 SalesOrder record in the test company",
+      "At least 1 CustomerInvoice record in the test company"
+    ],
+    "auth_tokens": [
+      "viewer_token: JWT for user with VIEWER role",
+      "staff_token: JWT for user with STAFF role",
+      "manager_token: JWT for user with MANAGER role"
+    ],
+    "s3_minio": "MinIO must be running locally (docker-compose.yml) for presign/confirm tests",
+    "cleanup": "Tests should clean up created attachments, notes, and record links after each test run"
+  },
+  "coverage_summary": {
+    "attachment_endpoints": 5,
+    "note_endpoints": 5,
+    "record_link_endpoints": 3,
+    "total_endpoints": 13,
+    "test_types": {
+      "happy_path": 25,
+      "validation_error": 24,
+      "edge_case": 14,
+      "authorization": 5
+    }
+  }
+}

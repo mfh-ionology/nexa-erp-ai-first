@@ -34,10 +34,19 @@ import { Route as AuthenticatedSystemAccessGroupsIndexRouteImport } from './rout
 import { Route as AuthenticatedArInvoicesIndexRouteImport } from './routes/_authenticated/ar/invoices/index';
 import { Route as AuthenticatedAiSkillsIndexRouteImport } from './routes/_authenticated/ai/skills/index';
 import { Route as AuthenticatedAiMemoryIndexRouteImport } from './routes/_authenticated/ai/memory/index';
+import { Route as AuthenticatedAiAdminIndexRouteImport } from './routes/_authenticated/ai/admin/index';
 import { Route as AuthenticatedSystemUsersIdRouteImport } from './routes/_authenticated/system/users/$id';
 import { Route as AuthenticatedSystemAccessGroupsNewRouteImport } from './routes/_authenticated/system/access-groups/new';
 import { Route as AuthenticatedSystemAccessGroupsIdRouteImport } from './routes/_authenticated/system/access-groups/$id';
 import { Route as AuthenticatedArInvoicesIdRouteImport } from './routes/_authenticated/ar/invoices/$id';
+import { Route as AuthenticatedAiAdminPromptsRouteImport } from './routes/_authenticated/ai/admin/prompts';
+import { Route as AuthenticatedAiAdminModelsRouteImport } from './routes/_authenticated/ai/admin/models';
+import { Route as AuthenticatedAiAdminPromptsIndexRouteImport } from './routes/_authenticated/ai/admin/prompts/index';
+import { Route as AuthenticatedAiAdminModelsIndexRouteImport } from './routes/_authenticated/ai/admin/models/index';
+import { Route as AuthenticatedAiAdminPromptsNewRouteImport } from './routes/_authenticated/ai/admin/prompts/new';
+import { Route as AuthenticatedAiAdminPromptsIdRouteImport } from './routes/_authenticated/ai/admin/prompts/$id';
+import { Route as AuthenticatedAiAdminModelsNewRouteImport } from './routes/_authenticated/ai/admin/models/new';
+import { Route as AuthenticatedAiAdminModelsIdRouteImport } from './routes/_authenticated/ai/admin/models/$id';
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -164,6 +173,11 @@ const AuthenticatedAiMemoryIndexRoute = AuthenticatedAiMemoryIndexRouteImport.up
   path: '/ai/memory/',
   getParentRoute: () => AuthenticatedRoute,
 } as any);
+const AuthenticatedAiAdminIndexRoute = AuthenticatedAiAdminIndexRouteImport.update({
+  id: '/ai/admin/',
+  path: '/ai/admin/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
 const AuthenticatedSystemUsersIdRoute = AuthenticatedSystemUsersIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -184,6 +198,46 @@ const AuthenticatedArInvoicesIdRoute = AuthenticatedArInvoicesIdRouteImport.upda
   id: '/ar/invoices/$id',
   path: '/ar/invoices/$id',
   getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedAiAdminPromptsRoute = AuthenticatedAiAdminPromptsRouteImport.update({
+  id: '/ai/admin/prompts',
+  path: '/ai/admin/prompts',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedAiAdminModelsRoute = AuthenticatedAiAdminModelsRouteImport.update({
+  id: '/ai/admin/models',
+  path: '/ai/admin/models',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedAiAdminPromptsIndexRoute = AuthenticatedAiAdminPromptsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedAiAdminPromptsRoute,
+} as any);
+const AuthenticatedAiAdminModelsIndexRoute = AuthenticatedAiAdminModelsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedAiAdminModelsRoute,
+} as any);
+const AuthenticatedAiAdminPromptsNewRoute = AuthenticatedAiAdminPromptsNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AuthenticatedAiAdminPromptsRoute,
+} as any);
+const AuthenticatedAiAdminPromptsIdRoute = AuthenticatedAiAdminPromptsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AuthenticatedAiAdminPromptsRoute,
+} as any);
+const AuthenticatedAiAdminModelsNewRoute = AuthenticatedAiAdminModelsNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AuthenticatedAiAdminModelsRoute,
+} as any);
+const AuthenticatedAiAdminModelsIdRoute = AuthenticatedAiAdminModelsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AuthenticatedAiAdminModelsRoute,
 } as any);
 
 export interface FileRoutesByFullPath {
@@ -206,15 +260,24 @@ export interface FileRoutesByFullPath {
   '/reporting/': typeof AuthenticatedReportingIndexRoute;
   '/sales/': typeof AuthenticatedSalesIndexRoute;
   '/system/': typeof AuthenticatedSystemIndexRoute;
+  '/ai/admin/models': typeof AuthenticatedAiAdminModelsRouteWithChildren;
+  '/ai/admin/prompts': typeof AuthenticatedAiAdminPromptsRouteWithChildren;
   '/ar/invoices/$id': typeof AuthenticatedArInvoicesIdRoute;
   '/system/access-groups/$id': typeof AuthenticatedSystemAccessGroupsIdRoute;
   '/system/access-groups/new': typeof AuthenticatedSystemAccessGroupsNewRoute;
   '/system/users/$id': typeof AuthenticatedSystemUsersIdRoute;
+  '/ai/admin/': typeof AuthenticatedAiAdminIndexRoute;
   '/ai/memory/': typeof AuthenticatedAiMemoryIndexRoute;
   '/ai/skills/': typeof AuthenticatedAiSkillsIndexRoute;
   '/ar/invoices/': typeof AuthenticatedArInvoicesIndexRoute;
   '/system/access-groups/': typeof AuthenticatedSystemAccessGroupsIndexRoute;
   '/system/users/': typeof AuthenticatedSystemUsersIndexRoute;
+  '/ai/admin/models/$id': typeof AuthenticatedAiAdminModelsIdRoute;
+  '/ai/admin/models/new': typeof AuthenticatedAiAdminModelsNewRoute;
+  '/ai/admin/prompts/$id': typeof AuthenticatedAiAdminPromptsIdRoute;
+  '/ai/admin/prompts/new': typeof AuthenticatedAiAdminPromptsNewRoute;
+  '/ai/admin/models/': typeof AuthenticatedAiAdminModelsIndexRoute;
+  '/ai/admin/prompts/': typeof AuthenticatedAiAdminPromptsIndexRoute;
 }
 export interface FileRoutesByTo {
   '/403': typeof R403Route;
@@ -238,11 +301,18 @@ export interface FileRoutesByTo {
   '/system/access-groups/$id': typeof AuthenticatedSystemAccessGroupsIdRoute;
   '/system/access-groups/new': typeof AuthenticatedSystemAccessGroupsNewRoute;
   '/system/users/$id': typeof AuthenticatedSystemUsersIdRoute;
+  '/ai/admin': typeof AuthenticatedAiAdminIndexRoute;
   '/ai/memory': typeof AuthenticatedAiMemoryIndexRoute;
   '/ai/skills': typeof AuthenticatedAiSkillsIndexRoute;
   '/ar/invoices': typeof AuthenticatedArInvoicesIndexRoute;
   '/system/access-groups': typeof AuthenticatedSystemAccessGroupsIndexRoute;
   '/system/users': typeof AuthenticatedSystemUsersIndexRoute;
+  '/ai/admin/models/$id': typeof AuthenticatedAiAdminModelsIdRoute;
+  '/ai/admin/models/new': typeof AuthenticatedAiAdminModelsNewRoute;
+  '/ai/admin/prompts/$id': typeof AuthenticatedAiAdminPromptsIdRoute;
+  '/ai/admin/prompts/new': typeof AuthenticatedAiAdminPromptsNewRoute;
+  '/ai/admin/models': typeof AuthenticatedAiAdminModelsIndexRoute;
+  '/ai/admin/prompts': typeof AuthenticatedAiAdminPromptsIndexRoute;
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
@@ -266,15 +336,24 @@ export interface FileRoutesById {
   '/_authenticated/reporting/': typeof AuthenticatedReportingIndexRoute;
   '/_authenticated/sales/': typeof AuthenticatedSalesIndexRoute;
   '/_authenticated/system/': typeof AuthenticatedSystemIndexRoute;
+  '/_authenticated/ai/admin/models': typeof AuthenticatedAiAdminModelsRouteWithChildren;
+  '/_authenticated/ai/admin/prompts': typeof AuthenticatedAiAdminPromptsRouteWithChildren;
   '/_authenticated/ar/invoices/$id': typeof AuthenticatedArInvoicesIdRoute;
   '/_authenticated/system/access-groups/$id': typeof AuthenticatedSystemAccessGroupsIdRoute;
   '/_authenticated/system/access-groups/new': typeof AuthenticatedSystemAccessGroupsNewRoute;
   '/_authenticated/system/users/$id': typeof AuthenticatedSystemUsersIdRoute;
+  '/_authenticated/ai/admin/': typeof AuthenticatedAiAdminIndexRoute;
   '/_authenticated/ai/memory/': typeof AuthenticatedAiMemoryIndexRoute;
   '/_authenticated/ai/skills/': typeof AuthenticatedAiSkillsIndexRoute;
   '/_authenticated/ar/invoices/': typeof AuthenticatedArInvoicesIndexRoute;
   '/_authenticated/system/access-groups/': typeof AuthenticatedSystemAccessGroupsIndexRoute;
   '/_authenticated/system/users/': typeof AuthenticatedSystemUsersIndexRoute;
+  '/_authenticated/ai/admin/models/$id': typeof AuthenticatedAiAdminModelsIdRoute;
+  '/_authenticated/ai/admin/models/new': typeof AuthenticatedAiAdminModelsNewRoute;
+  '/_authenticated/ai/admin/prompts/$id': typeof AuthenticatedAiAdminPromptsIdRoute;
+  '/_authenticated/ai/admin/prompts/new': typeof AuthenticatedAiAdminPromptsNewRoute;
+  '/_authenticated/ai/admin/models/': typeof AuthenticatedAiAdminModelsIndexRoute;
+  '/_authenticated/ai/admin/prompts/': typeof AuthenticatedAiAdminPromptsIndexRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
@@ -298,15 +377,24 @@ export interface FileRouteTypes {
     | '/reporting/'
     | '/sales/'
     | '/system/'
+    | '/ai/admin/models'
+    | '/ai/admin/prompts'
     | '/ar/invoices/$id'
     | '/system/access-groups/$id'
     | '/system/access-groups/new'
     | '/system/users/$id'
+    | '/ai/admin/'
     | '/ai/memory/'
     | '/ai/skills/'
     | '/ar/invoices/'
     | '/system/access-groups/'
-    | '/system/users/';
+    | '/system/users/'
+    | '/ai/admin/models/$id'
+    | '/ai/admin/models/new'
+    | '/ai/admin/prompts/$id'
+    | '/ai/admin/prompts/new'
+    | '/ai/admin/models/'
+    | '/ai/admin/prompts/';
   fileRoutesByTo: FileRoutesByTo;
   to:
     | '/403'
@@ -330,11 +418,18 @@ export interface FileRouteTypes {
     | '/system/access-groups/$id'
     | '/system/access-groups/new'
     | '/system/users/$id'
+    | '/ai/admin'
     | '/ai/memory'
     | '/ai/skills'
     | '/ar/invoices'
     | '/system/access-groups'
-    | '/system/users';
+    | '/system/users'
+    | '/ai/admin/models/$id'
+    | '/ai/admin/models/new'
+    | '/ai/admin/prompts/$id'
+    | '/ai/admin/prompts/new'
+    | '/ai/admin/models'
+    | '/ai/admin/prompts';
   id:
     | '__root__'
     | '/403'
@@ -357,15 +452,24 @@ export interface FileRouteTypes {
     | '/_authenticated/reporting/'
     | '/_authenticated/sales/'
     | '/_authenticated/system/'
+    | '/_authenticated/ai/admin/models'
+    | '/_authenticated/ai/admin/prompts'
     | '/_authenticated/ar/invoices/$id'
     | '/_authenticated/system/access-groups/$id'
     | '/_authenticated/system/access-groups/new'
     | '/_authenticated/system/users/$id'
+    | '/_authenticated/ai/admin/'
     | '/_authenticated/ai/memory/'
     | '/_authenticated/ai/skills/'
     | '/_authenticated/ar/invoices/'
     | '/_authenticated/system/access-groups/'
-    | '/_authenticated/system/users/';
+    | '/_authenticated/system/users/'
+    | '/_authenticated/ai/admin/models/$id'
+    | '/_authenticated/ai/admin/models/new'
+    | '/_authenticated/ai/admin/prompts/$id'
+    | '/_authenticated/ai/admin/prompts/new'
+    | '/_authenticated/ai/admin/models/'
+    | '/_authenticated/ai/admin/prompts/';
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
@@ -551,6 +655,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAiMemoryIndexRouteImport;
       parentRoute: typeof AuthenticatedRoute;
     };
+    '/_authenticated/ai/admin/': {
+      id: '/_authenticated/ai/admin/';
+      path: '/ai/admin';
+      fullPath: '/ai/admin/';
+      preLoaderRoute: typeof AuthenticatedAiAdminIndexRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/system/users/$id': {
       id: '/_authenticated/system/users/$id';
       path: '/$id';
@@ -578,6 +689,62 @@ declare module '@tanstack/react-router' {
       fullPath: '/ar/invoices/$id';
       preLoaderRoute: typeof AuthenticatedArInvoicesIdRouteImport;
       parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/ai/admin/prompts': {
+      id: '/_authenticated/ai/admin/prompts';
+      path: '/ai/admin/prompts';
+      fullPath: '/ai/admin/prompts';
+      preLoaderRoute: typeof AuthenticatedAiAdminPromptsRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/ai/admin/models': {
+      id: '/_authenticated/ai/admin/models';
+      path: '/ai/admin/models';
+      fullPath: '/ai/admin/models';
+      preLoaderRoute: typeof AuthenticatedAiAdminModelsRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/ai/admin/prompts/': {
+      id: '/_authenticated/ai/admin/prompts/';
+      path: '/';
+      fullPath: '/ai/admin/prompts/';
+      preLoaderRoute: typeof AuthenticatedAiAdminPromptsIndexRouteImport;
+      parentRoute: typeof AuthenticatedAiAdminPromptsRoute;
+    };
+    '/_authenticated/ai/admin/models/': {
+      id: '/_authenticated/ai/admin/models/';
+      path: '/';
+      fullPath: '/ai/admin/models/';
+      preLoaderRoute: typeof AuthenticatedAiAdminModelsIndexRouteImport;
+      parentRoute: typeof AuthenticatedAiAdminModelsRoute;
+    };
+    '/_authenticated/ai/admin/prompts/new': {
+      id: '/_authenticated/ai/admin/prompts/new';
+      path: '/new';
+      fullPath: '/ai/admin/prompts/new';
+      preLoaderRoute: typeof AuthenticatedAiAdminPromptsNewRouteImport;
+      parentRoute: typeof AuthenticatedAiAdminPromptsRoute;
+    };
+    '/_authenticated/ai/admin/prompts/$id': {
+      id: '/_authenticated/ai/admin/prompts/$id';
+      path: '/$id';
+      fullPath: '/ai/admin/prompts/$id';
+      preLoaderRoute: typeof AuthenticatedAiAdminPromptsIdRouteImport;
+      parentRoute: typeof AuthenticatedAiAdminPromptsRoute;
+    };
+    '/_authenticated/ai/admin/models/new': {
+      id: '/_authenticated/ai/admin/models/new';
+      path: '/new';
+      fullPath: '/ai/admin/models/new';
+      preLoaderRoute: typeof AuthenticatedAiAdminModelsNewRouteImport;
+      parentRoute: typeof AuthenticatedAiAdminModelsRoute;
+    };
+    '/_authenticated/ai/admin/models/$id': {
+      id: '/_authenticated/ai/admin/models/$id';
+      path: '/$id';
+      fullPath: '/ai/admin/models/$id';
+      preLoaderRoute: typeof AuthenticatedAiAdminModelsIdRouteImport;
+      parentRoute: typeof AuthenticatedAiAdminModelsRoute;
     };
   }
 }
@@ -613,6 +780,36 @@ const AuthenticatedSystemUsersRouteWithChildren = AuthenticatedSystemUsersRoute.
   AuthenticatedSystemUsersRouteChildren,
 );
 
+interface AuthenticatedAiAdminModelsRouteChildren {
+  AuthenticatedAiAdminModelsIdRoute: typeof AuthenticatedAiAdminModelsIdRoute;
+  AuthenticatedAiAdminModelsNewRoute: typeof AuthenticatedAiAdminModelsNewRoute;
+  AuthenticatedAiAdminModelsIndexRoute: typeof AuthenticatedAiAdminModelsIndexRoute;
+}
+
+const AuthenticatedAiAdminModelsRouteChildren: AuthenticatedAiAdminModelsRouteChildren = {
+  AuthenticatedAiAdminModelsIdRoute: AuthenticatedAiAdminModelsIdRoute,
+  AuthenticatedAiAdminModelsNewRoute: AuthenticatedAiAdminModelsNewRoute,
+  AuthenticatedAiAdminModelsIndexRoute: AuthenticatedAiAdminModelsIndexRoute,
+};
+
+const AuthenticatedAiAdminModelsRouteWithChildren =
+  AuthenticatedAiAdminModelsRoute._addFileChildren(AuthenticatedAiAdminModelsRouteChildren);
+
+interface AuthenticatedAiAdminPromptsRouteChildren {
+  AuthenticatedAiAdminPromptsIdRoute: typeof AuthenticatedAiAdminPromptsIdRoute;
+  AuthenticatedAiAdminPromptsNewRoute: typeof AuthenticatedAiAdminPromptsNewRoute;
+  AuthenticatedAiAdminPromptsIndexRoute: typeof AuthenticatedAiAdminPromptsIndexRoute;
+}
+
+const AuthenticatedAiAdminPromptsRouteChildren: AuthenticatedAiAdminPromptsRouteChildren = {
+  AuthenticatedAiAdminPromptsIdRoute: AuthenticatedAiAdminPromptsIdRoute,
+  AuthenticatedAiAdminPromptsNewRoute: AuthenticatedAiAdminPromptsNewRoute,
+  AuthenticatedAiAdminPromptsIndexRoute: AuthenticatedAiAdminPromptsIndexRoute,
+};
+
+const AuthenticatedAiAdminPromptsRouteWithChildren =
+  AuthenticatedAiAdminPromptsRoute._addFileChildren(AuthenticatedAiAdminPromptsRouteChildren);
+
 interface AuthenticatedRouteChildren {
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute;
   AuthenticatedSystemAccessGroupsRoute: typeof AuthenticatedSystemAccessGroupsRouteWithChildren;
@@ -631,7 +828,10 @@ interface AuthenticatedRouteChildren {
   AuthenticatedReportingIndexRoute: typeof AuthenticatedReportingIndexRoute;
   AuthenticatedSalesIndexRoute: typeof AuthenticatedSalesIndexRoute;
   AuthenticatedSystemIndexRoute: typeof AuthenticatedSystemIndexRoute;
+  AuthenticatedAiAdminModelsRoute: typeof AuthenticatedAiAdminModelsRouteWithChildren;
+  AuthenticatedAiAdminPromptsRoute: typeof AuthenticatedAiAdminPromptsRouteWithChildren;
   AuthenticatedArInvoicesIdRoute: typeof AuthenticatedArInvoicesIdRoute;
+  AuthenticatedAiAdminIndexRoute: typeof AuthenticatedAiAdminIndexRoute;
   AuthenticatedAiMemoryIndexRoute: typeof AuthenticatedAiMemoryIndexRoute;
   AuthenticatedAiSkillsIndexRoute: typeof AuthenticatedAiSkillsIndexRoute;
   AuthenticatedArInvoicesIndexRoute: typeof AuthenticatedArInvoicesIndexRoute;
@@ -655,7 +855,10 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedReportingIndexRoute: AuthenticatedReportingIndexRoute,
   AuthenticatedSalesIndexRoute: AuthenticatedSalesIndexRoute,
   AuthenticatedSystemIndexRoute: AuthenticatedSystemIndexRoute,
+  AuthenticatedAiAdminModelsRoute: AuthenticatedAiAdminModelsRouteWithChildren,
+  AuthenticatedAiAdminPromptsRoute: AuthenticatedAiAdminPromptsRouteWithChildren,
   AuthenticatedArInvoicesIdRoute: AuthenticatedArInvoicesIdRoute,
+  AuthenticatedAiAdminIndexRoute: AuthenticatedAiAdminIndexRoute,
   AuthenticatedAiMemoryIndexRoute: AuthenticatedAiMemoryIndexRoute,
   AuthenticatedAiSkillsIndexRoute: AuthenticatedAiSkillsIndexRoute,
   AuthenticatedArInvoicesIndexRoute: AuthenticatedArInvoicesIndexRoute,

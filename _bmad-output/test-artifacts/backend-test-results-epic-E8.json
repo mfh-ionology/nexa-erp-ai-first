@@ -1,0 +1,2003 @@
+{
+  "epic_id": "E8",
+  "epic_title": "Attachments + Notes + Record Links",
+  "executed_at": "2026-03-03T07:54:25.464787+00:00",
+  "api_base_url": "http://localhost:3000",
+  "summary": {
+    "total": 84,
+    "passed": 55,
+    "failed": 29,
+    "skipped": 0,
+    "env_failures": 29,
+    "potential_bugs": 0
+  },
+  "environment_notes": {
+    "auth": "Only SUPER_ADMIN user available - RBAC tests expecting 403 for VIEWER/STAFF roles fail (5 tests)",
+    "s3_minio": "MinIO not running - attachment presign/confirm endpoints return 500 (6 tests)",
+    "entities": "Customer/SalesOrder/Invoice tables not yet created - tests adapted to VatCode/PaymentTerms",
+    "uuid_validation": "UUID 00000000-0000-0000-0000-999999999999 rejected by Zod schema validator as invalid format rather than reaching 404 handler (14 tests)",
+    "test_data": "No SYSTEM notes or system-generated record links exist in dev DB (4 tests)"
+  },
+  "results": [
+    {
+      "test_num": 1,
+      "endpoint": "POST /attachments/presign",
+      "test_name": "Presign - happy path with PDF",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": 200,
+      "actual_status": 500,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 500,
+          "passed": false
+        },
+        {
+          "check": "body_contains: uploadUrl",
+          "passed": false
+        },
+        {
+          "check": "body_contains: storageKey",
+          "passed": false
+        }
+      ],
+      "error": "Expected status 200, got 500",
+      "failure_category": "env:minio_not_running"
+    },
+    {
+      "test_num": 2,
+      "endpoint": "POST /attachments/presign",
+      "test_name": "Presign - happy path with image",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": 200,
+      "actual_status": 500,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 500,
+          "passed": false
+        },
+        {
+          "check": "body_contains: uploadUrl",
+          "passed": false
+        },
+        {
+          "check": "body_contains: storageKey",
+          "passed": false
+        }
+      ],
+      "error": "Expected status 200, got 500",
+      "failure_category": "env:minio_not_running"
+    },
+    {
+      "test_num": 3,
+      "endpoint": "POST /attachments/presign",
+      "test_name": "Presign - rejected MIME type (application/x-msdownload)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        },
+        {
+          "check": "body_contains: mimeTypeNotAllowed",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 4,
+      "endpoint": "POST /attachments/presign",
+      "test_name": "Presign - blocked extension (.exe)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        },
+        {
+          "check": "body_contains: fileTypeBlocked",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 5,
+      "endpoint": "POST /attachments/presign",
+      "test_name": "Presign - blocked extension (.bat)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        },
+        {
+          "check": "body_contains: fileTypeBlocked",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 6,
+      "endpoint": "POST /attachments/presign",
+      "test_name": "Presign - file size exceeds maximum (>50MB)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        },
+        {
+          "check": "body_contains: fileTooLarge",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 7,
+      "endpoint": "POST /attachments/presign",
+      "test_name": "Presign - invalid entity type",
+      "type": "validation_error",
+      "status": "fail",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        },
+        {
+          "check": "body_contains: invalidType",
+          "passed": false
+        }
+      ],
+      "error": "Body checks failed: body_contains: invalidType",
+      "failure_category": "env:uuid_schema_validation"
+    },
+    {
+      "test_num": 8,
+      "endpoint": "POST /attachments/presign",
+      "test_name": "Presign - entity not found",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": 404,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 404,
+          "actual": 400,
+          "passed": false
+        },
+        {
+          "check": "body_contains: notFound",
+          "passed": false
+        }
+      ],
+      "error": "Expected status 404, got 400",
+      "failure_category": "env:uuid_schema_validation"
+    },
+    {
+      "test_num": 9,
+      "endpoint": "POST /attachments/presign",
+      "test_name": "Presign - missing required field (fileName)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 10,
+      "endpoint": "POST /attachments/presign",
+      "test_name": "Presign - invalid fileSize (negative number)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 11,
+      "endpoint": "POST /attachments/presign",
+      "test_name": "Presign - VIEWER role denied (requires STAFF+)",
+      "type": "authorization",
+      "status": "fail",
+      "expected_status": 403,
+      "actual_status": 500,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 403,
+          "actual": 500,
+          "passed": false
+        }
+      ],
+      "error": "Expected status 403, got 500",
+      "failure_category": "env:minio_not_running"
+    },
+    {
+      "test_num": 12,
+      "endpoint": "POST /attachments/confirm",
+      "test_name": "Confirm - happy path",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": 201,
+      "actual_status": 500,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 201,
+          "actual": 500,
+          "passed": false
+        },
+        {
+          "check": "body_contains: id",
+          "passed": false
+        },
+        {
+          "check": "body_contains: entityType",
+          "passed": false
+        },
+        {
+          "check": "body_contains: entityId",
+          "passed": false
+        },
+        {
+          "check": "body_contains: fileName",
+          "passed": false
+        },
+        {
+          "check": "body_contains: storageKey",
+          "passed": false
+        }
+      ],
+      "error": "Expected status 201, got 500",
+      "failure_category": "env:minio_not_running"
+    },
+    {
+      "test_num": 13,
+      "endpoint": "POST /attachments/confirm",
+      "test_name": "Confirm - storage key does not match tenant/entity",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        },
+        {
+          "check": "body_contains: invalidStorageKey",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 14,
+      "endpoint": "POST /attachments/confirm",
+      "test_name": "Confirm - object not found in S3",
+      "type": "validation_error",
+      "status": "fail",
+      "expected_status": 400,
+      "actual_status": 500,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 500,
+          "passed": false
+        },
+        {
+          "check": "body_contains: objectNotFound",
+          "passed": false
+        }
+      ],
+      "error": "Expected status 400, got 500",
+      "failure_category": "env:minio_not_running"
+    },
+    {
+      "test_num": 15,
+      "endpoint": "POST /attachments/confirm",
+      "test_name": "Confirm - file size mismatch",
+      "type": "validation_error",
+      "status": "fail",
+      "expected_status": 400,
+      "actual_status": 500,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 500,
+          "passed": false
+        },
+        {
+          "check": "body_contains: fileSizeMismatch",
+          "passed": false
+        }
+      ],
+      "error": "Expected status 400, got 500",
+      "failure_category": "env:minio_not_running"
+    },
+    {
+      "test_num": 16,
+      "endpoint": "POST /attachments/confirm",
+      "test_name": "Confirm - MIME type mismatch",
+      "type": "validation_error",
+      "status": "fail",
+      "expected_status": 400,
+      "actual_status": 500,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 500,
+          "passed": false
+        },
+        {
+          "check": "body_contains: mimeTypeMismatch",
+          "passed": false
+        }
+      ],
+      "error": "Expected status 400, got 500",
+      "failure_category": "env:minio_not_running"
+    },
+    {
+      "test_num": 17,
+      "endpoint": "POST /attachments/confirm",
+      "test_name": "Confirm - duplicate storageKey (already confirmed)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": 400,
+      "actual_status": 500,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 500,
+          "passed": false
+        },
+        {
+          "check": "body_contains: alreadyConfirmed",
+          "passed": false
+        }
+      ],
+      "error": "Expected status 400, got 500",
+      "failure_category": "env:minio_not_running"
+    },
+    {
+      "test_num": 18,
+      "endpoint": "POST /attachments/confirm",
+      "test_name": "Confirm - blocked MIME type on confirm (defense-in-depth)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        },
+        {
+          "check": "body_contains: mimeTypeNotAllowed",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 19,
+      "endpoint": "GET /attachments",
+      "test_name": "List attachments - happy path with results",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: items",
+          "passed": true
+        },
+        {
+          "check": "body_contains: total",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 20,
+      "endpoint": "GET /attachments",
+      "test_name": "List attachments - empty list for entity with no attachments",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: items",
+          "passed": true
+        },
+        {
+          "check": "body_contains: total",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 21,
+      "endpoint": "GET /attachments",
+      "test_name": "List attachments - pagination with limit and offset",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: items",
+          "passed": true
+        },
+        {
+          "check": "body_contains: total",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 22,
+      "endpoint": "GET /attachments",
+      "test_name": "List attachments - missing entityType query param",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 23,
+      "endpoint": "GET /attachments",
+      "test_name": "List attachments - invalid entityId (not UUID)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 24,
+      "endpoint": "GET /attachments/:id/download",
+      "test_name": "Download - happy path",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": 200,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 400,
+          "passed": false
+        },
+        {
+          "check": "body_contains: downloadUrl",
+          "passed": false
+        },
+        {
+          "check": "body_contains: fileName",
+          "passed": false
+        },
+        {
+          "check": "body_contains: mimeType",
+          "passed": false
+        }
+      ],
+      "error": "Expected status 200, got 400",
+      "failure_category": "env:uuid_schema_validation"
+    },
+    {
+      "test_num": 25,
+      "endpoint": "GET /attachments/:id/download",
+      "test_name": "Download - attachment not found",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": 404,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 404,
+          "actual": 400,
+          "passed": false
+        },
+        {
+          "check": "body_contains: notFound",
+          "passed": false
+        }
+      ],
+      "error": "Expected status 404, got 400",
+      "failure_category": "env:uuid_schema_validation"
+    },
+    {
+      "test_num": 26,
+      "endpoint": "GET /attachments/:id/download",
+      "test_name": "Download - invalid ID format (not UUID)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 27,
+      "endpoint": "DELETE /attachments/:id",
+      "test_name": "Delete attachment - happy path",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": 200,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 400,
+          "passed": false
+        },
+        {
+          "check": "body_contains: id",
+          "passed": true
+        }
+      ],
+      "error": "Expected status 200, got 400",
+      "failure_category": "env:uuid_schema_validation"
+    },
+    {
+      "test_num": 28,
+      "endpoint": "DELETE /attachments/:id",
+      "test_name": "Delete attachment - not found",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": 404,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 404,
+          "actual": 400,
+          "passed": false
+        },
+        {
+          "check": "body_contains: notFound",
+          "passed": false
+        }
+      ],
+      "error": "Expected status 404, got 400",
+      "failure_category": "env:uuid_schema_validation"
+    },
+    {
+      "test_num": 29,
+      "endpoint": "DELETE /attachments/:id",
+      "test_name": "Delete attachment - STAFF role denied (requires MANAGER+)",
+      "type": "authorization",
+      "status": "fail",
+      "expected_status": 403,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 403,
+          "actual": 400,
+          "passed": false
+        }
+      ],
+      "error": "Expected status 403, got 400",
+      "failure_category": "env:only_super_admin"
+    },
+    {
+      "test_num": 30,
+      "endpoint": "DELETE /attachments/:id",
+      "test_name": "Delete attachment - invalid ID format",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 31,
+      "endpoint": "POST /notes",
+      "test_name": "Create note - happy path (GENERAL)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 201,
+      "actual_status": 201,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 201,
+          "actual": 201,
+          "passed": true
+        },
+        {
+          "check": "body_contains: id",
+          "passed": true
+        },
+        {
+          "check": "body_contains: entityType",
+          "passed": true
+        },
+        {
+          "check": "body_contains: entityId",
+          "passed": true
+        },
+        {
+          "check": "body_contains: noteType",
+          "passed": true
+        },
+        {
+          "check": "body_contains: content",
+          "passed": true
+        },
+        {
+          "check": "body_contains: createdBy",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 32,
+      "endpoint": "POST /notes",
+      "test_name": "Create note - happy path (INTERNAL)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 201,
+      "actual_status": 201,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 201,
+          "actual": 201,
+          "passed": true
+        },
+        {
+          "check": "body_contains: id",
+          "passed": true
+        },
+        {
+          "check": "body_contains: noteType",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 33,
+      "endpoint": "POST /notes",
+      "test_name": "Create note - happy path (CUSTOMER_VISIBLE)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 201,
+      "actual_status": 201,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 201,
+          "actual": 201,
+          "passed": true
+        },
+        {
+          "check": "body_contains: noteType",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 34,
+      "endpoint": "POST /notes",
+      "test_name": "Create note - default noteType is GENERAL when omitted",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 201,
+      "actual_status": 201,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 201,
+          "actual": 201,
+          "passed": true
+        },
+        {
+          "check": "body_contains: GENERAL",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 35,
+      "endpoint": "POST /notes",
+      "test_name": "Create note - with optional title and classification",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 201,
+      "actual_status": 201,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 201,
+          "actual": 201,
+          "passed": true
+        },
+        {
+          "check": "body_contains: title",
+          "passed": true
+        },
+        {
+          "check": "body_contains: classification",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 36,
+      "endpoint": "POST /notes",
+      "test_name": "Create note - SYSTEM noteType rejected via API",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 37,
+      "endpoint": "POST /notes",
+      "test_name": "Create note - missing content",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 38,
+      "endpoint": "POST /notes",
+      "test_name": "Create note - empty content string",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 39,
+      "endpoint": "POST /notes",
+      "test_name": "Create note - content with dangerous HTML (XSS prevention)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 40,
+      "endpoint": "POST /notes",
+      "test_name": "Create note - invalid entity type",
+      "type": "validation_error",
+      "status": "fail",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        },
+        {
+          "check": "body_contains: invalidType",
+          "passed": false
+        }
+      ],
+      "error": "Body checks failed: body_contains: invalidType",
+      "failure_category": "env:uuid_schema_validation"
+    },
+    {
+      "test_num": 41,
+      "endpoint": "POST /notes",
+      "test_name": "Create note - entity not found",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": 404,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 404,
+          "actual": 400,
+          "passed": false
+        },
+        {
+          "check": "body_contains: notFound",
+          "passed": false
+        }
+      ],
+      "error": "Expected status 404, got 400",
+      "failure_category": "env:uuid_schema_validation"
+    },
+    {
+      "test_num": 42,
+      "endpoint": "GET /notes",
+      "test_name": "List notes - happy path",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: items",
+          "passed": true
+        },
+        {
+          "check": "body_contains: total",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 43,
+      "endpoint": "GET /notes",
+      "test_name": "List notes - empty results",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: items",
+          "passed": true
+        },
+        {
+          "check": "body_contains: total",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 44,
+      "endpoint": "GET /notes",
+      "test_name": "List notes - filter by noteType=INTERNAL",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: items",
+          "passed": true
+        },
+        {
+          "check": "body_contains: total",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 45,
+      "endpoint": "GET /notes",
+      "test_name": "List notes - pinned notes appear first",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: items",
+          "passed": true
+        },
+        {
+          "check": "body_contains: total",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 46,
+      "endpoint": "GET /notes",
+      "test_name": "List notes - pagination",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: items",
+          "passed": true
+        },
+        {
+          "check": "body_contains: total",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 47,
+      "endpoint": "GET /notes",
+      "test_name": "List notes - soft-deleted notes excluded",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: items",
+          "passed": true
+        },
+        {
+          "check": "body_contains: total",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 48,
+      "endpoint": "PATCH /notes/:id",
+      "test_name": "Update note - happy path (own note, update content)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: id",
+          "passed": true
+        },
+        {
+          "check": "body_contains: content",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 49,
+      "endpoint": "PATCH /notes/:id",
+      "test_name": "Update note - happy path (update title only)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: title",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 50,
+      "endpoint": "PATCH /notes/:id",
+      "test_name": "Update note - SYSTEM note is read-only",
+      "type": "validation_error",
+      "status": "fail",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        },
+        {
+          "check": "body_contains: systemNoteReadOnly",
+          "passed": false
+        }
+      ],
+      "error": "Body checks failed: body_contains: systemNoteReadOnly",
+      "failure_category": "env:uuid_schema_validation"
+    },
+    {
+      "test_num": 51,
+      "endpoint": "PATCH /notes/:id",
+      "test_name": "Update note - non-owner STAFF denied",
+      "type": "authorization",
+      "status": "fail",
+      "expected_status": 403,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 403,
+          "actual": 200,
+          "passed": false
+        },
+        {
+          "check": "body_contains: notOwner",
+          "passed": false
+        }
+      ],
+      "error": "Expected status 403, got 200",
+      "failure_category": "env:only_super_admin"
+    },
+    {
+      "test_num": 52,
+      "endpoint": "PATCH /notes/:id",
+      "test_name": "Update note - MANAGER can edit other user's note",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: content",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 53,
+      "endpoint": "PATCH /notes/:id",
+      "test_name": "Update note - empty body (no fields provided)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 54,
+      "endpoint": "PATCH /notes/:id",
+      "test_name": "Update note - not found",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": 404,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 404,
+          "actual": 400,
+          "passed": false
+        },
+        {
+          "check": "body_contains: notFound",
+          "passed": false
+        }
+      ],
+      "error": "Expected status 404, got 400",
+      "failure_category": "env:uuid_schema_validation"
+    },
+    {
+      "test_num": 55,
+      "endpoint": "PATCH /notes/:id",
+      "test_name": "Update note - XSS content rejected",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 56,
+      "endpoint": "DELETE /notes/:id",
+      "test_name": "Delete note - happy path (soft delete)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: id",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 57,
+      "endpoint": "DELETE /notes/:id",
+      "test_name": "Delete note - SYSTEM note cannot be deleted",
+      "type": "validation_error",
+      "status": "fail",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        },
+        {
+          "check": "body_contains: systemNoteReadOnly",
+          "passed": false
+        }
+      ],
+      "error": "Body checks failed: body_contains: systemNoteReadOnly",
+      "failure_category": "env:uuid_schema_validation"
+    },
+    {
+      "test_num": 58,
+      "endpoint": "DELETE /notes/:id",
+      "test_name": "Delete note - not found",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": 404,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 404,
+          "actual": 400,
+          "passed": false
+        },
+        {
+          "check": "body_contains: notFound",
+          "passed": false
+        }
+      ],
+      "error": "Expected status 404, got 400",
+      "failure_category": "env:uuid_schema_validation"
+    },
+    {
+      "test_num": 59,
+      "endpoint": "DELETE /notes/:id",
+      "test_name": "Delete note - STAFF role denied (requires MANAGER+)",
+      "type": "authorization",
+      "status": "fail",
+      "expected_status": 403,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 403,
+          "actual": 200,
+          "passed": false
+        }
+      ],
+      "error": "Expected status 403, got 200",
+      "failure_category": "env:only_super_admin"
+    },
+    {
+      "test_num": 60,
+      "endpoint": "DELETE /notes/:id",
+      "test_name": "Delete note - already soft-deleted note returns 404",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 404,
+      "actual_status": 404,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 404,
+          "actual": 404,
+          "passed": true
+        },
+        {
+          "check": "body_contains: notFound",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 61,
+      "endpoint": "PATCH /notes/:id/pin",
+      "test_name": "Pin note - happy path (pin unpinned note)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: isPinned",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 62,
+      "endpoint": "PATCH /notes/:id/pin",
+      "test_name": "Pin note - happy path (unpin pinned note)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: isPinned",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 63,
+      "endpoint": "PATCH /notes/:id/pin",
+      "test_name": "Pin note - not found",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": 404,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 404,
+          "actual": 400,
+          "passed": false
+        },
+        {
+          "check": "body_contains: notFound",
+          "passed": false
+        }
+      ],
+      "error": "Expected status 404, got 400",
+      "failure_category": "env:uuid_schema_validation"
+    },
+    {
+      "test_num": 64,
+      "endpoint": "POST /record-links",
+      "test_name": "Create record link - happy path (RELATES_TO)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 201,
+      "actual_status": 201,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 201,
+          "actual": 201,
+          "passed": true
+        },
+        {
+          "check": "body_contains: id",
+          "passed": true
+        },
+        {
+          "check": "body_contains: sourceEntityType",
+          "passed": true
+        },
+        {
+          "check": "body_contains: sourceEntityId",
+          "passed": true
+        },
+        {
+          "check": "body_contains: targetEntityType",
+          "passed": true
+        },
+        {
+          "check": "body_contains: targetEntityId",
+          "passed": true
+        },
+        {
+          "check": "body_contains: linkType",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 65,
+      "endpoint": "POST /record-links",
+      "test_name": "Create record link - happy path (CREATED_FROM)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 201,
+      "actual_status": 201,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 201,
+          "actual": 201,
+          "passed": true
+        },
+        {
+          "check": "body_contains: id",
+          "passed": true
+        },
+        {
+          "check": "body_contains: linkType",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 66,
+      "endpoint": "POST /record-links",
+      "test_name": "Create record link - self-link rejected",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        },
+        {
+          "check": "body_contains: selfLinkNotAllowed",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 67,
+      "endpoint": "POST /record-links",
+      "test_name": "Create record link - duplicate link rejected (409)",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 409,
+      "actual_status": 409,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 409,
+          "actual": 409,
+          "passed": true
+        },
+        {
+          "check": "body_contains: duplicateLink",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 68,
+      "endpoint": "POST /record-links",
+      "test_name": "Create record link - reverse RELATES_TO duplicate rejected (409)",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 409,
+      "actual_status": 409,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 409,
+          "actual": 409,
+          "passed": true
+        },
+        {
+          "check": "body_contains: duplicateLink",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 69,
+      "endpoint": "POST /record-links",
+      "test_name": "Create record link - invalid source entity type",
+      "type": "validation_error",
+      "status": "fail",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        },
+        {
+          "check": "body_contains: invalidType",
+          "passed": false
+        }
+      ],
+      "error": "Body checks failed: body_contains: invalidType",
+      "failure_category": "env:uuid_schema_validation"
+    },
+    {
+      "test_num": 70,
+      "endpoint": "POST /record-links",
+      "test_name": "Create record link - source entity not found",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": 404,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 404,
+          "actual": 400,
+          "passed": false
+        },
+        {
+          "check": "body_contains: notFound",
+          "passed": false
+        }
+      ],
+      "error": "Expected status 404, got 400",
+      "failure_category": "env:uuid_schema_validation"
+    },
+    {
+      "test_num": 71,
+      "endpoint": "POST /record-links",
+      "test_name": "Create record link - invalid linkType",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 72,
+      "endpoint": "POST /record-links",
+      "test_name": "Create record link - missing required fields",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 73,
+      "endpoint": "GET /record-links",
+      "test_name": "List record links - happy path (direction=all)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: items",
+          "passed": true
+        },
+        {
+          "check": "body_contains: total",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 74,
+      "endpoint": "GET /record-links",
+      "test_name": "List record links - direction=outgoing only",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: items",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 75,
+      "endpoint": "GET /record-links",
+      "test_name": "List record links - direction=incoming only",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: items",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 76,
+      "endpoint": "GET /record-links",
+      "test_name": "List record links - filter by linkType",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: items",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 77,
+      "endpoint": "GET /record-links",
+      "test_name": "List record links - empty results",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: items",
+          "passed": true
+        },
+        {
+          "check": "body_contains: total",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 78,
+      "endpoint": "GET /record-links",
+      "test_name": "List record links - pagination",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 200,
+          "actual": 200,
+          "passed": true
+        },
+        {
+          "check": "body_contains: items",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 79,
+      "endpoint": "GET /record-links",
+      "test_name": "List record links - missing entityType",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 80,
+      "endpoint": "DELETE /record-links/:id",
+      "test_name": "Delete record link - happy path (manual link)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 204,
+      "actual_status": 204,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 204,
+          "actual": 204,
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    },
+    {
+      "test_num": 81,
+      "endpoint": "DELETE /record-links/:id",
+      "test_name": "Delete record link - system link with MANAGER (allowed)",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": 204,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 204,
+          "actual": 400,
+          "passed": false
+        }
+      ],
+      "error": "Expected status 204, got 400",
+      "failure_category": "env:uuid_schema_validation"
+    },
+    {
+      "test_num": 82,
+      "endpoint": "DELETE /record-links/:id",
+      "test_name": "Delete record link - system link with STAFF denied",
+      "type": "authorization",
+      "status": "fail",
+      "expected_status": 403,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 403,
+          "actual": 400,
+          "passed": false
+        },
+        {
+          "check": "body_contains: systemLinkDeleteForbidden",
+          "passed": false
+        }
+      ],
+      "error": "Expected status 403, got 400",
+      "failure_category": "env:only_super_admin"
+    },
+    {
+      "test_num": 83,
+      "endpoint": "DELETE /record-links/:id",
+      "test_name": "Delete record link - not found",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": 404,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 404,
+          "actual": 400,
+          "passed": false
+        },
+        {
+          "check": "body_contains: notFound",
+          "passed": false
+        }
+      ],
+      "error": "Expected status 404, got 400",
+      "failure_category": "env:uuid_schema_validation"
+    },
+    {
+      "test_num": 84,
+      "endpoint": "DELETE /record-links/:id",
+      "test_name": "Delete record link - invalid ID format",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": 400,
+          "actual": 400,
+          "passed": true
+        }
+      ],
+      "error": null,
+      "failure_category": null
+    }
+  ]
+}
