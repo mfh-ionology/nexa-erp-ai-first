@@ -15,7 +15,7 @@
  * - E2E: toggle off EMAIL → save → mutation receives correct payload
  */
 
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -31,7 +31,7 @@ vi.mock('@nexa/i18n', () => ({
 
 vi.mock('@tanstack/react-router', () => ({
   useBlocker: vi.fn(),
-  Link: ({ children, ...props }: Record<string, unknown>) => children,
+  Link: ({ children }: Record<string, unknown>) => children,
 }));
 
 vi.mock('@/components/templates/page-header', () => ({

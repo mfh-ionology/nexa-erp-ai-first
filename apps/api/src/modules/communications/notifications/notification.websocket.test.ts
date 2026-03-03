@@ -71,7 +71,7 @@ function extractHandlers() {
     | undefined;
 
   const connectionCall = mockNamespace.on.mock.calls.find(
-    (call: [string, (...args: unknown[]) => void]) => call[0] === 'connection',
+    (call: any[]) => call[0] === 'connection',
   );
   const connectionHandler = connectionCall?.[1] as ((socket: any) => void) | undefined;
 

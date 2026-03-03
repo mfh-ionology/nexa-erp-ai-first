@@ -787,6 +787,10 @@ export interface BusinessEvents {
     channel: string;
     templateEventName: string;
   };
+  'notification.bulk_read': {
+    userId: string;
+    count: number;
+  };
   'email.sent': {
     emailMessageId: string;
     recipientEmail: string;
@@ -948,6 +952,7 @@ export const VALID_BUSINESS_EVENT_TYPES = new Set<string>([
   'document.rejected',
   // Communications
   'notification.sent',
+  'notification.bulk_read',
   'email.sent',
 ]);
 

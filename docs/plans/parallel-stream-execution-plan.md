@@ -203,10 +203,10 @@ Update this table as epics progress.
 
 | Epic | Stream | Phase | Status | Started | Completed | Notes |
 |------|--------|-------|--------|---------|-----------|-------|
-| E5c | A | 1 | backlog | — | — | |
-| E8 | B | 1 | backlog | — | — | |
+| E5c | A | 1 | done | 2026-03-03 | 2026-03-03 | 6 stories, 246M tokens, $176 |
+| E8 | B | 1 | done | 2026-03-03 | 2026-03-03 | 4 stories completed |
 | E13b | A | 2 | backlog | — | — | Platform DB — no schema conflict |
-| E9 | B | 2 | backlog | — | — | |
+| E9 | B | 2 | in-progress | 2026-03-03 | — | Post-epic phase running |
 | E5d | A | 3 | backlog | — | — | Needs E5c done |
 | E10 | B | 3 | backlog | — | — | Needs E9 done |
 | E11 | B | 4 | backlog | — | — | |

@@ -69,7 +69,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   // Sync notification list to store whenever React Query data actually changes.
   // Use a ref to track the previous data reference and skip redundant updates
   // (select's flatMap creates new arrays on every render cycle).
-  const prevNotificationsRef = useRef<typeof notificationsData>();
+  const prevNotificationsRef = useRef<typeof notificationsData | undefined>(undefined);
   useEffect(() => {
     if (notificationsData?.data && notificationsData !== prevNotificationsRef.current) {
       prevNotificationsRef.current = notificationsData;

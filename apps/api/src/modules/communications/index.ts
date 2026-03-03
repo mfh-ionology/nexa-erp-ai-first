@@ -27,7 +27,9 @@ const communicationsModulePluginFn: FastifyPluginAsync = async (fastify) => {
   await fastify.register(notificationTemplateRoutesPlugin);
 
   // Attach notification WebSocket handler to the HTTP server (E9-2)
-  const notificationWs = new NotificationWebSocketHandler(fastify.log);
+  const notificationWs = new NotificationWebSocketHandler(
+    fastify.log as unknown as import('pino').Logger,
+  );
   notificationWs.attach(fastify.server);
   fastify.decorate('notificationWs', notificationWs);
 

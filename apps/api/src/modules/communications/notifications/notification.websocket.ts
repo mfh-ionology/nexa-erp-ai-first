@@ -65,7 +65,7 @@ export class NotificationWebSocketHandler {
       // Create a new Socket.io Server on this HTTP server
       const corsOrigin = process.env.CORS_ORIGIN ?? '*';
       this.ownsServer = true;
-      this.io = new SocketServer(serverOrHttp as Parameters<typeof SocketServer>[0], {
+      this.io = new SocketServer(serverOrHttp as ConstructorParameters<typeof SocketServer>[0], {
         cors: {
           origin: corsOrigin === '*' ? true : corsOrigin.split(','),
           credentials: corsOrigin !== '*',

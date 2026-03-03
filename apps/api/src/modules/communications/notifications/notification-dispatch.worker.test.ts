@@ -524,7 +524,7 @@ describe('notification-dispatch worker', () => {
 
       // Verify renderNotificationEmailHtml was called with all required data
       expect(mockRenderHtml).toHaveBeenCalledTimes(1);
-      const renderCall = mockRenderHtml.mock.calls[0][0];
+      const renderCall = mockRenderHtml.mock.calls[0]![0];
       expect(renderCall.title).toBe('Test notification');
       expect(renderCall.body).toBe('Test body');
       expect(renderCall.actionUrl).toBe('https://app.nexa.io/approvals/1');

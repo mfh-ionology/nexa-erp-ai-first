@@ -592,7 +592,7 @@ describe('GET /notifications/preferences/role-defaults', () => {
           templateCode: 'APPROVAL_REQUESTED',
           templateName: 'Approval Required',
           eventName: 'approval.requested',
-          defaultChannels: ['IN_APP', 'EMAIL'],
+          defaultChannels: ['IN_APP', 'EMAIL'] as ('IN_APP' | 'EMAIL' | 'PUSH')[],
           enableInApp: true,
           enableEmail: false,
           enablePush: true,
