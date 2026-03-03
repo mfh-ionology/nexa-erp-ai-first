@@ -394,6 +394,13 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         path: '/ai/admin/automations',
         resourceCode: 'system.settings.detail',
       },
+      {
+        key: 'ai.admin.automationRuns',
+        labelKey: 'navigation:ai.admin.automationRuns',
+        icon: 'History',
+        path: '/ai/admin/automations/runs',
+        resourceCode: 'system.settings.detail',
+      },
     ],
   },
   {
@@ -420,6 +427,13 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         labelKey: 'navigation:system.settings',
         icon: 'Settings',
         path: '/system/settings',
+      },
+      {
+        key: 'system.notificationPreferences',
+        labelKey: 'navigation:system.notificationPreferences',
+        icon: 'Bell',
+        path: '/system/notification-preferences',
+        alwaysVisible: true,
       },
       {
         key: 'system.myPermissions',

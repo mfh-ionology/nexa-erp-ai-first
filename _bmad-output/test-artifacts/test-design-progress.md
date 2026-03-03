@@ -2,7 +2,7 @@
 stepsCompleted: ['step-01-detect-mode', 'step-02-load-context', 'step-03-risk-and-testability', 'step-04-coverage-plan', 'step-05-generate-output']
 lastStep: 'step-05-generate-output'
 lastSaved: '2026-03-03'
-lastEpic: 'E8'
+lastEpic: 'E9'
 ---
 
 # Test Design Progress — Epic E1
@@ -525,6 +525,55 @@ lastEpic: 'E8'
 - **Output file**: `_bmad-output/test-artifacts/test-design-epic-E8.md`
 - **Validated against checklist**: All criteria passed
 - **No CLI sessions to clean up** (no browser exploration for E8)
+- **All artifacts stored in test-artifacts/**
+
+## Completion
+- Workflow complete: 2026-03-03
+
+---
+
+# Test Design Progress — Epic E9
+
+## Step 1: Mode Detection
+- **Mode**: Epic-Level (Phase 4)
+- **Reason**: User explicitly requested E9 epic-level test design; sprint-status.yaml exists
+- **Epic**: E9 — Notifications (4 stories: E9.1-E9.4)
+- **Prerequisites**: E9 epic documentation available with 4 stories and detailed acceptance criteria
+
+## Step 2: Context Loading
+- **Config**: tea_use_playwright_utils=true, tea_browser_automation=auto, test_framework=playwright
+- **Artifacts loaded**:
+  - Epic E9 (4 stories: E9.1 Notification Service, E9.2 In-App Notifications, E9.3 Email Channel, E9.4 Notification Preferences)
+  - PRD: FR184 (multi-channel delivery), FR185 (per-channel preferences), FR186 (notification centre)
+  - PRD NFRs: NFR2 (CRUD <500ms), NFR27 (WCAG 2.1 AA), NFR31 (retry with exponential backoff)
+  - Data Models: §3.18 Communications Module — NotificationTemplate, NotificationPreference, Notification (channel, priority, status enums)
+  - State Machines: §17.2 Notification Status (PENDING → DELIVERED → READ → DISMISSED / FAILED)
+  - Event Catalog: §14 — notification.sent, template-based subscription to ALL business events
+  - Business Rules: BR-COM-014 (preference cascade from template defaults), BR-COM-015 (S3 presign for attachments)
+  - API Contracts: §2.25 Communications (GET /notifications, PATCH /notifications/:id/read, POST /notifications/:id/dismiss, GET/PUT /notifications/preferences)
+  - Dependencies: E3 (Event Bus), E6 (Frontend Shell), E10 (Email Integration — can be mocked)
+- **Knowledge fragments**: risk-governance.md, probability-impact.md, test-levels-framework.md, test-priorities-matrix.md
+- **Existing tests**: No E9-specific tests; Vitest configured, Playwright E2E for E2b-E8; 191+ unit/integration, 109+ E2E specs from prior epics
+
+## Step 3: Risk Assessment
+- **Total risks**: 10
+- **High-priority (>=6)**: 3 — R-001 (TECH: WebSocket reliability, score=9 CRITICAL), R-002 (DATA: delivery guarantees per-channel, score=6), R-003 (TECH: event bus template matching, score=6)
+- **Medium (3-4)**: 4 — R-004 (TECH: Handlebars rendering errors), R-005 (SEC: notification content leakage), R-006 (PERF: high-volume fan-out), R-007 (BUS: preference cascade complexity)
+- **Low (1-2)**: 3 — R-008 (OPS: email retry exhaustion), R-009 (BUS: notification fatigue), R-010 (OPS: WebSocket scaling)
+
+## Step 4: Coverage Plan
+- **P0**: 8 tests (~16-24 hours) — notification creation from events, multi-channel dispatch, WebSocket delivery, preference cascade, email queue, state lifecycle
+- **P1**: 12 tests (~12-20 hours) — target user resolution, cascade fallback, reconnection replay, mark all read, dismiss, email retry, preferences UI, CRUD endpoints
+- **P2**: 8 tests (~4-8 hours) — companyId scoping, template error handling, email FAILED state, HTML template rendering, admin role defaults, pagination, batch events
+- **P3**: 4 tests (~1-2 hours) — throughput benchmark, WebSocket latency, multi-tab, preference matrix performance
+- **Total**: 32 tests, ~33-54 hours (~1-1.5 weeks)
+- **Test levels**: Unit (template rendering, state machine, preference cascade), API (notification CRUD, delivery, WebSocket, email queue), E2E (bell/dropdown, preferences page)
+- **Execution**: All functional tests on every PR (<15 min); performance benchmarks nightly
+
+## Step 5: Output Generation
+- **Output file**: `_bmad-output/test-artifacts/test-design-epic-E9.md`
+- **Validated against checklist**: All criteria passed
+- **No CLI sessions to clean up** (no browser exploration for E9)
 - **All artifacts stored in test-artifacts/**
 
 ## Completion

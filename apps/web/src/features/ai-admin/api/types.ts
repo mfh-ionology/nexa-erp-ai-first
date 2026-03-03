@@ -502,6 +502,7 @@ export interface AiAutomationListItem {
   stepCount: number;
   createdAt: string;
   updatedAt: string;
+  lastRunId: string | null;
   lastRunStatus: AutomationRunStatus | null;
   lastRunAt: string | null;
   schedule: AiAutomationSchedule | null;
@@ -619,6 +620,7 @@ export interface AiAutomationRunListItem {
   id: string;
   automationId: string;
   automationName: string;
+  triggerType?: AutomationTriggerType;
   triggeredBy: string;
   status: AutomationRunStatus;
   startedAt: string | null;
@@ -634,6 +636,9 @@ export interface AiAutomationStepRun {
   stepId: string;
   stepOrder: number;
   agentId: string;
+  agentName?: string;
+  agentDisplayName?: string;
+  goal?: string;
   modelId: string | null;
   status: AutomationStepRunStatus;
   input: unknown;
@@ -661,6 +666,7 @@ export interface AiAutomationRunListParams {
   status?: AutomationRunStatus;
   dateFrom?: string;
   dateTo?: string;
+  automationId?: string;
 }
 
 // ─── Automation run list response ──────────────────────────────────────────
@@ -674,6 +680,31 @@ interface AiAutomationRunListMeta {
 export interface AiAutomationRunListResponse {
   data: AiAutomationRunListItem[];
   meta: AiAutomationRunListMeta;
+}
+
+// ─── Automation health stats (dashboard) ───────────────────────────────────
+
+export interface AutomationHealthStats {
+  totalAutomations: number;
+  activeCount: number;
+  pausedCount: number;
+  inactiveCount: number;
+  failedRunsLast24h: number;
+  upcomingRuns: Array<{
+    automationId: string;
+    automationName: string;
+    nextRunAt: string;
+  }>;
+  dailyTokenSpend: Array<{
+    date: string;
+    tokens: number;
+  }>;
+  circuitBreakerAlerts: Array<{
+    automationId: string;
+    automationName: string;
+    consecutiveFailures: number;
+    lastFailedAt: string;
+  }>;
 }
 
 // ─── Prompt variable types (for variable autocomplete) ─────────────────────
@@ -699,6 +730,7 @@ export interface RetryAutomationRunResponse {
   message: string;
   automationId: string;
   originalRunId: string;
+  newRunId: string;
 }
 
 // ─── Test trigger types ────────────────────────────────────────────────────

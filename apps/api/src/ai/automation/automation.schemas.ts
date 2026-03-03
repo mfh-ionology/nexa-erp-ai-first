@@ -208,6 +208,7 @@ export const automationListItemSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   stepCount: z.number(),
+  lastRunId: z.string().nullable(),
   lastRunStatus: z.string().nullable(),
   lastRunAt: z.string().nullable(),
   schedule: automationScheduleResponseSchema.nullable(),
@@ -500,6 +501,7 @@ export const retryResponseSchema = z.object({
   message: z.string(),
   automationId: z.string(),
   originalRunId: z.string(),
+  newRunId: z.string(),
 });
 
 // ─── TypeScript type inference ──────────────────────────────────────────────

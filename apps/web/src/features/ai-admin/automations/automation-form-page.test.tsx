@@ -79,6 +79,7 @@ const testAutomation: AiAutomationDetail = {
   maxDurationMs: 300000,
   createdAt: '2026-03-01T00:00:00Z',
   updatedAt: '2026-03-01T00:00:00Z',
+  lastRunId: null,
   lastRunStatus: 'COMPLETED',
   lastRunAt: '2026-03-03T07:00:00Z',
   stepCount: 1,

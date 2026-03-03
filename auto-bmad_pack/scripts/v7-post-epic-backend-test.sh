@@ -65,7 +65,7 @@ TEST_REPORT_FILE="${TEST_ARTIFACTS}/backend-test-report-epic-${EPIC_ID}.md"
 # Auth token (populated by seed_and_auth phase)
 AUTH_TOKEN=""
 SEED_USER_EMAIL="admin@nexa-erp.dev"
-SEED_USER_PASSWORD="NexaDev2026"
+SEED_USER_PASSWORD="NexaDev2026!"
 
 # ============================================================================
 # PHASE 0: SEED DATABASE & ACQUIRE AUTH TOKEN

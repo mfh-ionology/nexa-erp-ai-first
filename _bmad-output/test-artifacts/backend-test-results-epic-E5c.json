@@ -1,0 +1,2976 @@
+{
+  "epic_id": "E5c",
+  "executed_at": "2026-03-03T17:38:04.216892+00:00",
+  "api_base_url": "http://localhost:3000",
+  "note": "Routes are mounted at root level (no /ai prefix) due to fastify-plugin unwrapping. PLATFORM_SERVICE_TOKEN not set \u2014 AI module in degraded mode (all services null \u2192 503).",
+  "route_mapping": {
+    "test_plan_prefix": "/ai/*",
+    "actual_prefix": "/*",
+    "reason": "fastify-plugin (fp) makes AI plugin non-encapsulated, routes escape prefix scope"
+  },
+  "environment_issues": [
+    "PLATFORM_SERVICE_TOKEN not set in .env \u2014 AI module disabled (graceful degradation)",
+    "All service-dependent routes return HTTP 503 (Service Unavailable)",
+    "Validation-only routes (schema checking before service call) work correctly"
+  ],
+  "summary": {
+    "total": 143,
+    "passed": 22,
+    "failed": 69,
+    "skipped": 52,
+    "pass_rate": "15.4%"
+  },
+  "failure_breakdown": {
+    "503_service_unavailable": 60,
+    "400_validation_on_empty_template": 9,
+    "other": 0
+  },
+  "results": [
+    {
+      "test_id": "AGT-C-01",
+      "endpoint": "POST /ai/admin/agents",
+      "test_name": "Create agent - happy path",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "201",
+      "actual_status": 400,
+      "elapsed_ms": 7,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "201",
+          "actual": "400",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "id",
+            "name",
+            "displayName",
+            "promptId"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 201, got 400"
+    },
+    {
+      "test_id": "AUTO-C-01",
+      "endpoint": "POST /ai/automations",
+      "test_name": "Create SCHEDULED automation - happy path",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "201",
+      "actual_status": 400,
+      "elapsed_ms": 44,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "201",
+          "actual": "400",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "id",
+            "name",
+            "triggerType",
+            "steps",
+            "schedule"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 201, got 400"
+    },
+    {
+      "test_id": "AUTO-C-02",
+      "endpoint": "POST /ai/automations",
+      "test_name": "Create MANUAL automation - happy path",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "201",
+      "actual_status": 400,
+      "elapsed_ms": 8,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "201",
+          "actual": "400",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "id",
+            "triggerType"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 201, got 400"
+    },
+    {
+      "test_id": "AUTO-C-03",
+      "endpoint": "POST /ai/automations",
+      "test_name": "Create EVENT automation - happy path",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "201",
+      "actual_status": 400,
+      "elapsed_ms": 7,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "201",
+          "actual": "400",
+          "passed": false
+        }
+      ],
+      "error": "Expected 201, got 400"
+    },
+    {
+      "test_id": "AUTO-C-04",
+      "endpoint": "POST /ai/automations",
+      "test_name": "Create automation with multiple steps - sequential ordering",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "201",
+      "actual_status": 400,
+      "elapsed_ms": 6,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "201",
+          "actual": "400",
+          "passed": false
+        }
+      ],
+      "error": "Expected 201, got 400"
+    },
+    {
+      "test_id": "AUTO-C-05",
+      "endpoint": "POST /ai/automations",
+      "test_name": "Create automation with chainNextId - valid chain",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "201",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'existing_automation_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "EXEC-01",
+      "endpoint": "POST /ai/automations/:id/run",
+      "test_name": "Run Now - happy path (202 accepted)",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "202",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'existing_automation_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "EXEC-02",
+      "endpoint": "POST /ai/automations/:id/run",
+      "test_name": "Run Now - with custom input",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "202",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'existing_automation_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "MDL-C-01",
+      "endpoint": "POST /ai/admin/models",
+      "test_name": "Create model - happy path",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "201",
+      "actual_status": 503,
+      "elapsed_ms": 8,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "201",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "id",
+            "name",
+            "provider",
+            "modelId"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 201, got 503"
+    },
+    {
+      "test_id": "MDL-C-02",
+      "endpoint": "POST /ai/admin/models",
+      "test_name": "Create model with isDefault=true - unsets previous default",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "201",
+      "actual_status": 503,
+      "elapsed_ms": 8,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "201",
+          "actual": "503",
+          "passed": false
+        }
+      ],
+      "error": "Expected 201, got 503"
+    },
+    {
+      "test_id": "PRM-C-01",
+      "endpoint": "POST /ai/admin/prompts",
+      "test_name": "Create prompt - happy path",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "201",
+      "actual_status": 503,
+      "elapsed_ms": 5,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "201",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "id",
+            "name",
+            "category",
+            "activeVersion"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 201, got 503"
+    },
+    {
+      "test_id": "PRM-T-01",
+      "endpoint": "POST /ai/admin/prompts/:id/test",
+      "test_name": "Test render prompt - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'seeded_prompt_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "RUN-RT-01",
+      "endpoint": "POST /ai/automations/runs/:runId/retry",
+      "test_name": "Retry from failed step - happy path (202)",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "202",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'failed_run_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "SKL-C-01",
+      "endpoint": "POST /ai/admin/skills",
+      "test_name": "Create skill - happy path",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "201",
+      "actual_status": 503,
+      "elapsed_ms": 9,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "201",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "id",
+            "name",
+            "triggerPhrases",
+            "moduleKey"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 201, got 503"
+    },
+    {
+      "test_id": "SKL-TT-01",
+      "endpoint": "POST /ai/admin/skills/test-trigger",
+      "test_name": "Test trigger - matching phrase",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 9,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "matchedModule",
+            "matchedSkill",
+            "l0Confidence",
+            "l1Confidence"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "VAR-C-01",
+      "endpoint": "POST /ai/variables",
+      "test_name": "Create SYSTEM variable - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "201",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'seeded_prompt_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "VAR-C-02",
+      "endpoint": "POST /ai/variables",
+      "test_name": "Create DB_FIELD variable - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "201",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'seeded_prompt_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "VAR-C-03",
+      "endpoint": "POST /ai/variables",
+      "test_name": "Create EXPRESSION variable - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "201",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'seeded_prompt_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "VAR-T-01",
+      "endpoint": "POST /ai/variables/:id/test",
+      "test_name": "Test resolve SYSTEM variable - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'system_variable_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "VER-R-01",
+      "endpoint": "POST /ai/admin/prompts/:id/versions/:version/restore",
+      "test_name": "Restore version 1 - creates new version",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'multi_version_prompt_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "AGT-C-02",
+      "endpoint": "POST /ai/admin/agents",
+      "test_name": "Create agent - missing required promptId (400)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 13,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "AGT-C-04",
+      "endpoint": "POST /ai/admin/agents",
+      "test_name": "Create agent - invalid name pattern (400)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 8,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "AGT-C-05",
+      "endpoint": "POST /ai/admin/agents",
+      "test_name": "Create agent - maxTurns exceeds max (400)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 7,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "AUTO-C-06",
+      "endpoint": "POST /ai/automations",
+      "test_name": "Create automation - missing name (validation error)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 7,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "AUTO-C-07",
+      "endpoint": "POST /ai/automations",
+      "test_name": "Create automation - empty steps array (validation error)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 6,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "AUTO-C-08",
+      "endpoint": "POST /ai/automations",
+      "test_name": "Create SCHEDULED automation - missing schedule (validation error)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 5,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "AUTO-C-09",
+      "endpoint": "POST /ai/automations",
+      "test_name": "Create EVENT automation - missing eventType (validation error)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 11,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "AUTO-C-10",
+      "endpoint": "POST /ai/automations",
+      "test_name": "Create automation - invalid triggerType (validation error)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 10,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "AUTO-C-12",
+      "endpoint": "POST /ai/automations",
+      "test_name": "Create automation - step with invalid agentId (validation error)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 8,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "AUTO-C-13",
+      "endpoint": "POST /ai/automations",
+      "test_name": "Create automation - maxTokenBudget below minimum (validation error)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 21,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "MDL-C-03",
+      "endpoint": "POST /ai/admin/models",
+      "test_name": "Create model - missing required name (400)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 5,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "MDL-C-06",
+      "endpoint": "POST /ai/admin/models",
+      "test_name": "Create model - negative maxInputTokens (400)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 4,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "PRM-C-02",
+      "endpoint": "POST /ai/admin/prompts",
+      "test_name": "Create prompt - missing name (400)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 5,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "PRM-C-03",
+      "endpoint": "POST /ai/admin/prompts",
+      "test_name": "Create prompt - invalid category (400)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 11,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "PRM-C-04",
+      "endpoint": "POST /ai/admin/prompts",
+      "test_name": "Create prompt - invalid name pattern (400)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 9,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "SKL-C-02",
+      "endpoint": "POST /ai/admin/skills",
+      "test_name": "Create skill - missing triggerPhrases (400)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 6,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "SKL-C-03",
+      "endpoint": "POST /ai/admin/skills",
+      "test_name": "Create skill - invalid category (400)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 5,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "SKL-TT-03",
+      "endpoint": "POST /ai/admin/skills/test-trigger",
+      "test_name": "Test trigger - empty phrase (400)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 6,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "VAR-C-04",
+      "endpoint": "POST /ai/variables",
+      "test_name": "Create variable - missing variableName (400)",
+      "type": "validation_error",
+      "status": "skip",
+      "expected_status": "400",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'seeded_prompt_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "VAR-C-05",
+      "endpoint": "POST /ai/variables",
+      "test_name": "Create variable - invalid sourceType (400)",
+      "type": "validation_error",
+      "status": "skip",
+      "expected_status": "400",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'seeded_prompt_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "AGT-C-03",
+      "endpoint": "POST /ai/admin/agents",
+      "test_name": "Create agent - duplicate name (409 or 422)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "409 or 422",
+      "actual_status": 400,
+      "elapsed_ms": 7,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "409 or 422",
+          "actual": "400",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 409 or 422, got 400"
+    },
+    {
+      "test_id": "AUTO-C-11",
+      "endpoint": "POST /ai/automations",
+      "test_name": "Create automation - circular chain (422)",
+      "type": "edge_case",
+      "status": "skip",
+      "expected_status": "422",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Requires complex multi-step setup (circular chain detection)"
+    },
+    {
+      "test_id": "AUTO-C-14",
+      "endpoint": "POST /ai/automations",
+      "test_name": "Create automation - no auth token (401)",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": "401",
+      "actual_status": 401,
+      "elapsed_ms": 1,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "401",
+          "actual": "401",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "EXEC-03",
+      "endpoint": "POST /ai/automations/:id/run",
+      "test_name": "Run Now - automation not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 7,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "EXEC-04",
+      "endpoint": "POST /ai/automations/:id/run",
+      "test_name": "Run Now - inactive automation (should reject or 503)",
+      "type": "edge_case",
+      "status": "skip",
+      "expected_status": "422 or 503",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'deactivated_automation_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "MDL-C-04",
+      "endpoint": "POST /ai/admin/models",
+      "test_name": "Create model - duplicate name (409 or 422)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "409 or 422",
+      "actual_status": 503,
+      "elapsed_ms": 4,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "409 or 422",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 409 or 422, got 503"
+    },
+    {
+      "test_id": "MDL-C-05",
+      "endpoint": "POST /ai/admin/models",
+      "test_name": "Create model - circular fallback chain (422)",
+      "type": "edge_case",
+      "status": "skip",
+      "expected_status": "422",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Requires complex multi-step setup (circular chain detection)"
+    },
+    {
+      "test_id": "PRM-C-05",
+      "endpoint": "POST /ai/admin/prompts",
+      "test_name": "Create prompt - duplicate name (409 or 422)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "409 or 422",
+      "actual_status": 503,
+      "elapsed_ms": 8,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "409 or 422",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 409 or 422, got 503"
+    },
+    {
+      "test_id": "PRM-T-02",
+      "endpoint": "POST /ai/admin/prompts/:id/test",
+      "test_name": "Test render - prompt not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 6,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "RUN-RT-02",
+      "endpoint": "POST /ai/automations/runs/:runId/retry",
+      "test_name": "Retry - run not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 5,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "RUN-RT-03",
+      "endpoint": "POST /ai/automations/runs/:runId/retry",
+      "test_name": "Retry - run is not FAILED (should reject)",
+      "type": "edge_case",
+      "status": "skip",
+      "expected_status": "422 or 400",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'completed_run_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "SKL-C-04",
+      "endpoint": "POST /ai/admin/skills",
+      "test_name": "Create skill - duplicate name (409 or 422)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "409 or 422",
+      "actual_status": 503,
+      "elapsed_ms": 4,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "409 or 422",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 409 or 422, got 503"
+    },
+    {
+      "test_id": "SKL-TT-02",
+      "endpoint": "POST /ai/admin/skills/test-trigger",
+      "test_name": "Test trigger - no matching phrase",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 6,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "VAR-C-06",
+      "endpoint": "POST /ai/variables",
+      "test_name": "Create variable - duplicate variableName for same prompt (409 or 422)",
+      "type": "edge_case",
+      "status": "skip",
+      "expected_status": "409 or 422",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'seeded_prompt_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "VAR-T-02",
+      "endpoint": "POST /ai/variables/:id/test",
+      "test_name": "Test resolve - variable not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 6,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "VER-R-02",
+      "endpoint": "POST /ai/admin/prompts/:id/versions/:version/restore",
+      "test_name": "Restore version - version not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 400,
+      "elapsed_ms": 9,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "400",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 400"
+    },
+    {
+      "test_id": "AGT-G-01",
+      "endpoint": "GET /ai/admin/agents/:id",
+      "test_name": "Get agent detail - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'seeded_agent_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "AGT-L-01",
+      "endpoint": "GET /ai/admin/agents",
+      "test_name": "List agents - happy path",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 8,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "data"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "AGT-L-02",
+      "endpoint": "GET /ai/admin/agents",
+      "test_name": "List agents - filter by isActive",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 5,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "AGT-L-03",
+      "endpoint": "GET /ai/admin/agents",
+      "test_name": "List agents - search by name",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 6,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "data"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "AGT-L-04",
+      "endpoint": "GET /ai/admin/agents",
+      "test_name": "List agents - filter by modelId",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'seeded_model_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "AUTO-G-01",
+      "endpoint": "GET /ai/automations/:id",
+      "test_name": "Get automation detail - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'existing_automation_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "AUTO-L-01",
+      "endpoint": "GET /ai/automations",
+      "test_name": "List automations - happy path (default params)",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 4,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "data"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "AUTO-L-02",
+      "endpoint": "GET /ai/automations",
+      "test_name": "List automations - filter by triggerType=SCHEDULED",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 4,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "AUTO-L-03",
+      "endpoint": "GET /ai/automations",
+      "test_name": "List automations - filter by status=active",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 3,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "AUTO-L-04",
+      "endpoint": "GET /ai/automations",
+      "test_name": "List automations - pagination with cursor",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 4,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "data",
+            "meta"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "DASH-01",
+      "endpoint": "GET /ai/admin/dashboard",
+      "test_name": "Get dashboard summary - happy path (default 30 days)",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 5,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "activeModels",
+            "activeAgents",
+            "activeSkills",
+            "automations",
+            "dailyTokenUsage"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "DASH-02",
+      "endpoint": "GET /ai/admin/dashboard",
+      "test_name": "Get dashboard summary - custom days param",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 5,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "EXEC-R-01",
+      "endpoint": "GET /ai/automations/:id/runs",
+      "test_name": "List runs for automation - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'existing_automation_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "EXEC-R-03",
+      "endpoint": "GET /ai/automations/:id/runs",
+      "test_name": "List runs - filter by status=FAILED",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 400,
+      "elapsed_ms": 4,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "400",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 400"
+    },
+    {
+      "test_id": "MDL-G-01",
+      "endpoint": "GET /ai/admin/models/:id",
+      "test_name": "Get model detail - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'seeded_model_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "MDL-L-01",
+      "endpoint": "GET /ai/admin/models",
+      "test_name": "List models - happy path",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 36,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "data"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "MDL-L-02",
+      "endpoint": "GET /ai/admin/models",
+      "test_name": "List models - filter by provider",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 19,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "MDL-L-03",
+      "endpoint": "GET /ai/admin/models",
+      "test_name": "List models - filter by isActive=true",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 25,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "MDL-L-04",
+      "endpoint": "GET /ai/admin/models",
+      "test_name": "List models - search by name",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 24,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "PRM-G-01",
+      "endpoint": "GET /ai/admin/prompts/:id",
+      "test_name": "Get prompt detail - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'seeded_prompt_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "PRM-L-01",
+      "endpoint": "GET /ai/admin/prompts",
+      "test_name": "List prompts - happy path",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 15,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "data"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "PRM-L-02",
+      "endpoint": "GET /ai/admin/prompts",
+      "test_name": "List prompts - filter by category",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 6,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "PRM-L-03",
+      "endpoint": "GET /ai/admin/prompts",
+      "test_name": "List prompts - search by name",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 6,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "data"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "RUN-G-01",
+      "endpoint": "GET /ai/automations/runs/:runId",
+      "test_name": "Get run detail - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'existing_run_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "RUN-L-01",
+      "endpoint": "GET /ai/automations/runs",
+      "test_name": "List all runs - happy path",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 12,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "data"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "RUN-L-02",
+      "endpoint": "GET /ai/automations/runs",
+      "test_name": "List runs - filter by status",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 7,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "RUN-L-03",
+      "endpoint": "GET /ai/automations/runs",
+      "test_name": "List runs - filter by date range",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 4,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "RUN-L-04",
+      "endpoint": "GET /ai/automations/runs",
+      "test_name": "List runs - pagination with limit",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 6,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "SKL-G-01",
+      "endpoint": "GET /ai/admin/skills/:id",
+      "test_name": "Get skill detail - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'seeded_skill_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "SKL-L-01",
+      "endpoint": "GET /ai/admin/skills",
+      "test_name": "List skills - happy path (flat)",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 8,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "data"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "SKL-L-02",
+      "endpoint": "GET /ai/admin/skills",
+      "test_name": "List skills - grouped by module",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 7,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "data"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "SKL-L-03",
+      "endpoint": "GET /ai/admin/skills",
+      "test_name": "List skills - filter by moduleKey",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 7,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "SKL-L-04",
+      "endpoint": "GET /ai/admin/skills",
+      "test_name": "List skills - filter by category",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 6,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "SKL-L-05",
+      "endpoint": "GET /ai/admin/skills",
+      "test_name": "List skills - search by name",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 5,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "data"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "VAR-L-01",
+      "endpoint": "GET /ai/variables",
+      "test_name": "List all variables - happy path",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 5,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "data"
+          ],
+          "actual": "missing",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "VAR-L-02",
+      "endpoint": "GET /ai/variables",
+      "test_name": "List variables - filter by promptId",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'seeded_prompt_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "VER-G-01",
+      "endpoint": "GET /ai/admin/prompts/:id/versions/:version",
+      "test_name": "Get version 1 - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'seeded_prompt_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "VER-L-01",
+      "endpoint": "GET /ai/admin/prompts/:id/versions",
+      "test_name": "List prompt versions - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'seeded_prompt_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "AUTO-G-03",
+      "endpoint": "GET /ai/automations/:id",
+      "test_name": "Get automation - invalid UUID format",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 5,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "DASH-03",
+      "endpoint": "GET /ai/admin/dashboard",
+      "test_name": "Get dashboard - days exceeds max (400)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": "400",
+      "actual_status": 400,
+      "elapsed_ms": 5,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "400",
+          "actual": "400",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "AGT-G-02",
+      "endpoint": "GET /ai/admin/agents/:id",
+      "test_name": "Get agent - not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 8,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "AUTO-G-02",
+      "endpoint": "GET /ai/automations/:id",
+      "test_name": "Get automation - not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 4,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "AUTO-L-05",
+      "endpoint": "GET /ai/automations",
+      "test_name": "List automations - empty result for non-matching filter",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 4,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "DASH-04",
+      "endpoint": "GET /ai/admin/dashboard",
+      "test_name": "Get dashboard - no auth (401)",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": "401",
+      "actual_status": 401,
+      "elapsed_ms": 1,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "401",
+          "actual": "401",
+          "passed": true
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": null
+    },
+    {
+      "test_id": "EXEC-R-02",
+      "endpoint": "GET /ai/automations/:id/runs",
+      "test_name": "List runs - automation with no runs (empty array)",
+      "type": "edge_case",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'automation_with_no_runs_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "MDL-G-02",
+      "endpoint": "GET /ai/admin/models/:id",
+      "test_name": "Get model - not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 7,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "PRM-G-02",
+      "endpoint": "GET /ai/admin/prompts/:id",
+      "test_name": "Get prompt - not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 11,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "RUN-G-02",
+      "endpoint": "GET /ai/automations/runs/:runId",
+      "test_name": "Get run detail - not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 5,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "RUN-L-05",
+      "endpoint": "GET /ai/automations/runs",
+      "test_name": "List runs - empty result for future dates",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "200",
+      "actual_status": 503,
+      "elapsed_ms": 4,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "200",
+          "actual": "503",
+          "passed": false
+        }
+      ],
+      "error": "Expected 200, got 503"
+    },
+    {
+      "test_id": "SKL-G-02",
+      "endpoint": "GET /ai/admin/skills/:id",
+      "test_name": "Get skill - not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 4,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "VER-G-02",
+      "endpoint": "GET /ai/admin/prompts/:id/versions/:version",
+      "test_name": "Get version - version does not exist (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 400,
+      "elapsed_ms": 4,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "400",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 400"
+    },
+    {
+      "test_id": "VER-L-02",
+      "endpoint": "GET /ai/admin/prompts/:id/versions",
+      "test_name": "List versions - prompt not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 4,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "AGT-U-01",
+      "endpoint": "PATCH /ai/admin/agents/:id",
+      "test_name": "Update agent displayName - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'created_agent_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "AGT-U-02",
+      "endpoint": "PATCH /ai/admin/agents/:id",
+      "test_name": "Update agent - toggle isActive",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'created_agent_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "AUTO-U-01",
+      "endpoint": "PATCH /ai/automations/:id",
+      "test_name": "Update automation name - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'existing_automation_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "AUTO-U-02",
+      "endpoint": "PATCH /ai/automations/:id",
+      "test_name": "Update automation - toggle isActive",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'existing_automation_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "MDL-U-01",
+      "endpoint": "PATCH /ai/admin/models/:id",
+      "test_name": "Update model displayName - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'created_model_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "PRM-U-01",
+      "endpoint": "PATCH /ai/admin/prompts/:id",
+      "test_name": "Update prompt content - creates new version",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'created_prompt_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "PRM-U-02",
+      "endpoint": "PATCH /ai/admin/prompts/:id",
+      "test_name": "Update prompt metadata only - no new version",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'created_prompt_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "SKL-DA-01",
+      "endpoint": "PATCH /ai/admin/skills/:id/deactivate",
+      "test_name": "Deactivate skill - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'created_skill_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "SKL-U-01",
+      "endpoint": "PATCH /ai/admin/skills/:id",
+      "test_name": "Update skill - change trigger phrases",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'created_skill_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "SKL-U-02",
+      "endpoint": "PATCH /ai/admin/skills/:id",
+      "test_name": "Update skill - toggle isActive",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'created_skill_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "VAR-U-01",
+      "endpoint": "PATCH /ai/variables/:id",
+      "test_name": "Update variable displayName - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "200",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'existing_variable_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "PRM-U-03",
+      "endpoint": "PATCH /ai/admin/prompts/:id",
+      "test_name": "Update prompt content - missing changeReason (400)",
+      "type": "validation_error",
+      "status": "skip",
+      "expected_status": "400",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'created_prompt_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "AGT-U-03",
+      "endpoint": "PATCH /ai/admin/agents/:id",
+      "test_name": "Update agent - not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 8,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "AUTO-U-03",
+      "endpoint": "PATCH /ai/automations/:id",
+      "test_name": "Update automation - set circular chainNextId (422)",
+      "type": "edge_case",
+      "status": "skip",
+      "expected_status": "422",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'automation_A_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "AUTO-U-04",
+      "endpoint": "PATCH /ai/automations/:id",
+      "test_name": "Update automation - not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 9,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "MDL-U-02",
+      "endpoint": "PATCH /ai/admin/models/:id",
+      "test_name": "Update model - deactivate default model (422)",
+      "type": "edge_case",
+      "status": "skip",
+      "expected_status": "422",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'default_model_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "MDL-U-03",
+      "endpoint": "PATCH /ai/admin/models/:id",
+      "test_name": "Update model - set circular fallback (422)",
+      "type": "edge_case",
+      "status": "skip",
+      "expected_status": "422",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'model_A_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "MDL-U-04",
+      "endpoint": "PATCH /ai/admin/models/:id",
+      "test_name": "Update model - not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 6,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "PRM-U-04",
+      "endpoint": "PATCH /ai/admin/prompts/:id",
+      "test_name": "Update prompt - not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 5,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "SKL-DA-02",
+      "endpoint": "PATCH /ai/admin/skills/:id/deactivate",
+      "test_name": "Deactivate skill - not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 4,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "SKL-U-03",
+      "endpoint": "PATCH /ai/admin/skills/:id",
+      "test_name": "Update skill - not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 9,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "VAR-U-02",
+      "endpoint": "PATCH /ai/variables/:id",
+      "test_name": "Update variable - not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 8,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "AGT-D-01",
+      "endpoint": "DELETE /ai/admin/agents/:id",
+      "test_name": "Delete unreferenced agent - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "204",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'unreferenced_agent_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "AUTO-D-01",
+      "endpoint": "DELETE /ai/automations/:id",
+      "test_name": "Delete automation - happy path (soft delete)",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "204",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'created_automation_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "MDL-D-01",
+      "endpoint": "DELETE /ai/admin/models/:id",
+      "test_name": "Delete unreferenced model - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "204",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'unreferenced_model_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "PRM-D-01",
+      "endpoint": "DELETE /ai/admin/prompts/:id",
+      "test_name": "Delete unreferenced prompt - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "204",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'unreferenced_prompt_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "VAR-D-01",
+      "endpoint": "DELETE /ai/variables/:id",
+      "test_name": "Delete variable - happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": "204",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'created_variable_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "AGT-D-02",
+      "endpoint": "DELETE /ai/admin/agents/:id",
+      "test_name": "Delete agent referenced by automation step (422)",
+      "type": "edge_case",
+      "status": "skip",
+      "expected_status": "422",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'agent_used_in_automation_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "AGT-D-03",
+      "endpoint": "DELETE /ai/admin/agents/:id",
+      "test_name": "Delete agent - not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 8,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "AUTO-D-02",
+      "endpoint": "DELETE /ai/automations/:id",
+      "test_name": "Delete automation - not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 8,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "MDL-D-02",
+      "endpoint": "DELETE /ai/admin/models/:id",
+      "test_name": "Delete model referenced by agent (422)",
+      "type": "edge_case",
+      "status": "skip",
+      "expected_status": "422",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'model_used_by_agent_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "MDL-D-03",
+      "endpoint": "DELETE /ai/admin/models/:id",
+      "test_name": "Delete model - not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 4,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "PRM-D-02",
+      "endpoint": "DELETE /ai/admin/prompts/:id",
+      "test_name": "Delete prompt referenced by agent (422)",
+      "type": "edge_case",
+      "status": "skip",
+      "expected_status": "422",
+      "actual_status": 0,
+      "elapsed_ms": 0,
+      "assertions": [],
+      "error": "Required context variable 'prompt_used_by_agent_id' is empty (dependency not available)"
+    },
+    {
+      "test_id": "PRM-D-03",
+      "endpoint": "DELETE /ai/admin/prompts/:id",
+      "test_name": "Delete prompt - not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 6,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    },
+    {
+      "test_id": "VAR-D-02",
+      "endpoint": "DELETE /ai/variables/:id",
+      "test_name": "Delete variable - not found (404)",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": "404",
+      "actual_status": 503,
+      "elapsed_ms": 6,
+      "assertions": [
+        {
+          "check": "status_code",
+          "expected": "404",
+          "actual": "503",
+          "passed": false
+        },
+        {
+          "check": "body_contains",
+          "expected": [
+            "error"
+          ],
+          "actual": "present",
+          "passed": true
+        }
+      ],
+      "error": "Expected 404, got 503"
+    }
+  ]
+}

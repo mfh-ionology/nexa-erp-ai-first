@@ -690,10 +690,16 @@
 | `GET` | `/conference/rooms/:id/access` | Room access rules | MANAGER | FR145 |
 | `POST` | `/conference/rooms/:id/access` | Grant access | MANAGER | FR145 |
 | `GET` | `/notifications` | List notifications | STAFF | FR145 |
+| `GET` | `/notifications/unread-count` | Get unread notification count | STAFF | FR145 |
 | `PATCH` | `/notifications/:id/read` | Mark notification as read | STAFF | FR145 |
 | `POST` | `/notifications/:id/dismiss` | Dismiss notification | STAFF | FR145 |
 | `GET` | `/notifications/preferences` | Get notification prefs | STAFF | FR145 |
 | `PUT` | `/notifications/preferences` | Update notification prefs | STAFF | FR145 |
+| `GET` | `/notifications/templates` | List notification templates | ADMIN | FR145 |
+| `GET` | `/notifications/templates/:id` | Get notification template | ADMIN | FR145 |
+| `POST` | `/notifications/templates` | Create notification template | ADMIN | FR145 |
+| `PATCH` | `/notifications/templates/:id` | Update notification template | ADMIN | FR145 |
+| `DELETE` | `/notifications/templates/:id` | Soft-delete notification template | ADMIN | FR145 |
 
 ## 2.26 Service Orders & Timekeeper
 

@@ -20,6 +20,7 @@ export const TRANSLATION_NAMESPACES: readonly CoreTranslationNamespace[] = [
   'system',
   'mobile',
   'ai',
+  'notifications',
 ] as const;
 
 /**

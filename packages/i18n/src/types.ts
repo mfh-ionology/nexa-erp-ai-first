@@ -14,7 +14,8 @@ export type CoreTranslationNamespace =
   | 'errors'
   | 'system'
   | 'mobile'
-  | 'ai';
+  | 'ai'
+  | 'notifications';
 
 /**
  * All translation namespaces. Extensible — business module epics add

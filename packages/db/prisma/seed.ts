@@ -11,6 +11,7 @@ import { seedViewsSkillPack } from './seeds/skill-packs/views.js';
 import { seedViewsModuleKnowledge } from './seeds/module-knowledge/views.js';
 import { seedViewsEntityTriggers } from './seeds/entity-triggers/views.js';
 import { seedAutomationData } from './seeds/automation-seed.js';
+import { seedNotificationTemplates } from './seeds/notification-templates.seed.js';
 
 // Seed uses DIRECT_URL (bypasses PgBouncer) for reliable transactional seeding.
 // Runtime client (src/client.ts) uses DATABASE_URL via PgBouncer instead.
@@ -759,6 +760,13 @@ async function main() {
     await seedAutomationData(prisma, DEFAULT_COMPANY_ID, DEFAULT_USER_ID);
   } catch (e) {
     console.error('Failed to seed automation data:', e);
+  }
+
+  // ── Notification Template Seed Data — E9.1 Task 7.3 ──────────────────
+  try {
+    await seedNotificationTemplates(prisma);
+  } catch (e) {
+    console.error('Failed to seed notification templates:', e);
   }
 
   console.log('Seeding complete.');

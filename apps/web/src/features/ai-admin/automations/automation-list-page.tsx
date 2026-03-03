@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useNavigate } from '@tanstack/react-router';
 import { formatDistanceToNow } from 'date-fns';
-import { MoreHorizontal, Pencil, Play, Trash2 } from 'lucide-react';
+import { History, MoreHorizontal, Pencil, Play, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
@@ -39,49 +39,15 @@ import {
 import { EntityListPage } from '@/components/templates/entity-list-page';
 import { cn } from '@/lib/utils';
 
-import type {
-  AiAutomationListItem,
-  AutomationRunStatus,
-  AutomationTriggerType,
-} from '../api/types';
+import type { AiAutomationListItem, AutomationTriggerType } from '../api/types';
 import {
   useAiAutomations,
   useDeleteAiAutomation,
   useRunAutomation,
   useToggleAutomationActive,
 } from '../api/use-ai-automations';
+import { RUN_STATUS_CONFIG, TRIGGER_BADGE_CONFIG } from '../shared/automation-constants';
 import { cronToHumanReadable } from './components/cron-builder';
-
-// ─── Trigger type badge config ───────────────────────────────────────────────
-
-const TRIGGER_BADGE_CONFIG: Record<AutomationTriggerType, { label: string; className: string }> = {
-  SCHEDULED: {
-    label: 'Scheduled',
-    className: 'bg-[#f5f3ff] text-[#7c3aed] border border-[#7c3aed]/20',
-  },
-  EVENT: {
-    label: 'Event',
-    className: 'bg-[#eff6ff] text-[#2563eb] border border-[#2563eb]/20',
-  },
-  CHAIN: {
-    label: 'Chain',
-    className: 'bg-[#fffbeb] text-[#d97706] border border-[#d97706]/20',
-  },
-  MANUAL: {
-    label: 'Manual',
-    className: 'bg-[#f3f4f6] text-[#6b7280] border border-[#6b7280]/20',
-  },
-};
-
-// ─── Run status config ───────────────────────────────────────────────────────
-
-const RUN_STATUS_CONFIG: Record<AutomationRunStatus, { label: string; dotColor: string }> = {
-  COMPLETED: { label: 'Completed', dotColor: 'bg-[#10b981]' },
-  FAILED: { label: 'Failed', dotColor: 'bg-[#dc2626]' },
-  RUNNING: { label: 'Running', dotColor: 'bg-[#f59e0b]' },
-  PENDING: { label: 'Pending', dotColor: 'bg-[#d1d5db]' },
-  CANCELLED: { label: 'Cancelled', dotColor: 'bg-[#9ca3af]' },
-};
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -219,12 +185,34 @@ export function AutomationListPage() {
       {
         accessorKey: 'lastRunStatus',
         header: 'Last Run',
-        cell: ({ getValue }) => {
-          const status = getValue<AutomationRunStatus | null>();
+        cell: ({ row }) => {
+          const status = row.original.lastRunStatus;
+          const lastRunId = row.original.lastRunId;
           if (!status) {
             return <span className="text-sm text-muted-foreground">Never run</span>;
           }
           const config = RUN_STATUS_CONFIG[status];
+          if (lastRunId) {
+            return (
+              <button
+                type="button"
+                className="flex items-center gap-2 rounded-md px-1.5 py-0.5 transition-colors hover:bg-[#f5f3ff]"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void navigate({
+                    to: '/ai/admin/automations/runs/$runId' as string,
+                    params: { runId: lastRunId },
+                  });
+                }}
+                title="View run details"
+              >
+                <span className={cn('size-2 rounded-full', config.dotColor)} aria-hidden="true" />
+                <span className="text-sm underline decoration-dotted underline-offset-2">
+                  {config.label}
+                </span>
+              </button>
+            );
+          }
           return (
             <div className="flex items-center gap-2">
               <span className={cn('size-2 rounded-full', config.dotColor)} aria-hidden="true" />
@@ -291,6 +279,17 @@ export function AutomationListPage() {
                 >
                   <Pencil className="mr-2 size-4" />
                   Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    void navigate({
+                      to: '/ai/admin/automations/runs' as string,
+                      search: { automationId: automation.id, automationName: automation.name },
+                    })
+                  }
+                >
+                  <History className="mr-2 size-4" />
+                  View Runs
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setRunTarget(automation)}>
                   <Play className="mr-2 size-4" />

@@ -29,6 +29,8 @@ import { deadLetterPlugin } from './core/events/dead-letter.plugin.js';
 import { platformClientPlugin } from './core/platform/platform-client.plugin.js';
 import { platformWebhookPlugin } from './core/webhooks/platform-webhook.routes.js';
 import { crossCuttingModulePlugin } from './modules/cross-cutting/index.js';
+import { notificationDispatchPlugin } from './modules/communications/notifications/notification-dispatch.plugin.js';
+import { communicationsModulePlugin } from './modules/communications/index.js';
 import { aiPlugin } from './ai/index.js';
 import { createRequire } from 'node:module';
 
@@ -113,6 +115,12 @@ export async function buildApp(opts: { logger?: boolean | Record<string, unknown
 
   // -- Dead-letter queue + retry (depends on event-bus — after audit, before routes)
   await fastify.register(deadLetterPlugin);
+
+  // -- Notification dispatch queue + worker (depends on dead-letter / Redis)
+  await fastify.register(notificationDispatchPlugin);
+
+  // -- Communications module (notification event subscribers — depends on event-bus + dispatch)
+  await fastify.register(communicationsModulePlugin);
 
   // -- Platform Client SDK (singleton — before webhook route)
   await fastify.register(platformClientPlugin);

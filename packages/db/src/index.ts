@@ -54,6 +54,10 @@ export type {
   AiAutomationStepRun,
   AiPromptVariable,
   RecordLink,
+  NotificationTemplate,
+  NotificationPreference,
+  NotificationRoleDefault,
+  Notification,
 } from '../generated/prisma/client';
 
 // Enums
@@ -76,6 +80,9 @@ export {
   FilterOperator,
   NoteType,
   RecordLinkType,
+  NotificationChannel,
+  NotificationPriority,
+  NotificationStatus,
 } from '../generated/prisma/client';
 
 // Utilities

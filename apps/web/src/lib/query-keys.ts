@@ -83,6 +83,18 @@ export const queryKeys = {
     count: (entityType: string, entityId: string) =>
       [...queryKeys.recordLinks.all, 'count', entityType, entityId] as const,
   },
+  notifications: {
+    all: ['notifications'] as const,
+    list: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.notifications.all, 'list', params] as const)
+        : ([...queryKeys.notifications.all, 'list'] as const),
+    unreadCount: () => [...queryKeys.notifications.all, 'unread-count'] as const,
+    detail: (id: string) => [...queryKeys.notifications.all, 'detail', id] as const,
+    preferences: () => [...queryKeys.notifications.all, 'preferences'] as const,
+    roleDefaults: (role: string) =>
+      [...queryKeys.notifications.all, 'role-defaults', role] as const,
+  },
   aiAdmin: {
     all: ['ai-admin'] as const,
     dashboard: (params?: Record<string, unknown>) =>
@@ -145,8 +157,13 @@ export const queryKeys = {
       params
         ? ([...queryKeys.aiAdmin.all, 'automations', automationId, 'runs', params] as const)
         : ([...queryKeys.aiAdmin.all, 'automations', automationId, 'runs'] as const),
+    automationRunsAll: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'automations', 'runs', 'all', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'automations', 'runs', 'all'] as const),
     automationRun: (runId: string) =>
       [...queryKeys.aiAdmin.all, 'automations', 'runs', runId] as const,
+    automationHealth: () => [...queryKeys.aiAdmin.all, 'automations', 'health'] as const,
     automationVariables: (params?: Record<string, unknown>) =>
       params
         ? ([...queryKeys.aiAdmin.all, 'variables', params] as const)

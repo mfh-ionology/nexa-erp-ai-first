@@ -1,0 +1,187 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+    - generic [ref=e2]:
+        - generic [ref=e3]:
+            - link "Skip to content" [ref=e4] [cursor=pointer]:
+                - /url: '#main-content'
+            - complementary [ref=e6]:
+                - navigation "Navigation" [ref=e7]:
+                    - img [ref=e10]
+                    - generic [ref=e17]:
+                        - generic [ref=e18]:
+                            - generic [ref=e19]: Main
+                            - link "Dashboard" [ref=e21] [cursor=pointer]:
+                                - /url: /
+                                - img [ref=e22]
+                                - text: Dashboard
+                        - generic [ref=e27]:
+                            - generic [ref=e28]: Operations
+                            - generic [ref=e29]:
+                                - link "Finance" [ref=e30] [cursor=pointer]:
+                                    - /url: /finance
+                                    - img [ref=e31]
+                                    - text: Finance
+                                - link "Accounts Receivable" [ref=e33] [cursor=pointer]:
+                                    - /url: /ar
+                                    - img [ref=e34]
+                                    - text: Accounts Receivable
+                                - link "Accounts Payable" [ref=e37] [cursor=pointer]:
+                                    - /url: /ap
+                                    - img [ref=e38]
+                                    - text: Accounts Payable
+                                - link "Sales" [ref=e41] [cursor=pointer]:
+                                    - /url: /sales
+                                    - img [ref=e42]
+                                    - text: Sales
+                                - link "Purchasing" [ref=e46] [cursor=pointer]:
+                                    - /url: /purchasing
+                                    - img [ref=e47]
+                                    - text: Purchasing
+                                - link "Inventory" [ref=e49] [cursor=pointer]:
+                                    - /url: /inventory
+                                    - img [ref=e50]
+                                    - text: Inventory
+                        - generic [ref=e53]:
+                            - generic [ref=e54]: Other
+                            - generic [ref=e55]:
+                                - link "CRM" [ref=e56] [cursor=pointer]:
+                                    - /url: /crm
+                                    - img [ref=e57]
+                                    - text: CRM
+                                - link "HR & Payroll" [ref=e60] [cursor=pointer]:
+                                    - /url: /hr
+                                    - img [ref=e61]
+                                    - text: HR & Payroll
+                                - link "Manufacturing" [ref=e66] [cursor=pointer]:
+                                    - /url: /manufacturing
+                                    - img [ref=e67]
+                                    - text: Manufacturing
+                                - link "Reporting" [ref=e69] [cursor=pointer]:
+                                    - /url: /reporting
+                                    - img [ref=e70]
+                                    - text: Reporting
+                        - generic [ref=e72]:
+                            - generic [ref=e74]: AI
+                            - generic [ref=e75]:
+                                - link "Morning Briefing" [ref=e76] [cursor=pointer]:
+                                    - /url: /ai/briefing
+                                    - img [ref=e77]
+                                    - text: Morning Briefing
+                                - link "My Memory" [ref=e83] [cursor=pointer]:
+                                    - /url: /ai/memory
+                                    - img [ref=e84]
+                                    - text: My Memory
+                                - link "Skills" [ref=e92] [cursor=pointer]:
+                                    - /url: /ai/skills
+                                    - img [ref=e93]
+                                    - text: Skills
+                                - link "AI Administration" [ref=e96] [cursor=pointer]:
+                                    - /url: /ai/admin
+                                    - img [ref=e97]
+                                    - text: AI Administration
+                                - link "Model Registry" [ref=e100] [cursor=pointer]:
+                                    - /url: /ai/admin/models
+                                    - img [ref=e101]
+                                    - text: Model Registry
+                                - link "Prompt Templates" [ref=e104] [cursor=pointer]:
+                                    - /url: /ai/admin/prompts
+                                    - img [ref=e105]
+                                    - text: Prompt Templates
+                        - generic [ref=e110]:
+                            - generic [ref=e112]: Administration
+                            - generic [ref=e113]:
+                                - link "Settings" [ref=e114] [cursor=pointer]:
+                                    - /url: /system/settings
+                                    - img [ref=e115]
+                                    - text: Settings
+                                - link "Users" [ref=e118] [cursor=pointer]:
+                                    - /url: /system/users
+                                    - img [ref=e119]
+                                    - text: Users
+                                - link "Access Groups" [ref=e124] [cursor=pointer]:
+                                    - /url: /system/access-groups
+                                    - img [ref=e125]
+                                    - text: Access Groups
+                    - button "Collapse sidebar" [ref=e130]:
+                        - img [ref=e131]
+            - generic [ref=e133]:
+                - banner [ref=e134]:
+                    - combobox "Search or ask Nexa AI" [ref=e136] [cursor=pointer]:
+                        - img [ref=e137]
+                        - generic [ref=e140]:
+                            - text: Search or Ask Nexa anything...
+                            - generic:
+                                - generic: ⌘
+                                - text: K
+                    - generic [ref=e141]:
+                        - generic [ref=e142]: Tue, Mar 3, 2026
+                        - button "Open Co-Pilot" [ref=e143]:
+                            - img
+                        - button "Notifications, 0 unread" [ref=e144]:
+                            - img [ref=e145]
+                        - button "Favourites" [ref=e148]:
+                            - img
+                        - button "User menu" [ref=e149]:
+                            - generic [ref=e151]: AU
+                - generic [ref=e152]:
+                    - main "Main content" [ref=e153]:
+                        - main "Prompt Templates" [ref=e154]:
+                            - generic [ref=e155]:
+                                - navigation "breadcrumb" [ref=e156]:
+                                    - list [ref=e157]:
+                                        - listitem [ref=e158]:
+                                            - link "AI Administration" [ref=e159] [cursor=pointer]:
+                                                - /url: /ai/admin
+                                        - listitem [ref=e160]:
+                                            - img [ref=e161]
+                                        - listitem [ref=e163]:
+                                            - link "Prompt Templates" [disabled] [ref=e164]
+                                - generic [ref=e165]:
+                                    - heading "Prompt Templates" [level=1] [ref=e167]
+                                    - generic [ref=e169]:
+                                        - button "New" [ref=e170]:
+                                            - img
+                                            - text: New
+                                        - button "AI" [ref=e171]:
+                                            - img
+                            - generic [ref=e173]:
+                                - generic [ref=e174]:
+                                    - img [ref=e175]
+                                    - textbox "Search" [ref=e178]:
+                                        - /placeholder: Search by name or description...
+                                - combobox "Filter by category" [ref=e179]:
+                                    - generic: All Categories
+                                    - img
+                            - generic [ref=e181]:
+                                - table [ref=e183]:
+                                    - rowgroup [ref=e184]:
+                                        - row "Name Category Version Variables Status Last Updated" [ref=e185]:
+                                            - columnheader "Name" [ref=e186]
+                                            - columnheader "Category" [ref=e187]
+                                            - columnheader "Version" [ref=e188]
+                                            - columnheader "Variables" [ref=e189]
+                                            - columnheader "Status" [ref=e190]
+                                            - columnheader "Last Updated" [ref=e191]
+                                            - columnheader [ref=e192]
+                                - status [ref=e193]:
+                                    - img [ref=e195]
+                                    - paragraph [ref=e200]: No results found
+                                    - paragraph [ref=e201]: Try adjusting your search or filters
+                    - complementary "AI Co-Pilot assistant"
+        - generic:
+            - contentinfo:
+                - button "Open TanStack Router Devtools" [ref=e202] [cursor=pointer]:
+                    - generic [ref=e203]:
+                        - img [ref=e205]
+                        - img [ref=e240]
+                    - generic [ref=e274]: '-'
+                    - generic [ref=e275]: TanStack Router
+        - region "Notifications alt+T"
+        - generic [ref=e276]:
+            - img [ref=e278]
+            - button "Open Tanstack query devtools" [ref=e326] [cursor=pointer]:
+                - img [ref=e327]
+    - generic [ref=e375]: £25k
+```

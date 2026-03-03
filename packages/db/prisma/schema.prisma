@@ -1642,3 +1642,197 @@ model RecordLink {
   @@index([targetEntityType, targetEntityId], map: "idx_record_links_target")
   @@index([linkType], map: "idx_record_links_link_type")
 }
+
+// ---------------------------------------------------------------------------
+// Communications Module — E9.1 Notification Service (Architecture §2.29)
+// ---------------------------------------------------------------------------
+// Notification system enums and models. Notifications are scoped by userId
+// (the recipient), NOT by companyId. Template management is system-level.
+// ---------------------------------------------------------------------------
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  PUSH
+
+  @@map("notification_channel")
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+
+  @@map("notification_priority")
+}
+
+enum NotificationStatus {
+  PENDING
+  DELIVERED
+  READ
+  DISMISSED
+  FAILED
+
+  @@map("notification_status")
+}
+
+// ---------------------------------------------------------------------------
+// NotificationTemplate — E9.1 (Architecture §2.29)
+// ---------------------------------------------------------------------------
+// Event-bound templates that define notification content and default channels.
+// Templates use Handlebars variable substitution for dynamic content.
+// ---------------------------------------------------------------------------
+
+model NotificationTemplate {
+  id                  String             @id @default(uuid())
+  code                String             @unique                               // "INVOICE_APPROVED", "ORDER_SHIPPED", "APPROVAL_REQUIRED"
+  name                String             @db.VarChar(200)
+  description         String?            @db.Text
+
+  // Event binding
+  eventName           String             @map("event_name") @db.VarChar(200)  // Event bus event: "invoice.approved", "order.shipped"
+
+  // Template content (Handlebars)
+  titleTemplate       String             @map("title_template") @db.VarChar(500) // "Invoice {{invoiceNumber}} approved"
+  bodyTemplate        String             @map("body_template") @db.Text        // "Your invoice {{invoiceNumber}} for {{customerName}} has been approved."
+
+  // Channel defaults (which channels fire by default — users can override)
+  defaultChannels     NotificationChannel[] @default([IN_APP]) @map("default_channels")
+  defaultPriority     NotificationPriority  @default(NORMAL) @map("default_priority")
+
+  // Deep link
+  actionUrl           String?            @map("action_url") @db.VarChar(500)  // "/invoices/{{entityId}}" — template for navigation
+
+  // Status
+  isActive            Boolean            @default(true) @map("is_active")
+
+  // Audit
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+
+  // Relations
+  preferences         NotificationPreference[]
+  roleDefaults        NotificationRoleDefault[]
+
+  @@map("notification_templates")
+  @@index([eventName], map: "idx_notification_templates_event")
+  @@index([isActive], map: "idx_notification_templates_active")
+}
+
+// ---------------------------------------------------------------------------
+// NotificationPreference — E9.1 (Architecture §2.29)
+// ---------------------------------------------------------------------------
+// Per-user, per-template channel overrides. If no preference exists for a
+// user+template pair, the template's defaultChannels apply (BR-COM-014).
+// ---------------------------------------------------------------------------
+
+model NotificationPreference {
+  id                      String               @id @default(uuid())
+  userId                  String               @map("user_id")                // FK to User
+  notificationTemplateId  String               @map("notification_template_id") // FK to NotificationTemplate
+
+  // Channel overrides (user can enable/disable per channel per notification type)
+  enableInApp             Boolean              @default(true) @map("enable_in_app")
+  enableEmail             Boolean              @default(true) @map("enable_email")
+  enablePush              Boolean              @default(true) @map("enable_push")
+
+  // Priority override
+  priorityOverride        NotificationPriority? @map("priority_override")
+
+  // Mute / schedule
+  isMuted                 Boolean              @default(false) @map("is_muted")
+  muteUntil               DateTime?            @map("mute_until")
+
+  // Auto-reply (maps to legacy ConfAutoReplyVc — per-user out-of-office)
+  autoReplyEnabled        Boolean              @default(false) @map("auto_reply_enabled")
+  autoReplySubject        String?              @map("auto_reply_subject") @db.VarChar(500)
+  autoReplyBody           String?              @map("auto_reply_body") @db.Text
+  autoReplyStartDate      DateTime?            @map("auto_reply_start_date")
+  autoReplyEndDate        DateTime?            @map("auto_reply_end_date")
+
+  // Audit
+  createdAt               DateTime             @default(now()) @map("created_at")
+  updatedAt               DateTime             @updatedAt @map("updated_at")
+
+  // Relations
+  template                NotificationTemplate @relation(fields: [notificationTemplateId], references: [id])
+
+  @@map("notification_preferences")
+  @@unique([userId, notificationTemplateId], map: "uq_notification_prefs_user_template")
+  @@index([userId], map: "idx_notification_prefs_user")
+}
+
+// ---------------------------------------------------------------------------
+// NotificationRoleDefault — E9.4 (BR-COM-014 cascade middle layer)
+// ---------------------------------------------------------------------------
+// Per-role, per-template channel defaults. Admins configure these so that
+// users within a role automatically inherit sensible defaults.
+// Cascade: user preference → role default → template default.
+// ---------------------------------------------------------------------------
+
+model NotificationRoleDefault {
+  id                      String               @id @default(uuid())
+  role                    UserRole
+  notificationTemplateId  String               @map("notification_template_id")
+
+  // Channel defaults for this role
+  enableInApp             Boolean              @default(true) @map("enable_in_app")
+  enableEmail             Boolean              @default(true) @map("enable_email")
+  enablePush              Boolean              @default(true) @map("enable_push")
+
+  // Audit
+  createdAt               DateTime             @default(now()) @map("created_at")
+  updatedAt               DateTime             @updatedAt @map("updated_at")
+
+  // Relations
+  template                NotificationTemplate @relation(fields: [notificationTemplateId], references: [id])
+
+  @@map("notification_role_defaults")
+  @@unique([role, notificationTemplateId], map: "uq_notification_role_defaults_role_template")
+  @@index([role], map: "idx_notification_role_defaults_role")
+}
+
+// ---------------------------------------------------------------------------
+// Notification (Transactional Instance) — E9.1 (Architecture §2.29)
+// ---------------------------------------------------------------------------
+// Individual notification records created from templates when business events
+// fire. One record per channel per user per event occurrence.
+// State machine: PENDING → DELIVERED → READ/DISMISSED | PENDING → FAILED
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id                  String               @id @default(uuid())
+  userId              String               @map("user_id")                    // FK to User (recipient)
+  templateId          String?              @map("template_id")               // FK to NotificationTemplate (null for ad-hoc)
+
+  // Content (resolved from template at send time)
+  title               String               @db.VarChar(500)
+  body                String               @db.Text
+  channel             NotificationChannel
+  priority            NotificationPriority @default(NORMAL)
+
+  // Deep link
+  actionUrl           String?              @map("action_url") @db.VarChar(500)
+
+  // Polymorphic link to source entity
+  entityType          String?              @map("entity_type") @db.VarChar(100)
+  entityId            String?              @map("entity_id")
+
+  // Status
+  status              NotificationStatus   @default(PENDING)
+  deliveredAt         DateTime?            @map("delivered_at")
+  readAt              DateTime?            @map("read_at")
+  dismissedAt         DateTime?            @map("dismissed_at")
+
+  // Audit
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+
+  @@map("notifications")
+  @@index([userId, status], map: "idx_notifications_user_status")
+  @@index([userId, createdAt], map: "idx_notifications_user_time")
+  @@index([channel, status], map: "idx_notifications_channel_status")
+  @@index([entityType, entityId], map: "idx_notifications_entity")
+  @@index([templateId], map: "idx_notifications_template")
+}

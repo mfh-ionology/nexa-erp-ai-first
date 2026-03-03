@@ -24,6 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/templates/page-header';
 
 import { useAiDashboard } from '../api/use-ai-dashboard';
+import { AutomationHealthSection } from './components/automation-health-section';
 
 // ─── Chart config ────────────────────────────────────────────────────────────
 
@@ -230,6 +231,9 @@ export function AiConfigDashboard() {
               delay={550}
             />
           </div>
+
+          {/* ── Automation Health section ──────────────── */}
+          <AutomationHealthSection />
         </>
       )}
     </div>

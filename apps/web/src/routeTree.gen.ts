@@ -8,463 +8,529 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root';
-import { Route as LoginRouteImport } from './routes/login';
-import { Route as AuthenticatedRouteImport } from './routes/_authenticated';
-import { Route as R403RouteImport } from './routes/403';
-import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index';
-import { Route as AuthenticatedSystemIndexRouteImport } from './routes/_authenticated/system/index';
-import { Route as AuthenticatedSalesIndexRouteImport } from './routes/_authenticated/sales/index';
-import { Route as AuthenticatedReportingIndexRouteImport } from './routes/_authenticated/reporting/index';
-import { Route as AuthenticatedPurchasingIndexRouteImport } from './routes/_authenticated/purchasing/index';
-import { Route as AuthenticatedManufacturingIndexRouteImport } from './routes/_authenticated/manufacturing/index';
-import { Route as AuthenticatedInventoryIndexRouteImport } from './routes/_authenticated/inventory/index';
-import { Route as AuthenticatedHrIndexRouteImport } from './routes/_authenticated/hr/index';
-import { Route as AuthenticatedFinanceIndexRouteImport } from './routes/_authenticated/finance/index';
-import { Route as AuthenticatedCrmIndexRouteImport } from './routes/_authenticated/crm/index';
-import { Route as AuthenticatedArIndexRouteImport } from './routes/_authenticated/ar/index';
-import { Route as AuthenticatedApIndexRouteImport } from './routes/_authenticated/ap/index';
-import { Route as AuthenticatedSystemUsersRouteImport } from './routes/_authenticated/system/users';
-import { Route as AuthenticatedSystemResourcesRouteImport } from './routes/_authenticated/system/resources';
-import { Route as AuthenticatedSystemMyPermissionsRouteImport } from './routes/_authenticated/system/my-permissions';
-import { Route as AuthenticatedSystemCompaniesRouteImport } from './routes/_authenticated/system/companies';
-import { Route as AuthenticatedSystemAccessGroupsRouteImport } from './routes/_authenticated/system/access-groups';
-import { Route as AuthenticatedSystemUsersIndexRouteImport } from './routes/_authenticated/system/users/index';
-import { Route as AuthenticatedSystemAccessGroupsIndexRouteImport } from './routes/_authenticated/system/access-groups/index';
-import { Route as AuthenticatedArInvoicesIndexRouteImport } from './routes/_authenticated/ar/invoices/index';
-import { Route as AuthenticatedAiSkillsIndexRouteImport } from './routes/_authenticated/ai/skills/index';
-import { Route as AuthenticatedAiMemoryIndexRouteImport } from './routes/_authenticated/ai/memory/index';
-import { Route as AuthenticatedAiAdminIndexRouteImport } from './routes/_authenticated/ai/admin/index';
-import { Route as AuthenticatedSystemUsersIdRouteImport } from './routes/_authenticated/system/users/$id';
-import { Route as AuthenticatedSystemAccessGroupsNewRouteImport } from './routes/_authenticated/system/access-groups/new';
-import { Route as AuthenticatedSystemAccessGroupsIdRouteImport } from './routes/_authenticated/system/access-groups/$id';
-import { Route as AuthenticatedArInvoicesIdRouteImport } from './routes/_authenticated/ar/invoices/$id';
-import { Route as AuthenticatedAiAdminSkillsRouteImport } from './routes/_authenticated/ai/admin/skills';
-import { Route as AuthenticatedAiAdminPromptsRouteImport } from './routes/_authenticated/ai/admin/prompts';
-import { Route as AuthenticatedAiAdminModelsRouteImport } from './routes/_authenticated/ai/admin/models';
-import { Route as AuthenticatedAiAdminAutomationsRouteImport } from './routes/_authenticated/ai/admin/automations';
-import { Route as AuthenticatedAiAdminAgentsRouteImport } from './routes/_authenticated/ai/admin/agents';
-import { Route as AuthenticatedAiAdminSkillsIndexRouteImport } from './routes/_authenticated/ai/admin/skills/index';
-import { Route as AuthenticatedAiAdminPromptsIndexRouteImport } from './routes/_authenticated/ai/admin/prompts/index';
-import { Route as AuthenticatedAiAdminModelsIndexRouteImport } from './routes/_authenticated/ai/admin/models/index';
-import { Route as AuthenticatedAiAdminAutomationsIndexRouteImport } from './routes/_authenticated/ai/admin/automations/index';
-import { Route as AuthenticatedAiAdminAgentsIndexRouteImport } from './routes/_authenticated/ai/admin/agents/index';
-import { Route as AuthenticatedAiAdminSkillsNewRouteImport } from './routes/_authenticated/ai/admin/skills/new';
-import { Route as AuthenticatedAiAdminSkillsIdRouteImport } from './routes/_authenticated/ai/admin/skills/$id';
-import { Route as AuthenticatedAiAdminPromptsNewRouteImport } from './routes/_authenticated/ai/admin/prompts/new';
-import { Route as AuthenticatedAiAdminPromptsIdRouteImport } from './routes/_authenticated/ai/admin/prompts/$id';
-import { Route as AuthenticatedAiAdminModelsNewRouteImport } from './routes/_authenticated/ai/admin/models/new';
-import { Route as AuthenticatedAiAdminModelsIdRouteImport } from './routes/_authenticated/ai/admin/models/$id';
-import { Route as AuthenticatedAiAdminAutomationsNewRouteImport } from './routes/_authenticated/ai/admin/automations/new';
-import { Route as AuthenticatedAiAdminAutomationsAutomationIdRouteImport } from './routes/_authenticated/ai/admin/automations/$automationId';
-import { Route as AuthenticatedAiAdminAgentsNewRouteImport } from './routes/_authenticated/ai/admin/agents/new';
-import { Route as AuthenticatedAiAdminAgentsIdRouteImport } from './routes/_authenticated/ai/admin/agents/$id';
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
+import { Route as R403RouteImport } from './routes/403'
+import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedSystemIndexRouteImport } from './routes/_authenticated/system/index'
+import { Route as AuthenticatedSalesIndexRouteImport } from './routes/_authenticated/sales/index'
+import { Route as AuthenticatedReportingIndexRouteImport } from './routes/_authenticated/reporting/index'
+import { Route as AuthenticatedPurchasingIndexRouteImport } from './routes/_authenticated/purchasing/index'
+import { Route as AuthenticatedManufacturingIndexRouteImport } from './routes/_authenticated/manufacturing/index'
+import { Route as AuthenticatedInventoryIndexRouteImport } from './routes/_authenticated/inventory/index'
+import { Route as AuthenticatedHrIndexRouteImport } from './routes/_authenticated/hr/index'
+import { Route as AuthenticatedFinanceIndexRouteImport } from './routes/_authenticated/finance/index'
+import { Route as AuthenticatedCrmIndexRouteImport } from './routes/_authenticated/crm/index'
+import { Route as AuthenticatedArIndexRouteImport } from './routes/_authenticated/ar/index'
+import { Route as AuthenticatedApIndexRouteImport } from './routes/_authenticated/ap/index'
+import { Route as AuthenticatedSystemUsersRouteImport } from './routes/_authenticated/system/users'
+import { Route as AuthenticatedSystemResourcesRouteImport } from './routes/_authenticated/system/resources'
+import { Route as AuthenticatedSystemNotificationPreferencesRouteImport } from './routes/_authenticated/system/notification-preferences'
+import { Route as AuthenticatedSystemMyPermissionsRouteImport } from './routes/_authenticated/system/my-permissions'
+import { Route as AuthenticatedSystemCompaniesRouteImport } from './routes/_authenticated/system/companies'
+import { Route as AuthenticatedSystemAccessGroupsRouteImport } from './routes/_authenticated/system/access-groups'
+import { Route as AuthenticatedSystemUsersIndexRouteImport } from './routes/_authenticated/system/users/index'
+import { Route as AuthenticatedSystemAccessGroupsIndexRouteImport } from './routes/_authenticated/system/access-groups/index'
+import { Route as AuthenticatedArInvoicesIndexRouteImport } from './routes/_authenticated/ar/invoices/index'
+import { Route as AuthenticatedAiSkillsIndexRouteImport } from './routes/_authenticated/ai/skills/index'
+import { Route as AuthenticatedAiMemoryIndexRouteImport } from './routes/_authenticated/ai/memory/index'
+import { Route as AuthenticatedAiAdminIndexRouteImport } from './routes/_authenticated/ai/admin/index'
+import { Route as AuthenticatedSystemUsersIdRouteImport } from './routes/_authenticated/system/users/$id'
+import { Route as AuthenticatedSystemAccessGroupsNewRouteImport } from './routes/_authenticated/system/access-groups/new'
+import { Route as AuthenticatedSystemAccessGroupsIdRouteImport } from './routes/_authenticated/system/access-groups/$id'
+import { Route as AuthenticatedArInvoicesIdRouteImport } from './routes/_authenticated/ar/invoices/$id'
+import { Route as AuthenticatedAiAdminSkillsRouteImport } from './routes/_authenticated/ai/admin/skills'
+import { Route as AuthenticatedAiAdminPromptsRouteImport } from './routes/_authenticated/ai/admin/prompts'
+import { Route as AuthenticatedAiAdminModelsRouteImport } from './routes/_authenticated/ai/admin/models'
+import { Route as AuthenticatedAiAdminAutomationsRouteImport } from './routes/_authenticated/ai/admin/automations'
+import { Route as AuthenticatedAiAdminAgentsRouteImport } from './routes/_authenticated/ai/admin/agents'
+import { Route as AuthenticatedAiAdminSkillsIndexRouteImport } from './routes/_authenticated/ai/admin/skills/index'
+import { Route as AuthenticatedAiAdminPromptsIndexRouteImport } from './routes/_authenticated/ai/admin/prompts/index'
+import { Route as AuthenticatedAiAdminModelsIndexRouteImport } from './routes/_authenticated/ai/admin/models/index'
+import { Route as AuthenticatedAiAdminAutomationsIndexRouteImport } from './routes/_authenticated/ai/admin/automations/index'
+import { Route as AuthenticatedAiAdminAgentsIndexRouteImport } from './routes/_authenticated/ai/admin/agents/index'
+import { Route as AuthenticatedAiAdminSkillsNewRouteImport } from './routes/_authenticated/ai/admin/skills/new'
+import { Route as AuthenticatedAiAdminSkillsIdRouteImport } from './routes/_authenticated/ai/admin/skills/$id'
+import { Route as AuthenticatedAiAdminPromptsNewRouteImport } from './routes/_authenticated/ai/admin/prompts/new'
+import { Route as AuthenticatedAiAdminPromptsIdRouteImport } from './routes/_authenticated/ai/admin/prompts/$id'
+import { Route as AuthenticatedAiAdminModelsNewRouteImport } from './routes/_authenticated/ai/admin/models/new'
+import { Route as AuthenticatedAiAdminModelsIdRouteImport } from './routes/_authenticated/ai/admin/models/$id'
+import { Route as AuthenticatedAiAdminAutomationsNewRouteImport } from './routes/_authenticated/ai/admin/automations/new'
+import { Route as AuthenticatedAiAdminAutomationsAutomationIdRouteImport } from './routes/_authenticated/ai/admin/automations/$automationId'
+import { Route as AuthenticatedAiAdminAgentsNewRouteImport } from './routes/_authenticated/ai/admin/agents/new'
+import { Route as AuthenticatedAiAdminAgentsIdRouteImport } from './routes/_authenticated/ai/admin/agents/$id'
+import { Route as AuthenticatedAiAdminAutomationsRunsIndexRouteImport } from './routes/_authenticated/ai/admin/automations/runs/index'
+import { Route as AuthenticatedAiAdminAutomationsRunsRunIdRouteImport } from './routes/_authenticated/ai/admin/automations/runs/$runId'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const R403Route = R403RouteImport.update({
   id: '/403',
   path: '/403',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedSystemIndexRoute = AuthenticatedSystemIndexRouteImport.update({
-  id: '/system/',
-  path: '/system/',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
+} as any)
+const AuthenticatedSystemIndexRoute =
+  AuthenticatedSystemIndexRouteImport.update({
+    id: '/system/',
+    path: '/system/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedSalesIndexRoute = AuthenticatedSalesIndexRouteImport.update({
   id: '/sales/',
   path: '/sales/',
   getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedReportingIndexRoute = AuthenticatedReportingIndexRouteImport.update({
-  id: '/reporting/',
-  path: '/reporting/',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedPurchasingIndexRoute = AuthenticatedPurchasingIndexRouteImport.update({
-  id: '/purchasing/',
-  path: '/purchasing/',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedManufacturingIndexRoute = AuthenticatedManufacturingIndexRouteImport.update({
-  id: '/manufacturing/',
-  path: '/manufacturing/',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedInventoryIndexRoute = AuthenticatedInventoryIndexRouteImport.update({
-  id: '/inventory/',
-  path: '/inventory/',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
+} as any)
+const AuthenticatedReportingIndexRoute =
+  AuthenticatedReportingIndexRouteImport.update({
+    id: '/reporting/',
+    path: '/reporting/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedPurchasingIndexRoute =
+  AuthenticatedPurchasingIndexRouteImport.update({
+    id: '/purchasing/',
+    path: '/purchasing/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedManufacturingIndexRoute =
+  AuthenticatedManufacturingIndexRouteImport.update({
+    id: '/manufacturing/',
+    path: '/manufacturing/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedInventoryIndexRoute =
+  AuthenticatedInventoryIndexRouteImport.update({
+    id: '/inventory/',
+    path: '/inventory/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedHrIndexRoute = AuthenticatedHrIndexRouteImport.update({
   id: '/hr/',
   path: '/hr/',
   getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedFinanceIndexRoute = AuthenticatedFinanceIndexRouteImport.update({
-  id: '/finance/',
-  path: '/finance/',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
+} as any)
+const AuthenticatedFinanceIndexRoute =
+  AuthenticatedFinanceIndexRouteImport.update({
+    id: '/finance/',
+    path: '/finance/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedCrmIndexRoute = AuthenticatedCrmIndexRouteImport.update({
   id: '/crm/',
   path: '/crm/',
   getParentRoute: () => AuthenticatedRoute,
-} as any);
+} as any)
 const AuthenticatedArIndexRoute = AuthenticatedArIndexRouteImport.update({
   id: '/ar/',
   path: '/ar/',
   getParentRoute: () => AuthenticatedRoute,
-} as any);
+} as any)
 const AuthenticatedApIndexRoute = AuthenticatedApIndexRouteImport.update({
   id: '/ap/',
   path: '/ap/',
   getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedSystemUsersRoute = AuthenticatedSystemUsersRouteImport.update({
-  id: '/system/users',
-  path: '/system/users',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedSystemResourcesRoute = AuthenticatedSystemResourcesRouteImport.update({
-  id: '/system/resources',
-  path: '/system/resources',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedSystemMyPermissionsRoute = AuthenticatedSystemMyPermissionsRouteImport.update({
-  id: '/system/my-permissions',
-  path: '/system/my-permissions',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedSystemCompaniesRoute = AuthenticatedSystemCompaniesRouteImport.update({
-  id: '/system/companies',
-  path: '/system/companies',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedSystemAccessGroupsRoute = AuthenticatedSystemAccessGroupsRouteImport.update({
-  id: '/system/access-groups',
-  path: '/system/access-groups',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedSystemUsersIndexRoute = AuthenticatedSystemUsersIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthenticatedSystemUsersRoute,
-} as any);
+} as any)
+const AuthenticatedSystemUsersRoute =
+  AuthenticatedSystemUsersRouteImport.update({
+    id: '/system/users',
+    path: '/system/users',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSystemResourcesRoute =
+  AuthenticatedSystemResourcesRouteImport.update({
+    id: '/system/resources',
+    path: '/system/resources',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSystemNotificationPreferencesRoute =
+  AuthenticatedSystemNotificationPreferencesRouteImport.update({
+    id: '/system/notification-preferences',
+    path: '/system/notification-preferences',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSystemMyPermissionsRoute =
+  AuthenticatedSystemMyPermissionsRouteImport.update({
+    id: '/system/my-permissions',
+    path: '/system/my-permissions',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSystemCompaniesRoute =
+  AuthenticatedSystemCompaniesRouteImport.update({
+    id: '/system/companies',
+    path: '/system/companies',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSystemAccessGroupsRoute =
+  AuthenticatedSystemAccessGroupsRouteImport.update({
+    id: '/system/access-groups',
+    path: '/system/access-groups',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSystemUsersIndexRoute =
+  AuthenticatedSystemUsersIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedSystemUsersRoute,
+  } as any)
 const AuthenticatedSystemAccessGroupsIndexRoute =
   AuthenticatedSystemAccessGroupsIndexRouteImport.update({
     id: '/',
     path: '/',
     getParentRoute: () => AuthenticatedSystemAccessGroupsRoute,
-  } as any);
-const AuthenticatedArInvoicesIndexRoute = AuthenticatedArInvoicesIndexRouteImport.update({
-  id: '/ar/invoices/',
-  path: '/ar/invoices/',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedAiSkillsIndexRoute = AuthenticatedAiSkillsIndexRouteImport.update({
-  id: '/ai/skills/',
-  path: '/ai/skills/',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedAiMemoryIndexRoute = AuthenticatedAiMemoryIndexRouteImport.update({
-  id: '/ai/memory/',
-  path: '/ai/memory/',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedAiAdminIndexRoute = AuthenticatedAiAdminIndexRouteImport.update({
-  id: '/ai/admin/',
-  path: '/ai/admin/',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedSystemUsersIdRoute = AuthenticatedSystemUsersIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AuthenticatedSystemUsersRoute,
-} as any);
+  } as any)
+const AuthenticatedArInvoicesIndexRoute =
+  AuthenticatedArInvoicesIndexRouteImport.update({
+    id: '/ar/invoices/',
+    path: '/ar/invoices/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAiSkillsIndexRoute =
+  AuthenticatedAiSkillsIndexRouteImport.update({
+    id: '/ai/skills/',
+    path: '/ai/skills/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAiMemoryIndexRoute =
+  AuthenticatedAiMemoryIndexRouteImport.update({
+    id: '/ai/memory/',
+    path: '/ai/memory/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAiAdminIndexRoute =
+  AuthenticatedAiAdminIndexRouteImport.update({
+    id: '/ai/admin/',
+    path: '/ai/admin/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSystemUsersIdRoute =
+  AuthenticatedSystemUsersIdRouteImport.update({
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => AuthenticatedSystemUsersRoute,
+  } as any)
 const AuthenticatedSystemAccessGroupsNewRoute =
   AuthenticatedSystemAccessGroupsNewRouteImport.update({
     id: '/new',
     path: '/new',
     getParentRoute: () => AuthenticatedSystemAccessGroupsRoute,
-  } as any);
-const AuthenticatedSystemAccessGroupsIdRoute = AuthenticatedSystemAccessGroupsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AuthenticatedSystemAccessGroupsRoute,
-} as any);
-const AuthenticatedArInvoicesIdRoute = AuthenticatedArInvoicesIdRouteImport.update({
-  id: '/ar/invoices/$id',
-  path: '/ar/invoices/$id',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedAiAdminSkillsRoute = AuthenticatedAiAdminSkillsRouteImport.update({
-  id: '/ai/admin/skills',
-  path: '/ai/admin/skills',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedAiAdminPromptsRoute = AuthenticatedAiAdminPromptsRouteImport.update({
-  id: '/ai/admin/prompts',
-  path: '/ai/admin/prompts',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedAiAdminModelsRoute = AuthenticatedAiAdminModelsRouteImport.update({
-  id: '/ai/admin/models',
-  path: '/ai/admin/models',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedAiAdminAutomationsRoute = AuthenticatedAiAdminAutomationsRouteImport.update({
-  id: '/ai/admin/automations',
-  path: '/ai/admin/automations',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedAiAdminAgentsRoute = AuthenticatedAiAdminAgentsRouteImport.update({
-  id: '/ai/admin/agents',
-  path: '/ai/admin/agents',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-const AuthenticatedAiAdminSkillsIndexRoute = AuthenticatedAiAdminSkillsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthenticatedAiAdminSkillsRoute,
-} as any);
-const AuthenticatedAiAdminPromptsIndexRoute = AuthenticatedAiAdminPromptsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthenticatedAiAdminPromptsRoute,
-} as any);
-const AuthenticatedAiAdminModelsIndexRoute = AuthenticatedAiAdminModelsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthenticatedAiAdminModelsRoute,
-} as any);
+  } as any)
+const AuthenticatedSystemAccessGroupsIdRoute =
+  AuthenticatedSystemAccessGroupsIdRouteImport.update({
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => AuthenticatedSystemAccessGroupsRoute,
+  } as any)
+const AuthenticatedArInvoicesIdRoute =
+  AuthenticatedArInvoicesIdRouteImport.update({
+    id: '/ar/invoices/$id',
+    path: '/ar/invoices/$id',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAiAdminSkillsRoute =
+  AuthenticatedAiAdminSkillsRouteImport.update({
+    id: '/ai/admin/skills',
+    path: '/ai/admin/skills',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAiAdminPromptsRoute =
+  AuthenticatedAiAdminPromptsRouteImport.update({
+    id: '/ai/admin/prompts',
+    path: '/ai/admin/prompts',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAiAdminModelsRoute =
+  AuthenticatedAiAdminModelsRouteImport.update({
+    id: '/ai/admin/models',
+    path: '/ai/admin/models',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAiAdminAutomationsRoute =
+  AuthenticatedAiAdminAutomationsRouteImport.update({
+    id: '/ai/admin/automations',
+    path: '/ai/admin/automations',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAiAdminAgentsRoute =
+  AuthenticatedAiAdminAgentsRouteImport.update({
+    id: '/ai/admin/agents',
+    path: '/ai/admin/agents',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAiAdminSkillsIndexRoute =
+  AuthenticatedAiAdminSkillsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedAiAdminSkillsRoute,
+  } as any)
+const AuthenticatedAiAdminPromptsIndexRoute =
+  AuthenticatedAiAdminPromptsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedAiAdminPromptsRoute,
+  } as any)
+const AuthenticatedAiAdminModelsIndexRoute =
+  AuthenticatedAiAdminModelsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedAiAdminModelsRoute,
+  } as any)
 const AuthenticatedAiAdminAutomationsIndexRoute =
   AuthenticatedAiAdminAutomationsIndexRouteImport.update({
     id: '/',
     path: '/',
     getParentRoute: () => AuthenticatedAiAdminAutomationsRoute,
-  } as any);
-const AuthenticatedAiAdminAgentsIndexRoute = AuthenticatedAiAdminAgentsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthenticatedAiAdminAgentsRoute,
-} as any);
-const AuthenticatedAiAdminSkillsNewRoute = AuthenticatedAiAdminSkillsNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AuthenticatedAiAdminSkillsRoute,
-} as any);
-const AuthenticatedAiAdminSkillsIdRoute = AuthenticatedAiAdminSkillsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AuthenticatedAiAdminSkillsRoute,
-} as any);
-const AuthenticatedAiAdminPromptsNewRoute = AuthenticatedAiAdminPromptsNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AuthenticatedAiAdminPromptsRoute,
-} as any);
-const AuthenticatedAiAdminPromptsIdRoute = AuthenticatedAiAdminPromptsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AuthenticatedAiAdminPromptsRoute,
-} as any);
-const AuthenticatedAiAdminModelsNewRoute = AuthenticatedAiAdminModelsNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AuthenticatedAiAdminModelsRoute,
-} as any);
-const AuthenticatedAiAdminModelsIdRoute = AuthenticatedAiAdminModelsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AuthenticatedAiAdminModelsRoute,
-} as any);
+  } as any)
+const AuthenticatedAiAdminAgentsIndexRoute =
+  AuthenticatedAiAdminAgentsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedAiAdminAgentsRoute,
+  } as any)
+const AuthenticatedAiAdminSkillsNewRoute =
+  AuthenticatedAiAdminSkillsNewRouteImport.update({
+    id: '/new',
+    path: '/new',
+    getParentRoute: () => AuthenticatedAiAdminSkillsRoute,
+  } as any)
+const AuthenticatedAiAdminSkillsIdRoute =
+  AuthenticatedAiAdminSkillsIdRouteImport.update({
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => AuthenticatedAiAdminSkillsRoute,
+  } as any)
+const AuthenticatedAiAdminPromptsNewRoute =
+  AuthenticatedAiAdminPromptsNewRouteImport.update({
+    id: '/new',
+    path: '/new',
+    getParentRoute: () => AuthenticatedAiAdminPromptsRoute,
+  } as any)
+const AuthenticatedAiAdminPromptsIdRoute =
+  AuthenticatedAiAdminPromptsIdRouteImport.update({
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => AuthenticatedAiAdminPromptsRoute,
+  } as any)
+const AuthenticatedAiAdminModelsNewRoute =
+  AuthenticatedAiAdminModelsNewRouteImport.update({
+    id: '/new',
+    path: '/new',
+    getParentRoute: () => AuthenticatedAiAdminModelsRoute,
+  } as any)
+const AuthenticatedAiAdminModelsIdRoute =
+  AuthenticatedAiAdminModelsIdRouteImport.update({
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => AuthenticatedAiAdminModelsRoute,
+  } as any)
 const AuthenticatedAiAdminAutomationsNewRoute =
   AuthenticatedAiAdminAutomationsNewRouteImport.update({
     id: '/new',
     path: '/new',
     getParentRoute: () => AuthenticatedAiAdminAutomationsRoute,
-  } as any);
+  } as any)
 const AuthenticatedAiAdminAutomationsAutomationIdRoute =
   AuthenticatedAiAdminAutomationsAutomationIdRouteImport.update({
     id: '/$automationId',
     path: '/$automationId',
     getParentRoute: () => AuthenticatedAiAdminAutomationsRoute,
-  } as any);
-const AuthenticatedAiAdminAgentsNewRoute = AuthenticatedAiAdminAgentsNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AuthenticatedAiAdminAgentsRoute,
-} as any);
-const AuthenticatedAiAdminAgentsIdRoute = AuthenticatedAiAdminAgentsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AuthenticatedAiAdminAgentsRoute,
-} as any);
+  } as any)
+const AuthenticatedAiAdminAgentsNewRoute =
+  AuthenticatedAiAdminAgentsNewRouteImport.update({
+    id: '/new',
+    path: '/new',
+    getParentRoute: () => AuthenticatedAiAdminAgentsRoute,
+  } as any)
+const AuthenticatedAiAdminAgentsIdRoute =
+  AuthenticatedAiAdminAgentsIdRouteImport.update({
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => AuthenticatedAiAdminAgentsRoute,
+  } as any)
+const AuthenticatedAiAdminAutomationsRunsIndexRoute =
+  AuthenticatedAiAdminAutomationsRunsIndexRouteImport.update({
+    id: '/runs/',
+    path: '/runs/',
+    getParentRoute: () => AuthenticatedAiAdminAutomationsRoute,
+  } as any)
+const AuthenticatedAiAdminAutomationsRunsRunIdRoute =
+  AuthenticatedAiAdminAutomationsRunsRunIdRouteImport.update({
+    id: '/runs/$runId',
+    path: '/runs/$runId',
+    getParentRoute: () => AuthenticatedAiAdminAutomationsRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
-  '/403': typeof R403Route;
-  '/': typeof AuthenticatedIndexRoute;
-  '/login': typeof LoginRoute;
-  '/system/access-groups': typeof AuthenticatedSystemAccessGroupsRouteWithChildren;
-  '/system/companies': typeof AuthenticatedSystemCompaniesRoute;
-  '/system/my-permissions': typeof AuthenticatedSystemMyPermissionsRoute;
-  '/system/resources': typeof AuthenticatedSystemResourcesRoute;
-  '/system/users': typeof AuthenticatedSystemUsersRouteWithChildren;
-  '/ap/': typeof AuthenticatedApIndexRoute;
-  '/ar/': typeof AuthenticatedArIndexRoute;
-  '/crm/': typeof AuthenticatedCrmIndexRoute;
-  '/finance/': typeof AuthenticatedFinanceIndexRoute;
-  '/hr/': typeof AuthenticatedHrIndexRoute;
-  '/inventory/': typeof AuthenticatedInventoryIndexRoute;
-  '/manufacturing/': typeof AuthenticatedManufacturingIndexRoute;
-  '/purchasing/': typeof AuthenticatedPurchasingIndexRoute;
-  '/reporting/': typeof AuthenticatedReportingIndexRoute;
-  '/sales/': typeof AuthenticatedSalesIndexRoute;
-  '/system/': typeof AuthenticatedSystemIndexRoute;
-  '/ai/admin/agents': typeof AuthenticatedAiAdminAgentsRouteWithChildren;
-  '/ai/admin/automations': typeof AuthenticatedAiAdminAutomationsRouteWithChildren;
-  '/ai/admin/models': typeof AuthenticatedAiAdminModelsRouteWithChildren;
-  '/ai/admin/prompts': typeof AuthenticatedAiAdminPromptsRouteWithChildren;
-  '/ai/admin/skills': typeof AuthenticatedAiAdminSkillsRouteWithChildren;
-  '/ar/invoices/$id': typeof AuthenticatedArInvoicesIdRoute;
-  '/system/access-groups/$id': typeof AuthenticatedSystemAccessGroupsIdRoute;
-  '/system/access-groups/new': typeof AuthenticatedSystemAccessGroupsNewRoute;
-  '/system/users/$id': typeof AuthenticatedSystemUsersIdRoute;
-  '/ai/admin/': typeof AuthenticatedAiAdminIndexRoute;
-  '/ai/memory/': typeof AuthenticatedAiMemoryIndexRoute;
-  '/ai/skills/': typeof AuthenticatedAiSkillsIndexRoute;
-  '/ar/invoices/': typeof AuthenticatedArInvoicesIndexRoute;
-  '/system/access-groups/': typeof AuthenticatedSystemAccessGroupsIndexRoute;
-  '/system/users/': typeof AuthenticatedSystemUsersIndexRoute;
-  '/ai/admin/agents/$id': typeof AuthenticatedAiAdminAgentsIdRoute;
-  '/ai/admin/agents/new': typeof AuthenticatedAiAdminAgentsNewRoute;
-  '/ai/admin/automations/$automationId': typeof AuthenticatedAiAdminAutomationsAutomationIdRoute;
-  '/ai/admin/automations/new': typeof AuthenticatedAiAdminAutomationsNewRoute;
-  '/ai/admin/models/$id': typeof AuthenticatedAiAdminModelsIdRoute;
-  '/ai/admin/models/new': typeof AuthenticatedAiAdminModelsNewRoute;
-  '/ai/admin/prompts/$id': typeof AuthenticatedAiAdminPromptsIdRoute;
-  '/ai/admin/prompts/new': typeof AuthenticatedAiAdminPromptsNewRoute;
-  '/ai/admin/skills/$id': typeof AuthenticatedAiAdminSkillsIdRoute;
-  '/ai/admin/skills/new': typeof AuthenticatedAiAdminSkillsNewRoute;
-  '/ai/admin/agents/': typeof AuthenticatedAiAdminAgentsIndexRoute;
-  '/ai/admin/automations/': typeof AuthenticatedAiAdminAutomationsIndexRoute;
-  '/ai/admin/models/': typeof AuthenticatedAiAdminModelsIndexRoute;
-  '/ai/admin/prompts/': typeof AuthenticatedAiAdminPromptsIndexRoute;
-  '/ai/admin/skills/': typeof AuthenticatedAiAdminSkillsIndexRoute;
+  '/403': typeof R403Route
+  '/': typeof AuthenticatedIndexRoute
+  '/login': typeof LoginRoute
+  '/system/access-groups': typeof AuthenticatedSystemAccessGroupsRouteWithChildren
+  '/system/companies': typeof AuthenticatedSystemCompaniesRoute
+  '/system/my-permissions': typeof AuthenticatedSystemMyPermissionsRoute
+  '/system/notification-preferences': typeof AuthenticatedSystemNotificationPreferencesRoute
+  '/system/resources': typeof AuthenticatedSystemResourcesRoute
+  '/system/users': typeof AuthenticatedSystemUsersRouteWithChildren
+  '/ap/': typeof AuthenticatedApIndexRoute
+  '/ar/': typeof AuthenticatedArIndexRoute
+  '/crm/': typeof AuthenticatedCrmIndexRoute
+  '/finance/': typeof AuthenticatedFinanceIndexRoute
+  '/hr/': typeof AuthenticatedHrIndexRoute
+  '/inventory/': typeof AuthenticatedInventoryIndexRoute
+  '/manufacturing/': typeof AuthenticatedManufacturingIndexRoute
+  '/purchasing/': typeof AuthenticatedPurchasingIndexRoute
+  '/reporting/': typeof AuthenticatedReportingIndexRoute
+  '/sales/': typeof AuthenticatedSalesIndexRoute
+  '/system/': typeof AuthenticatedSystemIndexRoute
+  '/ai/admin/agents': typeof AuthenticatedAiAdminAgentsRouteWithChildren
+  '/ai/admin/automations': typeof AuthenticatedAiAdminAutomationsRouteWithChildren
+  '/ai/admin/models': typeof AuthenticatedAiAdminModelsRouteWithChildren
+  '/ai/admin/prompts': typeof AuthenticatedAiAdminPromptsRouteWithChildren
+  '/ai/admin/skills': typeof AuthenticatedAiAdminSkillsRouteWithChildren
+  '/ar/invoices/$id': typeof AuthenticatedArInvoicesIdRoute
+  '/system/access-groups/$id': typeof AuthenticatedSystemAccessGroupsIdRoute
+  '/system/access-groups/new': typeof AuthenticatedSystemAccessGroupsNewRoute
+  '/system/users/$id': typeof AuthenticatedSystemUsersIdRoute
+  '/ai/admin/': typeof AuthenticatedAiAdminIndexRoute
+  '/ai/memory/': typeof AuthenticatedAiMemoryIndexRoute
+  '/ai/skills/': typeof AuthenticatedAiSkillsIndexRoute
+  '/ar/invoices/': typeof AuthenticatedArInvoicesIndexRoute
+  '/system/access-groups/': typeof AuthenticatedSystemAccessGroupsIndexRoute
+  '/system/users/': typeof AuthenticatedSystemUsersIndexRoute
+  '/ai/admin/agents/$id': typeof AuthenticatedAiAdminAgentsIdRoute
+  '/ai/admin/agents/new': typeof AuthenticatedAiAdminAgentsNewRoute
+  '/ai/admin/automations/$automationId': typeof AuthenticatedAiAdminAutomationsAutomationIdRoute
+  '/ai/admin/automations/new': typeof AuthenticatedAiAdminAutomationsNewRoute
+  '/ai/admin/models/$id': typeof AuthenticatedAiAdminModelsIdRoute
+  '/ai/admin/models/new': typeof AuthenticatedAiAdminModelsNewRoute
+  '/ai/admin/prompts/$id': typeof AuthenticatedAiAdminPromptsIdRoute
+  '/ai/admin/prompts/new': typeof AuthenticatedAiAdminPromptsNewRoute
+  '/ai/admin/skills/$id': typeof AuthenticatedAiAdminSkillsIdRoute
+  '/ai/admin/skills/new': typeof AuthenticatedAiAdminSkillsNewRoute
+  '/ai/admin/agents/': typeof AuthenticatedAiAdminAgentsIndexRoute
+  '/ai/admin/automations/': typeof AuthenticatedAiAdminAutomationsIndexRoute
+  '/ai/admin/models/': typeof AuthenticatedAiAdminModelsIndexRoute
+  '/ai/admin/prompts/': typeof AuthenticatedAiAdminPromptsIndexRoute
+  '/ai/admin/skills/': typeof AuthenticatedAiAdminSkillsIndexRoute
+  '/ai/admin/automations/runs/$runId': typeof AuthenticatedAiAdminAutomationsRunsRunIdRoute
+  '/ai/admin/automations/runs/': typeof AuthenticatedAiAdminAutomationsRunsIndexRoute
 }
 export interface FileRoutesByTo {
-  '/403': typeof R403Route;
-  '/login': typeof LoginRoute;
-  '/': typeof AuthenticatedIndexRoute;
-  '/system/companies': typeof AuthenticatedSystemCompaniesRoute;
-  '/system/my-permissions': typeof AuthenticatedSystemMyPermissionsRoute;
-  '/system/resources': typeof AuthenticatedSystemResourcesRoute;
-  '/ap': typeof AuthenticatedApIndexRoute;
-  '/ar': typeof AuthenticatedArIndexRoute;
-  '/crm': typeof AuthenticatedCrmIndexRoute;
-  '/finance': typeof AuthenticatedFinanceIndexRoute;
-  '/hr': typeof AuthenticatedHrIndexRoute;
-  '/inventory': typeof AuthenticatedInventoryIndexRoute;
-  '/manufacturing': typeof AuthenticatedManufacturingIndexRoute;
-  '/purchasing': typeof AuthenticatedPurchasingIndexRoute;
-  '/reporting': typeof AuthenticatedReportingIndexRoute;
-  '/sales': typeof AuthenticatedSalesIndexRoute;
-  '/system': typeof AuthenticatedSystemIndexRoute;
-  '/ar/invoices/$id': typeof AuthenticatedArInvoicesIdRoute;
-  '/system/access-groups/$id': typeof AuthenticatedSystemAccessGroupsIdRoute;
-  '/system/access-groups/new': typeof AuthenticatedSystemAccessGroupsNewRoute;
-  '/system/users/$id': typeof AuthenticatedSystemUsersIdRoute;
-  '/ai/admin': typeof AuthenticatedAiAdminIndexRoute;
-  '/ai/memory': typeof AuthenticatedAiMemoryIndexRoute;
-  '/ai/skills': typeof AuthenticatedAiSkillsIndexRoute;
-  '/ar/invoices': typeof AuthenticatedArInvoicesIndexRoute;
-  '/system/access-groups': typeof AuthenticatedSystemAccessGroupsIndexRoute;
-  '/system/users': typeof AuthenticatedSystemUsersIndexRoute;
-  '/ai/admin/agents/$id': typeof AuthenticatedAiAdminAgentsIdRoute;
-  '/ai/admin/agents/new': typeof AuthenticatedAiAdminAgentsNewRoute;
-  '/ai/admin/automations/$automationId': typeof AuthenticatedAiAdminAutomationsAutomationIdRoute;
-  '/ai/admin/automations/new': typeof AuthenticatedAiAdminAutomationsNewRoute;
-  '/ai/admin/models/$id': typeof AuthenticatedAiAdminModelsIdRoute;
-  '/ai/admin/models/new': typeof AuthenticatedAiAdminModelsNewRoute;
-  '/ai/admin/prompts/$id': typeof AuthenticatedAiAdminPromptsIdRoute;
-  '/ai/admin/prompts/new': typeof AuthenticatedAiAdminPromptsNewRoute;
-  '/ai/admin/skills/$id': typeof AuthenticatedAiAdminSkillsIdRoute;
-  '/ai/admin/skills/new': typeof AuthenticatedAiAdminSkillsNewRoute;
-  '/ai/admin/agents': typeof AuthenticatedAiAdminAgentsIndexRoute;
-  '/ai/admin/automations': typeof AuthenticatedAiAdminAutomationsIndexRoute;
-  '/ai/admin/models': typeof AuthenticatedAiAdminModelsIndexRoute;
-  '/ai/admin/prompts': typeof AuthenticatedAiAdminPromptsIndexRoute;
-  '/ai/admin/skills': typeof AuthenticatedAiAdminSkillsIndexRoute;
+  '/403': typeof R403Route
+  '/login': typeof LoginRoute
+  '/': typeof AuthenticatedIndexRoute
+  '/system/companies': typeof AuthenticatedSystemCompaniesRoute
+  '/system/my-permissions': typeof AuthenticatedSystemMyPermissionsRoute
+  '/system/notification-preferences': typeof AuthenticatedSystemNotificationPreferencesRoute
+  '/system/resources': typeof AuthenticatedSystemResourcesRoute
+  '/ap': typeof AuthenticatedApIndexRoute
+  '/ar': typeof AuthenticatedArIndexRoute
+  '/crm': typeof AuthenticatedCrmIndexRoute
+  '/finance': typeof AuthenticatedFinanceIndexRoute
+  '/hr': typeof AuthenticatedHrIndexRoute
+  '/inventory': typeof AuthenticatedInventoryIndexRoute
+  '/manufacturing': typeof AuthenticatedManufacturingIndexRoute
+  '/purchasing': typeof AuthenticatedPurchasingIndexRoute
+  '/reporting': typeof AuthenticatedReportingIndexRoute
+  '/sales': typeof AuthenticatedSalesIndexRoute
+  '/system': typeof AuthenticatedSystemIndexRoute
+  '/ar/invoices/$id': typeof AuthenticatedArInvoicesIdRoute
+  '/system/access-groups/$id': typeof AuthenticatedSystemAccessGroupsIdRoute
+  '/system/access-groups/new': typeof AuthenticatedSystemAccessGroupsNewRoute
+  '/system/users/$id': typeof AuthenticatedSystemUsersIdRoute
+  '/ai/admin': typeof AuthenticatedAiAdminIndexRoute
+  '/ai/memory': typeof AuthenticatedAiMemoryIndexRoute
+  '/ai/skills': typeof AuthenticatedAiSkillsIndexRoute
+  '/ar/invoices': typeof AuthenticatedArInvoicesIndexRoute
+  '/system/access-groups': typeof AuthenticatedSystemAccessGroupsIndexRoute
+  '/system/users': typeof AuthenticatedSystemUsersIndexRoute
+  '/ai/admin/agents/$id': typeof AuthenticatedAiAdminAgentsIdRoute
+  '/ai/admin/agents/new': typeof AuthenticatedAiAdminAgentsNewRoute
+  '/ai/admin/automations/$automationId': typeof AuthenticatedAiAdminAutomationsAutomationIdRoute
+  '/ai/admin/automations/new': typeof AuthenticatedAiAdminAutomationsNewRoute
+  '/ai/admin/models/$id': typeof AuthenticatedAiAdminModelsIdRoute
+  '/ai/admin/models/new': typeof AuthenticatedAiAdminModelsNewRoute
+  '/ai/admin/prompts/$id': typeof AuthenticatedAiAdminPromptsIdRoute
+  '/ai/admin/prompts/new': typeof AuthenticatedAiAdminPromptsNewRoute
+  '/ai/admin/skills/$id': typeof AuthenticatedAiAdminSkillsIdRoute
+  '/ai/admin/skills/new': typeof AuthenticatedAiAdminSkillsNewRoute
+  '/ai/admin/agents': typeof AuthenticatedAiAdminAgentsIndexRoute
+  '/ai/admin/automations': typeof AuthenticatedAiAdminAutomationsIndexRoute
+  '/ai/admin/models': typeof AuthenticatedAiAdminModelsIndexRoute
+  '/ai/admin/prompts': typeof AuthenticatedAiAdminPromptsIndexRoute
+  '/ai/admin/skills': typeof AuthenticatedAiAdminSkillsIndexRoute
+  '/ai/admin/automations/runs/$runId': typeof AuthenticatedAiAdminAutomationsRunsRunIdRoute
+  '/ai/admin/automations/runs': typeof AuthenticatedAiAdminAutomationsRunsIndexRoute
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport;
-  '/403': typeof R403Route;
-  '/_authenticated': typeof AuthenticatedRouteWithChildren;
-  '/login': typeof LoginRoute;
-  '/_authenticated/': typeof AuthenticatedIndexRoute;
-  '/_authenticated/system/access-groups': typeof AuthenticatedSystemAccessGroupsRouteWithChildren;
-  '/_authenticated/system/companies': typeof AuthenticatedSystemCompaniesRoute;
-  '/_authenticated/system/my-permissions': typeof AuthenticatedSystemMyPermissionsRoute;
-  '/_authenticated/system/resources': typeof AuthenticatedSystemResourcesRoute;
-  '/_authenticated/system/users': typeof AuthenticatedSystemUsersRouteWithChildren;
-  '/_authenticated/ap/': typeof AuthenticatedApIndexRoute;
-  '/_authenticated/ar/': typeof AuthenticatedArIndexRoute;
-  '/_authenticated/crm/': typeof AuthenticatedCrmIndexRoute;
-  '/_authenticated/finance/': typeof AuthenticatedFinanceIndexRoute;
-  '/_authenticated/hr/': typeof AuthenticatedHrIndexRoute;
-  '/_authenticated/inventory/': typeof AuthenticatedInventoryIndexRoute;
-  '/_authenticated/manufacturing/': typeof AuthenticatedManufacturingIndexRoute;
-  '/_authenticated/purchasing/': typeof AuthenticatedPurchasingIndexRoute;
-  '/_authenticated/reporting/': typeof AuthenticatedReportingIndexRoute;
-  '/_authenticated/sales/': typeof AuthenticatedSalesIndexRoute;
-  '/_authenticated/system/': typeof AuthenticatedSystemIndexRoute;
-  '/_authenticated/ai/admin/agents': typeof AuthenticatedAiAdminAgentsRouteWithChildren;
-  '/_authenticated/ai/admin/automations': typeof AuthenticatedAiAdminAutomationsRouteWithChildren;
-  '/_authenticated/ai/admin/models': typeof AuthenticatedAiAdminModelsRouteWithChildren;
-  '/_authenticated/ai/admin/prompts': typeof AuthenticatedAiAdminPromptsRouteWithChildren;
-  '/_authenticated/ai/admin/skills': typeof AuthenticatedAiAdminSkillsRouteWithChildren;
-  '/_authenticated/ar/invoices/$id': typeof AuthenticatedArInvoicesIdRoute;
-  '/_authenticated/system/access-groups/$id': typeof AuthenticatedSystemAccessGroupsIdRoute;
-  '/_authenticated/system/access-groups/new': typeof AuthenticatedSystemAccessGroupsNewRoute;
-  '/_authenticated/system/users/$id': typeof AuthenticatedSystemUsersIdRoute;
-  '/_authenticated/ai/admin/': typeof AuthenticatedAiAdminIndexRoute;
-  '/_authenticated/ai/memory/': typeof AuthenticatedAiMemoryIndexRoute;
-  '/_authenticated/ai/skills/': typeof AuthenticatedAiSkillsIndexRoute;
-  '/_authenticated/ar/invoices/': typeof AuthenticatedArInvoicesIndexRoute;
-  '/_authenticated/system/access-groups/': typeof AuthenticatedSystemAccessGroupsIndexRoute;
-  '/_authenticated/system/users/': typeof AuthenticatedSystemUsersIndexRoute;
-  '/_authenticated/ai/admin/agents/$id': typeof AuthenticatedAiAdminAgentsIdRoute;
-  '/_authenticated/ai/admin/agents/new': typeof AuthenticatedAiAdminAgentsNewRoute;
-  '/_authenticated/ai/admin/automations/$automationId': typeof AuthenticatedAiAdminAutomationsAutomationIdRoute;
-  '/_authenticated/ai/admin/automations/new': typeof AuthenticatedAiAdminAutomationsNewRoute;
-  '/_authenticated/ai/admin/models/$id': typeof AuthenticatedAiAdminModelsIdRoute;
-  '/_authenticated/ai/admin/models/new': typeof AuthenticatedAiAdminModelsNewRoute;
-  '/_authenticated/ai/admin/prompts/$id': typeof AuthenticatedAiAdminPromptsIdRoute;
-  '/_authenticated/ai/admin/prompts/new': typeof AuthenticatedAiAdminPromptsNewRoute;
-  '/_authenticated/ai/admin/skills/$id': typeof AuthenticatedAiAdminSkillsIdRoute;
-  '/_authenticated/ai/admin/skills/new': typeof AuthenticatedAiAdminSkillsNewRoute;
-  '/_authenticated/ai/admin/agents/': typeof AuthenticatedAiAdminAgentsIndexRoute;
-  '/_authenticated/ai/admin/automations/': typeof AuthenticatedAiAdminAutomationsIndexRoute;
-  '/_authenticated/ai/admin/models/': typeof AuthenticatedAiAdminModelsIndexRoute;
-  '/_authenticated/ai/admin/prompts/': typeof AuthenticatedAiAdminPromptsIndexRoute;
-  '/_authenticated/ai/admin/skills/': typeof AuthenticatedAiAdminSkillsIndexRoute;
+  __root__: typeof rootRouteImport
+  '/403': typeof R403Route
+  '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/login': typeof LoginRoute
+  '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/system/access-groups': typeof AuthenticatedSystemAccessGroupsRouteWithChildren
+  '/_authenticated/system/companies': typeof AuthenticatedSystemCompaniesRoute
+  '/_authenticated/system/my-permissions': typeof AuthenticatedSystemMyPermissionsRoute
+  '/_authenticated/system/notification-preferences': typeof AuthenticatedSystemNotificationPreferencesRoute
+  '/_authenticated/system/resources': typeof AuthenticatedSystemResourcesRoute
+  '/_authenticated/system/users': typeof AuthenticatedSystemUsersRouteWithChildren
+  '/_authenticated/ap/': typeof AuthenticatedApIndexRoute
+  '/_authenticated/ar/': typeof AuthenticatedArIndexRoute
+  '/_authenticated/crm/': typeof AuthenticatedCrmIndexRoute
+  '/_authenticated/finance/': typeof AuthenticatedFinanceIndexRoute
+  '/_authenticated/hr/': typeof AuthenticatedHrIndexRoute
+  '/_authenticated/inventory/': typeof AuthenticatedInventoryIndexRoute
+  '/_authenticated/manufacturing/': typeof AuthenticatedManufacturingIndexRoute
+  '/_authenticated/purchasing/': typeof AuthenticatedPurchasingIndexRoute
+  '/_authenticated/reporting/': typeof AuthenticatedReportingIndexRoute
+  '/_authenticated/sales/': typeof AuthenticatedSalesIndexRoute
+  '/_authenticated/system/': typeof AuthenticatedSystemIndexRoute
+  '/_authenticated/ai/admin/agents': typeof AuthenticatedAiAdminAgentsRouteWithChildren
+  '/_authenticated/ai/admin/automations': typeof AuthenticatedAiAdminAutomationsRouteWithChildren
+  '/_authenticated/ai/admin/models': typeof AuthenticatedAiAdminModelsRouteWithChildren
+  '/_authenticated/ai/admin/prompts': typeof AuthenticatedAiAdminPromptsRouteWithChildren
+  '/_authenticated/ai/admin/skills': typeof AuthenticatedAiAdminSkillsRouteWithChildren
+  '/_authenticated/ar/invoices/$id': typeof AuthenticatedArInvoicesIdRoute
+  '/_authenticated/system/access-groups/$id': typeof AuthenticatedSystemAccessGroupsIdRoute
+  '/_authenticated/system/access-groups/new': typeof AuthenticatedSystemAccessGroupsNewRoute
+  '/_authenticated/system/users/$id': typeof AuthenticatedSystemUsersIdRoute
+  '/_authenticated/ai/admin/': typeof AuthenticatedAiAdminIndexRoute
+  '/_authenticated/ai/memory/': typeof AuthenticatedAiMemoryIndexRoute
+  '/_authenticated/ai/skills/': typeof AuthenticatedAiSkillsIndexRoute
+  '/_authenticated/ar/invoices/': typeof AuthenticatedArInvoicesIndexRoute
+  '/_authenticated/system/access-groups/': typeof AuthenticatedSystemAccessGroupsIndexRoute
+  '/_authenticated/system/users/': typeof AuthenticatedSystemUsersIndexRoute
+  '/_authenticated/ai/admin/agents/$id': typeof AuthenticatedAiAdminAgentsIdRoute
+  '/_authenticated/ai/admin/agents/new': typeof AuthenticatedAiAdminAgentsNewRoute
+  '/_authenticated/ai/admin/automations/$automationId': typeof AuthenticatedAiAdminAutomationsAutomationIdRoute
+  '/_authenticated/ai/admin/automations/new': typeof AuthenticatedAiAdminAutomationsNewRoute
+  '/_authenticated/ai/admin/models/$id': typeof AuthenticatedAiAdminModelsIdRoute
+  '/_authenticated/ai/admin/models/new': typeof AuthenticatedAiAdminModelsNewRoute
+  '/_authenticated/ai/admin/prompts/$id': typeof AuthenticatedAiAdminPromptsIdRoute
+  '/_authenticated/ai/admin/prompts/new': typeof AuthenticatedAiAdminPromptsNewRoute
+  '/_authenticated/ai/admin/skills/$id': typeof AuthenticatedAiAdminSkillsIdRoute
+  '/_authenticated/ai/admin/skills/new': typeof AuthenticatedAiAdminSkillsNewRoute
+  '/_authenticated/ai/admin/agents/': typeof AuthenticatedAiAdminAgentsIndexRoute
+  '/_authenticated/ai/admin/automations/': typeof AuthenticatedAiAdminAutomationsIndexRoute
+  '/_authenticated/ai/admin/models/': typeof AuthenticatedAiAdminModelsIndexRoute
+  '/_authenticated/ai/admin/prompts/': typeof AuthenticatedAiAdminPromptsIndexRoute
+  '/_authenticated/ai/admin/skills/': typeof AuthenticatedAiAdminSkillsIndexRoute
+  '/_authenticated/ai/admin/automations/runs/$runId': typeof AuthenticatedAiAdminAutomationsRunsRunIdRoute
+  '/_authenticated/ai/admin/automations/runs/': typeof AuthenticatedAiAdminAutomationsRunsIndexRoute
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath;
+  fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/403'
     | '/'
@@ -472,6 +538,7 @@ export interface FileRouteTypes {
     | '/system/access-groups'
     | '/system/companies'
     | '/system/my-permissions'
+    | '/system/notification-preferences'
     | '/system/resources'
     | '/system/users'
     | '/ap/'
@@ -514,14 +581,17 @@ export interface FileRouteTypes {
     | '/ai/admin/automations/'
     | '/ai/admin/models/'
     | '/ai/admin/prompts/'
-    | '/ai/admin/skills/';
-  fileRoutesByTo: FileRoutesByTo;
+    | '/ai/admin/skills/'
+    | '/ai/admin/automations/runs/$runId'
+    | '/ai/admin/automations/runs/'
+  fileRoutesByTo: FileRoutesByTo
   to:
     | '/403'
     | '/login'
     | '/'
     | '/system/companies'
     | '/system/my-permissions'
+    | '/system/notification-preferences'
     | '/system/resources'
     | '/ap'
     | '/ar'
@@ -558,7 +628,9 @@ export interface FileRouteTypes {
     | '/ai/admin/automations'
     | '/ai/admin/models'
     | '/ai/admin/prompts'
-    | '/ai/admin/skills';
+    | '/ai/admin/skills'
+    | '/ai/admin/automations/runs/$runId'
+    | '/ai/admin/automations/runs'
   id:
     | '__root__'
     | '/403'
@@ -568,6 +640,7 @@ export interface FileRouteTypes {
     | '/_authenticated/system/access-groups'
     | '/_authenticated/system/companies'
     | '/_authenticated/system/my-permissions'
+    | '/_authenticated/system/notification-preferences'
     | '/_authenticated/system/resources'
     | '/_authenticated/system/users'
     | '/_authenticated/ap/'
@@ -610,514 +683,569 @@ export interface FileRouteTypes {
     | '/_authenticated/ai/admin/automations/'
     | '/_authenticated/ai/admin/models/'
     | '/_authenticated/ai/admin/prompts/'
-    | '/_authenticated/ai/admin/skills/';
-  fileRoutesById: FileRoutesById;
+    | '/_authenticated/ai/admin/skills/'
+    | '/_authenticated/ai/admin/automations/runs/$runId'
+    | '/_authenticated/ai/admin/automations/runs/'
+  fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  R403Route: typeof R403Route;
-  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren;
-  LoginRoute: typeof LoginRoute;
+  R403Route: typeof R403Route
+  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  LoginRoute: typeof LoginRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
     '/login': {
-      id: '/login';
-      path: '/login';
-      fullPath: '/login';
-      preLoaderRoute: typeof LoginRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated': {
-      id: '/_authenticated';
-      path: '';
-      fullPath: '/';
-      preLoaderRoute: typeof AuthenticatedRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/403': {
-      id: '/403';
-      path: '/403';
-      fullPath: '/403';
-      preLoaderRoute: typeof R403RouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/403'
+      path: '/403'
+      fullPath: '/403'
+      preLoaderRoute: typeof R403RouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/': {
-      id: '/_authenticated/';
-      path: '/';
-      fullPath: '/';
-      preLoaderRoute: typeof AuthenticatedIndexRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/system/': {
-      id: '/_authenticated/system/';
-      path: '/system';
-      fullPath: '/system/';
-      preLoaderRoute: typeof AuthenticatedSystemIndexRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/system/'
+      path: '/system'
+      fullPath: '/system/'
+      preLoaderRoute: typeof AuthenticatedSystemIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/sales/': {
-      id: '/_authenticated/sales/';
-      path: '/sales';
-      fullPath: '/sales/';
-      preLoaderRoute: typeof AuthenticatedSalesIndexRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/sales/'
+      path: '/sales'
+      fullPath: '/sales/'
+      preLoaderRoute: typeof AuthenticatedSalesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/reporting/': {
-      id: '/_authenticated/reporting/';
-      path: '/reporting';
-      fullPath: '/reporting/';
-      preLoaderRoute: typeof AuthenticatedReportingIndexRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/reporting/'
+      path: '/reporting'
+      fullPath: '/reporting/'
+      preLoaderRoute: typeof AuthenticatedReportingIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/purchasing/': {
-      id: '/_authenticated/purchasing/';
-      path: '/purchasing';
-      fullPath: '/purchasing/';
-      preLoaderRoute: typeof AuthenticatedPurchasingIndexRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/purchasing/'
+      path: '/purchasing'
+      fullPath: '/purchasing/'
+      preLoaderRoute: typeof AuthenticatedPurchasingIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/manufacturing/': {
-      id: '/_authenticated/manufacturing/';
-      path: '/manufacturing';
-      fullPath: '/manufacturing/';
-      preLoaderRoute: typeof AuthenticatedManufacturingIndexRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/manufacturing/'
+      path: '/manufacturing'
+      fullPath: '/manufacturing/'
+      preLoaderRoute: typeof AuthenticatedManufacturingIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/inventory/': {
-      id: '/_authenticated/inventory/';
-      path: '/inventory';
-      fullPath: '/inventory/';
-      preLoaderRoute: typeof AuthenticatedInventoryIndexRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/inventory/'
+      path: '/inventory'
+      fullPath: '/inventory/'
+      preLoaderRoute: typeof AuthenticatedInventoryIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/hr/': {
-      id: '/_authenticated/hr/';
-      path: '/hr';
-      fullPath: '/hr/';
-      preLoaderRoute: typeof AuthenticatedHrIndexRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/hr/'
+      path: '/hr'
+      fullPath: '/hr/'
+      preLoaderRoute: typeof AuthenticatedHrIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/finance/': {
-      id: '/_authenticated/finance/';
-      path: '/finance';
-      fullPath: '/finance/';
-      preLoaderRoute: typeof AuthenticatedFinanceIndexRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/finance/'
+      path: '/finance'
+      fullPath: '/finance/'
+      preLoaderRoute: typeof AuthenticatedFinanceIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/crm/': {
-      id: '/_authenticated/crm/';
-      path: '/crm';
-      fullPath: '/crm/';
-      preLoaderRoute: typeof AuthenticatedCrmIndexRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/crm/'
+      path: '/crm'
+      fullPath: '/crm/'
+      preLoaderRoute: typeof AuthenticatedCrmIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/ar/': {
-      id: '/_authenticated/ar/';
-      path: '/ar';
-      fullPath: '/ar/';
-      preLoaderRoute: typeof AuthenticatedArIndexRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/ar/'
+      path: '/ar'
+      fullPath: '/ar/'
+      preLoaderRoute: typeof AuthenticatedArIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/ap/': {
-      id: '/_authenticated/ap/';
-      path: '/ap';
-      fullPath: '/ap/';
-      preLoaderRoute: typeof AuthenticatedApIndexRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/ap/'
+      path: '/ap'
+      fullPath: '/ap/'
+      preLoaderRoute: typeof AuthenticatedApIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/system/users': {
-      id: '/_authenticated/system/users';
-      path: '/system/users';
-      fullPath: '/system/users';
-      preLoaderRoute: typeof AuthenticatedSystemUsersRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/system/users'
+      path: '/system/users'
+      fullPath: '/system/users'
+      preLoaderRoute: typeof AuthenticatedSystemUsersRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/system/resources': {
-      id: '/_authenticated/system/resources';
-      path: '/system/resources';
-      fullPath: '/system/resources';
-      preLoaderRoute: typeof AuthenticatedSystemResourcesRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/system/resources'
+      path: '/system/resources'
+      fullPath: '/system/resources'
+      preLoaderRoute: typeof AuthenticatedSystemResourcesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/system/notification-preferences': {
+      id: '/_authenticated/system/notification-preferences'
+      path: '/system/notification-preferences'
+      fullPath: '/system/notification-preferences'
+      preLoaderRoute: typeof AuthenticatedSystemNotificationPreferencesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/system/my-permissions': {
-      id: '/_authenticated/system/my-permissions';
-      path: '/system/my-permissions';
-      fullPath: '/system/my-permissions';
-      preLoaderRoute: typeof AuthenticatedSystemMyPermissionsRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/system/my-permissions'
+      path: '/system/my-permissions'
+      fullPath: '/system/my-permissions'
+      preLoaderRoute: typeof AuthenticatedSystemMyPermissionsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/system/companies': {
-      id: '/_authenticated/system/companies';
-      path: '/system/companies';
-      fullPath: '/system/companies';
-      preLoaderRoute: typeof AuthenticatedSystemCompaniesRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/system/companies'
+      path: '/system/companies'
+      fullPath: '/system/companies'
+      preLoaderRoute: typeof AuthenticatedSystemCompaniesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/system/access-groups': {
-      id: '/_authenticated/system/access-groups';
-      path: '/system/access-groups';
-      fullPath: '/system/access-groups';
-      preLoaderRoute: typeof AuthenticatedSystemAccessGroupsRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/system/access-groups'
+      path: '/system/access-groups'
+      fullPath: '/system/access-groups'
+      preLoaderRoute: typeof AuthenticatedSystemAccessGroupsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/system/users/': {
-      id: '/_authenticated/system/users/';
-      path: '/';
-      fullPath: '/system/users/';
-      preLoaderRoute: typeof AuthenticatedSystemUsersIndexRouteImport;
-      parentRoute: typeof AuthenticatedSystemUsersRoute;
-    };
+      id: '/_authenticated/system/users/'
+      path: '/'
+      fullPath: '/system/users/'
+      preLoaderRoute: typeof AuthenticatedSystemUsersIndexRouteImport
+      parentRoute: typeof AuthenticatedSystemUsersRoute
+    }
     '/_authenticated/system/access-groups/': {
-      id: '/_authenticated/system/access-groups/';
-      path: '/';
-      fullPath: '/system/access-groups/';
-      preLoaderRoute: typeof AuthenticatedSystemAccessGroupsIndexRouteImport;
-      parentRoute: typeof AuthenticatedSystemAccessGroupsRoute;
-    };
+      id: '/_authenticated/system/access-groups/'
+      path: '/'
+      fullPath: '/system/access-groups/'
+      preLoaderRoute: typeof AuthenticatedSystemAccessGroupsIndexRouteImport
+      parentRoute: typeof AuthenticatedSystemAccessGroupsRoute
+    }
     '/_authenticated/ar/invoices/': {
-      id: '/_authenticated/ar/invoices/';
-      path: '/ar/invoices';
-      fullPath: '/ar/invoices/';
-      preLoaderRoute: typeof AuthenticatedArInvoicesIndexRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/ar/invoices/'
+      path: '/ar/invoices'
+      fullPath: '/ar/invoices/'
+      preLoaderRoute: typeof AuthenticatedArInvoicesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/ai/skills/': {
-      id: '/_authenticated/ai/skills/';
-      path: '/ai/skills';
-      fullPath: '/ai/skills/';
-      preLoaderRoute: typeof AuthenticatedAiSkillsIndexRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/ai/skills/'
+      path: '/ai/skills'
+      fullPath: '/ai/skills/'
+      preLoaderRoute: typeof AuthenticatedAiSkillsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/ai/memory/': {
-      id: '/_authenticated/ai/memory/';
-      path: '/ai/memory';
-      fullPath: '/ai/memory/';
-      preLoaderRoute: typeof AuthenticatedAiMemoryIndexRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/ai/memory/'
+      path: '/ai/memory'
+      fullPath: '/ai/memory/'
+      preLoaderRoute: typeof AuthenticatedAiMemoryIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/ai/admin/': {
-      id: '/_authenticated/ai/admin/';
-      path: '/ai/admin';
-      fullPath: '/ai/admin/';
-      preLoaderRoute: typeof AuthenticatedAiAdminIndexRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/ai/admin/'
+      path: '/ai/admin'
+      fullPath: '/ai/admin/'
+      preLoaderRoute: typeof AuthenticatedAiAdminIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/system/users/$id': {
-      id: '/_authenticated/system/users/$id';
-      path: '/$id';
-      fullPath: '/system/users/$id';
-      preLoaderRoute: typeof AuthenticatedSystemUsersIdRouteImport;
-      parentRoute: typeof AuthenticatedSystemUsersRoute;
-    };
+      id: '/_authenticated/system/users/$id'
+      path: '/$id'
+      fullPath: '/system/users/$id'
+      preLoaderRoute: typeof AuthenticatedSystemUsersIdRouteImport
+      parentRoute: typeof AuthenticatedSystemUsersRoute
+    }
     '/_authenticated/system/access-groups/new': {
-      id: '/_authenticated/system/access-groups/new';
-      path: '/new';
-      fullPath: '/system/access-groups/new';
-      preLoaderRoute: typeof AuthenticatedSystemAccessGroupsNewRouteImport;
-      parentRoute: typeof AuthenticatedSystemAccessGroupsRoute;
-    };
+      id: '/_authenticated/system/access-groups/new'
+      path: '/new'
+      fullPath: '/system/access-groups/new'
+      preLoaderRoute: typeof AuthenticatedSystemAccessGroupsNewRouteImport
+      parentRoute: typeof AuthenticatedSystemAccessGroupsRoute
+    }
     '/_authenticated/system/access-groups/$id': {
-      id: '/_authenticated/system/access-groups/$id';
-      path: '/$id';
-      fullPath: '/system/access-groups/$id';
-      preLoaderRoute: typeof AuthenticatedSystemAccessGroupsIdRouteImport;
-      parentRoute: typeof AuthenticatedSystemAccessGroupsRoute;
-    };
+      id: '/_authenticated/system/access-groups/$id'
+      path: '/$id'
+      fullPath: '/system/access-groups/$id'
+      preLoaderRoute: typeof AuthenticatedSystemAccessGroupsIdRouteImport
+      parentRoute: typeof AuthenticatedSystemAccessGroupsRoute
+    }
     '/_authenticated/ar/invoices/$id': {
-      id: '/_authenticated/ar/invoices/$id';
-      path: '/ar/invoices/$id';
-      fullPath: '/ar/invoices/$id';
-      preLoaderRoute: typeof AuthenticatedArInvoicesIdRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/ar/invoices/$id'
+      path: '/ar/invoices/$id'
+      fullPath: '/ar/invoices/$id'
+      preLoaderRoute: typeof AuthenticatedArInvoicesIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/ai/admin/skills': {
-      id: '/_authenticated/ai/admin/skills';
-      path: '/ai/admin/skills';
-      fullPath: '/ai/admin/skills';
-      preLoaderRoute: typeof AuthenticatedAiAdminSkillsRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/ai/admin/skills'
+      path: '/ai/admin/skills'
+      fullPath: '/ai/admin/skills'
+      preLoaderRoute: typeof AuthenticatedAiAdminSkillsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/ai/admin/prompts': {
-      id: '/_authenticated/ai/admin/prompts';
-      path: '/ai/admin/prompts';
-      fullPath: '/ai/admin/prompts';
-      preLoaderRoute: typeof AuthenticatedAiAdminPromptsRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/ai/admin/prompts'
+      path: '/ai/admin/prompts'
+      fullPath: '/ai/admin/prompts'
+      preLoaderRoute: typeof AuthenticatedAiAdminPromptsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/ai/admin/models': {
-      id: '/_authenticated/ai/admin/models';
-      path: '/ai/admin/models';
-      fullPath: '/ai/admin/models';
-      preLoaderRoute: typeof AuthenticatedAiAdminModelsRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/ai/admin/models'
+      path: '/ai/admin/models'
+      fullPath: '/ai/admin/models'
+      preLoaderRoute: typeof AuthenticatedAiAdminModelsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/ai/admin/automations': {
-      id: '/_authenticated/ai/admin/automations';
-      path: '/ai/admin/automations';
-      fullPath: '/ai/admin/automations';
-      preLoaderRoute: typeof AuthenticatedAiAdminAutomationsRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/ai/admin/automations'
+      path: '/ai/admin/automations'
+      fullPath: '/ai/admin/automations'
+      preLoaderRoute: typeof AuthenticatedAiAdminAutomationsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/ai/admin/agents': {
-      id: '/_authenticated/ai/admin/agents';
-      path: '/ai/admin/agents';
-      fullPath: '/ai/admin/agents';
-      preLoaderRoute: typeof AuthenticatedAiAdminAgentsRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
+      id: '/_authenticated/ai/admin/agents'
+      path: '/ai/admin/agents'
+      fullPath: '/ai/admin/agents'
+      preLoaderRoute: typeof AuthenticatedAiAdminAgentsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/ai/admin/skills/': {
-      id: '/_authenticated/ai/admin/skills/';
-      path: '/';
-      fullPath: '/ai/admin/skills/';
-      preLoaderRoute: typeof AuthenticatedAiAdminSkillsIndexRouteImport;
-      parentRoute: typeof AuthenticatedAiAdminSkillsRoute;
-    };
+      id: '/_authenticated/ai/admin/skills/'
+      path: '/'
+      fullPath: '/ai/admin/skills/'
+      preLoaderRoute: typeof AuthenticatedAiAdminSkillsIndexRouteImport
+      parentRoute: typeof AuthenticatedAiAdminSkillsRoute
+    }
     '/_authenticated/ai/admin/prompts/': {
-      id: '/_authenticated/ai/admin/prompts/';
-      path: '/';
-      fullPath: '/ai/admin/prompts/';
-      preLoaderRoute: typeof AuthenticatedAiAdminPromptsIndexRouteImport;
-      parentRoute: typeof AuthenticatedAiAdminPromptsRoute;
-    };
+      id: '/_authenticated/ai/admin/prompts/'
+      path: '/'
+      fullPath: '/ai/admin/prompts/'
+      preLoaderRoute: typeof AuthenticatedAiAdminPromptsIndexRouteImport
+      parentRoute: typeof AuthenticatedAiAdminPromptsRoute
+    }
     '/_authenticated/ai/admin/models/': {
-      id: '/_authenticated/ai/admin/models/';
-      path: '/';
-      fullPath: '/ai/admin/models/';
-      preLoaderRoute: typeof AuthenticatedAiAdminModelsIndexRouteImport;
-      parentRoute: typeof AuthenticatedAiAdminModelsRoute;
-    };
+      id: '/_authenticated/ai/admin/models/'
+      path: '/'
+      fullPath: '/ai/admin/models/'
+      preLoaderRoute: typeof AuthenticatedAiAdminModelsIndexRouteImport
+      parentRoute: typeof AuthenticatedAiAdminModelsRoute
+    }
     '/_authenticated/ai/admin/automations/': {
-      id: '/_authenticated/ai/admin/automations/';
-      path: '/';
-      fullPath: '/ai/admin/automations/';
-      preLoaderRoute: typeof AuthenticatedAiAdminAutomationsIndexRouteImport;
-      parentRoute: typeof AuthenticatedAiAdminAutomationsRoute;
-    };
+      id: '/_authenticated/ai/admin/automations/'
+      path: '/'
+      fullPath: '/ai/admin/automations/'
+      preLoaderRoute: typeof AuthenticatedAiAdminAutomationsIndexRouteImport
+      parentRoute: typeof AuthenticatedAiAdminAutomationsRoute
+    }
     '/_authenticated/ai/admin/agents/': {
-      id: '/_authenticated/ai/admin/agents/';
-      path: '/';
-      fullPath: '/ai/admin/agents/';
-      preLoaderRoute: typeof AuthenticatedAiAdminAgentsIndexRouteImport;
-      parentRoute: typeof AuthenticatedAiAdminAgentsRoute;
-    };
+      id: '/_authenticated/ai/admin/agents/'
+      path: '/'
+      fullPath: '/ai/admin/agents/'
+      preLoaderRoute: typeof AuthenticatedAiAdminAgentsIndexRouteImport
+      parentRoute: typeof AuthenticatedAiAdminAgentsRoute
+    }
     '/_authenticated/ai/admin/skills/new': {
-      id: '/_authenticated/ai/admin/skills/new';
-      path: '/new';
-      fullPath: '/ai/admin/skills/new';
-      preLoaderRoute: typeof AuthenticatedAiAdminSkillsNewRouteImport;
-      parentRoute: typeof AuthenticatedAiAdminSkillsRoute;
-    };
+      id: '/_authenticated/ai/admin/skills/new'
+      path: '/new'
+      fullPath: '/ai/admin/skills/new'
+      preLoaderRoute: typeof AuthenticatedAiAdminSkillsNewRouteImport
+      parentRoute: typeof AuthenticatedAiAdminSkillsRoute
+    }
     '/_authenticated/ai/admin/skills/$id': {
-      id: '/_authenticated/ai/admin/skills/$id';
-      path: '/$id';
-      fullPath: '/ai/admin/skills/$id';
-      preLoaderRoute: typeof AuthenticatedAiAdminSkillsIdRouteImport;
-      parentRoute: typeof AuthenticatedAiAdminSkillsRoute;
-    };
+      id: '/_authenticated/ai/admin/skills/$id'
+      path: '/$id'
+      fullPath: '/ai/admin/skills/$id'
+      preLoaderRoute: typeof AuthenticatedAiAdminSkillsIdRouteImport
+      parentRoute: typeof AuthenticatedAiAdminSkillsRoute
+    }
     '/_authenticated/ai/admin/prompts/new': {
-      id: '/_authenticated/ai/admin/prompts/new';
-      path: '/new';
-      fullPath: '/ai/admin/prompts/new';
-      preLoaderRoute: typeof AuthenticatedAiAdminPromptsNewRouteImport;
-      parentRoute: typeof AuthenticatedAiAdminPromptsRoute;
-    };
+      id: '/_authenticated/ai/admin/prompts/new'
+      path: '/new'
+      fullPath: '/ai/admin/prompts/new'
+      preLoaderRoute: typeof AuthenticatedAiAdminPromptsNewRouteImport
+      parentRoute: typeof AuthenticatedAiAdminPromptsRoute
+    }
     '/_authenticated/ai/admin/prompts/$id': {
-      id: '/_authenticated/ai/admin/prompts/$id';
-      path: '/$id';
-      fullPath: '/ai/admin/prompts/$id';
-      preLoaderRoute: typeof AuthenticatedAiAdminPromptsIdRouteImport;
-      parentRoute: typeof AuthenticatedAiAdminPromptsRoute;
-    };
+      id: '/_authenticated/ai/admin/prompts/$id'
+      path: '/$id'
+      fullPath: '/ai/admin/prompts/$id'
+      preLoaderRoute: typeof AuthenticatedAiAdminPromptsIdRouteImport
+      parentRoute: typeof AuthenticatedAiAdminPromptsRoute
+    }
     '/_authenticated/ai/admin/models/new': {
-      id: '/_authenticated/ai/admin/models/new';
-      path: '/new';
-      fullPath: '/ai/admin/models/new';
-      preLoaderRoute: typeof AuthenticatedAiAdminModelsNewRouteImport;
-      parentRoute: typeof AuthenticatedAiAdminModelsRoute;
-    };
+      id: '/_authenticated/ai/admin/models/new'
+      path: '/new'
+      fullPath: '/ai/admin/models/new'
+      preLoaderRoute: typeof AuthenticatedAiAdminModelsNewRouteImport
+      parentRoute: typeof AuthenticatedAiAdminModelsRoute
+    }
     '/_authenticated/ai/admin/models/$id': {
-      id: '/_authenticated/ai/admin/models/$id';
-      path: '/$id';
-      fullPath: '/ai/admin/models/$id';
-      preLoaderRoute: typeof AuthenticatedAiAdminModelsIdRouteImport;
-      parentRoute: typeof AuthenticatedAiAdminModelsRoute;
-    };
+      id: '/_authenticated/ai/admin/models/$id'
+      path: '/$id'
+      fullPath: '/ai/admin/models/$id'
+      preLoaderRoute: typeof AuthenticatedAiAdminModelsIdRouteImport
+      parentRoute: typeof AuthenticatedAiAdminModelsRoute
+    }
     '/_authenticated/ai/admin/automations/new': {
-      id: '/_authenticated/ai/admin/automations/new';
-      path: '/new';
-      fullPath: '/ai/admin/automations/new';
-      preLoaderRoute: typeof AuthenticatedAiAdminAutomationsNewRouteImport;
-      parentRoute: typeof AuthenticatedAiAdminAutomationsRoute;
-    };
+      id: '/_authenticated/ai/admin/automations/new'
+      path: '/new'
+      fullPath: '/ai/admin/automations/new'
+      preLoaderRoute: typeof AuthenticatedAiAdminAutomationsNewRouteImport
+      parentRoute: typeof AuthenticatedAiAdminAutomationsRoute
+    }
     '/_authenticated/ai/admin/automations/$automationId': {
-      id: '/_authenticated/ai/admin/automations/$automationId';
-      path: '/$automationId';
-      fullPath: '/ai/admin/automations/$automationId';
-      preLoaderRoute: typeof AuthenticatedAiAdminAutomationsAutomationIdRouteImport;
-      parentRoute: typeof AuthenticatedAiAdminAutomationsRoute;
-    };
+      id: '/_authenticated/ai/admin/automations/$automationId'
+      path: '/$automationId'
+      fullPath: '/ai/admin/automations/$automationId'
+      preLoaderRoute: typeof AuthenticatedAiAdminAutomationsAutomationIdRouteImport
+      parentRoute: typeof AuthenticatedAiAdminAutomationsRoute
+    }
     '/_authenticated/ai/admin/agents/new': {
-      id: '/_authenticated/ai/admin/agents/new';
-      path: '/new';
-      fullPath: '/ai/admin/agents/new';
-      preLoaderRoute: typeof AuthenticatedAiAdminAgentsNewRouteImport;
-      parentRoute: typeof AuthenticatedAiAdminAgentsRoute;
-    };
+      id: '/_authenticated/ai/admin/agents/new'
+      path: '/new'
+      fullPath: '/ai/admin/agents/new'
+      preLoaderRoute: typeof AuthenticatedAiAdminAgentsNewRouteImport
+      parentRoute: typeof AuthenticatedAiAdminAgentsRoute
+    }
     '/_authenticated/ai/admin/agents/$id': {
-      id: '/_authenticated/ai/admin/agents/$id';
-      path: '/$id';
-      fullPath: '/ai/admin/agents/$id';
-      preLoaderRoute: typeof AuthenticatedAiAdminAgentsIdRouteImport;
-      parentRoute: typeof AuthenticatedAiAdminAgentsRoute;
-    };
+      id: '/_authenticated/ai/admin/agents/$id'
+      path: '/$id'
+      fullPath: '/ai/admin/agents/$id'
+      preLoaderRoute: typeof AuthenticatedAiAdminAgentsIdRouteImport
+      parentRoute: typeof AuthenticatedAiAdminAgentsRoute
+    }
+    '/_authenticated/ai/admin/automations/runs/': {
+      id: '/_authenticated/ai/admin/automations/runs/'
+      path: '/runs'
+      fullPath: '/ai/admin/automations/runs/'
+      preLoaderRoute: typeof AuthenticatedAiAdminAutomationsRunsIndexRouteImport
+      parentRoute: typeof AuthenticatedAiAdminAutomationsRoute
+    }
+    '/_authenticated/ai/admin/automations/runs/$runId': {
+      id: '/_authenticated/ai/admin/automations/runs/$runId'
+      path: '/runs/$runId'
+      fullPath: '/ai/admin/automations/runs/$runId'
+      preLoaderRoute: typeof AuthenticatedAiAdminAutomationsRunsRunIdRouteImport
+      parentRoute: typeof AuthenticatedAiAdminAutomationsRoute
+    }
   }
 }
 
 interface AuthenticatedSystemAccessGroupsRouteChildren {
-  AuthenticatedSystemAccessGroupsIdRoute: typeof AuthenticatedSystemAccessGroupsIdRoute;
-  AuthenticatedSystemAccessGroupsNewRoute: typeof AuthenticatedSystemAccessGroupsNewRoute;
-  AuthenticatedSystemAccessGroupsIndexRoute: typeof AuthenticatedSystemAccessGroupsIndexRoute;
+  AuthenticatedSystemAccessGroupsIdRoute: typeof AuthenticatedSystemAccessGroupsIdRoute
+  AuthenticatedSystemAccessGroupsNewRoute: typeof AuthenticatedSystemAccessGroupsNewRoute
+  AuthenticatedSystemAccessGroupsIndexRoute: typeof AuthenticatedSystemAccessGroupsIndexRoute
 }
 
-const AuthenticatedSystemAccessGroupsRouteChildren: AuthenticatedSystemAccessGroupsRouteChildren = {
-  AuthenticatedSystemAccessGroupsIdRoute: AuthenticatedSystemAccessGroupsIdRoute,
-  AuthenticatedSystemAccessGroupsNewRoute: AuthenticatedSystemAccessGroupsNewRoute,
-  AuthenticatedSystemAccessGroupsIndexRoute: AuthenticatedSystemAccessGroupsIndexRoute,
-};
+const AuthenticatedSystemAccessGroupsRouteChildren: AuthenticatedSystemAccessGroupsRouteChildren =
+  {
+    AuthenticatedSystemAccessGroupsIdRoute:
+      AuthenticatedSystemAccessGroupsIdRoute,
+    AuthenticatedSystemAccessGroupsNewRoute:
+      AuthenticatedSystemAccessGroupsNewRoute,
+    AuthenticatedSystemAccessGroupsIndexRoute:
+      AuthenticatedSystemAccessGroupsIndexRoute,
+  }
 
 const AuthenticatedSystemAccessGroupsRouteWithChildren =
   AuthenticatedSystemAccessGroupsRoute._addFileChildren(
     AuthenticatedSystemAccessGroupsRouteChildren,
-  );
+  )
 
 interface AuthenticatedSystemUsersRouteChildren {
-  AuthenticatedSystemUsersIdRoute: typeof AuthenticatedSystemUsersIdRoute;
-  AuthenticatedSystemUsersIndexRoute: typeof AuthenticatedSystemUsersIndexRoute;
+  AuthenticatedSystemUsersIdRoute: typeof AuthenticatedSystemUsersIdRoute
+  AuthenticatedSystemUsersIndexRoute: typeof AuthenticatedSystemUsersIndexRoute
 }
 
-const AuthenticatedSystemUsersRouteChildren: AuthenticatedSystemUsersRouteChildren = {
-  AuthenticatedSystemUsersIdRoute: AuthenticatedSystemUsersIdRoute,
-  AuthenticatedSystemUsersIndexRoute: AuthenticatedSystemUsersIndexRoute,
-};
+const AuthenticatedSystemUsersRouteChildren: AuthenticatedSystemUsersRouteChildren =
+  {
+    AuthenticatedSystemUsersIdRoute: AuthenticatedSystemUsersIdRoute,
+    AuthenticatedSystemUsersIndexRoute: AuthenticatedSystemUsersIndexRoute,
+  }
 
-const AuthenticatedSystemUsersRouteWithChildren = AuthenticatedSystemUsersRoute._addFileChildren(
-  AuthenticatedSystemUsersRouteChildren,
-);
+const AuthenticatedSystemUsersRouteWithChildren =
+  AuthenticatedSystemUsersRoute._addFileChildren(
+    AuthenticatedSystemUsersRouteChildren,
+  )
 
 interface AuthenticatedAiAdminAgentsRouteChildren {
-  AuthenticatedAiAdminAgentsIdRoute: typeof AuthenticatedAiAdminAgentsIdRoute;
-  AuthenticatedAiAdminAgentsNewRoute: typeof AuthenticatedAiAdminAgentsNewRoute;
-  AuthenticatedAiAdminAgentsIndexRoute: typeof AuthenticatedAiAdminAgentsIndexRoute;
+  AuthenticatedAiAdminAgentsIdRoute: typeof AuthenticatedAiAdminAgentsIdRoute
+  AuthenticatedAiAdminAgentsNewRoute: typeof AuthenticatedAiAdminAgentsNewRoute
+  AuthenticatedAiAdminAgentsIndexRoute: typeof AuthenticatedAiAdminAgentsIndexRoute
 }
 
-const AuthenticatedAiAdminAgentsRouteChildren: AuthenticatedAiAdminAgentsRouteChildren = {
-  AuthenticatedAiAdminAgentsIdRoute: AuthenticatedAiAdminAgentsIdRoute,
-  AuthenticatedAiAdminAgentsNewRoute: AuthenticatedAiAdminAgentsNewRoute,
-  AuthenticatedAiAdminAgentsIndexRoute: AuthenticatedAiAdminAgentsIndexRoute,
-};
+const AuthenticatedAiAdminAgentsRouteChildren: AuthenticatedAiAdminAgentsRouteChildren =
+  {
+    AuthenticatedAiAdminAgentsIdRoute: AuthenticatedAiAdminAgentsIdRoute,
+    AuthenticatedAiAdminAgentsNewRoute: AuthenticatedAiAdminAgentsNewRoute,
+    AuthenticatedAiAdminAgentsIndexRoute: AuthenticatedAiAdminAgentsIndexRoute,
+  }
 
 const AuthenticatedAiAdminAgentsRouteWithChildren =
-  AuthenticatedAiAdminAgentsRoute._addFileChildren(AuthenticatedAiAdminAgentsRouteChildren);
+  AuthenticatedAiAdminAgentsRoute._addFileChildren(
+    AuthenticatedAiAdminAgentsRouteChildren,
+  )
 
 interface AuthenticatedAiAdminAutomationsRouteChildren {
-  AuthenticatedAiAdminAutomationsAutomationIdRoute: typeof AuthenticatedAiAdminAutomationsAutomationIdRoute;
-  AuthenticatedAiAdminAutomationsNewRoute: typeof AuthenticatedAiAdminAutomationsNewRoute;
-  AuthenticatedAiAdminAutomationsIndexRoute: typeof AuthenticatedAiAdminAutomationsIndexRoute;
+  AuthenticatedAiAdminAutomationsAutomationIdRoute: typeof AuthenticatedAiAdminAutomationsAutomationIdRoute
+  AuthenticatedAiAdminAutomationsNewRoute: typeof AuthenticatedAiAdminAutomationsNewRoute
+  AuthenticatedAiAdminAutomationsIndexRoute: typeof AuthenticatedAiAdminAutomationsIndexRoute
+  AuthenticatedAiAdminAutomationsRunsRunIdRoute: typeof AuthenticatedAiAdminAutomationsRunsRunIdRoute
+  AuthenticatedAiAdminAutomationsRunsIndexRoute: typeof AuthenticatedAiAdminAutomationsRunsIndexRoute
 }
 
-const AuthenticatedAiAdminAutomationsRouteChildren: AuthenticatedAiAdminAutomationsRouteChildren = {
-  AuthenticatedAiAdminAutomationsAutomationIdRoute:
-    AuthenticatedAiAdminAutomationsAutomationIdRoute,
-  AuthenticatedAiAdminAutomationsNewRoute: AuthenticatedAiAdminAutomationsNewRoute,
-  AuthenticatedAiAdminAutomationsIndexRoute: AuthenticatedAiAdminAutomationsIndexRoute,
-};
+const AuthenticatedAiAdminAutomationsRouteChildren: AuthenticatedAiAdminAutomationsRouteChildren =
+  {
+    AuthenticatedAiAdminAutomationsAutomationIdRoute:
+      AuthenticatedAiAdminAutomationsAutomationIdRoute,
+    AuthenticatedAiAdminAutomationsNewRoute:
+      AuthenticatedAiAdminAutomationsNewRoute,
+    AuthenticatedAiAdminAutomationsIndexRoute:
+      AuthenticatedAiAdminAutomationsIndexRoute,
+    AuthenticatedAiAdminAutomationsRunsRunIdRoute:
+      AuthenticatedAiAdminAutomationsRunsRunIdRoute,
+    AuthenticatedAiAdminAutomationsRunsIndexRoute:
+      AuthenticatedAiAdminAutomationsRunsIndexRoute,
+  }
 
 const AuthenticatedAiAdminAutomationsRouteWithChildren =
   AuthenticatedAiAdminAutomationsRoute._addFileChildren(
     AuthenticatedAiAdminAutomationsRouteChildren,
-  );
+  )
 
 interface AuthenticatedAiAdminModelsRouteChildren {
-  AuthenticatedAiAdminModelsIdRoute: typeof AuthenticatedAiAdminModelsIdRoute;
-  AuthenticatedAiAdminModelsNewRoute: typeof AuthenticatedAiAdminModelsNewRoute;
-  AuthenticatedAiAdminModelsIndexRoute: typeof AuthenticatedAiAdminModelsIndexRoute;
+  AuthenticatedAiAdminModelsIdRoute: typeof AuthenticatedAiAdminModelsIdRoute
+  AuthenticatedAiAdminModelsNewRoute: typeof AuthenticatedAiAdminModelsNewRoute
+  AuthenticatedAiAdminModelsIndexRoute: typeof AuthenticatedAiAdminModelsIndexRoute
 }
 
-const AuthenticatedAiAdminModelsRouteChildren: AuthenticatedAiAdminModelsRouteChildren = {
-  AuthenticatedAiAdminModelsIdRoute: AuthenticatedAiAdminModelsIdRoute,
-  AuthenticatedAiAdminModelsNewRoute: AuthenticatedAiAdminModelsNewRoute,
-  AuthenticatedAiAdminModelsIndexRoute: AuthenticatedAiAdminModelsIndexRoute,
-};
+const AuthenticatedAiAdminModelsRouteChildren: AuthenticatedAiAdminModelsRouteChildren =
+  {
+    AuthenticatedAiAdminModelsIdRoute: AuthenticatedAiAdminModelsIdRoute,
+    AuthenticatedAiAdminModelsNewRoute: AuthenticatedAiAdminModelsNewRoute,
+    AuthenticatedAiAdminModelsIndexRoute: AuthenticatedAiAdminModelsIndexRoute,
+  }
 
 const AuthenticatedAiAdminModelsRouteWithChildren =
-  AuthenticatedAiAdminModelsRoute._addFileChildren(AuthenticatedAiAdminModelsRouteChildren);
+  AuthenticatedAiAdminModelsRoute._addFileChildren(
+    AuthenticatedAiAdminModelsRouteChildren,
+  )
 
 interface AuthenticatedAiAdminPromptsRouteChildren {
-  AuthenticatedAiAdminPromptsIdRoute: typeof AuthenticatedAiAdminPromptsIdRoute;
-  AuthenticatedAiAdminPromptsNewRoute: typeof AuthenticatedAiAdminPromptsNewRoute;
-  AuthenticatedAiAdminPromptsIndexRoute: typeof AuthenticatedAiAdminPromptsIndexRoute;
+  AuthenticatedAiAdminPromptsIdRoute: typeof AuthenticatedAiAdminPromptsIdRoute
+  AuthenticatedAiAdminPromptsNewRoute: typeof AuthenticatedAiAdminPromptsNewRoute
+  AuthenticatedAiAdminPromptsIndexRoute: typeof AuthenticatedAiAdminPromptsIndexRoute
 }
 
-const AuthenticatedAiAdminPromptsRouteChildren: AuthenticatedAiAdminPromptsRouteChildren = {
-  AuthenticatedAiAdminPromptsIdRoute: AuthenticatedAiAdminPromptsIdRoute,
-  AuthenticatedAiAdminPromptsNewRoute: AuthenticatedAiAdminPromptsNewRoute,
-  AuthenticatedAiAdminPromptsIndexRoute: AuthenticatedAiAdminPromptsIndexRoute,
-};
+const AuthenticatedAiAdminPromptsRouteChildren: AuthenticatedAiAdminPromptsRouteChildren =
+  {
+    AuthenticatedAiAdminPromptsIdRoute: AuthenticatedAiAdminPromptsIdRoute,
+    AuthenticatedAiAdminPromptsNewRoute: AuthenticatedAiAdminPromptsNewRoute,
+    AuthenticatedAiAdminPromptsIndexRoute:
+      AuthenticatedAiAdminPromptsIndexRoute,
+  }
 
 const AuthenticatedAiAdminPromptsRouteWithChildren =
-  AuthenticatedAiAdminPromptsRoute._addFileChildren(AuthenticatedAiAdminPromptsRouteChildren);
+  AuthenticatedAiAdminPromptsRoute._addFileChildren(
+    AuthenticatedAiAdminPromptsRouteChildren,
+  )
 
 interface AuthenticatedAiAdminSkillsRouteChildren {
-  AuthenticatedAiAdminSkillsIdRoute: typeof AuthenticatedAiAdminSkillsIdRoute;
-  AuthenticatedAiAdminSkillsNewRoute: typeof AuthenticatedAiAdminSkillsNewRoute;
-  AuthenticatedAiAdminSkillsIndexRoute: typeof AuthenticatedAiAdminSkillsIndexRoute;
+  AuthenticatedAiAdminSkillsIdRoute: typeof AuthenticatedAiAdminSkillsIdRoute
+  AuthenticatedAiAdminSkillsNewRoute: typeof AuthenticatedAiAdminSkillsNewRoute
+  AuthenticatedAiAdminSkillsIndexRoute: typeof AuthenticatedAiAdminSkillsIndexRoute
 }
 
-const AuthenticatedAiAdminSkillsRouteChildren: AuthenticatedAiAdminSkillsRouteChildren = {
-  AuthenticatedAiAdminSkillsIdRoute: AuthenticatedAiAdminSkillsIdRoute,
-  AuthenticatedAiAdminSkillsNewRoute: AuthenticatedAiAdminSkillsNewRoute,
-  AuthenticatedAiAdminSkillsIndexRoute: AuthenticatedAiAdminSkillsIndexRoute,
-};
+const AuthenticatedAiAdminSkillsRouteChildren: AuthenticatedAiAdminSkillsRouteChildren =
+  {
+    AuthenticatedAiAdminSkillsIdRoute: AuthenticatedAiAdminSkillsIdRoute,
+    AuthenticatedAiAdminSkillsNewRoute: AuthenticatedAiAdminSkillsNewRoute,
+    AuthenticatedAiAdminSkillsIndexRoute: AuthenticatedAiAdminSkillsIndexRoute,
+  }
 
 const AuthenticatedAiAdminSkillsRouteWithChildren =
-  AuthenticatedAiAdminSkillsRoute._addFileChildren(AuthenticatedAiAdminSkillsRouteChildren);
+  AuthenticatedAiAdminSkillsRoute._addFileChildren(
+    AuthenticatedAiAdminSkillsRouteChildren,
+  )
 
 interface AuthenticatedRouteChildren {
-  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute;
-  AuthenticatedSystemAccessGroupsRoute: typeof AuthenticatedSystemAccessGroupsRouteWithChildren;
-  AuthenticatedSystemCompaniesRoute: typeof AuthenticatedSystemCompaniesRoute;
-  AuthenticatedSystemMyPermissionsRoute: typeof AuthenticatedSystemMyPermissionsRoute;
-  AuthenticatedSystemResourcesRoute: typeof AuthenticatedSystemResourcesRoute;
-  AuthenticatedSystemUsersRoute: typeof AuthenticatedSystemUsersRouteWithChildren;
-  AuthenticatedApIndexRoute: typeof AuthenticatedApIndexRoute;
-  AuthenticatedArIndexRoute: typeof AuthenticatedArIndexRoute;
-  AuthenticatedCrmIndexRoute: typeof AuthenticatedCrmIndexRoute;
-  AuthenticatedFinanceIndexRoute: typeof AuthenticatedFinanceIndexRoute;
-  AuthenticatedHrIndexRoute: typeof AuthenticatedHrIndexRoute;
-  AuthenticatedInventoryIndexRoute: typeof AuthenticatedInventoryIndexRoute;
-  AuthenticatedManufacturingIndexRoute: typeof AuthenticatedManufacturingIndexRoute;
-  AuthenticatedPurchasingIndexRoute: typeof AuthenticatedPurchasingIndexRoute;
-  AuthenticatedReportingIndexRoute: typeof AuthenticatedReportingIndexRoute;
-  AuthenticatedSalesIndexRoute: typeof AuthenticatedSalesIndexRoute;
-  AuthenticatedSystemIndexRoute: typeof AuthenticatedSystemIndexRoute;
-  AuthenticatedAiAdminAgentsRoute: typeof AuthenticatedAiAdminAgentsRouteWithChildren;
-  AuthenticatedAiAdminAutomationsRoute: typeof AuthenticatedAiAdminAutomationsRouteWithChildren;
-  AuthenticatedAiAdminModelsRoute: typeof AuthenticatedAiAdminModelsRouteWithChildren;
-  AuthenticatedAiAdminPromptsRoute: typeof AuthenticatedAiAdminPromptsRouteWithChildren;
-  AuthenticatedAiAdminSkillsRoute: typeof AuthenticatedAiAdminSkillsRouteWithChildren;
-  AuthenticatedArInvoicesIdRoute: typeof AuthenticatedArInvoicesIdRoute;
-  AuthenticatedAiAdminIndexRoute: typeof AuthenticatedAiAdminIndexRoute;
-  AuthenticatedAiMemoryIndexRoute: typeof AuthenticatedAiMemoryIndexRoute;
-  AuthenticatedAiSkillsIndexRoute: typeof AuthenticatedAiSkillsIndexRoute;
-  AuthenticatedArInvoicesIndexRoute: typeof AuthenticatedArInvoicesIndexRoute;
+  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedSystemAccessGroupsRoute: typeof AuthenticatedSystemAccessGroupsRouteWithChildren
+  AuthenticatedSystemCompaniesRoute: typeof AuthenticatedSystemCompaniesRoute
+  AuthenticatedSystemMyPermissionsRoute: typeof AuthenticatedSystemMyPermissionsRoute
+  AuthenticatedSystemNotificationPreferencesRoute: typeof AuthenticatedSystemNotificationPreferencesRoute
+  AuthenticatedSystemResourcesRoute: typeof AuthenticatedSystemResourcesRoute
+  AuthenticatedSystemUsersRoute: typeof AuthenticatedSystemUsersRouteWithChildren
+  AuthenticatedApIndexRoute: typeof AuthenticatedApIndexRoute
+  AuthenticatedArIndexRoute: typeof AuthenticatedArIndexRoute
+  AuthenticatedCrmIndexRoute: typeof AuthenticatedCrmIndexRoute
+  AuthenticatedFinanceIndexRoute: typeof AuthenticatedFinanceIndexRoute
+  AuthenticatedHrIndexRoute: typeof AuthenticatedHrIndexRoute
+  AuthenticatedInventoryIndexRoute: typeof AuthenticatedInventoryIndexRoute
+  AuthenticatedManufacturingIndexRoute: typeof AuthenticatedManufacturingIndexRoute
+  AuthenticatedPurchasingIndexRoute: typeof AuthenticatedPurchasingIndexRoute
+  AuthenticatedReportingIndexRoute: typeof AuthenticatedReportingIndexRoute
+  AuthenticatedSalesIndexRoute: typeof AuthenticatedSalesIndexRoute
+  AuthenticatedSystemIndexRoute: typeof AuthenticatedSystemIndexRoute
+  AuthenticatedAiAdminAgentsRoute: typeof AuthenticatedAiAdminAgentsRouteWithChildren
+  AuthenticatedAiAdminAutomationsRoute: typeof AuthenticatedAiAdminAutomationsRouteWithChildren
+  AuthenticatedAiAdminModelsRoute: typeof AuthenticatedAiAdminModelsRouteWithChildren
+  AuthenticatedAiAdminPromptsRoute: typeof AuthenticatedAiAdminPromptsRouteWithChildren
+  AuthenticatedAiAdminSkillsRoute: typeof AuthenticatedAiAdminSkillsRouteWithChildren
+  AuthenticatedArInvoicesIdRoute: typeof AuthenticatedArInvoicesIdRoute
+  AuthenticatedAiAdminIndexRoute: typeof AuthenticatedAiAdminIndexRoute
+  AuthenticatedAiMemoryIndexRoute: typeof AuthenticatedAiMemoryIndexRoute
+  AuthenticatedAiSkillsIndexRoute: typeof AuthenticatedAiSkillsIndexRoute
+  AuthenticatedArInvoicesIndexRoute: typeof AuthenticatedArInvoicesIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
-  AuthenticatedSystemAccessGroupsRoute: AuthenticatedSystemAccessGroupsRouteWithChildren,
+  AuthenticatedSystemAccessGroupsRoute:
+    AuthenticatedSystemAccessGroupsRouteWithChildren,
   AuthenticatedSystemCompaniesRoute: AuthenticatedSystemCompaniesRoute,
   AuthenticatedSystemMyPermissionsRoute: AuthenticatedSystemMyPermissionsRoute,
+  AuthenticatedSystemNotificationPreferencesRoute:
+    AuthenticatedSystemNotificationPreferencesRoute,
   AuthenticatedSystemResourcesRoute: AuthenticatedSystemResourcesRoute,
   AuthenticatedSystemUsersRoute: AuthenticatedSystemUsersRouteWithChildren,
   AuthenticatedApIndexRoute: AuthenticatedApIndexRoute,
@@ -1132,26 +1260,28 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedSalesIndexRoute: AuthenticatedSalesIndexRoute,
   AuthenticatedSystemIndexRoute: AuthenticatedSystemIndexRoute,
   AuthenticatedAiAdminAgentsRoute: AuthenticatedAiAdminAgentsRouteWithChildren,
-  AuthenticatedAiAdminAutomationsRoute: AuthenticatedAiAdminAutomationsRouteWithChildren,
+  AuthenticatedAiAdminAutomationsRoute:
+    AuthenticatedAiAdminAutomationsRouteWithChildren,
   AuthenticatedAiAdminModelsRoute: AuthenticatedAiAdminModelsRouteWithChildren,
-  AuthenticatedAiAdminPromptsRoute: AuthenticatedAiAdminPromptsRouteWithChildren,
+  AuthenticatedAiAdminPromptsRoute:
+    AuthenticatedAiAdminPromptsRouteWithChildren,
   AuthenticatedAiAdminSkillsRoute: AuthenticatedAiAdminSkillsRouteWithChildren,
   AuthenticatedArInvoicesIdRoute: AuthenticatedArInvoicesIdRoute,
   AuthenticatedAiAdminIndexRoute: AuthenticatedAiAdminIndexRoute,
   AuthenticatedAiMemoryIndexRoute: AuthenticatedAiMemoryIndexRoute,
   AuthenticatedAiSkillsIndexRoute: AuthenticatedAiSkillsIndexRoute,
   AuthenticatedArInvoicesIndexRoute: AuthenticatedArInvoicesIndexRoute,
-};
+}
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
   AuthenticatedRouteChildren,
-);
+)
 
 const rootRouteChildren: RootRouteChildren = {
   R403Route: R403Route,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   LoginRoute: LoginRoute,
-};
+}
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>();
+  ._addFileTypes<FileRouteTypes>()

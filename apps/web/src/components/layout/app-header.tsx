@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unnecessary-condition */
 import { useState } from 'react';
-import { Bell, Menu, MessageSquare, Search, X } from 'lucide-react';
+import { Menu, MessageSquare, Search, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { NexaLogo } from '@/components/ui/nexa-logo';
@@ -11,6 +11,7 @@ import { useSidebarStore } from '@/stores/sidebar-store';
 
 import { useI18n, useLocale } from '@nexa/i18n';
 
+import { NotificationDropdown } from '@/features/notifications/components/notification-dropdown';
 import { UnifiedSearch } from '../header/UnifiedSearch';
 import { FavouritesDropdown } from '@/features/views/components/favourites-dropdown';
 import { UserMenu } from './user-menu';
@@ -25,9 +26,6 @@ export function AppHeader() {
   const isStreaming = useCopilotStore((s) => s.isStreaming);
 
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
-
-  // Placeholder notification count (wired in E9)
-  const notificationCount = 3;
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -127,23 +125,8 @@ export function AppHeader() {
             </TooltipContent>
           </Tooltip>
 
-          {/* Notification bell (v0 style with badge) */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                className="relative flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                aria-label={t('navigation:notifications')}
-              >
-                <Bell className="h-4 w-4" />
-                {notificationCount > 0 && (
-                  <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-white">
-                    {notificationCount}
-                  </span>
-                )}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>{t('navigation:notifications')}</TooltipContent>
-          </Tooltip>
+          {/* Notification bell with dropdown */}
+          <NotificationDropdown />
 
           {/* Favourites star dropdown */}
           <FavouritesDropdown />

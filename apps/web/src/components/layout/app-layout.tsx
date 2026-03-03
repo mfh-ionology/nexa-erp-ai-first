@@ -1,5 +1,6 @@
 import { Outlet, useRouterState } from '@tanstack/react-router';
-import { useCallback, useEffect, useRef } from 'react';
+import { Component, useCallback, useEffect, useRef } from 'react';
+import type { ErrorInfo, ReactNode } from 'react';
 
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { useBreakpoint, usePrefersReducedMotion } from '@/hooks/use-breakpoint';
@@ -11,6 +12,34 @@ import { useI18n } from '@nexa/i18n';
 
 import { CopilotDrawer } from '@/components/copilot/CopilotDrawer';
 import { CopilotMinimisedPill } from '@/components/copilot/CopilotMinimisedPill';
+import { NotificationProvider } from '@/features/notifications/notification-provider';
+
+/**
+ * Silent error boundary for the notification system.
+ * If notifications crash, the rest of the app continues working.
+ */
+class NotificationErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.error('[NotificationErrorBoundary] Notification system error:', error, errorInfo);
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      // Silently render children without notification features
+      return <>{this.props.children}</>;
+    }
+    return this.props.children;
+  }
+}
 
 import { AppHeader } from './app-header';
 import { AppSidebar } from './app-sidebar';
@@ -142,26 +171,30 @@ export function AppLayout() {
       )}
 
       {/* ── Main content area ────────────────────────────── */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <AppHeader />
-        <div className="flex flex-1 overflow-hidden">
-          <main
-            id="main-content"
-            role="main"
-            aria-label={t('navigation:mainContent')}
-            className={cn(
-              'flex-1 overflow-auto p-6',
-              prefersReducedMotion ? '' : 'transition-[width] duration-200 ease-out',
-            )}
-          >
-            <Outlet />
-          </main>
-          {/* Co-Pilot Drawer (desktop/tablet) */}
-          {!isMobile && <CopilotDrawer />}
-        </div>
-        {/* ── Phone bottom tab bar (<768px) ───────────────── */}
-        {isMobile && <BottomTabBar />}
-      </div>
+      <NotificationErrorBoundary>
+        <NotificationProvider>
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <AppHeader />
+            <div className="flex flex-1 overflow-hidden">
+              <main
+                id="main-content"
+                role="main"
+                aria-label={t('navigation:mainContent')}
+                className={cn(
+                  'flex-1 overflow-auto p-6',
+                  prefersReducedMotion ? '' : 'transition-[width] duration-200 ease-out',
+                )}
+              >
+                <Outlet />
+              </main>
+              {/* Co-Pilot Drawer (desktop/tablet) */}
+              {!isMobile && <CopilotDrawer />}
+            </div>
+            {/* ── Phone bottom tab bar (<768px) ───────────────── */}
+            {isMobile && <BottomTabBar />}
+          </div>
+        </NotificationProvider>
+      </NotificationErrorBoundary>
 
       {/* Mobile Co-Pilot overlay + minimised pill */}
       {isMobile && <CopilotDrawer />}

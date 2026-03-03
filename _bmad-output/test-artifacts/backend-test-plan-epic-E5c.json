@@ -1,0 +1,2815 @@
+{
+  "epic_id": "E5c",
+  "epic_name": "AI Administration & Autonomous Workflows",
+  "generated_at": "2026-03-03T18:00:00.000Z",
+  "total_test_cases": 197,
+  "api_base_url": "http://localhost:5100",
+  "auth_note": "All endpoints require JWT auth + ADMIN role. Use seeded admin user. All data scoped by companyId from JWT.",
+  "test_data_prerequisites": {
+    "seeded_models": "3 AiModel records from E5 seed (claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5)",
+    "seeded_prompts": "6 AiPrompt records from E5 seed",
+    "seeded_agents": "AiAgent records from E5 seed",
+    "seeded_automations": "1 example automation from E5c-1 seed (Daily AR Aging Summary)",
+    "seeded_variables": "6 system variables from E5c-1 seed",
+    "seeded_skills": "AiSkill records from E5b seed"
+  },
+  "endpoint_groups": [
+    {
+      "group": "Automation CRUD",
+      "prefix": "/ai/automations",
+      "stories": ["E5c-1"],
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/ai/automations",
+          "description": "Create a new AI automation with steps and optional schedule",
+          "test_cases": [
+            {
+              "id": "AUTO-C-01",
+              "name": "Create SCHEDULED automation - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "Test Daily Report",
+                  "description": "Automated daily report generation",
+                  "triggerType": "SCHEDULED",
+                  "steps": [
+                    {
+                      "agentId": "{{seeded_agent_id}}",
+                      "goal": "Generate a daily activity summary",
+                      "inputConfig": { "sources": [{ "type": "SYSTEM", "variable": "today" }] },
+                      "outputConfig": { "capture": ["summary", "highlights"] },
+                      "maxTurns": 5
+                    }
+                  ],
+                  "schedule": {
+                    "cronExpression": "0 7 * * 1-5",
+                    "timezone": "Europe/London"
+                  },
+                  "maxTokenBudget": 25000,
+                  "maxDurationMs": 120000
+                }
+              },
+              "expected": {
+                "status": 201,
+                "body_contains": ["id", "name", "triggerType", "steps", "schedule"],
+                "body_assertions": {
+                  "data.name": "Test Daily Report",
+                  "data.triggerType": "SCHEDULED",
+                  "data.isActive": true,
+                  "data.maxTokenBudget": 25000,
+                  "data.stepCount": 1
+                }
+              },
+              "db_verification": {
+                "enabled": true,
+                "query": "SELECT * FROM ai_automations WHERE name = 'Test Daily Report'",
+                "expected": "Exactly 1 row with trigger_type='SCHEDULED', is_active=true"
+              }
+            },
+            {
+              "id": "AUTO-C-02",
+              "name": "Create MANUAL automation - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "Manual AR Cleanup",
+                  "triggerType": "MANUAL",
+                  "steps": [
+                    {
+                      "agentId": "{{seeded_agent_id}}",
+                      "goal": "Find and flag stale AR entries"
+                    }
+                  ]
+                }
+              },
+              "expected": {
+                "status": 201,
+                "body_contains": ["id", "triggerType"],
+                "body_assertions": {
+                  "data.triggerType": "MANUAL"
+                }
+              },
+              "db_verification": {
+                "enabled": true,
+                "query": "SELECT * FROM ai_automations WHERE name = 'Manual AR Cleanup'",
+                "expected": "1 row with trigger_type='MANUAL'"
+              }
+            },
+            {
+              "id": "AUTO-C-03",
+              "name": "Create EVENT automation - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "Invoice Overdue Handler",
+                  "triggerType": "EVENT",
+                  "eventType": "invoice.overdue",
+                  "steps": [
+                    {
+                      "agentId": "{{seeded_agent_id}}",
+                      "goal": "Analyse overdue invoice and draft follow-up"
+                    }
+                  ]
+                }
+              },
+              "expected": {
+                "status": 201,
+                "body_assertions": {
+                  "data.triggerType": "EVENT",
+                  "data.eventType": "invoice.overdue"
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AUTO-C-04",
+              "name": "Create automation with multiple steps - sequential ordering",
+              "type": "happy_path",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "Multi-Step Workflow",
+                  "triggerType": "MANUAL",
+                  "steps": [
+                    { "agentId": "{{seeded_agent_id}}", "goal": "Step 1: Analyse data" },
+                    { "agentId": "{{seeded_agent_id}}", "goal": "Step 2: Draft report" },
+                    { "agentId": "{{seeded_agent_id}}", "goal": "Step 3: Summarise" }
+                  ]
+                }
+              },
+              "expected": {
+                "status": 201,
+                "body_assertions": {
+                  "data.stepCount": 3
+                }
+              },
+              "db_verification": {
+                "enabled": true,
+                "query": "SELECT step_order FROM ai_automation_steps WHERE automation_id = '{{created_id}}' ORDER BY step_order",
+                "expected": "3 rows with step_order = 1, 2, 3"
+              }
+            },
+            {
+              "id": "AUTO-C-05",
+              "name": "Create automation with chainNextId - valid chain",
+              "type": "happy_path",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "Chained Workflow Start",
+                  "triggerType": "MANUAL",
+                  "chainNextId": "{{existing_automation_id}}",
+                  "steps": [
+                    { "agentId": "{{seeded_agent_id}}", "goal": "Prepare data for next automation" }
+                  ]
+                }
+              },
+              "expected": {
+                "status": 201,
+                "body_assertions": {
+                  "data.chainNextId": "{{existing_automation_id}}"
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AUTO-C-06",
+              "name": "Create automation - missing name (validation error)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "triggerType": "MANUAL",
+                  "steps": [{ "agentId": "{{seeded_agent_id}}", "goal": "Do something" }]
+                }
+              },
+              "expected": {
+                "status": 400,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AUTO-C-07",
+              "name": "Create automation - empty steps array (validation error)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "No Steps Automation",
+                  "triggerType": "MANUAL",
+                  "steps": []
+                }
+              },
+              "expected": {
+                "status": 400,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AUTO-C-08",
+              "name": "Create SCHEDULED automation - missing schedule (validation error)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "Scheduled Without Cron",
+                  "triggerType": "SCHEDULED",
+                  "steps": [{ "agentId": "{{seeded_agent_id}}", "goal": "Do something" }]
+                }
+              },
+              "expected": {
+                "status": 400,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AUTO-C-09",
+              "name": "Create EVENT automation - missing eventType (validation error)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "Event Without Type",
+                  "triggerType": "EVENT",
+                  "steps": [{ "agentId": "{{seeded_agent_id}}", "goal": "Do something" }]
+                }
+              },
+              "expected": {
+                "status": 400,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AUTO-C-10",
+              "name": "Create automation - invalid triggerType (validation error)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "Bad Trigger",
+                  "triggerType": "INVALID_TYPE",
+                  "steps": [{ "agentId": "{{seeded_agent_id}}", "goal": "Do something" }]
+                }
+              },
+              "expected": {
+                "status": 400,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AUTO-C-11",
+              "name": "Create automation - circular chain (422)",
+              "type": "edge_case",
+              "setup": "First create automation A, then attempt to create B chaining to A while A chains to B",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "Circular Chain B",
+                  "triggerType": "MANUAL",
+                  "chainNextId": "{{automation_A_id_that_chains_to_this}}",
+                  "steps": [{ "agentId": "{{seeded_agent_id}}", "goal": "Loop forever" }]
+                }
+              },
+              "expected": {
+                "status": 422,
+                "body_contains": ["circular", "chain"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AUTO-C-12",
+              "name": "Create automation - step with invalid agentId (validation error)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "Bad Agent Ref",
+                  "triggerType": "MANUAL",
+                  "steps": [{ "agentId": "not-a-uuid", "goal": "Do something" }]
+                }
+              },
+              "expected": {
+                "status": 400,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AUTO-C-13",
+              "name": "Create automation - maxTokenBudget below minimum (validation error)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "Low Budget",
+                  "triggerType": "MANUAL",
+                  "maxTokenBudget": 100,
+                  "steps": [{ "agentId": "{{seeded_agent_id}}", "goal": "Do something" }]
+                }
+              },
+              "expected": {
+                "status": 400,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AUTO-C-14",
+              "name": "Create automation - no auth token (401)",
+              "type": "edge_case",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations",
+                "headers": { "Content-Type": "application/json" },
+                "body": {
+                  "name": "No Auth",
+                  "triggerType": "MANUAL",
+                  "steps": [{ "agentId": "{{seeded_agent_id}}", "goal": "Unauthorised" }]
+                }
+              },
+              "expected": {
+                "status": 401,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/ai/automations",
+          "description": "List all automations with pagination and filters",
+          "test_cases": [
+            {
+              "id": "AUTO-L-01",
+              "name": "List automations - happy path (default params)",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/automations",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_contains": ["data"],
+                "body_assertions": {
+                  "data": "array with at least 1 item (seeded automation)"
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AUTO-L-02",
+              "name": "List automations - filter by triggerType=SCHEDULED",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/automations?triggerType=SCHEDULED",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "all items have triggerType": "SCHEDULED"
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AUTO-L-03",
+              "name": "List automations - filter by status=active",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/automations?status=active",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "all items have isActive": true
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AUTO-L-04",
+              "name": "List automations - pagination with cursor",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/automations?limit=1",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_contains": ["data", "meta"],
+                "body_assertions": {
+                  "data.length": "<=1",
+                  "meta.nextCursor": "present if more items exist"
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AUTO-L-05",
+              "name": "List automations - empty result for non-matching filter",
+              "type": "edge_case",
+              "request": {
+                "method": "GET",
+                "url": "/ai/automations?triggerType=CHAIN",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "data": "empty array []"
+                }
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/ai/automations/:id",
+          "description": "Get automation detail with steps and recent runs",
+          "test_cases": [
+            {
+              "id": "AUTO-G-01",
+              "name": "Get automation detail - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/automations/{{existing_automation_id}}",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_contains": ["id", "name", "steps", "triggerType"],
+                "body_assertions": {
+                  "data.steps": "array with step details",
+                  "data.recentRuns": "array (may be empty)"
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AUTO-G-02",
+              "name": "Get automation - not found (404)",
+              "type": "edge_case",
+              "request": {
+                "method": "GET",
+                "url": "/ai/automations/00000000-0000-0000-0000-000000000000",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 404,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AUTO-G-03",
+              "name": "Get automation - invalid UUID format",
+              "type": "validation_error",
+              "request": {
+                "method": "GET",
+                "url": "/ai/automations/not-a-uuid",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 400,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/ai/automations/:id",
+          "description": "Update automation fields, steps, and schedule",
+          "test_cases": [
+            {
+              "id": "AUTO-U-01",
+              "name": "Update automation name - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/automations/{{existing_automation_id}}",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "Updated Automation Name"
+                }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "data.name": "Updated Automation Name"
+                }
+              },
+              "db_verification": {
+                "enabled": true,
+                "query": "SELECT name FROM ai_automations WHERE id = '{{existing_automation_id}}'",
+                "expected": "name = 'Updated Automation Name'"
+              }
+            },
+            {
+              "id": "AUTO-U-02",
+              "name": "Update automation - toggle isActive",
+              "type": "happy_path",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/automations/{{existing_automation_id}}",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "isActive": false
+                }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "data.isActive": false
+                }
+              },
+              "db_verification": {
+                "enabled": true,
+                "query": "SELECT is_active FROM ai_automations WHERE id = '{{existing_automation_id}}'",
+                "expected": "is_active = false"
+              }
+            },
+            {
+              "id": "AUTO-U-03",
+              "name": "Update automation - set circular chainNextId (422)",
+              "type": "edge_case",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/automations/{{automation_A_id}}",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "chainNextId": "{{automation_A_id}}"
+                }
+              },
+              "expected": {
+                "status": 422,
+                "body_contains": ["circular", "chain"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AUTO-U-04",
+              "name": "Update automation - not found (404)",
+              "type": "edge_case",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/automations/00000000-0000-0000-0000-000000000000",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "name": "Ghost" }
+              },
+              "expected": {
+                "status": 404,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "DELETE",
+          "path": "/ai/automations/:id",
+          "description": "Soft-delete automation (set isActive=false)",
+          "test_cases": [
+            {
+              "id": "AUTO-D-01",
+              "name": "Delete automation - happy path (soft delete)",
+              "type": "happy_path",
+              "request": {
+                "method": "DELETE",
+                "url": "/ai/automations/{{created_automation_id}}",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 204,
+                "body_contains": []
+              },
+              "db_verification": {
+                "enabled": true,
+                "query": "SELECT is_active FROM ai_automations WHERE id = '{{created_automation_id}}'",
+                "expected": "is_active = false (soft deleted, row still exists)"
+              }
+            },
+            {
+              "id": "AUTO-D-02",
+              "name": "Delete automation - not found (404)",
+              "type": "edge_case",
+              "request": {
+                "method": "DELETE",
+                "url": "/ai/automations/00000000-0000-0000-0000-000000000000",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 404,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Automation Execution",
+      "prefix": "/ai/automations",
+      "stories": ["E5c-1"],
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/ai/automations/:id/run",
+          "description": "Manually trigger automation execution (Run Now)",
+          "test_cases": [
+            {
+              "id": "EXEC-01",
+              "name": "Run Now - happy path (202 accepted)",
+              "type": "happy_path",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations/{{existing_automation_id}}/run",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {}
+              },
+              "expected": {
+                "status": 202,
+                "body_contains": ["message", "automationId", "runId"]
+              },
+              "db_verification": {
+                "enabled": true,
+                "query": "SELECT * FROM ai_automation_runs WHERE automation_id = '{{existing_automation_id}}' ORDER BY created_at DESC LIMIT 1",
+                "expected": "1 row with triggered_by LIKE 'manual:%'"
+              }
+            },
+            {
+              "id": "EXEC-02",
+              "name": "Run Now - with custom input",
+              "type": "happy_path",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations/{{existing_automation_id}}/run",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "input": { "dateThreshold": "2026-02-01", "priority": "high" }
+                }
+              },
+              "expected": {
+                "status": 202,
+                "body_contains": ["runId"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "EXEC-03",
+              "name": "Run Now - automation not found (404)",
+              "type": "edge_case",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations/00000000-0000-0000-0000-000000000000/run",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {}
+              },
+              "expected": {
+                "status": 404,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "EXEC-04",
+              "name": "Run Now - inactive automation (should reject or 503)",
+              "type": "edge_case",
+              "setup": "Deactivate automation first, then try to run",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations/{{deactivated_automation_id}}/run",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {}
+              },
+              "expected": {
+                "status": "422 or 503",
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/ai/automations/:id/runs",
+          "description": "List runs for a specific automation",
+          "test_cases": [
+            {
+              "id": "EXEC-R-01",
+              "name": "List runs for automation - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/automations/{{existing_automation_id}}/runs",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_contains": ["data"],
+                "body_assertions": {
+                  "data": "array of run objects"
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "EXEC-R-02",
+              "name": "List runs - automation with no runs (empty array)",
+              "type": "edge_case",
+              "request": {
+                "method": "GET",
+                "url": "/ai/automations/{{automation_with_no_runs_id}}/runs",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "data": "empty array []"
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "EXEC-R-03",
+              "name": "List runs - filter by status=FAILED",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/automations/{{existing_automation_id}}/runs?status=FAILED",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "all items have status": "FAILED"
+                }
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Run Management",
+      "prefix": "/ai/automations/runs",
+      "stories": ["E5c-1"],
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/ai/automations/runs",
+          "description": "List all automation runs across all automations",
+          "test_cases": [
+            {
+              "id": "RUN-L-01",
+              "name": "List all runs - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/automations/runs",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_contains": ["data"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "RUN-L-02",
+              "name": "List runs - filter by status",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/automations/runs?status=COMPLETED",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "all items have status": "COMPLETED"
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "RUN-L-03",
+              "name": "List runs - filter by date range",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/automations/runs?dateFrom=2026-03-01&dateTo=2026-03-03",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "all items have createdAt": "between 2026-03-01 and 2026-03-03"
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "RUN-L-04",
+              "name": "List runs - pagination with limit",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/automations/runs?limit=5",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "data.length": "<=5"
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "RUN-L-05",
+              "name": "List runs - empty result for future dates",
+              "type": "edge_case",
+              "request": {
+                "method": "GET",
+                "url": "/ai/automations/runs?dateFrom=2030-01-01",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "data": "empty array []"
+                }
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/ai/automations/runs/:runId",
+          "description": "Get single run detail with step runs",
+          "test_cases": [
+            {
+              "id": "RUN-G-01",
+              "name": "Get run detail - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/automations/runs/{{existing_run_id}}",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_contains": ["id", "automationId", "status", "stepRuns"],
+                "body_assertions": {
+                  "data.stepRuns": "array of step run objects"
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "RUN-G-02",
+              "name": "Get run detail - not found (404)",
+              "type": "edge_case",
+              "request": {
+                "method": "GET",
+                "url": "/ai/automations/runs/00000000-0000-0000-0000-000000000000",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 404,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/ai/automations/runs/:runId/retry",
+          "description": "Retry automation from failed step",
+          "test_cases": [
+            {
+              "id": "RUN-RT-01",
+              "name": "Retry from failed step - happy path (202)",
+              "type": "happy_path",
+              "setup": "Requires a run with FAILED status",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations/runs/{{failed_run_id}}/retry",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 202,
+                "body_contains": ["message", "automationId", "originalRunId"]
+              },
+              "db_verification": {
+                "enabled": true,
+                "query": "SELECT * FROM ai_automation_runs WHERE retry_of_run_id = '{{failed_run_id}}'",
+                "expected": "1 row with retry_of_run_id set"
+              }
+            },
+            {
+              "id": "RUN-RT-02",
+              "name": "Retry - run not found (404)",
+              "type": "edge_case",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations/runs/00000000-0000-0000-0000-000000000000/retry",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 404,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "RUN-RT-03",
+              "name": "Retry - run is not FAILED (should reject)",
+              "type": "edge_case",
+              "setup": "Use a run with COMPLETED status",
+              "request": {
+                "method": "POST",
+                "url": "/ai/automations/runs/{{completed_run_id}}/retry",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": "422 or 400",
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Variable Management",
+      "prefix": "/ai/variables",
+      "stories": ["E5c-2"],
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/ai/variables",
+          "description": "Create a prompt variable binding",
+          "test_cases": [
+            {
+              "id": "VAR-C-01",
+              "name": "Create SYSTEM variable - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "POST",
+                "url": "/ai/variables",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "promptId": "{{seeded_prompt_id}}",
+                  "variableName": "custom.greeting",
+                  "displayName": "Custom Greeting",
+                  "description": "A custom greeting variable",
+                  "sourceType": "CONSTANT",
+                  "sourceConfig": { "value": "Hello, valued customer" },
+                  "isRequired": false
+                }
+              },
+              "expected": {
+                "status": 201,
+                "body_contains": ["id", "variableName", "sourceType"]
+              },
+              "db_verification": {
+                "enabled": true,
+                "query": "SELECT * FROM ai_prompt_variables WHERE variable_name = 'custom.greeting'",
+                "expected": "1 row with source_type='CONSTANT'"
+              }
+            },
+            {
+              "id": "VAR-C-02",
+              "name": "Create DB_FIELD variable - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "POST",
+                "url": "/ai/variables",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "promptId": "{{seeded_prompt_id}}",
+                  "variableName": "customer.companyName",
+                  "displayName": "Customer Company Name",
+                  "sourceType": "DB_FIELD",
+                  "sourceConfig": { "table": "customer", "field": "companyName" },
+                  "isRequired": true
+                }
+              },
+              "expected": {
+                "status": 201,
+                "body_contains": ["id", "sourceType"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "VAR-C-03",
+              "name": "Create EXPRESSION variable - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "POST",
+                "url": "/ai/variables",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "promptId": "{{seeded_prompt_id}}",
+                  "variableName": "thirtyDaysAgo",
+                  "displayName": "30 Days Ago",
+                  "sourceType": "EXPRESSION",
+                  "sourceConfig": { "expression": "today - 30 days" }
+                }
+              },
+              "expected": {
+                "status": 201,
+                "body_contains": ["id"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "VAR-C-04",
+              "name": "Create variable - missing variableName (400)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/variables",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "promptId": "{{seeded_prompt_id}}",
+                  "displayName": "Missing Name",
+                  "sourceType": "CONSTANT",
+                  "sourceConfig": { "value": "test" }
+                }
+              },
+              "expected": {
+                "status": 400,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "VAR-C-05",
+              "name": "Create variable - invalid sourceType (400)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/variables",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "promptId": "{{seeded_prompt_id}}",
+                  "variableName": "bad.source",
+                  "displayName": "Bad Source",
+                  "sourceType": "INVALID_SOURCE",
+                  "sourceConfig": {}
+                }
+              },
+              "expected": {
+                "status": 400,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "VAR-C-06",
+              "name": "Create variable - duplicate variableName for same prompt (409 or 422)",
+              "type": "edge_case",
+              "setup": "Create a variable first, then try same variableName for same promptId",
+              "request": {
+                "method": "POST",
+                "url": "/ai/variables",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "promptId": "{{seeded_prompt_id}}",
+                  "variableName": "custom.greeting",
+                  "displayName": "Duplicate",
+                  "sourceType": "CONSTANT",
+                  "sourceConfig": { "value": "dup" }
+                }
+              },
+              "expected": {
+                "status": "409 or 422",
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/ai/variables",
+          "description": "List all prompt variables, optionally filtered by promptId",
+          "test_cases": [
+            {
+              "id": "VAR-L-01",
+              "name": "List all variables - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/variables",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_contains": ["data"],
+                "body_assertions": {
+                  "data": "array with seeded system variables"
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "VAR-L-02",
+              "name": "List variables - filter by promptId",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/variables?promptId={{seeded_prompt_id}}",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "all items have promptId": "{{seeded_prompt_id}}"
+                }
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/ai/variables/:id",
+          "description": "Update a prompt variable",
+          "test_cases": [
+            {
+              "id": "VAR-U-01",
+              "name": "Update variable displayName - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/variables/{{existing_variable_id}}",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "displayName": "Updated Display Name"
+                }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "data.displayName": "Updated Display Name"
+                }
+              },
+              "db_verification": {
+                "enabled": true,
+                "query": "SELECT display_name FROM ai_prompt_variables WHERE id = '{{existing_variable_id}}'",
+                "expected": "display_name = 'Updated Display Name'"
+              }
+            },
+            {
+              "id": "VAR-U-02",
+              "name": "Update variable - not found (404)",
+              "type": "edge_case",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/variables/00000000-0000-0000-0000-000000000000",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "displayName": "Ghost" }
+              },
+              "expected": {
+                "status": 404,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "DELETE",
+          "path": "/ai/variables/:id",
+          "description": "Delete a prompt variable",
+          "test_cases": [
+            {
+              "id": "VAR-D-01",
+              "name": "Delete variable - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "DELETE",
+                "url": "/ai/variables/{{created_variable_id}}",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 204
+              },
+              "db_verification": {
+                "enabled": true,
+                "query": "SELECT COUNT(*) as cnt FROM ai_prompt_variables WHERE id = '{{created_variable_id}}'",
+                "expected": "cnt = 0"
+              }
+            },
+            {
+              "id": "VAR-D-02",
+              "name": "Delete variable - not found (404)",
+              "type": "edge_case",
+              "request": {
+                "method": "DELETE",
+                "url": "/ai/variables/00000000-0000-0000-0000-000000000000",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 404,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/ai/variables/:id/test",
+          "description": "Test resolve a variable with sample context",
+          "test_cases": [
+            {
+              "id": "VAR-T-01",
+              "name": "Test resolve SYSTEM variable - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "POST",
+                "url": "/ai/variables/{{system_variable_id}}/test",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "companyId": "{{test_company_id}}"
+                }
+              },
+              "expected": {
+                "status": 200,
+                "body_contains": ["resolvedValue"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "VAR-T-02",
+              "name": "Test resolve - variable not found (404)",
+              "type": "edge_case",
+              "request": {
+                "method": "POST",
+                "url": "/ai/variables/00000000-0000-0000-0000-000000000000/test",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "companyId": "{{test_company_id}}" }
+              },
+              "expected": {
+                "status": 404,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Admin Dashboard",
+      "prefix": "/ai/admin",
+      "stories": ["E5c-3"],
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/ai/admin/dashboard",
+          "description": "AI Configuration Dashboard summary data",
+          "test_cases": [
+            {
+              "id": "DASH-01",
+              "name": "Get dashboard summary - happy path (default 30 days)",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/admin/dashboard",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_contains": ["activeModels", "activeAgents", "activeSkills", "automations", "dailyTokenUsage"],
+                "body_assertions": {
+                  "data.activeModels.count": ">=1 (seeded models)",
+                  "data.automations.active": ">=0",
+                  "data.dailyTokenUsage": "array of daily objects"
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "DASH-02",
+              "name": "Get dashboard summary - custom days param",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/admin/dashboard?days=7",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "data.dailyTokenUsage.length": "<=7"
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "DASH-03",
+              "name": "Get dashboard - days exceeds max (400)",
+              "type": "validation_error",
+              "request": {
+                "method": "GET",
+                "url": "/ai/admin/dashboard?days=200",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 400,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "DASH-04",
+              "name": "Get dashboard - no auth (401)",
+              "type": "edge_case",
+              "request": {
+                "method": "GET",
+                "url": "/ai/admin/dashboard",
+                "headers": {}
+              },
+              "expected": {
+                "status": 401,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Admin Model Management",
+      "prefix": "/ai/admin/models",
+      "stories": ["E5c-3"],
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/ai/admin/models",
+          "description": "Create a new AI model in the registry",
+          "test_cases": [
+            {
+              "id": "MDL-C-01",
+              "name": "Create model - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/models",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "test-model-gpt4o",
+                  "provider": "openai",
+                  "modelId": "gpt-4o",
+                  "displayName": "GPT-4o Test",
+                  "maxInputTokens": 128000,
+                  "maxOutputTokens": 4096,
+                  "costPerMInput": "5.0000",
+                  "costPerMOutput": "15.0000",
+                  "routingTags": ["reasoning", "vision"],
+                  "capabilities": { "vision": true, "functionCalling": true }
+                }
+              },
+              "expected": {
+                "status": 201,
+                "body_contains": ["id", "name", "provider", "modelId"],
+                "body_assertions": {
+                  "data.name": "test-model-gpt4o",
+                  "data.isActive": true,
+                  "data.isDefault": false
+                }
+              },
+              "db_verification": {
+                "enabled": true,
+                "query": "SELECT * FROM ai_models WHERE name = 'test-model-gpt4o'",
+                "expected": "1 row with provider='openai', model_id='gpt-4o'"
+              }
+            },
+            {
+              "id": "MDL-C-02",
+              "name": "Create model with isDefault=true - unsets previous default",
+              "type": "happy_path",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/models",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "new-default-model",
+                  "provider": "anthropic",
+                  "modelId": "claude-test",
+                  "displayName": "New Default",
+                  "maxInputTokens": 200000,
+                  "maxOutputTokens": 8192,
+                  "costPerMInput": "15.0000",
+                  "costPerMOutput": "75.0000",
+                  "isDefault": true
+                }
+              },
+              "expected": {
+                "status": 201,
+                "body_assertions": {
+                  "data.isDefault": true
+                }
+              },
+              "db_verification": {
+                "enabled": true,
+                "query": "SELECT COUNT(*) as cnt FROM ai_models WHERE is_default = true",
+                "expected": "cnt = 1 (only the new model is default)"
+              }
+            },
+            {
+              "id": "MDL-C-03",
+              "name": "Create model - missing required name (400)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/models",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "provider": "openai",
+                  "modelId": "gpt-4",
+                  "displayName": "Missing Name"
+                }
+              },
+              "expected": {
+                "status": 400,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "MDL-C-04",
+              "name": "Create model - duplicate name (409 or 422)",
+              "type": "edge_case",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/models",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "claude-opus-4-6",
+                  "provider": "anthropic",
+                  "modelId": "claude-opus-dup",
+                  "displayName": "Duplicate Name",
+                  "maxInputTokens": 200000,
+                  "maxOutputTokens": 8192,
+                  "costPerMInput": "15.0000",
+                  "costPerMOutput": "75.0000"
+                }
+              },
+              "expected": {
+                "status": "409 or 422",
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "MDL-C-05",
+              "name": "Create model - circular fallback chain (422)",
+              "type": "edge_case",
+              "setup": "Create model A, then create model B with fallbackModelId = A, then try to set A's fallback to B",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/models",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "circular-fallback",
+                  "provider": "openai",
+                  "modelId": "circ-test",
+                  "displayName": "Circular Fallback",
+                  "maxInputTokens": 100000,
+                  "maxOutputTokens": 4096,
+                  "costPerMInput": "5.0000",
+                  "costPerMOutput": "15.0000",
+                  "fallbackModelId": "{{model_that_already_falls_back_to_this}}"
+                }
+              },
+              "expected": {
+                "status": 422,
+                "body_contains": ["circular", "fallback"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "MDL-C-06",
+              "name": "Create model - negative maxInputTokens (400)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/models",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "neg-tokens",
+                  "provider": "openai",
+                  "modelId": "neg-test",
+                  "displayName": "Negative Tokens",
+                  "maxInputTokens": -1000,
+                  "maxOutputTokens": 4096,
+                  "costPerMInput": "5.0000",
+                  "costPerMOutput": "15.0000"
+                }
+              },
+              "expected": {
+                "status": 400,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/ai/admin/models",
+          "description": "List all AI models with pagination and filters",
+          "test_cases": [
+            {
+              "id": "MDL-L-01",
+              "name": "List models - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/admin/models",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_contains": ["data"],
+                "body_assertions": {
+                  "data": "array with at least 3 seeded models"
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "MDL-L-02",
+              "name": "List models - filter by provider",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/admin/models?provider=anthropic",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "all items have provider": "anthropic"
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "MDL-L-03",
+              "name": "List models - filter by isActive=true",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/admin/models?isActive=true",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "all items have isActive": true
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "MDL-L-04",
+              "name": "List models - search by name",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/admin/models?search=opus",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "data": "contains claude-opus model"
+                }
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/ai/admin/models/:id",
+          "description": "Get model detail",
+          "test_cases": [
+            {
+              "id": "MDL-G-01",
+              "name": "Get model detail - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "GET",
+                "url": "/ai/admin/models/{{seeded_model_id}}",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_contains": ["id", "name", "provider", "modelId", "capabilities", "routingTags"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "MDL-G-02",
+              "name": "Get model - not found (404)",
+              "type": "edge_case",
+              "request": {
+                "method": "GET",
+                "url": "/ai/admin/models/00000000-0000-0000-0000-000000000000",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 404,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/ai/admin/models/:id",
+          "description": "Update AI model",
+          "test_cases": [
+            {
+              "id": "MDL-U-01",
+              "name": "Update model displayName - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/admin/models/{{created_model_id}}",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "displayName": "Updated Display Name" }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "data.displayName": "Updated Display Name"
+                }
+              },
+              "db_verification": {
+                "enabled": true,
+                "query": "SELECT display_name FROM ai_models WHERE id = '{{created_model_id}}'",
+                "expected": "display_name = 'Updated Display Name'"
+              }
+            },
+            {
+              "id": "MDL-U-02",
+              "name": "Update model - deactivate default model (422)",
+              "type": "edge_case",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/admin/models/{{default_model_id}}",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "isActive": false }
+              },
+              "expected": {
+                "status": 422,
+                "body_contains": ["default"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "MDL-U-03",
+              "name": "Update model - set circular fallback (422)",
+              "type": "edge_case",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/admin/models/{{model_A_id}}",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "fallbackModelId": "{{model_A_id}}" }
+              },
+              "expected": {
+                "status": 422,
+                "body_contains": ["circular", "fallback"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "MDL-U-04",
+              "name": "Update model - not found (404)",
+              "type": "edge_case",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/admin/models/00000000-0000-0000-0000-000000000000",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "displayName": "Ghost" }
+              },
+              "expected": {
+                "status": 404,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "DELETE",
+          "path": "/ai/admin/models/:id",
+          "description": "Delete AI model (hard delete, rejects if referenced by agents)",
+          "test_cases": [
+            {
+              "id": "MDL-D-01",
+              "name": "Delete unreferenced model - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "DELETE",
+                "url": "/ai/admin/models/{{unreferenced_model_id}}",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 204
+              },
+              "db_verification": {
+                "enabled": true,
+                "query": "SELECT COUNT(*) as cnt FROM ai_models WHERE id = '{{unreferenced_model_id}}'",
+                "expected": "cnt = 0 (hard deleted)"
+              }
+            },
+            {
+              "id": "MDL-D-02",
+              "name": "Delete model referenced by agent (422)",
+              "type": "edge_case",
+              "request": {
+                "method": "DELETE",
+                "url": "/ai/admin/models/{{model_used_by_agent_id}}",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 422,
+                "body_contains": ["referenced", "agent"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "MDL-D-03",
+              "name": "Delete model - not found (404)",
+              "type": "edge_case",
+              "request": {
+                "method": "DELETE",
+                "url": "/ai/admin/models/00000000-0000-0000-0000-000000000000",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 404,
+                "body_contains": ["error"]
+              },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Admin Prompt Management",
+      "prefix": "/ai/admin/prompts",
+      "stories": ["E5c-3"],
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/ai/admin/prompts",
+          "description": "Create a new prompt template with initial version",
+          "test_cases": [
+            {
+              "id": "PRM-C-01",
+              "name": "Create prompt - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/prompts",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "test-invoice-reminder",
+                  "description": "Remind customers about overdue invoices",
+                  "category": "automation",
+                  "systemPrompt": "You are an AR assistant. Draft follow-up emails for overdue invoices.",
+                  "userTemplate": "Invoice {{invoice.number}} is {{overdueCount}} days overdue. Customer: {{customer.name}}.",
+                  "parameters": [],
+                  "isActive": true
+                }
+              },
+              "expected": {
+                "status": 201,
+                "body_contains": ["id", "name", "category", "activeVersion"],
+                "body_assertions": {
+                  "data.name": "test-invoice-reminder",
+                  "data.activeVersion": 1,
+                  "data.isActive": true
+                }
+              },
+              "db_verification": {
+                "enabled": true,
+                "query": "SELECT p.active_version, (SELECT COUNT(*) FROM ai_prompt_versions pv WHERE pv.prompt_id = p.id) as version_count FROM ai_prompts p WHERE p.name = 'test-invoice-reminder'",
+                "expected": "active_version=1, version_count=1"
+              }
+            },
+            {
+              "id": "PRM-C-02",
+              "name": "Create prompt - missing name (400)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/prompts",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "category": "chat",
+                  "systemPrompt": "You are helpful.",
+                  "userTemplate": "Hello."
+                }
+              },
+              "expected": { "status": 400, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "PRM-C-03",
+              "name": "Create prompt - invalid category (400)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/prompts",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "bad-category-prompt",
+                  "category": "INVALID_CATEGORY",
+                  "systemPrompt": "Test",
+                  "userTemplate": "Test"
+                }
+              },
+              "expected": { "status": 400, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "PRM-C-04",
+              "name": "Create prompt - invalid name pattern (400)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/prompts",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "Invalid Name With Spaces!",
+                  "category": "chat",
+                  "systemPrompt": "Test",
+                  "userTemplate": "Test"
+                }
+              },
+              "expected": { "status": 400, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "PRM-C-05",
+              "name": "Create prompt - duplicate name (409 or 422)",
+              "type": "edge_case",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/prompts",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "test-invoice-reminder",
+                  "category": "chat",
+                  "systemPrompt": "Dup",
+                  "userTemplate": "Dup"
+                }
+              },
+              "expected": { "status": "409 or 422", "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/ai/admin/prompts",
+          "description": "List prompt templates",
+          "test_cases": [
+            {
+              "id": "PRM-L-01",
+              "name": "List prompts - happy path",
+              "type": "happy_path",
+              "request": { "method": "GET", "url": "/ai/admin/prompts", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 200, "body_contains": ["data"], "body_assertions": { "data": "array with seeded prompts" } },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "PRM-L-02",
+              "name": "List prompts - filter by category",
+              "type": "happy_path",
+              "request": { "method": "GET", "url": "/ai/admin/prompts?category=automation", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 200, "body_assertions": { "all items have category": "automation" } },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "PRM-L-03",
+              "name": "List prompts - search by name",
+              "type": "happy_path",
+              "request": { "method": "GET", "url": "/ai/admin/prompts?search=invoice", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 200, "body_contains": ["data"] },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/ai/admin/prompts/:id",
+          "description": "Get prompt detail with current version content",
+          "test_cases": [
+            {
+              "id": "PRM-G-01",
+              "name": "Get prompt detail - happy path",
+              "type": "happy_path",
+              "request": { "method": "GET", "url": "/ai/admin/prompts/{{seeded_prompt_id}}", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 200, "body_contains": ["id", "name", "systemPrompt", "userTemplate", "activeVersion"] },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "PRM-G-02",
+              "name": "Get prompt - not found (404)",
+              "type": "edge_case",
+              "request": { "method": "GET", "url": "/ai/admin/prompts/00000000-0000-0000-0000-000000000000", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 404, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/ai/admin/prompts/:id",
+          "description": "Update prompt (creates new version if content changed, requires changeReason)",
+          "test_cases": [
+            {
+              "id": "PRM-U-01",
+              "name": "Update prompt content - creates new version",
+              "type": "happy_path",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/admin/prompts/{{created_prompt_id}}",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "systemPrompt": "Updated system prompt content for v2.",
+                  "changeReason": "Improved instructions for clarity"
+                }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "data.activeVersion": 2,
+                  "data.systemPrompt": "Updated system prompt content for v2."
+                }
+              },
+              "db_verification": {
+                "enabled": true,
+                "query": "SELECT COUNT(*) as cnt FROM ai_prompt_versions WHERE prompt_id = '{{created_prompt_id}}'",
+                "expected": "cnt = 2 (initial + update)"
+              }
+            },
+            {
+              "id": "PRM-U-02",
+              "name": "Update prompt metadata only - no new version",
+              "type": "happy_path",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/admin/prompts/{{created_prompt_id}}",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "description": "Updated description only"
+                }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "data.description": "Updated description only",
+                  "data.activeVersion": "unchanged from previous"
+                }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "PRM-U-03",
+              "name": "Update prompt content - missing changeReason (400)",
+              "type": "validation_error",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/admin/prompts/{{created_prompt_id}}",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "systemPrompt": "Changed content without reason"
+                }
+              },
+              "expected": { "status": 400, "body_contains": ["changeReason"] },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "PRM-U-04",
+              "name": "Update prompt - not found (404)",
+              "type": "edge_case",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/admin/prompts/00000000-0000-0000-0000-000000000000",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "description": "Ghost" }
+              },
+              "expected": { "status": 404, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "DELETE",
+          "path": "/ai/admin/prompts/:id",
+          "description": "Delete prompt (rejects if referenced by agents)",
+          "test_cases": [
+            {
+              "id": "PRM-D-01",
+              "name": "Delete unreferenced prompt - happy path",
+              "type": "happy_path",
+              "request": { "method": "DELETE", "url": "/ai/admin/prompts/{{unreferenced_prompt_id}}", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 204 },
+              "db_verification": { "enabled": true, "query": "SELECT COUNT(*) as cnt FROM ai_prompts WHERE id = '{{unreferenced_prompt_id}}'", "expected": "cnt = 0" }
+            },
+            {
+              "id": "PRM-D-02",
+              "name": "Delete prompt referenced by agent (422)",
+              "type": "edge_case",
+              "request": { "method": "DELETE", "url": "/ai/admin/prompts/{{prompt_used_by_agent_id}}", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 422, "body_contains": ["referenced", "agent"] },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "PRM-D-03",
+              "name": "Delete prompt - not found (404)",
+              "type": "edge_case",
+              "request": { "method": "DELETE", "url": "/ai/admin/prompts/00000000-0000-0000-0000-000000000000", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 404, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/ai/admin/prompts/:id/test",
+          "description": "Test render prompt with sample variables",
+          "test_cases": [
+            {
+              "id": "PRM-T-01",
+              "name": "Test render prompt - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/prompts/{{seeded_prompt_id}}/test",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "sampleVariables": { "customer.name": "Acme Corp", "today": "2026-03-03" }
+                }
+              },
+              "expected": {
+                "status": 200,
+                "body_contains": ["systemPrompt", "userTemplate", "resolvedVariables", "unresolvedCount"]
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "PRM-T-02",
+              "name": "Test render - prompt not found (404)",
+              "type": "edge_case",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/prompts/00000000-0000-0000-0000-000000000000/test",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {}
+              },
+              "expected": { "status": 404, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/ai/admin/prompts/:id/versions",
+          "description": "List all versions of a prompt",
+          "test_cases": [
+            {
+              "id": "VER-L-01",
+              "name": "List prompt versions - happy path",
+              "type": "happy_path",
+              "request": { "method": "GET", "url": "/ai/admin/prompts/{{seeded_prompt_id}}/versions", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 200, "body_contains": ["data"], "body_assertions": { "data": "array ordered by version DESC, at least 1 entry" } },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "VER-L-02",
+              "name": "List versions - prompt not found (404)",
+              "type": "edge_case",
+              "request": { "method": "GET", "url": "/ai/admin/prompts/00000000-0000-0000-0000-000000000000/versions", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 404, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/ai/admin/prompts/:id/versions/:version",
+          "description": "Get specific version content",
+          "test_cases": [
+            {
+              "id": "VER-G-01",
+              "name": "Get version 1 - happy path",
+              "type": "happy_path",
+              "request": { "method": "GET", "url": "/ai/admin/prompts/{{seeded_prompt_id}}/versions/1", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 200, "body_contains": ["systemPrompt", "userTemplate", "version", "changeReason"] },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "VER-G-02",
+              "name": "Get version - version does not exist (404)",
+              "type": "edge_case",
+              "request": { "method": "GET", "url": "/ai/admin/prompts/{{seeded_prompt_id}}/versions/999", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 404, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/ai/admin/prompts/:id/versions/:version/restore",
+          "description": "Restore a previous version (creates new version)",
+          "test_cases": [
+            {
+              "id": "VER-R-01",
+              "name": "Restore version 1 - creates new version",
+              "type": "happy_path",
+              "setup": "Prompt must have at least 2 versions (create, then update)",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/prompts/{{multi_version_prompt_id}}/versions/1/restore",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": {
+                  "data.changeReason": "Restored from version 1"
+                }
+              },
+              "db_verification": {
+                "enabled": true,
+                "query": "SELECT active_version FROM ai_prompts WHERE id = '{{multi_version_prompt_id}}'",
+                "expected": "active_version incremented (e.g., 3 if was 2)"
+              }
+            },
+            {
+              "id": "VER-R-02",
+              "name": "Restore version - version not found (404)",
+              "type": "edge_case",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/prompts/{{seeded_prompt_id}}/versions/999/restore",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": { "status": 404, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Admin Agent Management",
+      "prefix": "/ai/admin/agents",
+      "stories": ["E5c-4"],
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/ai/admin/agents",
+          "description": "Create a new AI agent",
+          "test_cases": [
+            {
+              "id": "AGT-C-01",
+              "name": "Create agent - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/agents",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "test-report-agent",
+                  "displayName": "Test Report Agent",
+                  "description": "Generates reports",
+                  "promptId": "{{seeded_prompt_id}}",
+                  "modelId": "{{seeded_model_id}}",
+                  "tools": [{ "name": "query_invoices", "description": "Query invoice data" }],
+                  "guardrails": { "canRead": ["invoices"], "canWrite": [], "requiresApproval": true, "blockedOperations": [] },
+                  "maxTurns": 15,
+                  "routingTags": ["analysis"]
+                }
+              },
+              "expected": {
+                "status": 201,
+                "body_contains": ["id", "name", "displayName", "promptId"],
+                "body_assertions": { "data.name": "test-report-agent", "data.isActive": true, "data.maxTurns": 15 }
+              },
+              "db_verification": { "enabled": true, "query": "SELECT * FROM ai_agents WHERE name = 'test-report-agent'", "expected": "1 row with prompt_id and model_id set" }
+            },
+            {
+              "id": "AGT-C-02",
+              "name": "Create agent - missing required promptId (400)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/agents",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "name": "no-prompt-agent", "displayName": "No Prompt" }
+              },
+              "expected": { "status": 400, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AGT-C-03",
+              "name": "Create agent - duplicate name (409 or 422)",
+              "type": "edge_case",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/agents",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "name": "test-report-agent", "displayName": "Dup", "promptId": "{{seeded_prompt_id}}" }
+              },
+              "expected": { "status": "409 or 422", "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AGT-C-04",
+              "name": "Create agent - invalid name pattern (400)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/agents",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "name": "INVALID Name!", "displayName": "Bad", "promptId": "{{seeded_prompt_id}}" }
+              },
+              "expected": { "status": 400, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AGT-C-05",
+              "name": "Create agent - maxTurns exceeds max (400)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/agents",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "name": "too-many-turns", "displayName": "Too Many", "promptId": "{{seeded_prompt_id}}", "maxTurns": 100 }
+              },
+              "expected": { "status": 400, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/ai/admin/agents",
+          "description": "List all AI agents",
+          "test_cases": [
+            {
+              "id": "AGT-L-01",
+              "name": "List agents - happy path",
+              "type": "happy_path",
+              "request": { "method": "GET", "url": "/ai/admin/agents", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 200, "body_contains": ["data"], "body_assertions": { "data": "array with seeded agents" } },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AGT-L-02",
+              "name": "List agents - filter by isActive",
+              "type": "happy_path",
+              "request": { "method": "GET", "url": "/ai/admin/agents?isActive=true", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 200, "body_assertions": { "all items have isActive": true } },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AGT-L-03",
+              "name": "List agents - search by name",
+              "type": "happy_path",
+              "request": { "method": "GET", "url": "/ai/admin/agents?search=report", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 200, "body_contains": ["data"] },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AGT-L-04",
+              "name": "List agents - filter by modelId",
+              "type": "happy_path",
+              "request": { "method": "GET", "url": "/ai/admin/agents?modelId={{seeded_model_id}}", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 200 },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/ai/admin/agents/:id",
+          "description": "Get agent detail",
+          "test_cases": [
+            {
+              "id": "AGT-G-01",
+              "name": "Get agent detail - happy path",
+              "type": "happy_path",
+              "request": { "method": "GET", "url": "/ai/admin/agents/{{seeded_agent_id}}", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 200, "body_contains": ["id", "name", "tools", "guardrails", "promptId"] },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AGT-G-02",
+              "name": "Get agent - not found (404)",
+              "type": "edge_case",
+              "request": { "method": "GET", "url": "/ai/admin/agents/00000000-0000-0000-0000-000000000000", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 404, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/ai/admin/agents/:id",
+          "description": "Update AI agent",
+          "test_cases": [
+            {
+              "id": "AGT-U-01",
+              "name": "Update agent displayName - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/admin/agents/{{created_agent_id}}",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "displayName": "Updated Agent Display" }
+              },
+              "expected": { "status": 200, "body_assertions": { "data.displayName": "Updated Agent Display" } },
+              "db_verification": { "enabled": true, "query": "SELECT display_name FROM ai_agents WHERE id = '{{created_agent_id}}'", "expected": "display_name = 'Updated Agent Display'" }
+            },
+            {
+              "id": "AGT-U-02",
+              "name": "Update agent - toggle isActive",
+              "type": "happy_path",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/admin/agents/{{created_agent_id}}",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "isActive": false }
+              },
+              "expected": { "status": 200, "body_assertions": { "data.isActive": false } },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AGT-U-03",
+              "name": "Update agent - not found (404)",
+              "type": "edge_case",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/admin/agents/00000000-0000-0000-0000-000000000000",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "displayName": "Ghost" }
+              },
+              "expected": { "status": 404, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "DELETE",
+          "path": "/ai/admin/agents/:id",
+          "description": "Delete AI agent",
+          "test_cases": [
+            {
+              "id": "AGT-D-01",
+              "name": "Delete unreferenced agent - happy path",
+              "type": "happy_path",
+              "request": { "method": "DELETE", "url": "/ai/admin/agents/{{unreferenced_agent_id}}", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 204 },
+              "db_verification": { "enabled": true, "query": "SELECT COUNT(*) as cnt FROM ai_agents WHERE id = '{{unreferenced_agent_id}}'", "expected": "cnt = 0" }
+            },
+            {
+              "id": "AGT-D-02",
+              "name": "Delete agent referenced by automation step (422)",
+              "type": "edge_case",
+              "request": { "method": "DELETE", "url": "/ai/admin/agents/{{agent_used_in_automation_id}}", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 422, "body_contains": ["referenced"] },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "AGT-D-03",
+              "name": "Delete agent - not found (404)",
+              "type": "edge_case",
+              "request": { "method": "DELETE", "url": "/ai/admin/agents/00000000-0000-0000-0000-000000000000", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 404, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Admin Skill Management",
+      "prefix": "/ai/admin/skills",
+      "stories": ["E5c-4"],
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/ai/admin/skills",
+          "description": "Create a new AI skill",
+          "test_cases": [
+            {
+              "id": "SKL-C-01",
+              "name": "Create skill - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/skills",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": {
+                  "name": "test-invoice-analysis",
+                  "displayName": "Invoice Analysis",
+                  "description": "Analyzes invoice patterns",
+                  "category": "analysis",
+                  "skillContent": "# Invoice Analysis Skill\nAnalyze invoice data for patterns and anomalies.",
+                  "triggerPhrases": ["analyse invoices", "invoice analysis", "check invoices"],
+                  "inputSchema": { "type": "object", "properties": { "dateRange": { "type": "string" } } },
+                  "outputType": "json",
+                  "moduleKey": "finance",
+                  "packKey": "ar",
+                  "negativeTriggers": ["create invoice", "delete invoice"],
+                  "orchestrationPattern": "SEQUENTIAL",
+                  "priority": 200
+                }
+              },
+              "expected": {
+                "status": 201,
+                "body_contains": ["id", "name", "triggerPhrases", "moduleKey"],
+                "body_assertions": { "data.name": "test-invoice-analysis", "data.isActive": true, "data.priority": 200 }
+              },
+              "db_verification": { "enabled": true, "query": "SELECT * FROM ai_skills WHERE name = 'test-invoice-analysis'", "expected": "1 row with module_key='finance'" }
+            },
+            {
+              "id": "SKL-C-02",
+              "name": "Create skill - missing triggerPhrases (400)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/skills",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "name": "no-triggers", "displayName": "No Triggers", "category": "analysis", "skillContent": "Test", "triggerPhrases": [], "outputType": "json" }
+              },
+              "expected": { "status": 400, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "SKL-C-03",
+              "name": "Create skill - invalid category (400)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/skills",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "name": "bad-cat-skill", "displayName": "Bad Category", "category": "INVALID", "skillContent": "Test", "triggerPhrases": ["test"], "outputType": "json" }
+              },
+              "expected": { "status": 400, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "SKL-C-04",
+              "name": "Create skill - duplicate name (409 or 422)",
+              "type": "edge_case",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/skills",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "name": "test-invoice-analysis", "displayName": "Dup", "category": "analysis", "skillContent": "Dup", "triggerPhrases": ["dup"], "outputType": "json" }
+              },
+              "expected": { "status": "409 or 422", "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/ai/admin/skills",
+          "description": "List skills (flat or grouped by module)",
+          "test_cases": [
+            {
+              "id": "SKL-L-01",
+              "name": "List skills - happy path (flat)",
+              "type": "happy_path",
+              "request": { "method": "GET", "url": "/ai/admin/skills", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 200, "body_contains": ["data"] },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "SKL-L-02",
+              "name": "List skills - grouped by module",
+              "type": "happy_path",
+              "request": { "method": "GET", "url": "/ai/admin/skills?grouped=true", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 200, "body_contains": ["data"], "body_assertions": { "data": "grouped by moduleKey" } },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "SKL-L-03",
+              "name": "List skills - filter by moduleKey",
+              "type": "happy_path",
+              "request": { "method": "GET", "url": "/ai/admin/skills?moduleKey=finance", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 200, "body_assertions": { "all items have moduleKey": "finance" } },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "SKL-L-04",
+              "name": "List skills - filter by category",
+              "type": "happy_path",
+              "request": { "method": "GET", "url": "/ai/admin/skills?category=analysis", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 200, "body_assertions": { "all items have category": "analysis" } },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "SKL-L-05",
+              "name": "List skills - search by name",
+              "type": "happy_path",
+              "request": { "method": "GET", "url": "/ai/admin/skills?search=invoice", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 200, "body_contains": ["data"] },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "GET",
+          "path": "/ai/admin/skills/:id",
+          "description": "Get skill detail",
+          "test_cases": [
+            {
+              "id": "SKL-G-01",
+              "name": "Get skill detail - happy path",
+              "type": "happy_path",
+              "request": { "method": "GET", "url": "/ai/admin/skills/{{seeded_skill_id}}", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 200, "body_contains": ["id", "name", "skillContent", "triggerPhrases", "negativeTriggers"] },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "SKL-G-02",
+              "name": "Get skill - not found (404)",
+              "type": "edge_case",
+              "request": { "method": "GET", "url": "/ai/admin/skills/00000000-0000-0000-0000-000000000000", "headers": { "Authorization": "Bearer {{admin_jwt}}" } },
+              "expected": { "status": 404, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/ai/admin/skills/:id",
+          "description": "Update skill",
+          "test_cases": [
+            {
+              "id": "SKL-U-01",
+              "name": "Update skill - change trigger phrases",
+              "type": "happy_path",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/admin/skills/{{created_skill_id}}",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "triggerPhrases": ["analyse invoices", "invoice report", "ar analysis"] }
+              },
+              "expected": { "status": 200, "body_assertions": { "data.triggerPhrases.length": 3 } },
+              "db_verification": { "enabled": true, "query": "SELECT trigger_phrases FROM ai_skills WHERE id = '{{created_skill_id}}'", "expected": "3 trigger phrases" }
+            },
+            {
+              "id": "SKL-U-02",
+              "name": "Update skill - toggle isActive",
+              "type": "happy_path",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/admin/skills/{{created_skill_id}}",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "isActive": false }
+              },
+              "expected": { "status": 200, "body_assertions": { "data.isActive": false } },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "SKL-U-03",
+              "name": "Update skill - not found (404)",
+              "type": "edge_case",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/admin/skills/00000000-0000-0000-0000-000000000000",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "displayName": "Ghost" }
+              },
+              "expected": { "status": 404, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "PATCH",
+          "path": "/ai/admin/skills/:id/deactivate",
+          "description": "Soft-deactivate skill",
+          "test_cases": [
+            {
+              "id": "SKL-DA-01",
+              "name": "Deactivate skill - happy path",
+              "type": "happy_path",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/admin/skills/{{created_skill_id}}/deactivate",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": { "status": 200, "body_assertions": { "data.isActive": false } },
+              "db_verification": { "enabled": true, "query": "SELECT is_active FROM ai_skills WHERE id = '{{created_skill_id}}'", "expected": "is_active = false" }
+            },
+            {
+              "id": "SKL-DA-02",
+              "name": "Deactivate skill - not found (404)",
+              "type": "edge_case",
+              "request": {
+                "method": "PATCH",
+                "url": "/ai/admin/skills/00000000-0000-0000-0000-000000000000/deactivate",
+                "headers": { "Authorization": "Bearer {{admin_jwt}}" }
+              },
+              "expected": { "status": 404, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        },
+        {
+          "method": "POST",
+          "path": "/ai/admin/skills/test-trigger",
+          "description": "Test trigger phrase routing (L0->L1->L2 simulation)",
+          "test_cases": [
+            {
+              "id": "SKL-TT-01",
+              "name": "Test trigger - matching phrase",
+              "type": "happy_path",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/skills/test-trigger",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "phrase": "analyse invoices for this month" }
+              },
+              "expected": {
+                "status": 200,
+                "body_contains": ["matchedModule", "matchedSkill", "l0Confidence", "l1Confidence"],
+                "body_assertions": { "data.noMatch": false }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "SKL-TT-02",
+              "name": "Test trigger - no matching phrase",
+              "type": "edge_case",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/skills/test-trigger",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "phrase": "xyzzy nonsense gibberish 12345" }
+              },
+              "expected": {
+                "status": 200,
+                "body_assertions": { "data.noMatch": true, "data.matchedSkill": null }
+              },
+              "db_verification": { "enabled": false }
+            },
+            {
+              "id": "SKL-TT-03",
+              "name": "Test trigger - empty phrase (400)",
+              "type": "validation_error",
+              "request": {
+                "method": "POST",
+                "url": "/ai/admin/skills/test-trigger",
+                "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_jwt}}" },
+                "body": { "phrase": "" }
+              },
+              "expected": { "status": 400, "body_contains": ["error"] },
+              "db_verification": { "enabled": false }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "test_execution_order": [
+    "1. Run all POST (create) tests first to establish test data",
+    "2. Run all GET (list/detail) tests using created data",
+    "3. Run all PATCH (update) tests on created data",
+    "4. Run all DELETE tests last to clean up",
+    "5. Within each group, run happy_path tests before validation_error and edge_case tests"
+  ],
+  "cross_cutting_tests": [
+    {
+      "id": "AUTH-01",
+      "name": "All endpoints reject unauthenticated requests (401)",
+      "type": "edge_case",
+      "description": "Send request without Authorization header to every endpoint. Expect 401 for all.",
+      "applies_to": "all 41 endpoints"
+    },
+    {
+      "id": "AUTH-02",
+      "name": "All admin endpoints reject non-admin users (403)",
+      "type": "edge_case",
+      "description": "Send request with a non-ADMIN JWT to every /ai/admin/* endpoint. Expect 403.",
+      "applies_to": "all /ai/admin/* endpoints (26 endpoints)"
+    },
+    {
+      "id": "TENANT-01",
+      "name": "Company isolation - automations scoped by companyId",
+      "type": "edge_case",
+      "description": "Create automation as company A, then try to read/update/delete it as company B. Expect 404.",
+      "applies_to": "automation CRUD endpoints"
+    },
+    {
+      "id": "PERF-01",
+      "name": "List endpoints return within 500ms (NFR2)",
+      "type": "edge_case",
+      "description": "Measure response time for all paginated list endpoints. All must return within 500ms.",
+      "applies_to": "all GET list endpoints"
+    },
+    {
+      "id": "PAGINATION-01",
+      "name": "Cursor-based pagination works correctly",
+      "type": "happy_path",
+      "description": "For each list endpoint: (1) fetch page 1 with limit=2, (2) use nextCursor to fetch page 2, (3) verify no duplicate items across pages.",
+      "applies_to": "all paginated list endpoints"
+    }
+  ],
+  "summary": {
+    "total_endpoints": 41,
+    "endpoint_groups": {
+      "automation_crud": { "endpoints": 5, "test_cases": 30 },
+      "automation_execution": { "endpoints": 2, "test_cases": 7 },
+      "run_management": { "endpoints": 3, "test_cases": 10 },
+      "variable_management": { "endpoints": 5, "test_cases": 14 },
+      "admin_dashboard": { "endpoints": 1, "test_cases": 4 },
+      "admin_models": { "endpoints": 5, "test_cases": 23 },
+      "admin_prompts": { "endpoints": 8, "test_cases": 26 },
+      "admin_agents": { "endpoints": 5, "test_cases": 18 },
+      "admin_skills": { "endpoints": 6, "test_cases": 20 }
+    },
+    "cross_cutting_tests": 5,
+    "test_type_breakdown": {
+      "happy_path": 82,
+      "validation_error": 36,
+      "edge_case": 79
+    },
+    "db_verification_enabled": 25
+  }
+}

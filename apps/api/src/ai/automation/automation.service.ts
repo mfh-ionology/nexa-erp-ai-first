@@ -77,7 +77,7 @@ const automationListSelect = {
   runs: {
     take: 1,
     orderBy: { createdAt: 'desc' as const },
-    select: { status: true, startedAt: true, completedAt: true },
+    select: { id: true, status: true, startedAt: true, completedAt: true },
   },
 } satisfies Prisma.AiAutomationSelect;
 
@@ -768,9 +768,13 @@ export class AutomationService {
       }
     }
 
+    // Pre-generate the new run ID so we can return it to the client immediately
+    const newRunId = randomUUID();
+
     // Execute asynchronously starting from the failed step
     const result = this.executor.execute({
       automationId: originalRun.automationId,
+      runId: newRunId,
       input: retryInput ?? undefined,
       triggeredBy: `retry:${runId}`,
       retryOfRunId: runId,
@@ -783,6 +787,7 @@ export class AutomationService {
         {
           automationId: originalRun.automationId,
           originalRunId: runId,
+          newRunId,
           error: (err as Error).message,
         },
         'Retry automation run failed',
@@ -793,6 +798,7 @@ export class AutomationService {
       message: 'Retry started',
       automationId: originalRun.automationId,
       originalRunId: runId,
+      newRunId,
     };
   }
 
@@ -1070,6 +1076,7 @@ export class AutomationService {
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
       stepCount: item._count?.steps ?? 0,
+      lastRunId: item.runs?.[0]?.id ?? null,
       lastRunStatus: item.runs?.[0]?.status ?? null,
       lastRunAt:
         item.runs?.[0]?.completedAt?.toISOString() ??
