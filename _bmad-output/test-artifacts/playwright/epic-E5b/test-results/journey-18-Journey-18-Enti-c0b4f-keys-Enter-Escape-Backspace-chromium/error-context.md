@@ -1,0 +1,300 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - link "Skip to content" [ref=e4] [cursor=pointer]:
+        - /url: "#main-content"
+      - complementary [ref=e6]:
+        - navigation "Navigation" [ref=e7]:
+          - img [ref=e10]
+          - generic [ref=e17]:
+            - generic [ref=e18]:
+              - generic [ref=e19]: Main
+              - link "Dashboard" [ref=e21] [cursor=pointer]:
+                - /url: /
+                - img [ref=e22]
+                - text: Dashboard
+            - generic [ref=e27]:
+              - generic [ref=e28]: Operations
+              - generic [ref=e29]:
+                - link "Finance" [ref=e30] [cursor=pointer]:
+                  - /url: /finance
+                  - img [ref=e31]
+                  - text: Finance
+                - link "Accounts Receivable" [ref=e33] [cursor=pointer]:
+                  - /url: /ar
+                  - img [ref=e34]
+                  - text: Accounts Receivable
+                - link "Accounts Payable" [ref=e37] [cursor=pointer]:
+                  - /url: /ap
+                  - img [ref=e38]
+                  - text: Accounts Payable
+                - link "Sales" [ref=e41] [cursor=pointer]:
+                  - /url: /sales
+                  - img [ref=e42]
+                  - text: Sales
+                - link "Purchasing" [ref=e46] [cursor=pointer]:
+                  - /url: /purchasing
+                  - img [ref=e47]
+                  - text: Purchasing
+                - link "Inventory" [ref=e49] [cursor=pointer]:
+                  - /url: /inventory
+                  - img [ref=e50]
+                  - text: Inventory
+            - generic [ref=e53]:
+              - generic [ref=e54]: Other
+              - generic [ref=e55]:
+                - link "CRM" [ref=e56] [cursor=pointer]:
+                  - /url: /crm
+                  - img [ref=e57]
+                  - text: CRM
+                - link "HR & Payroll" [ref=e60] [cursor=pointer]:
+                  - /url: /hr
+                  - img [ref=e61]
+                  - text: HR & Payroll
+                - link "Manufacturing" [ref=e66] [cursor=pointer]:
+                  - /url: /manufacturing
+                  - img [ref=e67]
+                  - text: Manufacturing
+                - link "Reporting" [ref=e69] [cursor=pointer]:
+                  - /url: /reporting
+                  - img [ref=e70]
+                  - text: Reporting
+            - generic [ref=e72]:
+              - generic [ref=e74]: AI
+              - generic [ref=e75]:
+                - link "Morning Briefing" [ref=e76] [cursor=pointer]:
+                  - /url: /ai/briefing
+                  - img [ref=e77]
+                  - text: Morning Briefing
+                - link "My Memory" [ref=e83] [cursor=pointer]:
+                  - /url: /ai/memory
+                  - img [ref=e84]
+                  - text: My Memory
+                - link "Skills" [ref=e92] [cursor=pointer]:
+                  - /url: /ai/skills
+                  - img [ref=e93]
+                  - text: Skills
+            - generic [ref=e96]:
+              - generic [ref=e98]: Administration
+              - generic [ref=e99]:
+                - link "Settings" [ref=e100] [cursor=pointer]:
+                  - /url: /system/settings
+                  - img [ref=e101]
+                  - text: Settings
+                - link "Users" [ref=e104] [cursor=pointer]:
+                  - /url: /system/users
+                  - img [ref=e105]
+                  - text: Users
+                - link "Access Groups" [ref=e110] [cursor=pointer]:
+                  - /url: /system/access-groups
+                  - img [ref=e111]
+                  - text: Access Groups
+          - button "Collapse sidebar" [ref=e114]:
+            - img [ref=e115]
+      - generic [ref=e117]:
+        - banner [ref=e118]:
+          - combobox "Search or ask Nexa AI" [ref=e120] [cursor=pointer]:
+            - img [ref=e121]
+            - generic [ref=e124]:
+              - text: Search or Ask Nexa anything...
+              - generic:
+                - generic: ⌘
+                - text: K
+          - generic [ref=e125]:
+            - generic [ref=e126]: Mon, Mar 2, 2026
+            - button "Close Co-Pilot" [ref=e127]:
+              - img
+            - button "Notifications" [ref=e128]:
+              - img [ref=e129]
+              - generic [ref=e132]: "3"
+            - button "Favourites" [ref=e133]:
+              - img
+            - button "User menu" [ref=e134]:
+              - generic [ref=e136]: AU
+        - generic [ref=e137]:
+          - main "Main content" [ref=e138]:
+            - generic [ref=e139]:
+              - generic [ref=e140]:
+                - heading "Good morning, Admin" [level=1] [ref=e141]
+                - paragraph [ref=e142]: Monday, March 2, 2026
+              - region "Key performance indicators" [ref=e143]:
+                - generic [ref=e144]:
+                  - generic [ref=e145]:
+                    - generic [ref=e146]:
+                      - generic [ref=e147]:
+                        - img [ref=e149]
+                        - generic [ref=e151]: Revenue
+                      - generic [ref=e152]: +11.0%
+                    - generic [ref=e153]: £347,200
+                    - paragraph [ref=e154]: vs last month
+                    - img "Trend sparkline" [ref=e155]
+                  - generic [ref=e157]:
+                    - generic [ref=e158]:
+                      - generic [ref=e159]:
+                        - img [ref=e161]
+                        - generic [ref=e163]: Outstanding AR
+                      - generic [ref=e164]: +29.7%
+                    - generic [ref=e165]: £127,400
+                    - paragraph [ref=e166]: vs last month
+                    - img "Trend sparkline" [ref=e167]
+                  - generic [ref=e169]:
+                    - generic [ref=e170]:
+                      - generic [ref=e171]:
+                        - img [ref=e173]
+                        - generic [ref=e176]: Cash Position
+                      - generic [ref=e177]: "-12.9%"
+                    - generic [ref=e178]: £89,300
+                    - paragraph [ref=e179]: vs last month
+                    - img "Trend sparkline" [ref=e180]
+                  - generic [ref=e182]:
+                    - generic [ref=e183]:
+                      - generic [ref=e184]:
+                        - img [ref=e186]
+                        - generic [ref=e189]: Overdue Invoices
+                      - generic [ref=e190]: +75%
+                    - generic [ref=e191]: "7"
+                    - paragraph [ref=e192]: vs last month
+                    - img "Trend sparkline" [ref=e193]
+                  - generic [ref=e195]:
+                    - generic [ref=e196]:
+                      - generic [ref=e197]:
+                        - img [ref=e199]
+                        - generic [ref=e201]: Pipeline Value
+                      - generic [ref=e202]: +14.4%
+                    - generic [ref=e203]: £215,000
+                    - paragraph [ref=e204]: vs last month
+                    - img "Trend sparkline" [ref=e205]
+                  - generic [ref=e207]:
+                    - generic [ref=e208]:
+                      - generic [ref=e209]:
+                        - img [ref=e211]
+                        - generic [ref=e214]: Gross Margin
+                      - generic [ref=e215]: "-2.6pp"
+                    - generic [ref=e216]: 34.2%
+                    - paragraph [ref=e217]: vs last month
+                    - img "Trend sparkline" [ref=e218]
+              - region "Charts" [ref=e220]:
+                - generic [ref=e221]:
+                  - heading "Revenue & Payments" [level=3] [ref=e222]
+                  - generic [ref=e225]:
+                    - generic [ref=e227]:
+                      - generic [ref=e228]: Payments Received
+                      - generic [ref=e230]: Revenue
+                    - application [ref=e232]:
+                      - generic [ref=e267]:
+                        - generic [ref=e268]:
+                          - generic [ref=e270]: Oct
+                          - generic [ref=e272]: Dec
+                          - generic [ref=e274]: Feb
+                        - generic [ref=e275]:
+                          - generic [ref=e277]: £0
+                          - generic [ref=e279]: £90k
+                          - generic [ref=e281]: £180k
+                          - generic [ref=e283]: £270k
+                          - generic [ref=e285]: £360k
+                - generic [ref=e286]:
+                  - heading "Cash Flow Forecast" [level=3] [ref=e287]
+                  - application [ref=e291]:
+                    - generic [ref=e310]:
+                      - generic [ref=e311]:
+                        - generic [ref=e313]: W2
+                        - generic [ref=e315]: W4
+                        - generic [ref=e317]: W6
+                        - generic [ref=e319]: W8
+                      - generic [ref=e320]:
+                        - generic [ref=e322]: £0
+                        - generic [ref=e324]: £25k
+                        - generic [ref=e326]: £50k
+                        - generic [ref=e328]: £75k
+                        - generic [ref=e330]: £100k
+                      - generic [ref=e331]: Safety Threshold
+              - region "Tasks and activity" [ref=e332]:
+                - generic [ref=e333]:
+                  - generic [ref=e334]:
+                    - img [ref=e335]
+                    - heading "Tasks Today" [level=3] [ref=e338]
+                  - generic [ref=e339]:
+                    - generic [ref=e340] [cursor=pointer]:
+                      - generic [ref=e341]:
+                        - checkbox "Chase Acme Corp (£31k overdue) Urgent" [ref=e342]
+                        - generic [ref=e343]: Chase Acme Corp (£31k overdue)
+                      - generic [ref=e344]: Urgent
+                    - generic [ref=e345] [cursor=pointer]:
+                      - generic [ref=e346]:
+                        - checkbox "Review Widget-B pricing High" [ref=e347]
+                        - generic [ref=e348]: Review Widget-B pricing
+                      - generic [ref=e349]: High
+                    - generic [ref=e350] [cursor=pointer]:
+                      - generic [ref=e351]:
+                        - checkbox "Approve purchase orders over £5,000 Medium" [ref=e352]
+                        - generic [ref=e353]: Approve purchase orders over £5,000
+                      - generic [ref=e354]: Medium
+                    - generic [ref=e355] [cursor=pointer]:
+                      - generic [ref=e356]:
+                        - checkbox "Payroll prep — 5 days Normal" [ref=e357]
+                        - generic [ref=e358]: Payroll prep — 5 days
+                      - generic [ref=e359]: Normal
+                - generic [ref=e360]:
+                  - generic [ref=e361]:
+                    - img [ref=e362]
+                    - heading "Recent Activity" [level=3] [ref=e365]
+                  - generic [ref=e366]:
+                    - generic [ref=e367]:
+                      - generic [ref=e368]: SC
+                      - generic [ref=e369]:
+                        - paragraph [ref=e370]: Sarah approved PO-2026-0031
+                        - paragraph [ref=e371]: "{{count}}h ago"
+                    - generic [ref=e372]:
+                      - generic [ref=e373]: AI
+                      - generic [ref=e374]:
+                        - paragraph [ref=e375]: AI matched payment £22,100 → INV-0055
+                        - paragraph [ref=e376]: 3 hours ago
+                    - generic [ref=e377]:
+                      - generic [ref=e378]: DM
+                      - generic [ref=e379]:
+                        - paragraph [ref=e380]: David posted month-end journal JE-0412
+                        - paragraph [ref=e381]: Yesterday
+          - complementary "AI Co-Pilot assistant" [ref=e382]:
+            - generic [ref=e383]:
+              - generic [ref=e384]:
+                - img [ref=e385]
+                - generic [ref=e388]: Co-Pilot
+              - button "Close Co-Pilot" [ref=e389]:
+                - img
+            - generic [ref=e390]:
+              - button "Recent Chats" [ref=e391]:
+                - generic [ref=e392]: Recent Chats
+                - img
+              - button "New Chat" [ref=e393]:
+                - img
+            - generic [ref=e398]:
+              - img [ref=e400]
+              - paragraph [ref=e403]: Hi! I'm your Nexa Co-Pilot. Ask me anything about your business data, or use the quick prompts below to get started.
+            - generic "Quick Prompts" [ref=e404]:
+              - generic [ref=e405]: Quick Prompts
+              - generic [ref=e406]:
+                - button "Daily Briefing" [ref=e407] [cursor=pointer]
+                - button "What needs my attention?" [ref=e408] [cursor=pointer]
+                - button "Morning Briefing" [ref=e409] [cursor=pointer]
+            - generic [ref=e412]:
+              - textbox "Ask Nexa anything..." [active] [ref=e413]: open view us
+              - button "Send message" [ref=e414]:
+                - img [ref=e415]
+    - generic:
+      - contentinfo:
+        - button "Open TanStack Router Devtools" [ref=e418] [cursor=pointer]:
+          - generic [ref=e419]:
+            - img [ref=e421]
+            - img [ref=e456]
+          - generic [ref=e490]: "-"
+          - generic [ref=e491]: TanStack Router
+    - region "Notifications alt+T"
+    - generic [ref=e492]:
+      - img [ref=e494]
+      - button "Open Tanstack query devtools" [ref=e542] [cursor=pointer]:
+        - img [ref=e543]
+  - generic [ref=e591]: £25k
+```

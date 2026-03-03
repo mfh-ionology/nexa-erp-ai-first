@@ -1,0 +1,483 @@
+---
+stepsCompleted: ['step-01-detect-mode', 'step-02-load-context', 'step-03-risk-and-testability', 'step-04-coverage-plan', 'step-05-generate-output']
+lastStep: 'step-05-generate-output'
+lastSaved: '2026-03-01'
+lastEpic: 'E5b'
+---
+
+# Test Design Progress — Epic E1
+
+## Step 1: Mode Detection & Prerequisites
+
+## Mode: Epic-Level
+**Reason:** User explicitly requested E1 (Epic E1: Database + Core Models). This is a data-foundation epic with 6 stories and clear acceptance criteria.
+
+## Prerequisites Check
+- **Epic requirements:** Present (epic-e1-database-core-models.md with 6 stories, 30 ACs total)
+- **Architecture context:** Available (_bmad-output/planning-artifacts/architecture/)
+- **PRD:** Available for FR/NFR cross-reference
+
+## Epic E1 Summary
+- **Tier:** 0 (Foundation)
+- **Type:** Data foundation
+- **FRs:** FR80, FR84, FR86, FR171-FR177, FR193-FR197
+- **NFRs:** NFR10, NFR13, NFR18, NFR38, NFR44, NFR49
+- **Stories:** E1.S1 (Prisma Foundation), E1.S2 (System Module Models), E1.S3 (Multi-Company Models), E1.S4 (User & Session Models), E1.S5 (Number Series Service), E1.S6 (Platform Database Schema)
+
+# Step 2: Context Loading
+
+## Configuration
+- tea_use_playwright_utils: true
+- tea_browser_automation: auto
+- test_artifacts: _bmad-output/test-artifacts
+
+## Loaded Artifacts
+- Epic E1: epic-e1-database-core-models.md (6 stories, 30 ACs)
+- Architecture: core-architectural-decisions.md (§§2.1-2.8, §3)
+- Project Context: project-context.md (§§1, 2, 8b)
+- PRD FRs: FR80, FR84, FR86, FR171-FR177, FR193-FR197
+- PRD NFRs: NFR10, NFR13, NFR18, NFR38, NFR44, NFR49
+- Data Models, Business Rules, State Machines consulted
+
+## Existing Test Coverage
+- No existing tests found (greenfield project)
+
+## Knowledge Fragments Loaded
+- risk-governance.md
+- probability-impact.md
+- test-levels-framework.md
+- test-priorities-matrix.md
+
+# Step 3: Risk Assessment
+
+## Summary
+- Total risks: 11
+- High-priority (>=6): 3 (R-001 Number series concurrency, R-002 Decimal precision, R-003 Audit log immutability)
+- Medium (3-4): 5 (R-004 through R-008)
+- Low (1-2): 3 (R-009 through R-011)
+- Categories: DATA (4), TECH (3), SEC (1), OPS (1), PERF (1), BUS (0)
+
+# Step 4: Coverage Plan
+
+## Summary
+- P0: 12 tests (~12-20 hours) — data integrity and foundation blockers
+- P1: 18 tests (~10-18 hours) — model correctness and constraints
+- P2: 14 tests (~4-8 hours) — edge cases and defaults
+- P3: 4 tests (~1-2 hours) — benchmarks and simple CRUD
+- Total: 48 tests, ~27-48 hours (~3.5-6 days)
+
+## Test Levels
+- Unit: 7 tests (schema introspection, pure function tests)
+- Integration: 41 tests (Prisma + real PostgreSQL)
+- E2E: 0 tests (no browser UI in E1)
+
+# Step 5: Output Generation
+
+## Output File
+- `_bmad-output/test-artifacts/test-design-epic-E1.md`
+
+## Validation
+- All checklist criteria verified
+- No CLI sessions to clean up (no browser exploration for E1)
+- All artifacts stored in test-artifacts/
+
+## Completion
+- Workflow complete: 2026-02-18
+
+---
+
+# Test Design Progress — Epic E2
+
+## Step 1: Mode Detection
+- **Mode**: Epic-Level (Phase 4)
+- **Reason**: User explicitly requested E2 epic-level test design
+- **Prerequisites**: E2 epic documentation available with 6 stories and detailed acceptance criteria
+
+## Step 2: Context Loading
+- **Config**: tea_use_playwright_utils=true, tea_browser_automation=auto, test_framework=playwright
+- **Documents loaded**:
+  - Epic E2 (6 stories: E2.S1-E2.S6)
+  - Architecture: core-architectural-decisions.md, implementation-patterns-consistency-rules.md, project-structure-boundaries.md
+  - PRD: functional-requirements.md (FR80-84, FR172, FR174-177), non-functional-requirements.md (NFR2, NFR10-16, NFR45)
+  - API Contracts: overview, endpoint summary, detailed specifications
+  - Business Rules: IMP-007, IMP-008, IMP-009, BR-PLT-018 through BR-PLT-021
+  - Event Catalog: user.login, settings.updated events
+  - Project Context: Multi-company architecture, RBAC resolution
+  - Existing code: resolveUserRole (packages/db/src/utils/rbac.ts), getVisibleCompanyIds (packages/db/src/utils/sharing.ts)
+  - Prisma schema: User, UserCompanyRole, CompanyProfile, RefreshToken models
+- **Knowledge fragments**: risk-governance.md, probability-impact.md, test-levels-framework.md, test-priorities-matrix.md
+- **Existing tests**: No project-level test files found; E1 test design available as reference
+
+## Step 3: Risk Assessment
+- 12 risks identified
+- 5 high-priority (>=6): JWT bypass, RBAC flaw, refresh token replay, MFA bypass, company context missing
+- 3 medium (3-4): account lockout bypass, Argon2 performance, Zod schema mismatch
+- 4 low (1-2): tenant routing, info leakage, CORS, health endpoint
+
+## Step 4: Coverage Plan
+- 46 total test scenarios
+- P0: 16 (auth flows, RBAC boundaries, company isolation)
+- P1: 16 (standard CRUD, middleware, utilities)
+- P2: 10 (edge cases, logging, config)
+- P3: 4 (benchmarks, OpenAPI)
+
+## Step 5: Output Generated
+- Output file: `_bmad-output/test-artifacts/test-design-epic-E2.md`
+- Validated against checklist
+- No CLI sessions to clean up (no browser exploration for E2)
+- All artifacts stored in test-artifacts/
+
+## Completion
+- Workflow complete: 2026-02-18
+
+---
+
+# Test Design Progress — Epic E2b
+
+## Step 1: Mode Detection
+- **Mode**: Epic-Level (Phase 4)
+- **Reason**: User explicitly requested E2b epic-level test design
+- **Prerequisites**: E2b epic documentation available in epic-overview.md (E2b section) and epic-e2 (follow-on section)
+
+## Step 2: Context Loading
+- **Config**: tea_use_playwright_utils=true, tea_browser_automation=auto, test_framework=playwright
+- **Documents loaded**:
+  - Epic E2b scope (6 stories: E2b.1-E2b.6)
+  - Architecture: core-architectural-decisions.md
+  - PRD: FR81, FR175-FR177, FR227-FR233
+  - API Contracts: 13 E2b endpoints
+  - Business Rules: BR-RBAC-001 through BR-RBAC-008, IMP-007
+  - Event Catalog: 6 new events (access_group.*, user_access_group.*)
+  - Data Models: Resource, AccessGroup, AccessGroupPermission, AccessGroupFieldOverride, UserAccessGroup
+  - Prior E2 test design: 46 tests as baseline
+- **Knowledge fragments**: risk-governance.md, probability-impact.md, test-levels-framework.md, test-priorities-matrix.md
+
+## Step 3: Risk Assessment
+- 12 risks identified
+- 5 high-priority (>=6): Permission guard bypass, most-permissive-wins logic, cache stale data, field visibility leak, cross-company leakage
+- 5 medium (3-4): SUPER_ADMIN bypass failure, default data seeding, non-ADMIN management, export/import corruption, module derivation
+- 2 low (1-2): System group deletion, permission resolution latency
+
+## Step 4: Coverage Plan
+- 36 total test scenarios
+- P0: 12, P1: 12, P2: 8, P3: 4
+
+## Step 5: Output Generated
+- Output file: `_bmad-output/test-artifacts/test-design-epic-E2b.md`
+- Validated against checklist
+
+## Completion
+- Workflow complete: 2026-02-20
+
+---
+
+# Test Design Progress — Epic E3
+
+## Step 1: Mode Detection
+- **Mode**: Epic-Level (Phase 4)
+- **Reason**: User explicitly requested E3 epic-level test design
+- **Prerequisites**: E3 epic documentation available with 3 stories (E3.1, E3.2, E3.3) and detailed acceptance criteria
+
+## Step 2: Context Loading
+- **Config**: tea_use_playwright_utils=true, tea_browser_automation=auto, test_framework=playwright
+- **Documents loaded**:
+  - Epic E3 (3 stories: E3.1 Event Bus Infrastructure, E3.2 Audit Trail Service, E3.3 Event Persistence & Dead Letter)
+  - Architecture: core-architectural-decisions.md (sections 2.6 Immutable Audit Trail, 4.2 Event Architecture)
+  - PRD: FR85 (audit log viewing), FR92 (immutable audit), NFR9, NFR14, NFR22, NFR39, NFR40
+  - API Contracts: GET /system/audit-log, GET /system/audit-log/:entityType/:entityId
+  - Business Rules: IMP-003 (immutable audit, 6-year retention), BR-SYS-013/014 (polymorphic entity pattern)
+  - Event Catalog: 113+ events, naming conventions, cross-module rules
+  - Data Models: AuditLog model fields
+  - Existing code: event-emitter.ts (singleton placeholder for E3 event bus)
+- **Knowledge fragments**: risk-governance.md, probability-impact.md, test-levels-framework.md, test-priorities-matrix.md
+- **Existing tests**: 37 test files found; permission-cache-listeners.test.ts shows event emission patterns; Vitest v4.0.18 configured
+
+## Step 3: Risk Assessment
+- 10 risks identified
+- 4 high-priority (>=6): Error isolation (R-001), audit data completeness (R-003), dead-letter data loss (R-004), idempotency violation (R-009)
+- 3 medium (3-4): Handler deduplication (R-005), async blocking (R-006), retry timing (R-008)
+- 3 low (1-2): Immutability bypass (R-002), audit access control (R-007), Redis unavailable (R-010)
+
+## Step 4: Coverage Plan
+- 23 total test scenarios
+- P0: 5 (~10-15 hours) — event emission, error isolation, audit creation, immutability, dead-letter persistence
+- P1: 8 (~15-25 hours) — async execution, deduplication, audit queries, retry, re-processing, idempotency
+- P2: 7 (~5-10 hours) — naming conventions, Fastify plugin, role restrictions, pagination, correlation ID
+- P3: 3 (~2-4 hours) — subscriber ordering, performance benchmark, edge cases
+
+## Step 5: Output Generated
+- Output file: `_bmad-output/test-artifacts/test-design-epic-E3.md`
+- Validated against checklist
+- No CLI sessions to clean up (no browser exploration for E3)
+- All artifacts stored in test-artifacts/
+
+## Completion
+- Workflow complete: 2026-02-21
+
+---
+
+# Test Design Progress — Epic E4
+
+## Step 1: Mode Detection
+- **Mode**: Epic-Level (Phase 4)
+- **Reason**: User explicitly requested E4 epic-level test design
+- **Prerequisites**: E4 epic documentation available with 3 stories (E4.1, E4.2, E4.3) and detailed acceptance criteria
+
+## Step 2: Context Loading
+- **Config**: tea_use_playwright_utils=true, tea_browser_automation=auto, test_framework=playwright
+- **Documents loaded**:
+  - Epic E4 (3 stories: E4.1 Translation Key System, E4.2 Backend i18n, E4.3 Number/Date/Currency Formatting)
+  - Architecture: core-architectural-decisions.md (State Management, API patterns, error handling)
+  - PRD: FR178-FR180, NFR38, NFR41, NFR45
+  - API Contracts: Error response envelope, validation error structure, data conventions
+  - Data Models: Currency (minorUnit, symbol, code), CompanyProfile (defaultLanguage, baseCurrencyCode, timezone)
+  - Business Rules: IMP-002 (Decimal(19,4) for monetary fields)
+  - Project Context: Section 3 (i18n / Localisation Infrastructure)
+  - Existing code: Error class hierarchy (AppError, ValidationError), Vitest configured, no existing i18n code (greenfield)
+- **Knowledge fragments**: risk-governance.md, probability-impact.md, test-levels-framework.md, test-priorities-matrix.md
+
+## Step 3: Risk Assessment
+- 8 risks identified
+- 2 high-priority (>=6): Decimal precision loss (R-001), Fallback chain incorrect (R-002)
+- 4 medium (3-4): Zod mapping incomplete (R-003), ESLint false positives (R-004), minorUnit unavailable (R-005), namespace loading perf (R-006)
+- 2 low (1-2): Key naming inconsistency (R-007), interpolation injection (R-008)
+
+## Step 4: Coverage Plan
+- 34 total test scenarios
+- P0: 8 (~8-14 hours) — decimal precision, fallback chain, error envelope
+- P1: 12 (~10-18 hours) — interpolation, Zod mapping, date/number formatting
+- P2: 10 (~4-8 hours) — ESLint rules, namespace loading, backend locale, edge cases
+- P3: 4 (~1-3 hours) — performance benchmark, exhaustive currency test, escaping
+
+## Step 5: Output Generated
+- Output file: `_bmad-output/test-artifacts/test-design-epic-E4.md`
+- Validated against checklist
+- No CLI sessions to clean up (no browser exploration for E4)
+- All artifacts stored in test-artifacts/
+
+## Completion
+- Workflow complete: 2026-02-22
+
+---
+
+# Test Design Progress — Epic E3b
+
+## Step 1: Mode Detection
+- **Mode**: Epic-Level (Phase 4)
+- **Reason**: User explicitly requested E3b epic-level test design
+- **Prerequisites**: E3b epic documentation available with 5 stories (E3b.1-E3b.5) and detailed acceptance criteria
+
+## Step 2: Context Loading
+- **Config**: tea_use_playwright_utils=true, tea_browser_automation=auto, test_framework=playwright
+- **Documents loaded**:
+  - Epic E3b (5 stories: E3b.1 Platform API Server, E3b.2 Tenant Management API, E3b.3 AI Gateway + Provider Adapters, E3b.4 Platform Client SDK, E3b.5 Plan & Billing Management)
+  - Architecture: Section 2.31 (Platform layer, AI Gateway, SDK, ERP integration)
+  - PRD: FR193-FR210, FR219-FR225; NFR46-NFR51
+  - API Contracts: Section 20 (internal ERP-facing), Section 21 (admin-facing)
+  - Data Models: Section 5 (Platform database — Tenant, Plan, TenantAiUsage, TenantAiQuota, TenantBilling, PlatformUser, PlatformAuditLog, ImpersonationSession)
+  - Business Rules: Section 14b (BR-PLT-001 to BR-PLT-021)
+  - Event Catalog: Section 19 (13 platform events)
+  - State Machines: Section 20 (Tenant lifecycle, Billing enforcement, AI Quota runtime)
+  - Existing tests: platform-models.test.ts (schema validation, seed data verification)
+  - Schema gap identified: TenantProviderCredential model missing from Prisma schema
+- **Knowledge fragments**: risk-governance.md, probability-impact.md, test-levels-framework.md, test-priorities-matrix.md
+
+## Step 3: Risk Assessment
+- 14 risks identified
+- 6 high-priority (>=6): MFA bypass (R-001 score=9 CRITICAL), service token bypass (R-002), AI usage loss (R-003), state machine bypass (R-004), entitlement latency (R-005), missing schema model (R-009)
+- 6 medium (3-5): Audit immutability (R-006), circuit breaker staleness (R-007), fallback chain failure (R-008), webhook failure detection (R-010), AI Gateway overhead (R-011), billing escalation (R-012)
+- 2 low (1-2): Health endpoint accuracy (R-013), webhook delivery timing (R-014)
+
+## Step 4: Coverage Plan
+- 114 total test scenarios
+- P0: ~33 tests (~25-40 hours) — auth, state machine, quota enforcement, audit, performance
+- P1: ~41 tests (~20-35 hours) — CRUD, webhooks, caching, SDK, provider adapters, plans, billing
+- P2: ~29 tests (~10-20 hours) — edge cases, impersonation, BYOK, fallback chain, health
+- P3: ~11 tests (~5-10 hours) — performance benchmarks, CSV export, user management
+
+## Step 5: Output Generated
+- Output file: `_bmad-output/test-artifacts/test-design-epic-E3b.md`
+- Validated against checklist
+- No CLI sessions to clean up (no browser exploration for E3b)
+- All artifacts stored in test-artifacts/
+
+## Completion
+- Workflow complete: 2026-02-21
+
+---
+
+# Test Design Progress — Epic E5
+
+## Step 1: Mode Detection
+- **Mode**: Epic-Level (Phase 4)
+- **Reason**: User explicitly requested E5 epic-level test design
+- **Prerequisites**: E5 epic documentation available with 5 stories (E5.1-E5.5) and detailed acceptance criteria
+
+## Step 2: Context Loading
+- **Config**: tea_use_playwright_utils=true, tea_browser_automation=auto, test_framework=playwright
+- **Documents loaded**:
+  - Epic E5 (5 stories: E5.1 AI Service Layer, E5.2 AI Chat Session Management, E5.3 AI Action Framework, E5.4 AI Predictions, E5.5 Daily Briefing & Smart Suggestions)
+  - Architecture: core-architectural-decisions.md (Section 6 — AI Infrastructure & Orchestration, 7 subsystems)
+  - PRD: FR1-FR10, FR153-FR156; NFR1, NFR16, NFR21, NFR47
+  - API Contracts: WS /ai/chat, POST /ai/chat/message, GET /ai/chat/history, POST /ai/chat/sessions, POST /ai/predict/cash-flow, POST /ai/detect/anomalies, POST /ai/detect/duplicates, GET /ai/confidence, POST /ai/explain, GET /ai/briefing, POST /ai/suggestions
+  - Business Rules: IMP-005 (AI never auto-executes), IMP-006 (AI degradation safe), BR-COM-013
+  - Event Catalog: Section 17 (ai.action.executed, ai.degraded events)
+  - Data Models: AiModel, AiPrompt, AiPromptVersion, AiAgent, AiConversation, AiMessage (defined in Architecture §6)
+  - Dependencies: E3b (Platform API + AI Gateway), E4 (i18n)
+  - Existing code: No AI code exists yet (apps/api/src/ai/ directory not created)
+- **Knowledge fragments**: risk-governance.md, probability-impact.md, test-levels-framework.md, test-priorities-matrix.md
+
+## Step 3: Risk Assessment
+- 9 risks identified
+- 1 critical (score 9): R-001 — AI guardrails bypass for financial transactions (SEC)
+- 4 high (score 6): R-002 (TECH — AI Gateway integration failure), R-003 (PERF — response time SLA), R-004 (DATA — conversation context integrity), R-005 (SEC — WebSocket auth bypass)
+- 3 medium (score 4): R-006 (TECH — response parser), R-007 (BUS — prediction accuracy), R-009 (TECH — streaming delivery)
+- 1 low (score 2): R-008 (OPS — briefing job reliability)
+
+## Step 4: Coverage Plan
+- P0: 4 scenarios (~14 tests, ~8-12 hours) — guardrails, WS auth, degradation, quota
+- P1: 14 scenarios (~45 tests, ~25-40 hours) — core AI service layer, chat management, action framework, predictions, briefing
+- P2: 7 scenarios (~18 tests, ~8-15 hours) — duplicate detection, confidence retrieval, explain, suggestions, role variations
+- P3: 3 scenarios (~6 tests, ~2-4 hours) — preview data, BullMQ scheduling, token limit edge cases
+- Total: ~83 tests, ~43-71 hours (~1-2 weeks)
+
+## Step 5: Output Generated
+- Output file: `_bmad-output/test-artifacts/test-design-epic-E5.md`
+- Validated against checklist
+- No CLI sessions to clean up (no browser exploration for E5)
+- All artifacts stored in test-artifacts/
+
+## Completion
+- Workflow complete: 2026-02-22
+
+---
+
+# Test Design Progress — Epic E6
+
+## Step 1: Mode Detection
+- **Mode**: Epic-Level (Phase 4)
+- **Reason**: User specified Epic E6 with 12 stories and acceptance criteria
+- **Epic**: E6 — Web Frontend Shell + Mobile Scaffold
+
+## Step 2: Context Loading
+- **Config**: tea_use_playwright_utils=true, tea_browser_automation=auto, test_framework=playwright
+- **Artifacts loaded**: PRD (FRs: FR81, FR175-FR177, FR227-FR233; NFRs: NFR27-30, NFR41), Architecture (Section 5 Frontend), UX Design Spec (T1-T8 Templates, ActionBar System, Co-Pilot Dock, Responsive Design), API Contracts (System Module RBAC endpoints), Data Models (Resource, AccessGroup, Permissions), State Machine Reference (common patterns), Event Catalog (permission cache events), Business Rules Compendium (BR-RBAC-001 through BR-RBAC-008, BR-COM-013)
+- **Knowledge fragments**: risk-governance.md, probability-impact.md, test-levels-framework.md, test-priorities-matrix.md
+- **Existing test coverage**: Solid backend tests (40+ across packages/db, ai-gateway, platform-api); Playwright E2E for epics E2b-E5; No existing frontend web or mobile tests
+
+## Step 3: Risk Assessment
+- **Total risks**: 14
+- **High-priority (>=6)**: 4 — R-001 (SEC: permission bypass), R-002 (TECH: stale permissions), R-003 (BUS: ActionBar misconfiguration), R-004 (TECH: WebSocket reliability)
+- **Medium (3-4)**: 7
+- **Low (1-2)**: 3
+- **Critical findings**: Permission enforcement is defense-in-depth (client-side guards + backend guards); ActionBar action-config.ts is central to correct state-driven UX; Co-Pilot WebSocket streaming needs deterministic mocking
+
+## Step 4: Coverage Plan
+- **P0**: ~18 tests (~25-40 hours) — auth, permissions, ActionBar, Co-Pilot guardrails
+- **P1**: ~32 tests (~30-50 hours) — component templates, RBAC admin pages, responsive
+- **P2**: ~24 tests (~12-24 hours) — remaining templates, accessibility, mobile
+- **P3**: ~8 tests (~2-5 hours) — exploratory, cross-browser, stress
+- **Execution**: All functional tests on every PR (<15 min); mobile/perf on nightly/weekly
+- **Quality gates**: P0=100%, P1>=95%, SEC tests 100%
+
+## Step 5: Output Generation
+- **Output file**: `_bmad-output/test-artifacts/test-design-epic-E6.md`
+- **Validated against checklist**: All criteria passed
+
+## Completion
+- Workflow complete: 2026-02-23
+
+---
+
+# Test Design Progress — Epic E7
+
+## Step 1: Mode Detection
+- **Mode**: Epic-Level (Phase 4)
+- **Reason**: User explicitly requested E7 epic-level test design
+- **Epic**: E7 — Saved Views / Filters / Columns
+- **Prerequisites**: E7 epic documentation available with 3 stories (E7.1, E7.2, E7.3) and detailed acceptance criteria
+
+## Step 2: Context Loading
+- **Config**: tea_use_playwright_utils=true, tea_browser_automation=auto, test_framework=playwright
+- **Documents loaded**:
+  - Epic E7 (3 stories: E7.1 Database Schema & API Foundation, E7.2 Column Customization & Views UI, E7.3 Filter Builder & Favourites)
+  - Architecture: §2.9 Saved Views/Filters/Columns (SavedView model, filter-to-Prisma converter, entity metadata, API endpoints, frontend component structure)
+  - PRD: FR86 (saved views); NFR2 (CRUD <500ms), NFR27 (WCAG 2.1 AA), NFR28 (keyboard navigation)
+  - API Contracts: §3.13 (GET /views/init, POST /views/saved, POST /views/lov/batch, PATCH /views/columns/:viewKey/:fieldId/width, PUT /views/columns/:viewKey, POST /views/saved/:id/toggle-favourite, POST /views/saved/:id/set-default)
+  - Data Models: §3.1 System Module (6 tables: DataView, DataViewField, DateRangePreset, UserColumnPreference, SavedView, SavedViewCondition)
+  - UX Design Spec: T1 Entity List Template (Views & Columns button, Filter & Sort button, column drag-resize, saved view selector, header favourites)
+  - Project Context: §12 AI-First Integration (5 AI tools), §13 Metadata-Driven DataTable (3-tier LOV strategy, bundled init)
+  - Event Catalog: No view-related events
+  - Business Rules: No view-specific business rules
+  - State Machine Reference: No state machines for views
+- **Knowledge fragments**: risk-governance.md, probability-impact.md, test-levels-framework.md, test-priorities-matrix.md
+- **Existing tests**: 40+ backend test files (E1-E6); Playwright E2E tests for E2b-E6; no E7-specific tests yet
+
+## Step 3: Risk Assessment
+- **Total risks**: 11
+- **High-priority (>=6)**: 3 — R-001 (DATA: filter-to-Prisma incorrect WHERE), R-002 (SEC: scope visibility bypass), R-003 (PERF: init endpoint >100ms)
+- **Medium (3-4)**: 4 — R-004 (TECH: LOV batch stale data), R-005 (DATA: column width race conditions), R-006 (TECH: group bracketing incorrect), R-007 (BUS: default view resolution order)
+- **Low (1-2)**: 4 — R-008 (TECH: date preset timezone), R-009 (BUS: favourites stale cache), R-010 (TECH: column resize persistence), R-011 (OPS: Redis TTL invalidation)
+
+## Step 4: Coverage Plan
+- **P0**: ~24 tests (~12-20 hours) — filter-to-Prisma all operators, scope visibility, init endpoint performance
+- **P1**: ~36 tests (~15-25 hours) — saved view CRUD, LOV batch, column persistence, default resolution, modals, pinning
+- **P2**: ~19 tests (~5-10 hours) — advanced filter UI, favourites dropdown, sort config, save-as-new, date filter, seed validation
+- **P3**: ~5 tests (~2-4 hours) — performance benchmarks, Redis TTL, WCAG AA, cross-browser exploratory
+- **Total**: ~84 tests, ~34-59 hours (~1-1.5 weeks)
+- **Test levels**: Unit (filter-builder, date presets), Integration (API endpoints, scope, CRUD), E2E (modals, views, filters)
+
+## Step 5: Output Generation
+- **Output file**: `_bmad-output/test-artifacts/test-design-epic-E7.md`
+- **Validated against checklist**: All criteria passed
+- **No CLI sessions to clean up** (no browser exploration for E7)
+- **All artifacts stored in test-artifacts/**
+
+## Completion
+- Workflow complete: 2026-02-27
+
+---
+
+# Test Design Progress — Epic E5b
+
+## Step 1: Mode Detection
+- **Mode**: Epic-Level (Phase 4)
+- **Reason**: User explicitly requested E5b epic-level test design; sprint-status.yaml exists
+- **Epic**: E5b — AI Co-Pilot Intelligence — Memory, Skills & Dynamic Context
+
+## Step 2: Context Loading
+- **Config**: tea_use_playwright_utils=true, tea_browser_automation=auto, test_framework=playwright
+- **Artifacts loaded**:
+  - Epic E5b (7 stories, 5 pillars: Memory System, Skills Registry, Tool Framework, Inline Entity Mentions, Dynamic Context Assembly)
+  - Architecture: §5.4 (Dual Interface), §6.1-6.10 (AI Infrastructure — Model Registry, Prompt Manager, Agent Registry, Skill Registry, Context Engine, Guardrails)
+  - PRD FRs: FR1-FR10, FR153-156, FR205-226
+  - PRD NFRs: NFR1, NFR2, NFR16, NFR21, NFR27, NFR28, NFR30, NFR47
+  - Data Models: §3.20 (AI Infrastructure — 7 new tables + 1 enhanced)
+  - API Contracts: §3.6 (12 existing + 14 new E5b endpoints)
+  - Prior test design: test-design-epic-E5.md (9 risks, 28 scenarios)
+  - Project Context: §12 (AI-First Integration), §14-15 (Progressive Disclosure)
+- **Knowledge fragments**: risk-governance.md, probability-impact.md, test-levels-framework.md, test-priorities-matrix.md
+- **Existing tests**: 191 unit/integration files, 109 E2E specs, 21 AI-specific test files from E5
+
+## Step 3: Risk Assessment
+- **Total risks**: 12
+- **High-priority (>=6)**: 5 — R-001 (DATA: hybrid search returns irrelevant memories, score=9), R-002 (SEC: memory isolation failure, score=6), R-003 (TECH: L0→L1→L2 routing failure, score=6), R-004 (DATA: pre-compaction flush loses info, score=6), R-005 (PERF: context assembly exceeds token budget, score=6)
+- **Medium (3-4)**: 5 — R-006 (TECH: tool registration), R-007 (DATA: importance scoring), R-008 (BUS: entity mention), R-009 (TECH: skill override), R-010 (TECH: pgvector migration)
+- **Low (1-2)**: 2 — R-011 (OPS: memory settings desync), R-012 (BUS: skills browser RBAC)
+
+## Step 4: Coverage Plan
+- **P0**: 18 tests (~25-40 hours) — memory isolation, hybrid search, skill routing, pre-compaction flush, context budget, entity search
+- **P1**: 28 tests (~30-50 hours) — CRUD validation, overrides, implicit learning, E7 skill pack validation, UI pages
+- **P2**: 15 tests (~10-20 hours) — edge cases, accessibility, settings, UI polish
+- **P3**: 6 tests (~3-6 hours) — exploratory, benchmarks, sensitivity tests
+- **Total**: 67 tests, ~68-116 hours (~2-3 weeks)
+- **Execution**: All tests on every PR (<15 min); performance benchmarks nightly; large corpus weekly
+
+## Step 5: Output Generation
+- **Output file**: `_bmad-output/test-artifacts/test-design-epic-E5b.md`
+- **Validated against checklist**: All criteria passed
+- **No CLI sessions to clean up** (no browser exploration for E5b)
+- **All artifacts stored in test-artifacts/**
+
+## Completion
+- Workflow complete: 2026-03-01

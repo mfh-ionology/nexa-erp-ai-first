@@ -1,0 +1,2189 @@
+{
+  "epic_id": "E5",
+  "epic_title": "AI Orchestration",
+  "generated_at": "2026-02-23T12:00:00.000Z",
+  "total_test_cases": 146,
+  "api_base_url": "http://localhost:3000",
+  "stories_covered": ["E5.1", "E5.2", "E5.3", "E5.4", "E5.5"],
+  "auth_note": "All endpoints require JWT auth. Tests use a mock JWT with userId, companyId, tenantId claims. Permission guards enforce resource-level RBAC.",
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/ai/chat/sessions",
+      "description": "Create a new AI chat session (E5.2)",
+      "story": "E5.2",
+      "permission": "ai.chat:view",
+      "test_cases": [
+        {
+          "id": "E5-TC-001",
+          "name": "Create session - happy path with default channel",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/sessions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "status", "channel", "startedAt"],
+            "body_match": { "status": "active", "channel": "web_chat" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id, status, channel, user_id, company_id FROM ai_conversations WHERE id = '{{response.data.id}}'",
+            "expected": "Row exists with status='active', channel='web_chat', user_id matches JWT userId, company_id matches JWT companyId"
+          }
+        },
+        {
+          "id": "E5-TC-002",
+          "name": "Create session - happy path with explicit channel and agentId",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/sessions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "channel": "mobile_chat", "agentId": "{{valid_agent_uuid}}" }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "status", "channel", "startedAt"],
+            "body_match": { "channel": "mobile_chat" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT channel, agent_id FROM ai_conversations WHERE id = '{{response.data.id}}'",
+            "expected": "channel='mobile_chat', agent_id matches agentId"
+          }
+        },
+        {
+          "id": "E5-TC-003",
+          "name": "Create session - missing auth returns 401",
+          "type": "auth_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/sessions",
+            "headers": { "Content-Type": "application/json" },
+            "body": {}
+          },
+          "expected": { "status": 401, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-004",
+          "name": "Create session - invalid channel value returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/sessions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "channel": "invalid_channel" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-005",
+          "name": "Create session - invalid agentId format returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/sessions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "agentId": "not-a-uuid" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-006",
+          "name": "Create session - AI service degraded returns 503",
+          "type": "edge_case",
+          "precondition": "AI plugin failed to initialize (aiOrchestrator=null, chatSessionService=null)",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/sessions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": {}
+          },
+          "expected": { "status": 503, "body_contains": ["AI_DEGRADED"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/ai/chat/message",
+      "description": "HTTP fallback for non-streaming AI chat (E5.1)",
+      "story": "E5.1",
+      "permission": "ai.chat:view",
+      "test_cases": [
+        {
+          "id": "E5-TC-007",
+          "name": "Chat message - happy path returns AI text response",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/message",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "sessionId": "{{valid_session_id}}", "content": "What invoices are overdue?" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["type", "messageId", "content"],
+            "body_match": { "data.type": "text" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT role, content FROM ai_messages WHERE conversation_id = '{{sessionId}}' ORDER BY created_at DESC LIMIT 2",
+            "expected": "Two rows: user message with content='What invoices are overdue?' and assistant message with AI response"
+          }
+        },
+        {
+          "id": "E5-TC-008",
+          "name": "Chat message - happy path with page context",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/message",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": {
+              "sessionId": "{{valid_session_id}}",
+              "content": "Tell me about this customer",
+              "currentPage": "/ar/customers/123",
+              "currentEntityType": "Customer",
+              "currentEntityId": "{{customer_uuid}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["type", "messageId", "content"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-009",
+          "name": "Chat message - missing auth returns 401",
+          "type": "auth_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/message",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "sessionId": "abc", "content": "Hello" }
+          },
+          "expected": { "status": 401, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-010",
+          "name": "Chat message - missing sessionId returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/message",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "content": "Hello" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-011",
+          "name": "Chat message - empty content returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/message",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "sessionId": "{{valid_session_id}}", "content": "" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-012",
+          "name": "Chat message - content exceeds 10000 chars returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/message",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "sessionId": "{{valid_session_id}}", "content": "{{10001_char_string}}" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-013",
+          "name": "Chat message - AI service degraded returns 503",
+          "type": "edge_case",
+          "precondition": "AI orchestrator is null (degraded mode)",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/message",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "sessionId": "{{valid_session_id}}", "content": "Hello" }
+          },
+          "expected": { "status": 503, "body_contains": ["AI_DEGRADED"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-014",
+          "name": "Chat message - AI quota exceeded returns 429",
+          "type": "edge_case",
+          "precondition": "AI Gateway returns quota exceeded error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/message",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "sessionId": "{{valid_session_id}}", "content": "Hello" }
+          },
+          "expected": { "status": 429, "body_contains": ["AI_QUOTA_EXCEEDED"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-015",
+          "name": "Chat message - AI returns action_proposal type",
+          "type": "happy_path",
+          "precondition": "AI structured output contains action intent",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/message",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "sessionId": "{{valid_session_id}}", "content": "Create an invoice for Acme Corp" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["action_proposal", "action"],
+            "body_match": { "data.type": "action_proposal" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-016",
+          "name": "Chat message - multi-turn context preserved",
+          "type": "happy_path",
+          "precondition": "Session has existing messages in conversation history",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/message",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "sessionId": "{{session_with_history}}", "content": "And what about last month?" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["type", "messageId", "content"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) AS cnt FROM ai_messages WHERE conversation_id = '{{session_with_history}}'",
+            "expected": "Count increases by 2 (user message + assistant response)"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/ai/chat/history",
+      "description": "List user's chat conversations, most recent first (E5.2)",
+      "story": "E5.2",
+      "permission": "ai.chat:view",
+      "test_cases": [
+        {
+          "id": "E5-TC-017",
+          "name": "List sessions - happy path returns conversations sorted by startedAt desc",
+          "type": "happy_path",
+          "precondition": "User has 3+ existing conversations",
+          "request": {
+            "method": "GET",
+            "url": "/ai/chat/history",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"],
+            "body_match": { "data[0] has keys": ["id", "title", "status", "channel", "startedAt", "lastMessageAt", "messageCount"] }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-018",
+          "name": "List sessions - empty list for user with no conversations",
+          "type": "edge_case",
+          "precondition": "User has no conversations",
+          "request": {
+            "method": "GET",
+            "url": "/ai/chat/history",
+            "headers": { "Authorization": "Bearer {{jwt_new_user}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_match": { "data": [] }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-019",
+          "name": "List sessions - cursor pagination returns next page",
+          "type": "happy_path",
+          "precondition": "User has 25+ conversations",
+          "request": {
+            "method": "GET",
+            "url": "/ai/chat/history?limit=10&cursor={{cursor_from_first_page}}",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data", "pagination"],
+            "body_match": { "data.length": 10, "pagination.hasMore": true }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-020",
+          "name": "List sessions - only returns own conversations (no cross-user leakage)",
+          "type": "security",
+          "precondition": "Other users have conversations in same company",
+          "request": {
+            "method": "GET",
+            "url": "/ai/chat/history",
+            "headers": { "Authorization": "Bearer {{jwt_user_A}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_match": { "all data[].userId": "{{user_A_id}}" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-021",
+          "name": "List sessions - only returns own company conversations (no cross-tenant leakage)",
+          "type": "security",
+          "precondition": "User has conversations in multiple companies",
+          "request": {
+            "method": "GET",
+            "url": "/ai/chat/history",
+            "headers": { "Authorization": "Bearer {{jwt_company_A}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_match": { "all sessions scoped to company_A": true }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-022",
+          "name": "List sessions - missing auth returns 401",
+          "type": "auth_error",
+          "request": {
+            "method": "GET",
+            "url": "/ai/chat/history",
+            "headers": {}
+          },
+          "expected": { "status": 401, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-023",
+          "name": "List sessions - invalid limit value returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/ai/chat/history?limit=999",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-024",
+          "name": "List sessions - AI degraded returns 503",
+          "type": "edge_case",
+          "precondition": "chatSessionService is null",
+          "request": {
+            "method": "GET",
+            "url": "/ai/chat/history",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": { "status": 503, "body_contains": ["AI_DEGRADED"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/ai/chat/history/:sessionId",
+      "description": "Get single conversation with messages (E5.2)",
+      "story": "E5.2",
+      "permission": "ai.chat:view",
+      "test_cases": [
+        {
+          "id": "E5-TC-025",
+          "name": "Get session - happy path returns conversation with messages",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/ai/chat/history/{{valid_session_id}}",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "title", "status", "channel", "messages"],
+            "body_match": { "data.messages": "array of message objects with id, role, content, createdAt" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-026",
+          "name": "Get session - non-existent session returns 404",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/ai/chat/history/00000000-0000-0000-0000-000000000000",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-027",
+          "name": "Get session - other user's session returns 404 (no cross-user access)",
+          "type": "security",
+          "request": {
+            "method": "GET",
+            "url": "/ai/chat/history/{{other_user_session_id}}",
+            "headers": { "Authorization": "Bearer {{jwt_user_A}}" }
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-028",
+          "name": "Get session - invalid sessionId format returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/ai/chat/history/not-a-uuid",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-029",
+          "name": "Get session - message pagination with cursor",
+          "type": "happy_path",
+          "precondition": "Session has 60+ messages",
+          "request": {
+            "method": "GET",
+            "url": "/ai/chat/history/{{session_with_many_msgs}}?messageLimit=20&messageCursor={{cursor}}",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["messages", "nextMessageCursor"],
+            "body_match": { "data.messages.length": 20 }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-030",
+          "name": "Get session - missing auth returns 401",
+          "type": "auth_error",
+          "request": {
+            "method": "GET",
+            "url": "/ai/chat/history/{{valid_session_id}}",
+            "headers": {}
+          },
+          "expected": { "status": 401, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/ai/chat/sessions/:sessionId/end",
+      "description": "End a chat session (E5.2)",
+      "story": "E5.2",
+      "permission": "ai.chat:view",
+      "test_cases": [
+        {
+          "id": "E5-TC-031",
+          "name": "End session - happy path sets status to completed",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/sessions/{{active_session_id}}/end",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["sessionId", "status"],
+            "body_match": { "data.status": "completed" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT status, ended_at FROM ai_conversations WHERE id = '{{active_session_id}}'",
+            "expected": "status='completed', ended_at IS NOT NULL"
+          }
+        },
+        {
+          "id": "E5-TC-032",
+          "name": "End session - non-existent session (returns 200 per current impl, should be 404)",
+          "type": "edge_case",
+          "note": "Known issue E5.2-CR-ISSUE#2: endpoint returns 200 even when session not found",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/sessions/00000000-0000-0000-0000-000000000000/end",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": { "status": 200, "body_contains": ["sessionId", "status"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-033",
+          "name": "End session - invalid sessionId format returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/sessions/not-a-uuid/end",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-034",
+          "name": "End session - missing auth returns 401",
+          "type": "auth_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/sessions/{{active_session_id}}/end",
+            "headers": {}
+          },
+          "expected": { "status": 401, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-035",
+          "name": "End session - AI degraded returns 503",
+          "type": "edge_case",
+          "precondition": "chatSessionService is null",
+          "request": {
+            "method": "POST",
+            "url": "/ai/chat/sessions/{{active_session_id}}/end",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": { "status": 503, "body_contains": ["AI_DEGRADED"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/ai/predict/cash-flow",
+      "description": "AI cash flow forecast (E5.4 - FR153)",
+      "story": "E5.4",
+      "permission": "ai.predictions:view",
+      "test_cases": [
+        {
+          "id": "E5-TC-036",
+          "name": "Cash flow forecast - happy path returns period-by-period projections",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/predict/cash-flow",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": {
+              "startDate": "2026-03-01",
+              "endDate": "2026-06-30",
+              "includeCommittedPOs": true,
+              "includeRecurring": true
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["generatedAt", "currency", "currentBalance", "periods", "alerts"],
+            "body_match": {
+              "data.periods[*]": "each has periodStart, periodEnd, openingBalance, inflows, outflows, netFlow, closingBalance, inflowDetails, outflowDetails"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-037",
+          "name": "Cash flow forecast - with specific bankAccountIds",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/predict/cash-flow",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": {
+              "startDate": "2026-03-01",
+              "endDate": "2026-04-30",
+              "bankAccountIds": ["{{bank_account_uuid}}"],
+              "includeCommittedPOs": false,
+              "includeRecurring": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["generatedAt", "periods"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-038",
+          "name": "Cash flow forecast - NEGATIVE_BALANCE alert generated",
+          "type": "happy_path",
+          "precondition": "AI returns forecast with negative closing balance period",
+          "request": {
+            "method": "POST",
+            "url": "/ai/predict/cash-flow",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "startDate": "2026-03-01", "endDate": "2026-06-30" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["alerts"],
+            "body_match": { "data.alerts[*].type": "NEGATIVE_BALANCE" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-039",
+          "name": "Cash flow forecast - startDate after endDate returns 400/422",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/predict/cash-flow",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "startDate": "2026-06-30", "endDate": "2026-03-01" }
+          },
+          "expected": { "status": 400, "body_contains": ["error", "startDate must be before endDate"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-040",
+          "name": "Cash flow forecast - missing startDate returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/predict/cash-flow",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "endDate": "2026-06-30" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-041",
+          "name": "Cash flow forecast - invalid date format returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/predict/cash-flow",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "startDate": "2026/03/01", "endDate": "2026-06-30" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-042",
+          "name": "Cash flow forecast - missing auth returns 401",
+          "type": "auth_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/predict/cash-flow",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "startDate": "2026-03-01", "endDate": "2026-06-30" }
+          },
+          "expected": { "status": 401, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-043",
+          "name": "Cash flow forecast - insufficient permission returns 403",
+          "type": "auth_error",
+          "precondition": "User lacks ai.predictions:view permission",
+          "request": {
+            "method": "POST",
+            "url": "/ai/predict/cash-flow",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt_no_ai_perm}}" },
+            "body": { "startDate": "2026-03-01", "endDate": "2026-06-30" }
+          },
+          "expected": { "status": 403, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-044",
+          "name": "Cash flow forecast - AI degraded returns 503",
+          "type": "edge_case",
+          "precondition": "aiPredictionService is null",
+          "request": {
+            "method": "POST",
+            "url": "/ai/predict/cash-flow",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "startDate": "2026-03-01", "endDate": "2026-06-30" }
+          },
+          "expected": { "status": 503, "body_contains": ["AI_DEGRADED"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-045",
+          "name": "Cash flow forecast - graceful degradation when business models not yet built",
+          "type": "edge_case",
+          "precondition": "CustomerInvoice, SupplierInvoice, PurchaseOrder models do not exist yet",
+          "request": {
+            "method": "POST",
+            "url": "/ai/predict/cash-flow",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "startDate": "2026-03-01", "endDate": "2026-06-30" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["generatedAt", "periods"],
+            "body_match": { "response succeeds with empty/minimal data": true }
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/ai/detect/anomalies",
+      "description": "AI anomaly detection in transactions (E5.4 - FR156)",
+      "story": "E5.4",
+      "permission": "ai.predictions:view",
+      "test_cases": [
+        {
+          "id": "E5-TC-046",
+          "name": "Anomaly detection - happy path returns flagged items",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/detect/anomalies",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "lookbackDays": 90, "minConfidence": 0.5 }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["generatedAt", "lookbackDays", "totalAnalysed", "anomalies"],
+            "body_match": {
+              "data.anomalies[*]": "each has id, entityType, entityId, anomalyType, confidence, confidenceLevel"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-047",
+          "name": "Anomaly detection - with entity type filter",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/detect/anomalies",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "lookbackDays": 30, "entityTypes": ["Payment"], "minConfidence": 0.7 }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["anomalies"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-048",
+          "name": "Anomaly detection - confidence levels correctly applied",
+          "type": "happy_path",
+          "precondition": "AI returns anomalies with various confidence scores",
+          "request": {
+            "method": "POST",
+            "url": "/ai/detect/anomalies",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "lookbackDays": 90, "minConfidence": 0.0 }
+          },
+          "expected": {
+            "status": 200,
+            "body_match": {
+              "confidence >= 0.9": "confidenceLevel = 'high'",
+              "confidence 0.7-0.89": "confidenceLevel = 'review'",
+              "confidence < 0.7": "confidenceLevel = 'low'"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-049",
+          "name": "Anomaly detection - lookbackDays below minimum (7) returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/detect/anomalies",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "lookbackDays": 3 }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-050",
+          "name": "Anomaly detection - lookbackDays above maximum (365) returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/detect/anomalies",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "lookbackDays": 500 }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-051",
+          "name": "Anomaly detection - invalid entityTypes value returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/detect/anomalies",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "entityTypes": ["InvalidEntity"] }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-052",
+          "name": "Anomaly detection - missing auth returns 401",
+          "type": "auth_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/detect/anomalies",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "lookbackDays": 90 }
+          },
+          "expected": { "status": 401, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-053",
+          "name": "Anomaly detection - AI degraded returns 503",
+          "type": "edge_case",
+          "precondition": "aiPredictionService is null",
+          "request": {
+            "method": "POST",
+            "url": "/ai/detect/anomalies",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "lookbackDays": 90 }
+          },
+          "expected": { "status": 503, "body_contains": ["AI_DEGRADED"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/ai/detect/duplicates",
+      "description": "AI duplicate entity detection (E5.4 - FR155)",
+      "story": "E5.4",
+      "permission": "ai.predictions:view",
+      "test_cases": [
+        {
+          "id": "E5-TC-054",
+          "name": "Duplicate detection - happy path for Customer",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/detect/duplicates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "entityType": "Customer", "minSimilarity": 0.7, "limit": 20 }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["generatedAt", "entityType", "totalScanned", "duplicates"],
+            "body_match": {
+              "data.entityType": "Customer",
+              "data.duplicates[*]": "each has entityA, entityB, overallSimilarity, confidenceLevel, fieldComparisons"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-055",
+          "name": "Duplicate detection - for Supplier entityType",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/detect/duplicates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "entityType": "Supplier" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["duplicates"],
+            "body_match": { "data.entityType": "Supplier" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-056",
+          "name": "Duplicate detection - for Contact entityType",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/detect/duplicates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "entityType": "Contact" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["duplicates"],
+            "body_match": { "data.entityType": "Contact" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-057",
+          "name": "Duplicate detection - field comparisons include per-field similarity",
+          "type": "happy_path",
+          "precondition": "AI returns duplicate pairs with field-level comparisons",
+          "request": {
+            "method": "POST",
+            "url": "/ai/detect/duplicates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "entityType": "Customer", "minSimilarity": 0.5 }
+          },
+          "expected": {
+            "status": 200,
+            "body_match": {
+              "data.duplicates[*].fieldComparisons[*]": "each has field, valueA, valueB, similarity"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-058",
+          "name": "Duplicate detection - invalid entityType returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/detect/duplicates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "entityType": "Invoice" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-059",
+          "name": "Duplicate detection - missing entityType returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/detect/duplicates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": {}
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-060",
+          "name": "Duplicate detection - limit exceeds max (100) returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/detect/duplicates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "entityType": "Customer", "limit": 200 }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-061",
+          "name": "Duplicate detection - missing auth returns 401",
+          "type": "auth_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/detect/duplicates",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "entityType": "Customer" }
+          },
+          "expected": { "status": 401, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-062",
+          "name": "Duplicate detection - AI degraded returns 503",
+          "type": "edge_case",
+          "precondition": "aiPredictionService is null",
+          "request": {
+            "method": "POST",
+            "url": "/ai/detect/duplicates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "entityType": "Customer" }
+          },
+          "expected": { "status": 503, "body_contains": ["AI_DEGRADED"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/ai/confidence/:entityType/:entityId",
+      "description": "Get confidence scores for AI-created entity (E5.4 - FR10)",
+      "story": "E5.4",
+      "permission": "ai.predictions:view",
+      "test_cases": [
+        {
+          "id": "E5-TC-063",
+          "name": "Confidence score - happy path returns confidence for AI-created entity",
+          "type": "happy_path",
+          "precondition": "Entity was created by AI and AiMessage contains confidence data",
+          "request": {
+            "method": "GET",
+            "url": "/ai/confidence/Customer/{{ai_created_customer_uuid}}",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["entityType", "entityId", "overallConfidence", "confidenceLevel", "fieldConfidence", "lastUpdated"],
+            "body_match": {
+              "data.entityType": "Customer",
+              "data.confidenceLevel": "one of: high, review, low"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-064",
+          "name": "Confidence score - non-AI entity returns 404",
+          "type": "edge_case",
+          "precondition": "Entity was created manually (no AI record exists)",
+          "request": {
+            "method": "GET",
+            "url": "/ai/confidence/Customer/{{manually_created_uuid}}",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-065",
+          "name": "Confidence score - non-existent entityId returns 404",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/ai/confidence/Customer/00000000-0000-0000-0000-000000000000",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-066",
+          "name": "Confidence score - invalid entityId format returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/ai/confidence/Customer/not-a-uuid",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-067",
+          "name": "Confidence score - missing auth returns 401",
+          "type": "auth_error",
+          "request": {
+            "method": "GET",
+            "url": "/ai/confidence/Customer/{{uuid}}",
+            "headers": {}
+          },
+          "expected": { "status": 401, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-068",
+          "name": "Confidence score - AI degraded returns 503",
+          "type": "edge_case",
+          "precondition": "aiPredictionService is null",
+          "request": {
+            "method": "GET",
+            "url": "/ai/confidence/Customer/{{uuid}}",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": { "status": 503, "body_contains": ["AI_DEGRADED"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/ai/explain",
+      "description": "AI explainability - explain AI reasoning (E5.4 - FR10)",
+      "story": "E5.4",
+      "permission": "ai.predictions:view",
+      "test_cases": [
+        {
+          "id": "E5-TC-069",
+          "name": "Explain - happy path for entity creation decision",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/explain",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "entityType": "Customer", "entityId": "{{uuid}}", "decisionType": "creation" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["summary", "reasoning", "dataPoints"],
+            "body_match": {
+              "data.reasoning": "array of strings",
+              "data.dataPoints[*]": "each has field, value, confidence, source"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-070",
+          "name": "Explain - for anomaly decision type",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/explain",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "entityType": "Payment", "entityId": "{{uuid}}", "decisionType": "anomaly" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["summary", "reasoning", "dataPoints"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-071",
+          "name": "Explain - for forecast decision type",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/explain",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "entityType": "CashFlow", "entityId": "{{uuid}}", "decisionType": "forecast" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["summary", "reasoning", "dataPoints"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-072",
+          "name": "Explain - invalid decisionType returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/explain",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "entityType": "Customer", "entityId": "{{uuid}}", "decisionType": "invalid" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-073",
+          "name": "Explain - missing entityType returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/explain",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "entityId": "{{uuid}}", "decisionType": "creation" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-074",
+          "name": "Explain - invalid entityId format returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/explain",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "entityType": "Customer", "entityId": "not-uuid", "decisionType": "creation" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-075",
+          "name": "Explain - missing auth returns 401",
+          "type": "auth_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/explain",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "entityType": "Customer", "entityId": "{{uuid}}", "decisionType": "creation" }
+          },
+          "expected": { "status": 401, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-076",
+          "name": "Explain - AI degraded returns 503",
+          "type": "edge_case",
+          "precondition": "aiPredictionService is null",
+          "request": {
+            "method": "POST",
+            "url": "/ai/explain",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "entityType": "Customer", "entityId": "{{uuid}}", "decisionType": "creation" }
+          },
+          "expected": { "status": 503, "body_contains": ["AI_DEGRADED"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/ai/briefing",
+      "description": "Daily personalized briefing (E5.5 - FR3)",
+      "story": "E5.5",
+      "permission": "ai.briefing:view",
+      "test_cases": [
+        {
+          "id": "E5-TC-077",
+          "name": "Briefing - happy path returns role-based briefing",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/ai/briefing",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["generatedAt", "userId", "role", "greeting", "summary", "items"],
+            "body_match": {
+              "data.items[*]": "each has id, title, description, category, priority, actions"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-078",
+          "name": "Briefing - cached response returned on subsequent request",
+          "type": "happy_path",
+          "precondition": "First request generated and cached the briefing",
+          "request": {
+            "method": "GET",
+            "url": "/ai/briefing",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["cachedAt"],
+            "body_match": { "data.cachedAt": "non-null ISO datetime" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-079",
+          "name": "Briefing - forceRefresh bypasses cache",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/ai/briefing?forceRefresh=true",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["generatedAt", "items"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-080",
+          "name": "Briefing - Finance Manager role gets finance-specific items",
+          "type": "happy_path",
+          "precondition": "User has FINANCE role / finance access groups",
+          "request": {
+            "method": "GET",
+            "url": "/ai/briefing",
+            "headers": { "Authorization": "Bearer {{jwt_finance_manager}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_match": { "data.role": "FINANCE" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-081",
+          "name": "Briefing - Business Owner role gets owner-specific items",
+          "type": "happy_path",
+          "precondition": "User has SUPER_ADMIN/Owner role",
+          "request": {
+            "method": "GET",
+            "url": "/ai/briefing",
+            "headers": { "Authorization": "Bearer {{jwt_owner}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_match": { "data.role": "OWNER" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-082",
+          "name": "Briefing - items include actionable links and metrics",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/ai/briefing",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_match": {
+              "data.items[*].actions": "array with at least one action having label and actionType",
+              "data.items[*].metric": "optional object with value, optional delta/trend/comparisonPeriod"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-083",
+          "name": "Briefing - stale cache returns isStale=true",
+          "type": "edge_case",
+          "precondition": "Cached briefing is older than 24 hours but Redis key not expired",
+          "request": {
+            "method": "GET",
+            "url": "/ai/briefing",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_match": { "data.isStale": true }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-084",
+          "name": "Briefing - missing auth returns 401",
+          "type": "auth_error",
+          "request": {
+            "method": "GET",
+            "url": "/ai/briefing",
+            "headers": {}
+          },
+          "expected": { "status": 401, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-085",
+          "name": "Briefing - insufficient permission returns 403",
+          "type": "auth_error",
+          "precondition": "User lacks ai.briefing:view permission",
+          "request": {
+            "method": "GET",
+            "url": "/ai/briefing",
+            "headers": { "Authorization": "Bearer {{jwt_no_briefing_perm}}" }
+          },
+          "expected": { "status": 403, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-086",
+          "name": "Briefing - AI degraded returns 503",
+          "type": "edge_case",
+          "precondition": "aiBriefingEngine is null",
+          "request": {
+            "method": "GET",
+            "url": "/ai/briefing",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": { "status": 503, "body_contains": ["AI_DEGRADED"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-087",
+          "name": "Briefing - graceful degradation with empty database",
+          "type": "edge_case",
+          "precondition": "No business data exists yet (pre-E14)",
+          "request": {
+            "method": "GET",
+            "url": "/ai/briefing",
+            "headers": { "Authorization": "Bearer {{jwt}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["generatedAt", "items"],
+            "body_match": { "response succeeds with informational items": true }
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/ai/suggestions",
+      "description": "Contextual smart suggestions (E5.5 - FR5)",
+      "story": "E5.5",
+      "permission": "ai.suggestions:view",
+      "test_cases": [
+        {
+          "id": "E5-TC-088",
+          "name": "Suggestions - happy path with page context",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/suggestions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "pageRoute": "/ar/customers/123", "entityType": "Customer", "entityId": "{{customer_uuid}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["suggestions"],
+            "body_match": {
+              "data.suggestions[*]": "each has id, label, prompt, category, priority"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-089",
+          "name": "Suggestions - happy path without page context returns generic suggestions",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/suggestions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["suggestions"],
+            "body_match": { "data.suggestions.length >= 1": true }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-090",
+          "name": "Suggestions - customer detail page returns customer-specific suggestions",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/suggestions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "pageRoute": "/ar/customers/123", "entityType": "Customer" }
+          },
+          "expected": {
+            "status": 200,
+            "body_match": { "suggestions include customer-specific labels": "Invoice this customer, Show payment history, etc." }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-091",
+          "name": "Suggestions - invoice list page returns invoice-specific suggestions",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/suggestions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "pageRoute": "/ar/invoices" }
+          },
+          "expected": {
+            "status": 200,
+            "body_match": { "suggestions include invoice-specific labels": "Show overdue, Create invoice, etc." }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-092",
+          "name": "Suggestions - dashboard page returns morning briefing suggestion",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/ai/suggestions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "pageRoute": "/" }
+          },
+          "expected": {
+            "status": 200,
+            "body_match": { "suggestions include": "Morning briefing or What needs my attention" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-093",
+          "name": "Suggestions - RBAC filtering excludes suggestions for modules user lacks access",
+          "type": "security",
+          "precondition": "User lacks canAccess for ar.* resources",
+          "request": {
+            "method": "POST",
+            "url": "/ai/suggestions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt_no_ar_access}}" },
+            "body": { "pageRoute": "/" }
+          },
+          "expected": {
+            "status": 200,
+            "body_match": { "suggestions do NOT include AR-related items": true }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-094",
+          "name": "Suggestions - missing auth returns 401",
+          "type": "auth_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/suggestions",
+            "headers": { "Content-Type": "application/json" },
+            "body": {}
+          },
+          "expected": { "status": 401, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-095",
+          "name": "Suggestions - insufficient permission returns 403",
+          "type": "auth_error",
+          "precondition": "User lacks ai.suggestions:view permission",
+          "request": {
+            "method": "POST",
+            "url": "/ai/suggestions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt_no_suggest_perm}}" },
+            "body": {}
+          },
+          "expected": { "status": 403, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-096",
+          "name": "Suggestions - AI degraded returns 503",
+          "type": "edge_case",
+          "precondition": "aiSuggestionsService is null",
+          "request": {
+            "method": "POST",
+            "url": "/ai/suggestions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": {}
+          },
+          "expected": { "status": 503, "body_contains": ["AI_DEGRADED"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-097",
+          "name": "Suggestions - pageRoute exceeds max length returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/ai/suggestions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{jwt}}" },
+            "body": { "pageRoute": "{{501_char_string}}" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "WEBSOCKET",
+      "path": "/ai/chat (Socket.io namespace)",
+      "description": "WebSocket real-time AI chat (E5.2, E5.3)",
+      "story": "E5.2",
+      "note": "WebSocket tests use Socket.io client library, not standard HTTP requests",
+      "test_cases": [
+        {
+          "id": "E5-TC-098",
+          "name": "WS - connect with valid JWT authenticates successfully",
+          "type": "happy_path",
+          "request": {
+            "method": "WEBSOCKET",
+            "url": "ws://localhost:3000/ai/chat",
+            "headers": {},
+            "body": { "auth": { "token": "{{valid_jwt}}" } }
+          },
+          "expected": { "status": "connected", "body_contains": ["connection established"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-099",
+          "name": "WS - connect without JWT rejected with AUTH_REQUIRED",
+          "type": "auth_error",
+          "request": {
+            "method": "WEBSOCKET",
+            "url": "ws://localhost:3000/ai/chat",
+            "headers": {},
+            "body": {}
+          },
+          "expected": { "status": "error", "body_contains": ["AUTH_REQUIRED"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-100",
+          "name": "WS - connect with expired JWT rejected",
+          "type": "auth_error",
+          "request": {
+            "method": "WEBSOCKET",
+            "url": "ws://localhost:3000/ai/chat",
+            "headers": {},
+            "body": { "auth": { "token": "{{expired_jwt}}" } }
+          },
+          "expected": { "status": "error", "body_contains": ["AUTH_REQUIRED"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-101",
+          "name": "WS - send message receives stream_chunk + stream_end",
+          "type": "happy_path",
+          "request": {
+            "method": "WEBSOCKET_MESSAGE",
+            "url": "ws://localhost:3000/ai/chat",
+            "headers": {},
+            "body": { "type": "message", "sessionId": "{{valid_session_id}}", "content": "Hello AI" }
+          },
+          "expected": {
+            "status": "received",
+            "body_contains": ["stream_chunk events followed by stream_end with messageId"],
+            "body_match": { "stream_end has": ["sessionId", "messageId"] }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT role, content FROM ai_messages WHERE conversation_id = '{{sessionId}}' ORDER BY created_at DESC LIMIT 2",
+            "expected": "User message and assistant response persisted"
+          }
+        },
+        {
+          "id": "E5-TC-102",
+          "name": "WS - send message with empty sessionId auto-creates session",
+          "type": "happy_path",
+          "request": {
+            "method": "WEBSOCKET_MESSAGE",
+            "url": "ws://localhost:3000/ai/chat",
+            "headers": {},
+            "body": { "type": "message", "sessionId": "", "content": "Start a new chat" }
+          },
+          "expected": {
+            "status": "received",
+            "body_contains": ["stream_end with new sessionId"],
+            "body_match": { "response includes sessionId": "newly created UUID" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id, title FROM ai_conversations WHERE user_id = '{{userId}}' ORDER BY started_at DESC LIMIT 1",
+            "expected": "New conversation created with auto-generated title"
+          }
+        },
+        {
+          "id": "E5-TC-103",
+          "name": "WS - send message with another user's sessionId returns SESSION_NOT_FOUND",
+          "type": "security",
+          "request": {
+            "method": "WEBSOCKET_MESSAGE",
+            "url": "ws://localhost:3000/ai/chat",
+            "headers": {},
+            "body": { "type": "message", "sessionId": "{{other_user_session_id}}", "content": "Hijack attempt" }
+          },
+          "expected": {
+            "status": "error",
+            "body_contains": ["SESSION_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-104",
+          "name": "WS - action_confirm with valid actionId executes action",
+          "type": "happy_path",
+          "precondition": "Action proposal was staged by AI in the current session",
+          "request": {
+            "method": "WEBSOCKET_MESSAGE",
+            "url": "ws://localhost:3000/ai/chat",
+            "headers": {},
+            "body": { "type": "action_confirm", "sessionId": "{{session_id}}", "actionId": "{{proposal_id}}" }
+          },
+          "expected": {
+            "status": "received",
+            "body_contains": ["record_created or ACTION_TYPE_NOT_IMPLEMENTED"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-105",
+          "name": "WS - action_confirm with non-existent actionId returns ACTION_NOT_FOUND",
+          "type": "edge_case",
+          "request": {
+            "method": "WEBSOCKET_MESSAGE",
+            "url": "ws://localhost:3000/ai/chat",
+            "headers": {},
+            "body": { "type": "action_confirm", "sessionId": "{{session_id}}", "actionId": "nonexistent-id" }
+          },
+          "expected": {
+            "status": "error",
+            "body_contains": ["ACTION_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-106",
+          "name": "WS - action_reject cancels action and acknowledges",
+          "type": "happy_path",
+          "precondition": "Action proposal was staged",
+          "request": {
+            "method": "WEBSOCKET_MESSAGE",
+            "url": "ws://localhost:3000/ai/chat",
+            "headers": {},
+            "body": { "type": "action_reject", "sessionId": "{{session_id}}", "actionId": "{{proposal_id}}", "content": "I want to do it manually" }
+          },
+          "expected": {
+            "status": "received",
+            "body_contains": ["Action cancelled", "No changes were made"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT role, content FROM ai_messages WHERE conversation_id = '{{session_id}}' ORDER BY created_at DESC LIMIT 1",
+            "expected": "Message persisted with role='user' indicating rejection"
+          }
+        },
+        {
+          "id": "E5-TC-107",
+          "name": "WS - action_confirm for another user's proposal returns ACTION_FORBIDDEN",
+          "type": "security",
+          "precondition": "Action proposal belongs to different user's session",
+          "request": {
+            "method": "WEBSOCKET_MESSAGE",
+            "url": "ws://localhost:3000/ai/chat",
+            "headers": {},
+            "body": { "type": "action_confirm", "sessionId": "{{own_session}}", "actionId": "{{other_user_proposal_id}}" }
+          },
+          "expected": {
+            "status": "error",
+            "body_contains": ["ACTION_FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-108",
+          "name": "WS - client disconnect mid-stream handled gracefully",
+          "type": "edge_case",
+          "request": {
+            "method": "WEBSOCKET_DISCONNECT",
+            "url": "ws://localhost:3000/ai/chat",
+            "headers": {},
+            "body": { "disconnect during": "active streaming response" }
+          },
+          "expected": {
+            "status": "disconnected",
+            "body_contains": ["server does not crash, messages still persisted"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM ai_messages WHERE conversation_id = '{{session_id}}'",
+            "expected": "Messages persisted even after disconnect"
+          }
+        },
+        {
+          "id": "E5-TC-109",
+          "name": "WS - AI orchestrator unavailable returns AI_DEGRADED error",
+          "type": "edge_case",
+          "precondition": "AI orchestrator fails / returns error",
+          "request": {
+            "method": "WEBSOCKET_MESSAGE",
+            "url": "ws://localhost:3000/ai/chat",
+            "headers": {},
+            "body": { "type": "message", "sessionId": "{{session_id}}", "content": "Hello" }
+          },
+          "expected": {
+            "status": "error",
+            "body_contains": ["AI_DEGRADED"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-110",
+          "name": "WS - messages don't leak between concurrent users",
+          "type": "security",
+          "precondition": "Two users connected simultaneously",
+          "request": {
+            "method": "WEBSOCKET_MESSAGE",
+            "url": "ws://localhost:3000/ai/chat",
+            "headers": {},
+            "body": { "type": "message", "content": "User A's private message" }
+          },
+          "expected": {
+            "status": "received",
+            "body_contains": ["only User A receives the response, User B receives nothing"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-111",
+          "name": "WS - invalid message type returns error",
+          "type": "validation_error",
+          "request": {
+            "method": "WEBSOCKET_MESSAGE",
+            "url": "ws://localhost:3000/ai/chat",
+            "headers": {},
+            "body": { "type": "unknown_type", "sessionId": "{{session_id}}" }
+          },
+          "expected": {
+            "status": "error",
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-112",
+          "name": "WS - financial action proposal always requires approval",
+          "type": "happy_path",
+          "precondition": "AI proposes CREATE_INVOICE action",
+          "request": {
+            "method": "WEBSOCKET_MESSAGE",
+            "url": "ws://localhost:3000/ai/chat",
+            "headers": {},
+            "body": { "type": "message", "sessionId": "{{session_id}}", "content": "Create an invoice for £5000" }
+          },
+          "expected": {
+            "status": "received",
+            "body_contains": ["action_proposal"],
+            "body_match": { "action_proposal.requiresApproval": true }
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "UNIT_TEST",
+      "path": "apps/api/src/ai/orchestrator.ts",
+      "description": "AiOrchestrator service unit tests (E5.1)",
+      "story": "E5.1",
+      "test_cases": [
+        {
+          "id": "E5-TC-113",
+          "name": "Orchestrator - resolves agent by explicit name",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["agent resolved by name from AiAgent table"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-114",
+          "name": "Orchestrator - resolves agent by intent keywords",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["agent resolved from triggerConfig.keywords matching user message"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-115",
+          "name": "Orchestrator - falls back to chat-router when no agent matches",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["default chat-router agent used"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-116",
+          "name": "Orchestrator - graceful degradation on gateway error",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["AiResponse with type='error', code='AI_DEGRADED'"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-117",
+          "name": "Orchestrator - graceful degradation on quota exceeded",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["AiResponse with type='error', code='AI_QUOTA_EXCEEDED'"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-118",
+          "name": "Orchestrator - multi-turn conversation history assembled",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["previous messages loaded from AiMessage table, included in gateway request"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-119",
+          "name": "Orchestrator - token limit trimming for long conversations",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["oldest messages trimmed when approaching model maxInputTokens"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-120",
+          "name": "Orchestrator - messages persisted after successful response",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["user message and assistant response saved to AiMessage table"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "UNIT_TEST",
+      "path": "apps/api/src/ai/prompt-manager.ts",
+      "description": "PromptManager service unit tests (E5.1)",
+      "story": "E5.1",
+      "test_cases": [
+        {
+          "id": "E5-TC-121",
+          "name": "PromptManager - template compilation with simple params",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["{{param}} replaced with value"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-122",
+          "name": "PromptManager - nested param access (customer.name)",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["dot-path traversal resolves correctly"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-123",
+          "name": "PromptManager - entity param resolution with companyId scoping",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["Prisma query includes WHERE companyId"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-124",
+          "name": "PromptManager - query param resolution with row limit",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["query limited to max 50 rows"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-125",
+          "name": "PromptManager - context param resolution from Redis",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["Redis key {tenantId}:context:{userId} queried"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-126",
+          "name": "PromptManager - missing prompt returns error",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["AiPromptNotFoundError thrown"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-127",
+          "name": "PromptManager - unresolved params logged and escaped",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["warning logged, unresolved {{param}} removed/escaped"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "UNIT_TEST",
+      "path": "apps/api/src/ai/response-parser.ts",
+      "description": "ResponseParser unit tests (E5.1)",
+      "story": "E5.1",
+      "test_cases": [
+        {
+          "id": "E5-TC-128",
+          "name": "ResponseParser - structured JSON response parsed correctly",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["AiResponse with typed fields extracted from JSON"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-129",
+          "name": "ResponseParser - tool_use response parsed into ActionProposal",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["ActionProposal with type, entityType, previewData"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-130",
+          "name": "ResponseParser - plain text response handled",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["AiResponse with type='text'"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-131",
+          "name": "ResponseParser - malformed JSON falls back to text",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["graceful fallback to text response"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-132",
+          "name": "ResponseParser - confidence thresholds classified correctly",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": [">=0.9 high, 0.7-0.89 review, <0.7 low"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "UNIT_TEST",
+      "path": "apps/api/src/ai/guardrails.ts",
+      "description": "GuardrailsService unit tests (E5.3)",
+      "story": "E5.3",
+      "test_cases": [
+        {
+          "id": "E5-TC-133",
+          "name": "Guardrails - CREATE_INVOICE always requires approval",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["requiresApproval=true, rulesTriggered includes FINANCIAL_SAFETY"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-134",
+          "name": "Guardrails - POST_JOURNAL always requires approval",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["requiresApproval=true for financial action"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-135",
+          "name": "Guardrails - CREATE_PAYMENT always requires approval",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["requiresApproval=true for financial action"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-136",
+          "name": "Guardrails - RUN_PAYROLL always requires approval",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["requiresApproval=true for financial action"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-137",
+          "name": "Guardrails - non-financial SEND_EMAIL does NOT require approval when agent allows",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["requiresApproval=false when agent guardrails allow"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-138",
+          "name": "Guardrails - blocked operation returns allowed=false",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["allowed=false, reason includes 'blocked'"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-139",
+          "name": "Guardrails - entity not in canWrite returns allowed=false",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["allowed=false, reason includes 'write permission'"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-140",
+          "name": "Guardrails - amount above threshold sets requiresApproval=true",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["requiresApproval=true, rulesTriggered includes AMOUNT_THRESHOLD"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-141",
+          "name": "Guardrails - agent requiresApproval=true forces approval on all",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["requiresApproval=true for all actions from this agent"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-142",
+          "name": "Guardrails - isFinancialAction true for all FINANCIAL_ACTION_TYPES",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["all 17 financial action types return true"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "UNIT_TEST",
+      "path": "apps/api/src/ai/action-executor.ts",
+      "description": "ActionExecutor unit tests (E5.3)",
+      "story": "E5.3",
+      "test_cases": [
+        {
+          "id": "E5-TC-143",
+          "name": "ActionExecutor - registered handler called and returns success",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["handler invoked, ActionExecutionResult with success=true"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-144",
+          "name": "ActionExecutor - unregistered action type returns ACTION_TYPE_NOT_IMPLEMENTED",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["success=false, error.code=ACTION_TYPE_NOT_IMPLEMENTED"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-145",
+          "name": "ActionExecutor - ai.action.executed event emitted on success",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["eventBus.emit called with ai.action.executed, payload includes companyId, conversationId, actionType"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5-TC-146",
+          "name": "ActionExecutor - handler failure does NOT emit event",
+          "type": "unit",
+          "expected": { "status": "pass", "body_contains": ["eventBus.emit NOT called when handler throws"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "endpoints_by_story": {
+      "E5.1": {
+        "http_endpoints": ["POST /ai/chat/message"],
+        "unit_test_groups": ["AiOrchestrator", "PromptManager", "ResponseParser"],
+        "test_count": 24
+      },
+      "E5.2": {
+        "http_endpoints": ["POST /ai/chat/sessions", "GET /ai/chat/history", "GET /ai/chat/history/:sessionId", "POST /ai/chat/sessions/:sessionId/end"],
+        "websocket_endpoint": "WS /ai/chat",
+        "test_count": 40
+      },
+      "E5.3": {
+        "http_endpoints": [],
+        "websocket_messages": ["action_confirm", "action_reject"],
+        "unit_test_groups": ["GuardrailsService", "ActionExecutor"],
+        "test_count": 18
+      },
+      "E5.4": {
+        "http_endpoints": ["POST /ai/predict/cash-flow", "POST /ai/detect/anomalies", "POST /ai/detect/duplicates", "GET /ai/confidence/:entityType/:entityId", "POST /ai/explain"],
+        "test_count": 43
+      },
+      "E5.5": {
+        "http_endpoints": ["GET /ai/briefing", "POST /ai/suggestions"],
+        "test_count": 21
+      }
+    },
+    "test_type_distribution": {
+      "happy_path": 52,
+      "validation_error": 27,
+      "auth_error": 22,
+      "edge_case": 23,
+      "security": 8,
+      "unit": 34
+    },
+    "cross_cutting_concerns_tested": {
+      "companyId_scoping": "All list/get endpoints verify companyId isolation",
+      "auth_jwt": "Every endpoint tested with missing/expired JWT",
+      "permission_rbac": "Key endpoints tested with insufficient permissions",
+      "graceful_degradation": "All endpoint groups tested with service=null (503 response)",
+      "multi_tenant_isolation": "Session listing/access tested across users and companies",
+      "ai_guardrails_nfr16": "Financial actions always require approval regardless of confidence"
+    },
+    "known_issues_from_code_review": [
+      "E5.2-CR#2: POST /chat/sessions/:sessionId/end returns 200 even when session not found (should be 404)",
+      "E5.2-CR#1: endSession TOCTOU race in ownership check",
+      "E5.4-CR#1: PredictionService silently swallows AI errors, returns empty results instead of 429/503",
+      "E5.3-CR#5: In-memory action proposal storage breaks in multi-instance deployments",
+      "E5.5-CR#1: resolveRole() uses string pattern matching instead of access-group-based resolution"
+    ]
+  }
+}

@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexa ERP — Concept E: Purple + Command Centre</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+tailwind.config={theme:{extend:{colors:{nexa:{50:'#f5f3ff',100:'#ede9fe',200:'#ddd6fe',300:'#c4b5fd',400:'#a78bfa',500:'#8b5cf6',600:'#7c3aed',700:'#6d28d9',800:'#5b21b6',900:'#4c1d95'},page:'#f4f2ff'},fontFamily:{sans:['Inter','system-ui','sans-serif'],heading:['DM Sans','system-ui','sans-serif'],mono:['JetBrains Mono','monospace']}}}}
+</script>
+<style>
+@keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes stepIn{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes gradientBorder{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+@keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}
+.fade-in{animation:fadeInUp .4s ease forwards;opacity:0}
+.step-in{animation:stepIn .5s ease forwards;opacity:0}
+.d1{animation-delay:.05s}.d2{animation-delay:.1s}.d3{animation-delay:.15s}.d4{animation-delay:.2s}.d5{animation-delay:.25s}.d6{animation-delay:.3s}
+.sd1{animation-delay:.3s}.sd2{animation-delay:.8s}.sd3{animation-delay:1.3s}.sd4{animation-delay:1.8s}.sd5{animation-delay:2.3s}.sd6{animation-delay:2.8s}
+body{font-family:'Inter',sans-serif;background:#f4f2ff}
+.font-heading{font-family:'DM Sans',sans-serif}
+.font-mono{font-family:'JetBrains Mono',monospace}
+.card{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);transition:all .2s ease}
+.card:hover{box-shadow:0 4px 12px rgba(124,58,237,.1)}
+.nav-item{transition:all .15s ease}.nav-item:hover{background:#f5f3ff}.nav-item.active{background:#7c3aed;color:#fff;border-radius:8px}
+.badge-up{background:#d1fae5;color:#065f46;font-size:12px;padding:2px 8px;border-radius:99px;font-weight:600}
+.badge-down{background:#fee2e2;color:#991b1b;font-size:12px;padding:2px 8px;border-radius:99px;font-weight:600}
+.status-overdue{background:#fee2e2;color:#dc2626}.status-due{background:#fef3c7;color:#d97706}.status-paid{background:#d1fae5;color:#059669}.status-draft{background:#f3f4f6;color:#6b7280}.status-posted{background:#ede9fe;color:#7c3aed}
+.ai-chip{background:#ede9fe;color:#6d28d9;font-size:11px;padding:2px 8px;border-radius:99px;font-weight:500;display:inline-flex;align-items:center;gap:4px}
+.ai-chip::before{content:'✨';font-size:10px}
+.cmd-bar{background:linear-gradient(90deg,#7c3aed,#6366f1,#7c3aed);background-size:200% 200%;animation:gradientBorder 4s ease infinite;padding:2px;border-radius:12px}
+.cmd-bar-inner{background:#fff;border-radius:10px;display:flex;align-items:center;padding:0 16px;height:40px}
+.slide-panel{position:fixed;top:0;right:0;height:100%;width:384px;background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,.12);z-index:50;transform:translateX(100%);transition:transform .3s ease}
+.slide-panel.open{transform:translateX(0)}
+.backdrop{position:fixed;inset:0;background:rgba(0,0,0,.2);backdrop-filter:blur(2px);z-index:40;display:none}
+.backdrop.open{display:block}
+</style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+<!-- TOP BAR -->
+<header class="h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-4 shrink-0 z-30">
+  <div class="flex items-center gap-2">
+    <div class="w-8 h-8 rounded-lg bg-nexa-600 flex items-center justify-center"><span class="text-white font-bold text-sm">N</span></div>
+    <span class="font-heading font-bold text-nexa-900 text-lg">Nexa ERP</span>
+  </div>
+  <!-- COMMAND BAR (Hero Element) -->
+  <div class="flex-1 max-w-xl mx-auto">
+    <div class="cmd-bar">
+      <div class="cmd-bar-inner" onclick="openCommandBar()">
+        <svg class="w-4 h-4 text-nexa-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        <span class="text-sm text-gray-400 flex-1">Ask AI or search... (Cmd+K)</span>
+        <kbd class="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">⌘K</kbd>
+      </div>
+    </div>
+  </div>
+  <div class="flex items-center gap-3">
+    <button class="relative p-2 text-gray-500 hover:text-nexa-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg><span class="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">3</span></button>
+    <div class="flex items-center gap-2"><div class="w-8 h-8 rounded-full bg-nexa-100 flex items-center justify-center"><span class="text-nexa-700 font-semibold text-xs">SC</span></div><span class="text-sm font-medium text-gray-700">Sarah</span></div>
+  </div>
+</header>
+
+<div class="flex flex-1 overflow-hidden">
+<!-- LEFT NAV -->
+<nav class="w-56 bg-white border-r border-gray-200 p-3 flex flex-col gap-1 shrink-0">
+  <button onclick="showPage('dashboard')" class="nav-item active flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg" data-page="dashboard"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>Dashboard</button>
+  <button onclick="showPage('invoices')" class="nav-item flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-600 rounded-lg" data-page="invoices"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>Invoices</button>
+  <button onclick="showPage('newinvoice')" class="nav-item flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-600 rounded-lg" data-page="newinvoice"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>New Invoice</button>
+  <button onclick="showPage('aicreate')" class="nav-item flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-600 rounded-lg" data-page="aicreate"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>AI Create</button>
+  <button onclick="showPage('pnl')" class="nav-item flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-600 rounded-lg" data-page="pnl"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>P&L Report</button>
+  <button onclick="showPage('cashflow')" class="nav-item flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-600 rounded-lg" data-page="cashflow"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V7m0 1v8m0 0v1"/></svg>Cash Flow</button>
+  <button onclick="showPage('chat')" class="nav-item flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-600 rounded-lg" data-page="chat"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>AI Chat</button>
+  <div class="border-t border-gray-100 my-2"></div>
+  <button onclick="showPage('crm')" class="nav-item flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-600 rounded-lg" data-page="crm"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>CRM Pipeline</button>
+  <button onclick="showPage('inventory')" class="nav-item flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-600 rounded-lg" data-page="inventory"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>Inventory</button>
+  <button onclick="showPage('gl')" class="nav-item flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-600 rounded-lg" data-page="gl"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>General Ledger</button>
+  <button onclick="showPage('sales')" class="nav-item flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-600 rounded-lg" data-page="sales"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg>Sales Orders</button>
+  <div class="mt-auto pt-4 border-t border-gray-100"><p class="px-3 py-2 text-xs text-gray-400">Meridian Manufacturing Ltd</p></div>
+</nav>
+
+<!-- MAIN CONTENT (FULL WIDTH — no right sidebar) -->
+<main class="flex-1 overflow-y-auto p-6" id="main-content">
+
+<!-- DASHBOARD -->
+<div id="page-dashboard" class="page-content space-y-6">
+  <div class="card p-4 border-l-4 border-nexa-600 fade-in"><p class="text-sm text-gray-700"><span class="ai-chip mr-2">AI Insight</span> Revenue up 11% but gross margin declining — COGS growing 4.4pp faster than revenue. Investigate Widget-B pricing.</p></div>
+  <div class="flex items-center justify-between fade-in d1"><h1 class="font-heading text-2xl font-bold text-gray-900">Good morning, Sarah</h1><span class="text-sm text-gray-400">Monday, 17 February 2026</span></div>
+  <div class="grid grid-cols-3 gap-4">
+    <div class="card p-5 fade-in d1"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Revenue</p><span class="badge-up">+11.0%</span></div><p class="font-mono text-2xl font-bold text-gray-900">£347,200</p><p class="text-xs text-gray-400 mt-1">vs £312,800 Jan</p><svg class="mt-2" width="100%" height="24" viewBox="0 0 140 24"><polyline points="0,20 20,18 40,16 60,14 80,12 100,10 120,6 140,4" fill="none" stroke="#7c3aed" stroke-width="2"/></svg></div>
+    <div class="card p-5 fade-in d2"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Outstanding AR</p><span class="badge-down">+29.7%</span></div><p class="font-mono text-2xl font-bold text-gray-900">£127,400</p><p class="text-xs text-gray-400 mt-1">vs £98,200 Jan</p><svg class="mt-2" width="100%" height="24" viewBox="0 0 140 24"><polyline points="0,18 20,16 40,14 60,10 80,8 100,6 120,4 140,2" fill="none" stroke="#ef4444" stroke-width="2"/></svg></div>
+    <div class="card p-5 fade-in d3"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Cash Position</p><span class="badge-down">-12.9%</span></div><p class="font-mono text-2xl font-bold text-gray-900">£89,300</p><p class="text-xs text-gray-400 mt-1">vs £102,500 Jan</p><svg class="mt-2" width="100%" height="24" viewBox="0 0 140 24"><polyline points="0,4 20,6 40,8 60,10 80,14 100,16 120,18 140,20" fill="none" stroke="#f59e0b" stroke-width="2"/></svg></div>
+    <div class="card p-5 fade-in d4"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Overdue Invoices</p><span class="badge-down">+75%</span></div><p class="font-mono text-2xl font-bold text-gray-900">7</p><p class="text-xs text-gray-400 mt-1">vs 4 Jan</p><svg class="mt-2" width="100%" height="24" viewBox="0 0 140 24"><polyline points="0,16 20,14 40,14 60,12 80,10 100,6 120,4 140,2" fill="none" stroke="#ef4444" stroke-width="2"/></svg></div>
+    <div class="card p-5 fade-in d5"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Pipeline Value</p><span class="badge-up">+14.4%</span></div><p class="font-mono text-2xl font-bold text-gray-900">£215,000</p><p class="text-xs text-gray-400 mt-1">vs £188,000 Jan</p><svg class="mt-2" width="100%" height="24" viewBox="0 0 140 24"><polyline points="0,20 20,18 40,14 60,12 80,10 100,8 120,6 140,4" fill="none" stroke="#10b981" stroke-width="2"/></svg></div>
+    <div class="card p-5 fade-in d6"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Gross Margin</p><span class="badge-down">-2.6pp</span></div><p class="font-mono text-2xl font-bold text-gray-900">34.2%</p><p class="text-xs text-gray-400 mt-1">vs 36.8% Jan</p><svg class="mt-2" width="100%" height="24" viewBox="0 0 140 24"><polyline points="0,6 20,8 40,10 60,12 80,14 100,16 120,18 140,20" fill="none" stroke="#f59e0b" stroke-width="2"/></svg></div>
+  </div>
+  <div class="grid grid-cols-2 gap-4">
+    <div class="card p-5 fade-in d4"><h3 class="font-heading font-semibold text-gray-800 mb-4">Revenue & Payments</h3><canvas id="e-dash-rev" height="180"></canvas></div>
+    <div class="card p-5 fade-in d5"><h3 class="font-heading font-semibold text-gray-800 mb-4">Cash Flow Forecast</h3><canvas id="e-dash-cf" height="180"></canvas></div>
+  </div>
+</div>
+
+<!-- INVOICE LIST -->
+<div id="page-invoices" class="page-content space-y-6 hidden">
+  <div class="flex items-center justify-between fade-in"><h1 class="font-heading text-2xl font-bold text-gray-900">Invoices</h1><button class="px-4 py-2 bg-nexa-600 text-white rounded-lg text-sm font-medium hover:bg-nexa-700">+ New Invoice</button></div>
+  <div class="grid grid-cols-4 gap-4">
+    <div class="card p-4 fade-in d1"><p class="text-xs text-gray-500 uppercase">Total</p><p class="font-mono text-xl font-bold mt-1">82</p><p class="text-xs text-gray-400">vs 74 <span class="text-green-600">+10.8%</span></p></div>
+    <div class="card p-4 fade-in d2"><p class="text-xs text-gray-500 uppercase">Pending</p><p class="font-mono text-xl font-bold text-amber-600 mt-1">18</p><p class="text-xs text-gray-400">vs 12 <span class="text-red-500">+50%</span></p></div>
+    <div class="card p-4 fade-in d3"><p class="text-xs text-gray-500 uppercase">Overdue Value</p><p class="font-mono text-xl font-bold text-red-600 mt-1">£86,500</p><p class="text-xs text-gray-400">vs £42.3k <span class="text-red-500">+104%</span></p></div>
+    <div class="card p-4 fade-in d4"><p class="text-xs text-gray-500 uppercase">Paid (MTD)</p><p class="font-mono text-xl font-bold text-green-600 mt-1">£735,600</p><p class="text-xs text-gray-400">vs £698.2k <span class="text-green-600">+5.4%</span></p></div>
+  </div>
+  <div class="card overflow-hidden fade-in d3">
+    <div class="p-4 border-b border-gray-100 flex items-center gap-2">
+      <button class="px-3 py-1.5 bg-nexa-600 text-white text-xs font-medium rounded-full">All</button>
+      <button class="px-3 py-1.5 text-gray-500 text-xs rounded-full hover:bg-gray-100">Overdue</button>
+      <button class="px-3 py-1.5 text-gray-500 text-xs rounded-full hover:bg-gray-100">Due Soon</button>
+      <button class="px-3 py-1.5 text-gray-500 text-xs rounded-full hover:bg-gray-100">Paid</button>
+    </div>
+    <table class="w-full text-sm">
+      <thead><tr class="border-b border-gray-100 text-xs text-gray-500 uppercase text-left"><th class="px-4 py-3 w-10">AI</th><th class="px-4 py-3">Invoice #</th><th class="px-4 py-3">Customer</th><th class="px-4 py-3 text-right">Amount</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Due Date</th></tr></thead>
+      <tbody>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3"><button onclick="openSlidePanel('Acme Corp','INV-2026-0042','£31,000','OVERDUE','89 days','67%','Send formal demand — 89 days, no recent contact')" class="text-nexa-500 hover:text-nexa-700 text-lg">✨</button></td><td class="px-4 py-3 font-mono text-nexa-700 font-medium">#INV-2026-0042</td><td class="px-4 py-3">Acme Corp</td><td class="px-4 py-3 text-right font-mono font-medium">£31,000</td><td class="px-4 py-3"><span class="status-overdue text-xs px-2 py-1 rounded-full font-medium">Overdue</span></td><td class="px-4 py-3 text-gray-500">89 days ago</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3"><button onclick="openSlidePanel('BlueStar Ltd','INV-2026-0045','£15,800','OVERDUE','71 days','74%','Send reminder — approaching 90 day mark')" class="text-nexa-500 hover:text-nexa-700 text-lg">✨</button></td><td class="px-4 py-3 font-mono text-nexa-700 font-medium">#INV-2026-0045</td><td class="px-4 py-3">BlueStar Ltd</td><td class="px-4 py-3 text-right font-mono font-medium">£15,800</td><td class="px-4 py-3"><span class="status-overdue text-xs px-2 py-1 rounded-full font-medium">Overdue</span></td><td class="px-4 py-3 text-gray-500">71 days ago</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3"><button onclick="openSlidePanel('TechVault Inc','INV-2026-0048','£8,200','OVERDUE','45 days','82%','Friendly reminder — first overdue notice')" class="text-nexa-500 hover:text-nexa-700 text-lg">✨</button></td><td class="px-4 py-3 font-mono text-nexa-700 font-medium">#INV-2026-0048</td><td class="px-4 py-3">TechVault Inc</td><td class="px-4 py-3 text-right font-mono font-medium">£8,200</td><td class="px-4 py-3"><span class="status-overdue text-xs px-2 py-1 rounded-full font-medium">Overdue</span></td><td class="px-4 py-3 text-gray-500">45 days ago</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3 text-gray-300">✨</td><td class="px-4 py-3 font-mono text-nexa-700 font-medium">#INV-2026-0051</td><td class="px-4 py-3">Meridian Supplies</td><td class="px-4 py-3 text-right font-mono font-medium">£12,400</td><td class="px-4 py-3"><span class="status-due text-xs px-2 py-1 rounded-full font-medium">Due Soon</span></td><td class="px-4 py-3 text-gray-500">In 5 days</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3 text-gray-300">✨</td><td class="px-4 py-3 font-mono text-nexa-700 font-medium">#INV-2026-0053</td><td class="px-4 py-3">CloudNine Digital</td><td class="px-4 py-3 text-right font-mono font-medium">£4,800</td><td class="px-4 py-3"><span class="status-due text-xs px-2 py-1 rounded-full font-medium">Due Soon</span></td><td class="px-4 py-3 text-gray-500">In 12 days</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3 text-gray-300">✨</td><td class="px-4 py-3 font-mono text-nexa-700 font-medium">#INV-2026-0055</td><td class="px-4 py-3">FreshFields Organic</td><td class="px-4 py-3 text-right font-mono font-medium">£22,100</td><td class="px-4 py-3"><span class="status-paid text-xs px-2 py-1 rounded-full font-medium">Paid</span></td><td class="px-4 py-3 text-gray-500">Paid 12 Feb</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3 text-gray-300">✨</td><td class="px-4 py-3 font-mono text-nexa-700 font-medium">#INV-2026-0057</td><td class="px-4 py-3">UrbanCraft Studios</td><td class="px-4 py-3 text-right font-mono font-medium">£6,700</td><td class="px-4 py-3"><span class="status-draft text-xs px-2 py-1 rounded-full font-medium">Draft</span></td><td class="px-4 py-3 text-gray-500">—</td></tr>
+        <tr class="hover:bg-nexa-50/30"><td class="px-4 py-3 text-gray-300">✨</td><td class="px-4 py-3 font-mono text-nexa-700 font-medium">#INV-2026-0059</td><td class="px-4 py-3">NorthStar Logistics</td><td class="px-4 py-3 text-right font-mono font-medium">£9,300</td><td class="px-4 py-3"><span class="status-posted text-xs px-2 py-1 rounded-full font-medium">Posted</span></td><td class="px-4 py-3 text-gray-500">Due 1 Mar</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- NEW INVOICE -->
+<div id="page-newinvoice" class="page-content space-y-6 hidden">
+  <h1 class="font-heading text-2xl font-bold text-gray-900 fade-in">New Invoice</h1>
+  <div class="card p-4 border-l-4 border-nexa-500 fade-in d1"><span class="ai-chip">Pre-filled from history</span><span class="text-sm text-gray-600 ml-2">Acme usually orders Widget-C too. Note: £31k overdue on INV-0042.</span></div>
+  <div class="card p-6 space-y-6 fade-in d2 max-w-4xl">
+    <div class="grid grid-cols-2 gap-6">
+      <div><label class="block text-sm font-medium text-gray-700 mb-1">Customer</label><select class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"><option>Acme Corp (AC-001)</option></select></div>
+      <div><label class="block text-sm font-medium text-gray-700 mb-1">Address</label><p class="text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2">14 High Street, London EC2V 8AR</p></div>
+    </div>
+    <div class="grid grid-cols-3 gap-6">
+      <div><label class="block text-sm font-medium text-gray-700 mb-1">Invoice Date</label><input type="text" value="17/02/2026" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></div>
+      <div><label class="block text-sm font-medium text-gray-700 mb-1">Due Date</label><input type="text" value="19/03/2026" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></div>
+      <div><label class="block text-sm font-medium text-gray-700 mb-1">Terms</label><select class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"><option>NET30</option></select></div>
+    </div>
+    <table class="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+      <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase"><th class="px-4 py-2 text-left">Item</th><th class="px-4 py-2 text-left">Description</th><th class="px-4 py-2 text-right">Qty</th><th class="px-4 py-2 text-right">Price</th><th class="px-4 py-2 text-right">VAT</th><th class="px-4 py-2 text-right">Total</th></tr></thead>
+      <tbody>
+        <tr class="border-t border-gray-100"><td class="px-4 py-3 font-mono text-nexa-700">WA-100</td><td class="px-4 py-3">Widget-A Premium</td><td class="px-4 py-3 text-right font-mono">100</td><td class="px-4 py-3 text-right font-mono">£50.00</td><td class="px-4 py-3 text-right">20%</td><td class="px-4 py-3 text-right font-mono font-medium">£5,000.00</td></tr>
+        <tr class="border-t border-gray-100"><td class="px-4 py-3 font-mono text-nexa-700">WB-200</td><td class="px-4 py-3">Widget-B Standard</td><td class="px-4 py-3 text-right font-mono">50</td><td class="px-4 py-3 text-right font-mono">£30.00</td><td class="px-4 py-3 text-right">20%</td><td class="px-4 py-3 text-right font-mono font-medium">£1,500.00</td></tr>
+      </tbody>
+    </table>
+    <div class="flex justify-end"><div class="w-64 space-y-2 text-sm"><div class="flex justify-between"><span class="text-gray-500">Subtotal</span><span class="font-mono font-medium">£6,500.00</span></div><div class="flex justify-between"><span class="text-gray-500">VAT (20%)</span><span class="font-mono font-medium">£1,300.00</span></div><div class="flex justify-between border-t pt-2"><span class="font-semibold">Total</span><span class="font-mono font-bold text-lg">£7,800.00</span></div></div></div>
+    <div class="flex gap-3 justify-end border-t pt-4"><button class="px-4 py-2 text-gray-500 text-sm">Cancel</button><button class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium">Save Draft</button><button class="px-4 py-2 bg-nexa-600 text-white rounded-lg text-sm font-medium hover:bg-nexa-700">Submit</button></div>
+  </div>
+</div>
+
+<!-- AI CREATE INVOICE -->
+<div id="page-aicreate" class="page-content space-y-6 hidden">
+  <h1 class="font-heading text-2xl font-bold text-gray-900 fade-in">AI Invoice Creation</h1>
+  <div class="cmd-bar max-w-3xl fade-in d1"><div class="cmd-bar-inner py-3 h-auto"><svg class="w-5 h-5 text-nexa-500 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg><span class="font-mono text-sm text-gray-800">"Create invoice for Acme Corp — 100 Widget-A at £50, 50 Widget-B at £30"</span></div></div>
+  <div class="relative pl-8 space-y-4 max-w-3xl">
+    <div class="absolute left-[15px] top-4 bottom-4 w-0.5 bg-nexa-200"></div>
+    <div class="relative step-in sd1"><div class="absolute left-[-25px] w-5 h-5 rounded-full bg-nexa-600 flex items-center justify-center"><svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg></div><div class="card p-4"><div class="flex items-center gap-2 mb-1"><h4 class="font-heading font-semibold text-gray-800">Understanding Intent</h4><span class="ai-chip">0.2s</span></div><p class="text-sm text-gray-600">Parsed: Create → Sales Invoice | Customer: Acme Corp | Items: 2 line items</p></div></div>
+    <div class="relative step-in sd2"><div class="absolute left-[-25px] w-5 h-5 rounded-full bg-nexa-600 flex items-center justify-center"><svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg></div><div class="card p-4"><div class="flex items-center gap-2 mb-1"><h4 class="font-heading font-semibold text-gray-800">Customer Lookup</h4><span class="ai-chip">0.3s</span></div><p class="text-sm text-gray-600">Acme Corp (AC-001) • 14 High Street, London EC2V 8AR • Terms: NET30</p></div></div>
+    <div class="relative step-in sd3"><div class="absolute left-[-25px] w-5 h-5 rounded-full bg-nexa-600 flex items-center justify-center"><svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg></div><div class="card p-4"><div class="flex items-center gap-2 mb-2"><h4 class="font-heading font-semibold text-gray-800">Stock Check</h4><span class="ai-chip">0.4s</span></div><div class="grid grid-cols-2 gap-3 text-sm"><div class="bg-gray-50 rounded-lg p-3"><span class="font-mono text-nexa-700">WA-100</span> £50/unit <span class="text-green-600 font-medium">340 in stock ✓</span></div><div class="bg-gray-50 rounded-lg p-3"><span class="font-mono text-nexa-700">WB-200</span> £30/unit <span class="text-green-600 font-medium">180 in stock ✓</span></div></div></div></div>
+    <div class="relative step-in sd4"><div class="absolute left-[-25px] w-5 h-5 rounded-full bg-nexa-600 flex items-center justify-center"><svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg></div><div class="card p-4"><div class="flex items-center gap-2 mb-1"><h4 class="font-heading font-semibold text-gray-800">Business Rules</h4><span class="ai-chip">0.2s</span></div><p class="text-sm text-gray-600">Payment: NET30 • VAT: 20% • Number: INV-2026-0060 • No discount</p></div></div>
+    <div class="relative step-in sd5"><div class="absolute left-[-25px] w-5 h-5 rounded-full bg-nexa-600 flex items-center justify-center"><svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg></div><div class="card p-4"><div class="flex items-center gap-2 mb-1"><h4 class="font-heading font-semibold text-gray-800">Calculate</h4><span class="ai-chip">0.1s</span></div><p class="text-sm text-gray-600 font-mono">100 × £50 = £5,000 + 50 × £30 = £1,500 → Subtotal £6,500 + VAT £1,300 = <strong>£7,800</strong></p></div></div>
+    <div class="relative step-in sd6"><div class="absolute left-[-25px] w-5 h-5 rounded-full bg-green-500 flex items-center justify-center"><svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg></div><div class="card p-5 border-2 border-nexa-200"><h4 class="font-heading font-semibold text-gray-800 mb-3">Invoice Ready</h4><div class="bg-gray-50 rounded-lg p-4 text-sm space-y-2 mb-4"><div class="flex justify-between"><span class="text-gray-500">Invoice</span><span class="font-mono font-medium">INV-2026-0060</span></div><div class="flex justify-between"><span class="text-gray-500">Customer</span><span>Acme Corp</span></div><div class="flex justify-between"><span class="text-gray-500">Total</span><span class="font-mono font-bold text-lg">£7,800.00</span></div><div class="flex justify-between"><span class="text-gray-500">Due</span><span>19 March 2026</span></div></div><div class="flex gap-3"><button class="px-5 py-2.5 bg-nexa-600 text-white rounded-lg text-sm font-medium hover:bg-nexa-700">✓ Approve & Post</button><button class="px-4 py-2.5 bg-gray-100 rounded-lg text-sm font-medium">✏️ Edit</button><button class="px-4 py-2.5 text-gray-500 text-sm">✕ Cancel</button></div></div></div>
+  </div>
+</div>
+
+<!-- P&L REPORT -->
+<div id="page-pnl" class="page-content space-y-6 hidden">
+  <div class="flex items-center justify-between fade-in"><h1 class="font-heading text-2xl font-bold text-gray-900">Profit & Loss — February 2026</h1><select class="border border-gray-200 rounded-lg px-3 py-2 text-sm"><option>vs February 2025</option></select></div>
+  <div class="card overflow-hidden fade-in d1">
+    <table class="w-full text-sm"><thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase border-b"><th class="px-5 py-3 text-left">Account</th><th class="px-5 py-3 text-right">Feb 2026</th><th class="px-5 py-3 text-right">Feb 2025</th><th class="px-5 py-3 text-right">Change</th><th class="px-5 py-3 text-right">%</th><th class="px-5 py-3 text-left">AI</th></tr></thead>
+    <tbody>
+      <tr class="border-b border-gray-50"><td class="px-5 py-3 font-medium">Revenue</td><td class="px-5 py-3 text-right font-mono">£347,200</td><td class="px-5 py-3 text-right font-mono text-gray-400">£298,400</td><td class="px-5 py-3 text-right font-mono text-green-600">+£48,800</td><td class="px-5 py-3 text-right"><span class="badge-up">+16.3%</span></td><td class="px-5 py-3 text-xs text-gray-500">Widget-A volume growth</td></tr>
+      <tr class="border-b border-gray-50 bg-red-50/30"><td class="px-5 py-3 font-medium">COGS</td><td class="px-5 py-3 text-right font-mono">£228,800</td><td class="px-5 py-3 text-right font-mono text-gray-400">£189,500</td><td class="px-5 py-3 text-right font-mono text-red-600">+£39,300</td><td class="px-5 py-3 text-right"><span class="badge-down">+20.7%</span></td><td class="px-5 py-3"><span class="ai-chip">⚠️ Faster than revenue</span></td></tr>
+      <tr class="border-b bg-gray-50"><td class="px-5 py-3 font-bold">Gross Profit</td><td class="px-5 py-3 text-right font-mono font-bold">£118,400</td><td class="px-5 py-3 text-right font-mono text-gray-400">£108,900</td><td class="px-5 py-3 text-right font-mono text-green-600">+£9,500</td><td class="px-5 py-3 text-right"><span class="badge-up">+8.7%</span></td><td class="px-5 py-3"><span class="ai-chip">Margin: 34.2% vs 36.5%</span></td></tr>
+      <tr class="border-b border-gray-50"><td class="px-5 py-3 font-medium">OpEx</td><td class="px-5 py-3 text-right font-mono">£78,200</td><td class="px-5 py-3 text-right font-mono text-gray-400">£72,100</td><td class="px-5 py-3 text-right font-mono text-red-600">+£6,100</td><td class="px-5 py-3 text-right text-xs text-gray-500">+8.5%</td><td class="px-5 py-3 text-xs text-gray-400">In line</td></tr>
+      <tr class="bg-nexa-50/30"><td class="px-5 py-4 font-bold">Net Profit</td><td class="px-5 py-4 text-right font-mono font-bold text-lg">£40,200</td><td class="px-5 py-4 text-right font-mono text-gray-400">£36,800</td><td class="px-5 py-4 text-right font-mono text-green-600 font-semibold">+£3,400</td><td class="px-5 py-4 text-right"><span class="badge-up">+9.2%</span></td><td class="px-5 py-4"><span class="ai-chip">Watch COGS trend</span></td></tr>
+    </tbody></table>
+  </div>
+  <div class="card p-5 fade-in d2"><h3 class="font-heading font-semibold text-gray-800 mb-4">Comparison Chart</h3><canvas id="e-pnl" height="200"></canvas></div>
+  <div class="card p-4 border-l-4 border-nexa-500 fade-in d3"><p class="text-sm text-gray-700"><strong class="text-nexa-700">AI Analysis:</strong> COGS grew 20.7% vs revenue 16.3%. Margin compression driven by Widget-B raw materials (+14% since Oct). <strong>Recommendation:</strong> Review Widget-B pricing or renegotiate supplier.</p></div>
+</div>
+
+<!-- CASH FLOW -->
+<div id="page-cashflow" class="page-content space-y-6 hidden">
+  <h1 class="font-heading text-2xl font-bold text-gray-900 fade-in">8-Week Cash Flow Forecast</h1>
+  <div class="card p-5 fade-in d1"><canvas id="e-cf" height="220"></canvas></div>
+  <div class="grid grid-cols-3 gap-4 fade-in d2">
+    <div class="card p-4 border-t-4 border-gray-300"><p class="text-xs text-gray-500 uppercase mb-1">Current Path</p><p class="font-mono text-lg font-bold">Min £41,200</p><p class="text-xs text-gray-500">Week 6 — VAT</p></div>
+    <div class="card p-4 border-t-4 border-green-500"><p class="text-xs text-gray-500 uppercase mb-1">If Acme Pays</p><p class="font-mono text-lg font-bold text-green-600">Min £72,200 ✓</p><p class="text-xs text-gray-500">Chase £31k now</p><span class="ai-chip mt-2">Recommended</span></div>
+    <div class="card p-4 border-t-4 border-amber-500"><p class="text-xs text-gray-500 uppercase mb-1">Defer VAT</p><p class="font-mono text-lg font-bold text-amber-600">Min £62,700</p><p class="text-xs text-gray-500">HMRC time-to-pay</p></div>
+  </div>
+  <div class="card overflow-hidden fade-in d3">
+    <table class="w-full text-sm"><thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase border-b"><th class="px-4 py-3 text-left">Week</th><th class="px-4 py-3 text-left">Date</th><th class="px-4 py-3 text-right">Opening</th><th class="px-4 py-3 text-right">In</th><th class="px-4 py-3 text-right">Out</th><th class="px-4 py-3 text-right">Closing</th><th class="px-4 py-3">Notes</th></tr></thead>
+    <tbody>
+      <tr class="border-b border-gray-50"><td class="px-4 py-2">1</td><td class="px-4 py-2">17 Feb</td><td class="px-4 py-2 text-right font-mono">£89,300</td><td class="px-4 py-2 text-right font-mono text-green-600">£24,000</td><td class="px-4 py-2 text-right font-mono text-red-500">£18,400</td><td class="px-4 py-2 text-right font-mono font-medium">£94,900</td><td class="px-4 py-2"></td></tr>
+      <tr class="border-b border-gray-50"><td class="px-4 py-2">2</td><td class="px-4 py-2">24 Feb</td><td class="px-4 py-2 text-right font-mono">£94,900</td><td class="px-4 py-2 text-right font-mono text-green-600">£15,000</td><td class="px-4 py-2 text-right font-mono text-red-500">£67,200</td><td class="px-4 py-2 text-right font-mono font-medium">£42,700</td><td class="px-4 py-2 text-xs text-amber-500">Payroll</td></tr>
+      <tr class="border-b border-gray-50"><td class="px-4 py-2">3</td><td class="px-4 py-2">3 Mar</td><td class="px-4 py-2 text-right font-mono">£42,700</td><td class="px-4 py-2 text-right font-mono text-green-600">£31,000</td><td class="px-4 py-2 text-right font-mono text-red-500">£12,000</td><td class="px-4 py-2 text-right font-mono font-medium">£61,700</td><td class="px-4 py-2 text-xs text-gray-400">Acme if chased</td></tr>
+      <tr class="border-b border-gray-50"><td class="px-4 py-2">4</td><td class="px-4 py-2">10 Mar</td><td class="px-4 py-2 text-right font-mono">£61,700</td><td class="px-4 py-2 text-right font-mono text-green-600">£18,000</td><td class="px-4 py-2 text-right font-mono text-red-500">£22,000</td><td class="px-4 py-2 text-right font-mono font-medium">£57,700</td><td class="px-4 py-2"></td></tr>
+      <tr class="border-b border-gray-50"><td class="px-4 py-2">5</td><td class="px-4 py-2">17 Mar</td><td class="px-4 py-2 text-right font-mono">£57,700</td><td class="px-4 py-2 text-right font-mono text-green-600">£12,000</td><td class="px-4 py-2 text-right font-mono text-red-500">£15,000</td><td class="px-4 py-2 text-right font-mono font-medium">£54,700</td><td class="px-4 py-2"></td></tr>
+      <tr class="border-b border-gray-50 bg-red-50"><td class="px-4 py-2 text-red-700 font-bold">6</td><td class="px-4 py-2 text-red-700">24 Mar</td><td class="px-4 py-2 text-right font-mono">£54,700</td><td class="px-4 py-2 text-right font-mono text-green-600">£8,000</td><td class="px-4 py-2 text-right font-mono text-red-600 font-bold">£21,500</td><td class="px-4 py-2 text-right font-mono font-bold text-red-700">£41,200</td><td class="px-4 py-2 text-xs text-red-600 font-medium">⚠️ VAT</td></tr>
+      <tr class="border-b border-gray-50"><td class="px-4 py-2">7</td><td class="px-4 py-2">31 Mar</td><td class="px-4 py-2 text-right font-mono">£41,200</td><td class="px-4 py-2 text-right font-mono text-green-600">£35,000</td><td class="px-4 py-2 text-right font-mono text-red-500">£14,000</td><td class="px-4 py-2 text-right font-mono font-medium">£62,200</td><td class="px-4 py-2 text-xs text-gray-400">Quarter-end</td></tr>
+      <tr><td class="px-4 py-2">8</td><td class="px-4 py-2">7 Apr</td><td class="px-4 py-2 text-right font-mono">£62,200</td><td class="px-4 py-2 text-right font-mono text-green-600">£22,000</td><td class="px-4 py-2 text-right font-mono text-red-500">£16,000</td><td class="px-4 py-2 text-right font-mono font-medium">£68,200</td><td class="px-4 py-2"></td></tr>
+    </tbody></table>
+  </div>
+</div>
+
+<!-- AI CHAT -->
+<div id="page-chat" class="page-content flex flex-col h-full hidden">
+  <h1 class="font-heading text-2xl font-bold text-gray-900 mb-4 fade-in">Chat with Nexa AI</h1>
+  <div class="flex-1 overflow-y-auto space-y-4 pb-4">
+    <div class="flex gap-3 fade-in d1"><div class="w-8 h-8 rounded-full bg-nexa-600 flex items-center justify-center shrink-0"><span class="text-white text-xs font-bold">AI</span></div><div class="card p-4 max-w-2xl"><p class="text-sm text-gray-700">Good morning Sarah! What would you like to explore today?</p></div></div>
+    <div class="flex gap-3 justify-end fade-in d2"><div class="bg-nexa-50 rounded-xl p-4 max-w-xl"><p class="text-sm text-gray-800">What's our cash position looking like?</p></div></div>
+    <div class="flex gap-3 fade-in d3"><div class="w-8 h-8 rounded-full bg-nexa-600 flex items-center justify-center shrink-0"><span class="text-white text-xs font-bold">AI</span></div><div class="card p-4 max-w-2xl border-l-4 border-nexa-500"><p class="text-sm text-gray-700">Current cash: <strong class="font-mono">£89,300</strong>. Forecast dips to <strong class="font-mono text-red-600">£41,200</strong> in week 6 (VAT). Chasing Acme's £31k would significantly improve outlook.</p><div class="flex gap-2 mt-3"><button class="px-3 py-1.5 bg-nexa-100 text-nexa-700 rounded-lg text-xs font-medium">View Forecast</button><button class="px-3 py-1.5 bg-nexa-100 text-nexa-700 rounded-lg text-xs font-medium">Chase Debtors</button></div></div></div>
+    <div class="flex gap-3 justify-end fade-in d4"><div class="bg-nexa-50 rounded-xl p-4 max-w-xl"><p class="text-sm text-gray-800">Which customers owe us the most?</p></div></div>
+    <div class="flex gap-3 fade-in d5"><div class="w-8 h-8 rounded-full bg-nexa-600 flex items-center justify-center shrink-0"><span class="text-white text-xs font-bold">AI</span></div><div class="card p-4 max-w-2xl border-l-4 border-nexa-500"><p class="text-sm text-gray-700 mb-2">Top 3 overdue:</p><div class="bg-gray-50 rounded-lg p-3 text-sm space-y-1 mb-2"><div class="flex justify-between"><span>1. Acme Corp</span><span class="font-mono text-red-600 font-medium">£31,000 (89d)</span></div><div class="flex justify-between"><span>2. BlueStar Ltd</span><span class="font-mono text-red-600 font-medium">£15,800 (71d)</span></div><div class="flex justify-between"><span>3. TechVault Inc</span><span class="font-mono text-amber-600 font-medium">£8,200 (45d)</span></div></div><p class="text-sm text-gray-700">Total: <strong class="font-mono">£55,000</strong>. Draft reminders?</p><div class="flex gap-2 mt-3"><button class="px-3 py-1.5 bg-nexa-600 text-white rounded-lg text-xs font-medium">Draft Reminders</button><button class="px-3 py-1.5 bg-nexa-100 text-nexa-700 rounded-lg text-xs font-medium">View AR</button></div></div></div>
+  </div>
+  <div class="border-t border-gray-200 pt-4 shrink-0"><div class="flex gap-3"><input type="text" placeholder="Ask Nexa anything..." class="flex-1 border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-nexa-500 focus:ring-1 focus:ring-nexa-500"><button class="px-5 py-3 bg-nexa-600 text-white rounded-lg text-sm font-medium hover:bg-nexa-700">Send</button></div></div>
+</div>
+
+<!-- CRM PIPELINE -->
+<div id="page-crm" class="page-content space-y-6 hidden">
+  <div class="card p-4 border-l-4 border-nexa-500 fade-in"><p class="text-sm text-gray-700"><span class="ai-chip mr-2">AI Insight</span> 3 deals closing this week worth £47,500. NorthStar has Feb 28 deadline — prioritise. Win rate improved but avg deal size dropped 9.5%.</p></div>
+  <div class="flex items-center justify-between fade-in d1"><h1 class="font-heading text-2xl font-bold text-gray-900">CRM Pipeline</h1><button class="px-4 py-2 bg-nexa-600 text-white rounded-lg text-sm font-medium hover:bg-nexa-700">+ New Deal</button></div>
+  <div class="grid grid-cols-3 gap-4">
+    <div class="card p-5 fade-in d1"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Active Deals</p><span class="badge-up">+26.3%</span></div><p class="font-mono text-2xl font-bold text-gray-900">24</p><p class="text-xs text-gray-400 mt-1">vs 19 Jan</p></div>
+    <div class="card p-5 fade-in d2"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Pipeline Value</p><span class="badge-up">+14.4%</span></div><p class="font-mono text-2xl font-bold text-gray-900">£215,000</p><p class="text-xs text-gray-400 mt-1">vs £188,000 Jan</p></div>
+    <div class="card p-5 fade-in d3"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Win Rate</p><span class="badge-up">+5pp</span></div><p class="font-mono text-2xl font-bold text-gray-900">34%</p><p class="text-xs text-gray-400 mt-1">vs 29% Jan</p></div>
+    <div class="card p-5 fade-in d4"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Avg Deal Size</p><span class="badge-down">-9.5%</span></div><p class="font-mono text-2xl font-bold text-gray-900">£8,958</p><p class="text-xs text-gray-400 mt-1">vs £9,895 Jan</p></div>
+    <div class="card p-5 fade-in d5"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Sales Cycle</p><span class="badge-up">-12.5%</span></div><p class="font-mono text-2xl font-bold text-gray-900">28 days</p><p class="text-xs text-gray-400 mt-1">vs 32 days Jan</p></div>
+    <div class="card p-5 fade-in d6"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Closing This Week</p></div><p class="font-mono text-2xl font-bold text-nexa-700">3</p><p class="text-xs text-gray-400 mt-1">£47,500 value</p></div>
+  </div>
+  <!-- Pipeline Funnel -->
+  <div class="card p-5 fade-in d3">
+    <h3 class="font-heading font-semibold text-gray-800 mb-4">Pipeline Funnel</h3>
+    <div class="space-y-3">
+      <div class="flex items-center gap-4"><span class="text-sm text-gray-600 w-24 shrink-0">Lead</span><div class="flex-1 bg-gray-100 rounded-full h-8 overflow-hidden"><div class="h-full bg-nexa-200 rounded-full flex items-center px-3" style="width:100%"><span class="text-xs font-mono font-medium text-nexa-800">42 deals — £380k</span></div></div></div>
+      <div class="flex items-center gap-4"><span class="text-sm text-gray-600 w-24 shrink-0">Qualified</span><div class="flex-1 bg-gray-100 rounded-full h-8 overflow-hidden"><div class="h-full bg-nexa-300 rounded-full flex items-center px-3" style="width:57%"><span class="text-xs font-mono font-medium text-nexa-900">24 deals — £215k</span></div></div></div>
+      <div class="flex items-center gap-4"><span class="text-sm text-gray-600 w-24 shrink-0">Proposal</span><div class="flex-1 bg-gray-100 rounded-full h-8 overflow-hidden"><div class="h-full bg-nexa-400 rounded-full flex items-center px-3" style="width:34%"><span class="text-xs font-mono font-medium text-white">12 deals — £128k</span></div></div></div>
+      <div class="flex items-center gap-4"><span class="text-sm text-gray-600 w-24 shrink-0">Negotiation</span><div class="flex-1 bg-gray-100 rounded-full h-8 overflow-hidden"><div class="h-full bg-nexa-600 rounded-full flex items-center px-3" style="width:18%"><span class="text-xs font-mono font-medium text-white">5 — £67k</span></div></div></div>
+      <div class="flex items-center gap-4"><span class="text-sm text-gray-600 w-24 shrink-0">Closed Won</span><div class="flex-1 bg-gray-100 rounded-full h-8 overflow-hidden"><div class="h-full bg-green-500 rounded-full flex items-center px-3" style="width:23%"><span class="text-xs font-mono font-medium text-white">8 deals — £89k</span></div></div></div>
+    </div>
+  </div>
+  <!-- Top Deals Table -->
+  <div class="card overflow-hidden fade-in d4">
+    <div class="p-4 border-b border-gray-100"><h3 class="font-heading font-semibold text-gray-800">Top Deals</h3></div>
+    <table class="w-full text-sm">
+      <thead><tr class="border-b border-gray-100 text-xs text-gray-500 uppercase text-left"><th class="px-4 py-3">Deal</th><th class="px-4 py-3 text-right">Value</th><th class="px-4 py-3">Stage</th><th class="px-4 py-3 text-right">Probability</th><th class="px-4 py-3">Close Date</th></tr></thead>
+      <tbody>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3 font-medium">Acme Corp Renewal</td><td class="px-4 py-3 text-right font-mono font-medium">£45,000</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-nexa-100 text-nexa-700">Negotiation</span></td><td class="px-4 py-3 text-right font-mono text-green-600">85%</td><td class="px-4 py-3 text-gray-500">1 Mar</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3 font-medium">TechVault Expansion</td><td class="px-4 py-3 text-right font-mono font-medium">£32,000</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-amber-100 text-amber-700">Proposal</span></td><td class="px-4 py-3 text-right font-mono text-amber-600">60%</td><td class="px-4 py-3 text-gray-500">15 Mar</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3 font-medium">BlueStar New</td><td class="px-4 py-3 text-right font-mono font-medium">£28,000</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-blue-100 text-blue-700">Qualified</span></td><td class="px-4 py-3 text-right font-mono text-gray-500">40%</td><td class="px-4 py-3 text-gray-500">1 Apr</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30 bg-amber-50/30"><td class="px-4 py-3 font-medium">NorthStar Fleet <span class="ai-chip ml-1">Urgent</span></td><td class="px-4 py-3 text-right font-mono font-medium">£22,500</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-nexa-100 text-nexa-700">Negotiation</span></td><td class="px-4 py-3 text-right font-mono text-green-600">75%</td><td class="px-4 py-3 text-amber-600 font-medium">28 Feb</td></tr>
+        <tr class="hover:bg-nexa-50/30"><td class="px-4 py-3 font-medium">CloudNine Upgrade</td><td class="px-4 py-3 text-right font-mono font-medium">£18,000</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-amber-100 text-amber-700">Proposal</span></td><td class="px-4 py-3 text-right font-mono text-amber-600">55%</td><td class="px-4 py-3 text-gray-500">20 Mar</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- INVENTORY / WMS -->
+<div id="page-inventory" class="page-content space-y-6 hidden">
+  <div class="card p-4 border-l-4 border-nexa-500 fade-in"><p class="text-sm text-gray-700"><span class="ai-chip mr-2">AI Insight</span> 3 items at CRITICAL stock level. Widget-C hits reorder in ~6 days. £180k slow-moving inventory identified — stock turns dropped to 4.2x.</p></div>
+  <div class="flex items-center justify-between fade-in d1"><h1 class="font-heading text-2xl font-bold text-gray-900">Inventory / WMS</h1><button class="px-4 py-2 bg-nexa-600 text-white rounded-lg text-sm font-medium hover:bg-nexa-700">+ Stock Receipt</button></div>
+  <div class="grid grid-cols-3 gap-4">
+    <div class="card p-5 fade-in d1"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Total SKUs</p><span class="badge-up">+5.4%</span></div><p class="font-mono text-2xl font-bold text-gray-900">156</p><p class="text-xs text-gray-400 mt-1">vs 148 Jan</p></div>
+    <div class="card p-5 fade-in d2"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Stock Value</p><span class="badge-up">+5.5%</span></div><p class="font-mono text-2xl font-bold text-gray-900">£1,245,000</p><p class="text-xs text-gray-400 mt-1">vs £1,180,000 Jan</p></div>
+    <div class="card p-5 fade-in d3"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Low Stock Alerts</p><span class="badge-down">+167%</span></div><p class="font-mono text-2xl font-bold text-red-600">8</p><p class="text-xs text-gray-400 mt-1">vs 3 Jan</p></div>
+    <div class="card p-5 fade-in d4"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Stock Turns</p><span class="badge-down">-12.5%</span></div><p class="font-mono text-2xl font-bold text-gray-900">4.2x</p><p class="text-xs text-gray-400 mt-1">vs 4.8x Jan</p></div>
+    <div class="card p-5 fade-in d5"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Pending Receipts</p></div><p class="font-mono text-2xl font-bold text-gray-900">12</p><p class="text-xs text-gray-400 mt-1">£89,000 value</p></div>
+    <div class="card p-5 fade-in d6"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Stockout Risk</p></div><p class="font-mono text-2xl font-bold text-red-600">3 items</p><p class="text-xs text-gray-400 mt-1">Immediate attention</p></div>
+  </div>
+  <!-- Stock Items Table -->
+  <div class="card overflow-hidden fade-in d3">
+    <div class="p-4 border-b border-gray-100 flex items-center gap-2">
+      <button class="px-3 py-1.5 bg-nexa-600 text-white text-xs font-medium rounded-full">All</button>
+      <button class="px-3 py-1.5 text-gray-500 text-xs rounded-full hover:bg-gray-100">Low Stock</button>
+      <button class="px-3 py-1.5 text-gray-500 text-xs rounded-full hover:bg-gray-100">Critical</button>
+    </div>
+    <table class="w-full text-sm">
+      <thead><tr class="border-b border-gray-100 text-xs text-gray-500 uppercase text-left"><th class="px-4 py-3">SKU</th><th class="px-4 py-3">Description</th><th class="px-4 py-3 text-right">On Hand</th><th class="px-4 py-3 text-right">Reorder Lvl</th><th class="px-4 py-3">Status</th><th class="px-4 py-3 text-right">Value</th></tr></thead>
+      <tbody>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3 font-mono text-nexa-700">WA-100</td><td class="px-4 py-3">Widget-A Premium</td><td class="px-4 py-3 text-right font-mono">340</td><td class="px-4 py-3 text-right font-mono text-gray-400">200</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-700">OK</span></td><td class="px-4 py-3 text-right font-mono font-medium">£17,000</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30 bg-amber-50/30"><td class="px-4 py-3 font-mono text-nexa-700">WB-200</td><td class="px-4 py-3">Widget-B Standard</td><td class="px-4 py-3 text-right font-mono">180</td><td class="px-4 py-3 text-right font-mono text-gray-400">150</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-amber-100 text-amber-700">LOW</span></td><td class="px-4 py-3 text-right font-mono font-medium">£5,400</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30 bg-red-50/30"><td class="px-4 py-3 font-mono text-nexa-700">WC-300</td><td class="px-4 py-3">Widget-C Deluxe <span class="ai-chip ml-1">~6 days</span></td><td class="px-4 py-3 text-right font-mono text-red-600 font-bold">45</td><td class="px-4 py-3 text-right font-mono text-gray-400">100</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-red-100 text-red-700">CRITICAL</span></td><td class="px-4 py-3 text-right font-mono font-medium">£4,500</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3 font-mono text-nexa-700">GK-410</td><td class="px-4 py-3">Gasket Kit</td><td class="px-4 py-3 text-right font-mono">520</td><td class="px-4 py-3 text-right font-mono text-gray-400">200</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-700">OK</span></td><td class="px-4 py-3 text-right font-mono font-medium">£7,800</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30 bg-red-50/30"><td class="px-4 py-3 font-mono text-nexa-700">BT-500</td><td class="px-4 py-3">Bolt Set M8</td><td class="px-4 py-3 text-right font-mono text-red-600 font-bold">12</td><td class="px-4 py-3 text-right font-mono text-gray-400">50</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-red-100 text-red-700">CRITICAL</span></td><td class="px-4 py-3 text-right font-mono font-medium">£240</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3 font-mono text-nexa-700">CP-600</td><td class="px-4 py-3">Circuit Panel</td><td class="px-4 py-3 text-right font-mono">890</td><td class="px-4 py-3 text-right font-mono text-gray-400">300</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-700">OK</span></td><td class="px-4 py-3 text-right font-mono font-medium">£44,500</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30 bg-amber-50/30"><td class="px-4 py-3 font-mono text-nexa-700">FL-700</td><td class="px-4 py-3">Filter Large</td><td class="px-4 py-3 text-right font-mono">92</td><td class="px-4 py-3 text-right font-mono text-gray-400">80</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-amber-100 text-amber-700">LOW</span></td><td class="px-4 py-3 text-right font-mono font-medium">£2,760</td></tr>
+        <tr class="hover:bg-nexa-50/30"><td class="px-4 py-3 font-mono text-nexa-700">HS-800</td><td class="px-4 py-3">Heat Sink Pro</td><td class="px-4 py-3 text-right font-mono">310</td><td class="px-4 py-3 text-right font-mono text-gray-400">150</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-700">OK</span></td><td class="px-4 py-3 text-right font-mono font-medium">£15,500</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <!-- Stock Value by Category Chart -->
+  <div class="card p-5 fade-in d4"><h3 class="font-heading font-semibold text-gray-800 mb-4">Stock Value by Category</h3><canvas id="e-inv-cat" height="180"></canvas></div>
+</div>
+
+<!-- GENERAL LEDGER -->
+<div id="page-gl" class="page-content space-y-6 hidden">
+  <div class="card p-4 border-l-4 border-nexa-500 fade-in"><p class="text-sm text-gray-700"><span class="ai-chip mr-2">AI Insight</span> £3,200 in suspense from 2 unmatched bank transactions. 14 unreconciled items up 75%. AI auto-posted 47 routine entries saving ~8 hours.</p></div>
+  <div class="flex items-center justify-between fade-in d1"><h1 class="font-heading text-2xl font-bold text-gray-900">General Ledger</h1><button class="px-4 py-2 bg-nexa-600 text-white rounded-lg text-sm font-medium hover:bg-nexa-700">+ Journal Entry</button></div>
+  <div class="grid grid-cols-3 gap-4">
+    <div class="card p-5 fade-in d1"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Total Accounts</p></div><p class="font-mono text-2xl font-bold text-gray-900">89</p><p class="text-xs text-gray-400 mt-1">Chart of accounts</p></div>
+    <div class="card p-5 fade-in d2"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Journal Entries (MTD)</p><span class="badge-up">+18.2%</span></div><p class="font-mono text-2xl font-bold text-gray-900">234</p><p class="text-xs text-gray-400 mt-1">vs 198 Jan</p></div>
+    <div class="card p-5 fade-in d3"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Unreconciled</p><span class="badge-down">+75%</span></div><p class="font-mono text-2xl font-bold text-amber-600">14</p><p class="text-xs text-gray-400 mt-1">vs 8 Jan</p></div>
+    <div class="card p-5 fade-in d4"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Suspense</p><span class="badge-down">vs £0</span></div><p class="font-mono text-2xl font-bold text-red-600">£3,200</p><p class="text-xs text-gray-400 mt-1">2 unmatched txns</p></div>
+    <div class="card p-5 fade-in d5"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Period</p></div><p class="font-mono text-2xl font-bold text-nexa-700">Feb 2026</p><p class="text-xs text-green-600 mt-1 font-medium">Open</p></div>
+    <div class="card p-5 fade-in d6"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Last Closed</p></div><p class="font-mono text-2xl font-bold text-gray-900">Jan 2026</p><p class="text-xs text-gray-400 mt-1">Closed 5 Feb</p></div>
+  </div>
+  <!-- Trial Balance -->
+  <div class="card overflow-hidden fade-in d3">
+    <div class="p-4 border-b border-gray-100"><h3 class="font-heading font-semibold text-gray-800">Trial Balance Summary</h3></div>
+    <table class="w-full text-sm">
+      <thead><tr class="border-b border-gray-100 text-xs text-gray-500 uppercase text-left"><th class="px-5 py-3">Category</th><th class="px-5 py-3 text-right">Debit</th><th class="px-5 py-3 text-right">Credit</th><th class="px-5 py-3">Notes</th></tr></thead>
+      <tbody>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-5 py-3 font-medium">Assets</td><td class="px-5 py-3 text-right font-mono font-medium">£1,456,000</td><td class="px-5 py-3 text-right font-mono text-gray-300">—</td><td class="px-5 py-3"></td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-5 py-3 font-medium">Liabilities</td><td class="px-5 py-3 text-right font-mono text-gray-300">—</td><td class="px-5 py-3 text-right font-mono font-medium">£892,000</td><td class="px-5 py-3"></td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-5 py-3 font-medium">Equity</td><td class="px-5 py-3 text-right font-mono text-gray-300">—</td><td class="px-5 py-3 text-right font-mono font-medium">£320,000</td><td class="px-5 py-3"></td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-5 py-3 font-medium">Revenue</td><td class="px-5 py-3 text-right font-mono text-gray-300">—</td><td class="px-5 py-3 text-right font-mono font-medium">£347,200</td><td class="px-5 py-3"></td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30 bg-amber-50/30"><td class="px-5 py-3 font-medium">COGS</td><td class="px-5 py-3 text-right font-mono font-medium">£228,800</td><td class="px-5 py-3 text-right font-mono text-gray-300">—</td><td class="px-5 py-3"><span class="text-xs text-amber-600 font-medium">&#9888;&#65039; Growing faster</span></td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-5 py-3 font-medium">OpEx</td><td class="px-5 py-3 text-right font-mono font-medium">£78,200</td><td class="px-5 py-3 text-right font-mono text-gray-300">—</td><td class="px-5 py-3"></td></tr>
+        <tr class="hover:bg-nexa-50/30 bg-red-50/30"><td class="px-5 py-3 font-medium">Suspense</td><td class="px-5 py-3 text-right font-mono font-medium text-red-600">£3,200</td><td class="px-5 py-3 text-right font-mono text-gray-300">—</td><td class="px-5 py-3"><span class="text-xs text-red-600 font-medium">&#9888;&#65039; Clear</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <!-- Recent Journals -->
+  <div class="card overflow-hidden fade-in d4">
+    <div class="p-4 border-b border-gray-100"><h3 class="font-heading font-semibold text-gray-800">Recent Journal Entries</h3></div>
+    <table class="w-full text-sm">
+      <thead><tr class="border-b border-gray-100 text-xs text-gray-500 uppercase text-left"><th class="px-4 py-3">Entry #</th><th class="px-4 py-3">Date</th><th class="px-4 py-3">Description</th><th class="px-4 py-3 text-right">Amount</th><th class="px-4 py-3">Posted By</th></tr></thead>
+      <tbody>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3 font-mono text-nexa-700 font-medium">JE-0415</td><td class="px-4 py-3 text-gray-500">16 Feb</td><td class="px-4 py-3">Bank Recon</td><td class="px-4 py-3 text-right font-mono font-medium">£22,100</td><td class="px-4 py-3"><span class="ai-chip">AI Auto</span></td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3 font-mono text-nexa-700 font-medium">JE-0414</td><td class="px-4 py-3 text-gray-500">15 Feb</td><td class="px-4 py-3">Depreciation</td><td class="px-4 py-3 text-right font-mono font-medium">£4,200</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-gray-100 text-gray-600">System</span></td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3 font-mono text-nexa-700 font-medium">JE-0413</td><td class="px-4 py-3 text-gray-500">14 Feb</td><td class="px-4 py-3">Accrued Expenses</td><td class="px-4 py-3 text-right font-mono font-medium">£12,800</td><td class="px-4 py-3 text-gray-600">David M</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3 font-mono text-nexa-700 font-medium">JE-0412</td><td class="px-4 py-3 text-gray-500">13 Feb</td><td class="px-4 py-3">Inventory Adj</td><td class="px-4 py-3 text-right font-mono font-medium">£3,400</td><td class="px-4 py-3 text-gray-600">David M</td></tr>
+        <tr class="hover:bg-nexa-50/30"><td class="px-4 py-3 font-mono text-nexa-700 font-medium">JE-0411</td><td class="px-4 py-3 text-gray-500">12 Feb</td><td class="px-4 py-3">Revenue Recog</td><td class="px-4 py-3 text-right font-mono font-medium">£28,500</td><td class="px-4 py-3"><span class="ai-chip">AI Auto</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- SALES ORDERS -->
+<div id="page-sales" class="page-content space-y-6 hidden">
+  <div class="card p-4 border-l-4 border-nexa-500 fade-in"><p class="text-sm text-gray-700"><span class="ai-chip mr-2">AI Insight</span> 4 backorders from Widget-C stockout. Fulfilment dropped to 91%. SO-0089 due tomorrow — all items in stock, approve for picking?</p></div>
+  <div class="flex items-center justify-between fade-in d1"><h1 class="font-heading text-2xl font-bold text-gray-900">Sales Orders</h1><button class="px-4 py-2 bg-nexa-600 text-white rounded-lg text-sm font-medium hover:bg-nexa-700">+ New Order</button></div>
+  <div class="grid grid-cols-3 gap-4">
+    <div class="card p-5 fade-in d1"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Open Orders</p><span class="badge-up">+28.6%</span></div><p class="font-mono text-2xl font-bold text-gray-900">18</p><p class="text-xs text-gray-400 mt-1">vs 14 Jan</p></div>
+    <div class="card p-5 fade-in d2"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Order Value (MTD)</p><span class="badge-up">+14.9%</span></div><p class="font-mono text-2xl font-bold text-gray-900">£285,000</p><p class="text-xs text-gray-400 mt-1">vs £248,000 Jan</p></div>
+    <div class="card p-5 fade-in d3"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Fulfilment Rate</p><span class="badge-down">-5pp</span></div><p class="font-mono text-2xl font-bold text-amber-600">91%</p><p class="text-xs text-gray-400 mt-1">vs 96% Jan</p></div>
+    <div class="card p-5 fade-in d4"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Backorders</p><span class="badge-down">+300%</span></div><p class="font-mono text-2xl font-bold text-red-600">4</p><p class="text-xs text-gray-400 mt-1">vs 1 Jan</p></div>
+    <div class="card p-5 fade-in d5"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">Avg Processing</p><span class="badge-down">+16.7%</span></div><p class="font-mono text-2xl font-bold text-gray-900">2.1 days</p><p class="text-xs text-gray-400 mt-1">vs 1.8 days Jan</p></div>
+    <div class="card p-5 fade-in d6"><div class="flex items-center justify-between mb-2"><p class="text-xs font-medium text-gray-500 uppercase">On-Time Delivery</p><span class="badge-down">-7pp</span></div><p class="font-mono text-2xl font-bold text-amber-600">87%</p><p class="text-xs text-gray-400 mt-1">vs 94% Jan</p></div>
+  </div>
+  <!-- Sales Orders Table -->
+  <div class="card overflow-hidden fade-in d3">
+    <div class="p-4 border-b border-gray-100 flex items-center gap-2">
+      <button class="px-3 py-1.5 bg-nexa-600 text-white text-xs font-medium rounded-full">All</button>
+      <button class="px-3 py-1.5 text-gray-500 text-xs rounded-full hover:bg-gray-100">Processing</button>
+      <button class="px-3 py-1.5 text-gray-500 text-xs rounded-full hover:bg-gray-100">Backorder</button>
+      <button class="px-3 py-1.5 text-gray-500 text-xs rounded-full hover:bg-gray-100">Shipped</button>
+    </div>
+    <table class="w-full text-sm">
+      <thead><tr class="border-b border-gray-100 text-xs text-gray-500 uppercase text-left"><th class="px-4 py-3">Order #</th><th class="px-4 py-3">Customer</th><th class="px-4 py-3 text-right">Value</th><th class="px-4 py-3">Status</th><th class="px-4 py-3 text-right">Lines</th><th class="px-4 py-3">Delivery</th></tr></thead>
+      <tbody>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30 bg-nexa-50/20"><td class="px-4 py-3 font-mono text-nexa-700 font-medium">SO-0089 <span class="ai-chip ml-1">Due tmrw</span></td><td class="px-4 py-3">Acme Corp</td><td class="px-4 py-3 text-right font-mono font-medium">£12,400</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-nexa-100 text-nexa-700">Processing</span></td><td class="px-4 py-3 text-right font-mono">3</td><td class="px-4 py-3 text-amber-600 font-medium">19 Feb</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3 font-mono text-nexa-700 font-medium">SO-0088</td><td class="px-4 py-3">TechVault</td><td class="px-4 py-3 text-right font-mono font-medium">£8,900</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-amber-100 text-amber-700">Packed</span></td><td class="px-4 py-3 text-right font-mono">2</td><td class="px-4 py-3 text-gray-500">18 Feb</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3 font-mono text-nexa-700 font-medium">SO-0087</td><td class="px-4 py-3">FreshFields</td><td class="px-4 py-3 text-right font-mono font-medium">£15,600</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-700">Shipped</span></td><td class="px-4 py-3 text-right font-mono">4</td><td class="px-4 py-3 text-green-600">Delivered</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30 bg-red-50/30"><td class="px-4 py-3 font-mono text-nexa-700 font-medium">SO-0086</td><td class="px-4 py-3">BlueStar</td><td class="px-4 py-3 text-right font-mono font-medium">£6,200</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-red-100 text-red-700">Backorder</span></td><td class="px-4 py-3 text-right font-mono">1</td><td class="px-4 py-3 text-red-500">TBC</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3 font-mono text-nexa-700 font-medium">SO-0085</td><td class="px-4 py-3">NorthStar</td><td class="px-4 py-3 text-right font-mono font-medium">£22,000</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-nexa-100 text-nexa-700">Processing</span></td><td class="px-4 py-3 text-right font-mono">5</td><td class="px-4 py-3 text-gray-500">21 Feb</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3 font-mono text-nexa-700 font-medium">SO-0084</td><td class="px-4 py-3">CloudNine</td><td class="px-4 py-3 text-right font-mono font-medium">£4,800</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-amber-100 text-amber-700">Packed</span></td><td class="px-4 py-3 text-right font-mono">1</td><td class="px-4 py-3 text-gray-500">18 Feb</td></tr>
+        <tr class="border-b border-gray-50 hover:bg-nexa-50/30"><td class="px-4 py-3 font-mono text-nexa-700 font-medium">SO-0083</td><td class="px-4 py-3">UrbanCraft</td><td class="px-4 py-3 text-right font-mono font-medium">£9,100</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-700">Shipped</span></td><td class="px-4 py-3 text-right font-mono">3</td><td class="px-4 py-3 text-green-600">Delivered</td></tr>
+        <tr class="hover:bg-nexa-50/30 bg-red-50/30"><td class="px-4 py-3 font-mono text-nexa-700 font-medium">SO-0082</td><td class="px-4 py-3">Meridian</td><td class="px-4 py-3 text-right font-mono font-medium">£7,500</td><td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full font-medium bg-red-100 text-red-700">Backorder</span></td><td class="px-4 py-3 text-right font-mono">2</td><td class="px-4 py-3 text-red-500">TBC</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <!-- Order Status Doughnut -->
+  <div class="grid grid-cols-2 gap-4">
+    <div class="card p-5 fade-in d4"><h3 class="font-heading font-semibold text-gray-800 mb-4">Order Status Breakdown</h3><canvas id="e-sales-doughnut" height="220"></canvas></div>
+    <div class="card p-5 fade-in d5">
+      <h3 class="font-heading font-semibold text-gray-800 mb-4">Quick Actions</h3>
+      <div class="space-y-3">
+        <button class="w-full text-left p-3 bg-nexa-50 rounded-lg hover:bg-nexa-100 transition"><p class="text-sm font-medium text-nexa-800">Approve SO-0089 for Picking</p><p class="text-xs text-nexa-600">All 3 items in stock — due tomorrow</p></button>
+        <button class="w-full text-left p-3 bg-amber-50 rounded-lg hover:bg-amber-100 transition"><p class="text-sm font-medium text-amber-800">Review 4 Backorders</p><p class="text-xs text-amber-600">Widget-C stockout affecting BlueStar, Meridian</p></button>
+        <button class="w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition"><p class="text-sm font-medium text-gray-800">Generate Picking List</p><p class="text-xs text-gray-500">4 packed orders ready for dispatch</p></button>
+        <button class="w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition"><p class="text-sm font-medium text-gray-800">Update Delivery ETAs</p><p class="text-xs text-gray-500">2 backorders need revised dates</p></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<!-- SLIDE-IN PANEL -->
+<div class="backdrop" id="backdrop" onclick="closeSlidePanel()"></div>
+<div class="slide-panel" id="slide-panel">
+  <div class="p-5 border-b border-gray-100 flex items-center justify-between"><h3 class="font-heading font-semibold text-gray-900" id="panel-title">AI Analysis</h3><button onclick="closeSlidePanel()" class="text-gray-400 hover:text-gray-600 text-lg">✕</button></div>
+  <div class="p-5 space-y-4" id="panel-body"></div>
+</div>
+
+<!-- COMMAND BAR OVERLAY -->
+<div id="cmd-overlay" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-black/20 backdrop-blur-sm" onclick="closeCommandBar()"></div>
+  <div class="absolute top-20 left-1/2 -translate-x-1/2 w-full max-w-xl">
+    <div class="cmd-bar"><div class="bg-white rounded-[10px] overflow-hidden shadow-2xl">
+      <div class="flex items-center px-4 py-3 border-b border-gray-100"><svg class="w-5 h-5 text-nexa-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg><input type="text" id="cmd-input" placeholder="Ask AI or search..." class="flex-1 text-sm outline-none" oninput="filterCommands()"><kbd class="text-xs bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded ml-2">ESC</kbd></div>
+      <div class="py-2 max-h-64 overflow-y-auto" id="cmd-results">
+        <p class="px-4 py-1 text-xs text-gray-400 uppercase">Pages</p>
+        <button class="cmd-item w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-nexa-50 flex items-center gap-3" onclick="showPage('dashboard');closeCommandBar()">📊 Dashboard</button>
+        <button class="cmd-item w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-nexa-50 flex items-center gap-3" onclick="showPage('invoices');closeCommandBar()">📄 Invoices</button>
+        <button class="cmd-item w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-nexa-50 flex items-center gap-3" onclick="showPage('newinvoice');closeCommandBar()">➕ New Invoice</button>
+        <button class="cmd-item w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-nexa-50 flex items-center gap-3" onclick="showPage('aicreate');closeCommandBar()">🤖 AI Create Invoice</button>
+        <button class="cmd-item w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-nexa-50 flex items-center gap-3" onclick="showPage('pnl');closeCommandBar()">📈 P&L Report</button>
+        <button class="cmd-item w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-nexa-50 flex items-center gap-3" onclick="showPage('cashflow');closeCommandBar()">💰 Cash Flow</button>
+        <button class="cmd-item w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-nexa-50 flex items-center gap-3" onclick="showPage('chat');closeCommandBar()">💬 AI Chat</button>
+        <button class="cmd-item w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-nexa-50 flex items-center gap-3" onclick="showPage('crm');closeCommandBar()">🤝 CRM Pipeline</button>
+        <button class="cmd-item w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-nexa-50 flex items-center gap-3" onclick="showPage('inventory');closeCommandBar()">📦 Inventory / WMS</button>
+        <button class="cmd-item w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-nexa-50 flex items-center gap-3" onclick="showPage('gl');closeCommandBar()">📒 General Ledger</button>
+        <button class="cmd-item w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-nexa-50 flex items-center gap-3" onclick="showPage('sales');closeCommandBar()">🛒 Sales Orders</button>
+        <p class="px-4 py-1 text-xs text-gray-400 uppercase mt-2">AI Commands</p>
+        <button class="cmd-item w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-nexa-50">✨ "Create invoice for..." — start AI invoice creation</button>
+        <button class="cmd-item w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-nexa-50">✨ "Show cash flow" — view forecast</button>
+        <button class="cmd-item w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-nexa-50">✨ "Chase overdue invoices" — draft reminders</button>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+<script>
+function showPage(p){
+  document.querySelectorAll('.page-content').forEach(e=>e.classList.add('hidden'));
+  document.getElementById('page-'+p).classList.remove('hidden');
+  document.querySelectorAll('.nav-item').forEach(n=>{n.classList.remove('active');n.classList.add('text-gray-600')});
+  const b=document.querySelector(`[data-page="${p}"]`);if(b){b.classList.add('active');b.classList.remove('text-gray-600')}
+  document.querySelectorAll('#page-'+p+' .fade-in,#page-'+p+' .step-in').forEach(e=>{e.style.animation='none';e.offsetHeight;e.style.animation=''});
+  if(p==='dashboard')initDash();if(p==='pnl')initPnl();if(p==='cashflow')initCf();if(p==='inventory')initInv();if(p==='sales')initSales();
+}
+let dI=false,pI=false,cI=false,invI=false,salesI=false;
+function initDash(){if(dI)return;dI=true;
+  new Chart(document.getElementById('e-dash-rev'),{type:'bar',data:{labels:['Sep','Oct','Nov','Dec','Jan','Feb'],datasets:[{label:'Revenue',data:[285000,298000,305000,320000,312800,347200],backgroundColor:'#7c3aed',borderRadius:6},{label:'Payments',data:[260000,275000,290000,310000,298000,335000],backgroundColor:'#c4b5fd',borderRadius:6}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>'£'+v/1000+'k'}},x:{grid:{display:false}}}}});
+  new Chart(document.getElementById('e-dash-cf'),{type:'line',data:{labels:['W1','W2','W3','W4','W5','W6','W7','W8'],datasets:[{label:'Balance',data:[94900,42700,61700,57700,54700,41200,62200,68200],borderColor:'#7c3aed',backgroundColor:'rgba(124,58,237,.1)',fill:true,tension:.3,pointRadius:4},{label:'Threshold',data:[40000,40000,40000,40000,40000,40000,40000,40000],borderColor:'#ef4444',borderDash:[5,5],pointRadius:0}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>'£'+v/1000+'k'}},x:{grid:{display:false}}}}});
+}
+function initPnl(){if(pI)return;pI=true;
+  new Chart(document.getElementById('e-pnl'),{type:'bar',data:{labels:['Revenue','COGS','Gross Profit','OpEx','Net Profit'],datasets:[{label:'2026',data:[347200,228800,118400,78200,40200],backgroundColor:'#7c3aed',borderRadius:6},{label:'2025',data:[298400,189500,108900,72100,36800],backgroundColor:'#ddd6fe',borderRadius:6}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>'£'+v/1000+'k'}},x:{grid:{display:false}}}}});
+}
+function initCf(){if(cI)return;cI=true;
+  new Chart(document.getElementById('e-cf'),{type:'line',data:{labels:['17 Feb','24 Feb','3 Mar','10 Mar','17 Mar','24 Mar','31 Mar','7 Apr'],datasets:[{label:'Balance',data:[94900,42700,61700,57700,54700,41200,62200,68200],borderColor:'#7c3aed',backgroundColor:'rgba(124,58,237,.1)',fill:true,tension:.3,pointRadius:5},{label:'Threshold',data:[40000,40000,40000,40000,40000,40000,40000,40000],borderColor:'#ef4444',borderDash:[5,5],pointRadius:0}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>'£'+v/1000+'k'}},x:{grid:{display:false}}}}});
+}
+function initInv(){if(invI)return;invI=true;
+  new Chart(document.getElementById('e-inv-cat'),{type:'bar',data:{labels:['Raw Materials','Components','Finished Goods','Packaging'],datasets:[{label:'Stock Value',data:[420000,380000,285000,160000],backgroundColor:['#7c3aed','#a78bfa','#c4b5fd','#ddd6fe'],borderRadius:6}]},options:{responsive:true,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{callback:v=>'£'+v/1000+'k'}},y:{grid:{display:false}}}}});
+}
+function initSales(){if(salesI)return;salesI=true;
+  new Chart(document.getElementById('e-sales-doughnut'),{type:'doughnut',data:{labels:['Processing','Packed','Shipped','Delivered','Backorder'],datasets:[{data:[6,4,5,2,4],backgroundColor:['#7c3aed','#f59e0b','#10b981','#6ee7b7','#ef4444'],borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:16}}}}});
+}
+function openSlidePanel(customer,inv,amt,status,days,prob,rec){
+  document.getElementById('panel-title').textContent='AI Analysis: '+inv;
+  document.getElementById('panel-body').innerHTML=`<div class="bg-gray-50 rounded-lg p-4"><p class="font-medium">${customer}</p><p class="text-xs text-gray-500">${inv} • ${amt} • <span class="${status==='OVERDUE'?'text-red-600':'text-gray-600'} font-medium">${status}</span> • ${days}</p></div><div><p class="text-xs text-gray-500 uppercase mb-2">Payment Probability</p><div class="flex items-center gap-3"><div class="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-gradient-to-r from-nexa-500 to-nexa-600 rounded-full" style="width:${prob}"></div></div><span class="font-mono text-sm font-medium text-nexa-700">${prob}</span></div></div><div><p class="text-xs text-gray-500 uppercase mb-2">Customer History</p><p class="text-sm text-gray-600">Avg payment: 34 days • Last: 15 Jan 2026 • Reliability: Medium</p></div><div><p class="text-xs text-gray-500 uppercase mb-2">Recommendation</p><div class="bg-nexa-50 rounded-lg p-3 text-sm text-nexa-800">${rec}</div></div><div class="grid grid-cols-2 gap-2"><button class="px-3 py-2 bg-nexa-600 text-white rounded-lg text-xs font-medium">Send Reminder</button><button class="px-3 py-2 bg-gray-100 rounded-lg text-xs font-medium">Schedule Call</button><button class="px-3 py-2 bg-gray-100 rounded-lg text-xs font-medium">Escalate</button><button class="px-3 py-2 text-gray-500 rounded-lg text-xs">Dismiss</button></div>`;
+  document.getElementById('backdrop').classList.add('open');
+  document.getElementById('slide-panel').classList.add('open');
+}
+function closeSlidePanel(){document.getElementById('backdrop').classList.remove('open');document.getElementById('slide-panel').classList.remove('open')}
+function openCommandBar(){document.getElementById('cmd-overlay').classList.remove('hidden');setTimeout(()=>document.getElementById('cmd-input').focus(),100)}
+function closeCommandBar(){document.getElementById('cmd-overlay').classList.add('hidden');document.getElementById('cmd-input').value=''}
+function filterCommands(){const q=document.getElementById('cmd-input').value.toLowerCase();document.querySelectorAll('.cmd-item').forEach(i=>{i.style.display=i.textContent.toLowerCase().includes(q)?'':'none'})}
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openCommandBar()}if(e.key==='Escape')closeCommandBar()});
+window.addEventListener('load',()=>setTimeout(initDash,100));
+</script>
+</body>
+</html>

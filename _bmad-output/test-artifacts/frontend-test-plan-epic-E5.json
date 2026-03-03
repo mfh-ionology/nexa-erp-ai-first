@@ -1,0 +1,1493 @@
+{
+  "epic_id": "E5",
+  "epic_title": "AI Orchestration",
+  "generated_at": "2026-02-23T14:00:00.000Z",
+  "frontend_url": "http://localhost:5173",
+  "api_base_url": "http://localhost:3000",
+  "total_journeys": 26,
+  "total_steps": 128,
+  "prerequisites": {
+    "note": "The web app (apps/web) is a stub — no React runtime exists until E6 (Web Frontend Shell). This test plan specifies E2E tests to execute once the frontend is built. E5 is AI Orchestration infrastructure: AI Service Layer (E5.1), Chat Session Management (E5.2), Action Framework (E5.3), AI Predictions (E5.4), and Daily Briefing & Smart Suggestions (E5.5). Tests verify these AI capabilities through the Co-Pilot Dock, prediction pages, and briefing dashboard. Tests assume a running API at :3000 with Socket.io on /ai/chat, a Vite dev server at :5173, a seeded database with AI models/agents/prompts, and Redis for context cache and briefing cache.",
+    "depends_on_epics": ["E2", "E2b", "E3", "E3b", "E4", "E6"],
+    "seeded_users": {
+      "finance_manager": {
+        "email": "finance@nexa-test.co.uk",
+        "password": "Finance123!",
+        "role": "MANAGER",
+        "locale": "en-GB",
+        "description": "Finance Manager — has access to ai.chat, ai.predictions, ai.briefing, ai.suggestions. Used for most E5 journeys."
+      },
+      "business_owner": {
+        "email": "owner@nexa-test.co.uk",
+        "password": "Owner123!",
+        "role": "SUPER_ADMIN",
+        "locale": "en-GB",
+        "description": "Business Owner — SUPER_ADMIN role. Used for owner-specific briefing content tests."
+      },
+      "staff_user": {
+        "email": "staff@nexa-test.co.uk",
+        "password": "Staff123!",
+        "role": "STAFF",
+        "locale": "en-GB",
+        "description": "Staff user — has access to ai.chat and ai.suggestions but NOT ai.predictions. Used for permission boundary tests."
+      },
+      "viewer_user": {
+        "email": "viewer@nexa-test.co.uk",
+        "password": "View123!",
+        "role": "VIEWER",
+        "locale": "en-GB",
+        "description": "Viewer user — has access to ai.briefing (VIEWER min) but NOT ai.chat (STAFF min) or ai.predictions (MANAGER min). Used for RBAC tests."
+      }
+    },
+    "seeded_data": {
+      "company": "Nexa Test Company",
+      "company_base_currency": "GBP",
+      "ai_models": ["Claude Opus 4.6 (reasoning)", "Claude Sonnet 4.5 (standard/default)", "Claude Haiku 4.5 (cheap/fast)"],
+      "ai_agents": ["chat-router (default intent recognition agent)"],
+      "ai_prompts": ["chat-router system prompt", "cash_flow_forecast", "anomaly_detect", "duplicate_detect", "explain_decision"],
+      "ai_resources": ["ai.chat (STAFF+)", "ai.predictions (MANAGER+)", "ai.briefing (VIEWER+)", "ai.suggestions (STAFF+)"]
+    },
+    "infrastructure": {
+      "websocket": "Socket.io at /api/v1/ai/chat namespace, authenticated via JWT in handshake.auth.token",
+      "redis": "Required for context cache ({tenantId}:context:{userId}) and briefing cache ({tenantId}:briefing:{userId}:{companyId})",
+      "bullmq": "Briefing scheduler queue: briefing-generation, default cron: 0 6 * * *"
+    }
+  },
+  "acceptance_criteria_coverage": {
+    "E5.1-AC1": ["j01", "j03", "j10"],
+    "E5.1-AC2": ["j03"],
+    "E5.1-AC3": ["j03", "j08"],
+    "E5.1-AC4": ["j03", "j04"],
+    "E5.1-AC5": ["j20", "j21"],
+    "E5.1-AC6": "Usage recording is internal to AI Gateway — not directly visible in frontend E2E. Verified via backend tests and platform admin dashboard.",
+    "E5.2-AC1": ["j02", "j03"],
+    "E5.2-AC2": ["j03", "j04"],
+    "E5.2-AC3": ["j04"],
+    "E5.2-AC4": ["j05"],
+    "E5.2-AC5": ["j06"],
+    "E5.2-AC6": ["j19"],
+    "E5.3-AC1": ["j08"],
+    "E5.3-AC2": ["j09"],
+    "E5.3-AC3": ["j10"],
+    "E5.3-AC4": ["j11"],
+    "E5.3-AC5": "Audit trail with isAiAction metadata is verified via backend tests and audit log inspection (j22 checks audit log UI).",
+    "E5.4-AC1": ["j12"],
+    "E5.4-AC2": ["j13"],
+    "E5.4-AC3": ["j14"],
+    "E5.4-AC4": ["j15"],
+    "E5.4-AC5": ["j12", "j14", "j15"],
+    "E5.5-AC1": ["j16"],
+    "E5.5-AC2": ["j17"],
+    "E5.5-AC3": ["j16", "j17"],
+    "E5.5-AC4": ["j18"],
+    "E5.5-AC5": ["j16"],
+    "E5.5-AC6": ["j20", "j21"]
+  },
+  "journeys": [
+    {
+      "id": "j01-verify-ai-shell-elements",
+      "name": "Verify AI UI Elements Present in App Shell",
+      "description": "After login, verify that the app shell contains all AI-related UI elements: the unified search/AI input in the header bar (Cmd+K), the chat toggle button with badge indicator, and that the Co-Pilot drawer is initially closed.",
+      "priority": "critical",
+      "related_stories": ["E5-1", "E5-2"],
+      "acceptance_criteria": ["E5.1-AC1", "E5.2-AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "finance@nexa-test.co.uk",
+            "password": "Finance123!"
+          },
+          "expected_result": "Form filled with credentials",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Redirected to dashboard after successful login",
+          "screenshot": true,
+          "visual_check": "Dashboard page loaded. App shell visible with sidebar navigation and top header bar. Header contains a unified search/AI input bar with rotating placeholder examples (e.g., 'Invoice Acme for March widgets', 'Show overdue invoices'). A chat toggle button is visible in the header area, no badge indicator currently shown. Co-Pilot drawer is NOT visible (closed by default)."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Unified search/AI input in header bar",
+          "input_data": {},
+          "expected_result": "Search input field exists with placeholder text that rotates between entity search examples and AI command examples",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Chat toggle button (Co-Pilot button)",
+          "input_data": {},
+          "expected_result": "Chat/Co-Pilot toggle button exists in header. No badge dot visible (no pending AI suggestions).",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "Co-Pilot drawer panel",
+          "input_data": {},
+          "expected_result": "Co-Pilot drawer is NOT visible — it is closed by default on first login",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j02-open-copilot-drawer",
+      "name": "Open Co-Pilot Drawer and Verify Layout",
+      "description": "Click the chat toggle button to open the Co-Pilot drawer. Verify it slides in from the right with correct width (380px), contains the header ('Co-Pilot' title + close button), chat selector, empty conversation area, quick prompt chips, and input area.",
+      "priority": "critical",
+      "related_stories": ["E5-2"],
+      "acceptance_criteria": ["E5.2-AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "click",
+          "target": "Chat toggle button (Co-Pilot button)",
+          "input_data": {},
+          "expected_result": "Co-Pilot drawer slides in from the right side of the screen",
+          "screenshot": true,
+          "visual_check": "Right-side drawer visible at 380px width. Header row shows 'Co-Pilot' title on the left and a close button (X) on the right. Below the header is a chat selector area with a 'Recent Chats' dropdown (empty or showing no conversations) and a '+ New Chat' button. The main conversation area is empty or shows a welcome message. At the bottom, quick prompt chips are visible (role-based suggestions for Finance Manager). Below chips is an input area with placeholder 'Ask Nexa anything...' and a submit arrow button."
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Co-Pilot drawer header",
+          "input_data": {},
+          "expected_result": "'Co-Pilot' title text visible in drawer header, close button (X) visible",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "'+ New Chat' button",
+          "input_data": {},
+          "expected_result": "New Chat button is visible and clickable in the drawer header area",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Quick prompt chips",
+          "input_data": {},
+          "expected_result": "Quick prompt suggestion chips are visible below the conversation area. For a Finance Manager role, chips include suggestions like 'Cash flow forecast', 'Bank reconciliation', 'Month-end status'.",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Chat input field",
+          "input_data": {},
+          "expected_result": "Text input area with placeholder 'Ask Nexa anything...' is visible at the bottom of the drawer. Submit button (arrow icon) is visible.",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Close button (X) on Co-Pilot drawer",
+          "input_data": {},
+          "expected_result": "Drawer slides out to the right and closes. Main content area returns to full width.",
+          "screenshot": true,
+          "visual_check": "Co-Pilot drawer is no longer visible. Dashboard content area has returned to full width. Chat toggle button is still visible in the header."
+        }
+      ]
+    },
+    {
+      "id": "j03-send-first-chat-message",
+      "name": "Send First Chat Message and Receive Streaming Response",
+      "description": "Open the Co-Pilot drawer, type a message, send it, and verify the AI response streams in token-by-token with a typing indicator. This tests the full WebSocket pipeline: JWT auth, message send, orchestrator routing through AI Gateway, streaming response, and message persistence.",
+      "priority": "critical",
+      "related_stories": ["E5-1", "E5-2"],
+      "acceptance_criteria": ["E5.1-AC1", "E5.1-AC2", "E5.1-AC3", "E5.1-AC4", "E5.2-AC1", "E5.2-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "click",
+          "target": "Chat toggle button",
+          "input_data": {},
+          "expected_result": "Co-Pilot drawer opens",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Chat input field",
+          "input_data": {
+            "message": "What is the current status of my company?"
+          },
+          "expected_result": "Message text appears in the chat input field",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Send button (arrow) or press Enter",
+          "input_data": {},
+          "expected_result": "User message appears as a chat bubble on the right side (user message styling). A typing indicator or loading animation appears below it, indicating the AI is processing.",
+          "screenshot": true,
+          "visual_check": "User message bubble visible on the right side of the conversation area with purple/blue background. Below it, a typing indicator (dots animation or shimmer) is visible showing the AI is generating a response. The chat input field is cleared and ready for the next message."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "AI streaming response",
+          "input_data": {},
+          "expected_result": "AI response text begins appearing word-by-word on the left side of the conversation area (AI message styling with grey background). Text grows incrementally as tokens stream in.",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_text",
+          "target": "Completed AI response",
+          "input_data": {},
+          "expected_result": "After streaming completes, the typing indicator disappears. A complete AI response message is visible on the left side. The response is contextual — it references the company or provides relevant information.",
+          "screenshot": true,
+          "visual_check": "Full conversation visible: user message on the right, AI response on the left with grey background. No typing indicator. The AI response is a complete, well-formed message. The conversation area is scrolled to show the most recent messages. The chat selector dropdown now shows this conversation (auto-generated title derived from the first user message)."
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "Chat selector updated with session title",
+          "input_data": {},
+          "expected_result": "The chat selector/dropdown now shows the current conversation with an auto-generated title based on the first message (e.g., 'What is the current status...').",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j04-multi-turn-conversation",
+      "name": "Multi-Turn Conversation Maintains Context",
+      "description": "Send a follow-up message in the same conversation and verify the AI maintains context from the previous exchange. This tests multi-turn context assembly and conversation history persistence.",
+      "priority": "critical",
+      "related_stories": ["E5-2"],
+      "acceptance_criteria": ["E5.2-AC2", "E5.2-AC3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "fill_form",
+          "target": "Chat input field (in already-open Co-Pilot drawer)",
+          "input_data": {
+            "message": "Can you give me more details about overdue items?"
+          },
+          "expected_result": "Follow-up message text appears in input field",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Send button",
+          "input_data": {},
+          "expected_result": "Second user message appears below the first exchange. Typing indicator shows while AI processes.",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "verify_text",
+          "target": "AI follow-up response",
+          "input_data": {},
+          "expected_result": "AI response streams in and completes. The response references context from the first message — demonstrating the AI has full context of the previous messages in the session (multi-turn awareness). Response may include specific details about overdue invoices or receivables.",
+          "screenshot": true,
+          "visual_check": "Conversation thread shows 4 messages: user message 1, AI response 1, user message 2, AI response 2. The second AI response clearly references or builds upon the first exchange, demonstrating multi-turn context retention. Messages are in chronological order with proper styling (user = right/purple, AI = left/grey)."
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "Chat input field",
+          "input_data": {
+            "message": "Which customer owes the most?"
+          },
+          "expected_result": "Third user message entered",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Send button",
+          "input_data": {},
+          "expected_result": "AI responds with context from the entire conversation — knows we're discussing overdue items and provides customer-specific information.",
+          "screenshot": true,
+          "visual_check": "Conversation thread now has 6 messages. AI's third response demonstrates full conversation awareness — it references 'overdue items' from message 2 and 'company status' from message 1 while answering about the customer with the highest outstanding amount."
+        }
+      ]
+    },
+    {
+      "id": "j05-new-chat-session",
+      "name": "Create New Chat Session",
+      "description": "Click '+ New Chat' to start a fresh conversation. Verify the conversation area clears, a new session is created, and the AI starts fresh without context from the previous conversation.",
+      "priority": "critical",
+      "related_stories": ["E5-2"],
+      "acceptance_criteria": ["E5.2-AC4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "click",
+          "target": "'+ New Chat' button",
+          "input_data": {},
+          "expected_result": "Conversation area clears. A fresh chat session begins. The input area is ready for a new message.",
+          "screenshot": true,
+          "visual_check": "Co-Pilot drawer shows an empty conversation area (or a welcome message for the new session). The chat selector shows this is a new, untitled conversation. The previous conversation should be accessible via the Recent Chats dropdown. Input field placeholder is 'Ask Nexa anything...'."
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Chat input field",
+          "input_data": {
+            "message": "How many employees do we have?"
+          },
+          "expected_result": "New topic message entered — unrelated to previous conversation",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Send button",
+          "input_data": {},
+          "expected_result": "AI responds to the new question without referencing any context from the previous conversation about company status and overdue items. The AI starts fresh.",
+          "screenshot": true,
+          "visual_check": "New conversation with just 2 messages: user question about employees and AI response. The AI response does NOT reference overdue invoices or company status from the previous session — it has started fresh. Chat selector title auto-generated from 'How many employees...'."
+        }
+      ]
+    },
+    {
+      "id": "j06-view-chat-history",
+      "name": "View and Resume Previous Chat Sessions",
+      "description": "Open the Recent Chats dropdown, verify previous conversations are listed with auto-generated titles (most recent first), select a previous conversation, and verify its messages are loaded correctly.",
+      "priority": "critical",
+      "related_stories": ["E5-2"],
+      "acceptance_criteria": ["E5.2-AC5"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "click",
+          "target": "Recent Chats dropdown",
+          "input_data": {},
+          "expected_result": "Dropdown opens showing a list of previous conversations with auto-generated titles, most recent first.",
+          "screenshot": true,
+          "visual_check": "Dropdown list visible showing at least 2 conversations: the current one ('How many employees...') and the previous one ('What is the current status...'). Each entry shows the auto-generated title and may show a timestamp or message count. Most recent conversation is at the top."
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Previous conversation entry ('What is the current status...')",
+          "input_data": {},
+          "expected_result": "The conversation area loads the previous conversation with all its messages (3 user messages + 3 AI responses from j03/j04).",
+          "screenshot": true,
+          "visual_check": "Conversation area shows the full history of the previous chat session — all 6 messages (3 user, 3 AI) from the earlier conversation about company status and overdue items. Messages are in chronological order. The chat selector title shows 'What is the current status...' or similar auto-generated title."
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Chat input field",
+          "input_data": {
+            "message": "Summarise what we discussed."
+          },
+          "expected_result": "New message entered in the resumed conversation",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Send button",
+          "input_data": {},
+          "expected_result": "AI responds with a summary that references the previous messages in this conversation — proving cross-session persistence and context loading works correctly.",
+          "screenshot": true,
+          "visual_check": "Conversation now has 8 messages. The AI's summary response references company status, overdue items, and the top customer from the earlier exchange — confirming full conversation history was loaded and the AI has context from the resumed session."
+        }
+      ]
+    },
+    {
+      "id": "j07-header-ai-command",
+      "name": "Use Header Search Bar for AI Command",
+      "description": "Type a natural language AI command into the header unified search/AI input bar. Verify the Co-Pilot drawer opens and the AI processes the command as a chat message.",
+      "priority": "high",
+      "related_stories": ["E5-1", "E5-2"],
+      "acceptance_criteria": ["E5.1-AC1", "E5.2-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "click",
+          "target": "Close button on Co-Pilot drawer (if open)",
+          "input_data": {},
+          "expected_result": "Co-Pilot drawer is closed",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Header unified search/AI input",
+          "input_data": {
+            "query": "Show me this month's revenue"
+          },
+          "expected_result": "Text appears in the search bar. Autocomplete dropdown may show AI command suggestion.",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Submit/Enter on search bar",
+          "input_data": {},
+          "expected_result": "Co-Pilot drawer opens automatically. The typed text is submitted as a chat message. The AI begins streaming a response about revenue.",
+          "screenshot": true,
+          "visual_check": "Co-Pilot drawer has opened from the right. The conversation shows the user message 'Show me this month's revenue' and the AI is streaming a response about revenue data. This demonstrates the unified input routing AI commands to the Co-Pilot."
+        }
+      ]
+    },
+    {
+      "id": "j08-ai-action-proposal-received",
+      "name": "Receive an AI Action Proposal",
+      "description": "Ask the AI to perform an action (e.g., 'Create an invoice for Acme Corp'). Verify the AI sends an action_proposal message with type, description, entity type, preview data, and confidence score displayed as an action card in the conversation.",
+      "priority": "critical",
+      "related_stories": ["E5-3"],
+      "acceptance_criteria": ["E5.3-AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "click",
+          "target": "'+ New Chat' button",
+          "input_data": {},
+          "expected_result": "Fresh conversation started",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Chat input field",
+          "input_data": {
+            "message": "Create an invoice for Acme Corp for £5,000 for consulting services"
+          },
+          "expected_result": "Action request message entered",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Send button",
+          "input_data": {},
+          "expected_result": "AI processes the request. After the streaming text response completes, an action proposal card appears in the conversation.",
+          "screenshot": true,
+          "visual_check": "Conversation shows: 1) User message requesting invoice creation, 2) AI text response explaining what it will do, 3) An action proposal card rendered below the AI text. The card shows: action type (CREATE_INVOICE), entity type (CustomerInvoice), a description ('Create invoice for Acme Corp — £5,000 for consulting services'), preview data showing proposed field values (customer: Acme Corp, amount: £5,000, description: consulting services), and a confidence score with colour indicator (green >=90%, amber 70-89%, red <70%). Two action buttons are visible: 'Confirm' (primary/green) and 'Reject' (secondary/red)."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Action proposal confidence score",
+          "input_data": {},
+          "expected_result": "Confidence score is displayed with appropriate colour coding: green for >=90%, amber for 70-89%, red for <70%. The score value is visible (e.g., '95%' or '0.95').",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Action proposal preview data",
+          "input_data": {},
+          "expected_result": "Preview data card shows the proposed record fields: customer name, amount, description, and any other inferred fields. Each field may show its individual confidence score.",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "Confirm and Reject buttons on action card",
+          "input_data": {},
+          "expected_result": "'Confirm' button (primary action, green/blue) and 'Reject' button (destructive/secondary, red/grey) are both visible and clickable on the action proposal card.",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j09-confirm-ai-action",
+      "name": "Confirm an AI Action Proposal",
+      "description": "Click 'Confirm' on an action proposal. Verify the action executes through the standard API path, a record_created message is sent back, and the conversation shows the confirmed action result.",
+      "priority": "critical",
+      "related_stories": ["E5-3"],
+      "acceptance_criteria": ["E5.3-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "click",
+          "target": "Confirm button on action proposal card",
+          "input_data": {},
+          "expected_result": "Action proposal card updates to show a processing/executing state. After execution completes, a record_created message appears showing the created entity.",
+          "screenshot": true,
+          "visual_check": "The action proposal card has been replaced or updated with a success state. A 'Record Created' message is visible showing: entity type (CustomerInvoice), entity ID, display reference (e.g., 'INV-000042'), and possibly a link to navigate to the created record. The AI may add a confirmation text message like 'Invoice INV-000042 created successfully for Acme Corp — £5,000.' A success indicator (green checkmark or similar) is visible."
+        },
+        {
+          "step_number": 2,
+          "action": "verify_text",
+          "target": "Record created confirmation",
+          "input_data": {},
+          "expected_result": "Text confirms the invoice was created with a display reference number. The record was created through the standard API path (same as manual creation).",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Link to created record",
+          "input_data": {},
+          "expected_result": "A clickable link or button to navigate to the newly created record (e.g., 'View INV-000042') is visible in the confirmation message.",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j10-reject-ai-action",
+      "name": "Reject an AI Action Proposal",
+      "description": "Request another AI action, then click 'Reject' on the action proposal. Verify no data is modified, the AI acknowledges the rejection, and the conversation continues normally.",
+      "priority": "critical",
+      "related_stories": ["E5-3"],
+      "acceptance_criteria": ["E5.3-AC3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "fill_form",
+          "target": "Chat input field",
+          "input_data": {
+            "message": "Send an email to Acme Corp about their overdue payment"
+          },
+          "expected_result": "New action request entered",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Send button",
+          "input_data": {},
+          "expected_result": "AI processes and returns an action proposal for SEND_EMAIL",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "SEND_EMAIL action proposal card",
+          "input_data": {},
+          "expected_result": "Action proposal card visible with type SEND_EMAIL, preview showing email details (recipient, subject, draft body). Confirm and Reject buttons visible.",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Reject button on action proposal card",
+          "input_data": {},
+          "expected_result": "Action is cancelled. No email is sent. The AI acknowledges the rejection with a message like 'Action cancelled. No changes were made.'",
+          "screenshot": true,
+          "visual_check": "The action proposal card shows a cancelled/rejected state (greyed out or crossed out). Below it, an AI message reads 'Action cancelled. No changes were made.' or similar acknowledgement. The conversation continues — the chat input is ready for the next message. No error state visible."
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Chat input field",
+          "input_data": {
+            "message": "OK, never mind. What else needs my attention?"
+          },
+          "expected_result": "User can continue the conversation normally after rejecting an action",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Send button",
+          "input_data": {},
+          "expected_result": "AI responds normally to the follow-up question, demonstrating the conversation continues unaffected by the rejection.",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j11-financial-action-always-requires-confirmation",
+      "name": "Financial Actions Always Require User Confirmation",
+      "description": "Verify that financial actions (create invoice, post journal, process payment) ALWAYS require explicit user confirmation regardless of confidence score. This is NFR16 — AI never auto-executes financial transactions.",
+      "priority": "critical",
+      "related_stories": ["E5-3"],
+      "acceptance_criteria": ["E5.3-AC4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "click",
+          "target": "'+ New Chat' button",
+          "input_data": {},
+          "expected_result": "Fresh conversation started",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Chat input field",
+          "input_data": {
+            "message": "Post journal entry: debit Office Supplies £500, credit Cash £500"
+          },
+          "expected_result": "Financial action request entered",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Send button",
+          "input_data": {},
+          "expected_result": "AI processes and returns an action proposal for POST_JOURNAL with requiresApproval=true. The journal entry is NOT auto-executed even if confidence is very high.",
+          "screenshot": true,
+          "visual_check": "Action proposal card visible for POST_JOURNAL action. The card explicitly shows that this action requires user confirmation — there may be a label like 'Approval Required' or 'Financial action — confirmation required'. Confirm and Reject buttons are prominently displayed. The proposal shows the journal details (debit/credit accounts, amounts). Even if confidence is >=90%, the action is not auto-executed — it is staged for user approval."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "'Approval Required' indicator on financial action",
+          "input_data": {},
+          "expected_result": "A visual indicator (badge, label, or icon) clearly communicates that this is a financial action that requires explicit user confirmation before execution. The action has NOT been auto-executed.",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Chat input field",
+          "input_data": {
+            "message": "Process payment of £2,000 to Smith & Sons Ltd"
+          },
+          "expected_result": "Another financial action request (CREATE_PAYMENT)",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Send button",
+          "input_data": {},
+          "expected_result": "AI returns another action proposal for CREATE_PAYMENT with requiresApproval=true. Payment is NOT auto-executed.",
+          "screenshot": true,
+          "visual_check": "Second action proposal card visible for CREATE_PAYMENT. Both proposal cards (journal and payment) require explicit confirmation. Neither has been auto-executed. This verifies the guardrail: financial actions ALWAYS require approval."
+        }
+      ]
+    },
+    {
+      "id": "j12-cash-flow-forecast",
+      "name": "Generate Cash Flow Forecast",
+      "description": "Navigate to the AI predictions area and generate a cash flow forecast. Verify period-by-period projections are displayed with opening balance, inflows, outflows, net flow, closing balance, and source breakdowns. Verify confidence scoring colour coding.",
+      "priority": "critical",
+      "related_stories": ["E5-4"],
+      "acceptance_criteria": ["E5.4-AC1", "E5.4-AC5"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/predictions/cash-flow",
+          "input_data": {},
+          "expected_result": "Cash flow forecast page loads with a form to configure forecast parameters",
+          "screenshot": true,
+          "visual_check": "Cash flow forecast page visible with form fields: Start Date (date picker), End Date (date picker), optional Bank Account filter (multi-select dropdown), 'Include Committed POs' checkbox (checked by default), 'Include Recurring Payments' checkbox (checked by default), and a 'Generate Forecast' button."
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Cash flow forecast form",
+          "input_data": {
+            "startDate": "2026-03-01",
+            "endDate": "2026-06-30",
+            "includeCommittedPOs": true,
+            "includeRecurring": true
+          },
+          "expected_result": "Form fields filled with 4-month forecast range",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Generate Forecast button",
+          "input_data": {},
+          "expected_result": "Loading indicator appears while the AI generates the forecast. After processing, period-by-period results are displayed.",
+          "screenshot": true,
+          "visual_check": "Forecast results displayed showing: current balance in GBP at the top, followed by period-by-period breakdown (4 periods for Mar-Jun 2026). Each period shows: period date range, opening balance, inflows (with source breakdown — AR outstanding, recurring income), outflows (with source breakdown — AP outstanding, committed POs, recurring payments), net flow, and closing balance. All monetary values are in GBP format (£X,XXX.XX). A chart or visual timeline may accompany the data."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_text",
+          "target": "Period breakdown row",
+          "input_data": {},
+          "expected_result": "At least one period row shows all required fields: periodStart, periodEnd, openingBalance, inflows, outflows, netFlow, closingBalance. Inflow and outflow details show source breakdowns (e.g., 'AR outstanding: £X,XXX', 'Committed POs: £X,XXX').",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Inflow/outflow source breakdown",
+          "input_data": {},
+          "expected_result": "Each period has expandable or visible inflow details (sources like 'AR outstanding', 'Recurring income') and outflow details ('AP outstanding', 'Committed POs', 'Recurring payments'). Each detail shows source name, amount, and description.",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j13-cash-flow-negative-balance-alert",
+      "name": "Cash Flow Forecast with Negative Balance Alert",
+      "description": "Generate a forecast that identifies a period with a projected negative balance. Verify that a NEGATIVE_BALANCE alert is displayed with the affected period, shortfall amount, and suggested action.",
+      "priority": "high",
+      "related_stories": ["E5-4"],
+      "acceptance_criteria": ["E5.4-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "fill_form",
+          "target": "Cash flow forecast form",
+          "input_data": {
+            "startDate": "2026-03-01",
+            "endDate": "2026-12-31",
+            "includeCommittedPOs": true,
+            "includeRecurring": true
+          },
+          "expected_result": "Extended forecast range (10 months) to increase likelihood of negative balance period",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Generate Forecast button",
+          "input_data": {},
+          "expected_result": "Forecast generates with longer range. If any period has a negative closing balance, alerts section is populated.",
+          "screenshot": true,
+          "visual_check": "Forecast results displayed with an Alerts section prominently visible. If a NEGATIVE_BALANCE alert exists, it shows: alert type badge (NEGATIVE_BALANCE in red/warning colour), the affected period date range, the projected shortfall amount (e.g., '-£3,200'), a descriptive message, and a suggested action (e.g., 'Accelerate collections' or 'Defer payments'). The affected period row in the main table is highlighted with a warning indicator."
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Alert card for negative or low balance",
+          "input_data": {},
+          "expected_result": "If alerts are present, each alert card shows: type (NEGATIVE_BALANCE or LOW_BALANCE), message, affected period, amount, and optional suggestedAction. Alert types are colour-coded: NEGATIVE_BALANCE in red, LOW_BALANCE in amber, COLLECTION_OPPORTUNITY in blue/green.",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j14-anomaly-detection",
+      "name": "Run Anomaly Detection on Recent Transactions",
+      "description": "Navigate to the anomaly detection page, run a scan with configurable lookback period, and verify flagged transactions are displayed with anomaly types, confidence scores (colour-coded), and related entities.",
+      "priority": "high",
+      "related_stories": ["E5-4"],
+      "acceptance_criteria": ["E5.4-AC3", "E5.4-AC5"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/predictions/anomalies",
+          "input_data": {},
+          "expected_result": "Anomaly detection page loads with configuration form",
+          "screenshot": true,
+          "visual_check": "Anomaly detection page visible with form: Lookback Period (slider or input, 7-365 days, default 90), optional Entity Type filter (multi-select: SupplierInvoice, Payment, etc.), Minimum Confidence threshold (slider 0-100%, default 50%), and a 'Run Scan' button."
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Anomaly detection form",
+          "input_data": {
+            "lookbackDays": 90,
+            "minConfidence": 0.5
+          },
+          "expected_result": "Form configured with 90-day lookback and 50% minimum confidence",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Run Scan button",
+          "input_data": {},
+          "expected_result": "Loading indicator while AI analyses transactions. Results displayed after processing.",
+          "screenshot": true,
+          "visual_check": "Results section shows: summary header (e.g., 'Analysed 250 transactions — 5 anomalies detected'), followed by a list of anomaly cards. Each card shows: anomaly type badge (DUPLICATE_AMOUNT, UNUSUAL_AMOUNT, TIMING_ANOMALY, etc.), entity reference (display ref + entity type), description of the suspicious pattern, confidence score with colour indicator (green >=90%, amber 70-89%, red <70%), and optionally related entities with their relationship (e.g., 'original_payment', 'same_supplier'). Results are sorted by confidence (highest first)."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Anomaly card with confidence colour coding",
+          "input_data": {},
+          "expected_result": "At least one anomaly card shows a confidence score with appropriate colour: green background/badge for >=90%, amber for 70-89%, red for <70%. The confidence level label ('high', 'review', 'low') is visible.",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Related entities on anomaly card",
+          "input_data": {},
+          "expected_result": "If an anomaly has related entities, they are displayed with entity type, display reference, and relationship description (e.g., 'Potential duplicate of PAY-000123').",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j15-duplicate-detection",
+      "name": "Run Duplicate Detection for Customers",
+      "description": "Navigate to duplicate detection, select 'Customer' entity type, and run a scan. Verify duplicate pairs are returned with overall similarity scores, per-field comparison (name, address, VAT, email, phone), and confidence level colour coding.",
+      "priority": "high",
+      "related_stories": ["E5-4"],
+      "acceptance_criteria": ["E5.4-AC4", "E5.4-AC5"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/predictions/duplicates",
+          "input_data": {},
+          "expected_result": "Duplicate detection page loads with configuration form",
+          "screenshot": true,
+          "visual_check": "Duplicate detection page visible with form: Entity Type selector (dropdown: Customer, Supplier, Contact), Minimum Similarity threshold (slider 0-100%, default 70%), Results Limit (number input, default 20), and a 'Scan for Duplicates' button."
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Duplicate detection form",
+          "input_data": {
+            "entityType": "Customer",
+            "minSimilarity": 0.7,
+            "limit": 20
+          },
+          "expected_result": "Form configured for Customer duplicate scan",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Scan for Duplicates button",
+          "input_data": {},
+          "expected_result": "Loading indicator while AI performs fuzzy matching. Results displayed after processing.",
+          "screenshot": true,
+          "visual_check": "Results show: summary header (e.g., 'Scanned 150 customers — 3 potential duplicate pairs found'), followed by duplicate pair cards. Each card shows two entities side-by-side with: entity A and entity B display references and key data, overall similarity score with confidence level colour (green/amber/red), and a field-by-field comparison table showing field name, value A, value B, and per-field similarity score. Fields compared include: name, address, VAT number, bank details, email, phone."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Field-by-field comparison table",
+          "input_data": {},
+          "expected_result": "At least one duplicate pair card shows a comparison table with fields: field name (e.g., 'Company Name', 'Address', 'VAT Number'), value from entity A, value from entity B, and a per-field similarity score (0.0-1.0). High-similarity fields are highlighted.",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j16-daily-briefing-finance-manager",
+      "name": "View Daily Briefing as Finance Manager",
+      "description": "Navigate to the dashboard/briefing page as a Finance Manager. Verify the daily briefing loads with role-appropriate content: pending approvals, overdue invoices, cash position, upcoming payment runs, and anomaly alerts. Each item has actionable links and period comparison data.",
+      "priority": "critical",
+      "related_stories": ["E5-5"],
+      "acceptance_criteria": ["E5.5-AC1", "E5.5-AC3", "E5.5-AC5"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Dashboard/home page loads, briefing section is visible",
+          "screenshot": true,
+          "visual_check": "Dashboard loaded with a prominent Daily Briefing section. At the top is a personalised greeting (e.g., 'Good morning, [Name]') based on time of day and user name. Below is a 1-2 sentence summary overview. The briefing content is role-specific for Finance Manager: categories include 'Pending Approvals', 'Overdue Invoices', 'Cash Position', 'Upcoming Payment Runs', 'Anomaly Alerts'. Each section has item cards. A subtle 'cached at' timestamp or 'Refresh' button is visible."
+        },
+        {
+          "step_number": 2,
+          "action": "verify_text",
+          "target": "Personalised greeting",
+          "input_data": {},
+          "expected_result": "Greeting message visible at top of briefing, appropriate for time of day (e.g., 'Good morning' before 12:00, 'Good afternoon' 12:00-17:00, 'Good evening' after 17:00).",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Briefing item card with metric and actions",
+          "input_data": {},
+          "expected_result": "At least one briefing item card shows: title (e.g., '3 Overdue Invoices'), description, a metric with value (e.g., '£12,400'), optional delta/trend (e.g., '+12% vs last month', with up/down arrow), and action buttons (e.g., 'Chase', 'Review', 'Approve All'). The entity link allows one-click navigation to the relevant list/page.",
+          "screenshot": true,
+          "visual_check": "Close-up of a briefing item card: title bold at top, description text below, metric displayed prominently with a delta indicator (green up arrow for positive, red down arrow for negative), comparison period label (e.g., 'vs last month'). Action buttons at bottom: primary actions like 'Chase', 'Review', 'Approve'. Clicking an action would navigate to the relevant page or trigger the action."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Pending Approvals category",
+          "input_data": {},
+          "expected_result": "Pending Approvals section visible with count and action buttons (e.g., 'Approve All' or 'Review'). Content is finance-relevant.",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Cash Position category",
+          "input_data": {},
+          "expected_result": "Cash Position section visible with current balance, trend indicator, and comparison to prior period.",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Action button on a briefing item (e.g., 'Review' on overdue invoices)",
+          "input_data": {},
+          "expected_result": "Clicking the action navigates to the relevant page (e.g., invoice list filtered to overdue) or triggers the one-tap action.",
+          "screenshot": true,
+          "visual_check": "Navigation occurred — user is now on the relevant page (e.g., Invoices list with overdue filter applied, or approval queue). The breadcrumb or page title confirms the destination. This demonstrates the actionable links from the briefing work correctly."
+        }
+      ]
+    },
+    {
+      "id": "j17-daily-briefing-business-owner",
+      "name": "View Daily Briefing as Business Owner",
+      "description": "Log in as the Business Owner (SUPER_ADMIN) and verify the daily briefing shows owner-specific content: revenue vs prior period, overdue receivables, pending approvals across all modules, and AI-detected opportunities.",
+      "priority": "high",
+      "related_stories": ["E5-5"],
+      "acceptance_criteria": ["E5.5-AC2", "E5.5-AC3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads (after logging out from finance_manager)",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "owner@nexa-test.co.uk",
+            "password": "Owner123!"
+          },
+          "expected_result": "Owner credentials entered",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Logged in as Business Owner, redirected to dashboard",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Daily Briefing section on dashboard",
+          "input_data": {},
+          "expected_result": "Briefing loaded with OWNER role-specific content. Categories differ from Finance Manager: includes 'Revenue vs Prior Period', 'Overdue Receivables', 'Pending Approvals (All Modules)', 'AI-Detected Opportunities'.",
+          "screenshot": true,
+          "visual_check": "Business Owner briefing visible with: greeting, summary overview, and role-specific categories. 'Revenue vs Prior Period' shows revenue metric with delta (e.g., '£45,000 — +8% vs last month' with green up trend). 'Overdue Receivables' shows total outstanding. 'Pending Approvals' covers all modules (not just finance). 'Opportunities' section shows AI-detected business opportunities. Each item has action buttons. The content is clearly different from the Finance Manager briefing — it has a wider business scope."
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Revenue vs Prior Period briefing item",
+          "input_data": {},
+          "expected_result": "Revenue item shows: current period revenue value, delta/trend vs prior period (percentage and direction), comparison period label.",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "Cross-module Pending Approvals",
+          "input_data": {},
+          "expected_result": "Pending Approvals section shows items across ALL modules (finance, sales, HR, etc.), not just finance. The Owner sees a holistic view.",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j18-smart-suggestions-context-aware",
+      "name": "Smart Suggestions Change with Page Context",
+      "description": "Navigate to different pages and verify that the Co-Pilot's quick prompt chips update to reflect the current page context. On a Customer Detail page, suggestions should include 'Invoice this customer', 'Show payment history'; on the Dashboard, 'Morning briefing', 'What needs my attention?'.",
+      "priority": "high",
+      "related_stories": ["E5-5"],
+      "acceptance_criteria": ["E5.5-AC4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Dashboard page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Chat toggle button",
+          "input_data": {},
+          "expected_result": "Co-Pilot drawer opens",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Quick prompt chips on Dashboard",
+          "input_data": {},
+          "expected_result": "Quick prompt chips show dashboard-relevant suggestions: 'Morning briefing', 'What needs my attention?', 'Revenue this month', or similar general/role-based prompts.",
+          "screenshot": true,
+          "visual_check": "Co-Pilot drawer open on the Dashboard page. Quick prompt chips at the bottom show general/dashboard-context suggestions: 'Morning briefing', 'What needs my attention?', 'Revenue this month'. These are relevant to the home/dashboard context and the user's role."
+        },
+        {
+          "step_number": 4,
+          "action": "navigate",
+          "target": "/ar/customers/some-customer-id",
+          "input_data": {},
+          "expected_result": "Customer Detail page loads. Co-Pilot drawer stays open.",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Quick prompt chips on Customer Detail page",
+          "input_data": {},
+          "expected_result": "Quick prompt chips have CHANGED to show customer-context suggestions: 'Invoice this customer', 'Show payment history', 'Credit check', 'View outstanding'. The chips are now specific to the Customer entity being viewed.",
+          "screenshot": true,
+          "visual_check": "Co-Pilot drawer open on the Customer Detail page. Quick prompt chips now show customer-specific suggestions: 'Invoice this customer', 'Show payment history', 'Credit check', 'View outstanding'. The chips are visually different from the Dashboard chips — they are contextually aware of the current page and entity."
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Quick prompt chip 'Show payment history'",
+          "input_data": {},
+          "expected_result": "Clicking the chip auto-fills and submits the prompt. The AI responds with the customer's payment history. This demonstrates one-tap interaction from suggestion chips.",
+          "screenshot": true,
+          "visual_check": "Conversation shows the auto-submitted prompt 'Show payment history' as a user message, followed by the AI streaming/completed response about the customer's payment history. The interaction was seamless — one tap on the chip triggered the full AI query."
+        },
+        {
+          "step_number": 7,
+          "action": "navigate",
+          "target": "/ar/invoices",
+          "input_data": {},
+          "expected_result": "Invoice List page loads. Co-Pilot drawer stays open.",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "verify_element",
+          "target": "Quick prompt chips on Invoice List page",
+          "input_data": {},
+          "expected_result": "Quick prompt chips have changed again to show invoice-list-context suggestions: 'Show overdue', 'Create invoice', 'Export all', 'Send statements'.",
+          "screenshot": true,
+          "visual_check": "Co-Pilot drawer open on Invoice List page. Quick prompt chips show: 'Show overdue', 'Create invoice', 'Export all', 'Send statements'. Three different pages have shown three different sets of contextual suggestions — confirming the AI awareness changes with navigation."
+        }
+      ]
+    },
+    {
+      "id": "j19-http-fallback-non-streaming",
+      "name": "HTTP Fallback When WebSocket Unavailable",
+      "description": "Test the HTTP fallback path (POST /ai/chat/message) when WebSocket is unavailable. Verify the user can still send messages and receive complete (non-streaming) AI responses.",
+      "priority": "medium",
+      "related_stories": ["E5-2"],
+      "acceptance_criteria": ["E5.2-AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {
+            "note": "For this test, the WebSocket connection should be blocked or unavailable (e.g., via network throttling or mock). The frontend should detect the WS failure and fall back to HTTP."
+          },
+          "expected_result": "Dashboard loads. WebSocket connection to /ai/chat fails or is blocked.",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Chat toggle button",
+          "input_data": {},
+          "expected_result": "Co-Pilot drawer opens. A subtle indicator may show that the connection is in fallback/HTTP mode.",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Chat input field",
+          "input_data": {
+            "message": "What is my cash position today?"
+          },
+          "expected_result": "Message entered in chat input",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Send button",
+          "input_data": {},
+          "expected_result": "Message is sent via HTTP POST /ai/chat/message (not WebSocket). A loading indicator appears. The response arrives as a complete message (not streaming — no token-by-token appearance). The full AI response appears at once.",
+          "screenshot": true,
+          "visual_check": "Conversation shows user message and a complete AI response (appeared all at once, not streamed). The response contains cash position information. There is no visible error — the fallback worked seamlessly. There may be a subtle connection-mode indicator showing 'HTTP mode' or similar."
+        }
+      ]
+    },
+    {
+      "id": "j20-ai-degradation-graceful",
+      "name": "AI Service Degradation — Graceful Error Handling",
+      "description": "Test behaviour when the AI Gateway is unreachable. Verify the system degrades gracefully: the chat shows a user-friendly error, prediction endpoints return 503, briefing shows an error state, but the traditional UI remains fully functional (IMP-006).",
+      "priority": "critical",
+      "related_stories": ["E5-1", "E5-5"],
+      "acceptance_criteria": ["E5.1-AC5", "E5.5-AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {
+            "note": "For this test, the AI Gateway should be unreachable (service down or mocked to return errors). This tests IMP-006: AI degradation must not break traditional UI."
+          },
+          "expected_result": "Dashboard loads normally. Traditional UI elements (sidebar, navigation, pages) all work. Briefing section may show an error state.",
+          "screenshot": true,
+          "visual_check": "Dashboard loaded successfully. All traditional UI elements (sidebar, navigation, page content, data tables) are fully functional. The Daily Briefing section may show a graceful error state: 'AI service temporarily unavailable' or an empty briefing with a 'Retry' button — but the rest of the page works perfectly."
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Chat toggle button",
+          "input_data": {},
+          "expected_result": "Co-Pilot drawer opens",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Chat input field",
+          "input_data": {
+            "message": "Hello, can you help me?"
+          },
+          "expected_result": "Message entered",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Send button",
+          "input_data": {},
+          "expected_result": "User message appears in conversation. Instead of an AI response, an error message is displayed: 'AI service is temporarily unavailable. Please try again later.' The error is user-friendly — no stack traces, no technical jargon.",
+          "screenshot": true,
+          "visual_check": "Conversation shows user message on the right. On the left, instead of an AI response, there is a graceful error message card: 'AI service is temporarily unavailable' or 'The AI assistant is currently offline. Your data and traditional features continue to work normally.' The error has an appropriate icon (warning). No crash, no blank screen, no unhandled errors."
+        },
+        {
+          "step_number": 5,
+          "action": "navigate",
+          "target": "/ar/invoices",
+          "input_data": {},
+          "expected_result": "Invoice list page loads and functions normally — data loads, filters work, pagination works. AI degradation has NOT broken any traditional UI functionality.",
+          "screenshot": true,
+          "visual_check": "Invoice list page fully functional: data table showing invoices, column headers, filter controls, pagination, action buttons. The page works exactly as it would without AI features. This confirms IMP-006: AI degradation is safe — traditional UI is unaffected."
+        }
+      ]
+    },
+    {
+      "id": "j21-prediction-degradation-503",
+      "name": "Prediction Endpoints Return 503 When AI Degraded",
+      "description": "When AI service is unavailable, verify prediction pages (cash flow, anomaly, duplicate) show appropriate 503 error states with user-friendly messages and no crash.",
+      "priority": "high",
+      "related_stories": ["E5-4", "E5-5"],
+      "acceptance_criteria": ["E5.1-AC5", "E5.5-AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/predictions/cash-flow",
+          "input_data": {
+            "note": "AI Gateway still unreachable for this test."
+          },
+          "expected_result": "Cash flow forecast page loads with the configuration form visible",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Cash flow forecast form",
+          "input_data": {
+            "startDate": "2026-03-01",
+            "endDate": "2026-06-30"
+          },
+          "expected_result": "Form filled",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Generate Forecast button",
+          "input_data": {},
+          "expected_result": "Request fails with 503. A user-friendly error message is displayed: 'AI prediction service is temporarily unavailable. Please try again later.' No crash, no unhandled error.",
+          "screenshot": true,
+          "visual_check": "Instead of forecast results, an error state is displayed: warning/info card with message 'AI prediction service is temporarily unavailable. Please try again later.' or 'The forecast engine is currently offline.' A 'Retry' button may be present. The page layout is intact — no crash, no blank screen."
+        },
+        {
+          "step_number": 4,
+          "action": "navigate",
+          "target": "/ai/predictions/anomalies",
+          "input_data": {},
+          "expected_result": "Anomaly detection page loads with form",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Run Scan button",
+          "input_data": {},
+          "expected_result": "503 error displayed gracefully for anomaly detection as well",
+          "screenshot": true,
+          "visual_check": "Anomaly detection page shows same graceful error pattern: 'AI prediction service is temporarily unavailable.' No crash. The page remains navigable."
+        }
+      ]
+    },
+    {
+      "id": "j22-briefing-force-refresh",
+      "name": "Force Refresh Daily Briefing",
+      "description": "View a cached daily briefing, then click 'Refresh' to force regeneration. Verify the briefing updates with fresh data and the cache timestamp changes.",
+      "priority": "medium",
+      "related_stories": ["E5-5"],
+      "acceptance_criteria": ["E5.5-AC5"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "finance@nexa-test.co.uk",
+            "password": "Finance123!"
+          },
+          "expected_result": "Finance Manager credentials entered",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Logged in, dashboard loads with cached briefing",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Briefing cache timestamp",
+          "input_data": {},
+          "expected_result": "Daily briefing section visible with a 'cached at' timestamp or 'Last updated' indicator showing when the briefing was generated.",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Refresh button on briefing section",
+          "input_data": {},
+          "expected_result": "Loading indicator appears while briefing regenerates. After completion, the briefing content updates and the cache timestamp changes to the current time.",
+          "screenshot": true,
+          "visual_check": "Daily briefing section has been refreshed. A loading state briefly appeared, then the content updated. The 'cached at' or 'Last updated' timestamp now shows the current time (just now). The briefing content may have changed if underlying data changed since the last generation."
+        }
+      ]
+    },
+    {
+      "id": "j23-rbac-viewer-restricted",
+      "name": "RBAC — Viewer Cannot Access Chat or Predictions",
+      "description": "Log in as a VIEWER user and verify they can access the briefing (VIEWER minimum) but cannot access AI chat (STAFF minimum) or predictions (MANAGER minimum). Verify appropriate permission denied states.",
+      "priority": "high",
+      "related_stories": ["E5-1", "E5-2", "E5-4", "E5-5"],
+      "acceptance_criteria": ["E5.2-AC1", "E5.4-AC1", "E5.5-AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "viewer@nexa-test.co.uk",
+            "password": "View123!"
+          },
+          "expected_result": "Viewer credentials entered",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Logged in as VIEWER, dashboard loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Daily Briefing section",
+          "input_data": {},
+          "expected_result": "Daily Briefing is visible and accessible — VIEWER has permission for ai.briefing (VIEWER minimum).",
+          "screenshot": true,
+          "visual_check": "Dashboard shows the Daily Briefing section with content. VIEWER can see the briefing — this is expected since ai.briefing requires VIEWER minimum."
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Chat toggle button",
+          "input_data": {},
+          "expected_result": "Chat functionality is restricted. Either the Co-Pilot drawer doesn't open, or it opens with a message like 'You do not have permission to use the AI assistant.' The VIEWER lacks ai.chat access (STAFF minimum).",
+          "screenshot": true,
+          "visual_check": "Chat is restricted for VIEWER: either the chat toggle button is disabled/hidden, or the drawer opens with a permission error message. No chat input is available. This demonstrates RBAC enforcement on AI chat."
+        },
+        {
+          "step_number": 6,
+          "action": "navigate",
+          "target": "/ai/predictions/cash-flow",
+          "input_data": {},
+          "expected_result": "Predictions page shows a permission denied state or redirects. VIEWER lacks ai.predictions access (MANAGER minimum).",
+          "screenshot": true,
+          "visual_check": "Either: a) redirected away with a 403 error, b) the page loads but shows 'You do not have permission to access AI predictions', or c) the navigation link to predictions is hidden entirely. VIEWER cannot access MANAGER-level prediction features."
+        }
+      ]
+    },
+    {
+      "id": "j24-confidence-and-explainability",
+      "name": "View Confidence Score and AI Explanation for Entity",
+      "description": "Navigate to an AI-created entity and verify the confidence score is displayed with colour coding. Then request an explanation of the AI's reasoning and verify the structured explanation response.",
+      "priority": "medium",
+      "related_stories": ["E5-4"],
+      "acceptance_criteria": ["E5.4-AC5"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "finance@nexa-test.co.uk",
+            "password": "Finance123!"
+          },
+          "expected_result": "Finance Manager credentials entered",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Logged in as Finance Manager",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "navigate",
+          "target": "/ar/invoices/ai-created-invoice-id",
+          "input_data": {
+            "note": "Navigate to an invoice that was created via AI action confirmation (from j09). The entity should have AI confidence metadata stored."
+          },
+          "expected_result": "Invoice detail page loads for an AI-created entity",
+          "screenshot": true,
+          "visual_check": "Invoice detail page shows the entity data. An 'AI Confidence' badge or indicator is visible, showing the overall confidence score with colour coding (green >=90%, amber 70-89%, red <70%). There may be an 'AI Created' label or icon indicating this entity was created via AI. An 'Explain AI Decision' or 'View AI Reasoning' button/link is available."
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "AI confidence score badge",
+          "input_data": {},
+          "expected_result": "Confidence score displayed with value (e.g., '95%' or '0.95') and colour-coded badge: green for high (>=90%), amber for review (70-89%), red for low (<70%). Per-field confidence breakdown may be available.",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "'Explain AI Decision' button",
+          "input_data": {},
+          "expected_result": "A panel or modal opens showing the AI's explanation for creating this entity. The explanation includes: a plain English summary, bulleted reasoning steps, and data point attributions (field, value, confidence, source).",
+          "screenshot": true,
+          "visual_check": "Explanation panel visible with: 1) Summary section — 1-2 sentence plain English explanation of why the AI created this entity, 2) Reasoning section — bulleted list of reasoning steps the AI followed, 3) Data Points section — table showing each field, its value, confidence score, and data source ('extracted', 'inferred', 'default', 'historical'). The explanation is human-readable and helps the user understand and trust the AI's decision."
+        }
+      ]
+    },
+    {
+      "id": "j25-keyboard-shortcut-copilot",
+      "name": "Cmd+K Keyboard Shortcut Opens Search/AI Input",
+      "description": "Verify the Cmd+K (Mac) / Ctrl+K (Windows) keyboard shortcut focuses the header unified search/AI input bar. This is the primary keyboard-driven entry point for AI interaction.",
+      "priority": "medium",
+      "related_stories": ["E5-2"],
+      "acceptance_criteria": ["E5.2-AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Dashboard loaded, no input focused",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Press Cmd+K keyboard shortcut",
+          "input_data": {
+            "keyboardShortcut": "Meta+k"
+          },
+          "expected_result": "Header unified search/AI input bar is focused. Cursor is in the input field, ready for typing. An autocomplete dropdown may appear showing suggestions.",
+          "screenshot": true,
+          "visual_check": "Header search/AI input is focused with a visible cursor. The input field may be highlighted or expanded. An autocomplete dropdown is visible below the input showing categories: entity results (top), page navigation (middle), suggested AI prompts (bottom). The keyboard shortcut successfully activated the search/AI command palette."
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Header search/AI input (now focused)",
+          "input_data": {
+            "query": "Invoice Acme"
+          },
+          "expected_result": "Autocomplete dropdown shows results: entity matches (invoices for Acme), page matches (Invoice List), and AI suggestion ('Invoice Acme Corp' as an AI command).",
+          "screenshot": true,
+          "visual_check": "Autocomplete dropdown updated with results matching 'Invoice Acme': entity results showing any matching invoices, page navigation to Invoice List, and an AI prompt suggestion at the bottom. The dropdown categorises results clearly."
+        }
+      ]
+    },
+    {
+      "id": "j26-audit-trail-ai-actions",
+      "name": "Verify AI Actions Appear in Audit Trail",
+      "description": "After confirming an AI action (j09), navigate to the audit log and verify the entry includes isAiAction: true, aiConfidence score, and the conversation ID for traceability.",
+      "priority": "medium",
+      "related_stories": ["E5-3"],
+      "acceptance_criteria": ["E5.3-AC5"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/audit-log",
+          "input_data": {},
+          "expected_result": "Audit log page loads showing recent audit entries",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Audit log entry for AI-created invoice",
+          "input_data": {},
+          "expected_result": "An audit log entry exists for the invoice created via AI action confirmation in j09. The entry shows: entity type (CustomerInvoice), entity ID, action (CREATE), userId, timestamp.",
+          "screenshot": true,
+          "visual_check": "Audit log table showing recent entries. One entry clearly marked as AI-originated: it has an 'AI' badge or icon, the action is 'CREATE' for 'CustomerInvoice', and additional metadata columns show: isAiAction = true, aiConfidence = [score], and a correlationId linking to the conversation ID. This provides full traceability from AI chat conversation to the business action in the audit trail."
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "AI metadata on audit entry (isAiAction, aiConfidence)",
+          "input_data": {},
+          "expected_result": "The audit entry detail shows: isAiAction: true (indicating this was an AI-initiated action), aiConfidence: [decimal score 0.0-1.0], and correlationId: [conversation UUID] linking back to the AI chat session where the action was proposed and confirmed.",
+          "screenshot": false
+        }
+      ]
+    }
+  ]
+}

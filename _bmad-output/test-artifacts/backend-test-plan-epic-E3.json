@@ -1,0 +1,1512 @@
+{
+  "epic_id": "E3",
+  "epic_title": "Event Bus + Audit Trail",
+  "generated_at": "2026-02-21T14:30:00.000Z",
+  "total_test_cases": 46,
+  "api_base_url": "http://localhost:3000",
+  "notes": {
+    "auth_setup": "All authenticated requests require Authorization: Bearer <jwt> header. JWT obtained via POST /auth/login.",
+    "company_scoping": "Audit log endpoints are company-scoped via the company-context middleware (x-company-id header or JWT companyId claim). Dead-letter queue endpoints are NOT company-scoped (infrastructure-level).",
+    "data_seeding": "Audit log records are created via event bus emission, not via direct API. Tests must seed data by emitting events or inserting directly into the audit_logs table. Dead-letter entries are created by event handler failures; mock BullMQ for test control.",
+    "permission_setup": "Tests require users with specific access group permissions: system.audit-log.list (view) for audit endpoints, system.dead-letter-queue.list (view/edit) for DLQ endpoints.",
+    "response_envelope": "All responses follow the envelope pattern: { success: true, data: T, meta?: { cursor, hasMore, total } } for success, { success: false, error: { code, message } } for errors.",
+    "story_coverage": "E3.1 has no API endpoints (internal event bus infrastructure). E3.2 covers audit-log routes. E3.3 covers dead-letter-queue routes.",
+    "ordering": "Tests ordered: reads first (GET endpoints), then mutations (POST reprocess). No direct create or delete API endpoints exist in E3."
+  },
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/system/audit-log",
+      "description": "Query audit log with filters and cursor pagination (E3.2, AC#3)",
+      "story": "E3.2",
+      "permission": "system.audit-log.list / view",
+      "test_cases": [
+        {
+          "id": "AL-001",
+          "name": "Audit log list - happy path with default params",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}",
+              "Content-Type": "application/json"
+            },
+            "query": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data", "meta"],
+            "body_assertions": [
+              "response.body.success === true",
+              "Array.isArray(response.body.data)",
+              "response.body.meta.hasMore is boolean",
+              "response.body.meta.total is number >= 0",
+              "response.body.meta.cursor is string or null",
+              "default limit applied (max 50 records returned)"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AL-002",
+          "name": "Audit log list - filter by entityType",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log?entityType=User",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "entityType": "User"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertions": [
+              "response.body.success === true",
+              "every record in data has entityType === 'User'"
+            ]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM audit_logs WHERE company_id = '{{companyId}}' AND entity_type = 'User'",
+            "expected": "count matches response.body.meta.total"
+          }
+        },
+        {
+          "id": "AL-003",
+          "name": "Audit log list - filter by entityId",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log?entityId={{known_user_id}}",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "entityId": "{{known_user_id}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertions": [
+              "every record in data has entityId === '{{known_user_id}}'"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AL-004",
+          "name": "Audit log list - filter by action (CREATE)",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log?action=CREATE",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "action": "CREATE"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertions": [
+              "every record in data has action === 'CREATE'"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AL-005",
+          "name": "Audit log list - filter by userId",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log?userId={{known_user_id}}",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "userId": "{{known_user_id}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertions": [
+              "every record in data has userId === '{{known_user_id}}'"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AL-006",
+          "name": "Audit log list - filter by date range (dateFrom + dateTo)",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log?dateFrom=2026-01-01T00:00:00.000Z&dateTo=2026-02-21T23:59:59.999Z",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "dateFrom": "2026-01-01T00:00:00.000Z",
+              "dateTo": "2026-02-21T23:59:59.999Z"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertions": [
+              "every record timestamp is within the specified date range"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AL-007",
+          "name": "Audit log list - multiple filters combined",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log?entityType=AccessGroup&action=CREATE&limit=10",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "entityType": "AccessGroup",
+              "action": "CREATE",
+              "limit": 10
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertions": [
+              "every record has entityType === 'AccessGroup' AND action === 'CREATE'",
+              "data.length <= 10"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AL-008",
+          "name": "Audit log list - cursor pagination (page 1 then page 2)",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log?limit=2",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "limit": 2
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data", "meta"],
+            "body_assertions": [
+              "page 1: data.length === 2, meta.hasMore === true, meta.cursor is non-null UUID",
+              "page 2 (using cursor from page 1): returns next set of records",
+              "page 2 records do not overlap with page 1 records",
+              "records are ordered by timestamp descending"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AL-009",
+          "name": "Audit log list - descending timestamp order (most recent first)",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log?limit=10",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "limit": 10
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertions": [
+              "for each consecutive pair of records: data[i].timestamp >= data[i+1].timestamp"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AL-010",
+          "name": "Audit log list - empty result (no matching records)",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log?entityType=NonExistentEntity",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "entityType": "NonExistentEntity"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertions": [
+              "response.body.success === true",
+              "response.body.data is empty array []",
+              "response.body.meta.total === 0",
+              "response.body.meta.hasMore === false",
+              "response.body.meta.cursor === null"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AL-011",
+          "name": "Audit log list - company isolation (no cross-company data leakage)",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log",
+            "headers": {
+              "Authorization": "Bearer {{company_b_user_jwt}}"
+            },
+            "query": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_assertions": [
+              "response.body.data contains ONLY records where companyId === company_b_id",
+              "no records from company_a appear in results"
+            ]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM audit_logs WHERE company_id = '{{company_b_id}}'",
+            "expected": "count matches response.body.meta.total"
+          }
+        },
+        {
+          "id": "AL-012",
+          "name": "Audit log list - records older than 6 years still accessible (NFR40)",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log?dateFrom=2019-01-01T00:00:00.000Z&dateTo=2019-12-31T23:59:59.999Z",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "dateFrom": "2019-01-01T00:00:00.000Z",
+              "dateTo": "2019-12-31T23:59:59.999Z"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertions": [
+              "pre-seeded 7-year-old audit record appears in results",
+              "old records have all fields intact (entityType, entityId, action, userId, etc.)"
+            ]
+          },
+          "preconditions": [
+            "INSERT audit_log record with timestamp 7 years in the past before running this test"
+          ],
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT * FROM audit_logs WHERE company_id = '{{companyId}}' AND timestamp < '2020-01-01'",
+            "expected": "at least 1 record exists and is returned by the API"
+          }
+        },
+        {
+          "id": "AL-013",
+          "name": "Audit log list - invalid action enum value returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log?action=INVALID_ACTION",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "action": "INVALID_ACTION"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false",
+              "response.body.error.code is defined",
+              "error message references invalid action value"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AL-014",
+          "name": "Audit log list - invalid entityId (not UUID) returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log?entityId=not-a-uuid",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "entityId": "not-a-uuid"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false",
+              "error message references invalid UUID format"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AL-015",
+          "name": "Audit log list - invalid userId (not UUID) returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log?userId=not-a-uuid",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "userId": "not-a-uuid"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false",
+              "error message references invalid UUID format"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AL-016",
+          "name": "Audit log list - invalid dateFrom format returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log?dateFrom=not-a-date",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "dateFrom": "not-a-date"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false",
+              "error message references invalid ISO datetime format"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AL-017",
+          "name": "Audit log list - limit exceeds max (>200) returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log?limit=201",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "limit": 201
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false",
+              "error references limit validation"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AL-018",
+          "name": "Audit log list - limit below minimum (<1) returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log?limit=0",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "limit": 0
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AL-019",
+          "name": "Audit log list - unauthenticated request returns 401",
+          "type": "auth_error",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log",
+            "headers": {},
+            "query": {}
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false",
+              "response.body.error.code indicates authentication failure"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AL-020",
+          "name": "Audit log list - user without system.audit-log.list permission returns 403",
+          "type": "auth_error",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log",
+            "headers": {
+              "Authorization": "Bearer {{unprivileged_user_jwt}}"
+            },
+            "query": {}
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false",
+              "response.body.error.code indicates permission denied"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AL-021",
+          "name": "Audit log list - response includes all expected fields per record",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log?limit=1",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "limit": 1
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertions": [
+              "each record has: id (uuid), companyId (uuid), entityType (string), entityId (string), action (enum), beforeData (object|null), afterData (object|null), userId (string), isAiAction (boolean), aiConfidence (number|null), correlationId (string|null), timestamp (ISO datetime)"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system/audit-log/:entityType/:entityId",
+      "description": "Full change history for a specific entity in chronological order (E3.2, AC#4)",
+      "story": "E3.2",
+      "permission": "system.audit-log.list / view",
+      "test_cases": [
+        {
+          "id": "AH-001",
+          "name": "Entity history - happy path returns full change history",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log/AccessGroup/{{known_access_group_id}}",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "params": {
+              "entityType": "AccessGroup",
+              "entityId": "{{known_access_group_id}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data", "meta"],
+            "body_assertions": [
+              "response.body.success === true",
+              "every record has entityType === 'AccessGroup' AND entityId === '{{known_access_group_id}}'",
+              "meta.total matches number of audit records for this entity"
+            ]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM audit_logs WHERE company_id = '{{companyId}}' AND entity_type = 'AccessGroup' AND entity_id = '{{known_access_group_id}}'",
+            "expected": "count matches response.body.meta.total"
+          }
+        },
+        {
+          "id": "AH-002",
+          "name": "Entity history - chronological ascending order",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log/User/{{known_user_id}}",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "params": {
+              "entityType": "User",
+              "entityId": "{{known_user_id}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertions": [
+              "for each consecutive pair: data[i].timestamp <= data[i+1].timestamp (ascending chronological order)",
+              "earliest event (e.g. LOGIN) appears first, most recent last"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AH-003",
+          "name": "Entity history - cursor pagination for large histories",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log/User/{{known_user_id}}?limit=2",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "params": {
+              "entityType": "User",
+              "entityId": "{{known_user_id}}"
+            },
+            "query": {
+              "limit": 2
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertions": [
+              "page 1: data.length === 2 (or fewer if total < 2)",
+              "if hasMore, cursor is a valid UUID",
+              "page 2 using cursor returns subsequent records with no overlap"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AH-004",
+          "name": "Entity history - no records found returns 200 with empty array",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log/User/00000000-0000-0000-0000-000000000000",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "params": {
+              "entityType": "User",
+              "entityId": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertions": [
+              "response.body.success === true",
+              "response.body.data is empty array []",
+              "response.body.meta.total === 0",
+              "response.body.meta.hasMore === false"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AH-005",
+          "name": "Entity history - company isolation (no cross-company data)",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log/AccessGroup/{{company_a_group_id}}",
+            "headers": {
+              "Authorization": "Bearer {{company_b_user_jwt}}"
+            },
+            "params": {
+              "entityType": "AccessGroup",
+              "entityId": "{{company_a_group_id}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertions": [
+              "response.body.data is empty array [] (company B user cannot see company A audit records)",
+              "response.body.meta.total === 0"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AH-006",
+          "name": "Entity history - invalid entityId (not UUID) returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log/User/not-a-uuid",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "params": {
+              "entityType": "User",
+              "entityId": "not-a-uuid"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false",
+              "error references invalid UUID format for entityId"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AH-007",
+          "name": "Entity history - empty entityType returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log//{{valid_uuid}}",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "params": {
+              "entityType": "",
+              "entityId": "{{valid_uuid}}"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false",
+              "error references entityType min length validation (min 1 char)"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AH-008",
+          "name": "Entity history - unauthenticated request returns 401",
+          "type": "auth_error",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log/User/{{known_user_id}}",
+            "headers": {},
+            "params": {
+              "entityType": "User",
+              "entityId": "{{known_user_id}}"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "AH-009",
+          "name": "Entity history - user without permission returns 403",
+          "type": "auth_error",
+          "request": {
+            "method": "GET",
+            "url": "/system/audit-log/User/{{known_user_id}}",
+            "headers": {
+              "Authorization": "Bearer {{unprivileged_user_jwt}}"
+            },
+            "params": {
+              "entityType": "User",
+              "entityId": "{{known_user_id}}"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system/dead-letter-queue",
+      "description": "List dead-letter queue entries with optional filtering and pagination (E3.3, AC#3)",
+      "story": "E3.3",
+      "permission": "system.dead-letter-queue.list / view",
+      "test_cases": [
+        {
+          "id": "DL-001",
+          "name": "Dead letter queue list - happy path with default params",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/system/dead-letter-queue",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertions": [
+              "response.body.success === true",
+              "Array.isArray(response.body.data)",
+              "response.body.meta.hasMore is boolean",
+              "response.body.meta.cursor is string or null",
+              "default limit applied (max 20 records)"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "DL-002",
+          "name": "Dead letter queue list - response includes all expected fields per entry",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/system/dead-letter-queue?limit=1",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "limit": 1
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertions": [
+              "each entry has: id (string), eventName (string), payload (any), error (string), retryCount (number), originalTimestamp (ISO string), createdAt (ISO string), reprocessed (boolean)",
+              "optional fields: stack (string), reprocessedAt (ISO string)"
+            ]
+          },
+          "preconditions": [
+            "At least one DLQ entry exists (seed via failed event handler)"
+          ],
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "DL-003",
+          "name": "Dead letter queue list - filter by eventName",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/system/dead-letter-queue?eventName=user.login",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "eventName": "user.login"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertions": [
+              "every entry in data has eventName === 'user.login'"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "DL-004",
+          "name": "Dead letter queue list - filter by reprocessed=false",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/system/dead-letter-queue?reprocessed=false",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "reprocessed": "false"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertions": [
+              "every entry in data has reprocessed === false"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "DL-005",
+          "name": "Dead letter queue list - filter by reprocessed=true",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/system/dead-letter-queue?reprocessed=true",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "reprocessed": "true"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertions": [
+              "every entry in data has reprocessed === true",
+              "entries have reprocessedAt set to ISO timestamp"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "DL-006",
+          "name": "Dead letter queue list - cursor pagination",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/system/dead-letter-queue?limit=2",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "limit": 2
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertions": [
+              "page 1: data.length === 2 (or fewer if total < 2)",
+              "if hasMore, cursor is non-null string (BullMQ job ID)",
+              "page 2 using cursor returns next entries with no overlap"
+            ]
+          },
+          "preconditions": [
+            "At least 3 DLQ entries seeded for pagination testing"
+          ],
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "DL-007",
+          "name": "Dead letter queue list - empty result (no entries)",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/system/dead-letter-queue?eventName=nonexistent.event",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "eventName": "nonexistent.event"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertions": [
+              "response.body.success === true",
+              "response.body.data is empty array []",
+              "response.body.meta.hasMore === false",
+              "response.body.meta.cursor === null"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "DL-008",
+          "name": "Dead letter queue list - Redis unavailable returns 503",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/system/dead-letter-queue",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {}
+          },
+          "expected": {
+            "status": 503,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false",
+              "response.body.error.code === 'SERVICE_UNAVAILABLE'",
+              "response.body.error.message contains 'Dead-letter queue is unavailable'"
+            ]
+          },
+          "preconditions": [
+            "deadLetterService must be null on the Fastify instance (simulate Redis unavailable)"
+          ],
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "DL-009",
+          "name": "Dead letter queue list - invalid limit (>100) returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/system/dead-letter-queue?limit=101",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "limit": 101
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false",
+              "error references limit validation (max 100)"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "DL-010",
+          "name": "Dead letter queue list - invalid limit (<1) returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/system/dead-letter-queue?limit=0",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}"
+            },
+            "query": {
+              "limit": 0
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "DL-011",
+          "name": "Dead letter queue list - unauthenticated returns 401",
+          "type": "auth_error",
+          "request": {
+            "method": "GET",
+            "url": "/system/dead-letter-queue",
+            "headers": {},
+            "query": {}
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "DL-012",
+          "name": "Dead letter queue list - user without permission returns 403",
+          "type": "auth_error",
+          "request": {
+            "method": "GET",
+            "url": "/system/dead-letter-queue",
+            "headers": {
+              "Authorization": "Bearer {{unprivileged_user_jwt}}"
+            },
+            "query": {}
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/system/dead-letter-queue/:id/reprocess",
+      "description": "Re-emit a failed event from the dead-letter queue and mark it as reprocessed (E3.3, AC#4)",
+      "story": "E3.3",
+      "permission": "system.dead-letter-queue.list / edit",
+      "test_cases": [
+        {
+          "id": "DR-001",
+          "name": "Reprocess DLQ entry - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/system/dead-letter-queue/{{dlq_entry_id}}/reprocess",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}",
+              "Content-Type": "application/json"
+            },
+            "params": {
+              "id": "{{dlq_entry_id}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertions": [
+              "response.body.success === true",
+              "response.body.data.id === '{{dlq_entry_id}}'",
+              "response.body.data.reprocessed === true"
+            ]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "Verify via BullMQ: Job.fromId(queue, dlq_entry_id).data.reprocessed === true AND .data.reprocessedAt is ISO timestamp",
+            "expected": "DLQ entry marked as reprocessed with timestamp"
+          },
+          "side_effects": [
+            "The original event is re-emitted through the event bus",
+            "All subscribers for that event type receive the payload",
+            "If audit mapping exists, a new AuditLog record is created"
+          ]
+        },
+        {
+          "id": "DR-002",
+          "name": "Reprocess DLQ entry - verify event re-emission",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/system/dead-letter-queue/{{dlq_entry_id}}/reprocess",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}",
+              "Content-Type": "application/json"
+            },
+            "params": {
+              "id": "{{dlq_entry_id}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertions": [
+              "response.body.success === true",
+              "response.body.data.reprocessed === true"
+            ]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "Check that a new audit_log record was created by the re-emitted event (if the event has an audit mapping): SELECT * FROM audit_logs WHERE company_id = '{{companyId}}' ORDER BY timestamp DESC LIMIT 1",
+            "expected": "Most recent audit_log record matches the re-emitted event's entityType and action"
+          }
+        },
+        {
+          "id": "DR-003",
+          "name": "Reprocess DLQ entry - entry not found returns 404",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/system/dead-letter-queue/nonexistent-id-12345/reprocess",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}",
+              "Content-Type": "application/json"
+            },
+            "params": {
+              "id": "nonexistent-id-12345"
+            }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false",
+              "response.body.error.code === 'NOT_FOUND'",
+              "response.body.error.message contains 'Dead-letter entry not found'"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "DR-004",
+          "name": "Reprocess DLQ entry - already reprocessed returns 409",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/system/dead-letter-queue/{{already_reprocessed_dlq_id}}/reprocess",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}",
+              "Content-Type": "application/json"
+            },
+            "params": {
+              "id": "{{already_reprocessed_dlq_id}}"
+            }
+          },
+          "expected": {
+            "status": 409,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false",
+              "response.body.error.code === 'CONFLICT'",
+              "response.body.error.message contains 'already been reprocessed'"
+            ]
+          },
+          "preconditions": [
+            "DLQ entry must exist with reprocessed === true"
+          ],
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "DR-005",
+          "name": "Reprocess DLQ entry - Redis unavailable returns 503",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/system/dead-letter-queue/some-id/reprocess",
+            "headers": {
+              "Authorization": "Bearer {{admin_jwt}}",
+              "Content-Type": "application/json"
+            },
+            "params": {
+              "id": "some-id"
+            }
+          },
+          "expected": {
+            "status": 503,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false",
+              "response.body.error.code === 'SERVICE_UNAVAILABLE'",
+              "response.body.error.message contains 'Dead-letter queue is unavailable'"
+            ]
+          },
+          "preconditions": [
+            "deadLetterService must be null on the Fastify instance"
+          ],
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "DR-006",
+          "name": "Reprocess DLQ entry - unauthenticated returns 401",
+          "type": "auth_error",
+          "request": {
+            "method": "POST",
+            "url": "/system/dead-letter-queue/{{dlq_entry_id}}/reprocess",
+            "headers": {},
+            "params": {
+              "id": "{{dlq_entry_id}}"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        },
+        {
+          "id": "DR-007",
+          "name": "Reprocess DLQ entry - user without edit permission returns 403",
+          "type": "auth_error",
+          "request": {
+            "method": "POST",
+            "url": "/system/dead-letter-queue/{{dlq_entry_id}}/reprocess",
+            "headers": {
+              "Authorization": "Bearer {{view_only_user_jwt}}"
+            },
+            "params": {
+              "id": "{{dlq_entry_id}}"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["success", "error"],
+            "body_assertions": [
+              "response.body.success === false",
+              "user has view but not edit permission for system.dead-letter-queue.list"
+            ]
+          },
+          "db_verification": {
+            "enabled": false,
+            "query": "",
+            "expected": ""
+          }
+        }
+      ]
+    }
+  ],
+  "test_data_setup": {
+    "description": "Required test data seeding before running the test plan",
+    "users": [
+      {
+        "variable": "{{admin_jwt}}",
+        "description": "JWT for admin user with FULL_ACCESS access group (has system.audit-log.list view + system.dead-letter-queue.list view/edit)"
+      },
+      {
+        "variable": "{{unprivileged_user_jwt}}",
+        "description": "JWT for user without system.audit-log.list or system.dead-letter-queue.list permissions"
+      },
+      {
+        "variable": "{{company_b_user_jwt}}",
+        "description": "JWT for user in a different company (company B) for cross-company isolation tests"
+      },
+      {
+        "variable": "{{view_only_user_jwt}}",
+        "description": "JWT for user with system.dead-letter-queue.list view but NOT edit permission"
+      }
+    ],
+    "audit_log_seeding": [
+      "Create multiple audit log records across different entityTypes (User, AccessGroup, UserAccessGroup, CompanyProfile)",
+      "Create audit records with different actions (CREATE, UPDATE, DELETE, LOGIN)",
+      "Create audit records with different timestamps for date range testing",
+      "Create at least 1 record with timestamp 7+ years ago for retention test (AL-012)",
+      "Create audit records in 2+ different companies for company isolation testing",
+      "Create at least 5+ records for the same entity for pagination testing"
+    ],
+    "dead_letter_seeding": [
+      "Seed 3+ DLQ entries via failed event handler simulation or direct BullMQ job insertion",
+      "At least 1 entry with reprocessed=true and reprocessedAt set",
+      "At least 1 entry with reprocessed=false",
+      "Entries with different eventName values for filter testing"
+    ],
+    "variables": {
+      "{{companyId}}": "UUID of the primary test company",
+      "{{company_b_id}}": "UUID of a secondary test company",
+      "{{known_user_id}}": "UUID of a user with multiple audit log entries",
+      "{{known_access_group_id}}": "UUID of an access group with CREATE/UPDATE/DELETE audit trail",
+      "{{company_a_group_id}}": "UUID of an access group belonging to company A (for isolation testing)",
+      "{{dlq_entry_id}}": "BullMQ job ID of an unprocessed DLQ entry",
+      "{{already_reprocessed_dlq_id}}": "BullMQ job ID of a DLQ entry already marked reprocessed",
+      "{{valid_uuid}}": "Any valid UUID v4 for param validation testing"
+    }
+  },
+  "summary_by_type": {
+    "happy_path": 17,
+    "validation_error": 10,
+    "edge_case": 12,
+    "auth_error": 7
+  },
+  "summary_by_endpoint": {
+    "GET /system/audit-log": 21,
+    "GET /system/audit-log/:entityType/:entityId": 9,
+    "GET /system/dead-letter-queue": 12,
+    "POST /system/dead-letter-queue/:id/reprocess": 7
+  },
+  "coverage_notes": {
+    "e3_1_event_bus": "E3.1 (Event Bus Infrastructure) has no API endpoints — covered by unit tests in event-bus.test.ts and event-bus.plugin.test.ts",
+    "audit_immutability": "AuditLog immutability (PostgreSQL RULE-based UPDATE/DELETE prevention) is tested at the DB level in packages/db/src/__tests__/audit-immutability.test.ts, not via API tests",
+    "audit_creation": "AuditLog records are created via event bus emission (not a direct API endpoint). The audit service subscribes to business events and writes records automatically. Test seeding must use this flow or direct DB insertion.",
+    "retry_mechanism": "E3.3 retry + exponential backoff is tested in event-bus-retry.test.ts and retry-handler.test.ts (unit/integration tests), not via API endpoints",
+    "idempotency_guard": "E3.3 IdempotencyGuard utility is tested in idempotency.test.ts (unit tests), not via API endpoints"
+  }
+}

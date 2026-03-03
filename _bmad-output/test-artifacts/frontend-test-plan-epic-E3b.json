@@ -1,0 +1,2046 @@
+{
+  "epic_id": "E3b",
+  "epic_title": "Platform API + AI Gateway",
+  "generated_at": "2026-02-22T12:00:00.000Z",
+  "frontend_url": "http://localhost:5174",
+  "platform_api_url": "http://localhost:3001",
+  "total_journeys": 30,
+  "total_steps": 261,
+  "prerequisites": {
+    "note": "The Platform Admin Portal frontend does not exist yet — it is planned for Epic E13b. This test plan is a specification for E2E tests once the Platform Admin Portal is built. E3b stories are all backend infrastructure (Platform API server, Tenant Management API, AI Gateway package, Platform Client SDK, Plan & Billing Management). Tests assume a running Platform API at :3001, a Vite dev server for the Platform Admin Portal at :5174, a seeded Platform database with test platform users, and optionally Redis at :6379.",
+    "story_coverage": {
+      "E3b.1": "Journeys j01-j07 cover platform admin login with MFA, health monitoring, platform user management, and authorization. AC #1 (separate server) is infrastructure, tested indirectly. AC #2 (login+MFA) tested directly via j01-j02. AC #3 (MFA mandatory) tested via j03. AC #4 (health) tested via j04. AC #5 (internal service token) is backend-only, no frontend test. AC #6 (audit) tested via j28.",
+      "E3b.2": "Journeys j08-j16 cover tenant CRUD, lifecycle state transitions, module overrides, and feature flags. AC #1-#10 tested directly through tenant management UI flows.",
+      "E3b.3": "No direct frontend test coverage — AI Gateway is a backend package (packages/ai-gateway) with no admin UI. AI quota check/record endpoints are internal service-to-service. AI usage dashboard is tested via j25 (quota viewing). Provider adapters, fallback chains, circuit breaker are backend-only.",
+      "E3b.4": "No direct frontend test coverage — Platform Client SDK is a backend package (packages/platform-client). Webhook listener (POST /webhooks/platform) is backend-only. Cache invalidation is tested indirectly via tenant lifecycle and plan assignment journeys.",
+      "E3b.5": "Journeys j17-j27 cover plan CRUD, plan assignment, billing status, billing enforcement, and AI quota management. AC #1-#6 tested directly through plan and billing management UI flows."
+    },
+    "seeded_users": {
+      "platform_admin": {
+        "email": "admin@nexa-platform.local",
+        "password": "PlatformAdmin123!",
+        "role": "PLATFORM_ADMIN",
+        "mfaEnabled": true,
+        "mfaSecret": "JBSWY3DPEHPK3PXP",
+        "description": "Primary platform admin with MFA enabled — has full access to all platform admin operations"
+      },
+      "platform_viewer": {
+        "email": "viewer@nexa-platform.local",
+        "password": "PlatformViewer123!",
+        "role": "PLATFORM_VIEWER",
+        "mfaEnabled": false,
+        "description": "Read-only platform viewer — can view tenants, plans, billing but cannot create/modify"
+      },
+      "platform_admin_no_mfa": {
+        "email": "noomfa@nexa-platform.local",
+        "password": "NoMFA123!",
+        "role": "PLATFORM_ADMIN",
+        "mfaEnabled": false,
+        "description": "Platform admin without MFA enabled — login should be blocked per BR-PLT-018"
+      }
+    },
+    "seeded_data": {
+      "plans": [
+        { "code": "core", "displayName": "Core Plan", "maxUsers": 10, "maxCompanies": 1, "monthlyAiTokenAllowance": 100000, "aiHardLimit": true },
+        { "code": "pro", "displayName": "Professional Plan", "maxUsers": 50, "maxCompanies": 5, "monthlyAiTokenAllowance": 500000, "aiHardLimit": true },
+        { "code": "enterprise", "displayName": "Enterprise Plan", "maxUsers": 500, "maxCompanies": 50, "monthlyAiTokenAllowance": 5000000, "aiHardLimit": false }
+      ],
+      "tenants": [
+        { "code": "dev-tenant", "displayName": "Development Tenant", "status": "ACTIVE", "planCode": "pro" }
+      ],
+      "platform_audit_log_records": "Created by seed script (admin user creation, plan creation, tenant creation)",
+      "environment_variables": [
+        "PLATFORM_DATABASE_URL (Platform PostgreSQL)",
+        "PLATFORM_JWT_SECRET (min 32 chars)",
+        "PLATFORM_SERVICE_TOKEN (shared secret)",
+        "PLATFORM_PORT=3001"
+      ]
+    }
+  },
+  "journeys": [
+    {
+      "id": "j01-platform-admin-login-mfa",
+      "name": "Platform Admin Login with MFA",
+      "description": "Verify that a PLATFORM_ADMIN user with MFA enabled can login with email, password, and TOTP code. A platform JWT is issued and the user is redirected to the Platform Admin dashboard.",
+      "priority": "critical",
+      "related_stories": ["E3b-1"],
+      "acceptance_criteria": ["E3b.1-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Platform Admin Portal login page loads",
+          "screenshot": true,
+          "visual_check": "Login page with PLATFORM ADMIN branding, dark sidebar theme, email and password fields, and a Sign In button. Distinct from the ERP login page."
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!"
+          },
+          "expected_result": "Form fields populated",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "MFA verification step appears — TOTP code input field displayed",
+          "screenshot": true,
+          "visual_check": "MFA verification screen with a 6-digit TOTP code input field and a Verify button. Message indicates 'Enter the code from your authenticator app'."
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "MFA code input",
+          "input_data": {
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "TOTP code entered",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Verify button",
+          "input_data": {},
+          "expected_result": "Login succeeds, redirected to Platform Admin dashboard",
+          "screenshot": true,
+          "visual_check": "Platform Admin dashboard loaded with dark sidebar. Navigation shows: Tenants, Plans, Users, Monitoring sections. User name 'admin@nexa-platform.local' displayed in top bar with PLATFORM_ADMIN role badge."
+        }
+      ]
+    },
+    {
+      "id": "j02-platform-admin-login-wrong-mfa",
+      "name": "Platform Admin Login with Wrong MFA Code",
+      "description": "Verify that an incorrect TOTP code is rejected with a 401 error and the user cannot proceed.",
+      "priority": "high",
+      "related_stories": ["E3b-1"],
+      "acceptance_criteria": ["E3b.1-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!"
+          },
+          "expected_result": "Form fields populated",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "MFA verification step appears",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "MFA code input",
+          "input_data": {
+            "mfaCode": "000000"
+          },
+          "expected_result": "Invalid TOTP code entered",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Verify button",
+          "input_data": {},
+          "expected_result": "MFA verification fails with error",
+          "screenshot": true,
+          "visual_check": "Error message displayed: 'Invalid MFA code' or 'Authentication failed'. User remains on MFA verification screen. Dashboard is NOT accessible."
+        }
+      ]
+    },
+    {
+      "id": "j03-platform-admin-no-mfa-blocked",
+      "name": "PLATFORM_ADMIN Without MFA is Blocked",
+      "description": "Verify that a PLATFORM_ADMIN account without MFA enabled is blocked from logging in per BR-PLT-018 (mandatory MFA for PLATFORM_ADMIN).",
+      "priority": "critical",
+      "related_stories": ["E3b-1"],
+      "acceptance_criteria": ["E3b.1-AC3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "noomfa@nexa-platform.local",
+            "password": "NoMFA123!"
+          },
+          "expected_result": "Form fields populated",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login blocked with 403 error",
+          "screenshot": true,
+          "visual_check": "Error message displayed: 'MFA required for PLATFORM_ADMIN accounts. Please set up multi-factor authentication.' Login form remains visible. Dashboard is NOT accessible."
+        }
+      ]
+    },
+    {
+      "id": "j04-health-monitoring",
+      "name": "View Platform Health Status",
+      "description": "Verify that the health monitoring page shows Platform API status including database connectivity, Redis availability, and uptime.",
+      "priority": "high",
+      "related_stories": ["E3b-1"],
+      "acceptance_criteria": ["E3b.1-AC4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Monitoring link in sidebar",
+          "input_data": {},
+          "expected_result": "Health monitoring page loads",
+          "screenshot": true,
+          "visual_check": "Health monitoring dashboard showing: Overall status (ok/degraded), Platform API version, Uptime counter, Database connectivity indicator (connected/disconnected with latency in ms), Redis availability indicator (connected/disconnected with latency in ms). Green indicators for healthy services."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_text",
+          "target": "Health status indicator",
+          "input_data": {
+            "text": "ok"
+          },
+          "expected_result": "Platform health status shows 'ok' when all services are healthy",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Database connectivity indicator",
+          "input_data": {},
+          "expected_result": "Database shows 'connected: true' with latency value in milliseconds",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j05-platform-user-list",
+      "name": "List Platform Admin Users",
+      "description": "Verify that a PLATFORM_ADMIN can view the list of platform admin accounts.",
+      "priority": "high",
+      "related_stories": ["E3b-1"],
+      "acceptance_criteria": ["E3b.1-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Users link in sidebar",
+          "input_data": {},
+          "expected_result": "Platform Users page loads",
+          "screenshot": true,
+          "visual_check": "Platform Users list showing admin accounts. Table columns: Email, Display Name, Role (PLATFORM_ADMIN/PLATFORM_VIEWER), MFA Status (enabled/disabled), Active status. At least 3 seeded users visible."
+        }
+      ]
+    },
+    {
+      "id": "j06-create-platform-user",
+      "name": "Create a New Platform Admin User",
+      "description": "Verify that a PLATFORM_ADMIN can create a new platform admin account with email, display name, role, and password.",
+      "priority": "high",
+      "related_stories": ["E3b-1"],
+      "acceptance_criteria": ["E3b.1-AC2", "E3b.1-AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Users link in sidebar",
+          "input_data": {},
+          "expected_result": "Platform Users page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Create User button",
+          "input_data": {},
+          "expected_result": "Create user form/dialog appears",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Create User form",
+          "input_data": {
+            "email": "newadmin@nexa-platform.local",
+            "displayName": "New Admin User",
+            "role": "PLATFORM_VIEWER",
+            "password": "NewAdmin123!"
+          },
+          "expected_result": "Form fields populated",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Create / Save button",
+          "input_data": {},
+          "expected_result": "User created successfully",
+          "screenshot": true,
+          "visual_check": "Success toast: 'Platform user created successfully'. Users list now shows the new user 'newadmin@nexa-platform.local' with role PLATFORM_VIEWER. PlatformAuditLog entry created (verifiable via audit log page)."
+        }
+      ]
+    },
+    {
+      "id": "j07-viewer-cannot-create-users",
+      "name": "PLATFORM_VIEWER Cannot Create Users",
+      "description": "Verify that a PLATFORM_VIEWER cannot create, update, or manage platform users — receives 403 Forbidden.",
+      "priority": "high",
+      "related_stories": ["E3b-1"],
+      "acceptance_criteria": ["E3b.1-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "viewer@nexa-platform.local",
+            "password": "PlatformViewer123!"
+          },
+          "expected_result": "Login succeeds (PLATFORM_VIEWER, MFA not required)",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Users link in sidebar",
+          "input_data": {},
+          "expected_result": "Users page loads but Create button is hidden or disabled",
+          "screenshot": true,
+          "visual_check": "Users list visible (PLATFORM_VIEWER can view). Create User button is either hidden or disabled. No edit/update actions available on user rows."
+        }
+      ]
+    },
+    {
+      "id": "j08-create-tenant",
+      "name": "Create a New Tenant",
+      "description": "Verify that a PLATFORM_ADMIN can create a new tenant with code, display name, plan assignment, and database configuration. Tenant is created in PROVISIONING status.",
+      "priority": "critical",
+      "related_stories": ["E3b-2"],
+      "acceptance_criteria": ["E3b.2-AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Tenants link in sidebar",
+          "input_data": {},
+          "expected_result": "Tenants list page loads",
+          "screenshot": true,
+          "visual_check": "Tenants list page with filter controls (status, plan, search) and data table. Columns: Code, Display Name, Status, Plan, Region, Last Activity, Active Modules. Create Tenant button visible for PLATFORM_ADMIN."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Create Tenant button",
+          "input_data": {},
+          "expected_result": "Create tenant wizard/form appears",
+          "screenshot": true,
+          "visual_check": "Create tenant form with fields: Code (slug), Display Name, Legal Name, Plan (dropdown with Core/Pro/Enterprise), Region, Database Host, Database Name. Code field shows format hint (alphanumeric + hyphens, 3-50 chars)."
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Create Tenant form",
+          "input_data": {
+            "code": "test-acme-corp",
+            "displayName": "Acme Corporation",
+            "legalName": "Acme Corp Ltd",
+            "planId": "{{pro_plan_id}}",
+            "region": "uk-south",
+            "dbHost": "localhost",
+            "dbName": "nexa_acme"
+          },
+          "expected_result": "Form fields populated",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Create button",
+          "input_data": {},
+          "expected_result": "Tenant created in PROVISIONING status",
+          "screenshot": true,
+          "visual_check": "Success toast: 'Tenant created successfully'. Redirected to tenant detail page showing: Code='test-acme-corp', Status='PROVISIONING' (with amber badge), Plan='Professional Plan', Region='uk-south'. Activate button visible to transition to ACTIVE."
+        }
+      ]
+    },
+    {
+      "id": "j09-tenant-list-filters",
+      "name": "List and Filter Tenants",
+      "description": "Verify that the tenant list supports filtering by status, plan, and search term, with pagination.",
+      "priority": "high",
+      "related_stories": ["E3b-2"],
+      "acceptance_criteria": ["E3b.2-AC9"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/admin/tenants",
+          "input_data": {},
+          "expected_result": "Tenants list loads with all tenants",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "Status filter dropdown",
+          "input_data": {
+            "status": "ACTIVE"
+          },
+          "expected_result": "Status filter set to ACTIVE",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Apply Filters button",
+          "input_data": {},
+          "expected_result": "Table refreshes showing only ACTIVE tenants",
+          "screenshot": true,
+          "visual_check": "Tenant list shows only tenants with ACTIVE status badge. Pagination meta reflects filtered count. All visible rows have green 'ACTIVE' status badge."
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "Search input",
+          "input_data": {
+            "search": "acme"
+          },
+          "expected_result": "Search term entered",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Apply Filters button",
+          "input_data": {},
+          "expected_result": "Table refreshes showing tenants matching 'acme' search within ACTIVE status",
+          "screenshot": true,
+          "visual_check": "Filtered list shows only ACTIVE tenants with 'acme' in code, display name, or legal name. Pagination reflects combined filter count."
+        }
+      ]
+    },
+    {
+      "id": "j10-tenant-detail-view",
+      "name": "View Tenant Detail with Tabs",
+      "description": "Verify that the tenant detail page shows comprehensive information across multiple tabs: overview, modules, users, AI usage, billing, and audit.",
+      "priority": "high",
+      "related_stories": ["E3b-2"],
+      "acceptance_criteria": ["E3b.2-AC10"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/admin/tenants/{{dev_tenant_id}}",
+          "input_data": {},
+          "expected_result": "Tenant detail page loads for dev-tenant",
+          "screenshot": true,
+          "visual_check": "Tenant detail page with overview tab active. Shows: Code='dev-tenant', Display Name='Development Tenant', Status='ACTIVE' (green badge), Plan='Professional Plan', Region='uk-south', Last Activity timestamp. Tab navigation: Overview, Modules, Users, AI Usage, Billing, Audit."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Modules tab",
+          "input_data": {},
+          "expected_result": "Modules tab shows module overrides",
+          "screenshot": true,
+          "visual_check": "Modules tab showing a list of plan-enabled modules with toggle switches for module overrides. Enabled modules from plan listed. Override controls available for PLATFORM_ADMIN."
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Billing tab",
+          "input_data": {},
+          "expected_result": "Billing tab shows billing status and enforcement",
+          "screenshot": true,
+          "visual_check": "Billing tab showing: Billing Status (CURRENT/GRACE/OVERDUE/BLOCKED), Enforcement Action (NONE/WARNING/READ_ONLY/SUSPENDED), Stripe Customer ID, Subscription Status, Current Period End, Grace Period Days, Last Payment Date, Dunning Level."
+        }
+      ]
+    },
+    {
+      "id": "j11-tenant-lifecycle-activate",
+      "name": "Activate a Provisioning Tenant",
+      "description": "Verify that a PROVISIONING tenant can be activated (transitioned to ACTIVE status). Tests the PROVISIONING -> ACTIVE state transition.",
+      "priority": "critical",
+      "related_stories": ["E3b-2"],
+      "acceptance_criteria": ["E3b.2-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/admin/tenants/{{provisioning_tenant_id}}",
+          "input_data": {},
+          "expected_result": "Tenant detail page loads showing PROVISIONING status",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Activate button",
+          "input_data": {},
+          "expected_result": "Confirmation dialog appears",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Confirm Activate button",
+          "input_data": {},
+          "expected_result": "Tenant status transitions to ACTIVE",
+          "screenshot": true,
+          "visual_check": "Success toast: 'Tenant activated successfully'. Status badge changes from amber 'PROVISIONING' to green 'ACTIVE'. Activate button is replaced by lifecycle action buttons: Suspend, and settings update options."
+        }
+      ]
+    },
+    {
+      "id": "j12-tenant-lifecycle-suspend",
+      "name": "Suspend an Active Tenant",
+      "description": "Verify that an ACTIVE tenant can be suspended with a mandatory reason. Tests the ACTIVE -> SUSPENDED state transition and webhook push.",
+      "priority": "critical",
+      "related_stories": ["E3b-2"],
+      "acceptance_criteria": ["E3b.2-AC3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/admin/tenants/{{active_tenant_id}}",
+          "input_data": {},
+          "expected_result": "Tenant detail page loads showing ACTIVE status",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Suspend button",
+          "input_data": {},
+          "expected_result": "Suspension dialog appears with mandatory reason field",
+          "screenshot": true,
+          "visual_check": "Suspension dialog with a reason text field (mandatory), warning message about the impact of suspension (tenant users will lose access), and Confirm Suspend / Cancel buttons."
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Suspension reason field",
+          "input_data": {
+            "reason": "Non-payment after 30 days overdue"
+          },
+          "expected_result": "Reason entered",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Confirm Suspend button",
+          "input_data": {},
+          "expected_result": "Tenant suspended successfully",
+          "screenshot": true,
+          "visual_check": "Success toast: 'Tenant suspended'. Status badge changes from green 'ACTIVE' to red 'SUSPENDED'. Available actions now show: Reactivate, Archive. Suspension reason visible in tenant detail. tenant.suspended webhook pushed to ERP."
+        }
+      ]
+    },
+    {
+      "id": "j13-tenant-lifecycle-reactivate",
+      "name": "Reactivate a Suspended Tenant",
+      "description": "Verify that a SUSPENDED tenant can be reactivated (returned to ACTIVE status). Tests the SUSPENDED -> ACTIVE state transition.",
+      "priority": "critical",
+      "related_stories": ["E3b-2"],
+      "acceptance_criteria": ["E3b.2-AC4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/admin/tenants/{{suspended_tenant_id}}",
+          "input_data": {},
+          "expected_result": "Tenant detail page loads showing SUSPENDED status",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Reactivate button",
+          "input_data": {},
+          "expected_result": "Confirmation dialog appears",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Confirm Reactivate button",
+          "input_data": {},
+          "expected_result": "Tenant reactivated successfully",
+          "screenshot": true,
+          "visual_check": "Success toast: 'Tenant reactivated'. Status badge changes from red 'SUSPENDED' to green 'ACTIVE'. Available actions return to: Suspend. tenant.reactivated webhook pushed to ERP."
+        }
+      ]
+    },
+    {
+      "id": "j14-tenant-lifecycle-archive",
+      "name": "Archive a Suspended Tenant (Irrecoverable)",
+      "description": "Verify that a SUSPENDED tenant can be archived. ARCHIVED is terminal — no further state transitions are possible (BR-PLT-003).",
+      "priority": "critical",
+      "related_stories": ["E3b-2"],
+      "acceptance_criteria": ["E3b.2-AC5"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/admin/tenants/{{suspended_tenant_for_archive_id}}",
+          "input_data": {},
+          "expected_result": "Tenant detail page loads showing SUSPENDED status",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Archive button",
+          "input_data": {},
+          "expected_result": "Destructive action confirmation dialog appears with strong warning",
+          "screenshot": true,
+          "visual_check": "Archive confirmation dialog with red/destructive styling. Warning: 'This action is irreversible. The tenant will be permanently archived and cannot be reactivated.' Requires typing tenant code to confirm (e.g., 'Type test-acme-corp to confirm')."
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Confirmation input",
+          "input_data": {
+            "confirmCode": "test-acme-corp"
+          },
+          "expected_result": "Tenant code typed for confirmation",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Confirm Archive button",
+          "input_data": {},
+          "expected_result": "Tenant archived (terminal state)",
+          "screenshot": true,
+          "visual_check": "Success toast: 'Tenant archived'. Status badge shows grey 'ARCHIVED'. No lifecycle action buttons available (no reactivate, no suspend). Tenant detail is read-only. tenant.archived webhook pushed to ERP."
+        }
+      ]
+    },
+    {
+      "id": "j15-tenant-invalid-state-transition",
+      "name": "Invalid State Transition Rejected (ACTIVE -> ARCHIVED)",
+      "description": "Verify that invalid state transitions are rejected with a 422 INVALID_STATE_TRANSITION error per BR-PLT-001. ACTIVE cannot transition directly to ARCHIVED.",
+      "priority": "high",
+      "related_stories": ["E3b-2"],
+      "acceptance_criteria": ["E3b.2-AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/admin/tenants/{{active_tenant_id}}",
+          "input_data": {},
+          "expected_result": "Tenant detail page loads showing ACTIVE status",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Tenant action buttons",
+          "input_data": {},
+          "expected_result": "Archive button is NOT visible for ACTIVE tenant — only Suspend is available. The UI should prevent invalid transitions by only showing valid action buttons.",
+          "screenshot": true,
+          "visual_check": "Tenant detail for ACTIVE tenant shows only the 'Suspend' action button. No 'Archive' or 'Reactivate' buttons are visible. This prevents the ACTIVE -> ARCHIVED invalid transition at the UI level."
+        }
+      ]
+    },
+    {
+      "id": "j16-tenant-module-overrides",
+      "name": "Configure Tenant Module Overrides",
+      "description": "Verify that a PLATFORM_ADMIN can toggle module overrides for a tenant, which pushes tenant.modules_changed webhook to ERP.",
+      "priority": "high",
+      "related_stories": ["E3b-2"],
+      "acceptance_criteria": ["E3b.2-AC7"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/admin/tenants/{{dev_tenant_id}}",
+          "input_data": {},
+          "expected_result": "Tenant detail page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Modules tab",
+          "input_data": {},
+          "expected_result": "Modules tab shows current module configuration",
+          "screenshot": true,
+          "visual_check": "Module overrides panel showing plan-included modules with toggle switches. Each module row shows: Module Key (e.g., 'finance', 'sales', 'crm'), Enabled status (toggle), Override reason field."
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Toggle switch for 'manufacturing' module to enable it",
+          "input_data": {},
+          "expected_result": "Manufacturing module toggled on as override",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "Override reason field for manufacturing",
+          "input_data": {
+            "reason": "Trial access for Q1 2026"
+          },
+          "expected_result": "Reason entered for the override",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Save Module Overrides button",
+          "input_data": {},
+          "expected_result": "Module overrides saved, webhook pushed",
+          "screenshot": true,
+          "visual_check": "Success toast: 'Module overrides updated'. Manufacturing module now shows as enabled with override reason. tenant.modules_changed webhook pushed to ERP for cache invalidation."
+        }
+      ]
+    },
+    {
+      "id": "j17-create-plan",
+      "name": "Create a New Subscription Plan",
+      "description": "Verify that a PLATFORM_ADMIN can create a new subscription plan with all required fields: code, display name, limits, AI quota, and enabled modules.",
+      "priority": "critical",
+      "related_stories": ["E3b-5"],
+      "acceptance_criteria": ["E3b.5-AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Plans link in sidebar",
+          "input_data": {},
+          "expected_result": "Plans list page loads",
+          "screenshot": true,
+          "visual_check": "Plans list showing existing plans (Core, Professional, Enterprise). Table columns: Code, Display Name, Max Users, Max Companies, AI Token Allowance, Hard Limit, Modules, Rate Limit. Create Plan button visible."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Create Plan button",
+          "input_data": {},
+          "expected_result": "Create plan form appears",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Create Plan form",
+          "input_data": {
+            "code": "startup",
+            "displayName": "Startup Plan",
+            "maxUsers": 5,
+            "maxCompanies": 1,
+            "monthlyAiTokenAllowance": 50000,
+            "aiHardLimit": true,
+            "enabledModules": ["finance", "ar", "ap", "sales"],
+            "apiRateLimit": 500
+          },
+          "expected_result": "All plan fields populated",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Create Plan button",
+          "input_data": {},
+          "expected_result": "Plan created successfully",
+          "screenshot": true,
+          "visual_check": "Success toast: 'Plan created successfully'. Plans list now shows the new 'Startup Plan' with code='startup', maxUsers=5, enabledModules showing 4 modules. PlatformAuditLog entry created."
+        }
+      ]
+    },
+    {
+      "id": "j18-duplicate-plan-code-409",
+      "name": "Duplicate Plan Code Returns 409",
+      "description": "Verify that creating a plan with a duplicate code returns a 409 Conflict error.",
+      "priority": "high",
+      "related_stories": ["E3b-5"],
+      "acceptance_criteria": ["E3b.5-AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/admin/plans",
+          "input_data": {},
+          "expected_result": "Plans page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Create Plan button",
+          "input_data": {},
+          "expected_result": "Create plan form appears",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Create Plan form",
+          "input_data": {
+            "code": "core",
+            "displayName": "Duplicate Core",
+            "maxUsers": 10,
+            "maxCompanies": 1,
+            "monthlyAiTokenAllowance": 100000,
+            "enabledModules": ["finance"]
+          },
+          "expected_result": "Form populated with duplicate 'core' code",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Create Plan button",
+          "input_data": {},
+          "expected_result": "409 Conflict error",
+          "screenshot": true,
+          "visual_check": "Error toast or inline error: 'A plan with code core already exists' or '409 Conflict'. Form remains visible with the entered data. No duplicate plan created."
+        }
+      ]
+    },
+    {
+      "id": "j19-update-plan",
+      "name": "Update an Existing Plan",
+      "description": "Verify that a PLATFORM_ADMIN can update plan limits and modules on an existing plan.",
+      "priority": "high",
+      "related_stories": ["E3b-5"],
+      "acceptance_criteria": ["E3b.5-AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/admin/plans",
+          "input_data": {},
+          "expected_result": "Plans page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Edit button on the 'Startup Plan' row",
+          "input_data": {},
+          "expected_result": "Edit plan form loads with current values",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Edit Plan form",
+          "input_data": {
+            "maxUsers": 10,
+            "monthlyAiTokenAllowance": 100000
+          },
+          "expected_result": "Updated values entered",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Save button",
+          "input_data": {},
+          "expected_result": "Plan updated successfully",
+          "screenshot": true,
+          "visual_check": "Success toast: 'Plan updated'. Plans list shows the updated Startup Plan with maxUsers=10 and AI allowance=100,000. PlatformAuditLog entry created."
+        }
+      ]
+    },
+    {
+      "id": "j20-assign-plan-to-tenant",
+      "name": "Assign a New Plan to a Tenant",
+      "description": "Verify that a PLATFORM_ADMIN can assign a different plan to a tenant. The plan change pushes a tenant.plan_changed webhook and the new entitlements apply immediately (BR-PLT-006).",
+      "priority": "critical",
+      "related_stories": ["E3b-5"],
+      "acceptance_criteria": ["E3b.5-AC2", "E3b.5-AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/admin/tenants/{{dev_tenant_id}}",
+          "input_data": {},
+          "expected_result": "Tenant detail page loads showing current plan (Professional)",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Change Plan / Assign Plan button",
+          "input_data": {},
+          "expected_result": "Plan assignment dialog appears",
+          "screenshot": true,
+          "visual_check": "Plan assignment dialog showing current plan (Professional) and a dropdown/selector with available plans. Shows comparison of old vs new limits (maxUsers, maxCompanies, AI allowance, enabled modules)."
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Plan selector",
+          "input_data": {
+            "planId": "{{enterprise_plan_id}}",
+            "reason": "Customer upgraded to Enterprise"
+          },
+          "expected_result": "Enterprise plan selected with reason",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Confirm Plan Change button",
+          "input_data": {},
+          "expected_result": "Plan assigned, webhook pushed",
+          "screenshot": true,
+          "visual_check": "Success toast: 'Plan changed to Enterprise'. Tenant detail now shows Plan='Enterprise Plan'. Limits updated: maxUsers=500, maxCompanies=50, AI allowance=5,000,000. tenant.plan_changed webhook pushed. PlatformAuditLog entry shows old plan 'pro' -> new plan 'enterprise'."
+        }
+      ]
+    },
+    {
+      "id": "j21-view-tenant-billing",
+      "name": "View Tenant Billing Status",
+      "description": "Verify that the billing status for a tenant is displayed with all relevant fields: Stripe info, subscription status, enforcement action, and dunning level.",
+      "priority": "high",
+      "related_stories": ["E3b-5"],
+      "acceptance_criteria": ["E3b.5-AC3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/admin/tenants/{{dev_tenant_id}}",
+          "input_data": {},
+          "expected_result": "Tenant detail page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Billing tab",
+          "input_data": {},
+          "expected_result": "Billing information displayed",
+          "screenshot": true,
+          "visual_check": "Billing tab showing all fields: Billing Status='CURRENT' (green), Enforcement Action='NONE', Stripe Customer ID, Subscription Status, Current Period End date, Grace Period Days (14), Last Payment Date, Dunning Level (0). Enforcement controls section with 'Change Enforcement' button for PLATFORM_ADMIN."
+        }
+      ]
+    },
+    {
+      "id": "j22-billing-enforcement-escalation",
+      "name": "Escalate Billing Enforcement (NONE -> WARNING -> READ_ONLY)",
+      "description": "Verify the billing enforcement state machine: escalate from NONE to WARNING, then WARNING to READ_ONLY. Each transition pushes a billing.enforcement_changed webhook and creates audit log entries.",
+      "priority": "critical",
+      "related_stories": ["E3b-5"],
+      "acceptance_criteria": ["E3b.5-AC4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/admin/tenants/{{dev_tenant_id}}",
+          "input_data": {},
+          "expected_result": "Tenant detail page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Billing tab",
+          "input_data": {},
+          "expected_result": "Billing tab loads showing Enforcement Action = NONE",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Change Enforcement button",
+          "input_data": {},
+          "expected_result": "Enforcement change dialog appears",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "Enforcement change form",
+          "input_data": {
+            "enforcementAction": "WARNING",
+            "reason": "Invoice overdue by 7 days"
+          },
+          "expected_result": "WARNING selected with reason",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Confirm Enforcement Change button",
+          "input_data": {},
+          "expected_result": "Enforcement changed to WARNING",
+          "screenshot": true,
+          "visual_check": "Success toast: 'Enforcement changed to WARNING'. Billing tab now shows: Enforcement Action='WARNING' (amber badge), Billing Status='GRACE'. billing.enforcement_changed webhook pushed."
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Change Enforcement button",
+          "input_data": {},
+          "expected_result": "Enforcement change dialog appears again",
+          "screenshot": false
+        },
+        {
+          "step_number": 9,
+          "action": "fill_form",
+          "target": "Enforcement change form",
+          "input_data": {
+            "enforcementAction": "READ_ONLY",
+            "reason": "Invoice overdue by 21 days, grace period expired"
+          },
+          "expected_result": "READ_ONLY selected with reason",
+          "screenshot": false
+        },
+        {
+          "step_number": 10,
+          "action": "click",
+          "target": "Confirm Enforcement Change button",
+          "input_data": {},
+          "expected_result": "Enforcement changed to READ_ONLY",
+          "screenshot": true,
+          "visual_check": "Success toast: 'Enforcement changed to READ_ONLY'. Billing tab shows: Enforcement Action='READ_ONLY' (red badge), Billing Status='OVERDUE'. ERP write operations will be blocked for this tenant (BR-PLT-005)."
+        }
+      ]
+    },
+    {
+      "id": "j23-billing-enforcement-to-suspended",
+      "name": "Billing Enforcement Escalates to SUSPENDED",
+      "description": "Verify that escalating enforcement from READ_ONLY to SUSPENDED also transitions the tenant status to SUSPENDED and pushes both billing.enforcement_changed and tenant.suspended webhooks.",
+      "priority": "critical",
+      "related_stories": ["E3b-5"],
+      "acceptance_criteria": ["E3b.5-AC4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/admin/tenants/{{read_only_tenant_id}}",
+          "input_data": {},
+          "expected_result": "Tenant detail loads showing READ_ONLY enforcement",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Billing tab",
+          "input_data": {},
+          "expected_result": "Billing tab shows Enforcement Action = READ_ONLY",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Change Enforcement button",
+          "input_data": {},
+          "expected_result": "Enforcement change dialog appears",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "Enforcement change form",
+          "input_data": {
+            "enforcementAction": "SUSPENDED",
+            "reason": "Invoice overdue by 60 days, no response to dunning notices"
+          },
+          "expected_result": "SUSPENDED selected with reason",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Confirm Enforcement Change button",
+          "input_data": {},
+          "expected_result": "Enforcement changed to SUSPENDED, tenant status also changes",
+          "screenshot": true,
+          "visual_check": "Success toast: 'Enforcement changed to SUSPENDED'. Billing tab shows: Enforcement Action='SUSPENDED' (dark red badge), Billing Status='BLOCKED'. Tenant overview tab shows Status changed to 'SUSPENDED'. Both billing.enforcement_changed and tenant.suspended webhooks pushed."
+        }
+      ]
+    },
+    {
+      "id": "j24-billing-enforcement-invalid-skip",
+      "name": "Invalid Billing Enforcement Transition Rejected",
+      "description": "Verify that skipping enforcement levels (NONE -> READ_ONLY directly) is rejected with a 422 INVALID_ENFORCEMENT_TRANSITION error.",
+      "priority": "high",
+      "related_stories": ["E3b-5"],
+      "acceptance_criteria": ["E3b.5-AC4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/admin/tenants/{{none_enforcement_tenant_id}}",
+          "input_data": {},
+          "expected_result": "Tenant detail loads showing NONE enforcement",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Billing tab",
+          "input_data": {},
+          "expected_result": "Billing tab loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Enforcement change options",
+          "input_data": {},
+          "expected_result": "Only valid transitions are available. From NONE, only WARNING should be selectable. READ_ONLY and SUSPENDED should be disabled or hidden.",
+          "screenshot": true,
+          "visual_check": "Enforcement change dialog shows only 'WARNING' as an available option from current NONE state. READ_ONLY and SUSPENDED are greyed out/disabled. This prevents invalid enforcement transitions at the UI level."
+        }
+      ]
+    },
+    {
+      "id": "j25-view-ai-quota",
+      "name": "View Tenant AI Quota",
+      "description": "Verify that the AI quota for a tenant is displayed with usage percentage, allowance, soft/hard limits, and period dates.",
+      "priority": "high",
+      "related_stories": ["E3b-5"],
+      "acceptance_criteria": ["E3b.5-AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/admin/tenants/{{dev_tenant_id}}",
+          "input_data": {},
+          "expected_result": "Tenant detail page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "AI Usage tab",
+          "input_data": {},
+          "expected_result": "AI Usage tab loads with quota information",
+          "screenshot": true,
+          "visual_check": "AI Usage tab showing: Token Allowance (from plan), Tokens Used, Usage Percentage with progress bar, Soft Limit % threshold, Hard Limit % threshold, Burst Allowance, Period Start/End dates, Plan code. Progress bar colour changes based on usage (green < soft, amber between soft-hard, red > hard)."
+        }
+      ]
+    },
+    {
+      "id": "j26-update-ai-quota",
+      "name": "Update Tenant AI Quota Limits",
+      "description": "Verify that a PLATFORM_ADMIN can update AI quota parameters (token allowance, soft/hard limit percentages) for a tenant.",
+      "priority": "high",
+      "related_stories": ["E3b-5"],
+      "acceptance_criteria": ["E3b.5-AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/admin/tenants/{{dev_tenant_id}}",
+          "input_data": {},
+          "expected_result": "Tenant detail page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "AI Usage tab",
+          "input_data": {},
+          "expected_result": "AI Usage tab loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Edit Quota button",
+          "input_data": {},
+          "expected_result": "Quota edit form appears",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "AI Quota edit form",
+          "input_data": {
+            "tokenAllowance": 1000000,
+            "softLimitPct": 70,
+            "hardLimitPct": 95,
+            "reason": "Temporary quota increase for Q1 reporting period"
+          },
+          "expected_result": "Quota values updated in form",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Save Quota button",
+          "input_data": {},
+          "expected_result": "Quota updated successfully",
+          "screenshot": true,
+          "visual_check": "Success toast: 'AI quota updated'. AI Usage tab now shows: Token Allowance=1,000,000, Soft Limit=70%, Hard Limit=95%. Usage percentage recalculated based on new allowance. PlatformAuditLog entry created with change details."
+        }
+      ]
+    },
+    {
+      "id": "j27-viewer-cannot-modify",
+      "name": "PLATFORM_VIEWER Cannot Modify Plans, Tenants, or Billing",
+      "description": "Verify that PLATFORM_VIEWER role can view tenants, plans, and billing but cannot create, update, or perform lifecycle operations. All mutation buttons are hidden or disabled.",
+      "priority": "high",
+      "related_stories": ["E3b-2", "E3b-5"],
+      "acceptance_criteria": ["E3b.2-AC9", "E3b.2-AC10"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "viewer@nexa-platform.local",
+            "password": "PlatformViewer123!"
+          },
+          "expected_result": "Login succeeds (PLATFORM_VIEWER, no MFA required)",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Tenants link in sidebar",
+          "input_data": {},
+          "expected_result": "Tenants list loads (viewer can read)",
+          "screenshot": true,
+          "visual_check": "Tenants list visible. Create Tenant button is hidden/disabled. No edit, suspend, reactivate, or archive actions available on tenant rows."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "First tenant row to view detail",
+          "input_data": {},
+          "expected_result": "Tenant detail page loads in read-only mode",
+          "screenshot": true,
+          "visual_check": "Tenant detail page shows all information (overview, modules, billing, AI usage) but NO action buttons: no Suspend, no Activate, no Change Plan, no Edit Module Overrides, no Change Enforcement. All data is read-only."
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Plans link in sidebar",
+          "input_data": {},
+          "expected_result": "Plans list loads (viewer can read)",
+          "screenshot": true,
+          "visual_check": "Plans list visible with all plan data. Create Plan button is hidden/disabled. No edit actions available on plan rows."
+        }
+      ]
+    },
+    {
+      "id": "j28-platform-audit-log",
+      "name": "View Platform Audit Log",
+      "description": "Verify that all state-changing admin actions (login, tenant create, plan create, enforcement change) are recorded in the PlatformAuditLog and viewable through the platform audit log screen.",
+      "priority": "critical",
+      "related_stories": ["E3b-1"],
+      "acceptance_criteria": ["E3b.1-AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Audit Log link in sidebar (under Monitoring section)",
+          "input_data": {},
+          "expected_result": "Platform Audit Log page loads",
+          "screenshot": true,
+          "visual_check": "Platform Audit Log page with data table. Columns: Timestamp, Action, Target Type, Target ID, Actor (Platform User), IP Address. Records sorted by timestamp descending. Filter controls for action type, target type, date range, and actor."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_text",
+          "target": "Audit log table",
+          "input_data": {
+            "text": "auth.login"
+          },
+          "expected_result": "At least one audit record with action='auth.login' visible (from the login that just occurred)",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Audit log records",
+          "input_data": {},
+          "expected_result": "Multiple audit records visible from previous journeys: tenant.create, plan.created, tenant.suspend, billing.enforcement_changed, etc. Each record shows actor, action, target, and timestamp.",
+          "screenshot": true,
+          "visual_check": "Audit log showing a rich history of platform admin actions. Records include: auth.login, tenant.create, tenant.activate, tenant.suspend, tenant.reactivate, tenant.archive, plan.created, plan.updated, billing.enforcement_changed, platform_user.create. All entries have complete actor, IP, and timestamp data."
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "First audit record row (expand/detail view)",
+          "input_data": {},
+          "expected_result": "Audit record detail view opens",
+          "screenshot": true,
+          "visual_check": "Detail view showing: Action (e.g., 'tenant.suspend'), Target Type ('tenant'), Target ID (UUID), Actor (platform user email), Details (JSON showing reason, status change), IP Address, User Agent, Timestamp (ISO format)."
+        }
+      ]
+    },
+    {
+      "id": "j29-unauthenticated-redirect",
+      "name": "Unauthenticated Access Redirects to Login",
+      "description": "Verify that accessing any platform admin page without authentication redirects to the login page.",
+      "priority": "high",
+      "related_stories": ["E3b-1"],
+      "acceptance_criteria": ["E3b.1-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/admin/tenants",
+          "input_data": {},
+          "expected_result": "Redirected to login page",
+          "screenshot": true,
+          "visual_check": "Login page displayed. No tenant data visible. URL may show /login or /login?redirect=/admin/tenants."
+        },
+        {
+          "step_number": 2,
+          "action": "navigate",
+          "target": "/admin/plans",
+          "input_data": {},
+          "expected_result": "Redirected to login page",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/admin/users",
+          "input_data": {},
+          "expected_result": "Redirected to login page",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j30-full-tenant-lifecycle-e2e",
+      "name": "Full Tenant Lifecycle: Create -> Activate -> Assign Plan -> Enforce Billing -> Suspend -> Reactivate",
+      "description": "End-to-end journey testing the complete tenant lifecycle: create tenant, activate, assign a plan, escalate billing enforcement through WARNING -> READ_ONLY, then recover via payment (NONE). Verifies state machine transitions, webhook pushes, and audit trail at each step.",
+      "priority": "critical",
+      "related_stories": ["E3b-1", "E3b-2", "E3b-5"],
+      "acceptance_criteria": ["E3b.2-AC1", "E3b.2-AC2", "E3b.2-AC3", "E3b.2-AC4", "E3b.5-AC2", "E3b.5-AC4", "E3b.5-AC6", "E3b.1-AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.local",
+            "password": "PlatformAdmin123!",
+            "mfaCode": "{{generated_totp_code}}"
+          },
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Tenants link in sidebar",
+          "input_data": {},
+          "expected_result": "Tenants list loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Create Tenant button",
+          "input_data": {},
+          "expected_result": "Create tenant form appears",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Create Tenant form",
+          "input_data": {
+            "code": "e2e-lifecycle-test",
+            "displayName": "E2E Lifecycle Test Tenant",
+            "planId": "{{core_plan_id}}",
+            "region": "uk-south",
+            "dbHost": "localhost",
+            "dbName": "nexa_e2e_lifecycle"
+          },
+          "expected_result": "Form populated",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Create button",
+          "input_data": {},
+          "expected_result": "Tenant created in PROVISIONING status",
+          "screenshot": true,
+          "visual_check": "Tenant detail showing Status='PROVISIONING' (amber), Plan='Core Plan'. Activate button visible."
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Activate button",
+          "input_data": {},
+          "expected_result": "Confirmation dialog",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Confirm Activate button",
+          "input_data": {},
+          "expected_result": "Tenant activated",
+          "screenshot": true,
+          "visual_check": "Status changed to 'ACTIVE' (green). Suspend button now visible."
+        },
+        {
+          "step_number": 9,
+          "action": "click",
+          "target": "Change Plan / Assign Plan button",
+          "input_data": {},
+          "expected_result": "Plan assignment dialog",
+          "screenshot": false
+        },
+        {
+          "step_number": 10,
+          "action": "fill_form",
+          "target": "Plan selector",
+          "input_data": {
+            "planId": "{{pro_plan_id}}",
+            "reason": "Upgrade to Pro for E2E test"
+          },
+          "expected_result": "Pro plan selected",
+          "screenshot": false
+        },
+        {
+          "step_number": 11,
+          "action": "click",
+          "target": "Confirm Plan Change button",
+          "input_data": {},
+          "expected_result": "Plan changed to Professional",
+          "screenshot": true,
+          "visual_check": "Plan='Professional Plan'. Limits updated. tenant.plan_changed webhook pushed."
+        },
+        {
+          "step_number": 12,
+          "action": "click",
+          "target": "Billing tab",
+          "input_data": {},
+          "expected_result": "Billing tab shows NONE enforcement",
+          "screenshot": false
+        },
+        {
+          "step_number": 13,
+          "action": "click",
+          "target": "Change Enforcement button",
+          "input_data": {},
+          "expected_result": "Enforcement dialog",
+          "screenshot": false
+        },
+        {
+          "step_number": 14,
+          "action": "fill_form",
+          "target": "Enforcement form",
+          "input_data": {
+            "enforcementAction": "WARNING",
+            "reason": "E2E test: first dunning notice"
+          },
+          "expected_result": "WARNING selected",
+          "screenshot": false
+        },
+        {
+          "step_number": 15,
+          "action": "click",
+          "target": "Confirm button",
+          "input_data": {},
+          "expected_result": "Enforcement = WARNING",
+          "screenshot": true,
+          "visual_check": "Enforcement Action='WARNING' (amber). Billing Status='GRACE'. billing.enforcement_changed webhook pushed."
+        },
+        {
+          "step_number": 16,
+          "action": "click",
+          "target": "Change Enforcement button",
+          "input_data": {},
+          "expected_result": "Enforcement dialog",
+          "screenshot": false
+        },
+        {
+          "step_number": 17,
+          "action": "fill_form",
+          "target": "Enforcement form",
+          "input_data": {
+            "enforcementAction": "READ_ONLY",
+            "reason": "E2E test: grace period expired"
+          },
+          "expected_result": "READ_ONLY selected",
+          "screenshot": false
+        },
+        {
+          "step_number": 18,
+          "action": "click",
+          "target": "Confirm button",
+          "input_data": {},
+          "expected_result": "Enforcement = READ_ONLY",
+          "screenshot": true,
+          "visual_check": "Enforcement Action='READ_ONLY' (red). Billing Status='OVERDUE'. ERP writes blocked for this tenant."
+        },
+        {
+          "step_number": 19,
+          "action": "click",
+          "target": "Change Enforcement button",
+          "input_data": {},
+          "expected_result": "Enforcement dialog",
+          "screenshot": false
+        },
+        {
+          "step_number": 20,
+          "action": "fill_form",
+          "target": "Enforcement form",
+          "input_data": {
+            "enforcementAction": "NONE",
+            "reason": "E2E test: payment received, account restored"
+          },
+          "expected_result": "NONE selected (payment received recovery)",
+          "screenshot": false
+        },
+        {
+          "step_number": 21,
+          "action": "click",
+          "target": "Confirm button",
+          "input_data": {},
+          "expected_result": "Enforcement restored to NONE",
+          "screenshot": true,
+          "visual_check": "Enforcement Action='NONE' (green). Billing Status='CURRENT'. ERP writes re-enabled. billing.enforcement_changed webhook pushed."
+        },
+        {
+          "step_number": 22,
+          "action": "click",
+          "target": "Audit Log link in sidebar",
+          "input_data": {},
+          "expected_result": "Audit log loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 23,
+          "action": "verify_text",
+          "target": "Audit log table",
+          "input_data": {
+            "text": "e2e-lifecycle-test"
+          },
+          "expected_result": "Multiple audit records visible for the lifecycle test tenant",
+          "screenshot": true,
+          "visual_check": "Audit log showing chronological entries for the E2E lifecycle test: tenant.create, tenant.activate, tenant.plan_changed (core -> pro), billing.enforcement_changed (NONE->WARNING, WARNING->READ_ONLY, READ_ONLY->NONE). Each entry has complete actor, target, and timestamp data."
+        }
+      ]
+    }
+  ]
+}

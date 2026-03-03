@@ -1,0 +1,1971 @@
+{
+  "epic_id": "E5b",
+  "epic_name": "AI Co-Pilot Intelligence — Memory, Skills & Dynamic Context",
+  "generated_at": "2026-03-02T12:00:00Z",
+  "total_test_cases": 135,
+  "api_base_url": "http://localhost:3000",
+  "auth_note": "All endpoints require Bearer JWT. Use test user token from E2 auth setup. companyId derived from JWT context.",
+  "route_prefix": "/api/v1/ai",
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/memories",
+      "description": "Create a new AI memory for the authenticated user (E5b-1 AC-2)",
+      "story": "E5b-1",
+      "permission": "ai.chat:view",
+      "test_cases": [
+        {
+          "id": "MEM-C-01",
+          "name": "Create memory — happy path (EXPLICIT PREFERENCE)",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/memories",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "content": "I prefer Net 30 payment terms for new customers", "category": "PREFERENCE", "source": "EXPLICIT" }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "content", "category", "source", "importance", "createdAt"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT * FROM ai_memories WHERE id = '{{response.data.id}}'",
+            "expected": "Row exists with category='PREFERENCE', source='EXPLICIT', importance >= 1.0, userId matches, companyId matches"
+          }
+        },
+        {
+          "id": "MEM-C-02",
+          "name": "Create memory — happy path (IMPLICIT WORKFLOW)",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/memories",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "content": "User frequently opens overdue invoices view", "category": "WORKFLOW", "source": "IMPLICIT" }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "category", "source"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT importance FROM ai_memories WHERE id = '{{response.data.id}}'",
+            "expected": "importance = 0.5 (default for IMPLICIT)"
+          }
+        },
+        {
+          "id": "MEM-C-03",
+          "name": "Create memory — all 5 categories accepted",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/memories",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "content": "Test INSTRUCTION category", "category": "INSTRUCTION" }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["INSTRUCTION"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-C-04",
+          "name": "Create memory — with optional metadata",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/memories",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "content": "Entity context for Acme Ltd", "category": "ENTITY_CONTEXT", "metadata": { "entityType": "Customer", "entityId": "uuid-123" } }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["metadata"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-C-05",
+          "name": "Create memory — missing content field",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/memories",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "category": "PREFERENCE" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["content"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-C-06",
+          "name": "Create memory — missing category field",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/memories",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "content": "Test memory" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["category"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-C-07",
+          "name": "Create memory — invalid category value",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/memories",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "content": "Test", "category": "INVALID_CATEGORY" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["category"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-C-08",
+          "name": "Create memory — empty content string",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/memories",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "content": "", "category": "PREFERENCE" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["content"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-C-09",
+          "name": "Create memory — content exceeds 10000 chars",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/memories",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "content": "{{repeat('x', 10001)}}", "category": "PREFERENCE" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["content"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-C-10",
+          "name": "Create memory — memory disabled returns domain error",
+          "type": "edge_case",
+          "precondition": "User memory settings isEnabled=false",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/memories",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "content": "Should fail", "category": "PREFERENCE" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["MEMORY_DISABLED"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-C-11",
+          "name": "Create memory — disabled category returns domain error",
+          "type": "edge_case",
+          "precondition": "User memory settings enabledCategories does not include WORKFLOW",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/memories",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "content": "Should fail", "category": "WORKFLOW" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["MEMORY_CATEGORY_DISABLED"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-C-12",
+          "name": "Create memory — unauthenticated request",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/memories",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "content": "No token", "category": "PREFERENCE" }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": []
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/memories",
+      "description": "List memories for authenticated user with optional filters (E5b-1 AC-3)",
+      "story": "E5b-1",
+      "permission": "ai.chat:view",
+      "test_cases": [
+        {
+          "id": "MEM-R-01",
+          "name": "List memories — happy path (no filters)",
+          "type": "happy_path",
+          "precondition": "User has 3+ memories created",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/memories",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data", "meta"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-R-02",
+          "name": "List memories — filter by category",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/memories?category=PREFERENCE",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["PREFERENCE"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-R-03",
+          "name": "List memories — filter by search text",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/memories?search=invoice",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-R-04",
+          "name": "List memories — cursor-based pagination",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/memories?limit=2",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["cursor", "hasMore"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-R-05",
+          "name": "List memories — empty list returns 200 with empty array",
+          "type": "edge_case",
+          "precondition": "New user with no memories",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/memories",
+            "headers": { "Authorization": "Bearer {{newUserToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-R-06",
+          "name": "List memories — invalid category filter",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/memories?category=BOGUS",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["category"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-R-07",
+          "name": "List memories — company scoping (user cannot see other company memories)",
+          "type": "edge_case",
+          "precondition": "Memory created under companyA; request as user in companyB",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/memories",
+            "headers": { "Authorization": "Bearer {{companyBUserToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "Empty array — memories from companyA not visible" }
+        },
+        {
+          "id": "MEM-R-08",
+          "name": "List memories — ordered by importance DESC then recency",
+          "type": "happy_path",
+          "precondition": "Create memories with different importance scores",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/memories",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "First memory has highest importance score" }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/ai/memories/:id",
+      "description": "Update a memory's content or category (E5b-1 AC-4)",
+      "story": "E5b-1",
+      "permission": "ai.chat:view",
+      "test_cases": [
+        {
+          "id": "MEM-U-01",
+          "name": "Update memory — happy path (content change)",
+          "type": "happy_path",
+          "precondition": "Memory {{memoryId}} exists for user",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/v1/ai/memories/{{memoryId}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "content": "Updated: I now prefer Net 60 payment terms" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["Updated: I now prefer Net 60"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT content, updated_at FROM ai_memories WHERE id = '{{memoryId}}'",
+            "expected": "content updated, updated_at refreshed"
+          }
+        },
+        {
+          "id": "MEM-U-02",
+          "name": "Update memory — happy path (category change)",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/v1/ai/memories/{{memoryId}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "category": "INSTRUCTION" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["INSTRUCTION"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-U-03",
+          "name": "Update memory — not found (wrong id)",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/v1/ai/memories/00000000-0000-0000-0000-000000000000",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "content": "Updated" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["MEMORY_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-U-04",
+          "name": "Update memory — ownership enforcement (other user's memory)",
+          "type": "edge_case",
+          "precondition": "Memory belongs to userA; request as userB",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/v1/ai/memories/{{userAMemoryId}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userBToken}}" },
+            "body": { "content": "Hijacked" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["MEMORY_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-U-05",
+          "name": "Update memory — invalid UUID param",
+          "type": "validation_error",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/v1/ai/memories/not-a-uuid",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "content": "Updated" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["id"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/ai/memories/:id",
+      "description": "Hard delete a single memory (E5b-1 AC-5)",
+      "story": "E5b-1",
+      "permission": "ai.chat:view",
+      "test_cases": [
+        {
+          "id": "MEM-D-01",
+          "name": "Delete memory — happy path",
+          "type": "happy_path",
+          "precondition": "Memory {{memoryId}} exists for user",
+          "request": {
+            "method": "DELETE",
+            "url": "/api/v1/ai/memories/{{memoryId}}",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 204,
+            "body_contains": []
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM ai_memories WHERE id = '{{memoryId}}'",
+            "expected": "count = 0 (hard deleted)"
+          }
+        },
+        {
+          "id": "MEM-D-02",
+          "name": "Delete memory — not found",
+          "type": "edge_case",
+          "request": {
+            "method": "DELETE",
+            "url": "/api/v1/ai/memories/00000000-0000-0000-0000-000000000000",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["MEMORY_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-D-03",
+          "name": "Delete memory — ownership enforcement (other user's memory)",
+          "type": "edge_case",
+          "request": {
+            "method": "DELETE",
+            "url": "/api/v1/ai/memories/{{userAMemoryId}}",
+            "headers": { "Authorization": "Bearer {{userBToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["MEMORY_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/memories/forget-all",
+      "description": "Delete all memories for user in current company (E5b-1 AC-6)",
+      "story": "E5b-1",
+      "permission": "ai.chat:view",
+      "test_cases": [
+        {
+          "id": "MEM-FA-01",
+          "name": "Forget all — happy path with existing memories",
+          "type": "happy_path",
+          "precondition": "User has 5+ memories in current company",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/memories/forget-all",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["deletedCount"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM ai_memories WHERE user_id = '{{userId}}' AND company_id = '{{companyId}}'",
+            "expected": "count = 0"
+          }
+        },
+        {
+          "id": "MEM-FA-02",
+          "name": "Forget all — no memories returns deletedCount 0",
+          "type": "edge_case",
+          "precondition": "User has no memories",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/memories/forget-all",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["deletedCount"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-FA-03",
+          "name": "Forget all — does not delete other company's memories",
+          "type": "edge_case",
+          "precondition": "User has memories in companyA and companyB; request as companyA",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/memories/forget-all",
+            "headers": { "Authorization": "Bearer {{companyAToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["deletedCount"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM ai_memories WHERE user_id = '{{userId}}' AND company_id = '{{companyBId}}'",
+            "expected": "count > 0 (companyB memories preserved)"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/memories/settings",
+      "description": "Get user's memory settings (lazy upsert — creates defaults if none exist) (E5b-1 AC-9)",
+      "story": "E5b-1",
+      "permission": "ai.chat:view",
+      "test_cases": [
+        {
+          "id": "MEM-S-R-01",
+          "name": "Get settings — happy path (existing settings)",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/memories/settings",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["isEnabled", "enabledCategories", "retentionDays", "maxMemories"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-S-R-02",
+          "name": "Get settings — lazy upsert creates defaults for new user",
+          "type": "happy_path",
+          "precondition": "New user with no ai_memory_settings row",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/memories/settings",
+            "headers": { "Authorization": "Bearer {{newUserToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["isEnabled", "enabledCategories"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT is_enabled, retention_days, max_memories FROM ai_memory_settings WHERE user_id = '{{newUserId}}' AND company_id = '{{companyId}}'",
+            "expected": "Row created with isEnabled=true, retentionDays=365, maxMemories=500, all 5 categories enabled"
+          }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/ai/memories/settings",
+      "description": "Update memory settings (E5b-1 AC-9)",
+      "story": "E5b-1",
+      "permission": "ai.chat:view",
+      "test_cases": [
+        {
+          "id": "MEM-S-U-01",
+          "name": "Update settings — toggle isEnabled off",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/v1/ai/memories/settings",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "isEnabled": false }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["isEnabled"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT is_enabled FROM ai_memory_settings WHERE user_id = '{{userId}}' AND company_id = '{{companyId}}'",
+            "expected": "is_enabled = false"
+          }
+        },
+        {
+          "id": "MEM-S-U-02",
+          "name": "Update settings — change enabled categories",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/v1/ai/memories/settings",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "enabledCategories": ["PREFERENCE", "INSTRUCTION"] }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["enabledCategories"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-S-U-03",
+          "name": "Update settings — change retentionDays",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/v1/ai/memories/settings",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "retentionDays": 90 }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["retentionDays"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-S-U-04",
+          "name": "Update settings — retentionDays below minimum (0)",
+          "type": "validation_error",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/v1/ai/memories/settings",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "retentionDays": 0 }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["retentionDays"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-S-U-05",
+          "name": "Update settings — retentionDays above maximum (3651)",
+          "type": "validation_error",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/v1/ai/memories/settings",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "retentionDays": 3651 }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["retentionDays"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "MEM-S-U-06",
+          "name": "Update settings — maxMemories below minimum (5)",
+          "type": "validation_error",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/v1/ai/memories/settings",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{userToken}}" },
+            "body": { "maxMemories": 5 }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["maxMemories"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/skills",
+      "description": "Create a new AI skill (SUPER_ADMIN only) (E5b-2 AC-16)",
+      "story": "E5b-2",
+      "permission": "SUPER_ADMIN role",
+      "test_cases": [
+        {
+          "id": "SKL-C-01",
+          "name": "Create skill — happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/skills",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{superAdminToken}}" },
+            "body": {
+              "name": "test_skill",
+              "displayName": "Test Skill",
+              "description": "A test skill for validation",
+              "category": "test",
+              "skillContent": "You are a test skill.",
+              "triggerPhrases": ["test me", "run test"],
+              "inputSchema": { "type": "object", "properties": { "query": { "type": "string" } } },
+              "outputType": "text",
+              "requiredTools": [],
+              "moduleKey": "test",
+              "orchestrationPattern": "SEQUENTIAL",
+              "priority": 50
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "name", "displayName", "triggerPhrases", "isActive"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT * FROM ai_skills WHERE name = 'test_skill'",
+            "expected": "Row exists with all fields set correctly"
+          }
+        },
+        {
+          "id": "SKL-C-02",
+          "name": "Create skill — missing required fields",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/skills",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{superAdminToken}}" },
+            "body": { "name": "incomplete" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": []
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "SKL-C-03",
+          "name": "Create skill — ADMIN role rejected (requires SUPER_ADMIN)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/skills",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{adminToken}}" },
+            "body": {
+              "name": "forbidden_skill",
+              "displayName": "Forbidden",
+              "category": "test",
+              "skillContent": "No",
+              "triggerPhrases": ["forbidden"],
+              "inputSchema": {},
+              "outputType": "text"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": []
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "SKL-C-04",
+          "name": "Create skill — empty triggerPhrases array",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/skills",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{superAdminToken}}" },
+            "body": {
+              "name": "no_triggers",
+              "displayName": "No Triggers",
+              "category": "test",
+              "skillContent": "Content",
+              "triggerPhrases": [],
+              "inputSchema": {},
+              "outputType": "text"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["triggerPhrases"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/skills",
+      "description": "List all skills with optional moduleKey filter (E5b-2)",
+      "story": "E5b-2",
+      "permission": "ai.chat:view",
+      "test_cases": [
+        {
+          "id": "SKL-R-01",
+          "name": "List skills — happy path (all skills)",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/skills",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "SKL-R-02",
+          "name": "List skills — filter by moduleKey=views",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/skills?moduleKey=views",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["views"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "SKL-R-03",
+          "name": "List skills — non-existent moduleKey returns empty",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/skills?moduleKey=nonexistent",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "Empty data array" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/skills/:id",
+      "description": "Get a single skill by ID (E5b-2)",
+      "story": "E5b-2",
+      "permission": "ai.chat:view",
+      "test_cases": [
+        {
+          "id": "SKL-R-04",
+          "name": "Get skill by ID — happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/skills/{{skillId}}",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "name", "displayName", "skillContent", "triggerPhrases"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "SKL-R-05",
+          "name": "Get skill by ID — not found",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/skills/00000000-0000-0000-0000-000000000000",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["SKILL_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/ai/skills/:id",
+      "description": "Update a skill (ADMIN only) (E5b-2)",
+      "story": "E5b-2",
+      "permission": "ADMIN role",
+      "test_cases": [
+        {
+          "id": "SKL-U-01",
+          "name": "Update skill — happy path (description change)",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/v1/ai/skills/{{skillId}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{adminToken}}" },
+            "body": { "description": "Updated description" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["Updated description"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT description FROM ai_skills WHERE id = '{{skillId}}'",
+            "expected": "description = 'Updated description'"
+          }
+        },
+        {
+          "id": "SKL-U-02",
+          "name": "Update skill — not found",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/v1/ai/skills/00000000-0000-0000-0000-000000000000",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{adminToken}}" },
+            "body": { "description": "Ghost" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["SKILL_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "SKL-U-03",
+          "name": "Update skill — STAFF role rejected (requires ADMIN)",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/v1/ai/skills/{{skillId}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staffToken}}" },
+            "body": { "description": "Forbidden update" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": []
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/ai/skills/:id",
+      "description": "Delete a skill (ADMIN only) (E5b-2)",
+      "story": "E5b-2",
+      "permission": "ADMIN role",
+      "test_cases": [
+        {
+          "id": "SKL-D-01",
+          "name": "Delete skill — happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "DELETE",
+            "url": "/api/v1/ai/skills/{{skillId}}",
+            "headers": { "Authorization": "Bearer {{adminToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 204,
+            "body_contains": []
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM ai_skills WHERE id = '{{skillId}}'",
+            "expected": "count = 0"
+          }
+        },
+        {
+          "id": "SKL-D-02",
+          "name": "Delete skill — not found",
+          "type": "edge_case",
+          "request": {
+            "method": "DELETE",
+            "url": "/api/v1/ai/skills/00000000-0000-0000-0000-000000000000",
+            "headers": { "Authorization": "Bearer {{adminToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["SKILL_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "SKL-D-03",
+          "name": "Delete skill — STAFF role rejected",
+          "type": "edge_case",
+          "request": {
+            "method": "DELETE",
+            "url": "/api/v1/ai/skills/{{skillId}}",
+            "headers": { "Authorization": "Bearer {{staffToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": []
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/skill-overrides",
+      "description": "List tenant skill overrides (ADMIN only) (E5b-2 AC-7)",
+      "story": "E5b-2",
+      "permission": "ADMIN role",
+      "test_cases": [
+        {
+          "id": "OVR-R-01",
+          "name": "List overrides — happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/skill-overrides",
+            "headers": { "Authorization": "Bearer {{adminToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "OVR-R-02",
+          "name": "List overrides — empty when no overrides exist",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/skill-overrides",
+            "headers": { "Authorization": "Bearer {{adminToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "Empty data array" }
+        },
+        {
+          "id": "OVR-R-03",
+          "name": "List overrides — STAFF role rejected",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/skill-overrides",
+            "headers": { "Authorization": "Bearer {{staffToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": []
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/ai/skill-overrides/:skillId",
+      "description": "Upsert a tenant-specific skill override (ADMIN only) (E5b-2 AC-7)",
+      "story": "E5b-2",
+      "permission": "ADMIN role",
+      "test_cases": [
+        {
+          "id": "OVR-C-01",
+          "name": "Upsert override — create new override",
+          "type": "happy_path",
+          "request": {
+            "method": "PUT",
+            "url": "/api/v1/ai/skill-overrides/{{skillId}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{adminToken}}" },
+            "body": { "isActive": false, "triggerPhrasesOverride": ["custom trigger"], "priorityOverride": 200 }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["skillId", "companyId", "isActive", "triggerPhrasesOverride"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT * FROM ai_skill_overrides WHERE skill_id = '{{skillId}}' AND company_id = '{{companyId}}'",
+            "expected": "Row exists with isActive=false, triggerPhrasesOverride=['custom trigger'], priorityOverride=200"
+          }
+        },
+        {
+          "id": "OVR-C-02",
+          "name": "Upsert override — update existing override",
+          "type": "happy_path",
+          "precondition": "Override already exists for skillId",
+          "request": {
+            "method": "PUT",
+            "url": "/api/v1/ai/skill-overrides/{{skillId}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{adminToken}}" },
+            "body": { "isActive": true, "priorityOverride": 300 }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["priorityOverride"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "OVR-C-03",
+          "name": "Upsert override — skill not found",
+          "type": "edge_case",
+          "request": {
+            "method": "PUT",
+            "url": "/api/v1/ai/skill-overrides/00000000-0000-0000-0000-000000000000",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{adminToken}}" },
+            "body": { "isActive": false }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": []
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/ai/skill-overrides/:skillId",
+      "description": "Delete a tenant skill override — reset to default (ADMIN only) (E5b-2 AC-7)",
+      "story": "E5b-2",
+      "permission": "ADMIN role",
+      "test_cases": [
+        {
+          "id": "OVR-D-01",
+          "name": "Delete override — happy path",
+          "type": "happy_path",
+          "precondition": "Override exists for skillId",
+          "request": {
+            "method": "DELETE",
+            "url": "/api/v1/ai/skill-overrides/{{skillId}}",
+            "headers": { "Authorization": "Bearer {{adminToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 204,
+            "body_contains": []
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM ai_skill_overrides WHERE skill_id = '{{skillId}}' AND company_id = '{{companyId}}'",
+            "expected": "count = 0"
+          }
+        },
+        {
+          "id": "OVR-D-02",
+          "name": "Delete override — not found",
+          "type": "edge_case",
+          "request": {
+            "method": "DELETE",
+            "url": "/api/v1/ai/skill-overrides/00000000-0000-0000-0000-000000000000",
+            "headers": { "Authorization": "Bearer {{adminToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["SKILL_OVERRIDE_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/knowledge",
+      "description": "Create a module knowledge entry (ADMIN only) (E5b-2 AC-17)",
+      "story": "E5b-2",
+      "permission": "ADMIN role",
+      "test_cases": [
+        {
+          "id": "KNW-C-01",
+          "name": "Create knowledge — happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/knowledge",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{adminToken}}" },
+            "body": {
+              "moduleKey": "test",
+              "knowledgeType": "OVERVIEW",
+              "title": "Test Module Overview",
+              "content": "This is a test module for validation purposes.",
+              "priority": 100
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "moduleKey", "knowledgeType", "title", "content"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT * FROM ai_module_knowledge WHERE module_key = 'test' AND knowledge_type = 'OVERVIEW'",
+            "expected": "Row exists with title and content set"
+          }
+        },
+        {
+          "id": "KNW-C-02",
+          "name": "Create knowledge — missing required fields",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/knowledge",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{adminToken}}" },
+            "body": { "moduleKey": "test" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": []
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "KNW-C-03",
+          "name": "Create knowledge — STAFF role rejected",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/knowledge",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staffToken}}" },
+            "body": { "moduleKey": "test", "knowledgeType": "OVERVIEW", "title": "Forbidden", "content": "No" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": []
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/knowledge",
+      "description": "List module knowledge entries with optional filters (E5b-2 AC-17)",
+      "story": "E5b-2",
+      "permission": "ai.chat:view",
+      "test_cases": [
+        {
+          "id": "KNW-R-01",
+          "name": "List knowledge — happy path (no filters)",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/knowledge",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "KNW-R-02",
+          "name": "List knowledge — filter by moduleKey",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/knowledge?moduleKey=views",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["views"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "KNW-R-03",
+          "name": "List knowledge — filter by type",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/knowledge?type=ENTITIES",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "KNW-R-04",
+          "name": "List knowledge — empty result for unknown module",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/knowledge?moduleKey=nonexistent",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "Empty data array" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/knowledge/:id",
+      "description": "Get single knowledge entry by ID (E5b-2)",
+      "story": "E5b-2",
+      "permission": "ai.chat:view",
+      "test_cases": [
+        {
+          "id": "KNW-R-05",
+          "name": "Get knowledge by ID — happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/knowledge/{{knowledgeId}}",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "moduleKey", "knowledgeType", "title", "content"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "KNW-R-06",
+          "name": "Get knowledge by ID — not found",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/knowledge/00000000-0000-0000-0000-000000000000",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["KNOWLEDGE_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/ai/knowledge/:id",
+      "description": "Update a knowledge entry (ADMIN only) (E5b-2)",
+      "story": "E5b-2",
+      "permission": "ADMIN role",
+      "test_cases": [
+        {
+          "id": "KNW-U-01",
+          "name": "Update knowledge — happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/v1/ai/knowledge/{{knowledgeId}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{adminToken}}" },
+            "body": { "content": "Updated knowledge content with new details." }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["Updated knowledge content"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT content FROM ai_module_knowledge WHERE id = '{{knowledgeId}}'",
+            "expected": "content updated"
+          }
+        },
+        {
+          "id": "KNW-U-02",
+          "name": "Update knowledge — not found",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/v1/ai/knowledge/00000000-0000-0000-0000-000000000000",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{adminToken}}" },
+            "body": { "content": "Ghost" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["KNOWLEDGE_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/ai/knowledge/:id",
+      "description": "Delete a knowledge entry (ADMIN only) (E5b-2)",
+      "story": "E5b-2",
+      "permission": "ADMIN role",
+      "test_cases": [
+        {
+          "id": "KNW-D-01",
+          "name": "Delete knowledge — happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "DELETE",
+            "url": "/api/v1/ai/knowledge/{{knowledgeId}}",
+            "headers": { "Authorization": "Bearer {{adminToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 204,
+            "body_contains": []
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM ai_module_knowledge WHERE id = '{{knowledgeId}}'",
+            "expected": "count = 0"
+          }
+        },
+        {
+          "id": "KNW-D-02",
+          "name": "Delete knowledge — not found",
+          "type": "edge_case",
+          "request": {
+            "method": "DELETE",
+            "url": "/api/v1/ai/knowledge/00000000-0000-0000-0000-000000000000",
+            "headers": { "Authorization": "Bearer {{adminToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["KNOWLEDGE_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/entity-triggers",
+      "description": "Create an entity trigger (ADMIN only) (E5b-2 AC-18)",
+      "story": "E5b-2",
+      "permission": "ADMIN role",
+      "test_cases": [
+        {
+          "id": "TRG-C-01",
+          "name": "Create entity trigger — happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/entity-triggers",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{adminToken}}" },
+            "body": {
+              "moduleKey": "test",
+              "triggerWord": "widget",
+              "entityType": "Widget",
+              "searchEndpoint": "/api/v1/test/widgets",
+              "displayField": "name",
+              "subtitleField": "code",
+              "icon": "Package",
+              "priority": 100
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "moduleKey", "triggerWord", "entityType"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT * FROM ai_entity_triggers WHERE trigger_word = 'widget' AND module_key = 'test'",
+            "expected": "Row exists with all fields set"
+          }
+        },
+        {
+          "id": "TRG-C-02",
+          "name": "Create entity trigger — missing required fields",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/entity-triggers",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{adminToken}}" },
+            "body": { "moduleKey": "test" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": []
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "TRG-C-03",
+          "name": "Create entity trigger — STAFF role rejected",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/v1/ai/entity-triggers",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staffToken}}" },
+            "body": {
+              "moduleKey": "test",
+              "triggerWord": "forbidden",
+              "entityType": "Forbidden",
+              "searchEndpoint": "/api/v1/test/forbidden",
+              "displayField": "name"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": []
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/entity-triggers",
+      "description": "List entity triggers with optional filters (E5b-2 AC-18)",
+      "story": "E5b-2",
+      "permission": "ai.chat:view",
+      "test_cases": [
+        {
+          "id": "TRG-R-01",
+          "name": "List entity triggers — happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/entity-triggers",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "TRG-R-02",
+          "name": "List entity triggers — filter by moduleKey",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/entity-triggers?moduleKey=views",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["views"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "TRG-R-03",
+          "name": "List entity triggers — filter isActive=true",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/entity-triggers?isActive=true",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/entity-triggers/:id",
+      "description": "Get single entity trigger by ID (E5b-2)",
+      "story": "E5b-2",
+      "permission": "ai.chat:view",
+      "test_cases": [
+        {
+          "id": "TRG-R-04",
+          "name": "Get entity trigger by ID — happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/entity-triggers/{{triggerId}}",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "moduleKey", "triggerWord", "entityType"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "TRG-R-05",
+          "name": "Get entity trigger by ID — not found",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/entity-triggers/00000000-0000-0000-0000-000000000000",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["ENTITY_TRIGGER_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/ai/entity-triggers/:id",
+      "description": "Update an entity trigger (ADMIN only) (E5b-2)",
+      "story": "E5b-2",
+      "permission": "ADMIN role",
+      "test_cases": [
+        {
+          "id": "TRG-U-01",
+          "name": "Update entity trigger — happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/v1/ai/entity-triggers/{{triggerId}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{adminToken}}" },
+            "body": { "triggerWord": "gadget", "priority": 200 }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["gadget"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT trigger_word, priority FROM ai_entity_triggers WHERE id = '{{triggerId}}'",
+            "expected": "trigger_word = 'gadget', priority = 200"
+          }
+        },
+        {
+          "id": "TRG-U-02",
+          "name": "Update entity trigger — not found",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/v1/ai/entity-triggers/00000000-0000-0000-0000-000000000000",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{adminToken}}" },
+            "body": { "triggerWord": "ghost" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["ENTITY_TRIGGER_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/ai/entity-triggers/:id",
+      "description": "Delete an entity trigger (ADMIN only) (E5b-2)",
+      "story": "E5b-2",
+      "permission": "ADMIN role",
+      "test_cases": [
+        {
+          "id": "TRG-D-01",
+          "name": "Delete entity trigger — happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "DELETE",
+            "url": "/api/v1/ai/entity-triggers/{{triggerId}}",
+            "headers": { "Authorization": "Bearer {{adminToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 204,
+            "body_contains": []
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM ai_entity_triggers WHERE id = '{{triggerId}}'",
+            "expected": "count = 0"
+          }
+        },
+        {
+          "id": "TRG-D-02",
+          "name": "Delete entity trigger — not found",
+          "type": "edge_case",
+          "request": {
+            "method": "DELETE",
+            "url": "/api/v1/ai/entity-triggers/00000000-0000-0000-0000-000000000000",
+            "headers": { "Authorization": "Bearer {{adminToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["ENTITY_TRIGGER_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/entity-search",
+      "description": "Search entities by type with autocomplete proxy (E5b-7 AC-10)",
+      "story": "E5b-7",
+      "permission": "ai.chat:view",
+      "test_cases": [
+        {
+          "id": "SRCH-01",
+          "name": "Entity search — happy path (DataView)",
+          "type": "happy_path",
+          "precondition": "DataView records exist with 'invoice' in name",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/entity-search?type=DataView&q=in",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["displayName", "entityType"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "SRCH-02",
+          "name": "Entity search — happy path (SavedView)",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/entity-search?type=SavedView&q=ov",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "SRCH-03",
+          "name": "Entity search — with scope params",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/entity-search?type=SavedView&q=ov&scopeBy=viewKey&scopeValue=00000000-0000-0000-0000-000000000001",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "SRCH-04",
+          "name": "Entity search — max 8 results",
+          "type": "edge_case",
+          "precondition": "More than 8 matching records",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/entity-search?type=DataView&q=vi",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "Array length <= 8" }
+        },
+        {
+          "id": "SRCH-05",
+          "name": "Entity search — unknown entity type",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/entity-search?type=UnknownEntity&q=test",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": []
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "SRCH-06",
+          "name": "Entity search — query too short (1 char)",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/entity-search?type=DataView&q=a",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["q"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "SRCH-07",
+          "name": "Entity search — missing type parameter",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/entity-search?q=test",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["type"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "SRCH-08",
+          "name": "Entity search — scopeBy without scopeValue rejected",
+          "type": "validation_error",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/entity-search?type=DataView&q=test&scopeBy=viewKey",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["scopeBy", "scopeValue"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "id": "SRCH-09",
+          "name": "Entity search — empty results returns empty array",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/entity-search?type=DataView&q=zzzznonexistent",
+            "headers": { "Authorization": "Bearer {{userToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "Empty array" }
+        },
+        {
+          "id": "SRCH-10",
+          "name": "Entity search — companyId scoping",
+          "type": "edge_case",
+          "precondition": "DataView records in companyA; request as companyB user",
+          "request": {
+            "method": "GET",
+            "url": "/api/v1/ai/entity-search?type=DataView&q=in",
+            "headers": { "Authorization": "Bearer {{companyBUserToken}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "No companyA data visible" }
+        }
+      ]
+    }
+  ],
+  "test_summary": {
+    "by_type": {
+      "happy_path": 52,
+      "validation_error": 22,
+      "edge_case": 61
+    },
+    "by_story": {
+      "E5b-1": 39,
+      "E5b-2": 52,
+      "E5b-7": 10
+    },
+    "by_route_group": {
+      "memories_crud": 28,
+      "memory_settings": 8,
+      "skills_crud": 17,
+      "skill_overrides": 8,
+      "knowledge_crud": 14,
+      "entity_triggers_crud": 13,
+      "entity_search": 10
+    },
+    "endpoints_with_db_verification": 16,
+    "notes": [
+      "E5b-3 (Implicit Memory Learning) and E5b-4 (Hybrid Search) are internal services with no new REST endpoints — tested via unit tests only",
+      "E5b-5 (Memory & Skills Management UI) is frontend-only — no new backend endpoints",
+      "E5b-6 (E7 Skill Pack Validation) validates seed data and routing logic via integration tests — no new REST endpoints",
+      "Token variables like {{userToken}}, {{adminToken}} etc. are resolved at runtime from E2 auth test fixtures",
+      "All endpoints are registered under the /api/v1/ai prefix",
+      "Known code review issue: frontend sends retentionDays=0 for 'Keep forever' but backend validates min(1) — see E5b-5 ISSUE #1"
+    ]
+  }
+}

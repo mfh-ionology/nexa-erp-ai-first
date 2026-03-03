@@ -1,0 +1,1914 @@
+{
+  "epic_id": "E2b",
+  "epic_title": "Granular RBAC & Access Groups",
+  "generated_at": "2026-02-20T16:00:00.000Z",
+  "total_test_cases": 88,
+  "api_base_url": "http://localhost:3000",
+  "auth_note": "All endpoints except GET /system/my-permissions require ADMIN-level permission via createPermissionGuard. SUPER_ADMIN bypasses all guards. Unauthenticated requests return 401.",
+  "test_constants": {
+    "TEST_USER_ID": "aaaaaaaa-1111-4000-a000-000000000001",
+    "TEST_COMPANY_ID": "bbbbbbbb-2222-4000-b000-000000000001",
+    "OTHER_COMPANY_ID": "cccccccc-3333-4000-c000-000000000001",
+    "ADMIN_USER_ID": "aaaaaaaa-1111-4000-a000-000000000002",
+    "STAFF_USER_ID": "aaaaaaaa-1111-4000-a000-000000000003",
+    "SUPER_ADMIN_USER_ID": "aaaaaaaa-1111-4000-a000-000000000004"
+  },
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/system/access-groups",
+      "description": "Create a new access group for the current company (E2b.2)",
+      "story": "E2b-2",
+      "guard": "createPermissionGuard('system.access-groups.list', 'new')",
+      "test_cases": [
+        {
+          "id": "E2b.2-POST-001",
+          "name": "Create access group - happy path",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/system/access-groups",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "code": "CUSTOM_ROLE",
+              "name": "Custom Role",
+              "description": "A custom access group for testing"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["success", "data", "id", "code", "name", "description", "isSystem", "isActive", "permissions", "fieldOverrides"],
+            "body_exact_fields": {
+              "success": true,
+              "data.code": "CUSTOM_ROLE",
+              "data.name": "Custom Role",
+              "data.isSystem": false,
+              "data.isActive": true,
+              "data.permissions": [],
+              "data.fieldOverrides": []
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id, code, name, company_id, is_system, is_active FROM access_groups WHERE code = 'CUSTOM_ROLE' AND company_id = '{{TEST_COMPANY_ID}}'",
+            "expected": "Exactly 1 row with matching code, name, company_id, is_system=false, is_active=true"
+          }
+        },
+        {
+          "id": "E2b.2-POST-002",
+          "name": "Create access group - duplicate code returns 409",
+          "type": "error",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/system/access-groups",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "code": "FULL_ACCESS",
+              "name": "Duplicate Full Access"
+            }
+          },
+          "expected": {
+            "status": 409,
+            "body_contains": ["success", "error", "DUPLICATE_CODE"],
+            "body_exact_fields": { "success": false }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-POST-003",
+          "name": "Create access group - missing required code field returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/system/access-groups",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "name": "No Code Group"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-POST-004",
+          "name": "Create access group - missing required name field returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/system/access-groups",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "code": "NO_NAME"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-POST-005",
+          "name": "Create access group - invalid code format (lowercase) returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/system/access-groups",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "code": "invalid_lowercase",
+              "name": "Bad Code"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-POST-006",
+          "name": "Create access group - STAFF user gets 403",
+          "type": "authz_error",
+          "priority": "P0",
+          "request": {
+            "method": "POST",
+            "url": "/system/access-groups",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{STAFF_JWT}}" },
+            "body": {
+              "code": "STAFF_ATTEMPT",
+              "name": "Staff Attempt"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-POST-007",
+          "name": "Create access group - unauthenticated returns 401",
+          "type": "authn_error",
+          "priority": "P0",
+          "request": {
+            "method": "POST",
+            "url": "/system/access-groups",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "code": "UNAUTH_ATTEMPT",
+              "name": "Unauth"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-POST-008",
+          "name": "Create access group - SUPER_ADMIN succeeds",
+          "type": "happy_path",
+          "priority": "P0",
+          "request": {
+            "method": "POST",
+            "url": "/system/access-groups",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{SUPER_ADMIN_JWT}}" },
+            "body": {
+              "code": "SUPER_ADMIN_GROUP",
+              "name": "Super Admin Created Group"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["success", "data"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-POST-009",
+          "name": "Create access group - code exceeds max length (50 chars) returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/system/access-groups",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "code": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "name": "Too Long Code"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/system/company-profile",
+      "description": "Create new company (triggers access group seeding) (E2b.2 AC#6)",
+      "story": "E2b-2",
+      "guard": "createPermissionGuard('system.company-profile.detail', 'new')",
+      "test_cases": [
+        {
+          "id": "E2b.2-SEED-001",
+          "name": "Company creation seeds 12 default access groups",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/system/company-profile",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "name": "Test Company for Seeding",
+              "legalName": "Test Company Ltd",
+              "baseCurrency": "GBP",
+              "fiscalYearStart": "2026-01-01",
+              "country": "GB",
+              "timezone": "Europe/London"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["success", "data"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) as group_count FROM access_groups WHERE company_id = (SELECT id FROM company_profiles WHERE name = 'Test Company for Seeding') AND is_system = true",
+            "expected": "group_count = 12 (FULL_ACCESS, FINANCE_MANAGER, FINANCE_CLERK, SALES_MANAGER, SALES_STAFF, PURCHASE_MANAGER, PURCHASE_CLERK, WAREHOUSE_STAFF, HR_MANAGER, HR_VIEWER, REPORT_VIEWER, READ_ONLY)"
+          }
+        },
+        {
+          "id": "E2b.2-SEED-002",
+          "name": "Company creation assigns FULL_ACCESS group to creating user",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/system/company-profile",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "name": "Company for Assignment Test",
+              "legalName": "Assignment Test Ltd",
+              "baseCurrency": "GBP",
+              "fiscalYearStart": "2026-01-01",
+              "country": "GB",
+              "timezone": "Europe/London"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["success", "data"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT uag.id FROM user_access_groups uag JOIN access_groups ag ON uag.access_group_id = ag.id WHERE ag.code = 'FULL_ACCESS' AND uag.user_id = '{{ADMIN_USER_ID}}' AND uag.company_id = (SELECT id FROM company_profiles WHERE name = 'Company for Assignment Test')",
+            "expected": "Exactly 1 row — creating user assigned to FULL_ACCESS group"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system/resources",
+      "description": "List all resources with optional filters (E2b.1)",
+      "story": "E2b-1",
+      "guard": "createPermissionGuard('system.resources.list', 'view')",
+      "test_cases": [
+        {
+          "id": "E2b.1-GET-001",
+          "name": "List resources - happy path returns all active resources",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/resources",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data", "meta", "total"],
+            "body_exact_fields": { "success": true },
+            "body_array_min_length": { "data": 6 }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.1-GET-002",
+          "name": "List resources - filter by module=system",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/resources?module=system",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertion": "All items in data[] have module='system'"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.1-GET-003",
+          "name": "List resources - filter by type=PAGE",
+          "type": "happy_path",
+          "priority": "P2",
+          "request": {
+            "method": "GET",
+            "url": "/system/resources?type=PAGE",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertion": "All items in data[] have type='PAGE'"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.1-GET-004",
+          "name": "List resources - search by code or name",
+          "type": "happy_path",
+          "priority": "P2",
+          "request": {
+            "method": "GET",
+            "url": "/system/resources?search=users",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertion": "data[] items contain 'users' in code or name (case-insensitive)"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.1-GET-005",
+          "name": "List resources - STAFF user gets 403",
+          "type": "authz_error",
+          "priority": "P0",
+          "request": {
+            "method": "GET",
+            "url": "/system/resources",
+            "headers": { "Authorization": "Bearer {{STAFF_JWT}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.1-GET-006",
+          "name": "List resources - SUPER_ADMIN gets 200",
+          "type": "happy_path",
+          "priority": "P0",
+          "request": {
+            "method": "GET",
+            "url": "/system/resources",
+            "headers": { "Authorization": "Bearer {{SUPER_ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.1-GET-007",
+          "name": "List resources - isActive=false filter",
+          "type": "edge_case",
+          "priority": "P2",
+          "request": {
+            "method": "GET",
+            "url": "/system/resources?isActive=false",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertion": "All items in data[] have isActive=false (may be empty array)"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.1-GET-008",
+          "name": "List resources - unauthenticated returns 401",
+          "type": "authn_error",
+          "priority": "P0",
+          "request": {
+            "method": "GET",
+            "url": "/system/resources",
+            "headers": {}
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system/access-groups",
+      "description": "List access groups with pagination and filters (E2b.2)",
+      "story": "E2b-2",
+      "guard": "createPermissionGuard('system.access-groups.list', 'view')",
+      "test_cases": [
+        {
+          "id": "E2b.2-LIST-001",
+          "name": "List access groups - happy path returns paginated list with userCount",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/access-groups",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data", "meta"],
+            "body_assertion": "Each item in data[] has id, code, name, description, isSystem, isActive, userCount, createdAt, updatedAt"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-LIST-002",
+          "name": "List access groups - search filter",
+          "type": "happy_path",
+          "priority": "P2",
+          "request": {
+            "method": "GET",
+            "url": "/system/access-groups?search=manager",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertion": "data[] items contain 'manager' in code, name, or description"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-LIST-003",
+          "name": "List access groups - cursor pagination",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/access-groups?limit=5",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data", "meta"],
+            "body_assertion": "meta.hasMore=true when more than 5 groups exist, meta.cursor is set for next page"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-LIST-004",
+          "name": "List access groups - cross-company isolation (Company B groups NOT visible)",
+          "type": "security",
+          "priority": "P0",
+          "request": {
+            "method": "GET",
+            "url": "/system/access-groups",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT_COMPANY_A}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data[] contains ONLY access groups for Company A (no Company B groups)"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-LIST-005",
+          "name": "List access groups - STAFF user gets 403",
+          "type": "authz_error",
+          "priority": "P0",
+          "request": {
+            "method": "GET",
+            "url": "/system/access-groups",
+            "headers": { "Authorization": "Bearer {{STAFF_JWT}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-LIST-006",
+          "name": "List access groups - empty result for new company",
+          "type": "edge_case",
+          "priority": "P2",
+          "request": {
+            "method": "GET",
+            "url": "/system/access-groups?search=nonexistent_random_string",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_exact_fields": { "success": true },
+            "body_assertion": "data is empty array [], meta.total=0"
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system/access-groups/:id",
+      "description": "Get access group detail with permissions and field overrides (E2b.2)",
+      "story": "E2b-2",
+      "guard": "createPermissionGuard('system.access-groups.detail', 'view')",
+      "test_cases": [
+        {
+          "id": "E2b.2-DETAIL-001",
+          "name": "Get access group detail - happy path with permissions and fieldOverrides",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/access-groups/{{ACCESS_GROUP_ID}}",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data", "id", "code", "name", "permissions", "fieldOverrides", "userCount"],
+            "body_assertion": "data.permissions is array of {resourceCode, canAccess, canNew, canView, canEdit, canDelete}; data.fieldOverrides is array of {resourceCode, fieldPath, visibility}"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-DETAIL-002",
+          "name": "Get access group detail - not found returns 404",
+          "type": "error",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/access-groups/00000000-0000-4000-a000-000000000000",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-DETAIL-003",
+          "name": "Get access group detail - wrong company returns 404",
+          "type": "security",
+          "priority": "P0",
+          "request": {
+            "method": "GET",
+            "url": "/system/access-groups/{{OTHER_COMPANY_GROUP_ID}}",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["error"],
+            "body_assertion": "Other company's access group not accessible via direct ID — enforces companyId scoping"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-DETAIL-004",
+          "name": "Get access group detail - invalid UUID returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "GET",
+            "url": "/system/access-groups/not-a-uuid",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system/users/:id/access-groups",
+      "description": "List access groups assigned to a user for the current company (E2b.3)",
+      "story": "E2b-3",
+      "guard": "createPermissionGuard('system.users.detail', 'view')",
+      "test_cases": [
+        {
+          "id": "E2b.3-GET-001",
+          "name": "Get user access groups - happy path returns assigned groups",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/users/{{TEST_USER_ID}}/access-groups",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data", "userId", "companyId", "accessGroups"],
+            "body_assertion": "data.accessGroups is array of {id, code, name, description, isSystem, assignedBy, assignedAt}"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.3-GET-002",
+          "name": "Get user access groups - user not in company returns 404",
+          "type": "error",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/users/00000000-0000-4000-a000-000000000000/access-groups",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["error", "USER_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.3-GET-003",
+          "name": "Get user access groups - user with no groups returns empty array",
+          "type": "edge_case",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/users/{{USER_WITH_NO_GROUPS}}/access-groups",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_exact_fields": {
+              "success": true,
+              "data.accessGroups": []
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.3-GET-004",
+          "name": "Get user access groups - STAFF user gets 403",
+          "type": "authz_error",
+          "priority": "P0",
+          "request": {
+            "method": "GET",
+            "url": "/system/users/{{TEST_USER_ID}}/access-groups",
+            "headers": { "Authorization": "Bearer {{STAFF_JWT}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.3-GET-005",
+          "name": "Get user access groups - invalid UUID param returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "GET",
+            "url": "/system/users/not-a-uuid/access-groups",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system/my-permissions",
+      "description": "Get current user's resolved permissions, field overrides, access groups, role, and enabled modules (E2b.4)",
+      "story": "E2b-4",
+      "guard": "none (any authenticated user)",
+      "test_cases": [
+        {
+          "id": "E2b.4-GET-001",
+          "name": "My permissions - happy path returns resolved permissions",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/my-permissions",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data", "permissions", "fieldOverrides", "accessGroups", "role", "isSuperAdmin", "enabledModules"],
+            "body_assertion": "data.permissions is Record<string, {canAccess, canNew, canView, canEdit, canDelete}>; data.accessGroups is array of {id, code, name}; data.enabledModules is string[]"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.4-GET-002",
+          "name": "My permissions - SUPER_ADMIN gets isSuperAdmin=true and full access",
+          "type": "happy_path",
+          "priority": "P0",
+          "request": {
+            "method": "GET",
+            "url": "/system/my-permissions",
+            "headers": { "Authorization": "Bearer {{SUPER_ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_exact_fields": {
+              "success": true,
+              "data.isSuperAdmin": true
+            },
+            "body_assertion": "All permissions have canAccess=true, canNew=true, canView=true, canEdit=true, canDelete=true"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.4-GET-003",
+          "name": "My permissions - module derivation (enabledModules from canAccess)",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/my-permissions",
+            "headers": { "Authorization": "Bearer {{USER_WITH_SALES_GROUP_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data.enabledModules includes 'system' (if user has canAccess on any system.* resource); modules derived from access group permissions"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.4-GET-004",
+          "name": "My permissions - unauthenticated returns 401",
+          "type": "authn_error",
+          "priority": "P0",
+          "request": {
+            "method": "GET",
+            "url": "/system/my-permissions",
+            "headers": {}
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.4-GET-005",
+          "name": "My permissions - STAFF user can access (any authenticated user allowed)",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/my-permissions",
+            "headers": { "Authorization": "Bearer {{STAFF_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data", "permissions"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/system/access-groups/:id",
+      "description": "Update access group name and/or description (E2b.2)",
+      "story": "E2b-2",
+      "guard": "createPermissionGuard('system.access-groups.detail', 'edit')",
+      "test_cases": [
+        {
+          "id": "E2b.2-PATCH-001",
+          "name": "Update access group - happy path updates name",
+          "type": "happy_path",
+          "priority": "P2",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/access-groups/{{ACCESS_GROUP_ID}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "name": "Updated Group Name"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_exact_fields": { "data.name": "Updated Group Name" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT name FROM access_groups WHERE id = '{{ACCESS_GROUP_ID}}'",
+            "expected": "name = 'Updated Group Name'"
+          }
+        },
+        {
+          "id": "E2b.2-PATCH-002",
+          "name": "Update access group - happy path updates description",
+          "type": "happy_path",
+          "priority": "P2",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/access-groups/{{ACCESS_GROUP_ID}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "description": "Updated description text"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT description FROM access_groups WHERE id = '{{ACCESS_GROUP_ID}}'",
+            "expected": "description = 'Updated description text'"
+          }
+        },
+        {
+          "id": "E2b.2-PATCH-003",
+          "name": "Update access group - empty body (no fields) returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/access-groups/{{ACCESS_GROUP_ID}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-PATCH-004",
+          "name": "Update access group - not found returns 404",
+          "type": "error",
+          "priority": "P1",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/access-groups/00000000-0000-4000-a000-000000000000",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": { "name": "Does Not Exist" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-PATCH-005",
+          "name": "Update access group - system group allows name/description update",
+          "type": "happy_path",
+          "priority": "P2",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/access-groups/{{SYSTEM_GROUP_ID}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": { "name": "Renamed System Group" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertion": "System groups (isSystem=true) CAN have name/description modified"
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/system/access-groups/:id/permissions",
+      "description": "Replace all permissions for an access group (E2b.2)",
+      "story": "E2b-2",
+      "guard": "createPermissionGuard('system.access-groups.detail', 'edit')",
+      "test_cases": [
+        {
+          "id": "E2b.2-PERM-001",
+          "name": "Set permissions - happy path replaces all permissions",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "PUT",
+            "url": "/system/access-groups/{{ACCESS_GROUP_ID}}/permissions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": [
+              {
+                "resourceCode": "system.users.list",
+                "canAccess": true,
+                "canNew": true,
+                "canView": true,
+                "canEdit": true,
+                "canDelete": false
+              },
+              {
+                "resourceCode": "system.company-profile.detail",
+                "canAccess": true,
+                "canNew": false,
+                "canView": true,
+                "canEdit": false,
+                "canDelete": false
+              }
+            ]
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertion": "data is array of 2 permission objects matching the request"
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) as perm_count FROM access_group_permissions WHERE access_group_id = '{{ACCESS_GROUP_ID}}'",
+            "expected": "perm_count = 2 (old permissions replaced with new set)"
+          }
+        },
+        {
+          "id": "E2b.2-PERM-002",
+          "name": "Set permissions - empty array clears all permissions",
+          "type": "edge_case",
+          "priority": "P1",
+          "request": {
+            "method": "PUT",
+            "url": "/system/access-groups/{{ACCESS_GROUP_ID}}/permissions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": []
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_exact_fields": { "data": [] }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) as perm_count FROM access_group_permissions WHERE access_group_id = '{{ACCESS_GROUP_ID}}'",
+            "expected": "perm_count = 0"
+          }
+        },
+        {
+          "id": "E2b.2-PERM-003",
+          "name": "Set permissions - invalid resource code returns 400",
+          "type": "validation_error",
+          "priority": "P1",
+          "request": {
+            "method": "PUT",
+            "url": "/system/access-groups/{{ACCESS_GROUP_ID}}/permissions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": [
+              {
+                "resourceCode": "nonexistent.resource.code",
+                "canAccess": true,
+                "canNew": false,
+                "canView": true,
+                "canEdit": false,
+                "canDelete": false
+              }
+            ]
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error", "INVALID_RESOURCE"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-PERM-004",
+          "name": "Set permissions - duplicate resourceCode entries returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "PUT",
+            "url": "/system/access-groups/{{ACCESS_GROUP_ID}}/permissions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": [
+              { "resourceCode": "system.users.list", "canAccess": true, "canNew": true, "canView": true, "canEdit": true, "canDelete": true },
+              { "resourceCode": "system.users.list", "canAccess": false, "canNew": false, "canView": false, "canEdit": false, "canDelete": false }
+            ]
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-PERM-005",
+          "name": "Set permissions - canAccess=false with action flags true returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "PUT",
+            "url": "/system/access-groups/{{ACCESS_GROUP_ID}}/permissions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": [
+              { "resourceCode": "system.users.list", "canAccess": false, "canNew": true, "canView": false, "canEdit": false, "canDelete": false }
+            ]
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"],
+            "body_assertion": "Action flags must be false when canAccess is false"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-PERM-006",
+          "name": "Set permissions - access group not found returns 404",
+          "type": "error",
+          "priority": "P1",
+          "request": {
+            "method": "PUT",
+            "url": "/system/access-groups/00000000-0000-4000-a000-000000000000/permissions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": []
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/system/users/:id/access-groups",
+      "description": "Replace all access group assignments for a user (E2b.3)",
+      "story": "E2b-3",
+      "guard": "createPermissionGuard('system.users.detail', 'edit')",
+      "test_cases": [
+        {
+          "id": "E2b.3-PUT-001",
+          "name": "Assign access groups - happy path replaces all assignments",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "PUT",
+            "url": "/system/users/{{TEST_USER_ID}}/access-groups",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "accessGroupIds": ["{{FULL_ACCESS_GROUP_ID}}", "{{REPORT_VIEWER_GROUP_ID}}"]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data", "userId", "companyId", "accessGroups"],
+            "body_assertion": "data.accessGroups has exactly 2 items matching the provided group IDs; each has assignedBy set to admin's userId"
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) as assignment_count FROM user_access_groups WHERE user_id = '{{TEST_USER_ID}}' AND company_id = '{{TEST_COMPANY_ID}}'",
+            "expected": "assignment_count = 2 (previous assignments replaced)"
+          }
+        },
+        {
+          "id": "E2b.3-PUT-002",
+          "name": "Assign access groups - empty array returns 422 (business rule: min 1 group)",
+          "type": "error",
+          "priority": "P2",
+          "request": {
+            "method": "PUT",
+            "url": "/system/users/{{TEST_USER_ID}}/access-groups",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "accessGroupIds": []
+            }
+          },
+          "expected": {
+            "status": 422,
+            "body_contains": ["error", "MIN_GROUPS_REQUIRED"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.3-PUT-003",
+          "name": "Assign access groups - group from other company returns 400",
+          "type": "security",
+          "priority": "P0",
+          "request": {
+            "method": "PUT",
+            "url": "/system/users/{{TEST_USER_ID}}/access-groups",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "accessGroupIds": ["{{OTHER_COMPANY_GROUP_ID}}"]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error", "INVALID_ACCESS_GROUP"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.3-PUT-004",
+          "name": "Assign access groups - non-existent group ID returns 400",
+          "type": "validation_error",
+          "priority": "P1",
+          "request": {
+            "method": "PUT",
+            "url": "/system/users/{{TEST_USER_ID}}/access-groups",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "accessGroupIds": ["00000000-0000-4000-a000-000000000000"]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error", "INVALID_ACCESS_GROUP"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.3-PUT-005",
+          "name": "Assign access groups - user not in company returns 404",
+          "type": "error",
+          "priority": "P1",
+          "request": {
+            "method": "PUT",
+            "url": "/system/users/00000000-0000-4000-a000-000000000000/access-groups",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "accessGroupIds": ["{{FULL_ACCESS_GROUP_ID}}"]
+            }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["error", "USER_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.3-PUT-006",
+          "name": "Assign access groups - inactive group returns 400",
+          "type": "validation_error",
+          "priority": "P1",
+          "request": {
+            "method": "PUT",
+            "url": "/system/users/{{TEST_USER_ID}}/access-groups",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "accessGroupIds": ["{{INACTIVE_GROUP_ID}}"]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error", "INVALID_ACCESS_GROUP"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.3-PUT-007",
+          "name": "Assign access groups - STAFF user gets 403",
+          "type": "authz_error",
+          "priority": "P0",
+          "request": {
+            "method": "PUT",
+            "url": "/system/users/{{TEST_USER_ID}}/access-groups",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{STAFF_JWT}}" },
+            "body": {
+              "accessGroupIds": ["{{FULL_ACCESS_GROUP_ID}}"]
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.3-PUT-008",
+          "name": "Assign access groups - duplicate group IDs in array returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "PUT",
+            "url": "/system/users/{{TEST_USER_ID}}/access-groups",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "accessGroupIds": ["{{FULL_ACCESS_GROUP_ID}}", "{{FULL_ACCESS_GROUP_ID}}"]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.3-PUT-009",
+          "name": "Assign access groups - records correct assignedBy",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "PUT",
+            "url": "/system/users/{{TEST_USER_ID}}/access-groups",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "accessGroupIds": ["{{FULL_ACCESS_GROUP_ID}}"]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data.accessGroups[0].assignedBy equals the admin user's ID"
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT assigned_by FROM user_access_groups WHERE user_id = '{{TEST_USER_ID}}' AND company_id = '{{TEST_COMPANY_ID}}'",
+            "expected": "assigned_by = '{{ADMIN_USER_ID}}'"
+          }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/system/access-groups/:id",
+      "description": "Soft-delete an access group (E2b.2)",
+      "story": "E2b-2",
+      "guard": "createPermissionGuard('system.access-groups.detail', 'delete')",
+      "test_cases": [
+        {
+          "id": "E2b.2-DEL-001",
+          "name": "Delete access group - happy path soft-deletes custom group with no users",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/access-groups/{{CUSTOM_GROUP_NO_USERS_ID}}",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 204,
+            "body_assertion": "Empty response body"
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT is_active FROM access_groups WHERE id = '{{CUSTOM_GROUP_NO_USERS_ID}}'",
+            "expected": "is_active = false (soft-deleted, NOT physically removed)"
+          }
+        },
+        {
+          "id": "E2b.2-DEL-002",
+          "name": "Delete access group - system group returns 409 Conflict",
+          "type": "error",
+          "priority": "P1",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/access-groups/{{SYSTEM_GROUP_ID}}",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 409,
+            "body_contains": ["error", "SYSTEM_GROUP_PROTECTED"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT is_active FROM access_groups WHERE id = '{{SYSTEM_GROUP_ID}}'",
+            "expected": "is_active = true (NOT deleted, still active)"
+          }
+        },
+        {
+          "id": "E2b.2-DEL-003",
+          "name": "Delete access group - group with active users returns 409",
+          "type": "error",
+          "priority": "P1",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/access-groups/{{CUSTOM_GROUP_WITH_USERS_ID}}",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 409,
+            "body_contains": ["error", "GROUP_HAS_USERS"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-DEL-004",
+          "name": "Delete access group - not found returns 404",
+          "type": "error",
+          "priority": "P1",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/access-groups/00000000-0000-4000-a000-000000000000",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-DEL-005",
+          "name": "Delete access group - STAFF user gets 403",
+          "type": "authz_error",
+          "priority": "P0",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/access-groups/{{CUSTOM_GROUP_NO_USERS_ID}}",
+            "headers": { "Authorization": "Bearer {{STAFF_JWT}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.2-DEL-006",
+          "name": "Delete access group - unauthenticated returns 401",
+          "type": "authn_error",
+          "priority": "P0",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/access-groups/{{CUSTOM_GROUP_NO_USERS_ID}}",
+            "headers": {}
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system/resources (permission guard tests)",
+      "description": "Permission guard enforcement tests using resource routes (E2b.4)",
+      "story": "E2b-4",
+      "guard": "createPermissionGuard('system.resources.list', 'view')",
+      "test_cases": [
+        {
+          "id": "E2b.4-GUARD-001",
+          "name": "Permission guard - blocks user WITHOUT canAccess on resource",
+          "type": "security",
+          "priority": "P0",
+          "request": {
+            "method": "GET",
+            "url": "/system/resources",
+            "headers": { "Authorization": "Bearer {{USER_NO_ACCESS_GROUP_JWT}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"],
+            "body_assertion": "User has no access groups or no canAccess on system.resources.list -> 403"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.4-GUARD-002",
+          "name": "Permission guard - allows user WITH canAccess on resource",
+          "type": "security",
+          "priority": "P0",
+          "request": {
+            "method": "GET",
+            "url": "/system/resources",
+            "headers": { "Authorization": "Bearer {{USER_WITH_RESOURCES_VIEW_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.4-GUARD-003",
+          "name": "Permission guard - action-level check: canAccess=true but canDelete=false -> DELETE returns 403",
+          "type": "security",
+          "priority": "P0",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/access-groups/{{CUSTOM_GROUP_ID}}",
+            "headers": { "Authorization": "Bearer {{USER_VIEW_ONLY_JWT}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"],
+            "body_assertion": "User has canAccess=true, canView=true but canDelete=false on system.access-groups.detail -> DELETE blocked"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.4-GUARD-004",
+          "name": "Permission guard - SUPER_ADMIN bypasses all checks (no access groups needed)",
+          "type": "security",
+          "priority": "P0",
+          "request": {
+            "method": "GET",
+            "url": "/system/resources",
+            "headers": { "Authorization": "Bearer {{SUPER_ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertion": "SUPER_ADMIN accesses resource without any access group assignment"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.4-GUARD-005",
+          "name": "Permission guard - most-permissive-wins across multiple groups",
+          "type": "security",
+          "priority": "P0",
+          "request": {
+            "method": "GET",
+            "url": "/system/resources",
+            "headers": { "Authorization": "Bearer {{USER_MULTI_GROUP_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertion": "User in Group A (canView=false on system.resources.list) AND Group B (canView=true) -> OR merge -> canView=true -> allowed"
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/system/access-groups/:id/permissions (cache invalidation)",
+      "description": "Permission cache invalidation tests after group permission edit (E2b.4)",
+      "story": "E2b-4",
+      "guard": "createPermissionGuard('system.access-groups.detail', 'edit')",
+      "test_cases": [
+        {
+          "id": "E2b.4-CACHE-001",
+          "name": "Cache invalidation - after permission update, new permission applies immediately",
+          "type": "security",
+          "priority": "P0",
+          "request": {
+            "method": "PUT",
+            "url": "/system/access-groups/{{ACCESS_GROUP_ID}}/permissions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": [
+              { "resourceCode": "system.resources.list", "canAccess": false, "canNew": false, "canView": false, "canEdit": false, "canDelete": false }
+            ]
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "After this mutation, a user in this group calling GET /system/resources should now get 403 (permission cache invalidated via accessGroup.updated event)"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.4-CACHE-002",
+          "name": "Cache invalidation - after user group reassignment, new permissions apply immediately",
+          "type": "security",
+          "priority": "P0",
+          "request": {
+            "method": "PUT",
+            "url": "/system/users/{{TEST_USER_ID}}/access-groups",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "accessGroupIds": ["{{READ_ONLY_GROUP_ID}}"]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "After this mutation, calling GET /system/resources as TEST_USER should reflect READ_ONLY permissions (cache invalidated via user.accessGroups.assigned event)"
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system/company-profile (field filtering)",
+      "description": "Field-level visibility filtering tests via onSend hook (E2b.5)",
+      "story": "E2b-5",
+      "guard": "createPermissionGuard('system.company-profile.detail', 'view')",
+      "test_cases": [
+        {
+          "id": "E2b.5-FIELD-001",
+          "name": "Field filter - HIDDEN field stripped from response",
+          "type": "security",
+          "priority": "P0",
+          "request": {
+            "method": "GET",
+            "url": "/system/company-profile",
+            "headers": { "Authorization": "Bearer {{USER_WITH_HIDDEN_FIELD_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertion": "Field with HIDDEN override (e.g., vatNumber) is completely absent from data object"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.5-FIELD-002",
+          "name": "Field filter - READ_ONLY field present with _fieldMeta marker",
+          "type": "happy_path",
+          "priority": "P0",
+          "request": {
+            "method": "GET",
+            "url": "/system/company-profile",
+            "headers": { "Authorization": "Bearer {{USER_WITH_READONLY_FIELD_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data", "_fieldMeta"],
+            "body_assertion": "Field with READ_ONLY override present in data; _fieldMeta contains {fieldName: 'readOnly'}"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.5-FIELD-003",
+          "name": "Field filter - SUPER_ADMIN bypass (no fields stripped, no _fieldMeta)",
+          "type": "happy_path",
+          "priority": "P0",
+          "request": {
+            "method": "GET",
+            "url": "/system/company-profile",
+            "headers": { "Authorization": "Bearer {{SUPER_ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertion": "All fields present; no _fieldMeta property (SUPER_ADMIN bypasses field filtering entirely)"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.5-FIELD-004",
+          "name": "Field filter - no override defaults to VISIBLE (all fields present)",
+          "type": "happy_path",
+          "priority": "P2",
+          "request": {
+            "method": "GET",
+            "url": "/system/company-profile",
+            "headers": { "Authorization": "Bearer {{USER_NO_FIELD_OVERRIDES_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"],
+            "body_assertion": "All fields present; no _fieldMeta (no field overrides = default VISIBLE)"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.5-FIELD-005",
+          "name": "Field filter - most-permissive-wins: Group A HIDDEN + Group B VISIBLE = VISIBLE",
+          "type": "security",
+          "priority": "P0",
+          "request": {
+            "method": "GET",
+            "url": "/system/company-profile",
+            "headers": { "Authorization": "Bearer {{USER_MULTI_GROUP_FIELD_OVERRIDE_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "User in Group A (field HIDDEN) + Group B (field VISIBLE) -> field is present in response (VISIBLE wins)"
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system/company-profile/export-defaults",
+      "description": "Export company defaults as JSON (E2b.6 - NOT YET IMPLEMENTED)",
+      "story": "E2b-6",
+      "guard": "createPermissionGuard('system.company-profile.detail', 'view')",
+      "implementation_status": "NOT_IMPLEMENTED",
+      "test_cases": [
+        {
+          "id": "E2b.6-EXPORT-001",
+          "name": "Export defaults - happy path returns JSON with all entity types",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/company-profile/export-defaults",
+            "headers": { "Authorization": "Bearer {{ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data", "version", "exportedAt", "exportedFrom", "resources", "accessGroups", "vatCodes", "paymentTerms", "numberSeries", "currencies"],
+            "body_assertion": "data.resources is array of active resources; data.accessGroups includes permissions[] and fieldOverrides[] per group; data.version matches company-defaults.json format"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.6-EXPORT-002",
+          "name": "Export defaults - non-ADMIN gets 403",
+          "type": "authz_error",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/company-profile/export-defaults",
+            "headers": { "Authorization": "Bearer {{STAFF_JWT}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.6-EXPORT-003",
+          "name": "Export defaults - SUPER_ADMIN succeeds",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/company-profile/export-defaults",
+            "headers": { "Authorization": "Bearer {{SUPER_ADMIN_JWT}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/system/company-profile/import-defaults",
+      "description": "Import company defaults from JSON (E2b.6 - NOT YET IMPLEMENTED)",
+      "story": "E2b-6",
+      "guard": "createPermissionGuard('system.company-profile.detail', 'edit')",
+      "implementation_status": "NOT_IMPLEMENTED",
+      "test_cases": [
+        {
+          "id": "E2b.6-IMPORT-001",
+          "name": "Import defaults - happy path returns APPLIED status with summary",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/system/company-profile/import-defaults",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "data": {
+                "version": "1.1.0",
+                "description": "Test import",
+                "resources": [],
+                "accessGroups": [
+                  {
+                    "code": "IMPORTED_GROUP",
+                    "name": "Imported Group",
+                    "description": "From import",
+                    "isSystem": false,
+                    "permissions": [],
+                    "fieldOverrides": []
+                  }
+                ],
+                "vatCodes": [],
+                "paymentTerms": [],
+                "numberSeries": [],
+                "currencies": []
+              },
+              "dryRun": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "data", "status", "summary", "warnings"],
+            "body_exact_fields": { "data.status": "APPLIED" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id FROM access_groups WHERE code = 'IMPORTED_GROUP' AND company_id = '{{TEST_COMPANY_ID}}'",
+            "expected": "Exactly 1 row — imported group created"
+          }
+        },
+        {
+          "id": "E2b.6-IMPORT-002",
+          "name": "Import defaults - dry run returns DRY_RUN status without persisting",
+          "type": "happy_path",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/system/company-profile/import-defaults",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "data": {
+                "version": "1.1.0",
+                "description": "Dry run test",
+                "resources": [],
+                "accessGroups": [
+                  {
+                    "code": "DRY_RUN_GROUP",
+                    "name": "Dry Run Group",
+                    "description": null,
+                    "isSystem": false,
+                    "permissions": [],
+                    "fieldOverrides": []
+                  }
+                ],
+                "vatCodes": [],
+                "paymentTerms": [],
+                "numberSeries": [],
+                "currencies": []
+              },
+              "dryRun": true
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_exact_fields": { "data.status": "DRY_RUN" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id FROM access_groups WHERE code = 'DRY_RUN_GROUP' AND company_id = '{{TEST_COMPANY_ID}}'",
+            "expected": "0 rows — dry run did NOT persist"
+          }
+        },
+        {
+          "id": "E2b.6-IMPORT-003",
+          "name": "Import defaults - unsupported version returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/system/company-profile/import-defaults",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "data": {
+                "version": "99.0.0",
+                "description": "Unsupported version",
+                "resources": [],
+                "accessGroups": []
+              },
+              "dryRun": false
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error", "UNSUPPORTED_VERSION"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.6-IMPORT-004",
+          "name": "Import defaults - non-ADMIN gets 403",
+          "type": "authz_error",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/system/company-profile/import-defaults",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{STAFF_JWT}}" },
+            "body": { "data": { "version": "1.1.0" }, "dryRun": false }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2b.6-IMPORT-005",
+          "name": "Import defaults - export then import round-trip fidelity",
+          "type": "happy_path",
+          "priority": "P3",
+          "request": {
+            "method": "POST",
+            "url": "/system/company-profile/import-defaults",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_JWT}}" },
+            "body": {
+              "data": "{{EXPORT_RESULT_FROM_E2b.6-EXPORT-001}}",
+              "dryRun": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_exact_fields": { "data.status": "APPLIED" },
+            "body_assertion": "Re-exporting after import produces identical JSON (round-trip fidelity)"
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    }
+  ],
+  "cross_cutting_test_scenarios": {
+    "description": "Test scenarios that span multiple endpoints and verify cross-cutting concerns",
+    "scenarios": [
+      {
+        "id": "E2b-XCUT-001",
+        "name": "Full RBAC lifecycle: create group -> set permissions -> assign user -> verify enforcement",
+        "priority": "P0",
+        "steps": [
+          "1. POST /system/access-groups -> create CUSTOM_TEST group",
+          "2. PUT /system/access-groups/:id/permissions -> grant canAccess+canView on system.resources.list only",
+          "3. PUT /system/users/:id/access-groups -> assign CUSTOM_TEST to test user",
+          "4. GET /system/resources (as test user) -> 200 (canView granted)",
+          "5. POST /system/access-groups (as test user) -> 403 (canNew NOT granted on system.access-groups.list)",
+          "6. GET /system/my-permissions (as test user) -> verify permissions reflect CUSTOM_TEST grants"
+        ]
+      },
+      {
+        "id": "E2b-XCUT-002",
+        "name": "Permission cache invalidation lifecycle",
+        "priority": "P0",
+        "steps": [
+          "1. GET /system/resources (as user) -> 200 (has permission, cached)",
+          "2. PUT /system/access-groups/:id/permissions -> revoke canView on system.resources.list",
+          "3. GET /system/resources (as same user) -> 403 (cache invalidated, new permission applied)",
+          "4. Verify cache invalidation event emitted (accessGroup.updated)"
+        ]
+      },
+      {
+        "id": "E2b-XCUT-003",
+        "name": "Most-permissive-wins across multiple groups end-to-end",
+        "priority": "P0",
+        "steps": [
+          "1. Create Group A: canView=false on system.resources.list",
+          "2. Create Group B: canView=true on system.resources.list",
+          "3. Assign both groups to user",
+          "4. GET /system/resources (as user) -> 200 (OR merge: true wins)",
+          "5. GET /system/my-permissions -> verify canView=true for system.resources.list"
+        ]
+      },
+      {
+        "id": "E2b-XCUT-004",
+        "name": "Company creation seeds 12 groups with permissions and assigns creator",
+        "priority": "P1",
+        "steps": [
+          "1. POST /system/company-profile -> create new company",
+          "2. GET /system/access-groups (in new company context) -> verify 12 system groups",
+          "3. GET /system/users/:creatorId/access-groups -> verify FULL_ACCESS assigned",
+          "4. GET /system/my-permissions (as creator) -> verify full permissions"
+        ]
+      },
+      {
+        "id": "E2b-XCUT-005",
+        "name": "Field-level visibility end-to-end with permission guard integration",
+        "priority": "P0",
+        "steps": [
+          "1. Create access group with field override: vatNumber=HIDDEN on system.company-profile.detail",
+          "2. Assign group to user",
+          "3. GET /system/company-profile (as user) -> verify vatNumber absent from response",
+          "4. GET /system/company-profile (as SUPER_ADMIN) -> verify vatNumber present"
+        ]
+      }
+    ]
+  },
+  "summary": {
+    "endpoints_covered": 14,
+    "stories_covered": ["E2b-1", "E2b-2", "E2b-3", "E2b-4", "E2b-5", "E2b-6"],
+    "test_case_breakdown": {
+      "happy_path": 28,
+      "validation_error": 16,
+      "authz_error": 10,
+      "authn_error": 4,
+      "security": 10,
+      "error": 10,
+      "edge_case": 5,
+      "cross_cutting_scenarios": 5
+    },
+    "priority_breakdown": {
+      "P0": 25,
+      "P1": 33,
+      "P2": 22,
+      "P3": 1,
+      "cross_cutting": 5
+    },
+    "implementation_status": {
+      "implemented": {
+        "stories": ["E2b-1", "E2b-2", "E2b-3", "E2b-4", "E2b-5"],
+        "endpoint_count": 10
+      },
+      "not_implemented": {
+        "stories": ["E2b-6"],
+        "endpoint_count": 2,
+        "note": "E2b-6 (export/import) is ready-for-dev but NOT implemented. Test cases are included as planned tests."
+      }
+    },
+    "key_risks_tested": [
+      "R-001: Permission guard bypass (5 tests)",
+      "R-002: Most-permissive-wins logic error (3 tests)",
+      "R-004: Permission cache stale data (2 tests)",
+      "R-005: Field-level visibility leak (5 tests)",
+      "R-008: Cross-company access group leakage (3 tests)"
+    ]
+  }
+}

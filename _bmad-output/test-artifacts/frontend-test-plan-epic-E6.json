@@ -1,0 +1,1402 @@
+{
+  "epic_id": "E6",
+  "generated_at": "2026-02-24T14:00:00.000Z",
+  "frontend_url": "http://localhost:5173",
+  "total_journeys": 25,
+  "total_steps": 133,
+  "journeys": [
+    {
+      "id": "j1-login-flow",
+      "name": "Login with Email and Password",
+      "description": "Test the complete authentication flow including login form, JWT storage, and redirect to dashboard",
+      "priority": "critical",
+      "related_stories": ["E6.1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Unauthenticated user is redirected to /login",
+          "screenshot": true,
+          "visual_check": "Login page visible with Nexa logo, email and password fields, 'Sign In' button, and purple theme branding. Card centered on desktop."
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-test.com",
+            "password": "TestPassword123!"
+          },
+          "expected_result": "Form fields populated with email and password",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login API called, JWT received, user redirected to dashboard",
+          "screenshot": true,
+          "visual_check": "Dashboard or authenticated home page loaded. App shell visible with sidebar on left, header bar at top, and main content area."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "User avatar in top-right header",
+          "input_data": {},
+          "expected_result": "User avatar/initials visible in the header, confirming authenticated state",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j2-login-mfa",
+      "name": "Login with MFA Challenge",
+      "description": "Test the MFA verification step when the server requires a TOTP code",
+      "priority": "high",
+      "related_stories": ["E6.1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "mfa-user@nexa-test.com",
+            "password": "TestPassword123!"
+          },
+          "expected_result": "Form fields populated",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Server returns mfaRequired: true, MFA code input appears",
+          "screenshot": true,
+          "visual_check": "MFA verification step visible with 6-digit TOTP code input field and 'Verify' button."
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "MFA code input",
+          "input_data": {
+            "code": "123456"
+          },
+          "expected_result": "6-digit code entered in the TOTP field",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Verify button",
+          "input_data": {},
+          "expected_result": "MFA verified, user redirected to authenticated dashboard",
+          "screenshot": true,
+          "visual_check": "Authenticated app shell loaded with sidebar and header. MFA challenge no longer visible."
+        }
+      ]
+    },
+    {
+      "id": "j3-unauthenticated-redirect",
+      "name": "Unauthenticated Access Redirects to Login",
+      "description": "Verify that accessing any authenticated route without a session redirects to /login",
+      "priority": "critical",
+      "related_stories": ["E6.1", "E6.11"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/finance/journals",
+          "input_data": {},
+          "expected_result": "User is redirected to /login since they have no valid JWT",
+          "screenshot": true,
+          "visual_check": "Login page displayed. URL shows /login. No sidebar or app shell visible."
+        },
+        {
+          "step_number": 2,
+          "action": "navigate",
+          "target": "/system/resources",
+          "input_data": {},
+          "expected_result": "User is redirected to /login",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "User is redirected to /login",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j4-sidebar-navigation",
+      "name": "Sidebar Module Navigation",
+      "description": "Test sidebar module groups, expansion/collapse, sub-item navigation, and active route highlighting",
+      "priority": "critical",
+      "related_stories": ["E6.2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Authenticated dashboard loads with sidebar visible",
+          "screenshot": true,
+          "visual_check": "Full app shell with sidebar on the left showing module groups (System, Finance, Sales, etc.) with Lucide icons and translated labels."
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Finance module group in sidebar",
+          "input_data": {},
+          "expected_result": "Finance module group expands to show sub-items",
+          "screenshot": true,
+          "visual_check": "Finance group expanded showing sub-items: Chart of Accounts, Journals, Financial Periods, Bank Reconciliation, Budgets. Each with a Lucide icon and label."
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Journals sub-item under Finance",
+          "input_data": {},
+          "expected_result": "Navigation to /finance/journals, Journals item highlighted in sidebar",
+          "screenshot": true,
+          "visual_check": "Journals item has active styling: bold text, purple left border, light purple background. Main content area shows Journals page (placeholder)."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Sales module group in sidebar",
+          "input_data": {},
+          "expected_result": "Sales group expands, Finance group may remain expanded or collapse",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Quotes sub-item under Sales",
+          "input_data": {},
+          "expected_result": "Navigation to /sales/quotes, previous Journals highlight removed, Quotes now highlighted",
+          "screenshot": true,
+          "visual_check": "Sales > Quotes item is now active with purple highlight. Finance > Journals is no longer highlighted."
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Sidebar collapse toggle button (chevron at bottom)",
+          "input_data": {},
+          "expected_result": "Sidebar collapses to 64px icon-only mode",
+          "screenshot": true,
+          "visual_check": "Sidebar collapsed to narrow width showing only icons. Main content area expanded to fill space. Collapse chevron now points right."
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Sidebar expand toggle button",
+          "input_data": {},
+          "expected_result": "Sidebar expands back to 256px full mode",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j5-company-switcher",
+      "name": "Switch Company Context",
+      "description": "Test company switching from the sidebar, verifying global context update and permissions re-fetch",
+      "priority": "high",
+      "related_stories": ["E6.2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Dashboard loads with current company shown in sidebar header",
+          "screenshot": true,
+          "visual_check": "Company switcher at top of sidebar showing current company name and logo/initials."
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Company switcher dropdown in sidebar",
+          "input_data": {},
+          "expected_result": "Dropdown opens listing available companies with current company checked",
+          "screenshot": true,
+          "visual_check": "Dropdown menu showing list of companies. Current company has a checkmark indicator. Other companies listed without checkmark."
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Second company in the dropdown list",
+          "input_data": {},
+          "expected_result": "Company context switches, toast confirms switch, permissions re-fetched",
+          "screenshot": true,
+          "visual_check": "Success toast visible showing 'Switched to [Company Name]'. Sidebar header now shows the new company name. Sidebar modules may update based on new permissions."
+        }
+      ]
+    },
+    {
+      "id": "j6-user-menu-signout",
+      "name": "User Menu and Sign Out",
+      "description": "Test the user avatar dropdown menu items and the sign out flow",
+      "priority": "high",
+      "related_stories": ["E6.2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Authenticated dashboard loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "User avatar button in the top-right header",
+          "input_data": {},
+          "expected_result": "User dropdown menu opens",
+          "screenshot": true,
+          "visual_check": "Dropdown showing: user's full name at top, role and company name below, divider, 'My Profile' link, 'Preferences' link, divider, 'Sign Out' button."
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign Out menu item",
+          "input_data": {},
+          "expected_result": "User signed out, auth cleared, redirected to /login",
+          "screenshot": true,
+          "visual_check": "Login page displayed. No sidebar or app shell visible. Session fully cleared."
+        }
+      ]
+    },
+    {
+      "id": "j7-responsive-sidebar",
+      "name": "Responsive Sidebar Behaviour",
+      "description": "Test sidebar collapse on tablet width and off-canvas drawer on mobile width",
+      "priority": "medium",
+      "related_stories": ["E6.2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Full sidebar at desktop width (>=1280px)",
+          "screenshot": true,
+          "visual_check": "Full sidebar (256px) with icon + label visible for all module groups."
+        },
+        {
+          "step_number": 2,
+          "action": "screenshot",
+          "target": "Resize viewport to 1100px width (tablet)",
+          "input_data": {"viewport_width": 1100},
+          "expected_result": "Sidebar auto-collapses to icon-only mode (64px)",
+          "screenshot": true,
+          "visual_check": "Sidebar collapsed to icons only. Main content area fills remaining space. Tooltips should appear on icon hover."
+        },
+        {
+          "step_number": 3,
+          "action": "screenshot",
+          "target": "Resize viewport to 375px width (phone)",
+          "input_data": {"viewport_width": 375},
+          "expected_result": "Sidebar hidden. Hamburger menu visible in header.",
+          "screenshot": true,
+          "visual_check": "No sidebar visible. Header shows hamburger menu icon on the left. Content fills full width."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Hamburger menu button in header",
+          "input_data": {},
+          "expected_result": "Off-canvas sidebar drawer slides in from left",
+          "screenshot": true,
+          "visual_check": "Sidebar overlay/sheet visible from left with full navigation. Backdrop overlay behind. Module groups and company switcher visible."
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "System module group in mobile drawer",
+          "input_data": {},
+          "expected_result": "System group expands showing sub-items",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Users sub-item in mobile drawer",
+          "input_data": {},
+          "expected_result": "Navigation to /system/users, drawer closes automatically",
+          "screenshot": true,
+          "visual_check": "Mobile drawer closed. Main content shows Users page. Hamburger still visible in header."
+        }
+      ]
+    },
+    {
+      "id": "j8-copilot-cmd-k",
+      "name": "Co-Pilot Dock: Cmd+K and Drawer",
+      "description": "Test the unified search input focus via keyboard shortcut and the Co-Pilot drawer open/close",
+      "priority": "high",
+      "related_stories": ["E6.5"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Authenticated dashboard loads with search input in header",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Press Cmd+K (or Ctrl+K) keyboard shortcut",
+          "input_data": {"keyboard": "Meta+k"},
+          "expected_result": "Unified search input in header gains focus, command palette dropdown may open",
+          "screenshot": true,
+          "visual_check": "Search input in header bar is focused with cursor blinking. A command palette dropdown or autocomplete area may be visible below the input."
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Unified search input",
+          "input_data": {"query": "INV-"},
+          "expected_result": "Autocomplete dropdown shows matching entity suggestions for invoices",
+          "screenshot": true,
+          "visual_check": "Autocomplete dropdown showing entity results section with invoice matches. May also show page results and AI prompt suggestions sections."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Press Escape key to close search",
+          "input_data": {"keyboard": "Escape"},
+          "expected_result": "Search dropdown closes, input blurs",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Chat button in header bar",
+          "input_data": {},
+          "expected_result": "Co-Pilot drawer opens from the right side",
+          "screenshot": true,
+          "visual_check": "380px wide drawer visible on right side. Main content area resized to accommodate. Drawer shows chat history selector, conversation area (empty or with welcome), quick prompts, and input area at bottom."
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "Co-Pilot input area",
+          "input_data": {"message": "Show me overdue invoices"},
+          "expected_result": "Message typed in the Co-Pilot input field",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Send button or press Enter",
+          "input_data": {},
+          "expected_result": "User message appears right-aligned with purple background. AI response begins streaming with typing indicator.",
+          "screenshot": true,
+          "visual_check": "Chat area showing user message bubble on right (purple background) and AI response streaming on left (grey background) with pulsing dot typing indicator."
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Chat button in header to close drawer",
+          "input_data": {},
+          "expected_result": "Co-Pilot drawer closes, main content area resizes back to full width",
+          "screenshot": true,
+          "visual_check": "Drawer closed. Main content fills the full width again. Chat button in header no longer showing active state."
+        }
+      ]
+    },
+    {
+      "id": "j9-resource-registry-browse",
+      "name": "Browse Resource Registry with Filters",
+      "description": "Test the read-only Resource Registry page with module and type filters, search, and pagination",
+      "priority": "high",
+      "related_stories": ["E6.7"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/resources",
+          "input_data": {},
+          "expected_result": "Resource Registry page loads with T1 Entity List layout",
+          "screenshot": true,
+          "visual_check": "Page title 'Resource Registry'. Breadcrumbs: System > Resource Registry. Data table with columns: Code, Name, Module, Type, Sort Order. No [+ New] button visible. Module and Type filter dropdowns visible."
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "[+ New] button",
+          "input_data": {"should_exist": false},
+          "expected_result": "[+ New] button does NOT exist (read-only page)",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Module filter dropdown",
+          "input_data": {},
+          "expected_result": "Dropdown opens showing 'All Modules' plus all known modules (system, finance, sales, etc.)",
+          "screenshot": true,
+          "visual_check": "Module filter dropdown open showing options: All Modules, System, Finance, Accounts Receivable, Accounts Payable, Sales, Purchasing, Inventory, CRM, HR & Payroll, Manufacturing, Reporting."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Finance option in Module dropdown",
+          "input_data": {},
+          "expected_result": "Table filters to show only finance module resources",
+          "screenshot": true,
+          "visual_check": "Data table now shows only rows where Module column is 'Finance'. Filter dropdown shows 'Finance' selected."
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Type filter dropdown",
+          "input_data": {},
+          "expected_result": "Dropdown opens showing 'All Types' plus PAGE, REPORT, SETTING, MAINTENANCE",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "PAGE option in Type dropdown",
+          "input_data": {},
+          "expected_result": "Table filters further to show only finance PAGE resources (AND logic)",
+          "screenshot": true,
+          "visual_check": "Table shows only resources where Module=Finance AND Type=PAGE. Both filter dropdowns show their active selections."
+        },
+        {
+          "step_number": 7,
+          "action": "fill_form",
+          "target": "Search input",
+          "input_data": {"search": "journal"},
+          "expected_result": "Table filters by search term across code, name, description fields (300ms debounce)",
+          "screenshot": true,
+          "visual_check": "Table shows resources matching 'journal' in the finance/PAGE context. Search input shows 'journal' text."
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "First row in the table",
+          "input_data": {},
+          "expected_result": "Nothing happens (read-only page, no row click navigation)",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j10-access-group-create",
+      "name": "Create a New Access Group",
+      "description": "Test the full access group creation flow: navigate to create page, fill form, handle validation, save",
+      "priority": "critical",
+      "related_stories": ["E6.8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Access Group list page loads with T1 Entity List",
+          "screenshot": true,
+          "visual_check": "Page title 'Access Groups'. Breadcrumbs: System > Access Groups. Data table with columns: Code, Name, System badge, Users, Created. [+ New] button visible in action area."
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "[+ New] button",
+          "input_data": {},
+          "expected_result": "Navigates to /system/access-groups/new create form",
+          "screenshot": true,
+          "visual_check": "Create Access Group form with fields: Code (text input with placeholder 'e.g., SALES_MGR'), Name (text input), Description (textarea, optional). Breadcrumbs: System > Access Groups > New. Create and Cancel buttons."
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Create Access Group form",
+          "input_data": {
+            "code": "test_sales_rep",
+            "name": "Test Sales Representative",
+            "description": "Access group for sales representatives"
+          },
+          "expected_result": "Code auto-transforms to uppercase: TEST_SALES_REP. Name and description filled.",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Create button",
+          "input_data": {},
+          "expected_result": "POST /system/access-groups called, on success redirect to detail page with success toast",
+          "screenshot": true,
+          "visual_check": "Success toast 'Access group created successfully'. Redirected to access group detail page showing 'TEST_SALES_REP' as code, 'Test Sales Representative' as name. Permissions and Field Overrides tabs visible."
+        }
+      ]
+    },
+    {
+      "id": "j11-access-group-duplicate-code",
+      "name": "Access Group Create - Duplicate Code Error",
+      "description": "Test 409 CONFLICT handling when creating an access group with a code that already exists",
+      "priority": "medium",
+      "related_stories": ["E6.8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/access-groups/new",
+          "input_data": {},
+          "expected_result": "Create Access Group form loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Create Access Group form",
+          "input_data": {
+            "code": "FULL_ACCESS",
+            "name": "Full Access Duplicate"
+          },
+          "expected_result": "Form filled with existing system group code",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Create button",
+          "input_data": {},
+          "expected_result": "API returns 409 CONFLICT, inline error appears on Code field",
+          "screenshot": true,
+          "visual_check": "Code field shows inline error message: 'An access group with this code already exists'. Form remains on the create page for correction."
+        }
+      ]
+    },
+    {
+      "id": "j12-access-group-permissions",
+      "name": "Configure Access Group Permission Matrix",
+      "description": "Test the permission matrix checkbox grid on the access group detail page: check/uncheck permissions, select-all per module, save",
+      "priority": "critical",
+      "related_stories": ["E6.8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Access Group list page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Row for the test access group created in j10",
+          "input_data": {},
+          "expected_result": "Navigates to access group detail page",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Permissions tab",
+          "input_data": {},
+          "expected_result": "Permission matrix loads with checkbox grid grouped by module",
+          "screenshot": true,
+          "visual_check": "Permission matrix showing collapsible module groups. Each expanded group shows resource names with columns: Access, New, View, Edit, Delete. Checkbox grid visible with unchecked boxes."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Expand 'Sales' module group in permission matrix",
+          "input_data": {},
+          "expected_result": "Sales module section expands showing sales resources",
+          "screenshot": true,
+          "visual_check": "Sales module section expanded showing resources like Quotes, Orders, Delivery Notes with checkbox columns for each permission flag."
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "'Select All canAccess' checkbox on Sales module header",
+          "input_data": {},
+          "expected_result": "All sales resources get canAccess=true",
+          "screenshot": true,
+          "visual_check": "All checkboxes in the 'Access' column for sales resources are now checked."
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "canView checkbox for 'Sales Orders' resource",
+          "input_data": {},
+          "expected_result": "canView toggled to true for Sales Orders",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "canEdit checkbox for 'Sales Orders' resource",
+          "input_data": {},
+          "expected_result": "canEdit toggled to true for Sales Orders",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Save Permissions button",
+          "input_data": {},
+          "expected_result": "PUT /system/access-groups/:id/permissions called with full permissions array. Success toast shown.",
+          "screenshot": true,
+          "visual_check": "Success toast 'Permissions saved successfully'. Save button returns to disabled state. Checkboxes retain their checked state."
+        }
+      ]
+    },
+    {
+      "id": "j13-access-group-deactivate",
+      "name": "Deactivate a Custom Access Group",
+      "description": "Test deactivation of a non-system access group via overflow menu with confirmation dialog",
+      "priority": "high",
+      "related_stories": ["E6.8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Access Group list loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Row for the test access group (TEST_SALES_REP)",
+          "input_data": {},
+          "expected_result": "Navigates to detail page",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Overflow menu (more actions) button",
+          "input_data": {},
+          "expected_result": "Overflow menu opens showing 'Deactivate' option",
+          "screenshot": true,
+          "visual_check": "Dropdown menu with 'Deactivate' option visible. Since this is a custom group (not system), the option is enabled."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Deactivate option in overflow menu",
+          "input_data": {},
+          "expected_result": "Confirmation dialog appears with warning about consequences",
+          "screenshot": true,
+          "visual_check": "Confirmation dialog with title 'Deactivate Access Group', body text 'Deactivate TEST_SALES_REP? Users assigned to this group will lose its permissions.' Cancel and Deactivate buttons visible."
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Deactivate button in confirmation dialog",
+          "input_data": {},
+          "expected_result": "DELETE /system/access-groups/:id called (soft-delete), redirect to list with success toast",
+          "screenshot": true,
+          "visual_check": "Redirected to access group list. Success toast 'Access group deactivated'. The deactivated group is no longer in the default list view."
+        }
+      ]
+    },
+    {
+      "id": "j14-system-group-protection",
+      "name": "System Access Group Protection Rules",
+      "description": "Verify that system access groups show a protection banner and have Deactivate disabled",
+      "priority": "high",
+      "related_stories": ["E6.8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Access Group list loads showing system groups with 'System' badge",
+          "screenshot": true,
+          "visual_check": "List showing access groups. System groups have a 'System' badge in the System column."
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Row for a system access group (e.g., FULL_ACCESS)",
+          "input_data": {},
+          "expected_result": "Detail page loads with system group banner",
+          "screenshot": true,
+          "visual_check": "Info banner at top of page: 'This is a system access group. Its code cannot be changed and it cannot be deactivated.' Code field is read-only. System badge visible next to group name."
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Overflow menu (more actions) button",
+          "input_data": {},
+          "expected_result": "Overflow menu opens but Deactivate is disabled/hidden",
+          "screenshot": true,
+          "visual_check": "Overflow menu open. Deactivate option is either disabled (greyed out) or not present for system groups."
+        }
+      ]
+    },
+    {
+      "id": "j15-user-list-and-detail",
+      "name": "User List and Access Group Assignment",
+      "description": "Test viewing users, navigating to user detail, and assigning/removing access groups",
+      "priority": "critical",
+      "related_stories": ["E6.9"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/users",
+          "input_data": {},
+          "expected_result": "User list page loads with T1 Entity List layout",
+          "screenshot": true,
+          "visual_check": "Page title 'Users'. Data table with columns: Name, Email, Role (with coloured badges), Access Groups count, Status (Active/Inactive badges), Last Login. No [+ New] button (users created via auth registration)."
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Search input",
+          "input_data": {"search": "admin"},
+          "expected_result": "User list filters by name or email matching 'admin'",
+          "screenshot": true,
+          "visual_check": "Table filtered to show users matching 'admin'. Search input shows the text."
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "First user row in the filtered list",
+          "input_data": {},
+          "expected_result": "Navigates to /system/users/:id user detail page",
+          "screenshot": true,
+          "visual_check": "User detail page showing: user name as title, email, role badge, status badge, last login. Below: Access Groups assignment panel showing currently assigned groups as removable tag/chips."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Add Access Group button/combobox trigger",
+          "input_data": {},
+          "expected_result": "Combobox opens showing available access groups (excluding already assigned ones)",
+          "screenshot": true,
+          "visual_check": "Popover with searchable combobox listing active access groups. Already-assigned groups are excluded from the list. Search input for filtering."
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Access group combobox search input",
+          "input_data": {"search": "VIEW"},
+          "expected_result": "Combobox filters to groups matching 'VIEW'",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Select 'VIEW_ONLY' access group from combobox",
+          "input_data": {},
+          "expected_result": "Group added as a tag in the assignment panel (optimistic, unsaved)",
+          "screenshot": true,
+          "visual_check": "New access group tag 'VIEW_ONLY' appears in the assignment panel alongside existing group tags. Save button is now enabled."
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Save Access Groups button",
+          "input_data": {},
+          "expected_result": "PUT /system/users/:id/access-groups called with full accessGroupIds array. Success toast shown.",
+          "screenshot": true,
+          "visual_check": "Success toast 'Access groups updated successfully'. Save button returns to disabled state. Tags still show all assigned groups."
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Remove (X) button on the VIEW_ONLY tag",
+          "input_data": {},
+          "expected_result": "Tag removed from local state, Save button enabled",
+          "screenshot": true,
+          "visual_check": "VIEW_ONLY tag removed from assignment panel. Save button is now enabled again indicating unsaved changes."
+        },
+        {
+          "step_number": 9,
+          "action": "click",
+          "target": "Save Access Groups button",
+          "input_data": {},
+          "expected_result": "Groups saved without VIEW_ONLY, success toast",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j16-field-override-config",
+      "name": "Configure Field Overrides on Access Group",
+      "description": "Test the Field Overrides tab on access group detail: select resource, add override, set visibility, save",
+      "priority": "high",
+      "related_stories": ["E6.10"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Access group list loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Row for a custom access group",
+          "input_data": {},
+          "expected_result": "Navigates to access group detail page",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Field Overrides tab",
+          "input_data": {},
+          "expected_result": "Field Overrides panel loads with resource selector and empty state",
+          "screenshot": true,
+          "visual_check": "Field Overrides tab active. Resource selector combobox visible. Empty state message: 'Select a resource to configure field visibility overrides'. No field override table shown."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Resource selector combobox",
+          "input_data": {},
+          "expected_result": "Popover opens with searchable list of resources grouped by module",
+          "screenshot": true,
+          "visual_check": "Combobox dropdown showing resources grouped by module headers. Each resource shows name and code. Search input at top for filtering."
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Select a resource (e.g., 'Sales Orders' in Sales group)",
+          "input_data": {},
+          "expected_result": "Resource selected, empty override table shown for this resource",
+          "screenshot": true,
+          "visual_check": "Selected resource name displayed. Table area shows 'No field overrides configured for this resource' with 'Add Field Override' button."
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Add Field Override button",
+          "input_data": {},
+          "expected_result": "New row added with empty field path input and VISIBLE default visibility",
+          "screenshot": true,
+          "visual_check": "New row in the table with: empty field path input (auto-focused), Visibility dropdown showing 'Visible', and remove (X) button."
+        },
+        {
+          "step_number": 7,
+          "action": "fill_form",
+          "target": "Field path input on new row",
+          "input_data": {"fieldPath": "costPrice"},
+          "expected_result": "Field path set to 'costPrice'",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Visibility dropdown on the costPrice row",
+          "input_data": {},
+          "expected_result": "Dropdown opens showing: Visible, Read Only, Hidden",
+          "screenshot": false
+        },
+        {
+          "step_number": 9,
+          "action": "click",
+          "target": "Hidden option in visibility dropdown",
+          "input_data": {},
+          "expected_result": "Visibility changed to HIDDEN for costPrice field",
+          "screenshot": true,
+          "visual_check": "Row shows: Field Path='costPrice', Visibility='Hidden'. Save Field Overrides button is now enabled."
+        },
+        {
+          "step_number": 10,
+          "action": "click",
+          "target": "Save Field Overrides button",
+          "input_data": {},
+          "expected_result": "PUT /system/access-groups/:id/field-overrides called. Success toast shown.",
+          "screenshot": true,
+          "visual_check": "Success toast 'Field overrides saved successfully'. Save button returns to disabled state. Override row persists showing costPrice=HIDDEN."
+        }
+      ]
+    },
+    {
+      "id": "j17-permission-driven-sidebar",
+      "name": "Permission-Driven Sidebar Filtering",
+      "description": "Verify that sidebar only shows modules the user has canAccess permission for",
+      "priority": "critical",
+      "related_stories": ["E6.11"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "limited-user@nexa-test.com",
+            "password": "TestPassword123!"
+          },
+          "expected_result": "Login as user with limited module access (e.g., only system and sales enabled)",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Authenticated, dashboard loads with filtered sidebar",
+          "screenshot": true,
+          "visual_check": "Sidebar shows only modules the user has access to (e.g., System, Sales). Modules like Finance, Manufacturing, HR are NOT visible in the sidebar."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Finance module group in sidebar",
+          "input_data": {"should_exist": false},
+          "expected_result": "Finance module group is NOT present in the sidebar (user lacks canAccess)",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Sales module group in sidebar",
+          "input_data": {"should_exist": true},
+          "expected_result": "Sales module group IS present in the sidebar (user has canAccess)",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j18-route-guard-403",
+      "name": "Route Guard: 403 Access Denied Page",
+      "description": "Verify that navigating to a route the user lacks permissions for shows the 403 Access Denied page",
+      "priority": "critical",
+      "related_stories": ["E6.11"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/finance/journals",
+          "input_data": {},
+          "expected_result": "User without finance module access is redirected to /403 Access Denied page",
+          "screenshot": true,
+          "visual_check": "403 Access Denied page displayed with translated error message. Link back to home page visible. App shell (sidebar/header) still visible around the error content."
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Link back to home page",
+          "input_data": {},
+          "expected_result": "Navigates back to the home/dashboard page",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j19-non-admin-rbac-pages",
+      "name": "Non-Admin User Blocked from RBAC Admin Pages",
+      "description": "Verify that non-ADMIN users get 403 when accessing /system/resources, /system/access-groups, etc.",
+      "priority": "high",
+      "related_stories": ["E6.7", "E6.8", "E6.9", "E6.11"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "staff-user@nexa-test.com",
+            "password": "TestPassword123!"
+          },
+          "expected_result": "Login as STAFF role user (non-ADMIN)",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Authenticated as STAFF user",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "navigate",
+          "target": "/system/resources",
+          "input_data": {},
+          "expected_result": "403 Access Denied page shown (ADMIN required)",
+          "screenshot": true,
+          "visual_check": "403 Access Denied page. User cannot see the Resource Registry because they lack ADMIN role."
+        },
+        {
+          "step_number": 5,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "403 Access Denied page shown (ADMIN required)",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "navigate",
+          "target": "/system/users",
+          "input_data": {},
+          "expected_result": "403 Access Denied page shown (ADMIN required)",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j20-export-config",
+      "name": "Export Company Configuration as JSON",
+      "description": "Test the export flow: navigate to Company Profile, open export dialog, preview, download",
+      "priority": "high",
+      "related_stories": ["E6.12"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/companies",
+          "input_data": {},
+          "expected_result": "Company Profile page loads with overflow menu",
+          "screenshot": true,
+          "visual_check": "Company Profile page with company name as title. Breadcrumbs: System > Company Profile. Overflow menu button visible in the action area."
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Overflow menu (more actions) button",
+          "input_data": {},
+          "expected_result": "Overflow menu opens showing Export Config and Import Config",
+          "screenshot": true,
+          "visual_check": "Dropdown menu showing 'Export Config' and 'Import Config' options in the Data section."
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Export Config option",
+          "input_data": {},
+          "expected_result": "Export preview dialog opens",
+          "screenshot": true,
+          "visual_check": "Dialog titled 'Export Company Configuration' with description text. Summary preview showing counts: access groups, resources, VAT codes, payment terms, number series, currencies. 'Download JSON' and 'Cancel' buttons."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Download JSON button",
+          "input_data": {},
+          "expected_result": "API called, JSON file downloaded, success toast, dialog closes",
+          "screenshot": true,
+          "visual_check": "Success toast 'Configuration exported successfully'. Dialog closed. Browser download initiated for company-defaults-{slug}.json file."
+        }
+      ]
+    },
+    {
+      "id": "j21-import-config-dry-run",
+      "name": "Import Configuration with Dry Run Preview",
+      "description": "Test the import flow with dry run: open dialog, upload file, run dry run, view results",
+      "priority": "high",
+      "related_stories": ["E6.12"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/companies",
+          "input_data": {},
+          "expected_result": "Company Profile page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Overflow menu button",
+          "input_data": {},
+          "expected_result": "Overflow menu opens",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Import Config option",
+          "input_data": {},
+          "expected_result": "Import dialog opens",
+          "screenshot": true,
+          "visual_check": "Dialog titled 'Import Company Configuration'. File drop zone with dashed border visible. JSON textarea below with 'OR' separator. 'Dry Run' checkbox checked by default. 'Import' button disabled (no data yet). 'Cancel' button visible."
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "JSON textarea in import dialog",
+          "input_data": {"json": "{\"version\":\"1.0\",\"resources\":[],\"accessGroups\":[],\"vatCodes\":[],\"paymentTerms\":[],\"numberSeries\":[],\"currencies\":[]}"},
+          "expected_result": "Valid JSON entered, Import button becomes enabled",
+          "screenshot": true,
+          "visual_check": "JSON textarea filled with configuration JSON. Import button is now enabled (no longer disabled). Dry Run checkbox still checked."
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Import button",
+          "input_data": {},
+          "expected_result": "POST /system/company-profile/import-defaults called with dryRun: true. Results panel displayed.",
+          "screenshot": true,
+          "visual_check": "Results panel showing 'Dry Run Preview' title. Summary table with columns: Entity Type, Created, Updated. Rows for Resources, Access Groups, Permissions, etc. 'Apply' button to proceed with actual import. 'Close' button to dismiss."
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Apply button in dry run results",
+          "input_data": {},
+          "expected_result": "POST called with dryRun: false. Applied results shown. Success toast.",
+          "screenshot": true,
+          "visual_check": "Results panel updated to 'Import Results' title. Summary shows final applied counts. Success toast 'Configuration imported successfully'. 'Done' button visible to close dialog."
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Done button",
+          "input_data": {},
+          "expected_result": "Import dialog closes",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j22-superadmin-bypass",
+      "name": "SUPER_ADMIN Sees All Modules and Routes",
+      "description": "Verify that SUPER_ADMIN bypasses all permission checks: sees all sidebar items, can access all routes",
+      "priority": "high",
+      "related_stories": ["E6.11"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "superadmin@nexa-test.com",
+            "password": "TestPassword123!"
+          },
+          "expected_result": "Login as SUPER_ADMIN user",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Authenticated as SUPER_ADMIN",
+          "screenshot": true,
+          "visual_check": "Sidebar shows ALL module groups: System, Finance, AR, AP, Sales, Purchasing, Inventory, CRM, HR & Payroll, Manufacturing, Reporting. None are hidden."
+        },
+        {
+          "step_number": 4,
+          "action": "navigate",
+          "target": "/finance/journals",
+          "input_data": {},
+          "expected_result": "Route loads normally, no 403 redirect",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "navigate",
+          "target": "/system/resources",
+          "input_data": {},
+          "expected_result": "Resource Registry page loads for SUPER_ADMIN",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Access Groups page loads for SUPER_ADMIN",
+          "screenshot": true,
+          "visual_check": "Access Groups page loaded successfully. All RBAC admin pages accessible to SUPER_ADMIN regardless of access group assignments."
+        }
+      ]
+    },
+    {
+      "id": "j23-breadcrumb-navigation",
+      "name": "Breadcrumb Navigation and Skip Link",
+      "description": "Test breadcrumb trail rendering and skip-to-content accessibility link",
+      "priority": "medium",
+      "related_stories": ["E6.2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/resources",
+          "input_data": {},
+          "expected_result": "Resource Registry page loads with breadcrumbs",
+          "screenshot": true,
+          "visual_check": "Breadcrumb trail showing: System > Resource Registry. The last item (current page) has aria-current='page'. Separator characters visible between segments."
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "'System' breadcrumb link",
+          "input_data": {},
+          "expected_result": "Navigates to /system (System module root)",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_text",
+          "target": "Breadcrumbs",
+          "input_data": {"text": "System"},
+          "expected_result": "Breadcrumb shows System > Access Groups",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Tab key to focus 'Skip to content' link (visually hidden until focused)",
+          "input_data": {"keyboard": "Tab"},
+          "expected_result": "Skip to content link becomes visible on focus",
+          "screenshot": true,
+          "visual_check": "'Skip to content' link visible at top of page after receiving keyboard focus. Purple focus ring visible around the link."
+        }
+      ]
+    },
+    {
+      "id": "j24-action-bar-status-driven",
+      "name": "ActionBar Status-Driven Actions Demo",
+      "description": "Test the ActionBar component showing different primary actions based on entity status, overflow menu sections, and confirmation dialog for destructive actions. This uses a page that renders ActionBar (once business module pages exist).",
+      "priority": "high",
+      "related_stories": ["E6.4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Access group list with action bar elements visible",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Row for a custom (non-system) access group",
+          "input_data": {},
+          "expected_result": "Detail page loads with Save button and overflow menu",
+          "screenshot": true,
+          "visual_check": "Detail page with action area showing Save button (primary), and overflow menu trigger (three dots). Save button disabled when no changes."
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Overflow menu trigger button (three dots)",
+          "input_data": {},
+          "expected_result": "Overflow menu opens with grouped action sections",
+          "screenshot": true,
+          "visual_check": "Overflow dropdown showing Deactivate option. Sections with dividers visible. Keyboard shortcut hints may appear next to items."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Deactivate option in overflow",
+          "input_data": {},
+          "expected_result": "Confirmation dialog opens for this destructive action",
+          "screenshot": true,
+          "visual_check": "Destructive confirmation dialog with title, entity name in description, Cancel (ghost) and Deactivate (red/destructive) buttons."
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Cancel button in confirmation dialog",
+          "input_data": {},
+          "expected_result": "Dialog closes, no action taken, still on detail page",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j25-login-validation-errors",
+      "name": "Login Form Validation and Error Handling",
+      "description": "Test form validation on the login page: empty fields, invalid credentials, error display",
+      "priority": "medium",
+      "related_stories": ["E6.1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Sign In button (without filling form)",
+          "input_data": {},
+          "expected_result": "Validation errors shown for required email and password fields",
+          "screenshot": true,
+          "visual_check": "Email field shows required validation error. Password field shows required validation error. Error messages are translated via i18n."
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "wrong@example.com",
+            "password": "WrongPassword"
+          },
+          "expected_result": "Form fields populated with invalid credentials",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "API returns authentication error, error toast or inline error shown",
+          "screenshot": true,
+          "visual_check": "Error toast or inline error message displaying translated authentication error. Login form still visible for retry."
+        }
+      ]
+    }
+  ]
+}

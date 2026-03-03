@@ -1,0 +1,1069 @@
+{
+  "epic_id": "E4",
+  "epic_title": "i18n Infrastructure",
+  "generated_at": "2026-02-22T12:00:00.000Z",
+  "frontend_url": "http://localhost:5173",
+  "api_base_url": "http://localhost:3000",
+  "total_journeys": 13,
+  "total_steps": 107,
+  "prerequisites": {
+    "note": "The web app (apps/web) is a stub — no React runtime exists until E6 (Web Frontend Shell). This test plan specifies E2E tests to execute once the frontend is built. E4 is infrastructure: i18n translation keys (E4.1), backend error message translation (E4.2), and number/date/currency formatting (E4.3). Tests verify these infrastructure capabilities through UI interactions on pages created by E6+. Tests assume a running API at :3000, a Vite dev server at :5173, and a seeded database.",
+    "depends_on_epics": ["E2", "E6"],
+    "seeded_users": {
+      "admin": {
+        "email": "admin@nexa-test.co.uk",
+        "password": "Admin123!",
+        "role": "ADMIN",
+        "locale": "en",
+        "description": "Primary admin user with full access — used for most journeys"
+      },
+      "super_admin": {
+        "email": "superadmin@nexa-test.co.uk",
+        "password": "Super123!",
+        "role": "SUPER_ADMIN",
+        "locale": "en",
+        "description": "SUPER_ADMIN — used for admin-only operations"
+      },
+      "limited_user": {
+        "email": "viewer@nexa-test.co.uk",
+        "password": "View123!",
+        "role": "VIEWER",
+        "locale": "en",
+        "description": "View-only user — used for permission-denied tests"
+      }
+    },
+    "seeded_data": {
+      "company": "Nexa Test Company",
+      "company_default_language": "en",
+      "company_base_currency": "GBP"
+    },
+    "locale_files_referenced": {
+      "common": "packages/i18n/locales/en/common.json",
+      "validation": "packages/i18n/locales/en/validation.json",
+      "navigation": "packages/i18n/locales/en/navigation.json",
+      "errors": "packages/i18n/locales/en/errors.json"
+    }
+  },
+  "acceptance_criteria_coverage": {
+    "E4.1-AC1": ["j01", "j05", "j06"],
+    "E4.1-AC2": ["j01", "j05", "j06"],
+    "E4.1-AC3": ["j09", "j10"],
+    "E4.1-AC4": ["j03", "j07"],
+    "E4.1-AC5": "Build-time ESLint rule — not testable via E2E. Covered by CI lint step.",
+    "E4.2-AC1": ["j02", "j03", "j04", "j07", "j08", "j13"],
+    "E4.2-AC2": ["j02", "j03", "j04", "j07", "j08", "j13"],
+    "E4.2-AC3": "System messages stored with translation keys — verified by backend unit tests and audit log inspection, not directly visible in UI.",
+    "E4.2-AC4": "Backend message formatting utility — verified by unit tests in packages/i18n, not directly visible in UI.",
+    "E4.3-AC1": ["j12"],
+    "E4.3-AC2": ["j11"],
+    "E4.3-AC3": ["j12"],
+    "E4.3-AC4": ["j11", "j12"],
+    "E4.3-AC5": "Shared package consistency — architectural concern verified by unit tests in packages/shared and packages/i18n."
+  },
+  "journeys": [
+    {
+      "id": "j01-login-page-translated-labels",
+      "name": "Login Page Shows Translated English Text",
+      "description": "Verify that the login page renders all user-facing strings from the i18n translation system, not hardcoded text or raw translation keys. Every visible label, button, and placeholder must come from the t() helper resolving English locale files.",
+      "priority": "critical",
+      "related_stories": ["E4-1"],
+      "acceptance_criteria": ["E4.1-AC1", "E4.1-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads successfully",
+          "screenshot": true,
+          "visual_check": "Login form visible with email input field, password input field, and a Sign In / Log In button. All text is in English — no raw translation keys like 'common.submit' or 'auth.login' visible anywhere."
+        },
+        {
+          "step_number": 2,
+          "action": "verify_text",
+          "target": "Email input label or placeholder",
+          "input_data": {},
+          "expected_result": "Email field has a translated label (e.g., 'Email' or 'Email Address'), not a raw key like 'field.email'",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "verify_text",
+          "target": "Password input label or placeholder",
+          "input_data": {},
+          "expected_result": "Password field has a translated label (e.g., 'Password'), not a raw key",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Submit / Sign In button",
+          "input_data": {},
+          "expected_result": "Button text is a translated English string (e.g., 'Sign In', 'Log In', or 'Submit'), not 'common.submit' or similar raw key",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_text",
+          "target": "Page title or heading",
+          "input_data": {},
+          "expected_result": "Page heading shows translated text (e.g., 'Sign In to Nexa ERP'), no i18next key fragments visible",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j02-login-invalid-credentials-translated-error",
+      "name": "Invalid Login Shows Translated Error Message",
+      "description": "Submit invalid credentials and verify the error message displayed comes from the errors.json locale file (errors:AUTH_INVALID_CREDENTIALS), not a hardcoded string or raw translation key. The frontend should resolve the messageKey from the API error envelope.",
+      "priority": "critical",
+      "related_stories": ["E4-2"],
+      "acceptance_criteria": ["E4.2-AC1", "E4.2-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "nonexistent@example.com",
+            "password": "WrongPassword123!"
+          },
+          "expected_result": "Form fields populated with invalid credentials",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login attempt fails, error message displayed",
+          "screenshot": true,
+          "visual_check": "Error message visible on the login form: 'Invalid email or password'. This text comes from errors.json key AUTH_INVALID_CREDENTIALS. The raw key 'errors:AUTH_INVALID_CREDENTIALS' must NOT be visible."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_text",
+          "target": "Error message area",
+          "input_data": { "expected_text": "Invalid email or password" },
+          "expected_result": "Error text matches the English translation from errors.json AUTH_INVALID_CREDENTIALS exactly",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_text",
+          "target": "Full page",
+          "input_data": { "must_not_contain": "errors:AUTH_INVALID_CREDENTIALS" },
+          "expected_result": "Raw translation key 'errors:AUTH_INVALID_CREDENTIALS' does NOT appear anywhere on the page — the frontend resolved it via t()",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j03-login-validation-errors-interpolation",
+      "name": "Login Validation Errors Use Interpolated Field Names",
+      "description": "Submit the login form with empty fields and verify that validation error messages use the i18next interpolation system. The validation.json template 'required' is '{{field}} is required' — the frontend must resolve this with the actual field name substituted, not show raw '{{field}}' template syntax.",
+      "priority": "critical",
+      "related_stories": ["E4-1", "E4-2"],
+      "acceptance_criteria": ["E4.1-AC4", "E4.2-AC1", "E4.2-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Form submits with empty fields, validation errors appear",
+          "screenshot": true,
+          "visual_check": "Inline validation errors visible next to email and password fields. Error messages contain resolved field names (e.g., 'email is required'), NOT raw template syntax like '{{field}} is required' or raw keys like 'validation:required'."
+        },
+        {
+          "step_number": 3,
+          "action": "verify_text",
+          "target": "Email field validation error",
+          "input_data": { "must_not_contain": "{{field}}" },
+          "expected_result": "Email validation error does NOT contain '{{field}}' — i18next interpolation has resolved the variable",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_text",
+          "target": "Email field validation error",
+          "input_data": { "must_not_contain": "validation:" },
+          "expected_result": "No raw namespace prefix 'validation:' visible in the error message",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_text",
+          "target": "Password field validation error",
+          "input_data": { "must_not_contain": "{{field}}" },
+          "expected_result": "Password validation error has interpolated field name, not template syntax",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j04-login-account-locked-translated-error",
+      "name": "Account Locked After Repeated Failures Shows Translated Error",
+      "description": "Trigger the account lockout by submitting invalid credentials multiple times (6+ attempts). Verify the lockout error message comes from errors.json ACCOUNT_LOCKED key: 'Account temporarily locked due to too many failed attempts'.",
+      "priority": "high",
+      "related_stories": ["E4-2"],
+      "acceptance_criteria": ["E4.2-AC1", "E4.2-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-test.co.uk",
+            "password": "WrongPassword1!"
+          },
+          "expected_result": "Form populated with valid email but wrong password",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login fails with 'Invalid email or password'",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-test.co.uk",
+            "password": "WrongPassword2!"
+          },
+          "expected_result": "Form repopulated for second attempt",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login fails again",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-test.co.uk",
+            "password": "WrongPassword3!"
+          },
+          "expected_result": "Third attempt",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login fails",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-test.co.uk",
+            "password": "WrongPassword4!"
+          },
+          "expected_result": "Fourth attempt",
+          "screenshot": false
+        },
+        {
+          "step_number": 9,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login fails",
+          "screenshot": false
+        },
+        {
+          "step_number": 10,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-test.co.uk",
+            "password": "WrongPassword5!"
+          },
+          "expected_result": "Fifth attempt",
+          "screenshot": false
+        },
+        {
+          "step_number": 11,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login fails",
+          "screenshot": false
+        },
+        {
+          "step_number": 12,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-test.co.uk",
+            "password": "WrongPassword6!"
+          },
+          "expected_result": "Sixth attempt — should trigger lockout",
+          "screenshot": false
+        },
+        {
+          "step_number": 13,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Account locked error displayed",
+          "screenshot": true,
+          "visual_check": "Error message: 'Account temporarily locked due to too many failed attempts' from errors.json ACCOUNT_LOCKED. No raw key visible."
+        },
+        {
+          "step_number": 14,
+          "action": "verify_text",
+          "target": "Error message area",
+          "input_data": { "expected_text": "Account temporarily locked due to too many failed attempts" },
+          "expected_result": "Lockout error matches errors.json ACCOUNT_LOCKED translation exactly",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j05-sidebar-navigation-translated-labels",
+      "name": "Sidebar Navigation Shows Translated Module Names",
+      "description": "After login, verify the app shell sidebar navigation renders module names from navigation.json via t('navigation.xxx'), not hardcoded strings or raw keys. Check that Dashboard, System, Users, Settings all show their English translations.",
+      "priority": "critical",
+      "related_stories": ["E4-1"],
+      "acceptance_criteria": ["E4.1-AC1", "E4.1-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-test.co.uk",
+            "password": "Admin123!"
+          },
+          "expected_result": "Form populated",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login succeeds, redirected to dashboard",
+          "screenshot": true,
+          "visual_check": "App shell loaded with sidebar navigation. Module names visible in sidebar: 'Dashboard', 'System', 'Settings'. These come from navigation.json translations. No raw keys like 'navigation.dashboard' or 'navigation:system' visible."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_text",
+          "target": "Sidebar navigation",
+          "input_data": { "expected_text": "Dashboard" },
+          "expected_result": "Sidebar contains 'Dashboard' (from navigation.json key 'dashboard')",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_text",
+          "target": "Sidebar navigation",
+          "input_data": { "expected_text": "System" },
+          "expected_result": "Sidebar contains 'System' (from navigation.json key 'system')",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "verify_text",
+          "target": "Sidebar navigation",
+          "input_data": { "expected_text": "Users" },
+          "expected_result": "Sidebar contains 'Users' (from navigation.json key 'users')",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "verify_text",
+          "target": "Sidebar navigation",
+          "input_data": { "expected_text": "Settings" },
+          "expected_result": "Sidebar contains 'Settings' (from navigation.json key 'settings')",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "verify_text",
+          "target": "Full page",
+          "input_data": { "must_not_contain": "navigation:" },
+          "expected_result": "No raw i18n namespace prefix 'navigation:' appears anywhere on the rendered page",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j06-user-list-translated-ui-elements",
+      "name": "User List Page Uses Translated Headers and Action Buttons",
+      "description": "Navigate to the user list page and verify all UI elements (column headers, action buttons, status labels, empty states) use translated strings from common.json and navigation.json. Buttons like Create, Edit, Delete, Search, Filter must match their locale file values.",
+      "priority": "high",
+      "related_stories": ["E4-1"],
+      "acceptance_criteria": ["E4.1-AC1", "E4.1-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-test.co.uk",
+            "password": "Admin123!"
+          },
+          "expected_result": "Form populated",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "navigate",
+          "target": "/system/users",
+          "input_data": {},
+          "expected_result": "User list page loads",
+          "screenshot": true,
+          "visual_check": "User list page with translated UI: page title 'Users' (from navigation.json), action buttons using common.json labels ('Create', 'Search', 'Filter'), column headers in English. No raw translation keys visible."
+        },
+        {
+          "step_number": 5,
+          "action": "verify_text",
+          "target": "Page title or heading",
+          "input_data": { "expected_text": "Users" },
+          "expected_result": "Page title matches navigation.json 'users' key",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "Create button",
+          "input_data": {},
+          "expected_result": "Create button visible with text 'Create' (from common.json)",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "verify_element",
+          "target": "Search input or button",
+          "input_data": {},
+          "expected_result": "Search element visible with translated label/placeholder 'Search' (from common.json)",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "verify_text",
+          "target": "Status column values",
+          "input_data": {},
+          "expected_result": "User status labels show 'Active' or 'Inactive' (from common.json), not raw enum values like 'true'/'false'",
+          "screenshot": false
+        },
+        {
+          "step_number": 9,
+          "action": "verify_text",
+          "target": "Full page",
+          "input_data": { "must_not_contain": "common:" },
+          "expected_result": "No raw i18n namespace prefix 'common:' appears anywhere on the page",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j07-user-create-validation-interpolation",
+      "name": "User Creation Validation Shows Interpolated Field Names",
+      "description": "Open the Create User form and submit it empty to trigger Zod validation. Verify the field-level validation errors use i18next interpolation: the validation.json template '{{field}} is required' must render with actual field names like 'email is required', not raw template syntax.",
+      "priority": "critical",
+      "related_stories": ["E4-1", "E4-2"],
+      "acceptance_criteria": ["E4.1-AC4", "E4.2-AC1", "E4.2-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-test.co.uk",
+            "password": "Admin123!"
+          },
+          "expected_result": "Logged in",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "navigate",
+          "target": "/system/users",
+          "input_data": {},
+          "expected_result": "User list page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Create button",
+          "input_data": {},
+          "expected_result": "Create User form opens (modal or page)",
+          "screenshot": true,
+          "visual_check": "Create User form visible with empty fields for email, firstName, lastName, password, role. All field labels are translated English text."
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Save button",
+          "input_data": {},
+          "expected_result": "Form validation fails, field-level errors appear",
+          "screenshot": true,
+          "visual_check": "Validation errors visible next to required fields. Errors show interpolated field names (e.g., 'email is required', 'firstName is required') not raw '{{field}} is required' or 'validation:required'. The top-level error may show 'Please correct the errors below' from errors.json VALIDATION_ERROR."
+        },
+        {
+          "step_number": 7,
+          "action": "verify_text",
+          "target": "Validation error messages",
+          "input_data": { "must_not_contain": "{{field}}" },
+          "expected_result": "No raw interpolation template '{{field}}' visible — all variables resolved",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "verify_text",
+          "target": "Validation error messages",
+          "input_data": { "must_not_contain": "validation:" },
+          "expected_result": "No raw namespace prefix 'validation:' visible in error messages",
+          "screenshot": false
+        },
+        {
+          "step_number": 9,
+          "action": "verify_text",
+          "target": "Top-level error banner (if present)",
+          "input_data": { "expected_text": "Please correct the errors below" },
+          "expected_result": "Banner text matches errors.json VALIDATION_ERROR key",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j08-user-create-duplicate-email-error",
+      "name": "Duplicate Email Error Uses Translated Message",
+      "description": "Create a user with an email that already exists in the system. Verify the error message displayed is 'A user with this email already exists' from errors.json DUPLICATE_EMAIL key, resolved via the messageKey in the API error envelope.",
+      "priority": "high",
+      "related_stories": ["E4-2"],
+      "acceptance_criteria": ["E4.2-AC1", "E4.2-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-test.co.uk",
+            "password": "Admin123!"
+          },
+          "expected_result": "Logged in",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "navigate",
+          "target": "/system/users",
+          "input_data": {},
+          "expected_result": "User list page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Create button",
+          "input_data": {},
+          "expected_result": "Create User form opens",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "Create User form",
+          "input_data": {
+            "email": "admin@nexa-test.co.uk",
+            "firstName": "Duplicate",
+            "lastName": "User",
+            "password": "DuplicatePass123!"
+          },
+          "expected_result": "Form populated with existing email address",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Save button",
+          "input_data": {},
+          "expected_result": "Server returns DUPLICATE_EMAIL error, frontend displays translated message",
+          "screenshot": true,
+          "visual_check": "Error message visible: 'A user with this email already exists'. This comes from errors.json DUPLICATE_EMAIL key via the API messageKey. No raw key 'errors:DUPLICATE_EMAIL' visible."
+        },
+        {
+          "step_number": 8,
+          "action": "verify_text",
+          "target": "Error message",
+          "input_data": { "expected_text": "A user with this email already exists" },
+          "expected_result": "Error text matches errors.json DUPLICATE_EMAIL translation exactly",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j09-user-locale-preference",
+      "name": "User Locale Preference Change and Fallback Chain",
+      "description": "Edit the current user's locale preference and verify the i18n fallback chain (E4.1 AC3): user locale -> company locale -> 'en'. Since MVP only supports 'en', changing the locale should still resolve to English. Verify the locale field exists and is editable on the user profile.",
+      "priority": "high",
+      "related_stories": ["E4-1"],
+      "acceptance_criteria": ["E4.1-AC3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-test.co.uk",
+            "password": "Admin123!"
+          },
+          "expected_result": "Logged in",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "navigate",
+          "target": "/system/users",
+          "input_data": {},
+          "expected_result": "User list loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Admin user row or edit link",
+          "input_data": {},
+          "expected_result": "User detail/edit page opens for admin user",
+          "screenshot": true,
+          "visual_check": "User detail page showing admin user. Locale field visible with current value 'en'. The field is editable (dropdown or text input)."
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "Locale field",
+          "input_data": {},
+          "expected_result": "Locale field exists on the user edit form, showing the current locale value",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "fill_form",
+          "target": "User edit form",
+          "input_data": {
+            "locale": "en-GB"
+          },
+          "expected_result": "Locale field updated to 'en-GB'",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Save button",
+          "input_data": {},
+          "expected_result": "User saved successfully, success toast appears",
+          "screenshot": true,
+          "visual_check": "Success feedback visible (toast or inline message). The UI still renders in English — since 'en-GB' falls back to 'en' in the i18n fallback chain. All text remains translated correctly."
+        },
+        {
+          "step_number": 9,
+          "action": "verify_text",
+          "target": "Sidebar navigation",
+          "input_data": { "expected_text": "Dashboard" },
+          "expected_result": "After locale change, sidebar still shows 'Dashboard' in English — fallback chain resolved correctly",
+          "screenshot": false
+        },
+        {
+          "step_number": 10,
+          "action": "fill_form",
+          "target": "User edit form",
+          "input_data": {
+            "locale": "en"
+          },
+          "expected_result": "Locale reset back to 'en'",
+          "screenshot": false
+        },
+        {
+          "step_number": 11,
+          "action": "click",
+          "target": "Save button",
+          "input_data": {},
+          "expected_result": "User saved, locale back to 'en'",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j10-company-profile-default-language",
+      "name": "Company Profile Default Language for Fallback Chain",
+      "description": "Navigate to the company profile settings and verify the defaultLanguage field exists. This field feeds the i18n fallback chain: when a user has no locale set, the company's default language is used before falling back to 'en'.",
+      "priority": "medium",
+      "related_stories": ["E4-1"],
+      "acceptance_criteria": ["E4.1-AC3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-test.co.uk",
+            "password": "Admin123!"
+          },
+          "expected_result": "Logged in",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "navigate",
+          "target": "/system/company-profile",
+          "input_data": {},
+          "expected_result": "Company profile page loads",
+          "screenshot": true,
+          "visual_check": "Company profile page visible with company details. A 'Default Language' or 'Language' field is visible showing the company's default locale setting. All labels on this page are translated English text."
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Default Language field",
+          "input_data": {},
+          "expected_result": "defaultLanguage field exists on the company profile form, displaying the current company locale (e.g., 'en')",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "verify_text",
+          "target": "Company profile page",
+          "input_data": { "must_not_contain": "common:" },
+          "expected_result": "No raw i18n keys visible on the company profile page",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j11-date-formatting-en-gb",
+      "name": "Dates Display in DD/MM/YYYY Format for en-GB",
+      "description": "Navigate to a page that displays dates (user list with lastLoginAt/createdAt, or dashboard) and verify dates are formatted using the Intl API with en-GB locale: DD/MM/YYYY for short format, not MM/DD/YYYY (US) or ISO 8601 (2026-02-17).",
+      "priority": "high",
+      "related_stories": ["E4-3"],
+      "acceptance_criteria": ["E4.3-AC2", "E4.3-AC4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-test.co.uk",
+            "password": "Admin123!"
+          },
+          "expected_result": "Logged in",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "navigate",
+          "target": "/system/users",
+          "input_data": {},
+          "expected_result": "User list page loads showing users with date columns",
+          "screenshot": true,
+          "visual_check": "User list with date columns (Created At, Last Login). Dates are formatted as DD/MM/YYYY (e.g., '22/02/2026'), NOT as MM/DD/YYYY, ISO 8601 strings, or raw timestamps. This confirms the formatDate() utility with en-GB locale is being used via the useFormatDate() hook."
+        },
+        {
+          "step_number": 5,
+          "action": "verify_text",
+          "target": "Date column values",
+          "input_data": { "pattern": "\\d{2}/\\d{2}/\\d{4}" },
+          "expected_result": "At least one date value matches DD/MM/YYYY pattern (two-digit day, two-digit month, four-digit year separated by forward slashes)",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "verify_text",
+          "target": "Date column values",
+          "input_data": { "must_not_contain": "T00:00:00" },
+          "expected_result": "No raw ISO 8601 timestamp fragments visible in date display",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j12-currency-formatting-gbp",
+      "name": "Currency Values Display with Correct GBP Formatting",
+      "description": "Navigate to a page displaying monetary values (dashboard, company profile with financial settings, or any page showing amounts) and verify GBP currency formatting: £ symbol, comma thousands separator, 2 decimal places. Uses formatCurrency() from @nexa/shared with en-GB locale.",
+      "priority": "high",
+      "related_stories": ["E4-3"],
+      "acceptance_criteria": ["E4.3-AC1", "E4.3-AC3", "E4.3-AC4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-test.co.uk",
+            "password": "Admin123!"
+          },
+          "expected_result": "Logged in",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Dashboard or home page loads",
+          "screenshot": true,
+          "visual_check": "Dashboard or main page loaded. If monetary values are displayed (totals, balances, amounts), they should use GBP formatting: £ symbol, comma as thousands separator (e.g., '£1,234.56'), 2 decimal places for GBP (minorUnit=2). If no monetary values exist on dashboard yet, this step is informational."
+        },
+        {
+          "step_number": 5,
+          "action": "navigate",
+          "target": "/system/company-profile",
+          "input_data": {},
+          "expected_result": "Company profile page loads — may show base currency code",
+          "screenshot": true,
+          "visual_check": "Company profile showing base currency setting (GBP). If any monetary amounts are displayed on this page, they use £ symbol and correct decimal formatting."
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "Base Currency field or display",
+          "input_data": {},
+          "expected_result": "Company's base currency (GBP) is shown — this drives the currency formatting system via Currency.minorUnit",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "verify_text",
+          "target": "Any monetary value on page (if present)",
+          "input_data": { "pattern": "£[\\d,]+\\.\\d{2}" },
+          "expected_result": "Monetary values match GBP pattern: £ followed by digits with comma separators and exactly 2 decimal places",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j13-permission-denied-translated-error",
+      "name": "Permission Denied Shows Translated FORBIDDEN Error",
+      "description": "Login as a limited user (VIEWER role) and attempt an action that requires higher permissions (e.g., creating a user). Verify the permission error shows the translated message from errors.json FORBIDDEN key: 'You do not have permission to perform this action'.",
+      "priority": "high",
+      "related_stories": ["E4-2"],
+      "acceptance_criteria": ["E4.2-AC1", "E4.2-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "viewer@nexa-test.co.uk",
+            "password": "View123!"
+          },
+          "expected_result": "Form populated with limited user credentials",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login succeeds for viewer user",
+          "screenshot": true,
+          "visual_check": "Dashboard loaded for viewer user. Sidebar may show limited navigation based on permissions."
+        },
+        {
+          "step_number": 4,
+          "action": "navigate",
+          "target": "/system/users",
+          "input_data": {},
+          "expected_result": "User list page loads (or permission denied)",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Create button (if visible) or attempt restricted action",
+          "input_data": {},
+          "expected_result": "Permission denied error displayed — the API returns FORBIDDEN with translated messageKey",
+          "screenshot": true,
+          "visual_check": "Permission error visible: 'You do not have permission to perform this action' (from errors.json FORBIDDEN). If the Create button is hidden for viewers, navigate directly to /system/users/new to trigger the error. No raw key 'errors:FORBIDDEN' visible."
+        },
+        {
+          "step_number": 6,
+          "action": "verify_text",
+          "target": "Error message",
+          "input_data": { "expected_text": "You do not have permission to perform this action" },
+          "expected_result": "Error text matches errors.json FORBIDDEN translation",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "verify_text",
+          "target": "Full page",
+          "input_data": { "must_not_contain": "errors:FORBIDDEN" },
+          "expected_result": "Raw translation key 'errors:FORBIDDEN' is NOT visible — frontend resolved it via t()",
+          "screenshot": false
+        }
+      ]
+    }
+  ]
+}

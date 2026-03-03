@@ -1,0 +1,2731 @@
+{
+  "epic_id": "E2",
+  "epic_title": "API Server + Auth + Multi-Company RBAC",
+  "generated_at": "2026-02-19T12:00:00.000Z",
+  "total_test_cases": 114,
+  "api_base_url": "http://localhost:3000",
+  "auth_note": "Tests requiring authentication must first call POST /auth/login to obtain an accessToken. Use Authorization: Bearer <token> header. Refresh token is in httpOnly cookie 'nexa_refresh_token'.",
+  "test_data_prerequisites": {
+    "seeded_users": [
+      { "email": "admin@nexa-test.com", "role": "ADMIN", "password": "TestPassword123!", "mfaEnabled": false },
+      { "email": "super@nexa-test.com", "role": "SUPER_ADMIN", "password": "TestPassword123!", "mfaEnabled": false },
+      { "email": "staff@nexa-test.com", "role": "STAFF", "password": "TestPassword123!", "mfaEnabled": false },
+      { "email": "viewer@nexa-test.com", "role": "VIEWER", "password": "TestPassword123!", "mfaEnabled": false },
+      { "email": "manager@nexa-test.com", "role": "MANAGER", "password": "TestPassword123!", "mfaEnabled": false },
+      { "email": "mfa-user@nexa-test.com", "role": "ADMIN", "password": "TestPassword123!", "mfaEnabled": true, "mfaSecret": "JBSWY3DPEHPK3PXP" }
+    ],
+    "seeded_companies": [
+      { "name": "Test Company A", "baseCurrencyCode": "GBP" },
+      { "name": "Test Company B", "baseCurrencyCode": "GBP" }
+    ]
+  },
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "description": "Authenticate user with email/password, optionally with MFA token",
+      "auth_required": false,
+      "minimum_role": null,
+      "test_cases": [
+        {
+          "id": "E2-TC-001",
+          "name": "Login - happy path with valid credentials",
+          "type": "happy_path",
+          "priority": "P0",
+          "risk_link": "R-001",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "admin@nexa-test.com", "password": "TestPassword123!" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "expiresIn", "user"],
+            "body_shape": {
+              "success": true,
+              "data.accessToken": "string (JWT)",
+              "data.expiresIn": 900,
+              "data.user.id": "uuid",
+              "data.user.email": "admin@nexa-test.com",
+              "data.user.firstName": "string",
+              "data.user.lastName": "string",
+              "data.user.role": "ADMIN",
+              "data.user.enabledModules": "string[]",
+              "data.user.tenantId": "string",
+              "data.user.tenantName": "string",
+              "data.user.mfaEnabled": false
+            },
+            "cookies": {
+              "nexa_refresh_token": { "present": true, "httpOnly": true, "path": "/auth" }
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT \"lastLoginAt\" FROM \"User\" WHERE email = 'admin@nexa-test.com'",
+            "expected": "lastLoginAt should be updated to approximately now"
+          }
+        },
+        {
+          "id": "E2-TC-002",
+          "name": "Login - invalid email returns 401 INVALID_CREDENTIALS",
+          "type": "validation_error",
+          "priority": "P0",
+          "risk_link": "R-010",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "nonexistent@test.com", "password": "TestPassword123!" }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["INVALID_CREDENTIALS"],
+            "body_shape": {
+              "success": false,
+              "error.code": "INVALID_CREDENTIALS",
+              "error.message": "Invalid email or password"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-003",
+          "name": "Login - wrong password returns 401 INVALID_CREDENTIALS (same message as wrong email)",
+          "type": "validation_error",
+          "priority": "P0",
+          "risk_link": "R-010",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "admin@nexa-test.com", "password": "WrongPassword!" }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["INVALID_CREDENTIALS"],
+            "body_shape": {
+              "success": false,
+              "error.code": "INVALID_CREDENTIALS",
+              "error.message": "Invalid email or password"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-004",
+          "name": "Login - missing email field returns 400 validation error",
+          "type": "validation_error",
+          "priority": "P1",
+          "risk_link": "R-009",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "password": "TestPassword123!" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"],
+            "body_shape": {
+              "success": false,
+              "error.code": "VALIDATION_ERROR",
+              "error.details.email": "array of error strings"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-005",
+          "name": "Login - missing password field returns 400 validation error",
+          "type": "validation_error",
+          "priority": "P1",
+          "risk_link": "R-009",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "admin@nexa-test.com" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"],
+            "body_shape": {
+              "success": false,
+              "error.code": "VALIDATION_ERROR",
+              "error.details.password": "array of error strings"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-006",
+          "name": "Login - invalid email format returns 400 validation error",
+          "type": "validation_error",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "not-an-email", "password": "TestPassword123!" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-007",
+          "name": "Login - empty body returns 400 validation error",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": {}
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-008",
+          "name": "Login - inactive user returns 401 INVALID_CREDENTIALS",
+          "type": "edge_case",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "inactive-user@nexa-test.com", "password": "TestPassword123!" }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["INVALID_CREDENTIALS"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-009",
+          "name": "Login - account locked after 5 failed attempts returns 423",
+          "type": "edge_case",
+          "priority": "P0",
+          "risk_link": "R-006",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "admin@nexa-test.com", "password": "WrongPassword!" },
+            "note": "Must be preceded by 4 failed attempts, this is the 5th. Then a 6th attempt with correct or wrong password should return 423."
+          },
+          "expected": {
+            "status": 423,
+            "body_contains": ["ACCOUNT_LOCKED"],
+            "body_shape": {
+              "success": false,
+              "error.code": "ACCOUNT_LOCKED"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-010",
+          "name": "Login - MFA enabled user without mfaToken returns requiresMfa: true",
+          "type": "happy_path",
+          "priority": "P0",
+          "risk_link": "R-004",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "mfa-user@nexa-test.com", "password": "TestPassword123!" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["requiresMfa"],
+            "body_shape": {
+              "success": true,
+              "data.requiresMfa": true
+            },
+            "body_must_not_contain": ["accessToken"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-011",
+          "name": "Login - MFA enabled user with valid TOTP returns full JWT tokens",
+          "type": "happy_path",
+          "priority": "P0",
+          "risk_link": "R-004",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "mfa-user@nexa-test.com", "password": "TestPassword123!", "mfaToken": "<valid-totp-from-secret>" },
+            "note": "Generate valid TOTP from known mfaSecret using otpauth library"
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "expiresIn", "user"],
+            "cookies": {
+              "nexa_refresh_token": { "present": true, "httpOnly": true }
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-012",
+          "name": "Login - MFA enabled user with invalid TOTP returns 401 MFA_INVALID",
+          "type": "validation_error",
+          "priority": "P0",
+          "risk_link": "R-004",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "mfa-user@nexa-test.com", "password": "TestPassword123!", "mfaToken": "000000" }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["MFA_INVALID"],
+            "body_shape": {
+              "success": false,
+              "error.code": "MFA_INVALID"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-013",
+          "name": "Login - mfaToken with wrong format (not 6 digits) returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "mfa-user@nexa-test.com", "password": "TestPassword123!", "mfaToken": "abc" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-014",
+          "name": "Login - successful login resets failed attempt counter",
+          "type": "edge_case",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "admin@nexa-test.com", "password": "TestPassword123!" },
+            "note": "After 3 failed attempts, a successful login should reset the counter. Then 5 more failures should be needed to lock."
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/auth/refresh",
+      "description": "Refresh JWT access token using httpOnly refresh token cookie",
+      "auth_required": false,
+      "minimum_role": null,
+      "test_cases": [
+        {
+          "id": "E2-TC-015",
+          "name": "Refresh - happy path with valid refresh token cookie",
+          "type": "happy_path",
+          "priority": "P0",
+          "risk_link": "R-003",
+          "request": {
+            "method": "POST",
+            "url": "/auth/refresh",
+            "headers": { "Content-Type": "application/json" },
+            "cookies": { "nexa_refresh_token": "<valid-refresh-token-from-login>" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "expiresIn"],
+            "body_shape": {
+              "success": true,
+              "data.accessToken": "string (new JWT)",
+              "data.expiresIn": 900
+            },
+            "cookies": {
+              "nexa_refresh_token": { "present": true, "httpOnly": true, "note": "New rotated refresh token" }
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT \"revokedAt\" FROM \"RefreshToken\" WHERE \"tokenHash\" = '<hash-of-old-token>'",
+            "expected": "revokedAt should be set (old token revoked after rotation)"
+          }
+        },
+        {
+          "id": "E2-TC-016",
+          "name": "Refresh - old refresh token rejected after rotation (replay prevention)",
+          "type": "edge_case",
+          "priority": "P0",
+          "risk_link": "R-003",
+          "request": {
+            "method": "POST",
+            "url": "/auth/refresh",
+            "headers": { "Content-Type": "application/json" },
+            "cookies": { "nexa_refresh_token": "<old-refresh-token-already-rotated>" },
+            "note": "Use the refresh token that was already consumed in E2-TC-015"
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-017",
+          "name": "Refresh - no cookie returns 401",
+          "type": "validation_error",
+          "priority": "P0",
+          "request": {
+            "method": "POST",
+            "url": "/auth/refresh",
+            "headers": { "Content-Type": "application/json" }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-018",
+          "name": "Refresh - invalid/random token in cookie returns 401",
+          "type": "validation_error",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/auth/refresh",
+            "headers": { "Content-Type": "application/json" },
+            "cookies": { "nexa_refresh_token": "totally-invalid-random-token" }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-019",
+          "name": "Refresh - expired refresh token returns 401",
+          "type": "edge_case",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/auth/refresh",
+            "headers": { "Content-Type": "application/json" },
+            "cookies": { "nexa_refresh_token": "<token-with-expired-db-record>" },
+            "note": "Requires inserting a RefreshToken record with expiresAt in the past"
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/auth/logout",
+      "description": "Logout user, revoke refresh token and clear cookie",
+      "auth_required": false,
+      "minimum_role": null,
+      "test_cases": [
+        {
+          "id": "E2-TC-020",
+          "name": "Logout - happy path revokes refresh token and clears cookie",
+          "type": "happy_path",
+          "priority": "P0",
+          "risk_link": "R-003",
+          "request": {
+            "method": "POST",
+            "url": "/auth/logout",
+            "headers": { "Content-Type": "application/json" },
+            "cookies": { "nexa_refresh_token": "<valid-refresh-token>" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["message"],
+            "body_shape": {
+              "success": true,
+              "data.message": "Logged out"
+            },
+            "cookies": {
+              "nexa_refresh_token": { "present": true, "note": "Cookie cleared (maxAge=0 or empty)" }
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT \"revokedAt\" FROM \"RefreshToken\" WHERE \"tokenHash\" = '<hash>'",
+            "expected": "revokedAt should be set (not null)"
+          }
+        },
+        {
+          "id": "E2-TC-021",
+          "name": "Logout - subsequent refresh attempt after logout fails",
+          "type": "edge_case",
+          "priority": "P0",
+          "risk_link": "R-003",
+          "request": {
+            "method": "POST",
+            "url": "/auth/refresh",
+            "headers": { "Content-Type": "application/json" },
+            "cookies": { "nexa_refresh_token": "<token-used-in-logout-test>" },
+            "note": "Use the same token that was revoked in E2-TC-020"
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-022",
+          "name": "Logout - no cookie still returns 200 (idempotent)",
+          "type": "edge_case",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/auth/logout",
+            "headers": { "Content-Type": "application/json" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["Logged out"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/auth/mfa/setup",
+      "description": "Generate TOTP secret and QR URI for MFA setup",
+      "auth_required": true,
+      "minimum_role": null,
+      "test_cases": [
+        {
+          "id": "E2-TC-023",
+          "name": "MFA Setup - happy path returns secret and URI",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/auth/mfa/setup",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <valid-access-token>"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["secret", "uri"],
+            "body_shape": {
+              "success": true,
+              "data.secret": "string (base32 encoded)",
+              "data.uri": "string (otpauth://totp/...)"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT \"mfaSecret\", \"mfaEnabled\" FROM \"User\" WHERE id = '<userId>'",
+            "expected": "mfaSecret should be set (not null), mfaEnabled should remain false"
+          }
+        },
+        {
+          "id": "E2-TC-024",
+          "name": "MFA Setup - no auth token returns 401",
+          "type": "validation_error",
+          "priority": "P0",
+          "risk_link": "R-001",
+          "request": {
+            "method": "POST",
+            "url": "/auth/mfa/setup",
+            "headers": { "Content-Type": "application/json" }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-025",
+          "name": "MFA Setup - already enabled returns 409 MFA_ALREADY_ENABLED",
+          "type": "edge_case",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/auth/mfa/setup",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <token-for-mfa-enabled-user>"
+            }
+          },
+          "expected": {
+            "status": 409,
+            "body_contains": ["MFA_ALREADY_ENABLED"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/auth/mfa/verify",
+      "description": "Verify TOTP code and permanently enable MFA on account",
+      "auth_required": true,
+      "minimum_role": null,
+      "test_cases": [
+        {
+          "id": "E2-TC-026",
+          "name": "MFA Verify - happy path with valid TOTP enables MFA",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/auth/mfa/verify",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <valid-access-token>"
+            },
+            "body": { "token": "<valid-6-digit-totp>" },
+            "note": "Generate from the secret returned by /auth/mfa/setup"
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["MFA enabled successfully"],
+            "body_shape": {
+              "success": true,
+              "data.message": "MFA enabled successfully"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT \"mfaEnabled\" FROM \"User\" WHERE id = '<userId>'",
+            "expected": "mfaEnabled should be true"
+          }
+        },
+        {
+          "id": "E2-TC-027",
+          "name": "MFA Verify - invalid TOTP returns 401 MFA_INVALID",
+          "type": "validation_error",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/auth/mfa/verify",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <valid-access-token>"
+            },
+            "body": { "token": "000000" }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["MFA_INVALID"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-028",
+          "name": "MFA Verify - no auth token returns 401",
+          "type": "validation_error",
+          "priority": "P0",
+          "risk_link": "R-001",
+          "request": {
+            "method": "POST",
+            "url": "/auth/mfa/verify",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "token": "123456" }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-029",
+          "name": "MFA Verify - missing token field returns 400",
+          "type": "validation_error",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/auth/mfa/verify",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <valid-access-token>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-030",
+          "name": "MFA Verify - token not 6 digits returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/auth/mfa/verify",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <valid-access-token>"
+            },
+            "body": { "token": "12345" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-031",
+          "name": "MFA Verify - no mfaSecret set returns 400 MFA_SETUP_REQUIRED",
+          "type": "edge_case",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/auth/mfa/verify",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <token-for-user-without-mfa-setup>"
+            },
+            "body": { "token": "123456" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["MFA_SETUP_REQUIRED"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-032",
+          "name": "MFA Verify - rate limit after 5 failed attempts returns 423",
+          "type": "edge_case",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/auth/mfa/verify",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <valid-access-token>"
+            },
+            "body": { "token": "000000" },
+            "note": "Must be preceded by 4 failed attempts"
+          },
+          "expected": {
+            "status": 423,
+            "body_contains": ["ACCOUNT_LOCKED"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/auth/mfa/reset",
+      "description": "Admin resets MFA for another user (ADMIN+ required)",
+      "auth_required": true,
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "E2-TC-033",
+          "name": "MFA Reset - happy path clears mfaSecret and mfaEnabled",
+          "type": "happy_path",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/auth/mfa/reset",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "userId": "<target-user-id>" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["MFA reset successfully"],
+            "body_shape": {
+              "success": true,
+              "data.message": "MFA reset successfully"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT \"mfaEnabled\", \"mfaSecret\" FROM \"User\" WHERE id = '<target-user-id>'",
+            "expected": "mfaEnabled=false, mfaSecret=null"
+          }
+        },
+        {
+          "id": "E2-TC-034",
+          "name": "MFA Reset - revokes all sessions for target user",
+          "type": "happy_path",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/auth/mfa/reset",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "userId": "<target-user-id>" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["MFA reset successfully"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM \"RefreshToken\" WHERE \"userId\" = '<target-user-id>' AND \"revokedAt\" IS NULL",
+            "expected": "count should be 0 (all tokens revoked)"
+          }
+        },
+        {
+          "id": "E2-TC-035",
+          "name": "MFA Reset - self-reset returns 403 FORBIDDEN",
+          "type": "edge_case",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/auth/mfa/reset",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "userId": "<admin-own-user-id>" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-036",
+          "name": "MFA Reset - STAFF user denied (403)",
+          "type": "validation_error",
+          "priority": "P1",
+          "risk_link": "R-002",
+          "request": {
+            "method": "POST",
+            "url": "/auth/mfa/reset",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <staff-access-token>"
+            },
+            "body": { "userId": "<some-user-id>" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-037",
+          "name": "MFA Reset - non-existent userId returns 404",
+          "type": "edge_case",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/auth/mfa/reset",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "userId": "00000000-0000-0000-0000-000000000000" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["USER_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-038",
+          "name": "MFA Reset - invalid userId format returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/auth/mfa/reset",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "userId": "not-a-uuid" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-039",
+          "name": "MFA Reset - ADMIN cannot reset user in different company (403)",
+          "type": "edge_case",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/auth/mfa/reset",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token-company-A>"
+            },
+            "body": { "userId": "<user-in-company-B>" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/system/users",
+      "description": "Create a new user (ADMIN+ required)",
+      "auth_required": true,
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "E2-TC-040",
+          "name": "Create User - happy path with valid data",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": {
+              "email": "newuser@nexa-test.com",
+              "password": "SecureP@ss123",
+              "firstName": "New",
+              "lastName": "User",
+              "role": "STAFF",
+              "enabledModules": ["SYSTEM", "FINANCE"]
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "email", "firstName", "lastName"],
+            "body_shape": {
+              "success": true,
+              "data.email": "newuser@nexa-test.com",
+              "data.firstName": "New",
+              "data.lastName": "User",
+              "data.role": "STAFF",
+              "data.isActive": true,
+              "data.mfaEnabled": false
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id, email, \"passwordHash\", \"companyId\" FROM \"User\" WHERE email = 'newuser@nexa-test.com'",
+            "expected": "User exists, passwordHash is Argon2id hash (starts with $argon2id$), companyId matches request context"
+          }
+        },
+        {
+          "id": "E2-TC-041",
+          "name": "Create User - creates global role in UserCompanyRole",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": {
+              "email": "rolecheck@nexa-test.com",
+              "password": "SecureP@ss123",
+              "firstName": "Role",
+              "lastName": "Check",
+              "role": "MANAGER",
+              "enabledModules": []
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_shape": {
+              "data.role": "MANAGER"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT role, \"companyId\" FROM \"UserCompanyRole\" WHERE \"userId\" = '<created-user-id>' AND \"companyId\" IS NULL",
+            "expected": "One record with role=MANAGER and companyId=NULL (global role)"
+          }
+        },
+        {
+          "id": "E2-TC-042",
+          "name": "Create User - duplicate email returns 409 DUPLICATE_EMAIL",
+          "type": "edge_case",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": {
+              "email": "admin@nexa-test.com",
+              "password": "SecureP@ss123",
+              "firstName": "Duplicate",
+              "lastName": "User",
+              "role": "STAFF",
+              "enabledModules": []
+            }
+          },
+          "expected": {
+            "status": 409,
+            "body_contains": ["DUPLICATE_EMAIL"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-043",
+          "name": "Create User - missing required fields returns 400",
+          "type": "validation_error",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "email": "partial@test.com" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-044",
+          "name": "Create User - password too short (<8 chars) returns 400",
+          "type": "validation_error",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": {
+              "email": "shortpw@test.com",
+              "password": "short",
+              "firstName": "Short",
+              "lastName": "Pass",
+              "role": "STAFF",
+              "enabledModules": []
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-045",
+          "name": "Create User - invalid role enum value returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": {
+              "email": "badrole@test.com",
+              "password": "SecureP@ss123",
+              "firstName": "Bad",
+              "lastName": "Role",
+              "role": "INVALID_ROLE",
+              "enabledModules": []
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-046",
+          "name": "Create User - invalid module name returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": {
+              "email": "badmod@test.com",
+              "password": "SecureP@ss123",
+              "firstName": "Bad",
+              "lastName": "Module",
+              "role": "STAFF",
+              "enabledModules": ["NONEXISTENT_MODULE"]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-047",
+          "name": "Create User - STAFF user denied (403 FORBIDDEN)",
+          "type": "validation_error",
+          "priority": "P0",
+          "risk_link": "R-002",
+          "request": {
+            "method": "POST",
+            "url": "/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <staff-access-token>"
+            },
+            "body": {
+              "email": "staffcreate@test.com",
+              "password": "SecureP@ss123",
+              "firstName": "Staff",
+              "lastName": "Create",
+              "role": "VIEWER",
+              "enabledModules": []
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-048",
+          "name": "Create User - no auth token returns 401",
+          "type": "validation_error",
+          "priority": "P0",
+          "risk_link": "R-001",
+          "request": {
+            "method": "POST",
+            "url": "/system/users",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "email": "noauth@test.com",
+              "password": "SecureP@ss123",
+              "firstName": "No",
+              "lastName": "Auth",
+              "role": "STAFF",
+              "enabledModules": []
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-049",
+          "name": "Create User - non-SUPER_ADMIN cannot create SUPER_ADMIN user (403)",
+          "type": "edge_case",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": {
+              "email": "superadmin-new@test.com",
+              "password": "SecureP@ss123",
+              "firstName": "Super",
+              "lastName": "Admin",
+              "role": "SUPER_ADMIN",
+              "enabledModules": []
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/system/company-profile",
+      "description": "Create a new company profile with default number series (ADMIN+ required)",
+      "auth_required": true,
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "E2-TC-050",
+          "name": "Create Company - happy path with valid data",
+          "type": "happy_path",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/system/company-profile",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": {
+              "name": "New Test Company",
+              "legalName": "New Test Company Ltd",
+              "baseCurrencyCode": "GBP",
+              "vatNumber": "GB123456789"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "name", "baseCurrencyCode"],
+            "body_shape": {
+              "success": true,
+              "data.name": "New Test Company",
+              "data.baseCurrencyCode": "GBP",
+              "data.isActive": true
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM \"NumberSeries\" WHERE \"companyId\" = '<new-company-id>'",
+            "expected": "count should be 9 (default number series generated: INVOICE, CREDIT_NOTE, SALES_ORDER, SALES_QUOTE, PURCHASE_ORDER, JOURNAL, CUSTOMER, SUPPLIER, EMPLOYEE)"
+          }
+        },
+        {
+          "id": "E2-TC-051",
+          "name": "Create Company - grants ADMIN role to creating user",
+          "type": "happy_path",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/system/company-profile",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": {
+              "name": "Role Grant Company",
+              "baseCurrencyCode": "GBP"
+            }
+          },
+          "expected": {
+            "status": 201
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT role FROM \"UserCompanyRole\" WHERE \"userId\" = '<requesting-user-id>' AND \"companyId\" = '<new-company-id>'",
+            "expected": "role should be ADMIN"
+          }
+        },
+        {
+          "id": "E2-TC-052",
+          "name": "Create Company - missing name returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/system/company-profile",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "baseCurrencyCode": "GBP" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-053",
+          "name": "Create Company - invalid baseCurrencyCode length returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/system/company-profile",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "name": "Bad Currency", "baseCurrencyCode": "GBPP" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-054",
+          "name": "Create Company - STAFF user denied (403)",
+          "type": "validation_error",
+          "priority": "P1",
+          "risk_link": "R-002",
+          "request": {
+            "method": "POST",
+            "url": "/system/company-profile",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <staff-access-token>"
+            },
+            "body": { "name": "Staff Company", "baseCurrencyCode": "GBP" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "description": "Health check endpoint (public, no auth)",
+      "auth_required": false,
+      "minimum_role": null,
+      "test_cases": [
+        {
+          "id": "E2-TC-055",
+          "name": "Health - happy path returns status ok",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/health",
+            "headers": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["status", "version", "uptime"],
+            "body_shape": {
+              "success": true,
+              "data.status": "ok",
+              "data.version": "string (semver)",
+              "data.uptime": "number (seconds)"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-056",
+          "name": "Health - accessible without authentication",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/health",
+            "headers": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["ok"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system/users",
+      "description": "List users with cursor pagination (ADMIN+ required)",
+      "auth_required": true,
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "E2-TC-057",
+          "name": "List Users - happy path returns paginated list",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/users",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data", "meta"],
+            "body_shape": {
+              "success": true,
+              "data": "array of user objects",
+              "meta.hasMore": "boolean",
+              "meta.total": "number"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-058",
+          "name": "List Users - with limit parameter",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/users?limit=2",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_shape": {
+              "data": "array with at most 2 elements",
+              "meta.hasMore": "boolean"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-059",
+          "name": "List Users - with cursor pagination (second page)",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/users?limit=2&cursor=<cursor-from-first-page>",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_shape": {
+              "data": "array of users (different from first page)"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-060",
+          "name": "List Users - with search filter",
+          "type": "happy_path",
+          "priority": "P2",
+          "request": {
+            "method": "GET",
+            "url": "/system/users?search=admin",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_shape": {
+              "data": "array filtered by search term in email/firstName/lastName"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-061",
+          "name": "List Users - with isActive filter",
+          "type": "happy_path",
+          "priority": "P2",
+          "request": {
+            "method": "GET",
+            "url": "/system/users?isActive=true",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_shape": {
+              "data": "all items have isActive=true"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-062",
+          "name": "List Users - with sort and order",
+          "type": "happy_path",
+          "priority": "P2",
+          "request": {
+            "method": "GET",
+            "url": "/system/users?sort=email&order=desc",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_shape": {
+              "data": "array sorted by email descending"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-063",
+          "name": "List Users - invalid limit (>100) returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "GET",
+            "url": "/system/users?limit=200",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-064",
+          "name": "List Users - STAFF user denied (403)",
+          "type": "validation_error",
+          "priority": "P0",
+          "risk_link": "R-002",
+          "request": {
+            "method": "GET",
+            "url": "/system/users",
+            "headers": {
+              "Authorization": "Bearer <staff-access-token>"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-065",
+          "name": "List Users - no auth returns 401",
+          "type": "validation_error",
+          "priority": "P0",
+          "risk_link": "R-001",
+          "request": {
+            "method": "GET",
+            "url": "/system/users",
+            "headers": {}
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-066",
+          "name": "List Users - scoped to company (returns only users in current company)",
+          "type": "happy_path",
+          "priority": "P0",
+          "risk_link": "R-007",
+          "request": {
+            "method": "GET",
+            "url": "/system/users",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_shape": {
+              "data": "all items have companyId matching ctx.companyId"
+            }
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system/users/:id",
+      "description": "Get a single user by ID (ADMIN+ required)",
+      "auth_required": true,
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "E2-TC-067",
+          "name": "Get User - happy path returns user object",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/users/<existing-user-id>",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "email", "firstName", "lastName", "role"],
+            "body_shape": {
+              "success": true,
+              "data.id": "uuid",
+              "data.email": "string",
+              "data.role": "string or null",
+              "data.isActive": "boolean",
+              "data.mfaEnabled": "boolean"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-068",
+          "name": "Get User - non-existent ID returns 404",
+          "type": "edge_case",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/users/00000000-0000-0000-0000-000000000000",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-069",
+          "name": "Get User - invalid UUID format returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "GET",
+            "url": "/system/users/not-a-uuid",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-070",
+          "name": "Get User - user from different company returns 404 (company isolation)",
+          "type": "edge_case",
+          "priority": "P0",
+          "risk_link": "R-007",
+          "request": {
+            "method": "GET",
+            "url": "/system/users/<user-in-different-company>",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system/company-profile",
+      "description": "Get current company profile (VIEWER+ required)",
+      "auth_required": true,
+      "minimum_role": "VIEWER",
+      "test_cases": [
+        {
+          "id": "E2-TC-071",
+          "name": "Get Company Profile - happy path returns profile",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/company-profile",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "name", "baseCurrencyCode"],
+            "body_shape": {
+              "success": true,
+              "data.id": "uuid",
+              "data.name": "string",
+              "data.baseCurrencyCode": "string (3 chars)",
+              "data.isActive": true,
+              "data.timezone": "string",
+              "data.countryCode": "string (2 chars)"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-072",
+          "name": "Get Company Profile - VIEWER can access (minimum role)",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/company-profile",
+            "headers": {
+              "Authorization": "Bearer <viewer-access-token>"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["name"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-073",
+          "name": "Get Company Profile - no auth returns 401",
+          "type": "validation_error",
+          "priority": "P0",
+          "risk_link": "R-001",
+          "request": {
+            "method": "GET",
+            "url": "/system/company-profile",
+            "headers": {}
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-074",
+          "name": "Get Company Profile - non-existent company returns 403 (prevents enumeration)",
+          "type": "edge_case",
+          "priority": "P2",
+          "request": {
+            "method": "GET",
+            "url": "/system/company-profile",
+            "headers": {
+              "Authorization": "Bearer <token-with-nonexistent-companyId>",
+              "X-Company-ID": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["COMPANY_ACCESS_DENIED"],
+            "note": "Company context middleware returns 403 (not 404) to prevent enumeration"
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/system/users/:id",
+      "description": "Update user details (firstName, lastName) (ADMIN+ required)",
+      "auth_required": true,
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "E2-TC-075",
+          "name": "Update User - happy path updates firstName and lastName",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/users/<existing-user-id>",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "firstName": "Updated", "lastName": "Name" }
+          },
+          "expected": {
+            "status": 200,
+            "body_shape": {
+              "success": true,
+              "data.firstName": "Updated",
+              "data.lastName": "Name"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT \"firstName\", \"lastName\", \"updatedBy\" FROM \"User\" WHERE id = '<user-id>'",
+            "expected": "firstName='Updated', lastName='Name', updatedBy=requesting user id"
+          }
+        },
+        {
+          "id": "E2-TC-076",
+          "name": "Update User - partial update (only firstName)",
+          "type": "happy_path",
+          "priority": "P2",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/users/<existing-user-id>",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "firstName": "OnlyFirst" }
+          },
+          "expected": {
+            "status": 200,
+            "body_shape": {
+              "data.firstName": "OnlyFirst"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-077",
+          "name": "Update User - non-existent user returns 404",
+          "type": "edge_case",
+          "priority": "P1",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/users/00000000-0000-0000-0000-000000000000",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "firstName": "Ghost" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-078",
+          "name": "Update User - user from different company returns 404 (isolation)",
+          "type": "edge_case",
+          "priority": "P0",
+          "risk_link": "R-007",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/users/<user-in-different-company>",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "firstName": "Cross" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-079",
+          "name": "Update User - empty firstName returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/users/<existing-user-id>",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "firstName": "" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/system/users/:id/role",
+      "description": "Update user's global role (ADMIN+ required)",
+      "auth_required": true,
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "E2-TC-080",
+          "name": "Update Role - happy path updates global role",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/users/<existing-user-id>/role",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "role": "MANAGER" }
+          },
+          "expected": {
+            "status": 200,
+            "body_shape": {
+              "success": true,
+              "data.userId": "uuid",
+              "data.role": "MANAGER"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT role FROM \"UserCompanyRole\" WHERE \"userId\" = '<user-id>' AND \"companyId\" IS NULL",
+            "expected": "role should be MANAGER"
+          }
+        },
+        {
+          "id": "E2-TC-081",
+          "name": "Update Role - non-SUPER_ADMIN cannot assign SUPER_ADMIN (403)",
+          "type": "edge_case",
+          "priority": "P1",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/users/<existing-user-id>/role",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "role": "SUPER_ADMIN" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-082",
+          "name": "Update Role - invalid role value returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/users/<existing-user-id>/role",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "role": "INVALID" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-083",
+          "name": "Update Role - non-existent user returns 404",
+          "type": "edge_case",
+          "priority": "P1",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/users/00000000-0000-0000-0000-000000000000/role",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "role": "STAFF" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/system/users/:id/modules",
+      "description": "Update user's enabled modules (ADMIN+ required)",
+      "auth_required": true,
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "E2-TC-084",
+          "name": "Update Modules - happy path updates enabled modules",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/users/<existing-user-id>/modules",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "enabledModules": ["SYSTEM", "FINANCE", "SALES"] }
+          },
+          "expected": {
+            "status": 200,
+            "body_shape": {
+              "success": true,
+              "data.enabledModules": ["SYSTEM", "FINANCE", "SALES"]
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT \"enabledModules\" FROM \"User\" WHERE id = '<user-id>'",
+            "expected": "enabledModules should be [\"SYSTEM\", \"FINANCE\", \"SALES\"]"
+          }
+        },
+        {
+          "id": "E2-TC-085",
+          "name": "Update Modules - empty array (remove all modules)",
+          "type": "edge_case",
+          "priority": "P2",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/users/<existing-user-id>/modules",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "enabledModules": [] }
+          },
+          "expected": {
+            "status": 200,
+            "body_shape": {
+              "data.enabledModules": []
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-086",
+          "name": "Update Modules - invalid module name returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/users/<existing-user-id>/modules",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "enabledModules": ["NONEXISTENT"] }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-087",
+          "name": "Update Modules - non-existent user returns 404",
+          "type": "edge_case",
+          "priority": "P2",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/users/00000000-0000-0000-0000-000000000000/modules",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "enabledModules": ["SYSTEM"] }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/system/company-profile",
+      "description": "Update current company profile (ADMIN+ required)",
+      "auth_required": true,
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "E2-TC-088",
+          "name": "Update Company Profile - happy path",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/company-profile",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": {
+              "name": "Updated Company Name",
+              "phone": "+44 20 1234 5678"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_shape": {
+              "success": true,
+              "data.name": "Updated Company Name",
+              "data.phone": "+44 20 1234 5678"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT name, phone, \"updatedBy\" FROM \"CompanyProfile\" WHERE id = '<companyId>'",
+            "expected": "name='Updated Company Name', phone='+44 20 1234 5678', updatedBy=requesting user"
+          }
+        },
+        {
+          "id": "E2-TC-089",
+          "name": "Update Company Profile - partial update (only phone)",
+          "type": "happy_path",
+          "priority": "P2",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/company-profile",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "phone": "+44 20 9999 8888" }
+          },
+          "expected": {
+            "status": 200,
+            "body_shape": {
+              "data.phone": "+44 20 9999 8888"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-090",
+          "name": "Update Company Profile - baseCurrencyCode not allowed in update",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/company-profile",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "baseCurrencyCode": "USD" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"],
+            "note": "baseCurrencyCode is omitted from update schema"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-091",
+          "name": "Update Company Profile - STAFF denied (403)",
+          "type": "validation_error",
+          "priority": "P1",
+          "risk_link": "R-002",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/company-profile",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <staff-access-token>"
+            },
+            "body": { "name": "Staff Update" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-092",
+          "name": "Update Company Profile - invalid email format returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/company-profile",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "email": "not-an-email" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-093",
+          "name": "Update Company Profile - invalid website URL returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/company-profile",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            },
+            "body": { "website": "not-a-url" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/system/companies/:id/switch",
+      "description": "Switch user's active company context (VIEWER+ required)",
+      "auth_required": true,
+      "minimum_role": "VIEWER",
+      "test_cases": [
+        {
+          "id": "E2-TC-094",
+          "name": "Company Switch - happy path switches to authorized company",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/system/companies/<company-B-id>/switch",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <token-with-access-to-company-B>"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["companyId", "companyName", "role"],
+            "body_shape": {
+              "success": true,
+              "data.companyId": "<company-B-id>",
+              "data.companyName": "string",
+              "data.role": "string (UserRole enum)"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT \"companyId\" FROM \"User\" WHERE id = '<userId>'",
+            "expected": "companyId should be updated to <company-B-id>"
+          }
+        },
+        {
+          "id": "E2-TC-095",
+          "name": "Company Switch - unauthorized company returns 403",
+          "type": "edge_case",
+          "priority": "P0",
+          "risk_link": "R-007",
+          "request": {
+            "method": "POST",
+            "url": "/system/companies/<unauthorized-company-id>/switch",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["COMPANY_ACCESS_DENIED"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-096",
+          "name": "Company Switch - non-existent company returns 403 (not 404 to prevent enumeration)",
+          "type": "edge_case",
+          "priority": "P1",
+          "request": {
+            "method": "POST",
+            "url": "/system/companies/00000000-0000-0000-0000-000000000000/switch",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["COMPANY_ACCESS_DENIED"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-097",
+          "name": "Company Switch - invalid UUID format returns 400",
+          "type": "validation_error",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/system/companies/not-a-uuid/switch",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-098",
+          "name": "Company Switch - no auth returns 401",
+          "type": "validation_error",
+          "priority": "P0",
+          "risk_link": "R-001",
+          "request": {
+            "method": "POST",
+            "url": "/system/companies/<company-id>/switch",
+            "headers": { "Content-Type": "application/json" }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-099",
+          "name": "Company Switch - inactive company returns 403",
+          "type": "edge_case",
+          "priority": "P2",
+          "request": {
+            "method": "POST",
+            "url": "/system/companies/<inactive-company-id>/switch",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["COMPANY_ACCESS_DENIED"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/system/users/:id",
+      "description": "Soft-delete (deactivate) a user (ADMIN+ required)",
+      "auth_required": true,
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "E2-TC-100",
+          "name": "Delete User - happy path deactivates user",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/users/<user-to-deactivate-id>",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_shape": {
+              "success": true,
+              "data.isActive": false
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT \"isActive\" FROM \"User\" WHERE id = '<user-id>'",
+            "expected": "isActive should be false"
+          }
+        },
+        {
+          "id": "E2-TC-101",
+          "name": "Delete User - revokes all refresh tokens for deactivated user",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/users/<user-to-deactivate-id>",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 200
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM \"RefreshToken\" WHERE \"userId\" = '<user-id>' AND \"revokedAt\" IS NULL",
+            "expected": "count should be 0 (all tokens revoked)"
+          }
+        },
+        {
+          "id": "E2-TC-102",
+          "name": "Delete User - self-deactivation returns 422 SELF_DEACTIVATION",
+          "type": "edge_case",
+          "priority": "P1",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/users/<own-user-id>",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 422,
+            "body_contains": ["SELF_DEACTIVATION"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-103",
+          "name": "Delete User - non-existent user returns 404",
+          "type": "edge_case",
+          "priority": "P1",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/users/00000000-0000-0000-0000-000000000000",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-104",
+          "name": "Delete User - STAFF denied (403)",
+          "type": "validation_error",
+          "priority": "P0",
+          "risk_link": "R-002",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/users/<existing-user-id>",
+            "headers": {
+              "Authorization": "Bearer <staff-access-token>"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-105",
+          "name": "Delete User - no auth returns 401",
+          "type": "validation_error",
+          "priority": "P0",
+          "risk_link": "R-001",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/users/<existing-user-id>",
+            "headers": {}
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "ANY",
+      "path": "/auth/* and /system/*",
+      "description": "Cross-cutting: JWT verification hook on all authenticated routes",
+      "auth_required": true,
+      "minimum_role": null,
+      "test_cases": [
+        {
+          "id": "E2-TC-106",
+          "name": "JWT Hook - expired token returns 401",
+          "type": "edge_case",
+          "priority": "P0",
+          "risk_link": "R-001",
+          "request": {
+            "method": "GET",
+            "url": "/system/users",
+            "headers": {
+              "Authorization": "Bearer <expired-jwt-token>"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-107",
+          "name": "JWT Hook - malformed token returns 401",
+          "type": "edge_case",
+          "priority": "P0",
+          "risk_link": "R-001",
+          "request": {
+            "method": "GET",
+            "url": "/system/users",
+            "headers": {
+              "Authorization": "Bearer not.a.valid.jwt"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-108",
+          "name": "JWT Hook - missing Bearer prefix returns 401",
+          "type": "edge_case",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/users",
+            "headers": {
+              "Authorization": "<valid-jwt-without-bearer>"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "ANY",
+      "path": "/system/*",
+      "description": "Cross-cutting: Company context middleware and X-Company-ID header handling",
+      "auth_required": true,
+      "minimum_role": null,
+      "test_cases": [
+        {
+          "id": "E2-TC-109",
+          "name": "Company Context - X-Company-ID header with unauthorized company returns 403",
+          "type": "edge_case",
+          "priority": "P0",
+          "risk_link": "R-007",
+          "request": {
+            "method": "GET",
+            "url": "/system/company-profile",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>",
+              "X-Company-ID": "<company-user-has-no-access-to>"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["COMPANY_ACCESS_DENIED"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-110",
+          "name": "Company Context - no X-Company-ID header defaults to user.companyId",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/company-profile",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_shape": {
+              "data.id": "matches the user's default companyId"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-111",
+          "name": "Company Context - invalid UUID in X-Company-ID returns 400",
+          "type": "validation_error",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/system/company-profile",
+            "headers": {
+              "Authorization": "Bearer <admin-access-token>",
+              "X-Company-ID": "not-a-uuid"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"],
+            "note": "company-context middleware validates UUID format"
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "ANY",
+      "path": "/*",
+      "description": "Cross-cutting: Correlation ID, error envelope, 404 handler",
+      "auth_required": false,
+      "minimum_role": null,
+      "test_cases": [
+        {
+          "id": "E2-TC-112",
+          "name": "Correlation ID - generated when not provided",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/health",
+            "headers": {}
+          },
+          "expected": {
+            "status": 200,
+            "response_headers": {
+              "X-Correlation-ID": "UUID format string"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-113",
+          "name": "Correlation ID - echoes valid incoming header",
+          "type": "happy_path",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/health",
+            "headers": {
+              "X-Correlation-ID": "my-custom-trace-123"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "response_headers": {
+              "X-Correlation-ID": "my-custom-trace-123"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E2-TC-114",
+          "name": "404 Handler - unknown route returns standardised error envelope",
+          "type": "edge_case",
+          "priority": "P1",
+          "request": {
+            "method": "GET",
+            "url": "/nonexistent-route",
+            "headers": {}
+          },
+          "expected": {
+            "status": 404,
+            "body_shape": {
+              "success": false,
+              "error.code": "NOT_FOUND",
+              "error.message": "Route not found"
+            }
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_endpoints": 18,
+    "endpoints_by_method": {
+      "GET": 4,
+      "POST": 9,
+      "PATCH": 4,
+      "DELETE": 1
+    },
+    "test_cases_by_type": {
+      "happy_path": 38,
+      "validation_error": 44,
+      "edge_case": 32
+    },
+    "test_cases_by_priority": {
+      "P0": 28,
+      "P1": 48,
+      "P2": 38
+    },
+    "test_cases_with_db_verification": 16,
+    "cross_cutting_concerns_tested": [
+      "JWT verification hook (expired, malformed, missing Bearer)",
+      "RBAC guard (role hierarchy enforcement for VIEWER < STAFF < MANAGER < ADMIN < SUPER_ADMIN)",
+      "Company context middleware (X-Company-ID header, company isolation, default fallback)",
+      "Correlation ID middleware (generation, echo)",
+      "Error handler (standardised envelope for all error types)",
+      "Custom 404 handler (standardised envelope)",
+      "Account lockout (rate limiting after 5 failures)",
+      "MFA two-step auth flow (requiresMfa challenge, TOTP verification)"
+    ],
+    "risks_covered": [
+      "R-001: JWT token verification bypass",
+      "R-002: RBAC role resolution flaw",
+      "R-003: Refresh token replay after rotation",
+      "R-004: MFA challenge bypass",
+      "R-006: Account lockout bypass",
+      "R-007: Company context middleware missing on routes",
+      "R-009: Zod validation schema mismatch",
+      "R-010: Information leakage on failed login"
+    ]
+  }
+}

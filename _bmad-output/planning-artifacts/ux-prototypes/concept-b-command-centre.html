@@ -1,0 +1,2066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexa ERP — Command Centre</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: {
+        syne: ['Syne', 'sans-serif'],
+        fira: ['Fira Code', 'monospace'],
+        body: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif']
+      },
+      colors: {
+        surface: '#18181b',
+        bg: '#09090b',
+        accent: '#06b6d4',
+        violet: '#8b5cf6',
+        pos: '#22c55e',
+        neg: '#ef4444',
+        warn: '#eab308'
+      }
+    }
+  }
+}
+</script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #09090b; color: #fafafa; overflow-x: hidden; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #09090b; }
+::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #52525b; }
+
+@keyframes gradientBorder {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes pulse-cyan {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(6, 182, 212, 0); }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes slideOutRight {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+@keyframes stepIn {
+  from { opacity: 0; transform: translateX(-24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes pulseRing {
+  0% { box-shadow: 0 0 0 0 rgba(6,182,212,0.5); }
+  70% { box-shadow: 0 0 0 8px rgba(6,182,212,0); }
+  100% { box-shadow: 0 0 0 0 rgba(6,182,212,0); }
+}
+@keyframes typingDot {
+  0%, 80%, 100% { opacity: 0.3; }
+  40% { opacity: 1; }
+}
+
+.cmd-bar-wrapper {
+  padding: 1.5px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #06b6d4, #8b5cf6, #06b6d4, #8b5cf6);
+  background-size: 300% 300%;
+  animation: gradientBorder 4s ease infinite;
+}
+.cmd-bar-inner {
+  background: #18181b;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  height: 42px;
+}
+.ai-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(6,182,212,0.12);
+  color: #06b6d4;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  border: 1px solid rgba(6,182,212,0.25);
+  white-space: nowrap;
+}
+.ai-chip-pulse { animation: pulse-cyan 2s infinite; }
+.card {
+  background: #18181b;
+  border: 1px solid rgba(63,63,70,0.5);
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.2s ease;
+}
+.card:hover {
+  border-color: rgba(63,63,70,0.8);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+  transform: translateY(-1px);
+}
+.badge { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; font-family: 'Fira Code', monospace; }
+.badge-green { background: rgba(34,197,94,0.15); color: #22c55e; }
+.badge-red { background: rgba(239,68,68,0.15); color: #ef4444; }
+.badge-amber { background: rgba(234,179,8,0.15); color: #eab308; }
+.badge-blue { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.badge-zinc { background: rgba(161,161,170,0.15); color: #a1a1aa; }
+
+.status-pill { padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.status-overdue { background: rgba(239,68,68,0.15); color: #ef4444; }
+.status-due { background: rgba(234,179,8,0.15); color: #eab308; }
+.status-paid { background: rgba(34,197,94,0.15); color: #22c55e; }
+.status-draft { background: rgba(161,161,170,0.15); color: #a1a1aa; }
+.status-posted { background: rgba(59,130,246,0.15); color: #3b82f6; }
+
+.tab-btn { padding: 10px 20px; font-size: 14px; font-weight: 500; color: #a1a1aa; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; background: none; border-top: none; border-left: none; border-right: none; position: relative; }
+.tab-btn:hover { color: #fafafa; }
+.tab-btn.active { color: #06b6d4; border-bottom-color: #06b6d4; }
+.tab-btn .sub-menu { display: none; position: absolute; top: 100%; left: 0; background: #18181b; border: 1px solid rgba(63,63,70,0.5); border-radius: 8px; padding: 4px; min-width: 160px; z-index: 50; margin-top: 4px; }
+.tab-btn:hover .sub-menu, .tab-btn.active .sub-menu-open { display: block; }
+.sub-menu a { display: block; padding: 8px 14px; color: #a1a1aa; text-decoration: none; border-radius: 6px; font-size: 13px; transition: all 0.15s; }
+.sub-menu a:hover { background: rgba(63,63,70,0.4); color: #fafafa; }
+
+.page { display: none; animation: fadeInUp 0.4s ease; }
+.page.active { display: block; }
+.slide-panel { position: fixed; top: 0; right: 0; width: 420px; height: 100vh; background: #18181b; border-left: 1px solid rgba(63,63,70,0.5); z-index: 100; transform: translateX(100%); transition: transform 0.35s cubic-bezier(0.16,1,0.3,1); overflow-y: auto; }
+.slide-panel.open { transform: translateX(0); }
+.panel-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 99; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+.panel-backdrop.open { opacity: 1; pointer-events: auto; }
+
+.cmd-modal { position: fixed; inset: 0; z-index: 200; display: none; align-items: flex-start; justify-content: center; padding-top: 120px; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); }
+.cmd-modal.open { display: flex; }
+
+.sparkline { width: 100%; height: 32px; }
+.step-circle { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+.step-done { background: rgba(6,182,212,0.2); color: #06b6d4; border: 2px solid #06b6d4; }
+.step-active { background: transparent; border: 2px solid #06b6d4; animation: pulseRing 2s infinite; }
+.step-pending { background: transparent; border: 2px solid #3f3f46; color: #3f3f46; }
+
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; padding: 10px 14px; font-size: 12px; font-weight: 600; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid rgba(63,63,70,0.5); font-family: 'Syne', sans-serif; }
+td { padding: 12px 14px; border-bottom: 1px solid rgba(63,63,70,0.3); font-size: 14px; }
+tr:hover td { background: rgba(39,39,42,0.5); }
+
+.filter-pill { padding: 6px 16px; border-radius: 9999px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid rgba(63,63,70,0.5); background: transparent; color: #a1a1aa; transition: all 0.2s; }
+.filter-pill:hover { border-color: #06b6d4; color: #fafafa; }
+.filter-pill.active { background: rgba(6,182,212,0.12); border-color: #06b6d4; color: #06b6d4; }
+
+.chat-bubble { max-width: 85%; padding: 14px 18px; border-radius: 16px; font-size: 14px; line-height: 1.6; }
+.chat-user { background: #27272a; border-bottom-right-radius: 4px; margin-left: auto; }
+.chat-ai { background: rgba(6,182,212,0.08); border: 1px solid rgba(6,182,212,0.15); border-bottom-left-radius: 4px; }
+
+.btn-violet { background: #8b5cf6; color: white; padding: 8px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; border: none; cursor: pointer; transition: all 0.2s; }
+.btn-violet:hover { background: #7c3aed; transform: translateY(-1px); }
+.btn-zinc { background: #27272a; color: #fafafa; padding: 8px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; border: 1px solid rgba(63,63,70,0.5); cursor: pointer; transition: all 0.2s; }
+.btn-zinc:hover { background: #3f3f46; }
+.btn-ghost { background: none; border: none; color: #a1a1aa; padding: 8px 16px; font-size: 14px; cursor: pointer; transition: color 0.2s; }
+.btn-ghost:hover { color: #fafafa; }
+
+.tooltip-wrap { position: relative; }
+.tooltip-wrap .tooltip { display: none; position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #27272a; border: 1px solid rgba(63,63,70,0.5); color: #fafafa; font-size: 12px; padding: 8px 12px; border-radius: 8px; white-space: nowrap; z-index: 30; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+.tooltip-wrap:hover .tooltip { display: block; }
+.tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #27272a transparent transparent transparent; }
+
+.ai-insight-bar { background: rgba(6,182,212,0.06); border: 1px solid rgba(6,182,212,0.15); border-left: 3px solid #06b6d4; border-radius: 8px; padding: 14px 18px; }
+.num { font-family: 'Fira Code', monospace; }
+.heading { font-family: 'Syne', sans-serif; }
+</style>
+</head>
+<body>
+
+<!-- COMMAND BAR MODAL (Cmd+K) -->
+<div id="cmdModal" class="cmd-modal" onclick="if(event.target===this)closeCmdModal()">
+  <div style="width:600px;">
+    <div class="cmd-bar-wrapper">
+      <div style="background:#18181b;border-radius:11px;padding:4px;">
+        <div style="display:flex;align-items:center;padding:8px 16px;gap:10px;">
+          <svg width="20" height="20" fill="none" stroke="#06b6d4" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input id="cmdInput" type="text" placeholder="Ask AI or search... (type a command)" style="flex:1;background:none;border:none;outline:none;color:#fafafa;font-size:16px;font-family:inherit;" autocomplete="off">
+          <kbd style="background:#27272a;padding:2px 8px;border-radius:4px;font-size:11px;color:#a1a1aa;font-family:'Fira Code',monospace;">ESC</kbd>
+        </div>
+        <div style="border-top:1px solid rgba(63,63,70,0.3);padding:8px;">
+          <div style="padding:6px 12px;font-size:11px;color:#71717a;text-transform:uppercase;letter-spacing:1px;font-family:'Syne',sans-serif;">Quick Actions</div>
+          <div id="cmdResults">
+            <div class="cmd-result-item" data-index="0" onclick="navigateTo('ai-create')" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='rgba(39,39,42,0.8)'" onmouseout="this.style.background='transparent'">
+              <span style="color:#06b6d4;font-size:16px;width:24px;text-align:center;">✨</span><span style="flex:1;color:#fafafa;font-size:14px;">Create Invoice with AI</span><span style="font-size:12px;color:#52525b;background:#27272a;padding:2px 8px;border-radius:4px;">Invoice</span>
+            </div>
+            <div class="cmd-result-item" data-index="1" onclick="navigateTo('chat')" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='rgba(39,39,42,0.8)'" onmouseout="this.style.background='transparent'">
+              <span style="color:#06b6d4;font-size:16px;width:24px;text-align:center;">💬</span><span style="flex:1;color:#fafafa;font-size:14px;">Chat with Nexa AI</span><span style="font-size:12px;color:#52525b;background:#27272a;padding:2px 8px;border-radius:4px;">AI</span>
+            </div>
+            <div class="cmd-result-item" data-index="2" onclick="navigateTo('invoices')" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='rgba(39,39,42,0.8)'" onmouseout="this.style.background='transparent'">
+              <span style="color:#a1a1aa;font-size:16px;width:24px;text-align:center;">📄</span><span style="flex:1;color:#fafafa;font-size:14px;">View Invoices</span><span style="font-size:12px;color:#52525b;background:#27272a;padding:2px 8px;border-radius:4px;">AR</span>
+            </div>
+            <div class="cmd-result-item" data-index="3" onclick="navigateTo('pnl')" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='rgba(39,39,42,0.8)'" onmouseout="this.style.background='transparent'">
+              <span style="color:#a1a1aa;font-size:16px;width:24px;text-align:center;">📊</span><span style="flex:1;color:#fafafa;font-size:14px;">P&L Report</span><span style="font-size:12px;color:#52525b;background:#27272a;padding:2px 8px;border-radius:4px;">Reports</span>
+            </div>
+            <div class="cmd-result-item" data-index="4" onclick="navigateTo('cashflow')" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='rgba(39,39,42,0.8)'" onmouseout="this.style.background='transparent'">
+              <span style="color:#a1a1aa;font-size:16px;width:24px;text-align:center;">💰</span><span style="flex:1;color:#fafafa;font-size:14px;">Cash Flow Forecast</span><span style="font-size:12px;color:#52525b;background:#27272a;padding:2px 8px;border-radius:4px;">Finance</span>
+            </div>
+            <div class="cmd-result-item" data-index="5" onclick="navigateTo('dashboard')" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='rgba(39,39,42,0.8)'" onmouseout="this.style.background='transparent'">
+              <span style="color:#a1a1aa;font-size:16px;width:24px;text-align:center;">🏠</span><span style="flex:1;color:#fafafa;font-size:14px;">Dashboard</span><span style="font-size:12px;color:#52525b;background:#27272a;padding:2px 8px;border-radius:4px;">Navigation</span>
+            </div>
+          </div>
+          <div style="padding:8px 12px 4px;border-top:1px solid rgba(63,63,70,0.2);margin-top:4px;">
+            <div style="display:flex;gap:12px;font-size:11px;color:#52525b;">
+              <span><kbd style="background:#27272a;padding:1px 5px;border-radius:3px;font-family:'Fira Code',monospace;font-size:10px;">↑↓</kbd> Navigate</span>
+              <span><kbd style="background:#27272a;padding:1px 5px;border-radius:3px;font-family:'Fira Code',monospace;font-size:10px;">↵</kbd> Select</span>
+              <span><kbd style="background:#27272a;padding:1px 5px;border-radius:3px;font-family:'Fira Code',monospace;font-size:10px;">ESC</kbd> Close</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE-IN PANEL -->
+<div id="panelBackdrop" class="panel-backdrop" onclick="closePanel()"></div>
+<div id="slidePanel" class="slide-panel">
+  <div style="padding:24px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <h3 class="heading" style="font-size:16px;font-weight:600;" id="panelTitle">AI Analysis</h3>
+      <button onclick="closePanel()" style="background:none;border:none;color:#a1a1aa;cursor:pointer;font-size:20px;padding:4px 8px;border-radius:6px;transition:background 0.15s;" onmouseover="this.style.background='rgba(39,39,42,0.5)'" onmouseout="this.style.background='none'">&times;</button>
+    </div>
+    <div id="panelContent"></div>
+  </div>
+</div>
+
+<!-- TOP BAR -->
+<header style="position:sticky;top:0;z-index:50;background:rgba(9,9,11,0.85);backdrop-filter:blur(12px);border-bottom:1px solid rgba(63,63,70,0.3);">
+  <div style="max-width:1400px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:16px;">
+    <!-- Logo -->
+    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;cursor:pointer;" onclick="navigateTo('dashboard')">
+      <div style="width:28px;height:28px;background:linear-gradient(135deg,#06b6d4,#8b5cf6);border-radius:6px;display:flex;align-items:center;justify-content:center;">
+        <span style="color:white;font-size:14px;font-weight:800;font-family:'Syne',sans-serif;">N</span>
+      </div>
+      <span class="heading" style="font-size:16px;font-weight:700;letter-spacing:1px;">NEXA</span>
+    </div>
+    <!-- Command Bar -->
+    <div style="flex:1;max-width:640px;margin:0 auto;">
+      <div class="cmd-bar-wrapper" style="cursor:pointer;" onclick="openCmdModal()">
+        <div class="cmd-bar-inner">
+          <svg width="16" height="16" fill="none" stroke="#a1a1aa" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <span style="margin-left:10px;color:#71717a;font-size:14px;flex:1;">Ask AI or search...</span>
+          <kbd style="background:#27272a;padding:2px 8px;border-radius:4px;font-size:11px;color:#71717a;font-family:'Fira Code',monospace;">&#8984;K</kbd>
+        </div>
+      </div>
+    </div>
+    <!-- User -->
+    <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+      <span style="font-size:13px;color:#a1a1aa;">Sarah Chen</span>
+      <div style="width:32px;height:32px;background:linear-gradient(135deg,#8b5cf6,#06b6d4);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;">SC</div>
+    </div>
+  </div>
+  <!-- Tab Nav -->
+  <div style="max-width:1400px;margin:0 auto;padding:0 24px;display:flex;gap:0;border-top:1px solid rgba(63,63,70,0.2);">
+    <button class="tab-btn active" data-page="dashboard" onclick="navigateTo('dashboard')">Dashboard</button>
+    <div class="tab-btn" style="position:relative;" id="invoicesTab">
+      Invoices <span style="font-size:10px;">&#9662;</span>
+      <div class="sub-menu">
+        <a href="#" onclick="event.preventDefault();navigateTo('invoices')">List</a>
+        <a href="#" onclick="event.preventDefault();navigateTo('new-invoice')">New Invoice</a>
+        <a href="#" onclick="event.preventDefault();navigateTo('ai-create')">AI Create</a>
+      </div>
+    </div>
+    <div class="tab-btn" style="position:relative;" id="reportsTab">
+      Reports <span style="font-size:10px;">&#9662;</span>
+      <div class="sub-menu">
+        <a href="#" onclick="event.preventDefault();navigateTo('pnl')">P&L Report</a>
+      </div>
+    </div>
+    <button class="tab-btn" data-page="chat" onclick="navigateTo('chat')">AI Chat</button>
+    <button class="tab-btn" data-page="cashflow" onclick="navigateTo('cashflow')">Cash Flow</button>
+  </div>
+</header>
+
+<!-- MAIN CONTENT -->
+<main style="max-width:1400px;margin:0 auto;padding:24px;">
+
+<!-- ======================= PAGE 1: DASHBOARD ======================= -->
+<div id="page-dashboard" class="page active">
+  <!-- Greeting -->
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;">
+    <span style="color:#a1a1aa;font-size:14px;">Monday, 17 February 2026</span>
+    <span class="heading" style="font-size:20px;font-weight:600;">Good morning, Sarah</span>
+  </div>
+
+  <!-- AI Insight Banner -->
+  <div class="ai-insight-bar" style="margin-bottom:24px;">
+    <div style="display:flex;align-items:flex-start;gap:10px;">
+      <span style="font-size:18px;">📊</span>
+      <div>
+        <span style="color:#06b6d4;font-weight:600;font-size:13px;font-family:'Syne',sans-serif;">AI INSIGHT</span>
+        <p style="color:#d4d4d8;font-size:14px;margin-top:4px;line-height:1.5;">Revenue up 11% but gross margin declining — COGS growing 4.4pp faster than revenue. Investigate Widget-B pricing.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI Grid -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;" id="kpiGrid">
+    <!-- KPI cards inserted by JS -->
+  </div>
+
+  <!-- Charts -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;">
+    <div class="card">
+      <h3 class="heading" style="font-size:14px;font-weight:600;color:#a1a1aa;margin-bottom:16px;">Cash Flow Forecast</h3>
+      <canvas id="dashCashChart" height="200"></canvas>
+    </div>
+    <div class="card">
+      <h3 class="heading" style="font-size:14px;font-weight:600;color:#a1a1aa;margin-bottom:16px;">Revenue vs COGS (6mo)</h3>
+      <canvas id="dashRevenueChart" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- Actions Required -->
+  <div>
+    <h3 class="heading" style="font-size:14px;font-weight:600;color:#a1a1aa;margin-bottom:12px;">Actions Required</h3>
+    <div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;">
+      <div class="card" style="min-width:280px;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span class="badge badge-red">Urgent</span>
+          <span class="ai-chip">AI Flagged</span>
+        </div>
+        <p style="font-size:14px;font-weight:500;margin-bottom:4px;">Chase 3 overdue invoices</p>
+        <p class="num" style="font-size:20px;font-weight:600;color:#ef4444;margin-bottom:12px;">£55,000</p>
+        <button class="btn-zinc" style="font-size:13px;padding:6px 14px;" onclick="navigateTo('invoices')">View →</button>
+      </div>
+      <div class="card" style="min-width:280px;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span class="badge badge-amber">Review</span>
+        </div>
+        <p style="font-size:14px;font-weight:500;margin-bottom:4px;">Approve 2 purchase orders</p>
+        <p class="num" style="font-size:20px;font-weight:600;color:#eab308;margin-bottom:12px;">£8,400</p>
+        <button class="btn-zinc" style="font-size:13px;padding:6px 14px;">Approve →</button>
+      </div>
+      <div class="card" style="min-width:280px;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span class="badge badge-blue">Analysis</span>
+          <span class="ai-chip ai-chip-pulse">AI</span>
+        </div>
+        <p style="font-size:14px;font-weight:500;margin-bottom:4px;">Review Widget-B pricing</p>
+        <p style="color:#a1a1aa;font-size:13px;margin-bottom:12px;">Margin compression detected</p>
+        <button class="btn-zinc" style="font-size:13px;padding:6px 14px;" onclick="navigateTo('pnl')">Analyse →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= PAGE 2: INVOICE LIST ======================= -->
+<div id="page-invoices" class="page">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <h2 class="heading" style="font-size:24px;font-weight:700;">Invoices</h2>
+      <span class="badge badge-zinc" style="font-size:13px;">8</span>
+    </div>
+    <button class="btn-violet" onclick="navigateTo('new-invoice')">+ New Invoice</button>
+  </div>
+
+  <!-- Filter Bar -->
+  <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;" id="filterBar">
+    <button class="filter-pill active" onclick="filterInvoices('all',this)">All (8)</button>
+    <button class="filter-pill" onclick="filterInvoices('overdue',this)">Overdue (3)</button>
+    <button class="filter-pill" onclick="filterInvoices('due',this)">Due Soon (2)</button>
+    <button class="filter-pill" onclick="filterInvoices('paid',this)">Paid (1)</button>
+    <button class="filter-pill" onclick="filterInvoices('draft',this)">Draft (1)</button>
+    <button class="filter-pill" onclick="filterInvoices('posted',this)">Posted (1)</button>
+  </div>
+
+  <!-- Invoice Table -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:40px;"><input type="checkbox" style="accent-color:#06b6d4;"></th>
+          <th style="width:40px;">AI</th>
+          <th>Invoice #</th>
+          <th>Customer</th>
+          <th style="text-align:right;">Amount</th>
+          <th>Status</th>
+          <th>Due / Paid</th>
+          <th style="text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="invoiceTableBody">
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ======================= PAGE 3: NEW INVOICE ======================= -->
+<div id="page-new-invoice" class="page">
+  <div style="max-width:900px;margin:0 auto;">
+    <h2 class="heading" style="font-size:24px;font-weight:700;margin-bottom:20px;">New Invoice</h2>
+
+    <!-- AI insight -->
+    <div class="ai-insight-bar" style="margin-bottom:24px;">
+      <div style="display:flex;align-items:flex-start;gap:10px;">
+        <span style="font-size:16px;">💡</span>
+        <div style="flex:1;">
+          <p style="font-size:13px;color:#d4d4d8;line-height:1.5;">Acme Corp usually orders Widget-C too (30 units avg). <a href="#" style="color:#06b6d4;text-decoration:underline;">Add to invoice?</a></p>
+          <p style="font-size:13px;color:#ef4444;margin-top:4px;">⚠️ Acme has £31k outstanding (89 days overdue)</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Customer Section -->
+    <div class="card" style="margin-bottom:16px;">
+      <label class="heading" style="font-size:12px;color:#a1a1aa;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:8px;">Customer</label>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+        <div style="flex:1;background:#27272a;border:1px solid rgba(63,63,70,0.5);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:8px;">
+          <svg width="16" height="16" fill="none" stroke="#71717a" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <span style="color:#fafafa;font-size:14px;">Acme Corp (AC-001)</span>
+        </div>
+        <span class="ai-chip">AI pre-filled from customer defaults</span>
+      </div>
+      <div style="background:#27272a;border-radius:8px;padding:12px 16px;display:flex;gap:24px;font-size:13px;color:#a1a1aa;">
+        <div><span style="color:#71717a;">Address:</span> 14 High Street, London EC2A 4PQ</div>
+        <div><span style="color:#71717a;">Terms:</span> <span class="num">NET30</span></div>
+        <div><span style="color:#71717a;">VAT:</span> <span class="num">20%</span></div>
+      </div>
+    </div>
+
+    <!-- Line Items -->
+    <div class="card" style="margin-bottom:16px;padding:0;overflow:hidden;">
+      <div style="padding:16px 20px;border-bottom:1px solid rgba(63,63,70,0.3);">
+        <label class="heading" style="font-size:12px;color:#a1a1aa;text-transform:uppercase;letter-spacing:1px;">Line Items</label>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Description</th>
+            <th style="text-align:right;">Qty</th>
+            <th style="text-align:right;">Unit Price</th>
+            <th style="text-align:right;">VAT</th>
+            <th style="text-align:right;">Line Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span class="num" style="font-weight:500;">Widget-A</span>
+                <span style="color:#71717a;font-size:12px;">(WA-100)</span>
+              </div>
+            </td>
+            <td style="color:#a1a1aa;">Premium Widget Type A</td>
+            <td style="text-align:right;" class="num">100</td>
+            <td style="text-align:right;">
+              <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
+                <span class="num">£50.00</span>
+                <span class="ai-chip" style="font-size:10px;">Matches last price ✓</span>
+              </div>
+            </td>
+            <td style="text-align:right;" class="num">20%</td>
+            <td style="text-align:right;" class="num" style="font-weight:600;">£5,000.00</td>
+          </tr>
+          <tr>
+            <td>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span class="num" style="font-weight:500;">Widget-B</span>
+                <span style="color:#71717a;font-size:12px;">(WB-200)</span>
+              </div>
+            </td>
+            <td style="color:#a1a1aa;">Standard Widget Type B</td>
+            <td style="text-align:right;" class="num">50</td>
+            <td style="text-align:right;" class="num">£30.00</td>
+            <td style="text-align:right;" class="num">20%</td>
+            <td style="text-align:right;" class="num" style="font-weight:600;">£1,500.00</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="padding:12px 20px;border-top:1px solid rgba(63,63,70,0.3);">
+        <button class="btn-ghost" style="color:#06b6d4;font-size:13px;">+ Add Line Item</button>
+      </div>
+    </div>
+
+    <!-- Totals -->
+    <div class="card" style="margin-bottom:16px;">
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
+        <div style="display:flex;gap:40px;font-size:14px;">
+          <span style="color:#a1a1aa;">Subtotal</span>
+          <span class="num" style="font-weight:500;">£6,500.00</span>
+        </div>
+        <div style="display:flex;gap:40px;font-size:14px;">
+          <span style="color:#a1a1aa;">VAT (20%)</span>
+          <span class="num" style="font-weight:500;">£1,300.00</span>
+        </div>
+        <div style="width:200px;border-top:1px solid rgba(63,63,70,0.5);padding-top:8px;display:flex;justify-content:space-between;">
+          <span class="heading" style="font-weight:700;">Total</span>
+          <span class="num" style="font-size:20px;font-weight:700;">£7,800.00</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notes -->
+    <div class="card" style="margin-bottom:24px;">
+      <label class="heading" style="font-size:12px;color:#a1a1aa;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:8px;">Notes</label>
+      <textarea style="width:100%;background:#27272a;border:1px solid rgba(63,63,70,0.5);border-radius:8px;padding:10px 14px;color:#fafafa;font-size:14px;font-family:inherit;resize:vertical;min-height:60px;outline:none;" placeholder="Add notes visible to customer..."></textarea>
+    </div>
+
+    <!-- Actions -->
+    <div style="display:flex;gap:12px;justify-content:flex-end;padding-bottom:40px;">
+      <button class="btn-ghost" onclick="navigateTo('invoices')">Cancel</button>
+      <button class="btn-zinc">Save as Draft</button>
+      <button class="btn-violet">Submit for Approval</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= PAGE 4: AI CREATE INVOICE ======================= -->
+<div id="page-ai-create" class="page">
+  <div style="max-width:800px;margin:0 auto;">
+    <!-- Command Input -->
+    <div class="cmd-bar-wrapper" style="margin-bottom:32px;">
+      <div style="background:#18181b;border-radius:11px;padding:16px 20px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="color:#06b6d4;font-size:20px;">✨</span>
+          <div style="flex:1;">
+            <div style="font-size:11px;color:#06b6d4;font-family:'Syne',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">AI Command</div>
+            <div style="color:#fafafa;font-size:15px;line-height:1.4;">"Create invoice for Acme Corp — 100 Widget-A at £50, 50 Widget-B at £30"</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Steps Timeline -->
+    <div id="aiStepsContainer" style="position:relative;padding-left:48px;">
+      <div style="position:absolute;left:15px;top:16px;bottom:16px;width:2px;background:rgba(63,63,70,0.5);"></div>
+      <!-- Steps inserted by JS -->
+    </div>
+  </div>
+</div>
+
+<!-- ======================= PAGE 5: P&L REPORT ======================= -->
+<div id="page-pnl" class="page">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+    <h2 class="heading" style="font-size:24px;font-weight:700;">Profit & Loss — February 2026</h2>
+    <div class="btn-zinc" style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+      vs Last Year <span style="font-size:10px;">&#9662;</span>
+    </div>
+  </div>
+
+  <!-- P&L Table -->
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:24px;">
+    <table>
+      <thead>
+        <tr>
+          <th>Account</th>
+          <th style="text-align:right;">Feb 2026</th>
+          <th style="text-align:right;">Feb 2025</th>
+          <th style="text-align:right;">Variance £</th>
+          <th style="text-align:right;">Variance %</th>
+          <th style="width:120px;">Trend</th>
+          <th style="width:60px;">AI</th>
+        </tr>
+      </thead>
+      <tbody id="pnlTableBody">
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Chart -->
+  <div class="card" style="margin-bottom:24px;">
+    <h3 class="heading" style="font-size:14px;font-weight:600;color:#a1a1aa;margin-bottom:16px;">Year-over-Year Comparison</h3>
+    <canvas id="pnlChart" height="250"></canvas>
+  </div>
+
+  <!-- AI Narrative -->
+  <div class="ai-insight-bar">
+    <div style="display:flex;align-items:flex-start;gap:10px;">
+      <span style="font-size:18px;">🤖</span>
+      <div>
+        <span style="color:#06b6d4;font-weight:600;font-size:13px;font-family:'Syne',sans-serif;">AI NARRATIVE</span>
+        <p style="color:#d4d4d8;font-size:14px;margin-top:6px;line-height:1.6;">Your revenue grew 16.3% year-over-year, but COGS grew faster at 20.7%. This margin compression is primarily driven by raw material cost increases for Widget-B (+14% since October). <strong style="color:#fafafa;">Recommendation:</strong> Review Widget-B pricing or renegotiate supplier terms to protect margins.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= PAGE 6: CASH FLOW ======================= -->
+<div id="page-cashflow" class="page">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+    <div>
+      <h2 class="heading" style="font-size:24px;font-weight:700;">8-Week Cash Flow Forecast</h2>
+      <p style="color:#71717a;font-size:13px;margin-top:4px;">Last updated: Today, 09:00</p>
+    </div>
+  </div>
+
+  <!-- Chart -->
+  <div class="card" style="margin-bottom:24px;">
+    <canvas id="cashFlowChart" height="300"></canvas>
+  </div>
+
+  <!-- AI Scenarios -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;">
+    <div class="card" style="border-color:rgba(63,63,70,0.5);">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <div style="width:8px;height:8px;border-radius:50%;background:#a1a1aa;"></div>
+        <span class="heading" style="font-size:12px;font-weight:600;color:#a1a1aa;text-transform:uppercase;letter-spacing:0.5px;">Current Path</span>
+      </div>
+      <p class="num" style="font-size:20px;font-weight:600;margin-bottom:4px;">Minimum £41.2k</p>
+      <p style="font-size:13px;color:#71717a;">in week 6 (24 Mar)</p>
+    </div>
+    <div class="card" style="border-color:rgba(34,197,94,0.3);">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <div style="width:8px;height:8px;border-radius:50%;background:#22c55e;"></div>
+        <span class="heading" style="font-size:12px;font-weight:600;color:#22c55e;text-transform:uppercase;letter-spacing:0.5px;">If Acme Pays</span>
+      </div>
+      <p class="num" style="font-size:20px;font-weight:600;color:#22c55e;margin-bottom:4px;">Minimum £72.2k ✓</p>
+      <p style="font-size:13px;color:#71717a;">Chase Acme's £31k now</p>
+    </div>
+    <div class="card" style="border-color:rgba(234,179,8,0.3);">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <div style="width:8px;height:8px;border-radius:50%;background:#eab308;"></div>
+        <span class="heading" style="font-size:12px;font-weight:600;color:#eab308;text-transform:uppercase;letter-spacing:0.5px;">If VAT Deferred</span>
+      </div>
+      <p class="num" style="font-size:20px;font-weight:600;color:#eab308;margin-bottom:4px;">Minimum £62.7k</p>
+      <p style="font-size:13px;color:#71717a;">Contact HMRC for time-to-pay</p>
+    </div>
+  </div>
+
+  <!-- Weekly Breakdown -->
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:24px;">
+    <table>
+      <thead>
+        <tr>
+          <th>Week</th>
+          <th>Date</th>
+          <th style="text-align:right;">Opening</th>
+          <th style="text-align:right;">Inflows</th>
+          <th style="text-align:right;">Outflows</th>
+          <th style="text-align:right;">Closing</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody id="cashWeeklyBody">
+      </tbody>
+    </table>
+  </div>
+
+  <!-- AI Recommendation -->
+  <div class="ai-insight-bar">
+    <div style="display:flex;align-items:flex-start;gap:10px;">
+      <span style="font-size:18px;">🎯</span>
+      <div>
+        <span style="color:#06b6d4;font-weight:600;font-size:13px;font-family:'Syne',sans-serif;">RECOMMENDED ACTION</span>
+        <p style="color:#d4d4d8;font-size:14px;margin-top:6px;line-height:1.6;">Contact Acme Corp today. A payment of even £20k by week 3 keeps cash above £50k throughout. <a href="#" style="color:#06b6d4;text-decoration:underline;" onclick="event.preventDefault();navigateTo('chat')">Ask AI to draft a payment reminder →</a></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= PAGE 7: AI CHAT ======================= -->
+<div id="page-chat" class="page">
+  <div style="max-width:800px;margin:0 auto;display:flex;flex-direction:column;height:calc(100vh - 160px);">
+    <!-- Chat Header -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid rgba(63,63,70,0.3);">
+      <div style="width:36px;height:36px;background:linear-gradient(135deg,#06b6d4,#8b5cf6);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+        <span style="font-size:18px;">✨</span>
+      </div>
+      <div>
+        <span class="heading" style="font-weight:700;font-size:16px;">Nexa AI</span>
+        <div style="display:flex;align-items:center;gap:4px;margin-top:1px;">
+          <div style="width:6px;height:6px;border-radius:50%;background:#22c55e;"></div>
+          <span style="font-size:12px;color:#71717a;">Ready</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat Messages -->
+    <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:16px;padding-bottom:16px;" id="chatMessages">
+      <!-- Message 1: User -->
+      <div style="display:flex;justify-content:flex-end;">
+        <div class="chat-bubble chat-user">What's our cash position looking like?</div>
+      </div>
+      <!-- Message 2: AI -->
+      <div style="display:flex;justify-content:flex-start;">
+        <div class="chat-bubble chat-ai" style="max-width:500px;">
+          <div style="margin-bottom:10px;">
+            <canvas id="chatMiniChart" width="460" height="100"></canvas>
+          </div>
+          <p style="margin-bottom:10px;">Cash position is <strong class="num" style="color:#fafafa;">£89,300</strong>. Forecast shows a dip to <strong class="num" style="color:#eab308;">£41.2k</strong> in week 6 (24 Mar). Main risk: quarterly VAT payment of £21.5k.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn-zinc" style="font-size:12px;padding:5px 12px;" onclick="navigateTo('cashflow')">View Full Forecast</button>
+            <button class="btn-zinc" style="font-size:12px;padding:5px 12px;" onclick="navigateTo('invoices')">Chase Debtors</button>
+          </div>
+        </div>
+      </div>
+      <!-- Message 3: User -->
+      <div style="display:flex;justify-content:flex-end;">
+        <div class="chat-bubble chat-user">Which customers owe us the most?</div>
+      </div>
+      <!-- Message 4: AI -->
+      <div style="display:flex;justify-content:flex-start;">
+        <div class="chat-bubble chat-ai" style="max-width:500px;">
+          <p style="margin-bottom:10px;">Here are the top overdue accounts:</p>
+          <div style="background:rgba(9,9,11,0.5);border-radius:8px;padding:10px;margin-bottom:10px;overflow:hidden;">
+            <table style="font-size:13px;">
+              <thead><tr><th style="padding:6px 10px;font-size:11px;">Customer</th><th style="padding:6px 10px;text-align:right;font-size:11px;">Amount</th><th style="padding:6px 10px;text-align:right;font-size:11px;">Days Overdue</th></tr></thead>
+              <tbody>
+                <tr><td style="padding:6px 10px;">Acme Corp</td><td style="padding:6px 10px;text-align:right;" class="num">£31,000</td><td style="padding:6px 10px;text-align:right;color:#ef4444;" class="num">89</td></tr>
+                <tr><td style="padding:6px 10px;">BlueStar Ltd</td><td style="padding:6px 10px;text-align:right;" class="num">£15,800</td><td style="padding:6px 10px;text-align:right;color:#ef4444;" class="num">71</td></tr>
+                <tr><td style="padding:6px 10px;">TechVault Inc</td><td style="padding:6px 10px;text-align:right;" class="num">£8,200</td><td style="padding:6px 10px;text-align:right;color:#eab308;" class="num">45</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="margin-bottom:10px;">Total overdue: <strong class="num" style="color:#ef4444;">£55,000</strong>. Shall I draft payment reminders?</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn-violet" style="font-size:12px;padding:5px 12px;" id="draftRemindersBtn">Draft Reminders</button>
+            <button class="btn-zinc" style="font-size:12px;padding:5px 12px;">View AR Aging</button>
+          </div>
+        </div>
+      </div>
+      <!-- Message 5: User -->
+      <div style="display:flex;justify-content:flex-end;">
+        <div class="chat-bubble chat-user">Draft reminders for all three</div>
+      </div>
+      <!-- Message 6: AI -->
+      <div style="display:flex;justify-content:flex-start;">
+        <div class="chat-bubble chat-ai" style="max-width:540px;">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
+            <span style="color:#22c55e;">✓</span>
+            <span style="font-weight:500;">3 payment reminders drafted</span>
+          </div>
+          <!-- Email previews -->
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+            <div style="background:rgba(9,9,11,0.5);border-radius:8px;padding:10px 12px;border-left:3px solid #ef4444;">
+              <div style="font-size:12px;color:#71717a;margin-bottom:2px;">To: accounts@acmecorp.com</div>
+              <div style="font-size:13px;font-weight:500;">Payment Reminder — INV-2026-0042 (£31,000)</div>
+              <div style="font-size:12px;color:#a1a1aa;margin-top:4px;">Formal reminder — account is 89 days past due...</div>
+            </div>
+            <div style="background:rgba(9,9,11,0.5);border-radius:8px;padding:10px 12px;border-left:3px solid #ef4444;">
+              <div style="font-size:12px;color:#71717a;margin-bottom:2px;">To: finance@bluestar.co.uk</div>
+              <div style="font-size:13px;font-weight:500;">Payment Reminder — INV-2026-0045 (£15,800)</div>
+              <div style="font-size:12px;color:#a1a1aa;margin-top:4px;">Friendly reminder — payment now 71 days overdue...</div>
+            </div>
+            <div style="background:rgba(9,9,11,0.5);border-radius:8px;padding:10px 12px;border-left:3px solid #eab308;">
+              <div style="font-size:12px;color:#71717a;margin-bottom:2px;">To: ap@techvault.io</div>
+              <div style="font-size:13px;font-weight:500;">Payment Reminder — INV-2026-0048 (£8,200)</div>
+              <div style="font-size:12px;color:#a1a1aa;margin-top:4px;">Gentle nudge — payment is 45 days past terms...</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn-violet" style="font-size:12px;padding:5px 12px;">Review & Send</button>
+            <button class="btn-zinc" style="font-size:12px;padding:5px 12px;">Edit</button>
+            <button class="btn-ghost" style="font-size:12px;">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat Input -->
+    <div style="padding-top:12px;border-top:1px solid rgba(63,63,70,0.3);">
+      <div style="display:flex;gap:10px;align-items:center;">
+        <div style="flex:1;background:#18181b;border:1px solid rgba(63,63,70,0.5);border-radius:10px;padding:10px 16px;display:flex;align-items:center;">
+          <input type="text" placeholder="Ask Nexa anything..." style="flex:1;background:none;border:none;outline:none;color:#fafafa;font-size:14px;font-family:inherit;">
+        </div>
+        <button class="btn-violet" style="padding:10px 20px;">Send</button>
+      </div>
+      <div style="text-align:center;margin-top:8px;">
+        <span style="font-size:12px;color:#52525b;">Press <kbd style="background:#27272a;padding:1px 6px;border-radius:3px;font-size:11px;font-family:'Fira Code',monospace;">&#8984;K</kbd> anywhere for quick commands</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<!-- ======================= JAVASCRIPT ======================= -->
+<script>
+// ===== NAVIGATION =====
+let currentPage = 'dashboard';
+function navigateTo(page) {
+  closeCmdModal();
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const el = document.getElementById('page-' + page);
+  if (el) {
+    el.classList.add('active');
+    el.style.animation = 'none';
+    el.offsetHeight;
+    el.style.animation = 'fadeInUp 0.4s ease';
+  }
+  // Update tabs
+  document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+  const tabMap = { 'dashboard':'dashboard','invoices':'invoices','new-invoice':'invoices','ai-create':'invoices','pnl':'pnl','cashflow':'cashflow','chat':'chat' };
+  const tabName = tabMap[page] || page;
+  document.querySelectorAll('.tab-btn').forEach(t => {
+    if (t.dataset.page === tabName) t.classList.add('active');
+    if (tabName === 'invoices' && t.id === 'invoicesTab') t.classList.add('active');
+    if (tabName === 'pnl' && t.id === 'reportsTab') t.classList.add('active');
+  });
+  currentPage = page;
+  // Init page-specific content
+  if (page === 'ai-create') animateAiSteps();
+  if (page === 'chat') initChatMiniChart();
+  if (page === 'cashflow') initCashFlowChart();
+  if (page === 'pnl') initPnlChart();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ===== COMMAND MODAL =====
+function openCmdModal() {
+  document.getElementById('cmdModal').classList.add('open');
+  setTimeout(() => document.getElementById('cmdInput').focus(), 100);
+}
+function closeCmdModal() {
+  document.getElementById('cmdModal').classList.remove('open');
+}
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); openCmdModal(); }
+  if (e.key === 'Escape') closeCmdModal();
+});
+
+// ===== SLIDE PANEL =====
+function openPanel(invoiceId) {
+  const data = invoiceData.find(i => i.id === invoiceId);
+  if (!data) return;
+  document.getElementById('panelTitle').textContent = 'AI Analysis: ' + data.id;
+  const prob = data.status === 'PAID' ? 100 : data.status === 'POSTED' ? 92 : data.status === 'DRAFT' ? 75 : data.status === 'OVERDUE' ? (data.days > 60 ? 45 : 62) : 87;
+  const probColor = prob > 80 ? '#22c55e' : prob > 60 ? '#eab308' : '#ef4444';
+  const avgPay = data.status === 'OVERDUE' ? (data.days > 60 ? '52 days' : '34 days') : '28 days';
+  const reliability = prob > 80 ? 'High' : prob > 60 ? 'Medium' : 'Low';
+  const relColor = prob > 80 ? '#22c55e' : prob > 60 ? '#eab308' : '#ef4444';
+  let rec = 'Invoice is in good standing.';
+  if (data.status === 'OVERDUE') rec = data.days > 60 ? 'Send formal reminder — account is ' + data.days + ' days past due. Consider offering 2% early payment discount.' : 'Send a friendly payment reminder. Account is ' + data.days + ' days past due.';
+  else if (data.status === 'DUE') rec = 'Send a courtesy reminder before the due date to encourage prompt payment.';
+
+  document.getElementById('panelContent').innerHTML = `
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="width:100px;height:100px;border-radius:50%;border:4px solid ${probColor};display:inline-flex;align-items:center;justify-content:center;position:relative;">
+        <div>
+          <div class="num" style="font-size:28px;font-weight:700;color:${probColor};">${prob}%</div>
+          <div style="font-size:11px;color:#71717a;">Payment Prob.</div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="heading" style="font-size:12px;color:#a1a1aa;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Customer History</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div><span style="color:#71717a;font-size:12px;">Avg payment</span><div class="num" style="font-size:14px;">${avgPay}</div></div>
+        <div><span style="color:#71717a;font-size:12px;">Last payment</span><div class="num" style="font-size:14px;">15 Jan 2026</div></div>
+        <div><span style="color:#71717a;font-size:12px;">Reliability</span><div style="font-size:14px;color:${relColor};font-weight:600;">${reliability}</div></div>
+        <div><span style="color:#71717a;font-size:12px;">Credit limit</span><div class="num" style="font-size:14px;">£50,000</div></div>
+      </div>
+    </div>
+    <div class="ai-insight-bar" style="margin-bottom:20px;">
+      <div style="font-size:11px;color:#06b6d4;font-family:'Syne',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">AI Recommendation</div>
+      <p style="font-size:13px;color:#d4d4d8;line-height:1.5;">${rec}</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button class="btn-violet" style="width:100%;">Send Reminder</button>
+      <button class="btn-zinc" style="width:100%;">Schedule Call</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-zinc" style="flex:1;">Escalate</button>
+        <button class="btn-zinc" style="flex:1;">Add Note</button>
+      </div>
+    </div>`;
+  document.getElementById('slidePanel').classList.add('open');
+  document.getElementById('panelBackdrop').classList.add('open');
+}
+function closePanel() {
+  document.getElementById('slidePanel').classList.remove('open');
+  document.getElementById('panelBackdrop').classList.remove('open');
+}
+
+// ===== DATA =====
+const invoiceData = [
+  { id:'INV-2026-0042', customer:'Acme Corp', amount:31000, status:'OVERDUE', days:89, dueDate:'20 Nov 2025' },
+  { id:'INV-2026-0045', customer:'BlueStar Ltd', amount:15800, status:'OVERDUE', days:71, dueDate:'08 Dec 2025' },
+  { id:'INV-2026-0048', customer:'TechVault Inc', amount:8200, status:'OVERDUE', days:45, dueDate:'03 Jan 2026' },
+  { id:'INV-2026-0051', customer:'Meridian Supplies', amount:12400, status:'DUE', days:5, dueDate:'22 Feb 2026' },
+  { id:'INV-2026-0053', customer:'CloudNine Digital', amount:4800, status:'DUE', days:12, dueDate:'01 Mar 2026' },
+  { id:'INV-2026-0055', customer:'FreshFields Organic', amount:22100, status:'PAID', days:0, dueDate:'Paid 10 Feb' },
+  { id:'INV-2026-0057', customer:'UrbanCraft Studios', amount:6700, status:'DRAFT', days:0, dueDate:'—' },
+  { id:'INV-2026-0059', customer:'NorthStar Logistics', amount:9300, status:'POSTED', days:0, dueDate:'28 Feb 2026' }
+];
+
+const kpiData = [
+  { label:'Revenue (Feb)', value:'£347,200', prev:'vs £312,800 last month', change:'+11.0%', up:true, color:'#22c55e', points:[290,305,298,312,325,338,347], tip:'Driven by 3 large Acme orders' },
+  { label:'Outstanding AR', value:'£127,400', prev:'vs £98,200 last month', change:'+29.7%', up:true, color:'#ef4444', points:[82,88,91,95,98,112,127], tip:'3 invoices 45+ days overdue' },
+  { label:'Cash Position', value:'£89,300', prev:'vs £102,500 last month', change:'-12.9%', up:false, color:'#ef4444', points:[110,108,105,102,97,94,89], tip:'Down due to equipment purchase' },
+  { label:'Overdue Invoices', value:'7', prev:'vs 4 last month', change:'+75%', up:true, color:'#ef4444', points:[2,2,3,3,4,5,7], tip:'Acme Corp accounts for 56%' },
+  { label:'Pipeline Value', value:'£215,000', prev:'vs £188,000 last month', change:'+14.4%', up:true, color:'#22c55e', points:[165,170,178,182,188,200,215], tip:'2 new enterprise opportunities' },
+  { label:'Gross Margin', value:'34.2%', prev:'vs 36.8% last month', change:'-2.6pp', up:false, color:'#ef4444', points:[38.1,37.5,37.2,36.8,36.0,35.1,34.2], tip:'Widget-B costs rising +14%' }
+];
+
+// ===== RENDER KPI GRID =====
+function renderKPIs() {
+  const grid = document.getElementById('kpiGrid');
+  grid.innerHTML = '';
+  kpiData.forEach((kpi, i) => {
+    const isUp = kpi.up;
+    const badgeClass = kpi.color === '#22c55e' ? 'badge-green' : 'badge-red';
+    const arrow = isUp ? '▲' : '▼';
+    // Generate SVG sparkline
+    const pts = kpi.points;
+    const min = Math.min(...pts), max = Math.max(...pts);
+    const range = max - min || 1;
+    const w = 120, h = 32;
+    const coords = pts.map((p, idx) => `${(idx/(pts.length-1))*w},${h - ((p-min)/range)*h}`).join(' ');
+    const card = document.createElement('div');
+    card.className = 'card tooltip-wrap';
+    card.style.animation = `fadeInUp 0.4s ease ${i * 0.05}s both`;
+    card.innerHTML = `
+      <div class="tooltip">${kpi.tip}</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+        <span class="heading" style="font-size:12px;color:#a1a1aa;text-transform:uppercase;letter-spacing:0.5px;">${kpi.label}</span>
+        <span class="ai-chip" style="font-size:10px;cursor:help;">AI</span>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:4px;">
+        <span class="num" style="font-size:28px;font-weight:700;color:#fafafa;">${kpi.value}</span>
+        <span class="badge ${badgeClass}">${kpi.change} ${arrow}</span>
+      </div>
+      <div style="color:#52525b;font-size:12px;margin-bottom:10px;">${kpi.prev}</div>
+      <svg width="${w}" height="${h}" style="display:block;">
+        <polyline points="${coords}" fill="none" stroke="${kpi.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+    grid.appendChild(card);
+  });
+}
+
+// ===== RENDER INVOICE TABLE =====
+function renderInvoiceTable(filter) {
+  const tbody = document.getElementById('invoiceTableBody');
+  tbody.innerHTML = '';
+  const filtered = filter === 'all' ? invoiceData : invoiceData.filter(inv => {
+    if (filter === 'overdue') return inv.status === 'OVERDUE';
+    if (filter === 'due') return inv.status === 'DUE';
+    if (filter === 'paid') return inv.status === 'PAID';
+    if (filter === 'draft') return inv.status === 'DRAFT';
+    if (filter === 'posted') return inv.status === 'POSTED';
+    return true;
+  });
+  filtered.forEach((inv, i) => {
+    const statusClass = inv.status === 'OVERDUE' ? 'status-overdue' : inv.status === 'DUE' ? 'status-due' : inv.status === 'PAID' ? 'status-paid' : inv.status === 'DRAFT' ? 'status-draft' : 'status-posted';
+    const dueLabel = inv.status === 'OVERDUE' ? inv.days + ' days overdue' : inv.status === 'DUE' ? 'Due in ' + inv.days + ' days' : inv.dueDate;
+    let chipHtml = '';
+    if (inv.status === 'OVERDUE') chipHtml = `<span class="ai-chip" style="font-size:10px;background:rgba(239,68,68,0.12);color:#ef4444;border-color:rgba(239,68,68,0.25);">⚡ ${inv.days}d</span>`;
+    if (inv.status === 'POSTED') chipHtml = `<span class="ai-chip" style="font-size:10px;">🎯 92% likely</span>`;
+    const tr = document.createElement('tr');
+    tr.style.animation = `fadeInUp 0.3s ease ${i*0.04}s both`;
+    tr.innerHTML = `
+      <td><input type="checkbox" style="accent-color:#06b6d4;"></td>
+      <td><button onclick="openPanel('${inv.id}')" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px;" title="AI Analysis">✨</button></td>
+      <td class="num" style="font-weight:500;">${inv.id}</td>
+      <td>${inv.customer}</td>
+      <td style="text-align:right;">
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
+          <span class="num" style="font-weight:600;">£${inv.amount.toLocaleString()}</span>
+          ${chipHtml}
+        </div>
+      </td>
+      <td><span class="status-pill ${statusClass}">${inv.status}</span></td>
+      <td style="color:#a1a1aa;font-size:13px;">${dueLabel}</td>
+      <td style="text-align:right;">
+        <button class="btn-ghost" style="font-size:12px;padding:4px 8px;">View</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function filterInvoices(filter, btn) {
+  document.querySelectorAll('#filterBar .filter-pill').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderInvoiceTable(filter);
+}
+
+// ===== P&L TABLE =====
+function renderPnlTable() {
+  const rows = [
+    { account:'Revenue', cur:347200, prev:298400, isBold:false, isGood:true },
+    { account:'Cost of Goods Sold', cur:228800, prev:189500, isBold:false, isGood:false, aiChip:'Growing faster than revenue' },
+    { account:'Gross Profit', cur:118400, prev:108900, isBold:true, isGood:true },
+    { account:'Gross Margin', cur:34.2, prev:36.5, isBold:false, isGood:false, isPercent:true, aiChip:'Margin compression' },
+    { account:'Operating Expenses', cur:78200, prev:72100, isBold:false, isGood:null },
+    { account:'Net Profit', cur:40200, prev:36800, isBold:true, isGood:true }
+  ];
+  const tbody = document.getElementById('pnlTableBody');
+  tbody.innerHTML = '';
+  rows.forEach((r, i) => {
+    const variance = r.isPercent ? (r.cur - r.prev).toFixed(1) : r.cur - r.prev;
+    const varPct = r.isPercent ? (variance > 0 ? '+' : '') + variance + 'pp' : ((variance/r.prev)*100).toFixed(1);
+    const varSign = variance > 0 ? '+' : '';
+    const varColor = r.isGood === null ? '#a1a1aa' : (r.isGood ? '#22c55e' : '#ef4444');
+    const barW = Math.min(Math.abs(r.isPercent ? variance*10 : (variance/r.prev)*100), 100);
+    const barColor = r.isGood === null ? '#a1a1aa' : (r.isGood ? '#22c55e' : '#ef4444');
+    const fw = r.isBold ? 'font-weight:700;' : '';
+    const formatVal = v => r.isPercent ? v + '%' : '£' + v.toLocaleString();
+    const tr = document.createElement('tr');
+    tr.style.animation = `fadeInUp 0.3s ease ${i*0.05}s both`;
+    tr.innerHTML = `
+      <td style="${fw}${r.isBold?'border-top:2px solid rgba(63,63,70,0.5);':''}">${r.account}</td>
+      <td style="text-align:right;${fw}" class="num">${formatVal(r.cur)}</td>
+      <td style="text-align:right;color:#a1a1aa;" class="num">${formatVal(r.prev)}</td>
+      <td style="text-align:right;color:${varColor};${fw}" class="num">${r.isPercent ? (varSign+variance+'pp') : (varSign+'£'+Math.abs(variance).toLocaleString())}</td>
+      <td style="text-align:right;color:${varColor};" class="num">${r.isPercent ? '—' : (varSign+varPct+'%')}</td>
+      <td><div style="height:6px;background:rgba(63,63,70,0.3);border-radius:3px;overflow:hidden;"><div style="height:100%;width:${barW}%;background:${barColor};border-radius:3px;"></div></div></td>
+      <td>${r.aiChip ? '<span class="ai-chip" style="font-size:10px;">'+r.aiChip+'</span>' : ''}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// ===== CASH FLOW WEEKLY TABLE =====
+function renderCashWeekly() {
+  const weeks = [
+    { w:'W1', date:'17 Feb', open:89.3, inflow:18.6, outflow:13.0, close:94.9, note:'' },
+    { w:'W2', date:'24 Feb', open:94.9, inflow:5.8, outflow:58.0, close:42.7, note:'Payroll £52k' },
+    { w:'W3', date:'3 Mar', open:42.7, inflow:24.0, outflow:5.0, close:61.7, note:'' },
+    { w:'W4', date:'10 Mar', open:61.7, inflow:4.0, outflow:8.0, close:57.7, note:'' },
+    { w:'W5', date:'17 Mar', open:57.7, inflow:5.0, outflow:8.0, close:54.7, note:'' },
+    { w:'W6', date:'24 Mar', open:54.7, inflow:8.0, outflow:21.5, close:41.2, note:'VAT £21.5k' },
+    { w:'W7', date:'31 Mar', open:41.2, inflow:26.0, outflow:5.0, close:62.2, note:'' },
+    { w:'W8', date:'7 Apr', open:62.2, inflow:14.0, outflow:8.0, close:68.2, note:'' }
+  ];
+  const tbody = document.getElementById('cashWeeklyBody');
+  tbody.innerHTML = '';
+  weeks.forEach((w,i) => {
+    const isWarning = w.close < 45;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="num" style="font-weight:500;${isWarning?'color:#eab308;':''}">${w.w}</td>
+      <td style="color:#a1a1aa;">${w.date}</td>
+      <td style="text-align:right;" class="num">£${w.open.toFixed(1)}k</td>
+      <td style="text-align:right;color:#22c55e;" class="num">+£${w.inflow.toFixed(1)}k</td>
+      <td style="text-align:right;color:#ef4444;" class="num">-£${w.outflow.toFixed(1)}k</td>
+      <td style="text-align:right;font-weight:600;${isWarning?'color:#eab308;':''}" class="num">£${w.close.toFixed(1)}k${isWarning?' ⚠️':''}</td>
+      <td style="color:#71717a;font-size:13px;">${w.note}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// ===== AI STEPS ANIMATION =====
+function animateAiSteps() {
+  const steps = [
+    { title:'Understanding Intent', desc:'Parsed: <strong>Create → Sales Invoice</strong> | Customer: Acme Corp | Items: 2 line items', time:'0.2s' },
+    { title:'Customer Lookup', desc:`<div style="background:#27272a;border-radius:8px;padding:10px 14px;margin-top:8px;font-size:13px;"><div style="font-weight:600;margin-bottom:4px;">Acme Corp (AC-001)</div><div style="color:#a1a1aa;">14 High Street, London EC2A 4PQ</div><div style="color:#a1a1aa;margin-top:2px;">Terms: NET30 | Credit Limit: £50,000</div></div>`, time:'0.3s' },
+    { title:'Item & Stock Check', desc:`<div style="background:#27272a;border-radius:8px;padding:10px;margin-top:8px;overflow:hidden;"><table style="font-size:13px;"><thead><tr><th style="padding:4px 10px;font-size:11px;">Item</th><th style="padding:4px 10px;text-align:right;font-size:11px;">Price</th><th style="padding:4px 10px;text-align:right;font-size:11px;">Stock</th><th style="padding:4px 10px;font-size:11px;">Status</th></tr></thead><tbody><tr><td style="padding:4px 10px;" class="num">WA-100</td><td style="padding:4px 10px;text-align:right;" class="num">£50.00</td><td style="padding:4px 10px;text-align:right;" class="num">340</td><td style="padding:4px 10px;color:#22c55e;">✓ Available</td></tr><tr><td style="padding:4px 10px;" class="num">WB-200</td><td style="padding:4px 10px;text-align:right;" class="num">£30.00</td><td style="padding:4px 10px;text-align:right;" class="num">180</td><td style="padding:4px 10px;color:#22c55e;">✓ Available</td></tr></tbody></table></div>`, time:'0.4s' },
+    { title:'Applying Business Rules', desc:'Terms: <span class="num">NET30</span> | VAT: <span class="num">20%</span> | Discount: None | Number series: <span class="num">INV-2026</span>', time:'0.1s' },
+    { title:'Calculating Totals', desc:'<span class="num">100 × £50 = £5,000</span> + <span class="num">50 × £30 = £1,500</span> = <span class="num" style="font-weight:700;">£6,500</span> + VAT <span class="num">£1,300</span> = <span class="num" style="font-size:18px;font-weight:700;color:#06b6d4;">£7,800</span>', time:'0.2s' },
+    { title:'Invoice Ready', desc:`<div class="card" style="margin-top:10px;border-color:rgba(6,182,212,0.3);">
+      <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
+        <div><span class="heading" style="font-size:11px;color:#71717a;text-transform:uppercase;letter-spacing:1px;">Invoice</span><div class="num" style="font-size:16px;font-weight:600;">INV-2026-0060</div></div>
+        <div style="text-align:right;"><span style="font-size:11px;color:#71717a;">Total</span><div class="num" style="font-size:24px;font-weight:700;color:#06b6d4;">£7,800.00</div></div>
+      </div>
+      <div style="border-top:1px solid rgba(63,63,70,0.3);padding-top:10px;font-size:13px;color:#a1a1aa;">
+        <div>Acme Corp (AC-001) · NET30 · Due 19 Mar 2026</div>
+        <div style="margin-top:4px;">2 line items · VAT £1,300</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <button class="btn-violet" style="flex:1;">✓ Approve & Post</button>
+        <button class="btn-zinc">✏️ Edit</button>
+        <button class="btn-ghost">✕ Cancel</button>
+      </div>
+    </div>`, time:'0.3s' }
+  ];
+
+  const container = document.getElementById('aiStepsContainer');
+  // Keep the vertical line div
+  container.innerHTML = '<div style="position:absolute;left:15px;top:16px;bottom:16px;width:2px;background:rgba(63,63,70,0.5);"></div>';
+
+  steps.forEach((step, i) => {
+    setTimeout(() => {
+      const div = document.createElement('div');
+      div.style.cssText = `display:flex;gap:16px;margin-bottom:24px;animation:stepIn 0.5s ease both;`;
+      div.innerHTML = `
+        <div class="step-circle step-done" style="margin-left:-48px;">✓</div>
+        <div style="flex:1;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <span class="heading" style="font-size:14px;font-weight:600;">Step ${i+1}: ${step.title}</span>
+            <span style="font-size:11px;color:#52525b;" class="num">Completed in ${step.time}</span>
+          </div>
+          <div style="font-size:13px;color:#a1a1aa;line-height:1.5;">${step.desc}</div>
+        </div>`;
+      container.appendChild(div);
+    }, i * 600);
+  });
+}
+
+// ===== CHARTS =====
+const chartDefaults = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { grid: { color:'rgba(63,63,70,0.2)' }, ticks: { color:'#71717a', font:{ family:'Fira Code', size:11 } } },
+    y: { grid: { color:'rgba(63,63,70,0.2)' }, ticks: { color:'#71717a', font:{ family:'Fira Code', size:11 } } }
+  }
+};
+
+let dashCashChartObj, dashRevenueChartObj, pnlChartObj, cashFlowChartObj, chatMiniChartObj;
+
+function initDashCharts() {
+  // Cash Flow Forecast
+  if (dashCashChartObj) dashCashChartObj.destroy();
+  const ctx1 = document.getElementById('dashCashChart').getContext('2d');
+  const grad1 = ctx1.createLinearGradient(0,0,0,200);
+  grad1.addColorStop(0,'rgba(6,182,212,0.2)');
+  grad1.addColorStop(1,'rgba(6,182,212,0)');
+  dashCashChartObj = new Chart(ctx1, {
+    type:'line',
+    data:{
+      labels:['W1','W2','W3','W4','W5','W6','W7','W8'],
+      datasets:[
+        { data:[94.9,42.7,61.7,57.7,54.7,41.2,62.2,68.2], borderColor:'#06b6d4', backgroundColor:grad1, fill:true, tension:0.3, pointBackgroundColor:'#06b6d4', pointRadius:4, pointHoverRadius:6 },
+        { data:[40,40,40,40,40,40,40,40], borderColor:'#ef4444', borderDash:[6,4], pointRadius:0, fill:false }
+      ]
+    },
+    options:{ ...chartDefaults, plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:(c)=>'£'+c.parsed.y+'k' } } }, scales:{ ...chartDefaults.scales, y:{ ...chartDefaults.scales.y, ticks:{ ...chartDefaults.scales.y.ticks, callback:v=>'£'+v+'k' } } } }
+  });
+
+  // Revenue vs COGS
+  if (dashRevenueChartObj) dashRevenueChartObj.destroy();
+  const ctx2 = document.getElementById('dashRevenueChart').getContext('2d');
+  dashRevenueChartObj = new Chart(ctx2, {
+    type:'bar',
+    data:{
+      labels:['Sep','Oct','Nov','Dec','Jan','Feb'],
+      datasets:[
+        { label:'Revenue', data:[285,298,310,318,312,347], backgroundColor:'rgba(6,182,212,0.6)', borderRadius:4 },
+        { label:'COGS', data:[178,190,199,205,197,229], backgroundColor:'rgba(239,68,68,0.4)', borderRadius:4 }
+      ]
+    },
+    options:{ ...chartDefaults, plugins:{ legend:{ display:true, labels:{ color:'#a1a1aa', font:{size:11} } } }, scales:{ ...chartDefaults.scales, y:{ ...chartDefaults.scales.y, ticks:{ ...chartDefaults.scales.y.ticks, callback:v=>'£'+v+'k' } } } }
+  });
+}
+
+function initCashFlowChart() {
+  if (cashFlowChartObj) cashFlowChartObj.destroy();
+  const ctx = document.getElementById('cashFlowChart').getContext('2d');
+  const grad = ctx.createLinearGradient(0,0,0,300);
+  grad.addColorStop(0,'rgba(6,182,212,0.15)');
+  grad.addColorStop(1,'rgba(6,182,212,0)');
+  cashFlowChartObj = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels:['17 Feb','24 Feb','3 Mar','10 Mar','17 Mar','24 Mar','31 Mar','7 Apr'],
+      datasets:[
+        { label:'Closing Balance', data:[94.9,42.7,61.7,57.7,54.7,41.2,62.2,68.2], borderColor:'#06b6d4', backgroundColor:grad, fill:true, tension:0.3, pointBackgroundColor: function(ctx) { return ctx.parsed.y < 45 ? '#ef4444' : '#06b6d4'; }, pointRadius: function(ctx) { return ctx.parsed.y < 45 ? 7 : 4; }, pointHoverRadius:8 },
+        { label:'Safety Threshold', data:[40,40,40,40,40,40,40,40], borderColor:'#ef4444', borderDash:[6,4], pointRadius:0, fill:false }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{ display:true, labels:{ color:'#a1a1aa', font:{size:11} } },
+        tooltip:{ callbacks:{ label:(c)=>c.dataset.label+': £'+c.parsed.y+'k' } }
+      },
+      scales:{
+        x:{ grid:{color:'rgba(63,63,70,0.2)'}, ticks:{color:'#71717a', font:{family:'Fira Code',size:11}} },
+        y:{ grid:{color:'rgba(63,63,70,0.2)'}, ticks:{color:'#71717a', font:{family:'Fira Code',size:11}, callback:v=>'£'+v+'k'}, min:20, max:100 }
+      }
+    }
+  });
+}
+
+function initPnlChart() {
+  if (pnlChartObj) pnlChartObj.destroy();
+  const ctx = document.getElementById('pnlChart').getContext('2d');
+  pnlChartObj = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels:['Revenue','COGS','Gross Profit','Net Profit'],
+      datasets:[
+        { label:'Feb 2026', data:[347.2,228.8,118.4,40.2], backgroundColor:'rgba(6,182,212,0.7)', borderRadius:4 },
+        { label:'Feb 2025', data:[298.4,189.5,108.9,36.8], backgroundColor:'rgba(139,92,246,0.4)', borderRadius:4 }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:true, labels:{color:'#a1a1aa',font:{size:11}} } },
+      scales:{
+        x:{ grid:{color:'rgba(63,63,70,0.2)'}, ticks:{color:'#71717a',font:{family:'Fira Code',size:11}} },
+        y:{ grid:{color:'rgba(63,63,70,0.2)'}, ticks:{color:'#71717a',font:{family:'Fira Code',size:11},callback:v=>'£'+v+'k'} }
+      }
+    }
+  });
+}
+
+function initChatMiniChart() {
+  if (chatMiniChartObj) chatMiniChartObj.destroy();
+  const canvas = document.getElementById('chatMiniChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createLinearGradient(0,0,0,100);
+  grad.addColorStop(0,'rgba(6,182,212,0.2)');
+  grad.addColorStop(1,'rgba(6,182,212,0)');
+  chatMiniChartObj = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels:['W1','W2','W3','W4','W5','W6','W7','W8'],
+      datasets:[{ data:[94.9,42.7,61.7,57.7,54.7,41.2,62.2,68.2], borderColor:'#06b6d4', backgroundColor:grad, fill:true, tension:0.3, pointRadius:2 }]
+    },
+    options:{ responsive:false, plugins:{legend:{display:false}}, scales:{x:{display:false},y:{display:false}} }
+  });
+}
+
+// ===== COMMAND BAR SEARCH FILTERING =====
+const cmdItems = [
+  { icon:'✨', label:'Create Invoice with AI', category:'Invoice', page:'ai-create' },
+  { icon:'💬', label:'Chat with Nexa AI', category:'AI', page:'chat' },
+  { icon:'📄', label:'View Invoices', category:'AR', page:'invoices' },
+  { icon:'📝', label:'New Invoice', category:'AR', page:'new-invoice' },
+  { icon:'📊', label:'P&L Report', category:'Reports', page:'pnl' },
+  { icon:'💰', label:'Cash Flow Forecast', category:'Finance', page:'cashflow' },
+  { icon:'🏠', label:'Dashboard', category:'Navigation', page:'dashboard' },
+  { icon:'👥', label:'Customer List', category:'CRM', page:'dashboard' },
+  { icon:'📦', label:'Inventory Overview', category:'Stock', page:'dashboard' },
+  { icon:'🧾', label:'VAT Return', category:'Finance', page:'dashboard' },
+  { icon:'📈', label:'Sales Pipeline', category:'Sales', page:'dashboard' },
+  { icon:'💳', label:'Accounts Payable', category:'AP', page:'dashboard' }
+];
+
+function filterCmdItems(query) {
+  const container = document.getElementById('cmdResults');
+  if (!container) return;
+  const q = query.toLowerCase().trim();
+  const filtered = q ? cmdItems.filter(i =>
+    i.label.toLowerCase().includes(q) ||
+    i.category.toLowerCase().includes(q)
+  ) : cmdItems.slice(0, 6);
+
+  container.innerHTML = '';
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div style="padding:20px;text-align:center;">
+        <div style="font-size:24px;margin-bottom:8px;">🔍</div>
+        <div style="color:#71717a;font-size:13px;">No results found for "${q}"</div>
+        <div style="color:#52525b;font-size:12px;margin-top:4px;">Try a different search term</div>
+      </div>`;
+    return;
+  }
+
+  filtered.forEach((item, i) => {
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;';
+    div.onmouseover = function() { this.style.background = 'rgba(39,39,42,0.8)'; highlightCmdItem(i); };
+    div.onmouseout = function() { if (cmdSelectedIndex !== i) this.style.background = 'transparent'; };
+    div.onclick = function() { navigateTo(item.page); };
+    div.className = 'cmd-result-item';
+    div.dataset.index = i;
+    div.innerHTML = `
+      <span style="color:#06b6d4;font-size:16px;width:24px;text-align:center;">${item.icon}</span>
+      <span style="flex:1;color:#fafafa;font-size:14px;">${item.label}</span>
+      <span style="font-size:12px;color:#52525b;background:#27272a;padding:2px 8px;border-radius:4px;">${item.category}</span>`;
+    container.appendChild(div);
+  });
+}
+
+let cmdSelectedIndex = -1;
+function highlightCmdItem(idx) {
+  document.querySelectorAll('.cmd-result-item').forEach((el, i) => {
+    el.style.background = i === idx ? 'rgba(39,39,42,0.8)' : 'transparent';
+  });
+  cmdSelectedIndex = idx;
+}
+
+// ===== ENHANCED COMMAND MODAL =====
+document.getElementById('cmdInput').addEventListener('input', function() {
+  filterCmdItems(this.value);
+});
+
+document.getElementById('cmdInput').addEventListener('keydown', function(e) {
+  const items = document.querySelectorAll('.cmd-result-item');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    cmdSelectedIndex = Math.min(cmdSelectedIndex + 1, items.length - 1);
+    highlightCmdItem(cmdSelectedIndex);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    cmdSelectedIndex = Math.max(cmdSelectedIndex - 1, 0);
+    highlightCmdItem(cmdSelectedIndex);
+  } else if (e.key === 'Enter' && cmdSelectedIndex >= 0) {
+    e.preventDefault();
+    items[cmdSelectedIndex].click();
+  }
+});
+
+// ===== NOTIFICATION SYSTEM =====
+let notificationCount = 3;
+function showNotification(message, type) {
+  const container = document.getElementById('notificationContainer');
+  const notif = document.createElement('div');
+  notif.style.cssText = `
+    background: #18181b;
+    border: 1px solid ${type === 'success' ? 'rgba(34,197,94,0.3)' : type === 'warning' ? 'rgba(234,179,8,0.3)' : 'rgba(6,182,212,0.3)'};
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: fadeInUp 0.3s ease;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    min-width: 320px;
+    max-width: 420px;
+  `;
+  const iconMap = { success: '✓', warning: '⚠', info: '💡' };
+  const colorMap = { success: '#22c55e', warning: '#eab308', info: '#06b6d4' };
+  notif.innerHTML = `
+    <div style="width:24px;height:24px;border-radius:50%;background:${colorMap[type]}20;color:${colorMap[type]};display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">${iconMap[type]}</div>
+    <div style="flex:1;font-size:13px;color:#d4d4d8;">${message}</div>
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;color:#71717a;cursor:pointer;font-size:16px;padding:0 4px;">&times;</button>
+  `;
+  container.appendChild(notif);
+  setTimeout(() => {
+    notif.style.animation = 'fadeInUp 0.3s ease reverse';
+    setTimeout(() => notif.remove(), 300);
+  }, 4000);
+}
+
+// ===== KEYBOARD SHORTCUTS =====
+const shortcuts = [
+  { key: '1', desc: 'Dashboard', action: () => navigateTo('dashboard') },
+  { key: '2', desc: 'Invoices', action: () => navigateTo('invoices') },
+  { key: '3', desc: 'Reports', action: () => navigateTo('pnl') },
+  { key: '4', desc: 'AI Chat', action: () => navigateTo('chat') },
+  { key: '5', desc: 'Cash Flow', action: () => navigateTo('cashflow') },
+  { key: 'n', desc: 'New Invoice', action: () => navigateTo('new-invoice') },
+  { key: 'a', desc: 'AI Create', action: () => navigateTo('ai-create') },
+];
+
+let shortcutsModalOpen = false;
+function toggleShortcutsModal() {
+  shortcutsModalOpen = !shortcutsModalOpen;
+  document.getElementById('shortcutsModal').style.display = shortcutsModalOpen ? 'flex' : 'none';
+}
+
+document.addEventListener('keydown', function(e) {
+  // Don't handle if in input
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (document.getElementById('cmdModal').classList.contains('open')) return;
+
+  if (e.key === '?') {
+    e.preventDefault();
+    toggleShortcutsModal();
+    return;
+  }
+  if (e.key === 'Escape' && shortcutsModalOpen) {
+    toggleShortcutsModal();
+    return;
+  }
+
+  const shortcut = shortcuts.find(s => s.key === e.key);
+  if (shortcut && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    e.preventDefault();
+    shortcut.action();
+  }
+});
+
+// ===== INVOICE ROW SELECTION =====
+let selectedInvoices = new Set();
+function toggleInvoiceSelect(id) {
+  if (selectedInvoices.has(id)) selectedInvoices.delete(id);
+  else selectedInvoices.add(id);
+  updateBulkActions();
+}
+
+function updateBulkActions() {
+  const bar = document.getElementById('bulkActionBar');
+  if (selectedInvoices.size > 0) {
+    bar.style.display = 'flex';
+    document.getElementById('bulkCount').textContent = selectedInvoices.size + ' selected';
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+// ===== ENHANCED INVOICE TABLE WITH TOOLTIPS =====
+function renderInvoiceTableEnhanced(filter) {
+  const tbody = document.getElementById('invoiceTableBody');
+  tbody.innerHTML = '';
+  const filtered = filter === 'all' ? invoiceData : invoiceData.filter(inv => {
+    if (filter === 'overdue') return inv.status === 'OVERDUE';
+    if (filter === 'due') return inv.status === 'DUE';
+    if (filter === 'paid') return inv.status === 'PAID';
+    if (filter === 'draft') return inv.status === 'DRAFT';
+    if (filter === 'posted') return inv.status === 'POSTED';
+    return true;
+  });
+
+  filtered.forEach((inv, i) => {
+    const statusClass = inv.status === 'OVERDUE' ? 'status-overdue'
+      : inv.status === 'DUE' ? 'status-due'
+      : inv.status === 'PAID' ? 'status-paid'
+      : inv.status === 'DRAFT' ? 'status-draft'
+      : 'status-posted';
+    const dueLabel = inv.status === 'OVERDUE'
+      ? inv.days + ' days overdue'
+      : inv.status === 'DUE'
+      ? 'Due in ' + inv.days + ' days'
+      : inv.dueDate;
+
+    let chipHtml = '';
+    if (inv.status === 'OVERDUE') {
+      chipHtml = `<span class="ai-chip" style="font-size:10px;background:rgba(239,68,68,0.12);color:#ef4444;border-color:rgba(239,68,68,0.25);">⚡ ${inv.days}d</span>`;
+    }
+    if (inv.status === 'POSTED') {
+      chipHtml = `<span class="ai-chip" style="font-size:10px;">🎯 92%</span>`;
+    }
+    if (inv.status === 'PAID') {
+      chipHtml = `<span class="ai-chip" style="font-size:10px;background:rgba(34,197,94,0.12);color:#22c55e;border-color:rgba(34,197,94,0.25);">✓ Settled</span>`;
+    }
+
+    const tr = document.createElement('tr');
+    tr.style.cssText = `animation: fadeInUp 0.3s ease ${i * 0.04}s both; cursor: pointer;`;
+    tr.onclick = function(e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+    };
+    tr.innerHTML = `
+      <td>
+        <input type="checkbox" style="accent-color:#06b6d4;"
+          onchange="toggleInvoiceSelect('${inv.id}')"
+          ${selectedInvoices.has(inv.id) ? 'checked' : ''}>
+      </td>
+      <td>
+        <button onclick="openPanel('${inv.id}')"
+          style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;border-radius:6px;transition:all 0.15s;"
+          onmouseover="this.style.background='rgba(6,182,212,0.1)'"
+          onmouseout="this.style.background='none'"
+          title="AI Analysis for ${inv.id}">
+          ✨
+        </button>
+      </td>
+      <td class="num" style="font-weight:500;color:#fafafa;">${inv.id}</td>
+      <td>
+        <div style="display:flex;flex-direction:column;">
+          <span style="font-weight:500;">${inv.customer}</span>
+        </div>
+      </td>
+      <td style="text-align:right;">
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
+          <span class="num" style="font-weight:600;font-size:15px;">£${inv.amount.toLocaleString()}</span>
+          ${chipHtml}
+        </div>
+      </td>
+      <td><span class="status-pill ${statusClass}">${inv.status}</span></td>
+      <td style="color:#a1a1aa;font-size:13px;">${dueLabel}</td>
+      <td style="text-align:right;">
+        <div style="display:flex;gap:4px;justify-content:flex-end;">
+          <button class="btn-ghost" style="font-size:12px;padding:4px 8px;border-radius:6px;"
+            onmouseover="this.style.background='rgba(39,39,42,0.5)'"
+            onmouseout="this.style.background='none'"
+            onclick="openPanel('${inv.id}')">View</button>
+          <button class="btn-ghost" style="font-size:12px;padding:4px 8px;border-radius:6px;color:#06b6d4;"
+            onmouseover="this.style.background='rgba(6,182,212,0.08)'"
+            onmouseout="this.style.background='none'">⋯</button>
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// Override original render function
+renderInvoiceTable = renderInvoiceTableEnhanced;
+
+// ===== MINI SPARKLINE RENDERER =====
+function renderSparkline(canvasId, data, color, width, height) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  canvas.width = width || 120;
+  canvas.height = height || 32;
+  const ctx = canvas.getContext('2d');
+  const pts = data;
+  const min = Math.min(...pts);
+  const max = Math.max(...pts);
+  const range = max - min || 1;
+  const w = canvas.width;
+  const h = canvas.height;
+  const padding = 2;
+
+  ctx.beginPath();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  pts.forEach((p, i) => {
+    const x = padding + (i / (pts.length - 1)) * (w - padding * 2);
+    const y = padding + (1 - (p - min) / range) * (h - padding * 2);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Gradient fill
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, color + '30');
+  grad.addColorStop(1, color + '00');
+  ctx.lineTo(padding + (w - padding * 2), h);
+  ctx.lineTo(padding, h);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+}
+
+// ===== ENHANCED P&L WITH DRILL-DOWN =====
+function renderPnlTableEnhanced() {
+  const rows = [
+    {
+      account: 'Revenue',
+      cur: 347200,
+      prev: 298400,
+      isBold: false,
+      isGood: true,
+      isHeader: false,
+      subItems: [
+        { name: 'Widget-A Sales', cur: 198000, prev: 172000 },
+        { name: 'Widget-B Sales', cur: 112000, prev: 98400 },
+        { name: 'Service Revenue', cur: 37200, prev: 28000 }
+      ]
+    },
+    {
+      account: 'Cost of Goods Sold',
+      cur: 228800,
+      prev: 189500,
+      isBold: false,
+      isGood: false,
+      aiChip: 'Growing faster than revenue',
+      subItems: [
+        { name: 'Raw Materials', cur: 142000, prev: 112000 },
+        { name: 'Direct Labour', cur: 56800, prev: 51500 },
+        { name: 'Manufacturing OH', cur: 30000, prev: 26000 }
+      ]
+    },
+    {
+      account: 'Gross Profit',
+      cur: 118400,
+      prev: 108900,
+      isBold: true,
+      isGood: true,
+      isHeader: true
+    },
+    {
+      account: 'Gross Margin',
+      cur: 34.2,
+      prev: 36.5,
+      isBold: false,
+      isGood: false,
+      isPercent: true,
+      aiChip: 'Margin compression'
+    },
+    {
+      account: 'Operating Expenses',
+      cur: 78200,
+      prev: 72100,
+      isBold: false,
+      isGood: null,
+      subItems: [
+        { name: 'Salaries & Wages', cur: 48000, prev: 44000 },
+        { name: 'Rent & Utilities', cur: 12200, prev: 11800 },
+        { name: 'Marketing', cur: 8500, prev: 7200 },
+        { name: 'Other OpEx', cur: 9500, prev: 9100 }
+      ]
+    },
+    {
+      account: 'Net Profit',
+      cur: 40200,
+      prev: 36800,
+      isBold: true,
+      isGood: true,
+      isHeader: true
+    }
+  ];
+
+  const tbody = document.getElementById('pnlTableBody');
+  tbody.innerHTML = '';
+
+  rows.forEach((r, i) => {
+    const variance = r.isPercent
+      ? (r.cur - r.prev).toFixed(1)
+      : r.cur - r.prev;
+    const varPct = r.isPercent
+      ? (variance > 0 ? '+' : '') + variance + 'pp'
+      : ((variance / r.prev) * 100).toFixed(1);
+    const varSign = variance > 0 ? '+' : '';
+    const varColor = r.isGood === null ? '#a1a1aa' : (r.isGood ? '#22c55e' : '#ef4444');
+    const barW = Math.min(Math.abs(r.isPercent ? variance * 10 : (variance / r.prev) * 100), 100);
+    const barColor = r.isGood === null ? '#a1a1aa' : (r.isGood ? '#22c55e' : '#ef4444');
+    const fw = r.isBold ? 'font-weight:700;' : '';
+    const borderTop = r.isHeader ? 'border-top:2px solid rgba(63,63,70,0.5);' : '';
+    const formatVal = v => r.isPercent ? v + '%' : '£' + v.toLocaleString();
+    const hasExpand = r.subItems && r.subItems.length > 0;
+    const expandId = 'pnl-expand-' + i;
+
+    const tr = document.createElement('tr');
+    tr.style.cssText = `animation: fadeInUp 0.3s ease ${i * 0.05}s both;${hasExpand ? 'cursor:pointer;' : ''}`;
+    if (hasExpand) {
+      tr.onclick = function() {
+        const subRows = document.querySelectorAll('.pnl-sub-' + i);
+        subRows.forEach(sr => {
+          sr.style.display = sr.style.display === 'none' ? 'table-row' : 'none';
+        });
+        const arrow = document.getElementById(expandId);
+        arrow.textContent = arrow.textContent === '▸' ? '▾' : '▸';
+      };
+    }
+    tr.innerHTML = `
+      <td style="${fw}${borderTop}">
+        <div style="display:flex;align-items:center;gap:6px;">
+          ${hasExpand ? '<span id="' + expandId + '" style="color:#71717a;font-size:12px;width:14px;">▸</span>' : '<span style="width:14px;"></span>'}
+          ${r.account}
+        </div>
+      </td>
+      <td style="text-align:right;${fw}${borderTop}" class="num">${formatVal(r.cur)}</td>
+      <td style="text-align:right;color:#a1a1aa;${borderTop}" class="num">${formatVal(r.prev)}</td>
+      <td style="text-align:right;color:${varColor};${fw}${borderTop}" class="num">
+        ${r.isPercent ? (varSign + variance + 'pp') : (varSign + '£' + Math.abs(variance).toLocaleString())}
+      </td>
+      <td style="text-align:right;color:${varColor};${borderTop}" class="num">
+        ${r.isPercent ? '—' : (varSign + varPct + '%')}
+      </td>
+      <td style="${borderTop}">
+        <div style="height:6px;background:rgba(63,63,70,0.3);border-radius:3px;overflow:hidden;">
+          <div style="height:100%;width:${barW}%;background:${barColor};border-radius:3px;transition:width 0.6s ease;"></div>
+        </div>
+      </td>
+      <td style="${borderTop}">
+        ${r.aiChip ? '<span class="ai-chip" style="font-size:10px;">' + r.aiChip + '</span>' : ''}
+      </td>`;
+    tbody.appendChild(tr);
+
+    // Sub-items (hidden by default)
+    if (r.subItems) {
+      r.subItems.forEach(sub => {
+        const subVar = sub.cur - sub.prev;
+        const subVarPct = ((subVar / sub.prev) * 100).toFixed(1);
+        const subVarSign = subVar > 0 ? '+' : '';
+        const subColor = r.isGood === false ? '#ef4444' : (subVar > 0 ? '#22c55e' : '#ef4444');
+        const subTr = document.createElement('tr');
+        subTr.className = 'pnl-sub-' + i;
+        subTr.style.cssText = 'display:none;background:rgba(9,9,11,0.3);';
+        subTr.innerHTML = `
+          <td style="padding-left:40px;color:#a1a1aa;font-size:13px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="width:4px;height:4px;border-radius:50%;background:#52525b;"></span>
+              ${sub.name}
+            </div>
+          </td>
+          <td style="text-align:right;font-size:13px;" class="num">£${sub.cur.toLocaleString()}</td>
+          <td style="text-align:right;font-size:13px;color:#71717a;" class="num">£${sub.prev.toLocaleString()}</td>
+          <td style="text-align:right;font-size:13px;color:${subColor};" class="num">${subVarSign}£${Math.abs(subVar).toLocaleString()}</td>
+          <td style="text-align:right;font-size:13px;color:${subColor};" class="num">${subVarSign}${subVarPct}%</td>
+          <td></td>
+          <td></td>`;
+        tbody.appendChild(subTr);
+      });
+    }
+  });
+}
+
+// Override original
+renderPnlTable = renderPnlTableEnhanced;
+
+// ===== ENHANCED CASH FLOW WEEKLY =====
+function renderCashWeeklyEnhanced() {
+  const weeks = [
+    { w: 'W1', date: '17 Feb', open: 89.3, inflow: 18.6, outflow: 13.0, close: 94.9, note: '', risk: 'low' },
+    { w: 'W2', date: '24 Feb', open: 94.9, inflow: 5.8, outflow: 58.0, close: 42.7, note: 'Payroll £52k', risk: 'high' },
+    { w: 'W3', date: '3 Mar', open: 42.7, inflow: 24.0, outflow: 5.0, close: 61.7, note: '', risk: 'low' },
+    { w: 'W4', date: '10 Mar', open: 61.7, inflow: 4.0, outflow: 8.0, close: 57.7, note: '', risk: 'low' },
+    { w: 'W5', date: '17 Mar', open: 57.7, inflow: 5.0, outflow: 8.0, close: 54.7, note: '', risk: 'low' },
+    { w: 'W6', date: '24 Mar', open: 54.7, inflow: 8.0, outflow: 21.5, close: 41.2, note: 'VAT £21.5k', risk: 'critical' },
+    { w: 'W7', date: '31 Mar', open: 41.2, inflow: 26.0, outflow: 5.0, close: 62.2, note: '', risk: 'low' },
+    { w: 'W8', date: '7 Apr', open: 62.2, inflow: 14.0, outflow: 8.0, close: 68.2, note: '', risk: 'low' }
+  ];
+
+  const tbody = document.getElementById('cashWeeklyBody');
+  tbody.innerHTML = '';
+
+  weeks.forEach((w, i) => {
+    const isWarning = w.close < 45;
+    const isCritical = w.risk === 'critical';
+    const rowBg = isCritical ? 'background:rgba(234,179,8,0.04);' : '';
+    const tr = document.createElement('tr');
+    tr.style.cssText = `animation: fadeInUp 0.3s ease ${i * 0.05}s both;${rowBg}`;
+    tr.innerHTML = `
+      <td class="num" style="font-weight:600;${isWarning ? 'color:#eab308;' : ''}">
+        <div style="display:flex;align-items:center;gap:6px;">
+          ${isCritical ? '<span style="width:6px;height:6px;border-radius:50%;background:#eab308;"></span>' : ''}
+          ${w.w}
+        </div>
+      </td>
+      <td style="color:#a1a1aa;font-size:13px;">${w.date}</td>
+      <td style="text-align:right;" class="num">£${w.open.toFixed(1)}k</td>
+      <td style="text-align:right;" class="num">
+        <span style="color:#22c55e;">+£${w.inflow.toFixed(1)}k</span>
+      </td>
+      <td style="text-align:right;" class="num">
+        <span style="color:#ef4444;">-£${w.outflow.toFixed(1)}k</span>
+      </td>
+      <td style="text-align:right;font-weight:700;${isWarning ? 'color:#eab308;' : ''}" class="num">
+        £${w.close.toFixed(1)}k ${isWarning ? '⚠️' : ''}
+      </td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="color:#71717a;font-size:13px;">${w.note}</span>
+          ${isCritical ? '<span class="ai-chip ai-chip-pulse" style="font-size:10px;">Near threshold</span>' : ''}
+          ${w.risk === 'high' ? '<span class="ai-chip" style="font-size:10px;background:rgba(239,68,68,0.12);color:#ef4444;border-color:rgba(239,68,68,0.25);">Large outflow</span>' : ''}
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+renderCashWeekly = renderCashWeeklyEnhanced;
+
+// ===== ANIMATED COUNTERS =====
+function animateCounter(element, target, prefix, suffix, duration) {
+  const start = 0;
+  const startTime = performance.now();
+  const isFloat = String(target).includes('.');
+
+  function update(currentTime) {
+    const elapsed = currentTime - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    // Ease out cubic
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = start + (target - start) * eased;
+
+    if (isFloat) {
+      element.textContent = prefix + current.toFixed(1) + suffix;
+    } else {
+      element.textContent = prefix + Math.round(current).toLocaleString() + suffix;
+    }
+
+    if (progress < 1) {
+      requestAnimationFrame(update);
+    }
+  }
+  requestAnimationFrame(update);
+}
+
+// ===== THEME TOGGLE (future enhancement) =====
+let isDark = true;
+
+// ===== PAGE TRANSITION EFFECTS =====
+function addPageTransition(pageId) {
+  const page = document.getElementById('page-' + pageId);
+  if (!page) return;
+  const cards = page.querySelectorAll('.card');
+  cards.forEach((card, i) => {
+    card.style.animation = 'none';
+    card.offsetHeight;
+    card.style.animation = `fadeInUp 0.4s ease ${i * 0.05}s both`;
+  });
+}
+
+// ===== LIVE CLOCK =====
+function updateClock() {
+  const el = document.getElementById('liveClock');
+  if (!el) return;
+  const now = new Date(2026, 1, 17, 9, 0, 0);
+  const realNow = new Date();
+  const h = String(9 + (realNow.getMinutes() % 3)).padStart(2, '0');
+  const m = String(realNow.getSeconds()).padStart(2, '0');
+  el.textContent = h + ':' + m;
+}
+setInterval(updateClock, 1000);
+
+// ===== ENHANCED AI STEP ANIMATION =====
+function animateAiStepsEnhanced() {
+  const steps = [
+    {
+      title: 'Understanding Intent',
+      desc: `<div style="margin-top:8px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <span style="background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.2);padding:4px 10px;border-radius:6px;font-size:12px;color:#06b6d4;">Action: Create</span>
+          <span style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2);padding:4px 10px;border-radius:6px;font-size:12px;color:#8b5cf6;">Type: Sales Invoice</span>
+          <span style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);padding:4px 10px;border-radius:6px;font-size:12px;color:#22c55e;">Customer: Acme Corp</span>
+          <span style="background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.2);padding:4px 10px;border-radius:6px;font-size:12px;color:#eab308;">Items: 2 line items</span>
+        </div>
+      </div>`,
+      time: '0.2s'
+    },
+    {
+      title: 'Customer Lookup',
+      desc: `<div style="background:#27272a;border-radius:8px;padding:14px 16px;margin-top:8px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="width:36px;height:36px;background:rgba(6,182,212,0.1);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;">🏢</div>
+          <div>
+            <div style="font-weight:600;font-size:14px;">Acme Corp</div>
+            <div style="color:#71717a;font-size:12px;" class="num">AC-001</div>
+          </div>
+          <span class="badge badge-green" style="margin-left:auto;">Active</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+          <div><span style="color:#71717a;">Address:</span> <span style="color:#a1a1aa;">14 High Street, London EC2A 4PQ</span></div>
+          <div><span style="color:#71717a;">Terms:</span> <span class="num" style="color:#a1a1aa;">NET30</span></div>
+          <div><span style="color:#71717a;">Credit Limit:</span> <span class="num" style="color:#a1a1aa;">£50,000</span></div>
+          <div><span style="color:#71717a;">Outstanding:</span> <span class="num" style="color:#ef4444;">£31,000</span></div>
+        </div>
+      </div>`,
+      time: '0.3s'
+    },
+    {
+      title: 'Item & Stock Check',
+      desc: `<div style="background:#27272a;border-radius:8px;padding:10px;margin-top:8px;overflow:hidden;">
+        <table style="font-size:13px;">
+          <thead>
+            <tr>
+              <th style="padding:6px 10px;font-size:11px;">Item</th>
+              <th style="padding:6px 10px;font-size:11px;">Description</th>
+              <th style="padding:6px 10px;text-align:right;font-size:11px;">Price</th>
+              <th style="padding:6px 10px;text-align:right;font-size:11px;">Qty Req</th>
+              <th style="padding:6px 10px;text-align:right;font-size:11px;">In Stock</th>
+              <th style="padding:6px 10px;font-size:11px;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:6px 10px;" class="num">WA-100</td>
+              <td style="padding:6px 10px;color:#a1a1aa;">Premium Widget Type A</td>
+              <td style="padding:6px 10px;text-align:right;" class="num">£50.00</td>
+              <td style="padding:6px 10px;text-align:right;" class="num">100</td>
+              <td style="padding:6px 10px;text-align:right;" class="num">340</td>
+              <td style="padding:6px 10px;color:#22c55e;">✓ Available</td>
+            </tr>
+            <tr>
+              <td style="padding:6px 10px;" class="num">WB-200</td>
+              <td style="padding:6px 10px;color:#a1a1aa;">Standard Widget Type B</td>
+              <td style="padding:6px 10px;text-align:right;" class="num">£30.00</td>
+              <td style="padding:6px 10px;text-align:right;" class="num">50</td>
+              <td style="padding:6px 10px;text-align:right;" class="num">180</td>
+              <td style="padding:6px 10px;color:#22c55e;">✓ Available</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>`,
+      time: '0.4s'
+    },
+    {
+      title: 'Applying Business Rules',
+      desc: `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:8px;">
+        <div style="background:#27272a;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:11px;color:#71717a;margin-bottom:4px;">Terms</div>
+          <div class="num" style="font-weight:600;">NET30</div>
+        </div>
+        <div style="background:#27272a;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:11px;color:#71717a;margin-bottom:4px;">VAT Rate</div>
+          <div class="num" style="font-weight:600;">20%</div>
+        </div>
+        <div style="background:#27272a;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:11px;color:#71717a;margin-bottom:4px;">Discount</div>
+          <div class="num" style="font-weight:600;color:#a1a1aa;">None</div>
+        </div>
+        <div style="background:#27272a;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:11px;color:#71717a;margin-bottom:4px;">Series</div>
+          <div class="num" style="font-weight:600;">INV-2026</div>
+        </div>
+      </div>`,
+      time: '0.1s'
+    },
+    {
+      title: 'Calculating Totals',
+      desc: `<div style="margin-top:8px;">
+        <div style="background:#27272a;border-radius:8px;padding:14px 16px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px;">
+            <span style="color:#a1a1aa;">Widget-A: <span class="num">100 x £50.00</span></span>
+            <span class="num" style="font-weight:500;">£5,000.00</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:13px;">
+            <span style="color:#a1a1aa;">Widget-B: <span class="num">50 x £30.00</span></span>
+            <span class="num" style="font-weight:500;">£1,500.00</span>
+          </div>
+          <div style="border-top:1px solid rgba(63,63,70,0.3);padding-top:8px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px;">
+              <span style="color:#a1a1aa;">Subtotal</span>
+              <span class="num">£6,500.00</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px;">
+              <span style="color:#a1a1aa;">VAT (20%)</span>
+              <span class="num">£1,300.00</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:18px;margin-top:4px;">
+              <span class="heading" style="font-weight:700;">Total</span>
+              <span class="num" style="font-weight:700;color:#06b6d4;">£7,800.00</span>
+            </div>
+          </div>
+        </div>
+      </div>`,
+      time: '0.2s'
+    },
+    {
+      title: 'Invoice Ready',
+      desc: `<div class="card" style="margin-top:10px;border-color:rgba(6,182,212,0.3);background:rgba(24,24,27,0.9);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+          <div>
+            <span class="heading" style="font-size:11px;color:#71717a;text-transform:uppercase;letter-spacing:1px;">Sales Invoice</span>
+            <div class="num" style="font-size:18px;font-weight:700;margin-top:2px;">INV-2026-0060</div>
+            <div style="font-size:12px;color:#a1a1aa;margin-top:4px;">Acme Corp (AC-001)</div>
+          </div>
+          <div style="text-align:right;">
+            <span style="font-size:11px;color:#71717a;">Total (inc. VAT)</span>
+            <div class="num" style="font-size:28px;font-weight:700;color:#06b6d4;margin-top:2px;">£7,800.00</div>
+            <div style="font-size:12px;color:#71717a;margin-top:2px;">Due: 19 March 2026</div>
+          </div>
+        </div>
+        <div style="background:#27272a;border-radius:8px;padding:10px 14px;margin-bottom:14px;">
+          <div style="display:flex;gap:20px;font-size:12px;color:#a1a1aa;">
+            <span>2 line items</span>
+            <span>Subtotal: <span class="num">£6,500</span></span>
+            <span>VAT: <span class="num">£1,300</span></span>
+            <span>Terms: <span class="num">NET30</span></span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-violet" style="flex:1;padding:10px;">✓ Approve & Post</button>
+          <button class="btn-zinc" style="padding:10px 16px;">✏️ Edit</button>
+          <button class="btn-ghost" style="padding:10px 16px;">✕ Cancel</button>
+        </div>
+      </div>`,
+      time: '0.3s'
+    }
+  ];
+
+  const container = document.getElementById('aiStepsContainer');
+  container.innerHTML = '<div style="position:absolute;left:15px;top:16px;bottom:16px;width:2px;background:linear-gradient(to bottom, #06b6d4, rgba(63,63,70,0.3));"></div>';
+
+  steps.forEach((step, i) => {
+    setTimeout(() => {
+      const div = document.createElement('div');
+      div.style.cssText = `display:flex;gap:16px;margin-bottom:28px;animation:stepIn 0.5s ease both;`;
+      div.innerHTML = `
+        <div class="step-circle step-done" style="margin-left:-48px;transition:all 0.3s;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <div style="flex:1;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+            <span class="heading" style="font-size:15px;font-weight:600;">Step ${i + 1}: ${step.title}</span>
+            <span style="font-size:11px;color:#52525b;background:#27272a;padding:2px 8px;border-radius:4px;" class="num">Completed in ${step.time}</span>
+          </div>
+          <div style="font-size:13px;color:#a1a1aa;line-height:1.5;">${step.desc}</div>
+        </div>`;
+      container.appendChild(div);
+
+      // Show notification for last step
+      if (i === steps.length - 1) {
+        setTimeout(() => {
+          showNotification('Invoice INV-2026-0060 ready for approval — £7,800.00', 'success');
+        }, 400);
+      }
+    }, i * 700);
+  });
+}
+
+// Override original
+animateAiSteps = animateAiStepsEnhanced;
+
+// ===== INIT =====
+document.addEventListener('DOMContentLoaded', () => {
+  renderKPIs();
+  renderInvoiceTable('all');
+  renderPnlTable();
+  renderCashWeekly();
+  initDashCharts();
+
+  // Show welcome notification after a delay
+  setTimeout(() => {
+    showNotification('3 invoices need attention — £55k overdue', 'warning');
+  }, 2000);
+  setTimeout(() => {
+    showNotification('Widget-B margin compression detected by AI', 'info');
+  }, 4000);
+});
+</script>
+
+<!-- NOTIFICATION CONTAINER -->
+<div id="notificationContainer" style="position:fixed;bottom:24px;right:24px;z-index:300;display:flex;flex-direction:column;gap:8px;"></div>
+
+<!-- KEYBOARD SHORTCUTS MODAL -->
+<div id="shortcutsModal" style="display:none;position:fixed;inset:0;z-index:250;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);" onclick="if(event.target===this)toggleShortcutsModal()">
+  <div class="card" style="width:440px;max-height:80vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <h3 class="heading" style="font-size:18px;font-weight:700;">Keyboard Shortcuts</h3>
+      <button onclick="toggleShortcutsModal()" style="background:none;border:none;color:#a1a1aa;cursor:pointer;font-size:20px;">&times;</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(63,63,70,0.3);">
+        <span style="color:#a1a1aa;font-size:14px;">Open command bar</span>
+        <kbd style="background:#27272a;padding:3px 10px;border-radius:4px;font-size:12px;color:#fafafa;font-family:'Fira Code',monospace;">⌘ K</kbd>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(63,63,70,0.3);">
+        <span style="color:#a1a1aa;font-size:14px;">Dashboard</span>
+        <kbd style="background:#27272a;padding:3px 10px;border-radius:4px;font-size:12px;color:#fafafa;font-family:'Fira Code',monospace;">1</kbd>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(63,63,70,0.3);">
+        <span style="color:#a1a1aa;font-size:14px;">Invoices</span>
+        <kbd style="background:#27272a;padding:3px 10px;border-radius:4px;font-size:12px;color:#fafafa;font-family:'Fira Code',monospace;">2</kbd>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(63,63,70,0.3);">
+        <span style="color:#a1a1aa;font-size:14px;">P&L Report</span>
+        <kbd style="background:#27272a;padding:3px 10px;border-radius:4px;font-size:12px;color:#fafafa;font-family:'Fira Code',monospace;">3</kbd>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(63,63,70,0.3);">
+        <span style="color:#a1a1aa;font-size:14px;">AI Chat</span>
+        <kbd style="background:#27272a;padding:3px 10px;border-radius:4px;font-size:12px;color:#fafafa;font-family:'Fira Code',monospace;">4</kbd>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(63,63,70,0.3);">
+        <span style="color:#a1a1aa;font-size:14px;">Cash Flow</span>
+        <kbd style="background:#27272a;padding:3px 10px;border-radius:4px;font-size:12px;color:#fafafa;font-family:'Fira Code',monospace;">5</kbd>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(63,63,70,0.3);">
+        <span style="color:#a1a1aa;font-size:14px;">New Invoice</span>
+        <kbd style="background:#27272a;padding:3px 10px;border-radius:4px;font-size:12px;color:#fafafa;font-family:'Fira Code',monospace;">N</kbd>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(63,63,70,0.3);">
+        <span style="color:#a1a1aa;font-size:14px;">AI Create Invoice</span>
+        <kbd style="background:#27272a;padding:3px 10px;border-radius:4px;font-size:12px;color:#fafafa;font-family:'Fira Code',monospace;">A</kbd>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;">
+        <span style="color:#a1a1aa;font-size:14px;">Show shortcuts</span>
+        <kbd style="background:#27272a;padding:3px 10px;border-radius:4px;font-size:12px;color:#fafafa;font-family:'Fira Code',monospace;">?</kbd>
+      </div>
+    </div>
+    <div style="margin-top:16px;text-align:center;">
+      <span style="font-size:12px;color:#52525b;">Press <kbd style="background:#27272a;padding:1px 6px;border-radius:3px;font-size:11px;font-family:'Fira Code',monospace;">ESC</kbd> to close</span>
+    </div>
+  </div>
+</div>
+
+<!-- BULK ACTION BAR (Invoice page) -->
+<div id="bulkActionBar" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:80;background:#18181b;border:1px solid rgba(6,182,212,0.3);border-radius:12px;padding:10px 20px;box-shadow:0 8px 32px rgba(0,0,0,0.5);align-items:center;gap:16px;">
+  <span id="bulkCount" class="num" style="font-size:13px;font-weight:600;color:#06b6d4;">0 selected</span>
+  <div style="width:1px;height:20px;background:rgba(63,63,70,0.5);"></div>
+  <button class="btn-zinc" style="font-size:12px;padding:6px 12px;">Send Reminders</button>
+  <button class="btn-zinc" style="font-size:12px;padding:6px 12px;">Export</button>
+  <button class="btn-zinc" style="font-size:12px;padding:6px 12px;">Batch Approve</button>
+  <button onclick="selectedInvoices.clear();updateBulkActions();renderInvoiceTable('all');" style="background:none;border:none;color:#71717a;cursor:pointer;font-size:16px;padding:4px 8px;">&times;</button>
+</div>
+
+<!-- FOOTER -->
+<footer style="max-width:1400px;margin:40px auto 0;padding:20px 24px 24px;border-top:1px solid rgba(63,63,70,0.2);">
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div style="width:20px;height:20px;background:linear-gradient(135deg,#06b6d4,#8b5cf6);border-radius:4px;display:flex;align-items:center;justify-content:center;">
+        <span style="color:white;font-size:10px;font-weight:800;font-family:'Syne',sans-serif;">N</span>
+      </div>
+      <span style="font-size:12px;color:#52525b;">Nexa ERP v1.0 — AI-First ERP for UK SMEs</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;">
+      <span style="font-size:12px;color:#52525b;">Meridian Manufacturing Ltd</span>
+      <span style="font-size:12px;color:#3f3f46;">|</span>
+      <span style="font-size:12px;color:#52525b;">Concept B: Command Centre</span>
+      <span style="font-size:12px;color:#3f3f46;">|</span>
+      <button onclick="toggleShortcutsModal()" style="font-size:12px;color:#52525b;background:none;border:none;cursor:pointer;text-decoration:underline;transition:color 0.2s;" onmouseover="this.style.color='#a1a1aa'" onmouseout="this.style.color='#52525b'">Shortcuts (?)</button>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

@@ -1,0 +1,2078 @@
+{
+  "epic_id": "E4",
+  "epic_title": "i18n Infrastructure",
+  "generated_at": "2026-02-22T12:00:00.000Z",
+  "total_test_cases": 98,
+  "api_base_url": "http://localhost:3000",
+  "notes": [
+    "E4.1 added User.locale field to CRUD routes",
+    "E4.2 added messageKey/messageParams to all error envelopes",
+    "E4.2 replaced all hardcoded error messages with tServer() resolved translations",
+    "E4.2 mapped Zod validation errors to i18n translation keys",
+    "E4.3 created shared formatters (no direct API endpoint changes)",
+    "All error responses should include messageKey when the error carries one",
+    "Validation field-level errors are resolved via tServer() from Zod error map"
+  ],
+  "test_prerequisites": {
+    "seed_data": [
+      "At least one active company with companyId",
+      "A SUPER_ADMIN user for admin operations",
+      "An ADMIN user for standard operations",
+      "A STAFF user for restricted operations",
+      "A user with MFA enabled for MFA tests",
+      "A user with MFA not enabled for MFA setup tests"
+    ],
+    "auth_tokens": {
+      "super_admin_token": "JWT for SUPER_ADMIN user",
+      "admin_token": "JWT for ADMIN user",
+      "staff_token": "JWT for STAFF user"
+    }
+  },
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "description": "Authenticate user with email/password, optionally with MFA token",
+      "test_cases": [
+        {
+          "name": "Login - happy path with valid credentials",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "email": "admin@test.com",
+              "password": "ValidPassword123!"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "expiresIn", "user"],
+            "body_structure": {
+              "success": true,
+              "data.accessToken": "string (JWT)",
+              "data.expiresIn": "number (seconds)",
+              "data.user.id": "UUID",
+              "data.user.email": "string",
+              "data.user.firstName": "string",
+              "data.user.lastName": "string",
+              "data.user.role": "UserRole enum",
+              "data.user.locale": "string (BCP 47)",
+              "data.user.mfaEnabled": "boolean"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id FROM refresh_tokens WHERE user_id = :userId AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1",
+            "expected": "Refresh token row created for user"
+          }
+        },
+        {
+          "name": "Login - happy path returns locale in user object (E4.1)",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "email": "admin@test.com",
+              "password": "ValidPassword123!"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["locale"],
+            "body_structure": {
+              "data.user.locale": "string matching BCP 47 pattern"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Login - MFA required returns requiresMfa flag",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "email": "mfa-user@test.com",
+              "password": "ValidPassword123!"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["requiresMfa"],
+            "body_structure": {
+              "success": true,
+              "data.requiresMfa": true
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Login - happy path with valid MFA token",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "email": "mfa-user@test.com",
+              "password": "ValidPassword123!",
+              "mfaToken": "123456"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "user"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Login - missing email returns 400 with validation messageKey (E4.2)",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "password": "ValidPassword123!"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR", "messageKey"],
+            "body_structure": {
+              "success": false,
+              "error.code": "VALIDATION_ERROR",
+              "error.messageKey": "errors:VALIDATION_ERROR",
+              "error.details.email": "array of translated validation messages"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Login - missing password returns 400 with validation messageKey (E4.2)",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "email": "admin@test.com"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR", "messageKey"],
+            "body_structure": {
+              "success": false,
+              "error.code": "VALIDATION_ERROR",
+              "error.messageKey": "errors:VALIDATION_ERROR",
+              "error.details.password": "array of translated validation messages"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Login - invalid email format returns 400 with i18n validation error",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "email": "not-an-email",
+              "password": "ValidPassword123!"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"],
+            "body_structure": {
+              "success": false,
+              "error.code": "VALIDATION_ERROR",
+              "error.details.email": "array containing email validation message"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Login - invalid mfaToken format returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "email": "admin@test.com",
+              "password": "ValidPassword123!",
+              "mfaToken": "abc"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"],
+            "body_structure": {
+              "success": false,
+              "error.code": "VALIDATION_ERROR",
+              "error.details.mfaToken": "array of validation messages"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Login - non-existent email returns 401 with i18n messageKey (E4.2)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "email": "nonexistent@test.com",
+              "password": "WrongPassword123!"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["INVALID_CREDENTIALS"],
+            "body_structure": {
+              "success": false,
+              "error.code": "INVALID_CREDENTIALS",
+              "error.messageKey": "errors:AUTH_INVALID_CREDENTIALS"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Login - wrong password returns 401 with i18n messageKey (E4.2)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "email": "admin@test.com",
+              "password": "WrongPassword999!"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["INVALID_CREDENTIALS"],
+            "body_structure": {
+              "success": false,
+              "error.code": "INVALID_CREDENTIALS",
+              "error.messageKey": "errors:AUTH_INVALID_CREDENTIALS"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Login - invalid MFA token returns 401 with MFA_INVALID messageKey (E4.2)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "email": "mfa-user@test.com",
+              "password": "ValidPassword123!",
+              "mfaToken": "000000"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["MFA_INVALID"],
+            "body_structure": {
+              "success": false,
+              "error.code": "MFA_INVALID",
+              "error.messageKey": "errors:MFA_INVALID"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Login - inactive user returns 401 (timing-safe, same as invalid credentials)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "email": "deactivated@test.com",
+              "password": "ValidPassword123!"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["INVALID_CREDENTIALS"],
+            "body_structure": {
+              "success": false,
+              "error.code": "INVALID_CREDENTIALS",
+              "error.messageKey": "errors:AUTH_INVALID_CREDENTIALS"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/refresh",
+      "description": "Refresh access token using httpOnly refresh token cookie",
+      "test_cases": [
+        {
+          "name": "Refresh - happy path with valid refresh token cookie",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/refresh",
+            "headers": {
+              "Content-Type": "application/json",
+              "Cookie": "nexa_refresh_token=<valid_refresh_token>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "expiresIn"],
+            "body_structure": {
+              "success": true,
+              "data.accessToken": "string (new JWT)",
+              "data.expiresIn": "number (seconds)"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT revoked_at FROM refresh_tokens WHERE token_hash = :oldTokenHash",
+            "expected": "Old refresh token should have revoked_at set (token rotation)"
+          }
+        },
+        {
+          "name": "Refresh - no cookie returns 401 with UNAUTHORIZED messageKey (E4.2)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/refresh",
+            "headers": { "Content-Type": "application/json" },
+            "body": {}
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"],
+            "body_structure": {
+              "success": false,
+              "error.code": "UNAUTHORIZED",
+              "error.messageKey": "errors:UNAUTHORIZED"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Refresh - expired token returns 401 with UNAUTHORIZED messageKey",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/refresh",
+            "headers": {
+              "Content-Type": "application/json",
+              "Cookie": "nexa_refresh_token=<expired_refresh_token>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"],
+            "body_structure": {
+              "success": false,
+              "error.code": "UNAUTHORIZED",
+              "error.messageKey": "errors:UNAUTHORIZED"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Refresh - revoked token returns 401",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/refresh",
+            "headers": {
+              "Content-Type": "application/json",
+              "Cookie": "nexa_refresh_token=<revoked_refresh_token>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"],
+            "body_structure": {
+              "success": false,
+              "error.code": "UNAUTHORIZED",
+              "error.messageKey": "errors:UNAUTHORIZED"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "description": "Logout and revoke refresh token",
+      "test_cases": [
+        {
+          "name": "Logout - happy path revokes token and clears cookie",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/logout",
+            "headers": {
+              "Content-Type": "application/json",
+              "Cookie": "nexa_refresh_token=<valid_refresh_token>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["message"],
+            "body_structure": {
+              "success": true,
+              "data.message": "Logged out (resolved via tServer('common:loggedOut'))"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT revoked_at FROM refresh_tokens WHERE token_hash = :tokenHash",
+            "expected": "Refresh token revoked_at should be set"
+          }
+        },
+        {
+          "name": "Logout - no cookie still returns 200 (graceful)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/logout",
+            "headers": { "Content-Type": "application/json" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["message"],
+            "body_structure": {
+              "success": true,
+              "data.message": "Logged out"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/mfa/setup",
+      "description": "Initialize MFA TOTP setup for authenticated user",
+      "test_cases": [
+        {
+          "name": "MFA setup - happy path returns secret and URI",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/mfa/setup",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <valid_jwt>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["secret", "uri"],
+            "body_structure": {
+              "success": true,
+              "data.secret": "string (base32 TOTP secret)",
+              "data.uri": "string (otpauth:// URI)"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT mfa_secret FROM users WHERE id = :userId",
+            "expected": "mfa_secret should be set, mfa_enabled should still be false"
+          }
+        },
+        {
+          "name": "MFA setup - already enabled returns 409 with MFA_ALREADY_ENABLED messageKey (E4.2)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/mfa/setup",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <mfa_enabled_user_jwt>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 409,
+            "body_contains": ["MFA_ALREADY_ENABLED"],
+            "body_structure": {
+              "success": false,
+              "error.code": "MFA_ALREADY_ENABLED",
+              "error.messageKey": "errors:MFA_ALREADY_ENABLED"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "MFA setup - no auth token returns 401",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/mfa/setup",
+            "headers": { "Content-Type": "application/json" },
+            "body": {}
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/mfa/verify",
+      "description": "Verify TOTP token and enable MFA on account",
+      "test_cases": [
+        {
+          "name": "MFA verify - happy path enables MFA",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/mfa/verify",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <valid_jwt>"
+            },
+            "body": {
+              "token": "123456"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["message"],
+            "body_structure": {
+              "success": true,
+              "data.message": "MFA enabled successfully (resolved via tServer('common:mfaEnabled'))"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT mfa_enabled FROM users WHERE id = :userId",
+            "expected": "mfa_enabled should be true"
+          }
+        },
+        {
+          "name": "MFA verify - missing token returns 400 with validation messageKey",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/mfa/verify",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <valid_jwt>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"],
+            "body_structure": {
+              "success": false,
+              "error.code": "VALIDATION_ERROR",
+              "error.messageKey": "errors:VALIDATION_ERROR",
+              "error.details.token": "array of validation messages"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "MFA verify - invalid token format returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/mfa/verify",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <valid_jwt>"
+            },
+            "body": {
+              "token": "abc"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "MFA verify - wrong TOTP token returns 401 with MFA_INVALID messageKey (E4.2)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/mfa/verify",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <valid_jwt>"
+            },
+            "body": {
+              "token": "000000"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["MFA_INVALID"],
+            "body_structure": {
+              "success": false,
+              "error.code": "MFA_INVALID",
+              "error.messageKey": "errors:MFA_INVALID"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "MFA verify - setup not initiated returns 400 with MFA_SETUP_REQUIRED messageKey (E4.2)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/mfa/verify",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <user_without_mfa_secret_jwt>"
+            },
+            "body": {
+              "token": "123456"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["MFA_SETUP_REQUIRED"],
+            "body_structure": {
+              "success": false,
+              "error.code": "MFA_SETUP_REQUIRED",
+              "error.messageKey": "errors:MFA_SETUP_REQUIRED"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/mfa/reset",
+      "description": "Admin resets MFA for another user",
+      "test_cases": [
+        {
+          "name": "MFA reset - happy path admin resets another user",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/mfa/reset",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "userId": "<target_user_id>"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["message"],
+            "body_structure": {
+              "success": true,
+              "data.message": "MFA reset successfully (resolved via tServer('common:mfaReset'))"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT mfa_enabled, mfa_secret FROM users WHERE id = :targetUserId",
+            "expected": "mfa_enabled should be false, mfa_secret should be null"
+          }
+        },
+        {
+          "name": "MFA reset - missing userId returns 400 with validation messageKey",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/mfa/reset",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"],
+            "body_structure": {
+              "success": false,
+              "error.code": "VALIDATION_ERROR",
+              "error.messageKey": "errors:VALIDATION_ERROR"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "MFA reset - invalid userId format returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/mfa/reset",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "userId": "not-a-uuid"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "MFA reset - self reset returns 403 with MFA_CANNOT_RESET_SELF messageKey (E4.2)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/mfa/reset",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "userId": "<admin_own_user_id>"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["MFA_CANNOT_RESET_SELF"],
+            "body_structure": {
+              "success": false,
+              "error.code": "FORBIDDEN",
+              "error.messageKey": "errors:MFA_CANNOT_RESET_SELF"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "MFA reset - user not found returns 404 with USER_NOT_FOUND messageKey (E4.2)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/mfa/reset",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "userId": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["USER_NOT_FOUND"],
+            "body_structure": {
+              "success": false,
+              "error.code": "USER_NOT_FOUND",
+              "error.messageKey": "errors:USER_NOT_FOUND"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "MFA reset - cross-company by non-SUPER_ADMIN returns 403 (E4.2)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/mfa/reset",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "userId": "<user_in_different_company_id>"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["MFA_CROSS_COMPANY"],
+            "body_structure": {
+              "success": false,
+              "error.code": "FORBIDDEN",
+              "error.messageKey": "errors:MFA_CROSS_COMPANY"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/system/users",
+      "description": "Create a new user within the current company",
+      "test_cases": [
+        {
+          "name": "Create user - happy path with all fields including locale (E4.1)",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "email": "newuser@test.com",
+              "password": "SecurePass123!",
+              "firstName": "John",
+              "lastName": "Doe",
+              "role": "STAFF",
+              "enabledModules": ["SYSTEM", "FINANCE"],
+              "locale": "en-GB"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "email", "locale"],
+            "body_structure": {
+              "success": true,
+              "data.email": "newuser@test.com",
+              "data.firstName": "John",
+              "data.lastName": "Doe",
+              "data.role": "STAFF",
+              "data.locale": "en-GB",
+              "data.isActive": true,
+              "data.mfaEnabled": false
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id, email, first_name, last_name, locale, is_active, company_id FROM users WHERE email = 'newuser@test.com'",
+            "expected": "User row created with locale='en-GB', is_active=true, correct company_id"
+          }
+        },
+        {
+          "name": "Create user - happy path with minimal fields (locale defaults to 'en')",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "email": "minimal@test.com",
+              "password": "SecurePass123!",
+              "firstName": "Jane",
+              "lastName": "Doe",
+              "role": "VIEWER"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "email", "locale"],
+            "body_structure": {
+              "success": true,
+              "data.locale": "en",
+              "data.enabledModules": []
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT locale FROM users WHERE email = 'minimal@test.com'",
+            "expected": "locale should default to 'en'"
+          }
+        },
+        {
+          "name": "Create user - missing email returns 400 with i18n validation error (E4.2)",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "password": "SecurePass123!",
+              "firstName": "John",
+              "lastName": "Doe",
+              "role": "STAFF"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR", "messageKey"],
+            "body_structure": {
+              "success": false,
+              "error.code": "VALIDATION_ERROR",
+              "error.messageKey": "errors:VALIDATION_ERROR",
+              "error.details.email": "array with 'Email is required' or translated equivalent"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Create user - missing password returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "email": "nopass@test.com",
+              "firstName": "John",
+              "lastName": "Doe",
+              "role": "STAFF"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"],
+            "body_structure": {
+              "error.details.password": "array of validation messages"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Create user - password too short returns 400 with minLength messageKey (E4.2)",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "email": "shortpass@test.com",
+              "password": "short",
+              "firstName": "John",
+              "lastName": "Doe",
+              "role": "STAFF"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"],
+            "body_structure": {
+              "error.details.password": "array containing minLength validation message"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Create user - invalid role enum returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "email": "badrole@test.com",
+              "password": "SecurePass123!",
+              "firstName": "John",
+              "lastName": "Doe",
+              "role": "INVALID_ROLE"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"],
+            "body_structure": {
+              "error.details.role": "array of validation messages"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Create user - invalid locale format returns 400 (E4.1)",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/api/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "email": "badlocale@test.com",
+              "password": "SecurePass123!",
+              "firstName": "John",
+              "lastName": "Doe",
+              "role": "STAFF",
+              "locale": "INVALID!!"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"],
+            "body_structure": {
+              "error.details.locale": "array of validation messages (pattern mismatch)"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Create user - duplicate email returns 409 with DUPLICATE_EMAIL messageKey (E4.2)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "email": "admin@test.com",
+              "password": "SecurePass123!",
+              "firstName": "Duplicate",
+              "lastName": "User",
+              "role": "STAFF"
+            }
+          },
+          "expected": {
+            "status": 409,
+            "body_contains": ["DUPLICATE_EMAIL"],
+            "body_structure": {
+              "success": false,
+              "error.code": "DUPLICATE_EMAIL",
+              "error.messageKey": "errors:DUPLICATE_EMAIL"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Create user - non-SUPER_ADMIN creating SUPER_ADMIN returns 403 (E4.2)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "email": "wouldbe-super@test.com",
+              "password": "SecurePass123!",
+              "firstName": "Super",
+              "lastName": "Admin",
+              "role": "SUPER_ADMIN"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"],
+            "body_structure": {
+              "success": false,
+              "error.code": "FORBIDDEN",
+              "error.messageKey": "errors:FORBIDDEN_SUPER_ADMIN"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Create user - no auth token returns 401",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/system/users",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "email": "noauth@test.com",
+              "password": "SecurePass123!",
+              "firstName": "No",
+              "lastName": "Auth",
+              "role": "STAFF"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/system/company-profile",
+      "description": "Create a company profile for the current company",
+      "test_cases": [
+        {
+          "name": "Create company profile - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/system/company-profile",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "companyName": "Test Company Ltd",
+              "baseCurrencyCode": "GBP",
+              "countryCode": "GB",
+              "defaultLanguage": "en"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["companyName", "baseCurrencyCode", "defaultLanguage"],
+            "body_structure": {
+              "success": true,
+              "data.companyName": "Test Company Ltd",
+              "data.defaultLanguage": "en"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT company_name, default_language FROM company_profiles WHERE company_id = :companyId",
+            "expected": "Company profile row created with default_language='en'"
+          }
+        },
+        {
+          "name": "Create company profile - no auth returns 401",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/system/company-profile",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "companyName": "No Auth Co"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/system/users",
+      "description": "List users in the current company with pagination",
+      "test_cases": [
+        {
+          "name": "List users - happy path returns paginated list with locale field (E4.1)",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/system/users?limit=10",
+            "headers": {
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data", "meta"],
+            "body_structure": {
+              "success": true,
+              "data": "array of user objects, each containing locale field",
+              "meta.hasMore": "boolean",
+              "meta.total": "number"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "List users - each user object contains locale field (E4.1)",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/system/users",
+            "headers": {
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["locale"],
+            "body_structure": {
+              "data[0].locale": "string (BCP 47 locale, e.g., 'en')"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "List users - pagination with cursor",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/system/users?limit=1",
+            "headers": {
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_structure": {
+              "data": "array with 1 item",
+              "meta.hasMore": true,
+              "meta.cursor": "UUID for next page"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "List users - search filter",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/system/users?search=admin",
+            "headers": {
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_structure": {
+              "data": "array of users matching 'admin' in email/firstName/lastName"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "List users - isActive filter",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/system/users?isActive=true",
+            "headers": {
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_structure": {
+              "data": "array of users where isActive=true"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "List users - search with no results returns empty array",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/api/system/users?search=zzzznonexistent",
+            "headers": {
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_structure": {
+              "success": true,
+              "data": [],
+              "meta.total": 0,
+              "meta.hasMore": false
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "List users - no auth returns 401",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/api/system/users",
+            "headers": {},
+            "body": {}
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/system/users/:id",
+      "description": "Get a single user by ID",
+      "test_cases": [
+        {
+          "name": "Get user - happy path returns user with locale field (E4.1)",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/system/users/<existing_user_id>",
+            "headers": {
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "email", "locale"],
+            "body_structure": {
+              "success": true,
+              "data.id": "UUID",
+              "data.email": "string",
+              "data.locale": "string (BCP 47)"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Get user - non-existent ID returns 404 with messageKey (E4.2)",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/api/system/users/00000000-0000-0000-0000-000000000000",
+            "headers": {
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["NOT_FOUND"],
+            "body_structure": {
+              "success": false,
+              "error.code": "NOT_FOUND",
+              "error.messageKey": "errors:NOT_FOUND or errors:USER_NOT_FOUND"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Get user - invalid UUID format returns 400",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/api/system/users/not-a-uuid",
+            "headers": {
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/system/company-profile",
+      "description": "Get the current company's profile",
+      "test_cases": [
+        {
+          "name": "Get company profile - happy path returns profile with defaultLanguage",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/system/company-profile",
+            "headers": {
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["companyName", "defaultLanguage"],
+            "body_structure": {
+              "success": true,
+              "data.defaultLanguage": "string (locale code used in i18n fallback chain)"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Get company profile - no auth returns 401",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/api/system/company-profile",
+            "headers": {},
+            "body": {}
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/system/users/:id",
+      "description": "Update user profile fields (firstName, lastName, locale)",
+      "test_cases": [
+        {
+          "name": "Update user - happy path update locale (E4.1)",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/system/users/<existing_user_id>",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "locale": "en-GB"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["locale"],
+            "body_structure": {
+              "success": true,
+              "data.locale": "en-GB"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT locale FROM users WHERE id = :userId",
+            "expected": "locale should be 'en-GB'"
+          }
+        },
+        {
+          "name": "Update user - happy path update firstName",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/system/users/<existing_user_id>",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "firstName": "UpdatedName"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_structure": {
+              "success": true,
+              "data.firstName": "UpdatedName"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT first_name FROM users WHERE id = :userId",
+            "expected": "first_name should be 'UpdatedName'"
+          }
+        },
+        {
+          "name": "Update user - invalid locale format returns 400 (E4.1)",
+          "type": "validation_error",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/system/users/<existing_user_id>",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "locale": "NOT-VALID!!"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"],
+            "body_structure": {
+              "error.code": "VALIDATION_ERROR",
+              "error.messageKey": "errors:VALIDATION_ERROR",
+              "error.details.locale": "array of validation messages"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Update user - locale too long returns 400 (max 10 chars)",
+          "type": "validation_error",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/system/users/<existing_user_id>",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "locale": "en-GB-scotland-extended"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Update user - non-existent user returns 404",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/system/users/00000000-0000-0000-0000-000000000000",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "firstName": "Ghost"
+            }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/system/users/:id/role",
+      "description": "Update user's global role",
+      "test_cases": [
+        {
+          "name": "Update role - happy path SUPER_ADMIN assigns ADMIN",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/system/users/<existing_user_id>/role",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <super_admin_jwt>"
+            },
+            "body": {
+              "role": "ADMIN"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_structure": {
+              "success": true,
+              "data.userId": "UUID",
+              "data.role": "ADMIN"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT role FROM user_companies WHERE user_id = :userId AND company_id = :companyId",
+            "expected": "role should be 'ADMIN'"
+          }
+        },
+        {
+          "name": "Update role - invalid role enum returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/system/users/<existing_user_id>/role",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <super_admin_jwt>"
+            },
+            "body": {
+              "role": "SUPREME_LEADER"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Update role - missing role returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/system/users/<existing_user_id>/role",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <super_admin_jwt>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Update role - non-SUPER_ADMIN assigning SUPER_ADMIN returns 403 with messageKey (E4.2)",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/system/users/<existing_user_id>/role",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "role": "SUPER_ADMIN"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"],
+            "body_structure": {
+              "success": false,
+              "error.code": "FORBIDDEN",
+              "error.messageKey": "errors:FORBIDDEN_SUPER_ADMIN"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/system/users/:id/modules",
+      "description": "Update user's enabled modules",
+      "test_cases": [
+        {
+          "name": "Update modules - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/system/users/<existing_user_id>/modules",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "enabledModules": ["SYSTEM", "FINANCE", "SALES"]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_structure": {
+              "success": true,
+              "data.enabledModules": ["SYSTEM", "FINANCE", "SALES"]
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT enabled_modules FROM users WHERE id = :userId",
+            "expected": "enabled_modules should contain SYSTEM, FINANCE, SALES"
+          }
+        },
+        {
+          "name": "Update modules - invalid module name returns 400",
+          "type": "validation_error",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/system/users/<existing_user_id>/modules",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "enabledModules": ["INVALID_MODULE"]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["VALIDATION_ERROR"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Update modules - empty array clears modules",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/system/users/<existing_user_id>/modules",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "enabledModules": []
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_structure": {
+              "success": true,
+              "data.enabledModules": []
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT enabled_modules FROM users WHERE id = :userId",
+            "expected": "enabled_modules should be empty array"
+          }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/system/company-profile",
+      "description": "Update the current company's profile",
+      "test_cases": [
+        {
+          "name": "Update company profile - happy path update defaultLanguage (i18n fallback chain)",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/system/company-profile",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "defaultLanguage": "en-GB"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_structure": {
+              "success": true,
+              "data.defaultLanguage": "en-GB"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT default_language FROM company_profiles WHERE company_id = :companyId",
+            "expected": "default_language should be 'en-GB'"
+          }
+        },
+        {
+          "name": "Update company profile - no auth returns 401",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/system/company-profile",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "defaultLanguage": "fr"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/system/users/:id",
+      "description": "Deactivate (soft-delete) a user",
+      "test_cases": [
+        {
+          "name": "Deactivate user - happy path sets isActive=false",
+          "type": "happy_path",
+          "request": {
+            "method": "DELETE",
+            "url": "/api/system/users/<target_user_id>",
+            "headers": {
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_structure": {
+              "success": true,
+              "data.isActive": false
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT is_active FROM users WHERE id = :targetUserId; SELECT revoked_at FROM refresh_tokens WHERE user_id = :targetUserId AND revoked_at IS NULL",
+            "expected": "is_active=false, all refresh tokens revoked"
+          }
+        },
+        {
+          "name": "Deactivate user - self-deactivation returns 422 with SELF_DEACTIVATION messageKey (E4.2)",
+          "type": "edge_case",
+          "request": {
+            "method": "DELETE",
+            "url": "/api/system/users/<admin_own_user_id>",
+            "headers": {
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 422,
+            "body_contains": ["SELF_DEACTIVATION"],
+            "body_structure": {
+              "success": false,
+              "error.code": "SELF_DEACTIVATION",
+              "error.messageKey": "errors:SELF_DEACTIVATION"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Deactivate user - non-existent user returns 404",
+          "type": "edge_case",
+          "request": {
+            "method": "DELETE",
+            "url": "/api/system/users/00000000-0000-0000-0000-000000000000",
+            "headers": {
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Deactivate user - no auth returns 401",
+          "type": "edge_case",
+          "request": {
+            "method": "DELETE",
+            "url": "/api/system/users/<target_user_id>",
+            "headers": {},
+            "body": {}
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "CROSS_CUTTING",
+      "path": "*",
+      "description": "Cross-cutting i18n error envelope tests (E4.2) — apply to any endpoint that returns errors",
+      "test_cases": [
+        {
+          "name": "Error envelope - AppError includes messageKey when set (E4.2)",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "wrong@test.com", "password": "wrong" }
+          },
+          "expected": {
+            "status": 401,
+            "body_structure": {
+              "success": false,
+              "error.code": "string (UPPER_SNAKE_CASE)",
+              "error.message": "string (English resolved text)",
+              "error.messageKey": "string (i18n key like 'errors:AUTH_INVALID_CREDENTIALS')"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Error envelope - messageKey omitted when not set (no undefined in JSON)",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/api/nonexistent-route",
+            "headers": {
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 404,
+            "body_structure": {
+              "success": false,
+              "error.code": "NOT_FOUND",
+              "error.message": "string",
+              "error.messageKey_absent_or_present": "messageKey should not be 'undefined' string in JSON"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Error envelope - validation error details contain translated messages (E4.2 Zod mapping)",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/api/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "email": "",
+              "password": "x",
+              "firstName": "",
+              "lastName": "",
+              "role": "STAFF"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_structure": {
+              "success": false,
+              "error.code": "VALIDATION_ERROR",
+              "error.messageKey": "errors:VALIDATION_ERROR",
+              "error.details": "Record<string, string[]> with field-level translated messages",
+              "error.details_note": "Messages should be resolved via tServer() not raw Zod messages"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Error envelope - 500 errors use generic translated message (E4.2)",
+          "type": "edge_case",
+          "request": {
+            "method": "ANY",
+            "url": "endpoint that triggers 500",
+            "headers": {},
+            "body": {}
+          },
+          "expected": {
+            "status": 500,
+            "body_structure": {
+              "success": false,
+              "error.code": "INTERNAL_ERROR",
+              "error.message": "An internal server error occurred (resolved via tServer('errors:SERVER_ERROR'))",
+              "error.messageKey": "errors:SERVER_ERROR"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Error envelope - ValidationError includes messageParams for field context (E4.2)",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/api/system/users/<id>",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <admin_jwt>"
+            },
+            "body": {
+              "locale": "X"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_structure": {
+              "success": false,
+              "error.code": "VALIDATION_ERROR",
+              "error.details.locale": "array of translated messages with field name interpolated"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Company context - invalid X-Company-ID header returns 400 with i18n messageKey (E4.2)",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/api/system/users",
+            "headers": {
+              "Authorization": "Bearer <admin_jwt>",
+              "X-Company-ID": "not-a-uuid"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 400,
+            "body_structure": {
+              "success": false,
+              "error.code": "VALIDATION_ERROR",
+              "error.messageKey": "validation:invalidUuid",
+              "error.messageParams": { "field": "X-Company-ID" }
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "RBAC guard - insufficient permissions returns 403 with FORBIDDEN messageKey (E4.2)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/api/system/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer <viewer_jwt>"
+            },
+            "body": {
+              "email": "test@test.com",
+              "password": "SecurePass123!",
+              "firstName": "Test",
+              "lastName": "User",
+              "role": "STAFF"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"],
+            "body_structure": {
+              "success": false,
+              "error.code": "FORBIDDEN",
+              "error.messageKey": "errors:FORBIDDEN or errors:AUTH_FORBIDDEN"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Company context - inactive company returns 403 with COMPANY_ACCESS_DENIED messageKey (E4.2)",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/api/system/users",
+            "headers": {
+              "Authorization": "Bearer <admin_jwt>",
+              "X-Company-ID": "<inactive_company_uuid>"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["COMPANY_ACCESS_DENIED"],
+            "body_structure": {
+              "success": false,
+              "error.code": "COMPANY_ACCESS_DENIED",
+              "error.messageKey": "errors:COMPANY_ACCESS_DENIED"
+            }
+          },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    }
+  ]
+}

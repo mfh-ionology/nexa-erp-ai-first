@@ -1,0 +1,2352 @@
+{
+  "epic_id": "E3b",
+  "epic_title": "Platform API + AI Gateway",
+  "generated_at": "2026-02-22T12:00:00.000Z",
+  "total_test_cases": 156,
+  "api_base_url": "http://localhost:3001",
+  "stories_covered": ["E3b.1", "E3b.2", "E3b.3", "E3b.4", "E3b.5"],
+  "auth_context": {
+    "platform_admin_jwt": "JWT with platformUserId + platformRole=PLATFORM_ADMIN claims",
+    "platform_viewer_jwt": "JWT with platformUserId + platformRole=PLATFORM_VIEWER claims",
+    "service_token": "Bearer {PLATFORM_SERVICE_TOKEN} for internal ERP-facing endpoints",
+    "notes": "Platform API uses two auth pathways: Platform JWT (admin) and Service Token (internal). No ERP user JWT."
+  },
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/admin/auth/login",
+      "description": "Authenticate platform user with email/password + optional MFA",
+      "story": "E3b.1",
+      "auth": "public",
+      "test_cases": [
+        {
+          "name": "Login - happy path with MFA code",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "admin@nexa-platform.local", "password": "AdminPass123!", "mfaCode": "123456" }
+          },
+          "expected": { "status": 200, "body_contains": ["accessToken", "expiresIn", "platformUser"] },
+          "db_verification": { "enabled": true, "query": "SELECT \"lastLoginAt\" FROM \"platform_users\" WHERE email = 'admin@nexa-platform.local'", "expected": "lastLoginAt is updated to recent timestamp" }
+        },
+        {
+          "name": "Login - PLATFORM_VIEWER without MFA (MFA optional for viewers)",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "viewer@nexa-platform.local", "password": "ViewerPass123!" }
+          },
+          "expected": { "status": 200, "body_contains": ["accessToken", "platformUser"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Login - MFA required, no code provided → 202 challenge",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "admin@nexa-platform.local", "password": "AdminPass123!" }
+          },
+          "expected": { "status": 202, "body_contains": ["requiresMfa"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Login - missing email field",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "password": "AdminPass123!" }
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Login - missing password field",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "admin@nexa-platform.local" }
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Login - invalid email format",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "not-an-email", "password": "AdminPass123!" }
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Login - wrong password (timing-safe)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "admin@nexa-platform.local", "password": "WrongPassword123!" }
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Login - non-existent email (timing-safe, no leak)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "nobody@nexa-platform.local", "password": "AdminPass123!" }
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Login - wrong MFA code",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "admin@nexa-platform.local", "password": "AdminPass123!", "mfaCode": "000000" }
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Login - inactive user",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "inactive@nexa-platform.local", "password": "InactivePass123!" }
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Login - PLATFORM_ADMIN without MFA enabled → 403 (BR-PLT-018)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "admin-no-mfa@nexa-platform.local", "password": "AdminPass123!" }
+          },
+          "expected": { "status": 403, "body_contains": ["MFA"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/admin/auth/mfa/verify",
+      "description": "Verify TOTP code during MFA setup completion",
+      "story": "E3b.1",
+      "auth": "platform-jwt",
+      "test_cases": [
+        {
+          "name": "MFA verify - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/mfa/verify",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {platform_jwt}" },
+            "body": { "mfaCode": "123456" }
+          },
+          "expected": { "status": 200, "body_contains": ["message"] },
+          "db_verification": { "enabled": true, "query": "SELECT \"mfaEnabled\" FROM \"platform_users\" WHERE id = '{platformUserId}'", "expected": "mfaEnabled = true" }
+        },
+        {
+          "name": "MFA verify - missing mfaCode",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/mfa/verify",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {platform_jwt}" },
+            "body": {}
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "MFA verify - no auth header",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/mfa/verify",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "mfaCode": "123456" }
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "MFA verify - wrong TOTP code",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/mfa/verify",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {platform_jwt}" },
+            "body": { "mfaCode": "000000" }
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/admin/auth/refresh",
+      "description": "Refresh access token using httpOnly refresh cookie",
+      "story": "E3b.1",
+      "auth": "refresh-cookie",
+      "test_cases": [
+        {
+          "name": "Token refresh - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/refresh",
+            "headers": { "Content-Type": "application/json", "Cookie": "nexa_platform_refresh_token={valid_refresh_token}" },
+            "body": {}
+          },
+          "expected": { "status": 200, "body_contains": ["accessToken", "expiresIn"] },
+          "db_verification": { "enabled": true, "query": "SELECT COUNT(*) FROM \"platform_refresh_tokens\" WHERE \"userId\" = '{platformUserId}'", "expected": "New refresh token created, old one revoked" }
+        },
+        {
+          "name": "Token refresh - no refresh cookie",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/refresh",
+            "headers": { "Content-Type": "application/json" },
+            "body": {}
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Token refresh - invalid/expired refresh token",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/refresh",
+            "headers": { "Content-Type": "application/json", "Cookie": "nexa_platform_refresh_token=invalid_token_value" },
+            "body": {}
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/admin/auth/logout",
+      "description": "Logout - revoke refresh token and clear cookie",
+      "story": "E3b.1",
+      "auth": "public (optional jwt)",
+      "test_cases": [
+        {
+          "name": "Logout - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/logout",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {platform_jwt}", "Cookie": "nexa_platform_refresh_token={valid_refresh_token}" },
+            "body": {}
+          },
+          "expected": { "status": 200, "body_contains": ["message", "Logged out"] },
+          "db_verification": { "enabled": true, "query": "SELECT \"revokedAt\" FROM \"platform_refresh_tokens\" WHERE \"tokenHash\" = '{hash}'", "expected": "revokedAt is set (token revoked)" }
+        },
+        {
+          "name": "Logout - no cookie (still succeeds)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/logout",
+            "headers": { "Content-Type": "application/json" },
+            "body": {}
+          },
+          "expected": { "status": 200, "body_contains": ["Logged out"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/admin/users",
+      "description": "Create a new platform admin account",
+      "story": "E3b.1",
+      "auth": "platform-jwt (PLATFORM_ADMIN)",
+      "test_cases": [
+        {
+          "name": "Create user - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/admin/users",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "email": "newuser@nexa-platform.local", "password": "SecurePass123!", "displayName": "New User", "role": "PLATFORM_VIEWER" }
+          },
+          "expected": { "status": 201, "body_contains": ["id", "email", "displayName", "role"] },
+          "db_verification": { "enabled": true, "query": "SELECT id, email, role, \"isActive\" FROM \"platform_users\" WHERE email = 'newuser@nexa-platform.local'", "expected": "Record exists with role=PLATFORM_VIEWER, isActive=true" }
+        },
+        {
+          "name": "Create user - missing email",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/admin/users",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "password": "SecurePass123!", "displayName": "No Email", "role": "PLATFORM_VIEWER" }
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Create user - weak password (no uppercase)",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/admin/users",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "email": "weak@nexa-platform.local", "password": "weakpassword1!", "displayName": "Weak Pass", "role": "PLATFORM_VIEWER" }
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Create user - duplicate email → 409",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/users",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "email": "admin@nexa-platform.local", "password": "SecurePass123!", "displayName": "Duplicate", "role": "PLATFORM_ADMIN" }
+          },
+          "expected": { "status": 409, "body_contains": ["CONFLICT"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Create user - no auth header → 401",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/users",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "noauth@nexa-platform.local", "password": "SecurePass123!", "displayName": "No Auth", "role": "PLATFORM_VIEWER" }
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Create user - PLATFORM_VIEWER role → 403",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/users",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {viewer_jwt}" },
+            "body": { "email": "by-viewer@nexa-platform.local", "password": "SecurePass123!", "displayName": "By Viewer", "role": "PLATFORM_VIEWER" }
+          },
+          "expected": { "status": 403, "body_contains": ["FORBIDDEN"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/users",
+      "description": "List platform admin accounts with pagination",
+      "story": "E3b.1",
+      "auth": "platform-jwt (PLATFORM_ADMIN)",
+      "test_cases": [
+        {
+          "name": "List users - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/admin/users?limit=50&offset=0",
+            "headers": { "Authorization": "Bearer {admin_jwt}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["data", "meta", "total"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "List users - pagination offset",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/admin/users?limit=1&offset=0",
+            "headers": { "Authorization": "Bearer {admin_jwt}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["data", "hasMore"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "List users - no auth → 401",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/admin/users",
+            "headers": {},
+            "body": null
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/admin/users/:id",
+      "description": "Update platform admin account (role, active status, displayName, MFA reset)",
+      "story": "E3b.1",
+      "auth": "platform-jwt (PLATFORM_ADMIN)",
+      "test_cases": [
+        {
+          "name": "Update user role - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/users/{userId}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "role": "PLATFORM_VIEWER" }
+          },
+          "expected": { "status": 200, "body_contains": ["role", "PLATFORM_VIEWER"] },
+          "db_verification": { "enabled": true, "query": "SELECT role FROM \"platform_users\" WHERE id = '{userId}'", "expected": "role = PLATFORM_VIEWER" }
+        },
+        {
+          "name": "Update user - deactivate another user",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/users/{otherUserId}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "isActive": false }
+          },
+          "expected": { "status": 200, "body_contains": ["isActive", "false"] },
+          "db_verification": { "enabled": true, "query": "SELECT \"isActive\" FROM \"platform_users\" WHERE id = '{otherUserId}'", "expected": "isActive = false" }
+        },
+        {
+          "name": "Update user - invalid role value",
+          "type": "validation_error",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/users/{userId}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "role": "SUPER_ADMIN" }
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Update user - non-existent user → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/users/00000000-0000-0000-0000-000000000000",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "displayName": "Ghost" }
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Update user - cannot deactivate own account → 400",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/users/{ownUserId}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "isActive": false }
+          },
+          "expected": { "status": 400, "body_contains": ["cannot", "deactivate"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Update user - PLATFORM_VIEWER → 403",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/users/{userId}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {viewer_jwt}" },
+            "body": { "displayName": "Hacker" }
+          },
+          "expected": { "status": 403, "body_contains": ["FORBIDDEN"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/admin/plans",
+      "description": "Create a new subscription plan",
+      "story": "E3b.5",
+      "auth": "platform-jwt (PLATFORM_ADMIN)",
+      "test_cases": [
+        {
+          "name": "Create plan - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/admin/plans",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": {
+              "code": "test-plan",
+              "displayName": "Test Plan",
+              "maxUsers": 25,
+              "maxCompanies": 3,
+              "monthlyAiTokenAllowance": 500000,
+              "aiHardLimit": true,
+              "enabledModules": ["finance", "ar", "ap", "sales"],
+              "apiRateLimit": 500
+            }
+          },
+          "expected": { "status": 201, "body_contains": ["id", "code", "test-plan", "displayName"] },
+          "db_verification": { "enabled": true, "query": "SELECT id, code, \"maxUsers\", \"enabledModules\" FROM plans WHERE code = 'test-plan'", "expected": "Record exists with maxUsers=25, enabledModules contains finance" }
+        },
+        {
+          "name": "Create plan - missing required code",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/admin/plans",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "displayName": "No Code", "maxUsers": 10, "maxCompanies": 1, "monthlyAiTokenAllowance": 100000, "enabledModules": ["finance"] }
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Create plan - invalid code format (uppercase)",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/admin/plans",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "code": "BadCode", "displayName": "Bad Code", "maxUsers": 10, "maxCompanies": 1, "monthlyAiTokenAllowance": 100000, "enabledModules": ["finance"] }
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Create plan - negative maxUsers",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/admin/plans",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "code": "neg-plan", "displayName": "Neg Plan", "maxUsers": -5, "maxCompanies": 1, "monthlyAiTokenAllowance": 100000, "enabledModules": ["finance"] }
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Create plan - duplicate code → 409",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/plans",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "code": "core", "displayName": "Duplicate Core", "maxUsers": 10, "maxCompanies": 1, "monthlyAiTokenAllowance": 100000, "enabledModules": ["finance"] }
+          },
+          "expected": { "status": 409, "body_contains": ["CONFLICT"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Create plan - PLATFORM_VIEWER → 403",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/plans",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {viewer_jwt}" },
+            "body": { "code": "viewer-plan", "displayName": "Viewer Plan", "maxUsers": 10, "maxCompanies": 1, "monthlyAiTokenAllowance": 100000, "enabledModules": ["finance"] }
+          },
+          "expected": { "status": 403, "body_contains": ["FORBIDDEN"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/plans",
+      "description": "List all subscription plans with optional active filter",
+      "story": "E3b.5",
+      "auth": "platform-jwt (PLATFORM_VIEWER+)",
+      "test_cases": [
+        {
+          "name": "List plans - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/admin/plans",
+            "headers": { "Authorization": "Bearer {admin_jwt}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["data", "code", "displayName", "maxUsers"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "List plans - filter active=true",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/admin/plans?active=true",
+            "headers": { "Authorization": "Bearer {admin_jwt}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["data"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "List plans - PLATFORM_VIEWER can view",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/admin/plans",
+            "headers": { "Authorization": "Bearer {viewer_jwt}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["data"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/admin/plans/:id",
+      "description": "Update a subscription plan",
+      "story": "E3b.5",
+      "auth": "platform-jwt (PLATFORM_ADMIN)",
+      "test_cases": [
+        {
+          "name": "Update plan - happy path (update maxUsers)",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/plans/{planId}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "maxUsers": 50 }
+          },
+          "expected": { "status": 200, "body_contains": ["maxUsers", "50"] },
+          "db_verification": { "enabled": true, "query": "SELECT \"maxUsers\" FROM plans WHERE id = '{planId}'", "expected": "maxUsers = 50" }
+        },
+        {
+          "name": "Update plan - empty body → 400",
+          "type": "validation_error",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/plans/{planId}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": {}
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Update plan - non-existent plan → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/plans/00000000-0000-0000-0000-000000000000",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "maxUsers": 100 }
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Update plan - PLATFORM_VIEWER → 403",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/plans/{planId}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {viewer_jwt}" },
+            "body": { "maxUsers": 100 }
+          },
+          "expected": { "status": 403, "body_contains": ["FORBIDDEN"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/admin/tenants",
+      "description": "Create a new tenant in PROVISIONING status",
+      "story": "E3b.2",
+      "auth": "platform-jwt (PLATFORM_ADMIN)",
+      "test_cases": [
+        {
+          "name": "Create tenant - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": {
+              "code": "test-tenant",
+              "displayName": "Test Tenant Ltd",
+              "legalName": "Test Tenant Limited",
+              "planId": "{corePlanId}",
+              "region": "uk-south",
+              "dbHost": "db.test-tenant.nexa-erp.com",
+              "dbName": "nexa_test_tenant",
+              "dbPort": 5432,
+              "sandboxEnabled": false
+            }
+          },
+          "expected": { "status": 201, "body_contains": ["id", "code", "test-tenant", "status", "PROVISIONING"] },
+          "db_verification": { "enabled": true, "query": "SELECT t.id, t.status, tb.\"enforcementAction\", taq.\"tokenAllowance\" FROM tenants t LEFT JOIN tenant_billings tb ON tb.\"tenantId\" = t.id LEFT JOIN tenant_ai_quotas taq ON taq.\"tenantId\" = t.id WHERE t.code = 'test-tenant'", "expected": "Tenant with PROVISIONING status, TenantBilling with NONE enforcement, TenantAiQuota record all exist" }
+        },
+        {
+          "name": "Create tenant - missing required code",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "displayName": "No Code", "planId": "{corePlanId}", "dbHost": "db.test.com", "dbName": "nexa_test" }
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Create tenant - code too short (< 3 chars)",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "code": "ab", "displayName": "Short Code", "planId": "{corePlanId}", "dbHost": "db.test.com", "dbName": "nexa_test" }
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Create tenant - duplicate code → 409",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "code": "dev-tenant", "displayName": "Duplicate", "planId": "{corePlanId}", "dbHost": "db.dup.com", "dbName": "nexa_dup" }
+          },
+          "expected": { "status": 409, "body_contains": ["CONFLICT"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Create tenant - non-existent planId → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "code": "bad-plan-tenant", "displayName": "Bad Plan", "planId": "00000000-0000-0000-0000-000000000000", "dbHost": "db.test.com", "dbName": "nexa_test" }
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Create tenant - PLATFORM_VIEWER → 403",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {viewer_jwt}" },
+            "body": { "code": "viewer-tenant", "displayName": "Viewer", "planId": "{corePlanId}", "dbHost": "db.test.com", "dbName": "nexa_test" }
+          },
+          "expected": { "status": 403, "body_contains": ["FORBIDDEN"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/tenants",
+      "description": "List tenants with filtering and pagination",
+      "story": "E3b.2",
+      "auth": "platform-jwt (PLATFORM_VIEWER+)",
+      "test_cases": [
+        {
+          "name": "List tenants - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants?limit=50&offset=0",
+            "headers": { "Authorization": "Bearer {admin_jwt}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["data", "meta", "total"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "List tenants - filter by status=ACTIVE",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants?status=ACTIVE",
+            "headers": { "Authorization": "Bearer {admin_jwt}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["data"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "List tenants - search by name",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants?search=dev",
+            "headers": { "Authorization": "Bearer {admin_jwt}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["data"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "List tenants - PLATFORM_VIEWER can list",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants",
+            "headers": { "Authorization": "Bearer {viewer_jwt}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["data"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "List tenants - no auth → 401",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants",
+            "headers": {},
+            "body": null
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/tenants/:id",
+      "description": "Get full tenant detail including plan, modules, flags, billing, AI quota",
+      "story": "E3b.2",
+      "auth": "platform-jwt (PLATFORM_VIEWER+)",
+      "test_cases": [
+        {
+          "name": "Get tenant detail - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/{tenantId}",
+            "headers": { "Authorization": "Bearer {admin_jwt}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["id", "code", "displayName", "plan", "moduleOverrides", "featureFlags", "billing", "aiQuota"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Get tenant detail - non-existent → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/00000000-0000-0000-0000-000000000000",
+            "headers": { "Authorization": "Bearer {admin_jwt}" },
+            "body": null
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Get tenant detail - PLATFORM_VIEWER can view",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/{tenantId}",
+            "headers": { "Authorization": "Bearer {viewer_jwt}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["id", "code", "plan"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/admin/tenants/:id",
+      "description": "Update tenant settings (displayName, legalName, region, sandboxEnabled)",
+      "story": "E3b.2",
+      "auth": "platform-jwt (PLATFORM_ADMIN)",
+      "test_cases": [
+        {
+          "name": "Update tenant - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/{tenantId}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "displayName": "Updated Tenant Name" }
+          },
+          "expected": { "status": 200, "body_contains": ["displayName", "Updated Tenant Name"] },
+          "db_verification": { "enabled": true, "query": "SELECT \"displayName\" FROM tenants WHERE id = '{tenantId}'", "expected": "displayName = 'Updated Tenant Name'" }
+        },
+        {
+          "name": "Update tenant - empty body → 400",
+          "type": "validation_error",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/{tenantId}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": {}
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Update tenant - non-existent → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/00000000-0000-0000-0000-000000000000",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "displayName": "Ghost" }
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Update tenant - PLATFORM_VIEWER → 403",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/{tenantId}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {viewer_jwt}" },
+            "body": { "displayName": "Hacked" }
+          },
+          "expected": { "status": 403, "body_contains": ["FORBIDDEN"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/admin/tenants/:id/activate",
+      "description": "Transition tenant PROVISIONING → ACTIVE",
+      "story": "E3b.2",
+      "auth": "platform-jwt (PLATFORM_ADMIN)",
+      "test_cases": [
+        {
+          "name": "Activate tenant - happy path (PROVISIONING → ACTIVE)",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/{provisioningTenantId}/activate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": {}
+          },
+          "expected": { "status": 200, "body_contains": ["status", "ACTIVE"] },
+          "db_verification": { "enabled": true, "query": "SELECT status FROM tenants WHERE id = '{provisioningTenantId}'", "expected": "status = ACTIVE" }
+        },
+        {
+          "name": "Activate tenant - already ACTIVE → 422",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/{activeTenantId}/activate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": {}
+          },
+          "expected": { "status": 422, "body_contains": ["INVALID_STATE_TRANSITION"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Activate tenant - SUSPENDED → ACTIVE not via activate → 422",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/{suspendedTenantId}/activate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": {}
+          },
+          "expected": { "status": 422, "body_contains": ["INVALID_STATE_TRANSITION"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Activate tenant - non-existent → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/00000000-0000-0000-0000-000000000000/activate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": {}
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Activate tenant - PLATFORM_VIEWER → 403",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/{provisioningTenantId}/activate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {viewer_jwt}" },
+            "body": {}
+          },
+          "expected": { "status": 403, "body_contains": ["FORBIDDEN"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/admin/tenants/:id/suspend",
+      "description": "Suspend tenant (ACTIVE/READ_ONLY → SUSPENDED). Reason mandatory (BR-PLT-001).",
+      "story": "E3b.2",
+      "auth": "platform-jwt (PLATFORM_ADMIN)",
+      "test_cases": [
+        {
+          "name": "Suspend tenant - happy path (ACTIVE → SUSPENDED)",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/{activeTenantId}/suspend",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "reason": "Non-payment for 90 days" }
+          },
+          "expected": { "status": 200, "body_contains": ["status", "SUSPENDED"] },
+          "db_verification": { "enabled": true, "query": "SELECT t.status, pal.action FROM tenants t LEFT JOIN platform_audit_logs pal ON pal.\"targetId\" = t.id::text AND pal.action = 'tenant.suspended' WHERE t.id = '{activeTenantId}' ORDER BY pal.\"createdAt\" DESC LIMIT 1", "expected": "status = SUSPENDED, audit log exists with action tenant.suspended" }
+        },
+        {
+          "name": "Suspend tenant - missing reason → 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/{activeTenantId}/suspend",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": {}
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Suspend tenant - PROVISIONING → SUSPENDED → 422 (invalid transition)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/{provisioningTenantId}/suspend",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "reason": "Test invalid" }
+          },
+          "expected": { "status": 422, "body_contains": ["INVALID_STATE_TRANSITION"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Suspend tenant - ARCHIVED → SUSPENDED → 422 (terminal state)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/{archivedTenantId}/suspend",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "reason": "Can't suspend archived" }
+          },
+          "expected": { "status": 422, "body_contains": ["INVALID_STATE_TRANSITION"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Suspend tenant - non-existent → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/00000000-0000-0000-0000-000000000000/suspend",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "reason": "Ghost" }
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/admin/tenants/:id/reactivate",
+      "description": "Reactivate tenant (SUSPENDED → ACTIVE)",
+      "story": "E3b.2",
+      "auth": "platform-jwt (PLATFORM_ADMIN)",
+      "test_cases": [
+        {
+          "name": "Reactivate tenant - happy path (SUSPENDED → ACTIVE)",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/{suspendedTenantId}/reactivate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": {}
+          },
+          "expected": { "status": 200, "body_contains": ["status", "ACTIVE"] },
+          "db_verification": { "enabled": true, "query": "SELECT status FROM tenants WHERE id = '{suspendedTenantId}'", "expected": "status = ACTIVE" }
+        },
+        {
+          "name": "Reactivate tenant - PROVISIONING → 422 (invalid transition)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/{provisioningTenantId}/reactivate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": {}
+          },
+          "expected": { "status": 422, "body_contains": ["INVALID_STATE_TRANSITION"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Reactivate tenant - ARCHIVED → 422 (terminal state, BR-PLT-003)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/{archivedTenantId}/reactivate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": {}
+          },
+          "expected": { "status": 422, "body_contains": ["INVALID_STATE_TRANSITION"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Reactivate tenant - non-existent → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/00000000-0000-0000-0000-000000000000/reactivate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": {}
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/admin/tenants/:id/archive",
+      "description": "Archive tenant (SUSPENDED → ARCHIVED). Irreversible from UI (BR-PLT-003).",
+      "story": "E3b.2",
+      "auth": "platform-jwt (PLATFORM_ADMIN)",
+      "test_cases": [
+        {
+          "name": "Archive tenant - happy path (SUSPENDED → ARCHIVED)",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/{suspendedTenantId}/archive",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": {}
+          },
+          "expected": { "status": 200, "body_contains": ["status", "ARCHIVED"] },
+          "db_verification": { "enabled": true, "query": "SELECT status FROM tenants WHERE id = '{suspendedTenantId}'", "expected": "status = ARCHIVED (terminal state)" }
+        },
+        {
+          "name": "Archive tenant - ACTIVE → ARCHIVED → 422 (must suspend first)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/{activeTenantId}/archive",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": {}
+          },
+          "expected": { "status": 422, "body_contains": ["INVALID_STATE_TRANSITION"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Archive tenant - already ARCHIVED → 422",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/{archivedTenantId}/archive",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": {}
+          },
+          "expected": { "status": 422, "body_contains": ["INVALID_STATE_TRANSITION"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Archive tenant - non-existent → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/00000000-0000-0000-0000-000000000000/archive",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": {}
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/admin/tenants/:id/modules",
+      "description": "Upsert module overrides for tenant. Pushes tenant.modules_changed webhook for changed modules.",
+      "story": "E3b.2",
+      "auth": "platform-jwt (PLATFORM_ADMIN)",
+      "test_cases": [
+        {
+          "name": "Upsert modules - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "PUT",
+            "url": "/admin/tenants/{tenantId}/modules",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": {
+              "modules": [
+                { "moduleKey": "finance", "enabled": true },
+                { "moduleKey": "crm", "enabled": false, "reason": "Not on plan" }
+              ]
+            }
+          },
+          "expected": { "status": 200, "body_contains": ["moduleKey", "enabled"] },
+          "db_verification": { "enabled": true, "query": "SELECT \"moduleKey\", enabled FROM \"tenant_module_overrides\" WHERE \"tenantId\" = '{tenantId}'", "expected": "Records exist for finance (true) and crm (false)" }
+        },
+        {
+          "name": "Upsert modules - empty modules array → 400",
+          "type": "validation_error",
+          "request": {
+            "method": "PUT",
+            "url": "/admin/tenants/{tenantId}/modules",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "modules": [] }
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Upsert modules - non-existent tenant → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "PUT",
+            "url": "/admin/tenants/00000000-0000-0000-0000-000000000000/modules",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "modules": [{ "moduleKey": "finance", "enabled": true }] }
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Upsert modules - PLATFORM_VIEWER → 403",
+          "type": "edge_case",
+          "request": {
+            "method": "PUT",
+            "url": "/admin/tenants/{tenantId}/modules",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {viewer_jwt}" },
+            "body": { "modules": [{ "moduleKey": "finance", "enabled": true }] }
+          },
+          "expected": { "status": 403, "body_contains": ["FORBIDDEN"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/admin/tenants/:id/feature-flags",
+      "description": "Upsert feature flags for tenant",
+      "story": "E3b.2",
+      "auth": "platform-jwt (PLATFORM_ADMIN)",
+      "test_cases": [
+        {
+          "name": "Upsert feature flags - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "PUT",
+            "url": "/admin/tenants/{tenantId}/feature-flags",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": {
+              "flags": [
+                { "featureKey": "ai_forecasting", "enabled": true },
+                { "featureKey": "beta_dashboard", "enabled": false }
+              ]
+            }
+          },
+          "expected": { "status": 200, "body_contains": ["featureKey", "enabled"] },
+          "db_verification": { "enabled": true, "query": "SELECT \"featureKey\", enabled FROM \"tenant_feature_flags\" WHERE \"tenantId\" = '{tenantId}'", "expected": "Records exist for ai_forecasting (true) and beta_dashboard (false)" }
+        },
+        {
+          "name": "Upsert feature flags - empty flags array → 400",
+          "type": "validation_error",
+          "request": {
+            "method": "PUT",
+            "url": "/admin/tenants/{tenantId}/feature-flags",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "flags": [] }
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Upsert feature flags - non-existent tenant → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "PUT",
+            "url": "/admin/tenants/00000000-0000-0000-0000-000000000000/feature-flags",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "flags": [{ "featureKey": "test", "enabled": true }] }
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Upsert feature flags - PLATFORM_VIEWER → 403",
+          "type": "edge_case",
+          "request": {
+            "method": "PUT",
+            "url": "/admin/tenants/{tenantId}/feature-flags",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {viewer_jwt}" },
+            "body": { "flags": [{ "featureKey": "test", "enabled": true }] }
+          },
+          "expected": { "status": 403, "body_contains": ["FORBIDDEN"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/admin/tenants/:id/assign-plan",
+      "description": "Change tenant's subscription plan. Pushes tenant.plan_changed webhook. Idempotent if same plan.",
+      "story": "E3b.5",
+      "auth": "platform-jwt (PLATFORM_ADMIN)",
+      "test_cases": [
+        {
+          "name": "Assign plan - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/{tenantId}/assign-plan",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "planId": "{proPlanId}", "reason": "Customer upgraded" }
+          },
+          "expected": { "status": 200, "body_contains": ["tenantId", "oldPlanCode", "newPlanCode", "changedAt"] },
+          "db_verification": { "enabled": true, "query": "SELECT \"planId\" FROM tenants WHERE id = '{tenantId}'", "expected": "planId = {proPlanId}" }
+        },
+        {
+          "name": "Assign plan - same plan (idempotent) → 200",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/{tenantId}/assign-plan",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "planId": "{currentPlanId}" }
+          },
+          "expected": { "status": 200, "body_contains": ["tenantId", "oldPlanCode", "newPlanCode"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Assign plan - non-existent tenant → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/00000000-0000-0000-0000-000000000000/assign-plan",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "planId": "{proPlanId}" }
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Assign plan - non-existent plan → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/{tenantId}/assign-plan",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "planId": "00000000-0000-0000-0000-000000000000" }
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Assign plan - PLATFORM_VIEWER → 403",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/{tenantId}/assign-plan",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {viewer_jwt}" },
+            "body": { "planId": "{proPlanId}" }
+          },
+          "expected": { "status": 403, "body_contains": ["FORBIDDEN"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/tenants/:id/billing",
+      "description": "Get tenant billing status. Lazy-initializes TenantBilling if none exists.",
+      "story": "E3b.5",
+      "auth": "platform-jwt (PLATFORM_VIEWER+)",
+      "test_cases": [
+        {
+          "name": "Get billing - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/{tenantId}/billing",
+            "headers": { "Authorization": "Bearer {admin_jwt}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["tenantId", "billingStatus", "enforcementAction", "dunningLevel"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Get billing - tenant with no billing record → lazy-init defaults",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/{newTenantId}/billing",
+            "headers": { "Authorization": "Bearer {admin_jwt}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["enforcementAction", "NONE", "dunningLevel"] },
+          "db_verification": { "enabled": true, "query": "SELECT \"enforcementAction\", \"dunningLevel\" FROM \"tenant_billings\" WHERE \"tenantId\" = '{newTenantId}'", "expected": "Record created with enforcementAction=NONE, dunningLevel=0" }
+        },
+        {
+          "name": "Get billing - non-existent tenant → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/00000000-0000-0000-0000-000000000000/billing",
+            "headers": { "Authorization": "Bearer {admin_jwt}" },
+            "body": null
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Get billing - PLATFORM_VIEWER can view",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/{tenantId}/billing",
+            "headers": { "Authorization": "Bearer {viewer_jwt}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["billingStatus"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/admin/tenants/:id/billing/enforcement",
+      "description": "Change billing enforcement action. Follows state machine (BR-PLT-004).",
+      "story": "E3b.5",
+      "auth": "platform-jwt (PLATFORM_ADMIN)",
+      "test_cases": [
+        {
+          "name": "Enforcement NONE → WARNING - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/{tenantId}/billing/enforcement",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "enforcementAction": "WARNING", "reason": "Payment 15 days overdue" }
+          },
+          "expected": { "status": 200, "body_contains": ["previousAction", "NONE", "newAction", "WARNING"] },
+          "db_verification": { "enabled": true, "query": "SELECT tb.\"enforcementAction\", t.\"billingStatus\" FROM \"tenant_billings\" tb JOIN tenants t ON t.id = tb.\"tenantId\" WHERE tb.\"tenantId\" = '{tenantId}'", "expected": "enforcementAction = WARNING, billingStatus = GRACE" }
+        },
+        {
+          "name": "Enforcement WARNING → READ_ONLY",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/{warningTenantId}/billing/enforcement",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "enforcementAction": "READ_ONLY", "reason": "Grace period expired" }
+          },
+          "expected": { "status": 200, "body_contains": ["previousAction", "WARNING", "newAction", "READ_ONLY"] },
+          "db_verification": { "enabled": true, "query": "SELECT \"enforcementAction\" FROM \"tenant_billings\" WHERE \"tenantId\" = '{warningTenantId}'", "expected": "enforcementAction = READ_ONLY" }
+        },
+        {
+          "name": "Enforcement READ_ONLY → SUSPENDED (escalation to tenant suspension)",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/{readOnlyTenantId}/billing/enforcement",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "enforcementAction": "SUSPENDED", "reason": "60 days non-payment" }
+          },
+          "expected": { "status": 200, "body_contains": ["previousAction", "READ_ONLY", "newAction", "SUSPENDED"] },
+          "db_verification": { "enabled": true, "query": "SELECT tb.\"enforcementAction\", t.status FROM \"tenant_billings\" tb JOIN tenants t ON t.id = tb.\"tenantId\" WHERE tb.\"tenantId\" = '{readOnlyTenantId}'", "expected": "enforcementAction = SUSPENDED, tenant status = SUSPENDED" }
+        },
+        {
+          "name": "Enforcement SUSPENDED → NONE (payment received, reactivation)",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/{enforcementSuspendedTenantId}/billing/enforcement",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "enforcementAction": "NONE", "reason": "Full payment received" }
+          },
+          "expected": { "status": 200, "body_contains": ["previousAction", "SUSPENDED", "newAction", "NONE"] },
+          "db_verification": { "enabled": true, "query": "SELECT tb.\"enforcementAction\", t.status FROM \"tenant_billings\" tb JOIN tenants t ON t.id = tb.\"tenantId\" WHERE tb.\"tenantId\" = '{enforcementSuspendedTenantId}'", "expected": "enforcementAction = NONE, tenant status = ACTIVE" }
+        },
+        {
+          "name": "Enforcement - missing reason → 400",
+          "type": "validation_error",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/{tenantId}/billing/enforcement",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "enforcementAction": "WARNING" }
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Enforcement NONE → READ_ONLY (skip) → 422",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/{noneTenantId}/billing/enforcement",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "enforcementAction": "READ_ONLY", "reason": "Trying to skip" }
+          },
+          "expected": { "status": 422, "body_contains": ["INVALID_ENFORCEMENT_TRANSITION"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Enforcement NONE → SUSPENDED (skip) → 422",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/{noneTenantId}/billing/enforcement",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "enforcementAction": "SUSPENDED", "reason": "Trying to skip" }
+          },
+          "expected": { "status": 422, "body_contains": ["INVALID_ENFORCEMENT_TRANSITION"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Enforcement - non-existent tenant → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/00000000-0000-0000-0000-000000000000/billing/enforcement",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "enforcementAction": "WARNING", "reason": "Ghost" }
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Enforcement - PLATFORM_VIEWER → 403",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/{tenantId}/billing/enforcement",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {viewer_jwt}" },
+            "body": { "enforcementAction": "WARNING", "reason": "Unauthorized" }
+          },
+          "expected": { "status": 403, "body_contains": ["FORBIDDEN"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/tenants/:id/ai/quota",
+      "description": "Get tenant's AI token quota status for current period",
+      "story": "E3b.5",
+      "auth": "platform-jwt (PLATFORM_VIEWER+)",
+      "test_cases": [
+        {
+          "name": "Get AI quota - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/{tenantId}/ai/quota",
+            "headers": { "Authorization": "Bearer {admin_jwt}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["tenantId", "planCode", "tokenAllowance", "tokensUsed", "quotaPct", "softLimitPct", "hardLimitPct", "periodStart", "periodEnd"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Get AI quota - non-existent tenant → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/00000000-0000-0000-0000-000000000000/ai/quota",
+            "headers": { "Authorization": "Bearer {admin_jwt}" },
+            "body": null
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Get AI quota - PLATFORM_VIEWER can view",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/{tenantId}/ai/quota",
+            "headers": { "Authorization": "Bearer {viewer_jwt}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["quotaPct"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/admin/tenants/:id/ai/quota",
+      "description": "Manually adjust AI quota (tokenAllowance, softLimitPct, hardLimitPct, burstAllowance)",
+      "story": "E3b.5",
+      "auth": "platform-jwt (PLATFORM_ADMIN)",
+      "test_cases": [
+        {
+          "name": "Update AI quota - happy path (increase token allowance)",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/{tenantId}/ai/quota",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "tokenAllowance": 1000000, "reason": "Customer requested increase" }
+          },
+          "expected": { "status": 200, "body_contains": ["tokenAllowance", "quotaPct"] },
+          "db_verification": { "enabled": true, "query": "SELECT \"tokenAllowance\" FROM \"tenant_ai_quotas\" WHERE \"tenantId\" = '{tenantId}'", "expected": "tokenAllowance = 1000000" }
+        },
+        {
+          "name": "Update AI quota - adjust soft/hard limits",
+          "type": "happy_path",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/{tenantId}/ai/quota",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "softLimitPct": 70, "hardLimitPct": 120, "reason": "Custom thresholds" }
+          },
+          "expected": { "status": 200, "body_contains": ["softLimitPct", "hardLimitPct"] },
+          "db_verification": { "enabled": true, "query": "SELECT \"softLimitPct\", \"hardLimitPct\" FROM \"tenant_ai_quotas\" WHERE \"tenantId\" = '{tenantId}'", "expected": "softLimitPct = 70, hardLimitPct = 120" }
+        },
+        {
+          "name": "Update AI quota - missing reason → 400",
+          "type": "validation_error",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/{tenantId}/ai/quota",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "tokenAllowance": 500000 }
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Update AI quota - no quota fields besides reason → 400",
+          "type": "validation_error",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/{tenantId}/ai/quota",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {admin_jwt}" },
+            "body": { "reason": "Only reason, no changes" }
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Update AI quota - PLATFORM_VIEWER → 403",
+          "type": "edge_case",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/{tenantId}/ai/quota",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {viewer_jwt}" },
+            "body": { "tokenAllowance": 999999, "reason": "Unauthorized" }
+          },
+          "expected": { "status": 403, "body_contains": ["FORBIDDEN"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/platform/tenants/:tenantId/entitlements",
+      "description": "Get complete entitlements for a tenant (ERP internal). Cache-Control: 5 min.",
+      "story": "E3b.1",
+      "auth": "service-token",
+      "test_cases": [
+        {
+          "name": "Get entitlements - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/{tenantId}/entitlements",
+            "headers": { "Authorization": "Bearer {service_token}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["status", "planCode", "billingStatus", "enforcementAction", "maxUsers", "maxCompanies", "enabledModules", "featureFlags"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Get entitlements - non-existent tenant → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/00000000-0000-0000-0000-000000000000/entitlements",
+            "headers": { "Authorization": "Bearer {service_token}" },
+            "body": null
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Get entitlements - missing service token → 401",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/{tenantId}/entitlements",
+            "headers": {},
+            "body": null
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Get entitlements - invalid service token → 401",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/{tenantId}/entitlements",
+            "headers": { "Authorization": "Bearer invalid-token" },
+            "body": null
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/platform/tenants/:tenantId/status",
+      "description": "Get tenant's operational status (lightweight). Cache-Control: 60s.",
+      "story": "E3b.1",
+      "auth": "service-token",
+      "test_cases": [
+        {
+          "name": "Get tenant status - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/{tenantId}/status",
+            "headers": { "Authorization": "Bearer {service_token}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["status", "billingStatus", "enforcementAction"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Get tenant status - non-existent → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/00000000-0000-0000-0000-000000000000/status",
+            "headers": { "Authorization": "Bearer {service_token}" },
+            "body": null
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Get tenant status - invalid service token → 401",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/{tenantId}/status",
+            "headers": { "Authorization": "Bearer wrong-token" },
+            "body": null
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/platform/tenants/:tenantId/modules/:moduleKey/access",
+      "description": "Check if a specific module is accessible for a tenant",
+      "story": "E3b.1",
+      "auth": "service-token",
+      "test_cases": [
+        {
+          "name": "Module access - module in plan → allowed",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/{tenantId}/modules/finance/access",
+            "headers": { "Authorization": "Bearer {service_token}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["allowed", "true"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Module access - module NOT in plan → denied",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/{tenantId}/modules/manufacturing/access",
+            "headers": { "Authorization": "Bearer {service_token}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["allowed", "false", "reason"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Module access - non-existent tenant → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/00000000-0000-0000-0000-000000000000/modules/finance/access",
+            "headers": { "Authorization": "Bearer {service_token}" },
+            "body": null
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Module access - invalid service token → 401",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/{tenantId}/modules/finance/access",
+            "headers": { "Authorization": "Bearer bad-token" },
+            "body": null
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/platform/tenants/:tenantId/users/quota",
+      "description": "Check user quota status for tenant",
+      "story": "E3b.1",
+      "auth": "service-token",
+      "test_cases": [
+        {
+          "name": "User quota - happy path (under limit)",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/{tenantId}/users/quota?currentCount=5",
+            "headers": { "Authorization": "Bearer {service_token}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["currentCount", "maxUsers", "canAddUser"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "User quota - at limit (canAddUser=false)",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/{tenantId}/users/quota?currentCount=9999",
+            "headers": { "Authorization": "Bearer {service_token}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["canAddUser", "false"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "User quota - non-existent tenant → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/00000000-0000-0000-0000-000000000000/users/quota?currentCount=0",
+            "headers": { "Authorization": "Bearer {service_token}" },
+            "body": null
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/platform/tenants/:tenantId/ai/check",
+      "description": "Pre-flight AI quota check before making an AI call",
+      "story": "E3b.3",
+      "auth": "service-token",
+      "test_cases": [
+        {
+          "name": "AI quota check - under limit → allowed",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/platform/tenants/{tenantId}/ai/check",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {service_token}" },
+            "body": { "estimatedTokens": 1000, "featureKey": "chat_completion" }
+          },
+          "expected": { "status": 200, "body_contains": ["allowed", "true", "remainingTokens", "quotaPct"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "AI quota check - soft limit warning",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/platform/tenants/{highUsageTenantId}/ai/check",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {service_token}" },
+            "body": { "estimatedTokens": 100, "featureKey": "document_analysis" }
+          },
+          "expected": { "status": 200, "body_contains": ["allowed", "true", "warning"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "AI quota check - hard limit reached (aiHardLimit=true) → allowed=false",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/platform/tenants/{exhaustedTenantId}/ai/check",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {service_token}" },
+            "body": { "estimatedTokens": 10000, "featureKey": "chat_completion" }
+          },
+          "expected": { "status": 200, "body_contains": ["allowed", "false"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "AI quota check - missing estimatedTokens → 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/platform/tenants/{tenantId}/ai/check",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {service_token}" },
+            "body": { "featureKey": "chat_completion" }
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "AI quota check - non-existent tenant → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/platform/tenants/00000000-0000-0000-0000-000000000000/ai/check",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {service_token}" },
+            "body": { "estimatedTokens": 1000, "featureKey": "chat" }
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "AI quota check - invalid service token → 401",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/platform/tenants/{tenantId}/ai/check",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer wrong-token" },
+            "body": { "estimatedTokens": 1000, "featureKey": "chat" }
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/platform/tenants/:tenantId/ai/record",
+      "description": "Record AI usage after a successful call. Idempotent on requestId.",
+      "story": "E3b.3",
+      "auth": "service-token",
+      "test_cases": [
+        {
+          "name": "Record AI usage - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/platform/tenants/{tenantId}/ai/record",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {service_token}" },
+            "body": {
+              "userId": "00000000-0000-0000-0000-000000000001",
+              "featureKey": "chat_completion",
+              "provider": "anthropic",
+              "model": "claude-sonnet-4-5",
+              "promptTokens": 500,
+              "completionTokens": 300,
+              "totalTokens": 800,
+              "costEstimate": 0.012,
+              "requestId": "req-unique-001",
+              "isByok": false,
+              "latencyMs": 1500,
+              "fallbackUsed": false
+            }
+          },
+          "expected": { "status": 200, "body_contains": ["recorded", "true", "quotaPct"] },
+          "db_verification": { "enabled": true, "query": "SELECT \"requestId\", provider, model, \"totalTokens\" FROM \"tenant_ai_usages\" WHERE \"requestId\" = 'req-unique-001'", "expected": "Record exists with provider=anthropic, model=claude-sonnet-4-5, totalTokens=800" }
+        },
+        {
+          "name": "Record AI usage - BYOK does NOT increment quota",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/platform/tenants/{tenantId}/ai/record",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {service_token}" },
+            "body": {
+              "userId": "00000000-0000-0000-0000-000000000001",
+              "featureKey": "document_analysis",
+              "provider": "openai",
+              "model": "gpt-4o",
+              "promptTokens": 2000,
+              "completionTokens": 1000,
+              "totalTokens": 3000,
+              "costEstimate": 0,
+              "requestId": "req-byok-001",
+              "isByok": true,
+              "fallbackUsed": false
+            }
+          },
+          "expected": { "status": 200, "body_contains": ["recorded", "true"] },
+          "db_verification": { "enabled": true, "query": "SELECT \"isByok\" FROM \"tenant_ai_usages\" WHERE \"requestId\" = 'req-byok-001'", "expected": "isByok = true, tokensUsed on TenantAiQuota NOT incremented" }
+        },
+        {
+          "name": "Record AI usage - duplicate requestId → idempotent 200",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/platform/tenants/{tenantId}/ai/record",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {service_token}" },
+            "body": {
+              "userId": "00000000-0000-0000-0000-000000000001",
+              "featureKey": "chat_completion",
+              "provider": "anthropic",
+              "model": "claude-sonnet-4-5",
+              "promptTokens": 500,
+              "completionTokens": 300,
+              "totalTokens": 800,
+              "costEstimate": 0.012,
+              "requestId": "req-unique-001",
+              "isByok": false,
+              "fallbackUsed": false
+            }
+          },
+          "expected": { "status": 200, "body_contains": ["recorded", "true"] },
+          "db_verification": { "enabled": true, "query": "SELECT COUNT(*) as cnt FROM \"tenant_ai_usages\" WHERE \"requestId\" = 'req-unique-001'", "expected": "cnt = 1 (not duplicated)" }
+        },
+        {
+          "name": "Record AI usage - missing required fields → 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/platform/tenants/{tenantId}/ai/record",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {service_token}" },
+            "body": { "userId": "00000000-0000-0000-0000-000000000001", "featureKey": "chat" }
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Record AI usage - non-existent tenant → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/platform/tenants/00000000-0000-0000-0000-000000000000/ai/record",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {service_token}" },
+            "body": {
+              "userId": "00000000-0000-0000-0000-000000000001",
+              "featureKey": "chat",
+              "provider": "anthropic",
+              "model": "claude-sonnet-4-5",
+              "promptTokens": 100,
+              "completionTokens": 50,
+              "totalTokens": 150,
+              "costEstimate": 0,
+              "requestId": "req-ghost-001",
+              "isByok": false,
+              "fallbackUsed": false
+            }
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Record AI usage - invalid service token → 401",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/platform/tenants/{tenantId}/ai/record",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer invalid" },
+            "body": {
+              "userId": "00000000-0000-0000-0000-000000000001",
+              "featureKey": "chat",
+              "provider": "anthropic",
+              "model": "claude-sonnet-4-5",
+              "promptTokens": 100,
+              "completionTokens": 50,
+              "totalTokens": 150,
+              "costEstimate": 0,
+              "requestId": "req-unauth-001",
+              "isByok": false,
+              "fallbackUsed": false
+            }
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/platform/tenants/:tenantId/ai/usage",
+      "description": "Get AI usage summary for current billing period aggregated by feature and provider",
+      "story": "E3b.3",
+      "auth": "service-token",
+      "test_cases": [
+        {
+          "name": "Get AI usage - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/{tenantId}/ai/usage",
+            "headers": { "Authorization": "Bearer {service_token}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["period", "summary", "byFeature", "byProvider", "warnings"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Get AI usage - no usage data → 200 with zeros",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/{newTenantId}/ai/usage",
+            "headers": { "Authorization": "Bearer {service_token}" },
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["summary", "tokensUsed", "0"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Get AI usage - non-existent tenant → 404",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/00000000-0000-0000-0000-000000000000/ai/usage",
+            "headers": { "Authorization": "Bearer {service_token}" },
+            "body": null
+          },
+          "expected": { "status": 404, "body_contains": ["NOT_FOUND"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Get AI usage - invalid service token → 401",
+          "type": "edge_case",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/{tenantId}/ai/usage",
+            "headers": { "Authorization": "Bearer bad" },
+            "body": null
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/webhooks/platform",
+      "description": "ERP webhook listener for platform events (cache invalidation, quota warnings). On ERP API port 3000.",
+      "story": "E3b.4",
+      "auth": "service-token",
+      "api_base_url_override": "http://localhost:3000",
+      "test_cases": [
+        {
+          "name": "Webhook - tenant.plan_changed → 200, cache invalidated",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/webhooks/platform",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {service_token}" },
+            "body": {
+              "event": "tenant.plan_changed",
+              "timestamp": "2026-02-22T10:00:00.000Z",
+              "payload": { "tenantId": "{tenantId}", "oldPlanCode": "core", "newPlanCode": "pro", "changedBy": "{platformUserId}", "enabledModules": ["finance", "ar", "ap", "sales"] }
+            }
+          },
+          "expected": { "status": 200, "body_contains": ["success", "true"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Webhook - tenant.suspended → 200, cache invalidated",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/webhooks/platform",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {service_token}" },
+            "body": {
+              "event": "tenant.suspended",
+              "timestamp": "2026-02-22T10:00:00.000Z",
+              "payload": { "tenantId": "{tenantId}", "reason": "Non-payment", "suspendedBy": "{platformUserId}", "enforcementAction": "SUSPENDED" }
+            }
+          },
+          "expected": { "status": 200, "body_contains": ["success", "true"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Webhook - unknown event → 200 (forward compatible)",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/webhooks/platform",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {service_token}" },
+            "body": {
+              "event": "future.unknown_event",
+              "timestamp": "2026-02-22T10:00:00.000Z",
+              "payload": { "tenantId": "{tenantId}", "data": "something new" }
+            }
+          },
+          "expected": { "status": 200, "body_contains": ["success", "true"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Webhook - missing Authorization header → 401",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/webhooks/platform",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "event": "tenant.suspended",
+              "timestamp": "2026-02-22T10:00:00.000Z",
+              "payload": { "tenantId": "{tenantId}" }
+            }
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Webhook - invalid service token → 401",
+          "type": "edge_case",
+          "request": {
+            "method": "POST",
+            "url": "/webhooks/platform",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer wrong-token" },
+            "body": {
+              "event": "tenant.suspended",
+              "timestamp": "2026-02-22T10:00:00.000Z",
+              "payload": { "tenantId": "{tenantId}" }
+            }
+          },
+          "expected": { "status": 401, "body_contains": ["UNAUTHORIZED"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Webhook - malformed body (missing event) → 400",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/webhooks/platform",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {service_token}" },
+            "body": { "timestamp": "2026-02-22T10:00:00.000Z", "payload": {} }
+          },
+          "expected": { "status": 400, "body_contains": ["VALIDATION_ERROR"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/monitoring/health",
+      "description": "Platform health check including database and Redis connectivity",
+      "story": "E3b.1",
+      "auth": "public",
+      "test_cases": [
+        {
+          "name": "Health check - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/admin/monitoring/health",
+            "headers": {},
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["status", "version", "uptime", "database"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        },
+        {
+          "name": "Health check - returns correct structure with DB connectivity",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/admin/monitoring/health",
+            "headers": {},
+            "body": null
+          },
+          "expected": { "status": 200, "body_contains": ["connected", "latencyMs"] },
+          "db_verification": { "enabled": false, "query": "", "expected": "" }
+        }
+      ]
+    }
+  ],
+  "test_summary": {
+    "by_type": {
+      "happy_path": 56,
+      "validation_error": 21,
+      "edge_case": 75
+    },
+    "by_story": {
+      "E3b.1": 59,
+      "E3b.2": 40,
+      "E3b.3": 16,
+      "E3b.4": 6,
+      "E3b.5": 31
+    },
+    "by_auth_type": {
+      "public": 15,
+      "platform_jwt_admin": 70,
+      "platform_jwt_viewer": 18,
+      "service_token": 37,
+      "refresh_cookie": 3
+    },
+    "by_http_method": {
+      "GET": 40,
+      "POST": 85,
+      "PATCH": 21,
+      "PUT": 8
+    },
+    "endpoints_with_db_verification": 18,
+    "business_rules_tested": [
+      "BR-PLT-001: Strict tenant lifecycle state machine transitions",
+      "BR-PLT-003: ARCHIVED tenants irrecoverable (terminal state)",
+      "BR-PLT-004: Billing enforcement escalation NONE→WARNING→READ_ONLY→SUSPENDED",
+      "BR-PLT-005: READ_ONLY blocks writes (enforcementAction propagated via webhook)",
+      "BR-PLT-006: Plan change immediate effect via webhook cache invalidation",
+      "BR-PLT-016: PlatformAuditLog immutable (append-only)",
+      "BR-PLT-017: Every state-changing action logged to PlatformAuditLog",
+      "BR-PLT-018: Mandatory MFA for PLATFORM_ADMIN accounts",
+      "BR-PLT-019: ERP must check entitlements at login",
+      "BR-PLT-020: ERP degrades gracefully if Platform unreachable (circuit breaker)"
+    ],
+    "nfrs_tested": [
+      "NFR46: Platform API <50ms (entitlement endpoint)",
+      "NFR48: Mandatory MFA for PLATFORM_ADMIN",
+      "NFR49: Immutable audit log",
+      "NFR50: Durable AI usage records (idempotent requestId)",
+      "NFR51: Webhook cache invalidation <30s"
+    ]
+  }
+}

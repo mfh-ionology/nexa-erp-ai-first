@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexa ERP — AI Interaction Prototypes</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    background: #0f0a1a;
+    color: #e2dff0;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .noise {
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .glow-orb {
+    position: fixed;
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    filter: blur(120px);
+    opacity: 0.12;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .glow-orb-1 { background: #7c3aed; top: -200px; right: -100px; }
+  .glow-orb-2 { background: #a78bfa; bottom: -200px; left: -150px; }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 80px 32px;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 100px;
+    background: rgba(124, 58, 237, 0.15);
+    border: 1px solid rgba(124, 58, 237, 0.3);
+    color: #a78bfa;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+  }
+  .badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #7c3aed;
+    box-shadow: 0 0 8px #7c3aed;
+  }
+
+  h1 {
+    font-size: clamp(36px, 5vw, 56px);
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, #ffffff 0%, #a78bfa 50%, #7c3aed 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    font-size: 18px;
+    color: #9990b8;
+    max-width: 600px;
+    line-height: 1.6;
+    margin-bottom: 64px;
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+  }
+
+  .card {
+    position: relative;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(124, 58, 237, 0.2);
+    border-radius: 16px;
+    padding: 32px;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.08) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .card:hover {
+    border-color: rgba(124, 58, 237, 0.5);
+    transform: translateY(-4px);
+    box-shadow: 0 20px 60px rgba(124, 58, 237, 0.15);
+  }
+  .card:hover::before { opacity: 1; }
+
+  .card-letter {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #7c3aed, #5b21b6);
+    color: white;
+    font-size: 22px;
+    font-weight: 800;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 16px rgba(124, 58, 237, 0.3);
+  }
+
+  .card-title {
+    position: relative;
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #fff;
+  }
+
+  .card-model {
+    position: relative;
+    font-size: 14px;
+    font-weight: 600;
+    color: #a78bfa;
+    margin-bottom: 16px;
+  }
+
+  .card-desc {
+    position: relative;
+    font-size: 15px;
+    color: #8880a8;
+    line-height: 1.6;
+    flex: 1;
+    margin-bottom: 24px;
+  }
+
+  .card-features {
+    position: relative;
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+  .card-features li {
+    padding: 4px 12px;
+    border-radius: 100px;
+    background: rgba(124, 58, 237, 0.1);
+    border: 1px solid rgba(124, 58, 237, 0.15);
+    font-size: 12px;
+    color: #b8b0d0;
+    font-weight: 500;
+  }
+
+  .card-cta {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #a78bfa;
+    font-weight: 600;
+    font-size: 14px;
+    transition: gap 0.2s ease;
+  }
+  .card:hover .card-cta { gap: 12px; }
+  .card-cta::after {
+    content: '\2192';
+    font-size: 18px;
+  }
+
+  .footer {
+    margin-top: 80px;
+    padding-top: 32px;
+    border-top: 1px solid rgba(124, 58, 237, 0.15);
+    text-align: center;
+    color: #5a5278;
+    font-size: 14px;
+  }
+
+  @media (max-width: 640px) {
+    .container { padding: 48px 20px; }
+    .cards { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+  <div class="noise"></div>
+  <div class="glow-orb glow-orb-1"></div>
+  <div class="glow-orb glow-orb-2"></div>
+
+  <div class="container">
+    <div class="badge">UX Prototypes</div>
+    <h1>Nexa ERP<br>AI Interaction Models</h1>
+    <p class="subtitle">Three approaches to AI-first ERP interaction. Each prototype includes 11 pages: Dashboard, Invoices, CRM, Inventory, GL, Sales Orders, Reports, Settings, and more.</p>
+
+    <div class="cards">
+      <a href="concept-d.html" class="card">
+        <div class="card-letter">D</div>
+        <div class="card-title">Co-Pilot Dock</div>
+        <div class="card-model">AI as persistent sidebar companion</div>
+        <p class="card-desc">The AI lives in a collapsible right-side panel. Always available, never in the way. Users can chat with the AI while viewing any screen. The AI sees what you see and offers contextual suggestions.</p>
+        <ul class="card-features">
+          <li>Sidebar AI panel</li>
+          <li>Contextual awareness</li>
+          <li>Always visible</li>
+          <li>Multi-turn chat</li>
+        </ul>
+        <span class="card-cta">Open Prototype</span>
+      </a>
+
+      <a href="concept-e.html" class="card">
+        <div class="card-letter">E</div>
+        <div class="card-title">Command Centre</div>
+        <div class="card-model">AI via Cmd+K modal overlay</div>
+        <p class="card-desc">The AI activates on demand via keyboard shortcut. A modal command palette overlays the current screen. Type natural language commands, get instant results. Minimal chrome, maximum workspace.</p>
+        <ul class="card-features">
+          <li>Cmd+K shortcut</li>
+          <li>Modal overlay</li>
+          <li>Keyboard-first</li>
+          <li>Zero chrome</li>
+        </ul>
+        <span class="card-cta">Open Prototype</span>
+      </a>
+
+      <a href="concept-f.html" class="card">
+        <div class="card-letter">F</div>
+        <div class="card-title">Conversation Canvas</div>
+        <div class="card-model">AI IS the workspace</div>
+        <p class="card-desc">The conversational interface is the primary workspace. Forms, tables, and charts render inline within the conversation. The AI doesn't assist your workflow — it IS your workflow.</p>
+        <ul class="card-features">
+          <li>Chat-first UI</li>
+          <li>Inline forms</li>
+          <li>AI as workspace</li>
+          <li>Conversational flow</li>
+        </ul>
+        <span class="card-cta">Open Prototype</span>
+      </a>
+    </div>
+
+    <div class="footer">
+      Nexa ERP &mdash; AI-First ERP for UK SMEs &mdash; February 2026
+    </div>
+  </div>
+</body>
+</html>

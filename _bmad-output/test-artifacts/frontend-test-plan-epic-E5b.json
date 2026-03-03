@@ -1,0 +1,898 @@
+{
+  "epic_id": "E5b",
+  "epic_name": "AI Co-Pilot Intelligence — Memory, Skills & Dynamic Context",
+  "generated_at": "2026-03-02T16:00:00.000Z",
+  "frontend_url": "http://localhost:5173",
+  "total_journeys": 18,
+  "total_steps": 178,
+  "notes": "Frontend stories covered: E5b-5 (Memory & Skills Management UI) and E5b-7 (Inline Entity Mentions & Chat Autocomplete). Stories E5b-1 through E5b-4 and E5b-6 are backend-only and tested via the backend test plan.",
+  "prerequisites": {
+    "auth": "Authenticated user session with ADMIN role (for skill override tests) and STAFF role (for read-only verification)",
+    "seed_data": "AI memory seeded with 10+ memories across 5 categories (PREFERENCE, WORKFLOW, DECISION, INSTRUCTION, ENTITY_CONTEXT), mix of EXPLICIT and IMPLICIT sources. Skills seeded via E5b-6 views skill pack. Entity triggers seeded for 'view' and 'saved view'.",
+    "backend": "API server running with AI module registered, memory endpoints active, skills endpoints active, entity-triggers endpoint active, entity-search proxy active"
+  },
+  "journeys": [
+    {
+      "id": "j1-ai-nav-sidebar",
+      "name": "AI Section Appears in Sidebar Navigation",
+      "description": "Verify the AI sidebar section exists with all 3 navigation items: Morning Briefing, My Memory, Skills",
+      "priority": "critical",
+      "related_stories": ["E5b-5"],
+      "acceptance_criteria": ["AC1", "AC9"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "App shell loads with sidebar visible",
+          "screenshot": true,
+          "visual_check": "App shell with purple sidebar, top bar with 'N' logo, sidebar shows module sections"
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Sidebar AI section with Bot icon",
+          "input_data": {},
+          "expected_result": "AI section is visible in the sidebar with Bot icon and 'AI' label"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "AI section expand toggle in sidebar",
+          "input_data": {},
+          "expected_result": "AI section expands to show 3 navigation items",
+          "screenshot": true,
+          "visual_check": "Expanded AI section showing: 'Morning Briefing' (Sun icon), 'My Memory' (Brain icon), 'Skills' (Wand2 icon)"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_text",
+          "target": "AI sidebar items",
+          "input_data": {},
+          "expected_result": "All 3 items visible: 'Morning Briefing', 'My Memory', 'Skills'"
+        }
+      ]
+    },
+    {
+      "id": "j2-memory-page-load",
+      "name": "Memory Management Page Load & Layout",
+      "description": "Navigate to the Memory page and verify the T7 settings template layout loads correctly with settings panel, stats, and memory list",
+      "priority": "critical",
+      "related_stories": ["E5b-5"],
+      "acceptance_criteria": ["AC1", "AC2", "AC3", "AC8", "AC13"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "click",
+          "target": "My Memory link in AI sidebar section",
+          "input_data": {},
+          "expected_result": "Navigates to /ai/memory"
+        },
+        {
+          "step_number": 2,
+          "action": "verify_text",
+          "target": "Page title",
+          "input_data": {},
+          "expected_result": "Page title shows 'My Memory' with Brain icon",
+          "screenshot": true,
+          "visual_check": "Memory page with Concept D styling: light purple (#f4f2ff) background, purple accents, settings panel at top, memory list below. Skeleton loading may be visible briefly."
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Memory settings panel",
+          "input_data": {},
+          "expected_result": "Settings panel shows: 'Enable AI Memory' toggle (on), category checkboxes (all checked), retention period selector, 'Forget Everything' button"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Memory stats panel",
+          "input_data": {},
+          "expected_result": "Stats panel shows total memory count, Explicit vs Learned breakdown with percentages"
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Search input and category filter pills",
+          "input_data": {},
+          "expected_result": "Search input with placeholder 'Search memories...' and category filter pills visible"
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "Grouped memory list",
+          "input_data": {},
+          "expected_result": "Memories displayed grouped by category (Preferences, Workflows, Decisions, Instructions, Entity Context) with collapsible accordion sections and count badges",
+          "screenshot": true,
+          "visual_check": "Memory cards with 12px radius, category badges (coloured), source badges (Explicit=purple, Learned=grey), creation dates, last used dates. Cards appear with fadeInUp animation."
+        }
+      ]
+    },
+    {
+      "id": "j3-memory-settings-toggle",
+      "name": "Toggle Memory Settings",
+      "description": "Test toggling memory enable/disable and category checkboxes with optimistic updates",
+      "priority": "critical",
+      "related_stories": ["E5b-5"],
+      "acceptance_criteria": ["AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/memory",
+          "input_data": {},
+          "expected_result": "Memory page loads with settings panel"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Enable AI Memory toggle switch",
+          "input_data": {},
+          "expected_result": "Toggle switches to OFF, category checkboxes and retention selector become visually disabled",
+          "screenshot": true,
+          "visual_check": "Toggle is OFF (grey), category checkboxes are greyed out/disabled, retention selector is disabled. Memory list remains visible but settings are inactive."
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Enable AI Memory toggle switch",
+          "input_data": {},
+          "expected_result": "Toggle switches back to ON, category checkboxes and retention selector become active again"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Workflows category checkbox",
+          "input_data": {},
+          "expected_result": "Workflows category is unchecked, PATCH /ai/memories/settings called with updated enabledCategories"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Workflows category checkbox",
+          "input_data": {},
+          "expected_result": "Workflows category is re-checked"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Retention period selector",
+          "input_data": {"value": "90"},
+          "expected_result": "Retention period changes to 90 days",
+          "screenshot": true,
+          "visual_check": "Retention period selector shows '90 days' selected"
+        }
+      ]
+    },
+    {
+      "id": "j4-memory-search-filter",
+      "name": "Search and Filter Memories",
+      "description": "Test client-side search and category filtering of the memory list",
+      "priority": "high",
+      "related_stories": ["E5b-5"],
+      "acceptance_criteria": ["AC4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/memory",
+          "input_data": {},
+          "expected_result": "Memory page loads with all memories visible"
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Search memories input",
+          "input_data": {"search": "invoice"},
+          "expected_result": "After 300ms debounce, memory list filters to show only memories containing 'invoice' (case-insensitive)",
+          "screenshot": true,
+          "visual_check": "Only memory cards containing the word 'invoice' are visible, other categories/cards hidden"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Preferences category filter pill",
+          "input_data": {},
+          "expected_result": "List further filters to show only Preferences that also contain 'invoice'"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Clear search (X button)",
+          "input_data": {},
+          "expected_result": "Search text cleared, showing all Preferences (category filter still active)"
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Search memories input",
+          "input_data": {"search": "zzzznonexistent"},
+          "expected_result": "Empty state shown: 'No memories match your search'",
+          "screenshot": true,
+          "visual_check": "Empty state message visible with 'No memories match your search' text"
+        }
+      ]
+    },
+    {
+      "id": "j5-memory-edit",
+      "name": "Edit an Existing Memory",
+      "description": "Test editing a memory's content via the edit dialog with optimistic update",
+      "priority": "critical",
+      "related_stories": ["E5b-5"],
+      "acceptance_criteria": ["AC5"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/memory",
+          "input_data": {},
+          "expected_result": "Memory page loads with memories visible"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Edit button (pencil icon) on first memory card",
+          "input_data": {},
+          "expected_result": "Edit dialog opens with 'Edit Memory' title and memory content in a textarea",
+          "screenshot": true,
+          "visual_check": "Dialog overlay with 'Edit Memory' heading, textarea pre-filled with current memory content, Save and Cancel buttons"
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Memory content textarea in edit dialog",
+          "input_data": {"content": "Updated preference: Always use Net 60 payment terms"},
+          "expected_result": "Textarea shows new content, Save button is enabled"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Save button in edit dialog",
+          "input_data": {},
+          "expected_result": "Dialog closes, memory card updates immediately (optimistic), toast notification shows 'Memory updated'",
+          "screenshot": true,
+          "visual_check": "Memory card shows updated content 'Updated preference: Always use Net 60 payment terms', success toast visible at top-right"
+        }
+      ]
+    },
+    {
+      "id": "j6-memory-delete-single",
+      "name": "Delete a Single Memory",
+      "description": "Test deleting a single memory with confirmation dialog and fade-out animation",
+      "priority": "critical",
+      "related_stories": ["E5b-5"],
+      "acceptance_criteria": ["AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/memory",
+          "input_data": {},
+          "expected_result": "Memory page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Memory category group with count badge",
+          "input_data": {},
+          "expected_result": "Note the count badge number for the target category"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Delete button (trash icon) on a memory card",
+          "input_data": {},
+          "expected_result": "Confirmation dialog appears with 'Delete this memory? This action cannot be undone.'",
+          "screenshot": true,
+          "visual_check": "AlertDialog with warning message, memory content excerpt visible, red destructive 'Delete' button and 'Cancel' button"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Delete confirm button in dialog",
+          "input_data": {},
+          "expected_result": "Dialog closes, memory card removed with animation, toast shows 'Memory deleted', category count badge decrements",
+          "screenshot": true,
+          "visual_check": "Memory card gone from list, count badge updated, success toast 'Memory deleted' visible"
+        }
+      ]
+    },
+    {
+      "id": "j7-memory-forget-all",
+      "name": "Forget Everything — Destructive Action",
+      "description": "Test the 'Forget Everything' flow requiring user to type 'FORGET' to confirm",
+      "priority": "critical",
+      "related_stories": ["E5b-5"],
+      "acceptance_criteria": ["AC7"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/memory",
+          "input_data": {},
+          "expected_result": "Memory page loads with memories"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Forget Everything button (red variant) in settings panel",
+          "input_data": {},
+          "expected_result": "Destructive confirmation dialog appears with warning icon, title 'Forget Everything'",
+          "screenshot": true,
+          "visual_check": "AlertDialog with warning icon, title 'Forget Everything', body text 'This will permanently delete ALL of your AI memories. This action cannot be undone.', text input for confirmation, confirm button disabled"
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Confirmation text input",
+          "input_data": {"confirm": "FORG"},
+          "expected_result": "Confirm button remains disabled (incomplete word)"
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "Confirmation text input",
+          "input_data": {"confirm": "FORGET"},
+          "expected_result": "Confirm button becomes enabled (red variant)",
+          "screenshot": true,
+          "visual_check": "Text input shows 'FORGET', red 'Forget Everything' confirm button is now enabled/clickable"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Forget Everything confirm button",
+          "input_data": {},
+          "expected_result": "Dialog closes, memory list clears with animation, toast shows 'All memories have been deleted', empty state displayed",
+          "screenshot": true,
+          "visual_check": "Memory list is empty, empty state message 'No memories yet' with Lightbulb icon visible, success toast 'All memories have been deleted'"
+        }
+      ]
+    },
+    {
+      "id": "j8-memory-empty-state",
+      "name": "Memory Page Empty State",
+      "description": "Verify the empty state renders correctly when no memories exist",
+      "priority": "medium",
+      "related_stories": ["E5b-5"],
+      "acceptance_criteria": ["AC3", "AC13"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/memory",
+          "input_data": {},
+          "expected_result": "Memory page loads (after forget-all or with empty memory store)"
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Empty state container",
+          "input_data": {},
+          "expected_result": "Empty state shows Lightbulb icon, 'No memories yet' heading, 'As you interact with the AI, it will remember your preferences and decisions' description",
+          "screenshot": true,
+          "visual_check": "Centered empty state with Lightbulb icon, motivational message, Concept D purple styling, no memory cards visible"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Memory stats panel",
+          "input_data": {},
+          "expected_result": "Stats panel shows Total: 0, Explicit: 0, Learned: 0"
+        }
+      ]
+    },
+    {
+      "id": "j9-skills-page-load",
+      "name": "AI Skills Browser Page Load & Layout",
+      "description": "Navigate to the Skills page and verify the module-grouped accordion layout",
+      "priority": "critical",
+      "related_stories": ["E5b-5"],
+      "acceptance_criteria": ["AC9", "AC10", "AC13"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "click",
+          "target": "Skills link in AI sidebar section",
+          "input_data": {},
+          "expected_result": "Navigates to /ai/skills"
+        },
+        {
+          "step_number": 2,
+          "action": "verify_text",
+          "target": "Page title",
+          "input_data": {},
+          "expected_result": "Page title shows 'AI Skills' with Wand2 icon",
+          "screenshot": true,
+          "visual_check": "Skills page with Concept D styling: light purple background, search input, module filter dropdown, accordion sections grouped by module"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "First module accordion group (expanded by default)",
+          "input_data": {},
+          "expected_result": "First module group (e.g., 'Views & Navigation') is expanded showing skill cards with skill count badge"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Skill card details",
+          "input_data": {},
+          "expected_result": "Each skill card shows: name, description, trigger phrases as green tags, orchestration pattern badge, active/inactive status indicator (green dot)",
+          "screenshot": true,
+          "visual_check": "Skill cards with 12px radius, trigger phrases as green pill tags, negative triggers as red tags (if any), green dot 'Active' indicator, orchestration pattern badge"
+        }
+      ]
+    },
+    {
+      "id": "j10-skills-search-filter",
+      "name": "Search and Filter Skills",
+      "description": "Test client-side search and module filtering on the Skills page",
+      "priority": "high",
+      "related_stories": ["E5b-5"],
+      "acceptance_criteria": ["AC11"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/skills",
+          "input_data": {},
+          "expected_result": "Skills page loads with all skills visible"
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Search skills input",
+          "input_data": {"search": "invoice"},
+          "expected_result": "After 300ms debounce, skills list filters to show only skills whose name, description, or trigger phrases match 'invoice'",
+          "screenshot": true,
+          "visual_check": "Only skills matching 'invoice' in name, description, or trigger phrases are visible"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Module filter dropdown",
+          "input_data": {"value": "views"},
+          "expected_result": "Skills list filters to show only skills in the 'Views & Navigation' module"
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "Search skills input",
+          "input_data": {"search": "zzzznonexistent"},
+          "expected_result": "Empty state shown: 'No skills match your search'",
+          "screenshot": true,
+          "visual_check": "Empty state with Zap icon and 'No skills match your search' message"
+        }
+      ]
+    },
+    {
+      "id": "j11-skill-detail-admin",
+      "name": "Admin Skill Detail & Override (ADMIN Role)",
+      "description": "Test that an ADMIN user can view skill details and save/reset overrides",
+      "priority": "critical",
+      "related_stories": ["E5b-5"],
+      "acceptance_criteria": ["AC12"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/skills",
+          "input_data": {},
+          "expected_result": "Skills page loads (logged in as ADMIN)"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "First skill card (e.g., 'Open Entity List')",
+          "input_data": {},
+          "expected_result": "Slide-out sheet opens from right showing full skill details",
+          "screenshot": true,
+          "visual_check": "Sheet with skill name, active/inactive toggle, editable trigger phrases as tag input, editable priority number, read-only skill instructions in monospace, read-only required tools list, Save Override and Reset to Default buttons at bottom"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Active/Inactive toggle in skill detail sheet",
+          "input_data": {},
+          "expected_result": "Toggle switches state (active → inactive or vice versa)"
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "Trigger phrase tag input",
+          "input_data": {"newTrigger": "display records"},
+          "expected_result": "New trigger phrase 'display records' added as a green tag"
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Priority number input",
+          "input_data": {"priority": "150"},
+          "expected_result": "Priority value changes to 150"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Save Override button",
+          "input_data": {},
+          "expected_result": "Override saved via PUT /ai/skill-overrides/:skillId, toast shows 'Skill override saved', sheet closes, skill card updates to reflect override",
+          "screenshot": true,
+          "visual_check": "Toast 'Skill override saved' visible, skill card in list may show 'Custom' override badge"
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Same skill card again",
+          "input_data": {},
+          "expected_result": "Sheet re-opens showing the overridden values"
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Reset to Default button",
+          "input_data": {},
+          "expected_result": "Override removed via DELETE /ai/skill-overrides/:skillId, toast shows 'Override removed — using default settings', skill card reverts to default values",
+          "screenshot": true,
+          "visual_check": "Toast 'Override removed — using default settings' visible, skill card no longer shows override badge"
+        }
+      ]
+    },
+    {
+      "id": "j12-skill-detail-staff",
+      "name": "Staff Skill Detail — Read-Only (STAFF Role)",
+      "description": "Verify that STAFF users see read-only skill details with no edit controls",
+      "priority": "high",
+      "related_stories": ["E5b-5"],
+      "acceptance_criteria": ["AC12"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/skills",
+          "input_data": {},
+          "expected_result": "Skills page loads (logged in as STAFF user)"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "First skill card",
+          "input_data": {},
+          "expected_result": "Slide-out sheet opens with all fields read-only",
+          "screenshot": true,
+          "visual_check": "Sheet shows skill details but NO save button, NO toggles, NO editable inputs. Only a Close button at the bottom. Trigger phrases displayed as non-editable tags."
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Sheet footer",
+          "input_data": {},
+          "expected_result": "Only Close button visible, no Save Override or Reset to Default buttons"
+        }
+      ]
+    },
+    {
+      "id": "j13-concept-d-visual-compliance",
+      "name": "Concept D Visual Compliance Check",
+      "description": "Verify both Memory and Skills pages follow Concept D design system requirements",
+      "priority": "high",
+      "related_stories": ["E5b-5"],
+      "acceptance_criteria": ["AC13", "AC14"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/memory",
+          "input_data": {},
+          "expected_result": "Memory page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "screenshot",
+          "target": "Full memory page",
+          "input_data": {},
+          "expected_result": "Page rendered with Concept D styling",
+          "screenshot": true,
+          "visual_check": "Purple primary (#7c3aed) on action buttons and toggles, cards with 12px border-radius and custom shadow, light purple (#f4f2ff) background, Plus Jakarta Sans headings, Inter body text, focus rings on interactive elements, skeleton loading completed"
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/ai/skills",
+          "input_data": {},
+          "expected_result": "Skills page loads"
+        },
+        {
+          "step_number": 4,
+          "action": "screenshot",
+          "target": "Full skills page",
+          "input_data": {},
+          "expected_result": "Page rendered with Concept D styling",
+          "screenshot": true,
+          "visual_check": "Category badges with semantic colours, green trigger phrase tags, red negative trigger tags, purple active states, cards with purple-tinted hover shadow, fadeInUp animation visible on card entry"
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Keyboard focus rings on interactive elements",
+          "input_data": {},
+          "expected_result": "Tab through interactive elements — each shows a visible focus ring (WCAG 2.1 AA compliance)"
+        }
+      ]
+    },
+    {
+      "id": "j14-responsive-memory-page",
+      "name": "Memory Page Responsive Behaviour",
+      "description": "Test memory page layout at phone, tablet, and desktop breakpoints",
+      "priority": "medium",
+      "related_stories": ["E5b-5"],
+      "acceptance_criteria": ["AC14"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/memory",
+          "input_data": {"viewport": "375x812"},
+          "expected_result": "Phone layout: single column, settings sections stack vertically, accordion for categories",
+          "screenshot": true,
+          "visual_check": "Phone viewport (375px): single column layout, settings panel stacked vertically, category sections as accordion, memory cards full-width, touch-friendly button sizes"
+        },
+        {
+          "step_number": 2,
+          "action": "navigate",
+          "target": "/ai/memory",
+          "input_data": {"viewport": "768x1024"},
+          "expected_result": "Tablet layout: single column form layout",
+          "screenshot": true,
+          "visual_check": "Tablet viewport (768px): single column but wider form layout, settings panel and memory list full-width"
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/ai/memory",
+          "input_data": {"viewport": "1440x900"},
+          "expected_result": "Desktop layout: two-column settings panel (label left, input right), full memory/skill cards",
+          "screenshot": true,
+          "visual_check": "Desktop viewport (1440px): two-column settings layout, wider memory cards, more content visible"
+        }
+      ]
+    },
+    {
+      "id": "j15-entity-mention-trigger-detection",
+      "name": "Entity Mention Trigger Word Detection in Chat",
+      "description": "Test that typing trigger words in the copilot chat input activates entity autocomplete",
+      "priority": "critical",
+      "related_stories": ["E5b-7"],
+      "acceptance_criteria": ["AC1", "AC5", "AC8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Dashboard loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Co-Pilot toggle button in header/sidebar",
+          "input_data": {},
+          "expected_result": "Co-Pilot drawer opens",
+          "screenshot": true,
+          "visual_check": "Co-Pilot drawer visible on right side (desktop) with chat history, message area, quick prompts, and input area with EntityMentionInput"
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Co-Pilot chat input textarea",
+          "input_data": {"text": "open saved view ov"},
+          "expected_result": "After typing 'saved view' trigger word + 2+ chars 'ov', autocomplete dropdown appears above the input showing matching saved views",
+          "screenshot": true,
+          "visual_check": "Autocomplete dropdown positioned above the input, showing matching saved view entities with: purple circle icon (Bookmark), display name, subtitle, purple highlight on selected item. Dropdown has 12px border-radius matching Concept D."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Autocomplete dropdown keyboard hint",
+          "input_data": {},
+          "expected_result": "Footer text visible: 'Use arrow keys to navigate, Enter to select, Esc to dismiss'"
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Co-Pilot chat input textarea",
+          "input_data": {"text": "hello world"},
+          "expected_result": "No autocomplete dropdown appears (no trigger word detected)"
+        }
+      ]
+    },
+    {
+      "id": "j16-entity-chip-selection",
+      "name": "Entity Selection & Chip Insertion",
+      "description": "Test selecting an entity from autocomplete and verifying chip insertion in the input",
+      "priority": "critical",
+      "related_stories": ["E5b-7"],
+      "acceptance_criteria": ["AC3", "AC4", "AC8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "click",
+          "target": "Co-Pilot toggle button",
+          "input_data": {},
+          "expected_result": "Co-Pilot drawer opens"
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Co-Pilot chat input textarea",
+          "input_data": {"text": "open view us"},
+          "expected_result": "Autocomplete dropdown appears showing matching views (e.g., 'Users' DataView)"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "First result in autocomplete dropdown (e.g., 'Users')",
+          "input_data": {},
+          "expected_result": "Trigger word + search text replaced with entity chip. Chip shows entity name in purple pill style.",
+          "screenshot": true,
+          "visual_check": "Entity chip visible in input area: purple pill (bg-[#ede9fe] text-[#6d28d9]) with LayoutList icon, 'Users' text, and X close button. Autocomplete dropdown dismissed. Input textarea refocused."
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "Co-Pilot chat input textarea (after chip)",
+          "input_data": {"text": " please show me this view"},
+          "expected_result": "Additional text typed after the chip, input shows chip + text together"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "X close button on entity chip",
+          "input_data": {},
+          "expected_result": "Entity chip removed from input, text remains"
+        }
+      ]
+    },
+    {
+      "id": "j17-entity-mention-send-display",
+      "name": "Send Message with Entity Mentions & Display in Chat",
+      "description": "Test sending a message with entity mentions and verifying they render as chips in the chat history",
+      "priority": "critical",
+      "related_stories": ["E5b-7"],
+      "acceptance_criteria": ["AC4", "AC11"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "click",
+          "target": "Co-Pilot toggle button",
+          "input_data": {},
+          "expected_result": "Co-Pilot drawer opens"
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Co-Pilot chat input textarea",
+          "input_data": {"text": "open view us"},
+          "expected_result": "Autocomplete appears"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "First autocomplete result",
+          "input_data": {},
+          "expected_result": "Entity chip inserted"
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "Co-Pilot chat input textarea",
+          "input_data": {"text": " show me all records"},
+          "expected_result": "Text added after chip"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Send button (purple arrow) in chat input",
+          "input_data": {},
+          "expected_result": "Message sent with entity mentions. User message bubble appears in chat with entity chips displayed inline.",
+          "screenshot": true,
+          "visual_check": "User message bubble (purple/primary background) with entity chip using user-message variant (bg-white/20 text-white), followed by message text 'show me all records'. Input cleared and ready for next message."
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "Streaming indicator in chat",
+          "input_data": {},
+          "expected_result": "AI assistant streaming indicator (pulsing dots) visible while waiting for response"
+        },
+        {
+          "step_number": 7,
+          "action": "verify_element",
+          "target": "Assistant response message",
+          "input_data": {},
+          "expected_result": "Assistant message appears with response. If it references entities, they render as assistant-message variant chips (bg-[#ede9fe] text-[#6d28d9]).",
+          "screenshot": true,
+          "visual_check": "Assistant message bubble (light background) with any entity mentions as muted purple chips, non-removable (display-only). Message content addresses the user's request about the mentioned entity."
+        }
+      ]
+    },
+    {
+      "id": "j18-entity-mention-keyboard-nav",
+      "name": "Entity Autocomplete Keyboard Navigation",
+      "description": "Test full keyboard navigation of entity autocomplete: arrow keys, Enter, Tab, Escape, Backspace",
+      "priority": "high",
+      "related_stories": ["E5b-7"],
+      "acceptance_criteria": ["AC8", "AC1", "AC3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "click",
+          "target": "Co-Pilot toggle button",
+          "input_data": {},
+          "expected_result": "Co-Pilot drawer opens"
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Co-Pilot chat input textarea",
+          "input_data": {"text": "open view us"},
+          "expected_result": "Autocomplete dropdown appears with results"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Press ArrowDown key",
+          "input_data": {"key": "ArrowDown"},
+          "expected_result": "Second result highlighted with purple background (#f5f3ff)",
+          "screenshot": true,
+          "visual_check": "Autocomplete dropdown with second item highlighted in light purple (#f5f3ff), first item unhighlighted"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Press ArrowUp key",
+          "input_data": {"key": "ArrowUp"},
+          "expected_result": "First result highlighted again"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Press Enter key",
+          "input_data": {"key": "Enter"},
+          "expected_result": "Selected entity inserted as chip, autocomplete closes"
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "Co-Pilot chat input textarea",
+          "input_data": {"text": "open saved view ov"},
+          "expected_result": "Autocomplete appears again for 'saved view' trigger"
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Press Escape key",
+          "input_data": {"key": "Escape"},
+          "expected_result": "Autocomplete dropdown dismissed, text remains in input"
+        },
+        {
+          "step_number": 8,
+          "action": "fill_form",
+          "target": "Clear textarea to empty",
+          "input_data": {"text": ""},
+          "expected_result": "Textarea is empty, chip(s) still present from step 5"
+        },
+        {
+          "step_number": 9,
+          "action": "click",
+          "target": "Press Backspace key with empty textarea",
+          "input_data": {"key": "Backspace"},
+          "expected_result": "Last entity chip removed from input",
+          "screenshot": true,
+          "visual_check": "Input area with no chips remaining, empty textarea, ready for fresh input"
+        }
+      ]
+    }
+  ]
+}

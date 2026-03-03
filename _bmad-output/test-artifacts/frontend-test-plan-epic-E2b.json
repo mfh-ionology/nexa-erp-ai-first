@@ -1,0 +1,1536 @@
+{
+  "epic_id": "E2b",
+  "epic_title": "Granular RBAC & Access Groups",
+  "generated_at": "2026-02-20T17:30:00.000Z",
+  "frontend_url": "http://localhost:5173",
+  "api_base_url": "http://localhost:3000",
+  "total_journeys": 21,
+  "total_steps": 141,
+  "prerequisites": {
+    "note": "Frontend pages do not exist yet — the web app (apps/web) is a stub. This test plan is a specification for E2E tests once the frontend is built (expected in E6+ epics). Tests assume a running API at :3000, a Vite dev server at :5173, and a seeded database with test users.",
+    "seeded_users": {
+      "admin": {
+        "email": "admin@nexa-test.co.uk",
+        "password": "Admin123!",
+        "role": "ADMIN",
+        "access_groups": ["FULL_ACCESS"],
+        "description": "Primary admin user with full access — used for most journeys"
+      },
+      "super_admin": {
+        "email": "superadmin@nexa-test.co.uk",
+        "password": "Super123!",
+        "role": "SUPER_ADMIN",
+        "access_groups": [],
+        "description": "SUPER_ADMIN bypasses permission matrix entirely"
+      },
+      "sales_staff": {
+        "email": "sales@nexa-test.co.uk",
+        "password": "Sales123!",
+        "role": "STAFF",
+        "access_groups": ["SALES_STAFF"],
+        "description": "Limited user — cannot access admin pages"
+      },
+      "read_only": {
+        "email": "readonly@nexa-test.co.uk",
+        "password": "Read123!",
+        "role": "VIEWER",
+        "access_groups": ["READ_ONLY"],
+        "description": "View-only user — no create/edit/delete permissions"
+      }
+    },
+    "seeded_data": {
+      "company": "Nexa Test Company",
+      "resources": 6,
+      "pre_built_access_groups": 12,
+      "resource_codes": [
+        "system.users.list",
+        "system.users.detail",
+        "system.company-profile.detail",
+        "system.resources.list",
+        "system.access-groups.list",
+        "system.access-groups.detail"
+      ]
+    }
+  },
+  "journeys": [
+    {
+      "id": "j01-admin-login-sidebar-navigation",
+      "name": "Admin Login and Permission-Driven Sidebar",
+      "description": "Verify that an ADMIN user with FULL_ACCESS group sees all System module sidebar items after login. The sidebar is built from GET /system/my-permissions.",
+      "priority": "critical",
+      "related_stories": ["E2b-4", "E2b-2"],
+      "acceptance_criteria": ["E2b.4-AC5", "E2b.4-AC11"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads with email and password fields",
+          "screenshot": true,
+          "visual_check": "Login form visible with email input, password input, and Sign In button"
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-test.co.uk",
+            "password": "Admin123!"
+          },
+          "expected_result": "Form fields populated",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login succeeds, redirected to dashboard",
+          "screenshot": true,
+          "visual_check": "Dashboard loaded with app shell — sidebar visible with System module expanded showing: Users, Company Profile, Resource Registry, Access Groups"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Sidebar System section",
+          "input_data": {},
+          "expected_result": "System module section contains links for Users, Company Profile, Resource Registry, and Access Groups",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_text",
+          "target": "Sidebar",
+          "input_data": {
+            "texts": ["Users", "Company Profile", "Resource Registry", "Access Groups"]
+          },
+          "expected_result": "All four System module sidebar items visible for FULL_ACCESS user",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j02-view-resource-registry",
+      "name": "View System Resource Registry",
+      "description": "Admin navigates to the Resource Registry page and verifies all seeded resources are displayed with correct metadata. This is a read-only T1 Entity List page.",
+      "priority": "critical",
+      "related_stories": ["E2b-1"],
+      "acceptance_criteria": ["E2b.1-AC1", "E2b.1-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "click",
+          "target": "Resource Registry sidebar link",
+          "input_data": {},
+          "expected_result": "Navigates to /system/resources",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "verify_text",
+          "target": "Page title",
+          "input_data": {
+            "text": "Resource Registry"
+          },
+          "expected_result": "Resource Registry heading visible",
+          "screenshot": true,
+          "visual_check": "T1 Entity List page with Resource Registry title, no [+ New] button (read-only), table listing resources with columns: Code, Name, Module, Type, Sort Order"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Resource list table",
+          "input_data": {},
+          "expected_result": "Table contains at least 6 rows for seeded system resources",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_text",
+          "target": "Resource table rows",
+          "input_data": {
+            "texts": [
+              "system.users.list",
+              "system.users.detail",
+              "system.company-profile.detail",
+              "system.resources.list",
+              "system.access-groups.list",
+              "system.access-groups.detail"
+            ]
+          },
+          "expected_result": "All 6 seeded system resource codes visible in the table",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Module filter dropdown",
+          "input_data": {
+            "module": "system"
+          },
+          "expected_result": "Table filtered to show only system module resources",
+          "screenshot": true,
+          "visual_check": "Filter dropdown showing 'system' selected, table showing only system-module resources"
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "Type filter dropdown",
+          "input_data": {
+            "type": "PAGE"
+          },
+          "expected_result": "Table filtered to show only PAGE type resources",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "fill_form",
+          "target": "Search input",
+          "input_data": {
+            "search": "access"
+          },
+          "expected_result": "Table filtered to show resources matching 'access' in code, name, or description",
+          "screenshot": true,
+          "visual_check": "Search box shows 'access', table filtered to show access-groups.list and access-groups.detail resources"
+        }
+      ]
+    },
+    {
+      "id": "j03-view-access-group-list",
+      "name": "View Access Group List with Pre-Built Groups",
+      "description": "Admin navigates to Access Groups page and verifies all 12 pre-built system groups are listed with correct metadata. T1 Entity List with cursor pagination.",
+      "priority": "critical",
+      "related_stories": ["E2b-2"],
+      "acceptance_criteria": ["E2b.2-AC2", "E2b.2-AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "click",
+          "target": "Access Groups sidebar link",
+          "input_data": {},
+          "expected_result": "Navigates to /system/access-groups",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "verify_text",
+          "target": "Page title",
+          "input_data": {
+            "text": "Access Groups"
+          },
+          "expected_result": "Access Groups heading visible",
+          "screenshot": true,
+          "visual_check": "T1 Entity List page with Access Groups title, [+ New Access Group] button visible, table listing groups with columns: Code, Name, Description, System badge, Active Users, Created"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Access group table",
+          "input_data": {},
+          "expected_result": "Table contains 12 rows for pre-built system groups",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_text",
+          "target": "Access group table rows",
+          "input_data": {
+            "texts": [
+              "FULL_ACCESS",
+              "FINANCE_MANAGER",
+              "FINANCE_CLERK",
+              "SALES_MANAGER",
+              "SALES_STAFF",
+              "PURCHASE_MANAGER",
+              "PURCHASE_CLERK",
+              "WAREHOUSE_STAFF",
+              "HR_MANAGER",
+              "HR_VIEWER",
+              "REPORT_VIEWER",
+              "READ_ONLY"
+            ]
+          },
+          "expected_result": "All 12 pre-built access group codes visible",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "System badge on FULL_ACCESS row",
+          "input_data": {},
+          "expected_result": "System badge/indicator visible on all 12 pre-built groups",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "Search input",
+          "input_data": {
+            "search": "manager"
+          },
+          "expected_result": "Table filtered to show groups containing 'manager'",
+          "screenshot": true,
+          "visual_check": "Search showing 'manager', table showing FINANCE_MANAGER, SALES_MANAGER, PURCHASE_MANAGER, HR_MANAGER"
+        },
+        {
+          "step_number": 7,
+          "action": "fill_form",
+          "target": "Search input",
+          "input_data": {
+            "search": ""
+          },
+          "expected_result": "Search cleared, all groups visible again",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j04-create-custom-access-group",
+      "name": "Create a Custom Access Group",
+      "description": "Admin creates a new custom access group with a unique code, name, and description via the create form. Verifies it appears in the list.",
+      "priority": "critical",
+      "related_stories": ["E2b-2"],
+      "acceptance_criteria": ["E2b.2-AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Access group list page loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "[+ New Access Group] button",
+          "input_data": {},
+          "expected_result": "Navigates to /system/access-groups/new — create form displayed",
+          "screenshot": true,
+          "visual_check": "T7 Settings template in create mode with empty form fields: Code (text input), Name (text input), Description (textarea)"
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Access group create form",
+          "input_data": {
+            "code": "QA_TESTER",
+            "name": "QA Tester",
+            "description": "Custom access group for QA testing E2E flows"
+          },
+          "expected_result": "Form fields populated with custom group data",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "[Save Settings] button",
+          "input_data": {},
+          "expected_result": "Access group created successfully — 201 response",
+          "screenshot": true,
+          "visual_check": "Success toast 'Access group created', redirected to detail page for QA_TESTER showing code (read-only after creation), name, description, empty permission matrix"
+        },
+        {
+          "step_number": 5,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Access group list now shows 13 groups (12 pre-built + QA_TESTER)",
+          "screenshot": true,
+          "visual_check": "Access group list with QA_TESTER row visible, no System badge on QA_TESTER (isSystem: false), user count showing 0"
+        }
+      ]
+    },
+    {
+      "id": "j05-create-duplicate-code-rejected",
+      "name": "Create Access Group with Duplicate Code is Rejected",
+      "description": "Verify that creating an access group with an existing code for the same company returns a 409 Conflict error.",
+      "priority": "high",
+      "related_stories": ["E2b-2"],
+      "acceptance_criteria": ["E2b.2-AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/access-groups/new",
+          "input_data": {},
+          "expected_result": "Create form loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Access group create form",
+          "input_data": {
+            "code": "QA_TESTER",
+            "name": "QA Tester Duplicate",
+            "description": "Attempting duplicate code"
+          },
+          "expected_result": "Form populated",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "[Save Settings] button",
+          "input_data": {},
+          "expected_result": "409 Conflict error displayed — code already exists",
+          "screenshot": true,
+          "visual_check": "Error toast or inline error showing 'Access group code already exists for this company', form remains on create page"
+        }
+      ]
+    },
+    {
+      "id": "j06-view-access-group-detail",
+      "name": "View Access Group Detail with Permission Matrix",
+      "description": "Admin views a pre-built system group (FULL_ACCESS) detail page showing the full permission matrix and field overrides panel. T7 Settings template.",
+      "priority": "critical",
+      "related_stories": ["E2b-2"],
+      "acceptance_criteria": ["E2b.2-AC3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Access group list loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "FULL_ACCESS row in table",
+          "input_data": {},
+          "expected_result": "Navigates to /system/access-groups/:fullAccessId — detail page loaded",
+          "screenshot": true,
+          "visual_check": "T7 Settings page with breadcrumb 'System > Access Groups > Full Access', title 'Full Access', Active status badge, [Save Settings] button, system group banner visible"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_text",
+          "target": "Group metadata section",
+          "input_data": {
+            "texts": ["FULL_ACCESS", "Full Access"]
+          },
+          "expected_result": "Code (read-only for system groups) and name displayed",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Permission matrix grid",
+          "input_data": {},
+          "expected_result": "Checkbox grid visible with resources grouped by module (System collapsible section), columns: canAccess, canNew, canView, canEdit, canDelete",
+          "screenshot": true,
+          "visual_check": "Permission matrix showing System module expanded with all 6 resources, each row has 5 checkboxes, FULL_ACCESS has all checkboxes checked (all true)"
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "System module collapsible section in permission matrix",
+          "input_data": {},
+          "expected_result": "System section shows: User Management, User Detail, Company Profile, Resource Registry, Access Group List, Access Group Detail — all with all 5 checkboxes checked",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "Field Overrides section",
+          "input_data": {},
+          "expected_result": "Field overrides panel visible (empty for FULL_ACCESS — no overrides set)",
+          "screenshot": true,
+          "visual_check": "Field Overrides section visible with resource selector dropdown, no overrides configured for FULL_ACCESS group"
+        }
+      ]
+    },
+    {
+      "id": "j07-edit-access-group-metadata",
+      "name": "Edit Access Group Name and Description",
+      "description": "Admin edits the name and description of the custom QA_TESTER group. Also tests that system groups can have name/description modified.",
+      "priority": "high",
+      "related_stories": ["E2b-2"],
+      "acceptance_criteria": ["E2b.2-AC4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Access group list loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "QA_TESTER row in table",
+          "input_data": {},
+          "expected_result": "QA_TESTER detail page loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Access group metadata form",
+          "input_data": {
+            "name": "QA Testing Team",
+            "description": "Updated description for the QA testing access group"
+          },
+          "expected_result": "Name and description fields updated",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "[Save Settings] button",
+          "input_data": {},
+          "expected_result": "Metadata updated successfully — 200 response",
+          "screenshot": true,
+          "visual_check": "Success toast 'Access group updated', page shows updated name 'QA Testing Team' and new description"
+        },
+        {
+          "step_number": 5,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "List shows updated name 'QA Testing Team' for the QA_TESTER group",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j08-configure-permission-matrix",
+      "name": "Configure Permission Matrix for Custom Group",
+      "description": "Admin configures the permission matrix for QA_TESTER group — enabling specific canAccess/canView permissions on some resources and saving. Verifies replace-all semantics.",
+      "priority": "critical",
+      "related_stories": ["E2b-2"],
+      "acceptance_criteria": ["E2b.2-AC5"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Access group list loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "QA_TESTER row in table",
+          "input_data": {},
+          "expected_result": "QA_TESTER detail page loaded with empty permission matrix (all unchecked)",
+          "screenshot": true,
+          "visual_check": "Permission matrix with all 6 resources visible, all checkboxes unchecked (new group has no permissions)"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "canAccess checkbox for system.users.list",
+          "input_data": {},
+          "expected_result": "canAccess checkbox now checked for Users List",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "canView checkbox for system.users.list",
+          "input_data": {},
+          "expected_result": "canView checkbox now checked for Users List",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "canAccess checkbox for system.users.detail",
+          "input_data": {},
+          "expected_result": "canAccess checkbox now checked for Users Detail",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "canView checkbox for system.users.detail",
+          "input_data": {},
+          "expected_result": "canView checkbox now checked for Users Detail",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "canAccess checkbox for system.company-profile.detail",
+          "input_data": {},
+          "expected_result": "canAccess checkbox now checked for Company Profile",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "canView checkbox for system.company-profile.detail",
+          "input_data": {},
+          "expected_result": "canView checkbox now checked for Company Profile",
+          "screenshot": true,
+          "visual_check": "Permission matrix showing users.list (canAccess+canView), users.detail (canAccess+canView), company-profile (canAccess+canView) checked; resources.list and access-groups remain unchecked"
+        },
+        {
+          "step_number": 9,
+          "action": "click",
+          "target": "[Save Settings] button",
+          "input_data": {},
+          "expected_result": "Permissions saved — PUT /access-groups/:id/permissions returns 200",
+          "screenshot": true,
+          "visual_check": "Success toast 'Permissions updated', permission matrix retains the checked state"
+        },
+        {
+          "step_number": 10,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Return to list",
+          "screenshot": false
+        },
+        {
+          "step_number": 11,
+          "action": "click",
+          "target": "QA_TESTER row in table",
+          "input_data": {},
+          "expected_result": "Detail page reloaded — permissions persisted correctly",
+          "screenshot": true,
+          "visual_check": "Permission matrix shows the same 6 checkboxes still checked from previous save — data persisted via GET detail API"
+        }
+      ]
+    },
+    {
+      "id": "j09-configure-field-overrides",
+      "name": "Configure Field-Level Visibility Overrides",
+      "description": "Admin configures field overrides on the QA_TESTER group — setting a field to HIDDEN and another to READ_ONLY on a resource. Verifies the field override panel.",
+      "priority": "high",
+      "related_stories": ["E2b-5", "E2b-2"],
+      "acceptance_criteria": ["E2b.5-AC1", "E2b.5-AC2", "E2b.5-AC7"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Access group list loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "QA_TESTER row in table",
+          "input_data": {},
+          "expected_result": "QA_TESTER detail page loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Field Overrides section / tab",
+          "input_data": {},
+          "expected_result": "Field overrides panel visible with resource selector",
+          "screenshot": true,
+          "visual_check": "Field Overrides panel with 'Select Resource' dropdown, no overrides configured yet"
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "Resource selector dropdown",
+          "input_data": {
+            "resource": "system.company-profile.detail"
+          },
+          "expected_result": "Resource selected, field override table shows available fields for company-profile",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Field override for vatNumber",
+          "input_data": {
+            "fieldPath": "vatNumber",
+            "visibility": "HIDDEN"
+          },
+          "expected_result": "vatNumber field set to HIDDEN",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "Field override for registrationNumber",
+          "input_data": {
+            "fieldPath": "registrationNumber",
+            "visibility": "READ_ONLY"
+          },
+          "expected_result": "registrationNumber field set to READ_ONLY",
+          "screenshot": true,
+          "visual_check": "Field override table showing vatNumber = HIDDEN, registrationNumber = READ_ONLY with dropdown selectors"
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "[Save Settings] button",
+          "input_data": {},
+          "expected_result": "Field overrides saved via PUT /access-groups/:id/field-overrides — 200",
+          "screenshot": true,
+          "visual_check": "Success toast 'Field overrides updated', override table retains HIDDEN and READ_ONLY settings"
+        }
+      ]
+    },
+    {
+      "id": "j10-assign-access-groups-to-user",
+      "name": "Assign Access Groups to a User",
+      "description": "Admin navigates to a user's detail page and assigns the QA_TESTER custom group alongside an existing system group. Verifies the replace-all assignment pattern.",
+      "priority": "critical",
+      "related_stories": ["E2b-3"],
+      "acceptance_criteria": ["E2b.3-AC1", "E2b.3-AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/users",
+          "input_data": {},
+          "expected_result": "User list page loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "sales@nexa-test.co.uk user row",
+          "input_data": {},
+          "expected_result": "User detail page loaded for the sales staff user",
+          "screenshot": true,
+          "visual_check": "T2 Record Detail page for the sales user, showing user info and Access Groups assignment panel with current groups (SALES_STAFF)"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Access Groups assignment panel",
+          "input_data": {},
+          "expected_result": "Panel shows currently assigned groups — SALES_STAFF displayed as tag/chip",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Add access group selector / multi-select",
+          "input_data": {},
+          "expected_result": "Dropdown or modal showing available access groups for assignment",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Access group multi-select",
+          "input_data": {
+            "accessGroups": ["SALES_STAFF", "QA_TESTER"]
+          },
+          "expected_result": "Both SALES_STAFF and QA_TESTER selected",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Save access group assignments button",
+          "input_data": {},
+          "expected_result": "Assignments saved via PUT /system/users/:id/access-groups — 200",
+          "screenshot": true,
+          "visual_check": "Success toast 'Access groups updated', panel shows both SALES_STAFF and QA_TESTER as assigned groups with assignedBy and assignedAt timestamps"
+        },
+        {
+          "step_number": 7,
+          "action": "navigate",
+          "target": "/system/users",
+          "input_data": {},
+          "expected_result": "Return to user list",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "sales@nexa-test.co.uk user row",
+          "input_data": {},
+          "expected_result": "User detail reloaded — assignments persisted",
+          "screenshot": true,
+          "visual_check": "Access Groups panel shows both SALES_STAFF and QA_TESTER groups assigned, verifying persistence"
+        }
+      ]
+    },
+    {
+      "id": "j11-assign-empty-group-rejected",
+      "name": "Assign Zero Access Groups Rejected (422)",
+      "description": "Verify that attempting to assign zero access groups to a user returns a 422 Business Rule Violation — at least one group is required.",
+      "priority": "high",
+      "related_stories": ["E2b-3"],
+      "acceptance_criteria": ["E2b.3-AC3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/users",
+          "input_data": {},
+          "expected_result": "User list loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "sales@nexa-test.co.uk user row",
+          "input_data": {},
+          "expected_result": "User detail page loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Remove all access group tags/chips",
+          "input_data": {},
+          "expected_result": "All access groups deselected — empty selection",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Save access group assignments button",
+          "input_data": {},
+          "expected_result": "422 error — at least one access group is required",
+          "screenshot": true,
+          "visual_check": "Error toast or inline error showing 'At least one access group is required', assignments not saved, previous groups remain"
+        }
+      ]
+    },
+    {
+      "id": "j12-verify-permission-enforcement-denied",
+      "name": "Verify Permission Enforcement - Limited User Denied Access",
+      "description": "Login as the sales_staff user (SALES_STAFF group) and verify that admin-only pages like Resource Registry and Access Groups are NOT visible in the sidebar and return 403 if navigated to directly.",
+      "priority": "critical",
+      "related_stories": ["E2b-4"],
+      "acceptance_criteria": ["E2b.4-AC3", "E2b.4-AC4", "E2b.4-AC11"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loaded (may need to logout first)",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "sales@nexa-test.co.uk",
+            "password": "Sales123!"
+          },
+          "expected_result": "Form populated",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login succeeds, dashboard loaded",
+          "screenshot": true,
+          "visual_check": "Dashboard loaded, sidebar does NOT show Resource Registry or Access Groups links (SALES_STAFF lacks canAccess on system.resources.list and system.access-groups.list). Only Company Profile and Users visible if SALES_STAFF+QA_TESTER grants that access."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_text",
+          "target": "Sidebar",
+          "input_data": {
+            "absent_texts": ["Resource Registry", "Access Groups"]
+          },
+          "expected_result": "Resource Registry and Access Groups NOT visible in sidebar",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "navigate",
+          "target": "/system/resources",
+          "input_data": {},
+          "expected_result": "403 Forbidden or redirect to unauthorized page",
+          "screenshot": true,
+          "visual_check": "Access denied message displayed — user does not have canAccess permission on system.resources.list"
+        },
+        {
+          "step_number": 6,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "403 Forbidden or redirect to unauthorized page",
+          "screenshot": true,
+          "visual_check": "Access denied message displayed — user does not have canAccess permission on system.access-groups.list"
+        }
+      ]
+    },
+    {
+      "id": "j13-verify-most-permissive-wins",
+      "name": "Verify Most-Permissive-Wins Permission Resolution",
+      "description": "The sales user has both SALES_STAFF (limited access) and QA_TESTER (users.list canAccess+canView). Verify that the union of permissions is applied — user can view the Users page via QA_TESTER even though SALES_STAFF doesn't grant it.",
+      "priority": "critical",
+      "related_stories": ["E2b-4"],
+      "acceptance_criteria": ["E2b.4-AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "sales@nexa-test.co.uk",
+            "password": "Sales123!"
+          },
+          "expected_result": "Login form populated",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_text",
+          "target": "Sidebar",
+          "input_data": {
+            "texts": ["Users"]
+          },
+          "expected_result": "Users link visible in sidebar — granted by QA_TESTER's canAccess on system.users.list",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Users sidebar link",
+          "input_data": {},
+          "expected_result": "User list page loads successfully (not 403)",
+          "screenshot": true,
+          "visual_check": "User list page visible showing users — most-permissive-wins resolved canAccess=true from QA_TESTER group even though SALES_STAFF doesn't grant it"
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "[+ New User] button",
+          "input_data": {},
+          "expected_result": "[+ New User] button should be HIDDEN — QA_TESTER only has canAccess+canView, not canNew",
+          "screenshot": true,
+          "visual_check": "User list page with no [+ New User] button visible — canNew is false for system.users.list in QA_TESTER group"
+        }
+      ]
+    },
+    {
+      "id": "j14-verify-field-level-visibility",
+      "name": "Verify Field-Level Visibility in API Response",
+      "description": "The sales user (with QA_TESTER group having HIDDEN vatNumber and READ_ONLY registrationNumber on company-profile) views the company profile. HIDDEN fields should be absent, READ_ONLY fields should have _fieldMeta annotation.",
+      "priority": "high",
+      "related_stories": ["E2b-5"],
+      "acceptance_criteria": ["E2b.5-AC1", "E2b.5-AC2", "E2b.5-AC4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/company-profile",
+          "input_data": {},
+          "expected_result": "Company profile page loaded (QA_TESTER grants canAccess+canView on company-profile)",
+          "screenshot": true,
+          "visual_check": "Company profile page loaded — vatNumber field should be ABSENT (HIDDEN), registrationNumber field should be present but marked as read-only"
+        },
+        {
+          "step_number": 2,
+          "action": "verify_text",
+          "target": "Company profile form",
+          "input_data": {
+            "absent_texts": ["vatNumber value"]
+          },
+          "expected_result": "vatNumber field is not displayed (HIDDEN by QA_TESTER field override)",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "registrationNumber field",
+          "input_data": {},
+          "expected_result": "registrationNumber field is present but displayed as read-only (READ_ONLY override)",
+          "screenshot": true,
+          "visual_check": "registrationNumber field visible but non-editable (greyed out, disabled, or with read-only indicator), reflecting the READ_ONLY field override from QA_TESTER group"
+        }
+      ]
+    },
+    {
+      "id": "j15-super-admin-bypass",
+      "name": "SUPER_ADMIN Bypasses All Permission Checks",
+      "description": "Login as SUPER_ADMIN user and verify full access to all pages, all fields visible (no field filtering), and no access group assignment required.",
+      "priority": "critical",
+      "related_stories": ["E2b-4", "E2b-5"],
+      "acceptance_criteria": ["E2b.4-AC2", "E2b.5-AC5"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "superadmin@nexa-test.co.uk",
+            "password": "Super123!"
+          },
+          "expected_result": "Form populated",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login succeeds, dashboard loaded with full sidebar",
+          "screenshot": true,
+          "visual_check": "Dashboard with full sidebar showing all System module items (Users, Company Profile, Resource Registry, Access Groups) — SUPER_ADMIN bypass means all resources accessible"
+        },
+        {
+          "step_number": 4,
+          "action": "navigate",
+          "target": "/system/resources",
+          "input_data": {},
+          "expected_result": "Resource Registry accessible — SUPER_ADMIN bypass",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Access Groups accessible — SUPER_ADMIN bypass",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "navigate",
+          "target": "/system/company-profile",
+          "input_data": {},
+          "expected_result": "Company profile page loaded with ALL fields visible — SUPER_ADMIN skips field filtering",
+          "screenshot": true,
+          "visual_check": "Company profile shows ALL fields including vatNumber and registrationNumber fully editable — no _fieldMeta applied, SUPER_ADMIN bypass means no field filtering"
+        }
+      ]
+    },
+    {
+      "id": "j16-my-permissions-endpoint",
+      "name": "Verify My Permissions Endpoint Data",
+      "description": "Call GET /system/my-permissions for different users and verify the response drives the UI correctly — permissions, accessGroups, enabledModules, and isSuperAdmin flag.",
+      "priority": "high",
+      "related_stories": ["E2b-4"],
+      "acceptance_criteria": ["E2b.4-AC5", "E2b.4-AC11"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-test.co.uk",
+            "password": "Admin123!"
+          },
+          "expected_result": "Form populated",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login succeeds",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "navigate",
+          "target": "/system/my-permissions",
+          "input_data": {},
+          "expected_result": "My permissions page or developer info panel loads showing resolved permissions",
+          "screenshot": true,
+          "visual_check": "Permissions view showing: role (ADMIN), isSuperAdmin (false), accessGroups list including FULL_ACCESS, permissions object with all system resources having all flags true, enabledModules including 'system'"
+        },
+        {
+          "step_number": 5,
+          "action": "verify_text",
+          "target": "Permissions data",
+          "input_data": {
+            "texts": ["ADMIN", "FULL_ACCESS", "system"]
+          },
+          "expected_result": "Role, access group, and enabled module displayed correctly",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j17-system-group-cannot-be-deleted",
+      "name": "System Access Group Cannot Be Deleted",
+      "description": "Admin attempts to delete/deactivate a system group (isSystem: true) and verifies the operation is rejected with 409 Conflict.",
+      "priority": "high",
+      "related_stories": ["E2b-2"],
+      "acceptance_criteria": ["E2b.2-AC7"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Access group list loaded (logged in as admin)",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "READ_ONLY row in table",
+          "input_data": {},
+          "expected_result": "READ_ONLY detail page loaded — system group banner visible",
+          "screenshot": true,
+          "visual_check": "T7 Settings page for READ_ONLY group with system group banner 'This is a system access group — code cannot be changed and it cannot be deleted'"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Overflow menu (More Actions)",
+          "input_data": {},
+          "expected_result": "Overflow menu opens",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Deactivate option in overflow menu",
+          "input_data": {},
+          "expected_result": "Deactivate option is disabled or has tooltip explaining system groups cannot be deleted",
+          "screenshot": true,
+          "visual_check": "Overflow menu showing Deactivate option disabled/greyed out with tooltip 'System access groups cannot be deactivated'"
+        }
+      ]
+    },
+    {
+      "id": "j18-delete-custom-access-group",
+      "name": "Soft-Delete Custom Access Group",
+      "description": "Admin deactivates the QA_TESTER custom group (after removing user assignments). Verifies soft-delete behavior — isActive becomes false.",
+      "priority": "high",
+      "related_stories": ["E2b-2", "E2b-3"],
+      "acceptance_criteria": ["E2b.2-AC8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/users",
+          "input_data": {},
+          "expected_result": "User list loaded (admin session)",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "sales@nexa-test.co.uk user row",
+          "input_data": {},
+          "expected_result": "Sales user detail page loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Access group multi-select",
+          "input_data": {
+            "accessGroups": ["SALES_STAFF"]
+          },
+          "expected_result": "Only SALES_STAFF selected — QA_TESTER removed",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Save access group assignments button",
+          "input_data": {},
+          "expected_result": "Assignment saved — sales user now only has SALES_STAFF",
+          "screenshot": true,
+          "visual_check": "Success toast, Access Groups panel shows only SALES_STAFF for the sales user"
+        },
+        {
+          "step_number": 5,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Access group list loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "QA_TESTER row in table",
+          "input_data": {},
+          "expected_result": "QA_TESTER detail page loaded — user count now 0",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Overflow menu (More Actions)",
+          "input_data": {},
+          "expected_result": "Overflow menu opens",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Deactivate option",
+          "input_data": {},
+          "expected_result": "Confirmation dialog appears",
+          "screenshot": true,
+          "visual_check": "Confirmation dialog: 'Are you sure you want to deactivate QA Testing Team? This will remove the group from active use.'"
+        },
+        {
+          "step_number": 9,
+          "action": "click",
+          "target": "Confirm deactivation button",
+          "input_data": {},
+          "expected_result": "Group deactivated — 204 response from DELETE endpoint",
+          "screenshot": true,
+          "visual_check": "Success toast 'Access group deactivated', redirected to access group list, QA_TESTER no longer visible in active group list (isActive filter defaults to true)"
+        }
+      ]
+    },
+    {
+      "id": "j19-read-only-user-no-create-edit-delete",
+      "name": "Read-Only User Cannot Create, Edit, or Delete",
+      "description": "Login as the read_only user (READ_ONLY group) and verify they can view pages but cannot create, edit, or delete — buttons are hidden and direct actions are blocked.",
+      "priority": "high",
+      "related_stories": ["E2b-4"],
+      "acceptance_criteria": ["E2b.4-AC4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "readonly@nexa-test.co.uk",
+            "password": "Read123!"
+          },
+          "expected_result": "Form populated",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login succeeds, dashboard loaded",
+          "screenshot": true,
+          "visual_check": "Dashboard loaded with sidebar showing system module items — READ_ONLY group has canAccess+canView on all resources"
+        },
+        {
+          "step_number": 4,
+          "action": "navigate",
+          "target": "/system/users",
+          "input_data": {},
+          "expected_result": "User list page accessible (canAccess+canView is true)",
+          "screenshot": true,
+          "visual_check": "User list visible but [+ New User] button is HIDDEN — canNew is false for READ_ONLY group"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "First user row in table",
+          "input_data": {},
+          "expected_result": "User detail page loads (canView is true)",
+          "screenshot": true,
+          "visual_check": "User detail page visible in read-only mode — all form fields are disabled/read-only, no Edit or Delete buttons visible (canEdit and canDelete are false)"
+        },
+        {
+          "step_number": 6,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Access group list accessible (canAccess+canView is true for READ_ONLY)",
+          "screenshot": true,
+          "visual_check": "Access group list visible but [+ New Access Group] button is HIDDEN — canNew is false for READ_ONLY group"
+        }
+      ]
+    },
+    {
+      "id": "j20-export-import-defaults",
+      "name": "Export and Import Permission Configuration",
+      "description": "Admin exports the company's permission configuration as JSON and re-imports it (dry run first, then actual import). Verifies round-trip fidelity.",
+      "priority": "high",
+      "related_stories": ["E2b-6"],
+      "acceptance_criteria": ["E2b.6-AC1", "E2b.6-AC2", "E2b.6-AC5", "E2b.6-AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/company-profile",
+          "input_data": {},
+          "expected_result": "Company profile page loaded (admin session)",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Overflow menu (More Actions)",
+          "input_data": {},
+          "expected_result": "Overflow menu opens with Export Config and Import Config options",
+          "screenshot": true,
+          "visual_check": "Overflow menu showing 'Export Config' and 'Import Config' options"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Export Config option",
+          "input_data": {},
+          "expected_result": "GET /system/company-profile/export-defaults called — JSON download initiated or preview shown",
+          "screenshot": true,
+          "visual_check": "Export dialog or JSON preview showing version, exportedAt, exportedFrom (company name), resources array, accessGroups array with permissions and fieldOverrides, vatCodes, paymentTerms, numberSeries, currencies"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_text",
+          "target": "Export JSON preview",
+          "input_data": {
+            "texts": ["version", "resources", "accessGroups", "permissions"]
+          },
+          "expected_result": "Export JSON contains all expected sections",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Import Config option (from overflow menu)",
+          "input_data": {},
+          "expected_result": "Import dialog opens with JSON input area and dry-run toggle",
+          "screenshot": true,
+          "visual_check": "Import dialog with JSON textarea/file upload area, dry-run toggle checkbox, and Import button"
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "Import dialog",
+          "input_data": {
+            "dryRun": true,
+            "data": "{{previously exported JSON}}"
+          },
+          "expected_result": "Dry-run mode enabled, JSON pasted/loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Import button",
+          "input_data": {},
+          "expected_result": "Dry run executed — POST /system/company-profile/import-defaults with dryRun:true returns DRY_RUN status with summary counts",
+          "screenshot": true,
+          "visual_check": "Import result showing status: DRY_RUN, summary with counts (resources created/updated, access groups created/updated, permissions set), no warnings — dry run validated without persisting"
+        },
+        {
+          "step_number": 8,
+          "action": "fill_form",
+          "target": "Import dialog",
+          "input_data": {
+            "dryRun": false
+          },
+          "expected_result": "Dry-run toggle unchecked for actual import",
+          "screenshot": false
+        },
+        {
+          "step_number": 9,
+          "action": "click",
+          "target": "Import button",
+          "input_data": {},
+          "expected_result": "Actual import executed — status: APPLIED with summary counts",
+          "screenshot": true,
+          "visual_check": "Import result showing status: APPLIED, summary with created/updated counts, empty warnings array. Permission configuration re-applied successfully."
+        }
+      ]
+    },
+    {
+      "id": "j21-cache-invalidation-after-permission-change",
+      "name": "Verify Cache Invalidation After Permission Change",
+      "description": "Admin modifies an access group's permissions, then the affected user's next request reflects the updated permissions without waiting for cache TTL.",
+      "priority": "high",
+      "related_stories": ["E2b-4"],
+      "acceptance_criteria": ["E2b.4-AC6", "E2b.4-AC7"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "Access group list loaded (admin session)",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "SALES_STAFF row in table",
+          "input_data": {},
+          "expected_result": "SALES_STAFF detail page loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "canAccess checkbox for system.resources.list (currently unchecked for SALES_STAFF)",
+          "input_data": {},
+          "expected_result": "canAccess now checked for Resource Registry in SALES_STAFF group",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "canView checkbox for system.resources.list",
+          "input_data": {},
+          "expected_result": "canView now checked",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "[Save Settings] button",
+          "input_data": {},
+          "expected_result": "Permissions saved — cache invalidated for all SALES_STAFF users",
+          "screenshot": true,
+          "visual_check": "Success toast 'Permissions updated' — permission cache for sales user should be invalidated"
+        },
+        {
+          "step_number": 6,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Navigate to login to switch users",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "sales@nexa-test.co.uk",
+            "password": "Sales123!"
+          },
+          "expected_result": "Login form populated",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Login succeeds with updated permissions",
+          "screenshot": true,
+          "visual_check": "Dashboard sidebar now shows 'Resource Registry' link for sales user — the permission change took effect immediately (cache was invalidated by the accessGroup.updated event)"
+        },
+        {
+          "step_number": 9,
+          "action": "click",
+          "target": "Resource Registry sidebar link",
+          "input_data": {},
+          "expected_result": "Resource Registry page accessible — confirming cache invalidation worked",
+          "screenshot": true,
+          "visual_check": "Resource Registry page loads successfully for the sales user — previously denied, now allowed after SALES_STAFF permission update"
+        },
+        {
+          "step_number": 10,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Switch back to admin to revert change",
+          "screenshot": false
+        },
+        {
+          "step_number": 11,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-test.co.uk",
+            "password": "Admin123!"
+          },
+          "expected_result": "Admin login",
+          "screenshot": false
+        },
+        {
+          "step_number": 12,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Admin logged in",
+          "screenshot": false
+        },
+        {
+          "step_number": 13,
+          "action": "navigate",
+          "target": "/system/access-groups",
+          "input_data": {},
+          "expected_result": "List loaded",
+          "screenshot": false
+        },
+        {
+          "step_number": 14,
+          "action": "click",
+          "target": "SALES_STAFF row",
+          "input_data": {},
+          "expected_result": "Detail page",
+          "screenshot": false
+        },
+        {
+          "step_number": 15,
+          "action": "click",
+          "target": "canAccess checkbox for system.resources.list (uncheck it)",
+          "input_data": {},
+          "expected_result": "Reverted to original state",
+          "screenshot": false
+        },
+        {
+          "step_number": 16,
+          "action": "click",
+          "target": "canView checkbox for system.resources.list (uncheck it)",
+          "input_data": {},
+          "expected_result": "Reverted",
+          "screenshot": false
+        },
+        {
+          "step_number": 17,
+          "action": "click",
+          "target": "[Save Settings] button",
+          "input_data": {},
+          "expected_result": "SALES_STAFF permissions restored to original",
+          "screenshot": false
+        }
+      ]
+    }
+  ]
+}

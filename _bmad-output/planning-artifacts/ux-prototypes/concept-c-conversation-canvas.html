@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexa ERP — Concept C: The Conversation Canvas</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: {
+        heading: ['Bricolage Grotesque', 'sans-serif'],
+        mono: ['DM Mono', 'monospace'],
+      },
+      colors: {
+        nxbg: '#0c0a1a',
+        nxsurface: '#1a1730',
+        nxai: '#1e1b32',
+        nxuser: '#252244',
+        nxteal: '#14b8a6',
+        nxviolet: '#8b5cf6',
+        nxpos: '#34d399',
+        nxneg: '#f87171',
+        nxwarn: '#fbbf24',
+        nxtxt: '#e2e8f0',
+        nxtxt2: '#94a3b8',
+      }
+    }
+  }
+}
+</script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Bricolage Grotesque', sans-serif; background: #0c0a1a; color: #e2e8f0; overflow: hidden; height: 100vh; }
+.font-mono-num { font-family: 'DM Mono', monospace; }
+.gradient-text { background: linear-gradient(135deg, #14b8a6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.gradient-border { border: 1px solid transparent; background-clip: padding-box; position: relative; }
+.gradient-border::before { content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; background: linear-gradient(135deg, rgba(20,184,166,0.4), rgba(139,92,246,0.4)); -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; }
+.ai-border-left { border-left: 3px solid transparent; border-image: linear-gradient(to bottom, #14b8a6, #8b5cf6) 1; }
+.user-border-left { border-left: 3px solid #334155; }
+.card-enter { animation: cardEnter 0.4s ease-out forwards; opacity: 0; transform: scale(0.95) translateY(10px); }
+@keyframes cardEnter { to { opacity: 1; transform: scale(1) translateY(0); } }
+.msg-enter { animation: msgEnter 0.35s ease-out forwards; opacity: 0; transform: translateY(15px); }
+@keyframes msgEnter { to { opacity: 1; transform: translateY(0); } }
+.typing-dot { width: 8px; height: 8px; border-radius: 50%; background: #14b8a6; display: inline-block; animation: typingBounce 1.2s infinite; }
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typingBounce { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-8px); opacity: 1; } }
+.check-circle { stroke-dasharray: 166; stroke-dashoffset: 166; animation: checkDraw 0.6s ease forwards; }
+.check-mark { stroke-dasharray: 48; stroke-dashoffset: 48; animation: checkDraw 0.3s 0.4s ease forwards; }
+@keyframes checkDraw { to { stroke-dashoffset: 0; } }
+.input-glow:focus-within { box-shadow: 0 0 20px rgba(20,184,166,0.15), 0 0 40px rgba(139,92,246,0.1); }
+.input-glow { transition: box-shadow 0.3s ease; }
+.sidebar-btn { transition: all 0.2s ease; }
+.sidebar-btn:hover { transform: scale(1.02); box-shadow: 0 0 15px rgba(139,92,246,0.2); }
+.sidebar-btn.active { background: linear-gradient(135deg, rgba(20,184,166,0.15), rgba(139,92,246,0.15)); border-color: rgba(139,92,246,0.4); }
+.status-overdue { background: rgba(248,113,113,0.15); color: #f87171; }
+.status-due { background: rgba(251,191,36,0.15); color: #fbbf24; }
+.status-paid { background: rgba(52,211,153,0.15); color: #34d399; }
+.status-draft { background: rgba(148,163,184,0.15); color: #94a3b8; }
+.status-posted { background: rgba(20,184,166,0.15); color: #14b8a6; }
+.conv-stream { scrollbar-width: thin; scrollbar-color: rgba(139,92,246,0.3) transparent; }
+.conv-stream::-webkit-scrollbar { width: 6px; }
+.conv-stream::-webkit-scrollbar-track { background: transparent; }
+.conv-stream::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.3); border-radius: 3px; }
+.sparkline-up { color: #34d399; }
+.sparkline-down { color: #f87171; }
+.scenario-card { transition: all 0.2s ease; cursor: pointer; }
+.scenario-card:hover { transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+.step-card { animation: stepIn 0.5s ease-out forwards; opacity: 0; }
+@keyframes stepIn { to { opacity: 1; } }
+.bg-mesh { background-image: radial-gradient(at 20% 80%, rgba(20,184,166,0.03) 0%, transparent 50%), radial-gradient(at 80% 20%, rgba(139,92,246,0.03) 0%, transparent 50%), radial-gradient(at 50% 50%, rgba(20,184,166,0.02) 0%, transparent 70%); }
+.inv-row { transition: background 0.15s ease; cursor: pointer; }
+.inv-row:hover { background: rgba(139,92,246,0.08); }
+.ai-analysis-enter { animation: analysisSlide 0.5s ease-out forwards; opacity: 0; max-height: 0; overflow: hidden; }
+@keyframes analysisSlide { to { opacity: 1; max-height: 600px; } }
+.quick-reply { transition: all 0.2s ease; }
+.quick-reply:hover { background: linear-gradient(135deg, rgba(20,184,166,0.2), rgba(139,92,246,0.2)); border-color: rgba(139,92,246,0.5); transform: translateY(-1px); }
+.progress-bar-fill { background: linear-gradient(90deg, #14b8a6, #8b5cf6); }
+</style>
+</head>
+<body class="bg-nxbg text-nxtxt">
+
+<!-- TOP BAR -->
+<div class="fixed top-0 left-0 right-0 h-14 bg-nxsurface/80 backdrop-blur-xl border-b border-violet-500/10 flex items-center justify-between px-5 z-50">
+  <div class="flex items-center gap-3">
+    <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #14b8a6, #8b5cf6);">
+      <span class="text-white font-bold text-sm">N</span>
+    </div>
+    <span class="font-heading font-bold text-lg gradient-text">NEXA</span>
+    <div class="ml-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-nxbg/50 border border-violet-500/10 cursor-pointer hover:border-violet-500/30 transition-colors">
+      <svg class="w-4 h-4 text-nxtxt2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      <span class="text-sm text-nxtxt2">Conversations</span>
+      <svg class="w-3 h-3 text-nxtxt2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+    </div>
+  </div>
+  <div class="flex items-center gap-3 text-sm text-nxtxt2">
+    <span class="font-mono-num text-xs opacity-60">Mon 17 Feb 2026</span>
+    <span class="opacity-30">|</span>
+    <span class="text-xs opacity-60">Meridian Manufacturing Ltd</span>
+    <div class="relative cursor-pointer ml-2">
+      <svg class="w-5 h-5 text-nxtxt2 hover:text-nxtxt transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+      <span class="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center text-white" style="background: linear-gradient(135deg, #14b8a6, #8b5cf6);">3</span>
+    </div>
+    <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold cursor-pointer" style="background: linear-gradient(135deg, rgba(20,184,166,0.3), rgba(139,92,246,0.3));">SC</div>
+  </div>
+</div>
+
+<!-- MAIN LAYOUT -->
+<div class="flex h-screen pt-14">
+  <!-- CONVERSATION AREA -->
+  <div class="flex-1 flex flex-col relative bg-mesh">
+    <!-- Conversation Stream -->
+    <div id="convStream" class="conv-stream flex-1 overflow-y-auto px-4 py-6">
+      <div id="convContent" class="max-w-3xl mx-auto space-y-4"></div>
+    </div>
+    <!-- Input Bar -->
+    <div class="px-4 pb-5 pt-2">
+      <div class="max-w-3xl mx-auto">
+        <div class="input-glow rounded-2xl border border-violet-500/20 bg-nxsurface/60 backdrop-blur-sm p-1 flex items-center gap-2 focus-within:border-violet-500/40">
+          <input id="chatInput" type="text" placeholder="Type your message..." class="flex-1 bg-transparent px-4 py-3 text-sm text-nxtxt placeholder-nxtxt2/50 outline-none font-heading" onkeydown="if(event.key==='Enter')handleChat()">
+          <button onclick="handleChat()" class="w-10 h-10 rounded-xl flex items-center justify-center transition-all hover:scale-105" style="background: linear-gradient(135deg, #14b8a6, #8b5cf6);">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+          </button>
+        </div>
+        <div id="quickReplies" class="flex gap-2 mt-2 flex-wrap"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT SIDEBAR -->
+  <div class="w-52 border-l border-violet-500/10 bg-nxsurface/30 backdrop-blur-sm flex flex-col p-3 gap-2 overflow-y-auto">
+    <div class="text-[10px] uppercase tracking-widest text-nxtxt2/50 font-heading mb-1 px-2">Quick Actions</div>
+    <button onclick="switchView('briefing')" data-view="briefing" class="sidebar-btn active flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-violet-500/10 bg-nxbg/30 text-sm text-left w-full">
+      <span class="text-base">☀️</span><span class="font-heading text-nxtxt">Briefing</span>
+    </button>
+    <button onclick="switchView('invoices')" data-view="invoices" class="sidebar-btn flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-violet-500/10 bg-nxbg/30 text-sm text-left w-full">
+      <span class="text-base">📄</span><span class="font-heading text-nxtxt">Invoices</span>
+    </button>
+    <button onclick="switchView('create')" data-view="create" class="sidebar-btn flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-violet-500/10 bg-nxbg/30 text-sm text-left w-full">
+      <span class="text-base">➕</span><span class="font-heading text-nxtxt">Create Invoice</span>
+    </button>
+    <button onclick="switchView('reports')" data-view="reports" class="sidebar-btn flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-violet-500/10 bg-nxbg/30 text-sm text-left w-full">
+      <span class="text-base">📊</span><span class="font-heading text-nxtxt">P&L Report</span>
+    </button>
+    <button onclick="switchView('cashflow')" data-view="cashflow" class="sidebar-btn flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-violet-500/10 bg-nxbg/30 text-sm text-left w-full">
+      <span class="text-base">💰</span><span class="font-heading text-nxtxt">Cash Flow</span>
+    </button>
+    <button onclick="switchView('chat')" data-view="chat" class="sidebar-btn flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-violet-500/10 bg-nxbg/30 text-sm text-left w-full">
+      <span class="text-base">💬</span><span class="font-heading text-nxtxt">Free Chat</span>
+    </button>
+    <div class="mt-4 text-[10px] uppercase tracking-widest text-nxtxt2/50 font-heading mb-1 px-2">Recent</div>
+    <div class="space-y-1">
+      <div class="px-3 py-2 rounded-lg text-xs text-nxtxt2 hover:bg-nxbg/30 cursor-pointer transition-colors truncate">"Cash flow forecast..."</div>
+      <div class="px-3 py-2 rounded-lg text-xs text-nxtxt2 hover:bg-nxbg/30 cursor-pointer transition-colors truncate">"Overdue invoices..."</div>
+      <div class="px-3 py-2 rounded-lg text-xs text-nxtxt2 hover:bg-nxbg/30 cursor-pointer transition-colors truncate">"Widget-B pricing..."</div>
+      <div class="px-3 py-2 rounded-lg text-xs text-nxtxt2 hover:bg-nxbg/30 cursor-pointer transition-colors truncate">"February P&L..."</div>
+    </div>
+    <div class="mt-auto pt-4 border-t border-violet-500/10 px-2">
+      <div class="text-[10px] text-nxtxt2/40 font-mono-num">Nexa ERP v0.1-alpha</div>
+      <div class="text-[10px] text-nxtxt2/30 font-mono-num">Concept C: Conversation Canvas</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========== GLOBAL STATE ==========
+let currentView = 'briefing';
+let charts = {};
+let analysisShown = {};
+
+// ========== HELPER FUNCTIONS ==========
+function ai(html) {
+  return `<div class="msg-enter flex gap-3 items-start"><div class="w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center mt-1" style="background: linear-gradient(135deg, rgba(20,184,166,0.3), rgba(139,92,246,0.3));"><span class="text-sm">✦</span></div><div class="flex-1 ai-border-left pl-4 py-1"><div class="text-sm leading-relaxed">${html}</div></div></div>`;
+}
+
+function user(html) {
+  return `<div class="msg-enter flex gap-3 items-start justify-end"><div class="user-border-left pl-4 py-1 max-w-[85%]"><div class="text-sm leading-relaxed text-nxtxt/90">${html}</div></div><div class="w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center mt-1 bg-nxuser border border-violet-500/10"><span class="text-xs font-bold text-nxtxt2">SC</span></div></div>`;
+}
+
+function card(html, extraClass = '') {
+  return `<div class="card-enter gradient-border rounded-2xl bg-nxsurface/80 backdrop-blur-sm p-5 my-3 ${extraClass}">${html}</div>`;
+}
+
+function pill(status) {
+  const m = { OVERDUE: 'status-overdue', 'DUE SOON': 'status-due', PAID: 'status-paid', DRAFT: 'status-draft', POSTED: 'status-posted' };
+  return `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono-num ${m[status] || 'status-draft'}">${status}</span>`;
+}
+
+function num(v, cls = '') { return `<span class="font-mono-num ${cls}">${v}</span>`; }
+
+function kpiBox(label, value, change, isPositive) {
+  const color = isPositive ? 'text-nxpos' : 'text-nxneg';
+  const arrow = isPositive ? '▲' : '▼';
+  return `<div class="flex-1 p-3 rounded-xl bg-nxbg/50"><div class="text-[11px] text-nxtxt2 mb-1">${label}</div><div class="font-mono-num text-xl font-medium text-nxtxt">${value}</div><div class="font-mono-num text-xs ${color} mt-1">${arrow} ${change}</div></div>`;
+}
+
+function typingIndicator() {
+  return `<div class="flex gap-3 items-start my-2"><div class="w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center" style="background: linear-gradient(135deg, rgba(20,184,166,0.3), rgba(139,92,246,0.3));"><span class="text-sm">✦</span></div><div class="flex gap-1.5 items-center pl-4 py-3"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div></div>`;
+}
+
+function checkSvg() {
+  return `<svg class="w-5 h-5" viewBox="0 0 52 52"><circle class="check-circle" cx="26" cy="26" r="25" fill="none" stroke="#14b8a6" stroke-width="2"/><path class="check-mark" fill="none" stroke="#14b8a6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M14.1 27.2l7.1 7.2 16.7-16.8"/></svg>`;
+}
+
+function scrollToBottom() {
+  const el = document.getElementById('convStream');
+  setTimeout(() => { el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); }, 50);
+}
+
+function setQuickReplies(replies) {
+  const el = document.getElementById('quickReplies');
+  el.innerHTML = replies.map(r => `<button onclick="handleQuickReply('${r.replace(/'/g, "\\'")}')" class="quick-reply px-3 py-1.5 rounded-full border border-violet-500/20 bg-nxbg/50 text-xs text-nxtxt2 hover:text-nxtxt font-heading">${r}</button>`).join('');
+}
+
+function handleChat() {
+  const input = document.getElementById('chatInput');
+  const val = input.value.trim();
+  if (!val) return;
+  input.value = '';
+  const content = document.getElementById('convContent');
+  content.innerHTML += user(val);
+  scrollToBottom();
+  setTimeout(() => {
+    content.innerHTML += ai("I'd be happy to help with that! In this prototype, try clicking the Quick Actions on the right sidebar to explore different conversation views.");
+    scrollToBottom();
+  }, 1000);
+}
+
+function handleQuickReply(text) {
+  const input = document.getElementById('chatInput');
+  input.value = text;
+  handleChat();
+}
+
+// ========== VIEW: MORNING BRIEFING ==========
+function renderBriefing() {
+  const c = document.getElementById('convContent');
+  c.innerHTML = '';
+  let delay = 0;
+
+  setTimeout(() => {
+    c.innerHTML += ai(`Good morning, Sarah! <span class="text-lg">☀️</span> Here's your <strong>Monday briefing</strong> for Meridian Manufacturing.`);
+    scrollToBottom();
+  }, delay += 300);
+
+  // Card 1: Revenue & Performance
+  setTimeout(() => {
+    c.innerHTML += ai(card(`
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-2 h-2 rounded-full bg-nxteal"></div>
+        <span class="text-xs uppercase tracking-wider text-nxtxt2 font-heading">Revenue & Performance</span>
+      </div>
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        ${kpiBox('Revenue (Feb)', '£347,200', '11.0% vs Jan', true)}
+        ${kpiBox('Gross Margin', '34.2%', '2.6pp vs Jan', false)}
+      </div>
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        <div class="h-16"><canvas id="sparkRevenue"></canvas></div>
+        <div class="h-16"><canvas id="sparkMargin"></canvas></div>
+      </div>
+      <div class="flex items-start gap-2 p-3 rounded-xl bg-nxwarn/5 border border-nxwarn/10">
+        <span class="text-nxwarn text-sm mt-0.5">⚠️</span>
+        <span class="text-xs text-nxtxt2">Revenue strong but margins are compressing — <strong class="text-nxtxt">Widget-B raw material costs up 14%</strong> since October.</span>
+      </div>
+    `));
+    scrollToBottom();
+    renderSparklines();
+  }, delay += 600);
+
+  // Card 2: Cash Position
+  setTimeout(() => {
+    c.innerHTML += ai(card(`
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-2 h-2 rounded-full bg-nxteal"></div>
+        <span class="text-xs uppercase tracking-wider text-nxtxt2 font-heading">Cash Position</span>
+      </div>
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        ${kpiBox('Current Balance', '£89,300', '12.9% vs Jan', false)}
+        ${kpiBox('Forecast Min (Wk 6)', '£41,200', 'Below £45k', false)}
+      </div>
+      <div class="h-32 mb-3"><canvas id="cashMini"></canvas></div>
+      <div class="flex items-start gap-2 p-3 rounded-xl bg-nxneg/5 border border-nxneg/10 mb-3">
+        <span class="text-nxneg text-sm mt-0.5">⚠️</span>
+        <span class="text-xs text-nxtxt2">Cash will dip to <strong class="text-nxneg font-mono-num">£41,200</strong> in week 6 when quarterly VAT payment (£21,500) is due.</span>
+      </div>
+      <button onclick="switchView('cashflow')" class="text-xs font-heading px-4 py-2 rounded-lg border border-violet-500/20 hover:border-violet-500/40 text-nxtxt2 hover:text-nxtxt transition-all">View Full Forecast →</button>
+    `));
+    scrollToBottom();
+    renderCashMini();
+  }, delay += 700);
+
+  // Card 3: Action Items
+  setTimeout(() => {
+    c.innerHTML += ai(card(`
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-2 h-2 rounded-full bg-nxviolet"></div>
+        <span class="text-xs uppercase tracking-wider text-nxtxt2 font-heading">Today's Action Items</span>
+        <span class="ml-auto font-mono-num text-[11px] text-nxtxt2/50">4 items</span>
+      </div>
+      <div class="space-y-2">
+        <div class="flex items-center gap-3 p-3 rounded-xl bg-nxbg/40 hover:bg-nxbg/60 transition-colors cursor-pointer group">
+          <input type="checkbox" class="w-4 h-4 rounded accent-teal-500">
+          <div class="flex-1"><div class="text-sm">Chase 3 overdue invoices</div><div class="font-mono-num text-xs text-nxneg">£55,000 at risk</div></div>
+          <button onclick="switchView('invoices')" class="text-[11px] px-3 py-1 rounded-lg border border-nxteal/20 text-nxteal opacity-0 group-hover:opacity-100 transition-opacity hover:bg-nxteal/10">Chase Now →</button>
+        </div>
+        <div class="flex items-center gap-3 p-3 rounded-xl bg-nxbg/40 hover:bg-nxbg/60 transition-colors cursor-pointer group">
+          <input type="checkbox" class="w-4 h-4 rounded accent-teal-500">
+          <div class="flex-1"><div class="text-sm">Review Widget-B pricing</div><div class="text-xs text-nxtxt2">Margin impact analysis needed</div></div>
+          <button class="text-[11px] px-3 py-1 rounded-lg border border-nxteal/20 text-nxteal opacity-0 group-hover:opacity-100 transition-opacity hover:bg-nxteal/10">Analyse →</button>
+        </div>
+        <div class="flex items-center gap-3 p-3 rounded-xl bg-nxbg/40 hover:bg-nxbg/60 transition-colors cursor-pointer group">
+          <input type="checkbox" class="w-4 h-4 rounded accent-teal-500">
+          <div class="flex-1"><div class="text-sm">Approve 2 purchase orders</div><div class="font-mono-num text-xs text-nxtxt2">£8,400 total</div></div>
+          <button class="text-[11px] px-3 py-1 rounded-lg border border-nxteal/20 text-nxteal opacity-0 group-hover:opacity-100 transition-opacity hover:bg-nxteal/10">View POs →</button>
+        </div>
+        <div class="flex items-center gap-3 p-3 rounded-xl bg-nxbg/40 hover:bg-nxbg/60 transition-colors cursor-pointer group">
+          <input type="checkbox" class="w-4 h-4 rounded accent-teal-500">
+          <div class="flex-1"><div class="text-sm">Payroll preparation</div><div class="text-xs text-nxwarn">5 days until next run</div></div>
+          <button class="text-[11px] px-3 py-1 rounded-lg border border-nxteal/20 text-nxteal opacity-0 group-hover:opacity-100 transition-opacity hover:bg-nxteal/10">Review →</button>
+        </div>
+      </div>
+    `));
+    scrollToBottom();
+  }, delay += 600);
+
+  // Card 4: AR Snapshot
+  setTimeout(() => {
+    c.innerHTML += ai(card(`
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-2 h-2 rounded-full bg-nxneg"></div>
+        <span class="text-xs uppercase tracking-wider text-nxtxt2 font-heading">Accounts Receivable Aging</span>
+        <span class="ml-auto font-mono-num text-xs text-nxtxt2">Total: £127,400</span>
+      </div>
+      <div class="mb-3">
+        <div class="flex rounded-lg overflow-hidden h-8">
+          <div class="bg-nxpos/30 flex items-center justify-center text-[10px] font-mono-num text-nxpos" style="width:56.5%">£72,000</div>
+          <div class="bg-nxneg/20 flex items-center justify-center text-[10px] font-mono-num text-nxneg" style="width:36.9%">£47,200</div>
+          <div class="bg-nxneg/40 flex items-center justify-center text-[10px] font-mono-num text-nxneg" style="width:6.6%">£8.2k</div>
+        </div>
+        <div class="flex text-[10px] text-nxtxt2 mt-1.5">
+          <div style="width:56.5%">Current</div>
+          <div style="width:36.9%">60–90 days</div>
+          <div style="width:6.6%">90+</div>
+        </div>
+      </div>
+      <div class="flex items-start gap-2 p-3 rounded-xl bg-nxneg/5 border border-nxneg/10">
+        <span class="text-xs text-nxtxt2"><strong class="text-nxneg">Acme Corp</strong> alone is <strong class="text-nxtxt">40%</strong> of overdue amount (£31,000 at 89 days).</span>
+      </div>
+    `));
+    scrollToBottom();
+  }, delay += 600);
+
+  // Follow-up message
+  setTimeout(() => {
+    c.innerHTML += ai(`Shall I <strong>draft payment reminders</strong> for the 3 overdue accounts, or would you like to start with something else?`);
+    setQuickReplies(['Draft reminders', 'Show me invoices', 'Cash flow details', 'Widget-B analysis']);
+    scrollToBottom();
+  }, delay += 500);
+}
+
+function renderSparklines() {
+  const makeSparkline = (id, data, color) => {
+    const ctx = document.getElementById(id);
+    if (!ctx) return;
+    new Chart(ctx, {
+      type: 'line',
+      data: { labels: ['Sep','Oct','Nov','Dec','Jan','Feb'], datasets: [{ data, borderColor: color, borderWidth: 2, fill: true, backgroundColor: color + '15', tension: 0.4, pointRadius: 0 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } } }
+    });
+  };
+  makeSparkline('sparkRevenue', [285, 294, 310, 302, 312.8, 347.2], '#14b8a6');
+  makeSparkline('sparkMargin', [37.1, 36.9, 36.8, 36.5, 36.8, 34.2], '#f87171');
+}
+
+function renderCashMini() {
+  const ctx = document.getElementById('cashMini');
+  if (!ctx) return;
+  charts.cashMini = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: ['Now','Wk1','Wk2','Wk3','Wk4','Wk5','Wk6','Wk7','Wk8'],
+      datasets: [
+        { data: [89.3,94.9,42.7,61.7,57.7,54.7,41.2,62.2,68.2], borderColor: '#14b8a6', borderWidth: 2, fill: true, backgroundColor: 'rgba(20,184,166,0.08)', tension: 0.3, pointRadius: 3, pointBackgroundColor: (ctx) => ctx.raw < 45 ? '#f87171' : '#14b8a6' },
+        { data: Array(9).fill(40), borderColor: 'rgba(248,113,113,0.3)', borderWidth: 1, borderDash: [4,4], pointRadius: 0, fill: false }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => '£' + c.raw.toFixed(1) + 'k' } } }, scales: { x: { ticks: { color: '#94a3b8', font: { size: 9, family: 'DM Mono' } }, grid: { display: false } }, y: { ticks: { color: '#94a3b8', font: { size: 9, family: 'DM Mono' }, callback: v => '£' + v + 'k' }, grid: { color: 'rgba(139,92,246,0.05)' } } } }
+  });
+}
+
+// ========== VIEW: INVOICES ==========
+function renderInvoices() {
+  const c = document.getElementById('convContent');
+  c.innerHTML = '';
+  let delay = 0;
+
+  setTimeout(() => {
+    c.innerHTML += ai(`Here are your current invoices, Sarah. I've flagged the ones that need attention. 📄`);
+    scrollToBottom();
+  }, delay += 300);
+
+  // AI Summary card
+  setTimeout(() => {
+    c.innerHTML += ai(card(`
+      <div class="flex items-center gap-4 flex-wrap">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-nxbg/50 flex items-center justify-center font-mono-num text-sm font-bold text-nxtxt">8</div>
+          <span class="text-xs text-nxtxt2">Total invoices</span>
+        </div>
+        <div class="w-px h-6 bg-violet-500/10"></div>
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-nxneg/10 flex items-center justify-center font-mono-num text-sm font-bold text-nxneg">3</div>
+          <span class="text-xs text-nxtxt2">Overdue <span class="font-mono-num text-nxneg">(£55k at risk)</span></span>
+        </div>
+        <div class="w-px h-6 bg-violet-500/10"></div>
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-nxwarn/10 flex items-center justify-center font-mono-num text-sm font-bold text-nxwarn">2</div>
+          <span class="text-xs text-nxtxt2">Due soon</span>
+        </div>
+        <div class="w-px h-6 bg-violet-500/10"></div>
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-nxpos/10 flex items-center justify-center font-mono-num text-sm font-bold text-nxpos">1</div>
+          <span class="text-xs text-nxtxt2">Paid this week</span>
+        </div>
+      </div>
+    `));
+    scrollToBottom();
+  }, delay += 500);
+
+  // Invoice Table Card
+  setTimeout(() => {
+    c.innerHTML += ai(card(`
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-nxviolet"></div>
+          <span class="text-xs uppercase tracking-wider text-nxtxt2 font-heading">Invoice Register</span>
+        </div>
+        <div class="flex gap-2">
+          <span class="px-2 py-0.5 rounded text-[10px] bg-nxbg/50 text-nxtxt2 font-mono-num cursor-pointer hover:text-nxtxt">All (8)</span>
+          <span class="px-2 py-0.5 rounded text-[10px] bg-nxneg/10 text-nxneg font-mono-num cursor-pointer">Overdue (3)</span>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="border-b border-violet-500/10">
+              <th class="py-2 px-2 text-left text-nxtxt2 font-heading font-normal text-[10px] uppercase tracking-wider w-8">✨</th>
+              <th class="py-2 px-2 text-left text-nxtxt2 font-heading font-normal text-[10px] uppercase tracking-wider">Invoice</th>
+              <th class="py-2 px-2 text-left text-nxtxt2 font-heading font-normal text-[10px] uppercase tracking-wider">Customer</th>
+              <th class="py-2 px-2 text-right text-nxtxt2 font-heading font-normal text-[10px] uppercase tracking-wider">Amount</th>
+              <th class="py-2 px-2 text-center text-nxtxt2 font-heading font-normal text-[10px] uppercase tracking-wider">Status</th>
+              <th class="py-2 px-2 text-right text-nxtxt2 font-heading font-normal text-[10px] uppercase tracking-wider">Due / Days</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="inv-row border-b border-violet-500/5" onclick="showAnalysis('acme')">
+              <td class="py-3 px-2"><span class="cursor-pointer hover:scale-110 inline-block transition-transform text-nxviolet">✦</span></td>
+              <td class="py-3 px-2 font-mono-num text-nxtxt">INV-0042</td>
+              <td class="py-3 px-2">Acme Corp</td>
+              <td class="py-3 px-2 text-right font-mono-num">£31,000</td>
+              <td class="py-3 px-2 text-center">${pill('OVERDUE')}</td>
+              <td class="py-3 px-2 text-right font-mono-num text-nxneg">89 days</td>
+            </tr>
+            <tr class="inv-row border-b border-violet-500/5" onclick="showAnalysis('bluestar')">
+              <td class="py-3 px-2"><span class="cursor-pointer hover:scale-110 inline-block transition-transform text-nxviolet">✦</span></td>
+              <td class="py-3 px-2 font-mono-num text-nxtxt">INV-0045</td>
+              <td class="py-3 px-2">BlueStar Ltd</td>
+              <td class="py-3 px-2 text-right font-mono-num">£15,800</td>
+              <td class="py-3 px-2 text-center">${pill('OVERDUE')}</td>
+              <td class="py-3 px-2 text-right font-mono-num text-nxneg">71 days</td>
+            </tr>
+            <tr class="inv-row border-b border-violet-500/5" onclick="showAnalysis('techvault')">
+              <td class="py-3 px-2"><span class="cursor-pointer hover:scale-110 inline-block transition-transform text-nxviolet">✦</span></td>
+              <td class="py-3 px-2 font-mono-num text-nxtxt">INV-0048</td>
+              <td class="py-3 px-2">TechVault Inc</td>
+              <td class="py-3 px-2 text-right font-mono-num">£8,200</td>
+              <td class="py-3 px-2 text-center">${pill('OVERDUE')}</td>
+              <td class="py-3 px-2 text-right font-mono-num text-nxneg">45 days</td>
+            </tr>
+            <tr class="inv-row border-b border-violet-500/5">
+              <td class="py-3 px-2"><span class="cursor-pointer hover:scale-110 inline-block transition-transform text-nxviolet/50">✦</span></td>
+              <td class="py-3 px-2 font-mono-num text-nxtxt">INV-0051</td>
+              <td class="py-3 px-2">Meridian Supplies</td>
+              <td class="py-3 px-2 text-right font-mono-num">£12,400</td>
+              <td class="py-3 px-2 text-center">${pill('DUE SOON')}</td>
+              <td class="py-3 px-2 text-right font-mono-num text-nxwarn">5 days</td>
+            </tr>
+            <tr class="inv-row border-b border-violet-500/5">
+              <td class="py-3 px-2"><span class="cursor-pointer hover:scale-110 inline-block transition-transform text-nxviolet/50">✦</span></td>
+              <td class="py-3 px-2 font-mono-num text-nxtxt">INV-0053</td>
+              <td class="py-3 px-2">CloudNine Solutions</td>
+              <td class="py-3 px-2 text-right font-mono-num">£4,800</td>
+              <td class="py-3 px-2 text-center">${pill('DUE SOON')}</td>
+              <td class="py-3 px-2 text-right font-mono-num text-nxwarn">12 days</td>
+            </tr>
+            <tr class="inv-row border-b border-violet-500/5">
+              <td class="py-3 px-2"><span class="text-nxviolet/30">✦</span></td>
+              <td class="py-3 px-2 font-mono-num text-nxtxt">INV-0055</td>
+              <td class="py-3 px-2">FreshFields Organic</td>
+              <td class="py-3 px-2 text-right font-mono-num">£22,100</td>
+              <td class="py-3 px-2 text-center">${pill('PAID')}</td>
+              <td class="py-3 px-2 text-right font-mono-num text-nxpos">Paid</td>
+            </tr>
+            <tr class="inv-row border-b border-violet-500/5">
+              <td class="py-3 px-2"><span class="text-nxviolet/30">✦</span></td>
+              <td class="py-3 px-2 font-mono-num text-nxtxt">INV-0057</td>
+              <td class="py-3 px-2">UrbanCraft Design</td>
+              <td class="py-3 px-2 text-right font-mono-num">£6,700</td>
+              <td class="py-3 px-2 text-center">${pill('DRAFT')}</td>
+              <td class="py-3 px-2 text-right font-mono-num text-nxtxt2">—</td>
+            </tr>
+            <tr class="inv-row">
+              <td class="py-3 px-2"><span class="text-nxviolet/30">✦</span></td>
+              <td class="py-3 px-2 font-mono-num text-nxtxt">INV-0059</td>
+              <td class="py-3 px-2">NorthStar Logistics</td>
+              <td class="py-3 px-2 text-right font-mono-num">£9,300</td>
+              <td class="py-3 px-2 text-center">${pill('POSTED')}</td>
+              <td class="py-3 px-2 text-right font-mono-num text-nxtxt2">18 days</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="mt-3 text-[10px] text-nxtxt2/50 text-center">Click ✦ on any row for AI analysis</div>
+    `, 'p-4'));
+    scrollToBottom();
+  }, delay += 600);
+
+  // AI analysis container
+  setTimeout(() => {
+    c.innerHTML += `<div id="analysisContainer"></div>`;
+  }, delay += 100);
+
+  // Follow-up
+  setTimeout(() => {
+    c.innerHTML += ai(`The 3 overdue invoices total <strong class="font-mono-num text-nxneg">£55,000</strong>. Acme Corp (<span class="font-mono-num">£31k</span>) is the biggest concern at 89 days. Want me to take action?`);
+    setQuickReplies(['Chase all overdue', 'Analyse Acme Corp', 'Create new invoice', 'Export to PDF']);
+    scrollToBottom();
+  }, delay += 500);
+}
+
+function showAnalysis(company) {
+  const container = document.getElementById('analysisContainer');
+  if (!container) return;
+  if (analysisShown[company]) return;
+  analysisShown[company] = true;
+
+  const data = {
+    acme: { name: 'Acme Corp', inv: 'INV-0042', amount: '£31,000', days: 89, prob: 67, speed: 34, reliability: 'Medium', lastContact: '25 days ago', rec: 'Escalate — 89 days overdue with no recent contact. Consider formal demand letter.', probColor: 'nxwarn' },
+    bluestar: { name: 'BlueStar Ltd', inv: 'INV-0045', amount: '£15,800', days: 71, prob: 78, speed: 28, reliability: 'Good', lastContact: '12 days ago', rec: 'Follow up — phone call recommended. Payment likely within 2 weeks with reminder.', probColor: 'nxpos' },
+    techvault: { name: 'TechVault Inc', inv: 'INV-0048', amount: '£8,200', days: 45, prob: 85, speed: 22, reliability: 'Good', lastContact: '8 days ago', rec: 'Gentle reminder — usually pays on time. Recent delay likely operational.', probColor: 'nxpos' }
+  };
+  const d = data[company];
+  if (!d) return;
+
+  container.innerHTML += `
+    <div class="ai-analysis-enter my-3">
+      <div class="flex gap-3 items-start">
+        <div class="w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center mt-1" style="background: linear-gradient(135deg, rgba(20,184,166,0.3), rgba(139,92,246,0.3));">
+          <span class="text-sm">✦</span>
+        </div>
+        <div class="flex-1 ai-border-left pl-4 py-1">
+          <div class="text-sm leading-relaxed">
+            <div class="gradient-border rounded-2xl bg-nxsurface/80 backdrop-blur-sm p-5 my-2">
+              <div class="flex items-center gap-2 mb-3">
+                <span class="text-nxviolet">📋</span>
+                <span class="text-xs uppercase tracking-wider text-nxtxt2 font-heading">AI Analysis: ${d.inv} — ${d.name}</span>
+              </div>
+              <div class="grid grid-cols-3 gap-3 mb-4">
+                <div class="p-2.5 rounded-lg bg-nxbg/50">
+                  <div class="text-[10px] text-nxtxt2 mb-1">Payment Probability</div>
+                  <div class="font-mono-num text-lg text-${d.probColor}">${d.prob}%</div>
+                  <div class="w-full h-1.5 rounded-full bg-nxbg/80 mt-1.5"><div class="h-full rounded-full progress-bar-fill" style="width:${d.prob}%"></div></div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-nxbg/50">
+                  <div class="text-[10px] text-nxtxt2 mb-1">Avg Payment Speed</div>
+                  <div class="font-mono-num text-lg text-nxtxt">${d.speed} days</div>
+                  <div class="text-[10px] text-nxtxt2 mt-1">Reliability: ${d.reliability}</div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-nxbg/50">
+                  <div class="text-[10px] text-nxtxt2 mb-1">Last Contact</div>
+                  <div class="text-sm text-nxtxt mt-1">${d.lastContact}</div>
+                  <div class="font-mono-num text-[10px] text-nxtxt2 mt-1">${d.days} days overdue</div>
+                </div>
+              </div>
+              <div class="p-3 rounded-xl bg-nxbg/40 mb-4">
+                <div class="text-[10px] text-nxtxt2 mb-1 uppercase tracking-wider">Recommendation</div>
+                <div class="text-xs text-nxtxt">${d.rec}</div>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button class="px-3 py-1.5 rounded-lg text-[11px] font-heading text-white transition-all hover:scale-105" style="background: linear-gradient(135deg, #14b8a6, #8b5cf6);">Send Reminder</button>
+                <button class="px-3 py-1.5 rounded-lg text-[11px] font-heading border border-violet-500/20 text-nxtxt2 hover:text-nxtxt hover:border-violet-500/40 transition-all">Schedule Call</button>
+                <button class="px-3 py-1.5 rounded-lg text-[11px] font-heading border border-nxneg/20 text-nxneg/70 hover:text-nxneg hover:border-nxneg/40 transition-all">Formal Demand</button>
+                <button class="px-3 py-1.5 rounded-lg text-[11px] font-heading border border-nxwarn/20 text-nxwarn/70 hover:text-nxwarn hover:border-nxwarn/40 transition-all">Offer Discount</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  scrollToBottom();
+}
+
+// ========== VIEW: CREATE INVOICE ==========
+function renderCreateInvoice() {
+  const c = document.getElementById('convContent');
+  c.innerHTML = '';
+  let delay = 0;
+
+  setTimeout(() => {
+    c.innerHTML += user(`Create invoice for Acme Corp — 100 Widget-A at £50, 50 Widget-B at £30`);
+    scrollToBottom();
+  }, delay += 300);
+
+  setTimeout(() => {
+    c.innerHTML += ai(`On it! Let me build that invoice for you... 🔨`);
+    scrollToBottom();
+  }, delay += 600);
+
+  // Step 1
+  setTimeout(() => {
+    c.innerHTML += ai(card(`
+      <div class="step-card flex items-center gap-3">
+        <div class="flex-shrink-0">${checkSvg()}</div>
+        <div class="flex-1">
+          <div class="text-xs font-heading text-nxtxt2 mb-1">Step 1 — Understanding your request</div>
+          <div class="flex gap-4 text-xs">
+            <span class="px-2 py-0.5 rounded bg-nxteal/10 text-nxteal font-mono-num">Invoice</span>
+            <span class="px-2 py-0.5 rounded bg-nxviolet/10 text-nxviolet">→ Acme Corp</span>
+            <span class="px-2 py-0.5 rounded bg-nxbg/50 text-nxtxt2 font-mono-num">2 line items</span>
+          </div>
+        </div>
+        <span class="text-[10px] text-nxpos font-mono-num">✓ Complete</span>
+      </div>
+    `, 'py-3 px-4'));
+    scrollToBottom();
+  }, delay += 800);
+
+  // Step 2
+  setTimeout(() => {
+    c.innerHTML += ai(card(`
+      <div class="step-card flex items-start gap-3">
+        <div class="flex-shrink-0 mt-1">${checkSvg()}</div>
+        <div class="flex-1">
+          <div class="text-xs font-heading text-nxtxt2 mb-2">Step 2 — Finding customer</div>
+          <div class="p-3 rounded-xl bg-nxbg/50">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-nxviolet/10 flex items-center justify-center text-sm font-bold text-nxviolet">AC</div>
+              <div>
+                <div class="text-sm font-heading">Acme Corp</div>
+                <div class="font-mono-num text-[10px] text-nxtxt2">AC-001</div>
+              </div>
+              <div class="ml-auto text-right text-[11px] text-nxtxt2">
+                <div>14 High Street, London EC2V 8AR</div>
+                <div class="font-mono-num">Terms: NET30</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <span class="text-[10px] text-nxpos font-mono-num mt-1">✓ Complete</span>
+      </div>
+    `, 'py-3 px-4'));
+    scrollToBottom();
+  }, delay += 900);
+
+  // Step 3
+  setTimeout(() => {
+    c.innerHTML += ai(card(`
+      <div class="step-card flex items-start gap-3">
+        <div class="flex-shrink-0 mt-1">${checkSvg()}</div>
+        <div class="flex-1">
+          <div class="text-xs font-heading text-nxtxt2 mb-2">Step 3 — Checking items & stock</div>
+          <table class="w-full text-xs">
+            <thead><tr class="border-b border-violet-500/10">
+              <th class="py-1.5 text-left text-nxtxt2 font-normal text-[10px]">Item</th>
+              <th class="py-1.5 text-left text-nxtxt2 font-normal text-[10px]">Code</th>
+              <th class="py-1.5 text-right text-nxtxt2 font-normal text-[10px]">Price</th>
+              <th class="py-1.5 text-right text-nxtxt2 font-normal text-[10px]">Stock</th>
+              <th class="py-1.5 text-center text-nxtxt2 font-normal text-[10px]">Status</th>
+            </tr></thead>
+            <tbody>
+              <tr class="border-b border-violet-500/5">
+                <td class="py-2">Widget-A</td>
+                <td class="py-2 font-mono-num text-nxtxt2">WA-100</td>
+                <td class="py-2 text-right font-mono-num">£50.00</td>
+                <td class="py-2 text-right font-mono-num">340</td>
+                <td class="py-2 text-center"><span class="text-nxpos text-[10px]">✓ In Stock</span></td>
+              </tr>
+              <tr>
+                <td class="py-2">Widget-B</td>
+                <td class="py-2 font-mono-num text-nxtxt2">WB-200</td>
+                <td class="py-2 text-right font-mono-num">£30.00</td>
+                <td class="py-2 text-right font-mono-num">180</td>
+                <td class="py-2 text-center"><span class="text-nxpos text-[10px]">✓ In Stock</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <span class="text-[10px] text-nxpos font-mono-num mt-1">✓ Complete</span>
+      </div>
+    `, 'py-3 px-4'));
+    scrollToBottom();
+  }, delay += 900);
+
+  // Step 4
+  setTimeout(() => {
+    c.innerHTML += ai(card(`
+      <div class="step-card flex items-start gap-3">
+        <div class="flex-shrink-0 mt-1">${checkSvg()}</div>
+        <div class="flex-1">
+          <div class="text-xs font-heading text-nxtxt2 mb-2">Step 4 — Applying business rules</div>
+          <div class="flex gap-3 flex-wrap">
+            <div class="px-3 py-1.5 rounded-lg bg-nxbg/50 text-xs"><span class="text-nxtxt2">Payment terms:</span> <span class="font-mono-num">NET30</span></div>
+            <div class="px-3 py-1.5 rounded-lg bg-nxbg/50 text-xs"><span class="text-nxtxt2">VAT:</span> <span class="font-mono-num">20% standard</span></div>
+            <div class="px-3 py-1.5 rounded-lg bg-nxbg/50 text-xs"><span class="text-nxtxt2">Number:</span> <span class="font-mono-num text-nxteal">INV-2026-0060</span></div>
+          </div>
+        </div>
+        <span class="text-[10px] text-nxpos font-mono-num mt-1">✓ Complete</span>
+      </div>
+    `, 'py-3 px-4'));
+    scrollToBottom();
+  }, delay += 800);
+
+  // Step 5
+  setTimeout(() => {
+    c.innerHTML += ai(card(`
+      <div class="step-card flex items-start gap-3">
+        <div class="flex-shrink-0 mt-1">${checkSvg()}</div>
+        <div class="flex-1">
+          <div class="text-xs font-heading text-nxtxt2 mb-2">Step 5 — Calculating totals</div>
+          <div class="space-y-1.5 text-xs">
+            <div class="flex justify-between"><span class="text-nxtxt2">100 × Widget-A @ £50.00</span><span class="font-mono-num">£5,000.00</span></div>
+            <div class="flex justify-between"><span class="text-nxtxt2">50 × Widget-B @ £30.00</span><span class="font-mono-num">£1,500.00</span></div>
+            <div class="border-t border-violet-500/10 pt-1.5 flex justify-between"><span class="text-nxtxt2">Subtotal</span><span class="font-mono-num">£6,500.00</span></div>
+            <div class="flex justify-between"><span class="text-nxtxt2">VAT @ 20%</span><span class="font-mono-num">£1,300.00</span></div>
+            <div class="border-t border-violet-500/10 pt-1.5 flex justify-between text-base font-bold"><span>Total</span><span class="font-mono-num gradient-text">£7,800.00</span></div>
+          </div>
+        </div>
+        <span class="text-[10px] text-nxpos font-mono-num mt-1">✓ Complete</span>
+      </div>
+    `, 'py-3 px-4'));
+    scrollToBottom();
+  }, delay += 800);
+
+  // AI message before preview
+  setTimeout(() => {
+    c.innerHTML += ai(`Invoice <strong class="font-mono-num text-nxteal">INV-2026-0060</strong> is ready for your review:`);
+    scrollToBottom();
+  }, delay += 500);
+
+  // Invoice Preview Card
+  setTimeout(() => {
+    c.innerHTML += ai(card(`
+      <div class="relative">
+        <div class="flex items-center justify-between mb-5">
+          <div>
+            <div class="text-xl font-heading font-bold gradient-text">INVOICE</div>
+            <div class="font-mono-num text-sm text-nxteal mt-0.5">INV-2026-0060</div>
+          </div>
+          <div class="text-right">
+            <div class="text-sm font-heading">Meridian Manufacturing Ltd</div>
+            <div class="text-[11px] text-nxtxt2">42 Commerce Way, Birmingham B1 2JR</div>
+            <div class="font-mono-num text-[11px] text-nxtxt2">VAT: GB 123 4567 89</div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4 mb-5 p-3 rounded-xl bg-nxbg/40">
+          <div>
+            <div class="text-[10px] text-nxtxt2 uppercase tracking-wider mb-1">Bill To</div>
+            <div class="text-sm font-heading">Acme Corp</div>
+            <div class="text-[11px] text-nxtxt2">14 High Street<br>London EC2V 8AR</div>
+          </div>
+          <div class="text-right">
+            <div class="text-[10px] text-nxtxt2 uppercase tracking-wider mb-1">Details</div>
+            <div class="text-[11px] text-nxtxt2">Date: <span class="font-mono-num text-nxtxt">17 Feb 2026</span></div>
+            <div class="text-[11px] text-nxtxt2">Due: <span class="font-mono-num text-nxtxt">19 Mar 2026</span></div>
+            <div class="text-[11px] text-nxtxt2">Terms: <span class="font-mono-num text-nxtxt">NET30</span></div>
+          </div>
+        </div>
+        <table class="w-full text-xs mb-4">
+          <thead><tr class="border-b border-violet-500/10">
+            <th class="py-2 text-left text-nxtxt2 font-heading font-normal text-[10px] uppercase">Item</th>
+            <th class="py-2 text-left text-nxtxt2 font-heading font-normal text-[10px] uppercase">Description</th>
+            <th class="py-2 text-right text-nxtxt2 font-heading font-normal text-[10px] uppercase">Qty</th>
+            <th class="py-2 text-right text-nxtxt2 font-heading font-normal text-[10px] uppercase">Unit Price</th>
+            <th class="py-2 text-right text-nxtxt2 font-heading font-normal text-[10px] uppercase">Amount</th>
+          </tr></thead>
+          <tbody>
+            <tr class="border-b border-violet-500/5">
+              <td class="py-2.5 font-mono-num">WA-100</td>
+              <td class="py-2.5">Widget-A — Standard</td>
+              <td class="py-2.5 text-right font-mono-num">100</td>
+              <td class="py-2.5 text-right font-mono-num">£50.00</td>
+              <td class="py-2.5 text-right font-mono-num">£5,000.00</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 font-mono-num">WB-200</td>
+              <td class="py-2.5">Widget-B — Premium</td>
+              <td class="py-2.5 text-right font-mono-num">50</td>
+              <td class="py-2.5 text-right font-mono-num">£30.00</td>
+              <td class="py-2.5 text-right font-mono-num">£1,500.00</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="flex justify-end">
+          <div class="w-48 space-y-1.5 text-xs">
+            <div class="flex justify-between"><span class="text-nxtxt2">Subtotal</span><span class="font-mono-num">£6,500.00</span></div>
+            <div class="flex justify-between"><span class="text-nxtxt2">VAT (20%)</span><span class="font-mono-num">£1,300.00</span></div>
+            <div class="flex justify-between border-t border-violet-500/10 pt-2 text-base font-bold"><span>Total</span><span class="font-mono-num gradient-text">£7,800.00</span></div>
+          </div>
+        </div>
+        <div class="flex gap-3 mt-5 pt-4 border-t border-violet-500/10">
+          <button class="px-5 py-2.5 rounded-xl text-sm font-heading text-white transition-all hover:scale-105 hover:shadow-lg" style="background: linear-gradient(135deg, #14b8a6, #8b5cf6);">✓ Approve & Post</button>
+          <button class="px-5 py-2.5 rounded-xl text-sm font-heading border border-violet-500/20 text-nxtxt2 hover:text-nxtxt hover:border-violet-500/40 transition-all">✏️ Edit</button>
+          <button class="px-5 py-2.5 rounded-xl text-sm font-heading border border-nxneg/20 text-nxneg/50 hover:text-nxneg hover:border-nxneg/40 transition-all">✕ Cancel</button>
+        </div>
+      </div>
+    `));
+    scrollToBottom();
+  }, delay += 600);
+
+  // Warning note
+  setTimeout(() => {
+    c.innerHTML += ai(`<div class="flex items-start gap-2 p-3 rounded-xl bg-nxwarn/5 border border-nxwarn/10 text-xs"><span class="text-nxwarn mt-0.5">💡</span><span class="text-nxtxt2"><strong class="text-nxwarn">Heads up:</strong> Acme Corp currently has <span class="font-mono-num text-nxneg">£31,000</span> overdue (89 days). You may want to reference this when sending the invoice.</span></div>`);
+    setQuickReplies(['Approve & Post', 'Edit line items', 'Add note about overdue', 'Cancel invoice']);
+    scrollToBottom();
+  }, delay += 500);
+}
+
+// ========== VIEW: P&L REPORT ==========
+function renderReports() {
+  const c = document.getElementById('convContent');
+  c.innerHTML = '';
+  let delay = 0;
+
+  setTimeout(() => {
+    c.innerHTML += user(`Show me P&L comparison vs last year`);
+    scrollToBottom();
+  }, delay += 300);
+
+  setTimeout(() => {
+    c.innerHTML += ai(`Here's your <strong>Profit & Loss</strong> for February 2026 compared to February 2025:`);
+    scrollToBottom();
+  }, delay += 600);
+
+  // P&L Table Card
+  setTimeout(() => {
+    c.innerHTML += ai(card(`
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-2 h-2 rounded-full bg-nxteal"></div>
+        <span class="text-xs uppercase tracking-wider text-nxtxt2 font-heading">Profit & Loss Statement</span>
+        <span class="ml-auto text-[10px] text-nxtxt2 font-mono-num">Feb 2026 vs Feb 2025</span>
+      </div>
+      <table class="w-full text-xs">
+        <thead><tr class="border-b border-violet-500/10">
+          <th class="py-2 text-left text-nxtxt2 font-heading font-normal text-[10px] uppercase tracking-wider">Account</th>
+          <th class="py-2 text-right text-nxtxt2 font-heading font-normal text-[10px] uppercase tracking-wider">Feb 2026</th>
+          <th class="py-2 text-right text-nxtxt2 font-heading font-normal text-[10px] uppercase tracking-wider">Feb 2025</th>
+          <th class="py-2 text-right text-nxtxt2 font-heading font-normal text-[10px] uppercase tracking-wider">Change</th>
+          <th class="py-2 text-right text-nxtxt2 font-heading font-normal text-[10px] uppercase tracking-wider">%</th>
+        </tr></thead>
+        <tbody>
+          <tr class="border-b border-violet-500/5">
+            <td class="py-3 font-heading font-medium">Revenue</td>
+            <td class="py-3 text-right font-mono-num text-nxtxt">£347,200</td>
+            <td class="py-3 text-right font-mono-num text-nxtxt2">£298,400</td>
+            <td class="py-3 text-right font-mono-num text-nxpos">+£48,800</td>
+            <td class="py-3 text-right"><span class="font-mono-num px-2 py-0.5 rounded text-[10px] bg-nxpos/10 text-nxpos">+16.3%</span></td>
+          </tr>
+          <tr class="border-b border-violet-500/5 bg-nxneg/3">
+            <td class="py-3 font-heading font-medium">Cost of Goods Sold</td>
+            <td class="py-3 text-right font-mono-num text-nxtxt">£228,800</td>
+            <td class="py-3 text-right font-mono-num text-nxtxt2">£189,500</td>
+            <td class="py-3 text-right font-mono-num text-nxneg">+£39,300</td>
+            <td class="py-3 text-right"><span class="font-mono-num px-2 py-0.5 rounded text-[10px] bg-nxneg/10 text-nxneg">+20.7% ⚠️</span></td>
+          </tr>
+          <tr class="border-b border-violet-500/10">
+            <td class="py-3 font-heading font-bold">Gross Profit</td>
+            <td class="py-3 text-right font-mono-num font-bold text-nxtxt">£118,400</td>
+            <td class="py-3 text-right font-mono-num text-nxtxt2">£108,900</td>
+            <td class="py-3 text-right font-mono-num text-nxpos">+£9,500</td>
+            <td class="py-3 text-right"><span class="font-mono-num px-2 py-0.5 rounded text-[10px] bg-nxpos/10 text-nxpos">+8.7%</span></td>
+          </tr>
+          <tr class="border-b border-violet-500/5 bg-nxneg/3">
+            <td class="py-3 text-nxtxt2 pl-3">↳ Gross Margin</td>
+            <td class="py-3 text-right font-mono-num text-nxtxt">34.2%</td>
+            <td class="py-3 text-right font-mono-num text-nxtxt2">36.5%</td>
+            <td class="py-3 text-right font-mono-num text-nxneg">-2.3pp</td>
+            <td class="py-3 text-right"><span class="font-mono-num px-2 py-0.5 rounded text-[10px] bg-nxneg/10 text-nxneg">⚠️</span></td>
+          </tr>
+          <tr class="border-b border-violet-500/5">
+            <td class="py-3 font-heading font-medium">Operating Expenses</td>
+            <td class="py-3 text-right font-mono-num text-nxtxt">£78,200</td>
+            <td class="py-3 text-right font-mono-num text-nxtxt2">£72,100</td>
+            <td class="py-3 text-right font-mono-num text-nxtxt2">+£6,100</td>
+            <td class="py-3 text-right"><span class="font-mono-num px-2 py-0.5 rounded text-[10px] bg-nxbg/50 text-nxtxt2">+8.5%</span></td>
+          </tr>
+          <tr class="border-t-2 border-violet-500/20">
+            <td class="py-3 font-heading font-bold text-base">Net Profit</td>
+            <td class="py-3 text-right font-mono-num font-bold text-base gradient-text">£40,200</td>
+            <td class="py-3 text-right font-mono-num text-nxtxt2">£36,800</td>
+            <td class="py-3 text-right font-mono-num text-nxpos">+£3,400</td>
+            <td class="py-3 text-right"><span class="font-mono-num px-2 py-0.5 rounded text-[10px] bg-nxpos/10 text-nxpos">+9.2%</span></td>
+          </tr>
+        </tbody>
+      </table>
+    `));
+    scrollToBottom();
+  }, delay += 600);
+
+  // P&L Chart
+  setTimeout(() => {
+    c.innerHTML += ai(card(`
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-2 h-2 rounded-full bg-nxviolet"></div>
+        <span class="text-xs uppercase tracking-wider text-nxtxt2 font-heading">Visual Comparison</span>
+      </div>
+      <div class="h-56"><canvas id="plChart"></canvas></div>
+    `));
+    scrollToBottom();
+    setTimeout(renderPLChart, 100);
+  }, delay += 600);
+
+  // AI Narrative
+  setTimeout(() => {
+    c.innerHTML += ai(`Revenue is growing strongly at <span class="font-mono-num text-nxpos">+16.3%</span>, but here's the concern: your COGS grew <em>faster</em> at <span class="font-mono-num text-nxneg">+20.7%</span>, causing gross margin to compress from <span class="font-mono-num">36.5%</span> to <span class="font-mono-num text-nxneg">34.2%</span>.<br><br>This is primarily driven by <strong>Widget-B raw material costs</strong>, which have increased 14% since October. Two options:`);
+    scrollToBottom();
+  }, delay += 600);
+
+  // Action Options Card
+  setTimeout(() => {
+    c.innerHTML += ai(card(`
+      <div class="space-y-3">
+        <div class="p-4 rounded-xl bg-nxbg/40 border border-nxpos/10 hover:border-nxpos/30 transition-all cursor-pointer group">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="text-nxpos font-heading font-bold text-sm">Option A</span>
+            <span class="text-[10px] text-nxpos/70 px-2 py-0.5 rounded bg-nxpos/10">RECOMMENDED</span>
+          </div>
+          <div class="text-xs text-nxtxt mb-2">Increase Widget-B price by 8% — restores margin to <span class="font-mono-num text-nxpos">35.8%</span></div>
+          <button class="text-[11px] px-4 py-1.5 rounded-lg border border-nxpos/20 text-nxpos opacity-60 group-hover:opacity-100 transition-all hover:bg-nxpos/10">Model This →</button>
+        </div>
+        <div class="p-4 rounded-xl bg-nxbg/40 border border-nxwarn/10 hover:border-nxwarn/30 transition-all cursor-pointer group">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="text-nxwarn font-heading font-bold text-sm">Option B</span>
+          </div>
+          <div class="text-xs text-nxtxt mb-2">Renegotiate with supplier — potential 6% cost reduction</div>
+          <button class="text-[11px] px-4 py-1.5 rounded-lg border border-nxwarn/20 text-nxwarn opacity-60 group-hover:opacity-100 transition-all hover:bg-nxwarn/10">Draft Proposal →</button>
+        </div>
+      </div>
+    `));
+    setQuickReplies(['Model Option A', 'Draft supplier proposal', 'Show COGS breakdown', 'Export P&L']);
+    scrollToBottom();
+  }, delay += 500);
+}
+
+function renderPLChart() {
+  const ctx = document.getElementById('plChart');
+  if (!ctx) return;
+  charts.pl = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Revenue', 'COGS', 'Gross Profit', 'OpEx', 'Net Profit'],
+      datasets: [
+        { label: 'Feb 2026', data: [347.2, 228.8, 118.4, 78.2, 40.2], backgroundColor: 'rgba(20,184,166,0.6)', borderColor: '#14b8a6', borderWidth: 1, borderRadius: 4 },
+        { label: 'Feb 2025', data: [298.4, 189.5, 108.9, 72.1, 36.8], backgroundColor: 'rgba(139,92,246,0.3)', borderColor: '#8b5cf6', borderWidth: 1, borderRadius: 4 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { color: '#94a3b8', font: { size: 10, family: 'DM Mono' }, boxWidth: 12 } }, tooltip: { callbacks: { label: c => c.dataset.label + ': £' + c.raw + 'k' } } },
+      scales: {
+        x: { ticks: { color: '#94a3b8', font: { size: 9, family: 'Bricolage Grotesque' } }, grid: { display: false } },
+        y: { ticks: { color: '#94a3b8', font: { size: 9, family: 'DM Mono' }, callback: v => '£' + v + 'k' }, grid: { color: 'rgba(139,92,246,0.05)' } }
+      }
+    }
+  });
+}
+
+// ========== VIEW: CASH FLOW ==========
+function renderCashFlow() {
+  const c = document.getElementById('convContent');
+  c.innerHTML = '';
+  let delay = 0;
+
+  setTimeout(() => {
+    c.innerHTML += user(`Show me cash flow forecast`);
+    scrollToBottom();
+  }, delay += 300);
+
+  setTimeout(() => {
+    c.innerHTML += ai(`Here's your <strong>8-week cash flow</strong> outlook, Sarah:`);
+    scrollToBottom();
+  }, delay += 600);
+
+  // Cash Flow Chart
+  setTimeout(() => {
+    c.innerHTML += ai(card(`
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-2 h-2 rounded-full bg-nxteal"></div>
+        <span class="text-xs uppercase tracking-wider text-nxtxt2 font-heading">Cash Flow Forecast</span>
+        <span class="ml-auto text-[10px] text-nxtxt2 font-mono-num">8-week outlook</span>
+      </div>
+      <div class="h-52"><canvas id="cashFlowChart"></canvas></div>
+      <div class="flex items-center gap-4 mt-3 text-[10px] text-nxtxt2">
+        <div class="flex items-center gap-1"><div class="w-3 h-0.5 bg-nxteal rounded"></div> Closing Balance</div>
+        <div class="flex items-center gap-1"><div class="w-3 h-0.5 bg-nxneg/40 rounded" style="border-top: 1px dashed rgba(248,113,113,0.5);"></div> Minimum Threshold (£40k)</div>
+      </div>
+    `));
+    scrollToBottom();
+    setTimeout(renderCashFlowChart, 100);
+  }, delay += 600);
+
+  // Weekly Breakdown Table
+  setTimeout(() => {
+    c.innerHTML += ai(card(`
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-2 h-2 rounded-full bg-nxviolet"></div>
+        <span class="text-xs uppercase tracking-wider text-nxtxt2 font-heading">Weekly Breakdown</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead><tr class="border-b border-violet-500/10">
+            <th class="py-2 text-left text-nxtxt2 font-heading font-normal text-[10px] uppercase">Week</th>
+            <th class="py-2 text-right text-nxtxt2 font-heading font-normal text-[10px] uppercase">Opening</th>
+            <th class="py-2 text-right text-nxtxt2 font-heading font-normal text-[10px] uppercase">In</th>
+            <th class="py-2 text-right text-nxtxt2 font-heading font-normal text-[10px] uppercase">Out</th>
+            <th class="py-2 text-right text-nxtxt2 font-heading font-normal text-[10px] uppercase">Closing</th>
+            <th class="py-2 text-left text-nxtxt2 font-heading font-normal text-[10px] uppercase pl-3">Notes</th>
+          </tr></thead>
+          <tbody>
+            <tr class="border-b border-violet-500/5">
+              <td class="py-2.5 font-mono-num">Wk 1</td>
+              <td class="py-2.5 text-right font-mono-num">£89,300</td>
+              <td class="py-2.5 text-right font-mono-num text-nxpos">£42,600</td>
+              <td class="py-2.5 text-right font-mono-num text-nxneg">£37,000</td>
+              <td class="py-2.5 text-right font-mono-num font-medium">£94,900</td>
+              <td class="py-2.5 pl-3 text-nxtxt2">—</td>
+            </tr>
+            <tr class="border-b border-violet-500/5">
+              <td class="py-2.5 font-mono-num">Wk 2</td>
+              <td class="py-2.5 text-right font-mono-num">£94,900</td>
+              <td class="py-2.5 text-right font-mono-num text-nxpos">£18,800</td>
+              <td class="py-2.5 text-right font-mono-num text-nxneg">£71,000</td>
+              <td class="py-2.5 text-right font-mono-num font-medium">£42,700</td>
+              <td class="py-2.5 pl-3 text-nxwarn text-[10px]">Payroll £52k</td>
+            </tr>
+            <tr class="border-b border-violet-500/5">
+              <td class="py-2.5 font-mono-num">Wk 3</td>
+              <td class="py-2.5 text-right font-mono-num">£42,700</td>
+              <td class="py-2.5 text-right font-mono-num text-nxpos">£38,000</td>
+              <td class="py-2.5 text-right font-mono-num text-nxneg">£19,000</td>
+              <td class="py-2.5 text-right font-mono-num font-medium">£61,700</td>
+              <td class="py-2.5 pl-3 text-nxtxt2">—</td>
+            </tr>
+            <tr class="border-b border-violet-500/5">
+              <td class="py-2.5 font-mono-num">Wk 4</td>
+              <td class="py-2.5 text-right font-mono-num">£61,700</td>
+              <td class="py-2.5 text-right font-mono-num text-nxpos">£22,000</td>
+              <td class="py-2.5 text-right font-mono-num text-nxneg">£26,000</td>
+              <td class="py-2.5 text-right font-mono-num font-medium">£57,700</td>
+              <td class="py-2.5 pl-3 text-nxtxt2">—</td>
+            </tr>
+            <tr class="border-b border-violet-500/5">
+              <td class="py-2.5 font-mono-num">Wk 5</td>
+              <td class="py-2.5 text-right font-mono-num">£57,700</td>
+              <td class="py-2.5 text-right font-mono-num text-nxpos">£15,000</td>
+              <td class="py-2.5 text-right font-mono-num text-nxneg">£18,000</td>
+              <td class="py-2.5 text-right font-mono-num font-medium">£54,700</td>
+              <td class="py-2.5 pl-3 text-nxtxt2">—</td>
+            </tr>
+            <tr class="border-b border-violet-500/5 bg-nxneg/5">
+              <td class="py-2.5 font-mono-num text-nxneg font-bold">Wk 6 ⚠️</td>
+              <td class="py-2.5 text-right font-mono-num">£54,700</td>
+              <td class="py-2.5 text-right font-mono-num text-nxpos">£8,000</td>
+              <td class="py-2.5 text-right font-mono-num text-nxneg font-bold">£21,500</td>
+              <td class="py-2.5 text-right font-mono-num font-bold text-nxneg">£41,200</td>
+              <td class="py-2.5 pl-3 text-nxneg text-[10px] font-bold">VAT payment £21.5k</td>
+            </tr>
+            <tr class="border-b border-violet-500/5">
+              <td class="py-2.5 font-mono-num">Wk 7</td>
+              <td class="py-2.5 text-right font-mono-num">£41,200</td>
+              <td class="py-2.5 text-right font-mono-num text-nxpos">£36,000</td>
+              <td class="py-2.5 text-right font-mono-num text-nxneg">£15,000</td>
+              <td class="py-2.5 text-right font-mono-num font-medium">£62,200</td>
+              <td class="py-2.5 pl-3 text-nxtxt2">—</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 font-mono-num">Wk 8</td>
+              <td class="py-2.5 text-right font-mono-num">£62,200</td>
+              <td class="py-2.5 text-right font-mono-num text-nxpos">£24,000</td>
+              <td class="py-2.5 text-right font-mono-num text-nxneg">£18,000</td>
+              <td class="py-2.5 text-right font-mono-num font-medium">£68,200</td>
+              <td class="py-2.5 pl-3 text-nxtxt2">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    `));
+    scrollToBottom();
+  }, delay += 600);
+
+  // AI Warning
+  setTimeout(() => {
+    c.innerHTML += ai(`<span class="text-nxneg">⚠️</span> Cash dips to <strong class="font-mono-num text-nxneg">£41,200</strong> in week 6 when the quarterly VAT payment (<span class="font-mono-num">£21,500</span>) hits. Here are your options:`);
+    scrollToBottom();
+  }, delay += 500);
+
+  // Scenario Cards
+  setTimeout(() => {
+    c.innerHTML += ai(`
+      <div class="grid grid-cols-3 gap-3 my-3">
+        <div class="scenario-card gradient-border rounded-2xl bg-nxsurface/80 p-4 border border-nxtxt2/10">
+          <div class="text-[10px] uppercase tracking-wider text-nxtxt2 mb-2 font-heading">Scenario 1: Do Nothing</div>
+          <div class="font-mono-num text-2xl text-nxtxt mb-1">£41.2k</div>
+          <div class="text-xs text-nxtxt2 mb-3">minimum balance</div>
+          <div class="w-full h-1.5 rounded-full bg-nxbg/80"><div class="h-full rounded-full bg-nxtxt2/30" style="width:41%"></div></div>
+          <div class="text-[10px] text-nxtxt2/50 mt-2">Current trajectory</div>
+        </div>
+        <div class="scenario-card gradient-border rounded-2xl bg-nxsurface/80 p-4 border border-nxpos/20 relative">
+          <div class="absolute -top-2 right-3 px-2 py-0.5 rounded text-[9px] font-bold text-white" style="background: linear-gradient(135deg, #14b8a6, #8b5cf6);">RECOMMENDED</div>
+          <div class="text-[10px] uppercase tracking-wider text-nxpos mb-2 font-heading">Scenario 2: Chase Acme</div>
+          <div class="font-mono-num text-2xl text-nxpos mb-1">£72.2k</div>
+          <div class="text-xs text-nxtxt2 mb-3">minimum balance</div>
+          <div class="w-full h-1.5 rounded-full bg-nxbg/80"><div class="h-full rounded-full bg-nxpos/60" style="width:72%"></div></div>
+          <div class="text-[10px] text-nxpos/60 mt-2">+£31k from Acme recovery</div>
+        </div>
+        <div class="scenario-card gradient-border rounded-2xl bg-nxsurface/80 p-4 border border-nxwarn/20">
+          <div class="text-[10px] uppercase tracking-wider text-nxwarn mb-2 font-heading">Scenario 3: Defer VAT</div>
+          <div class="font-mono-num text-2xl text-nxwarn mb-1">£62.7k</div>
+          <div class="text-xs text-nxtxt2 mb-3">minimum balance</div>
+          <div class="w-full h-1.5 rounded-full bg-nxbg/80"><div class="h-full rounded-full bg-nxwarn/50" style="width:62%"></div></div>
+          <div class="text-[10px] text-nxwarn/60 mt-2">Interest penalty applies</div>
+        </div>
+      </div>
+    `);
+    scrollToBottom();
+  }, delay += 600);
+
+  // Final message
+  setTimeout(() => {
+    c.innerHTML += ai(`I'd recommend <strong>chasing Acme Corp</strong> first — it's the safest path to keep cash healthy. Shall I draft a payment reminder?`);
+    setQuickReplies(['Draft Acme reminder', 'Model all 3 scenarios', 'Extend to 12 weeks', 'Show receivables due']);
+    scrollToBottom();
+  }, delay += 500);
+}
+
+function renderCashFlowChart() {
+  const ctx = document.getElementById('cashFlowChart');
+  if (!ctx) return;
+  charts.cashFlow = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: ['Now', 'Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6', 'Week 7', 'Week 8'],
+      datasets: [
+        {
+          label: 'Closing Balance',
+          data: [89.3, 94.9, 42.7, 61.7, 57.7, 54.7, 41.2, 62.2, 68.2],
+          borderColor: '#14b8a6',
+          borderWidth: 2.5,
+          fill: true,
+          backgroundColor: (ctx2) => {
+            const gradient = ctx2.chart.ctx.createLinearGradient(0, 0, 0, 250);
+            gradient.addColorStop(0, 'rgba(20,184,166,0.15)');
+            gradient.addColorStop(1, 'rgba(20,184,166,0.0)');
+            return gradient;
+          },
+          tension: 0.35,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          pointBackgroundColor: (ctx2) => ctx2.raw < 45 ? '#f87171' : '#14b8a6',
+          pointBorderColor: (ctx2) => ctx2.raw < 45 ? '#f87171' : '#14b8a6',
+          pointBorderWidth: 2
+        },
+        {
+          label: 'Threshold',
+          data: Array(9).fill(40),
+          borderColor: 'rgba(248,113,113,0.35)',
+          borderWidth: 1.5,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: { label: c => c.dataset.label + ': £' + c.raw.toFixed(1) + 'k' },
+          backgroundColor: '#1a1730',
+          titleColor: '#e2e8f0',
+          bodyColor: '#94a3b8',
+          borderColor: 'rgba(139,92,246,0.2)',
+          borderWidth: 1
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#94a3b8', font: { size: 10, family: 'DM Mono' } }, grid: { display: false } },
+        y: {
+          min: 20,
+          ticks: { color: '#94a3b8', font: { size: 10, family: 'DM Mono' }, callback: v => '£' + v + 'k' },
+          grid: { color: 'rgba(139,92,246,0.05)' }
+        }
+      }
+    }
+  });
+}
+
+// ========== VIEW: FREE CHAT ==========
+function renderChat() {
+  const c = document.getElementById('convContent');
+  c.innerHTML = '';
+  let delay = 0;
+
+  setTimeout(() => {
+    c.innerHTML += ai(`What would you like to explore, Sarah? I can help with invoices, reports, stock levels, customer info, or anything else about your business. 💬`);
+    setQuickReplies(['Revenue trends', 'Customer balances', 'Stock levels', 'Upcoming payments']);
+    scrollToBottom();
+  }, delay += 400);
+}
+
+// ========== VIEW SWITCHING ==========
+function switchView(view) {
+  // Destroy existing charts
+  Object.values(charts).forEach(ch => { if (ch && ch.destroy) ch.destroy(); });
+  charts = {};
+  analysisShown = {};
+
+  currentView = view;
+
+  // Update sidebar buttons
+  document.querySelectorAll('.sidebar-btn').forEach(btn => {
+    btn.classList.remove('active');
+    if (btn.dataset.view === view) btn.classList.add('active');
+  });
+
+  // Clear quick replies
+  document.getElementById('quickReplies').innerHTML = '';
+
+  // Render the selected view
+  switch (view) {
+    case 'briefing': renderBriefing(); break;
+    case 'invoices': renderInvoices(); break;
+    case 'create': renderCreateInvoice(); break;
+    case 'reports': renderReports(); break;
+    case 'cashflow': renderCashFlow(); break;
+    case 'chat': renderChat(); break;
+  }
+}
+
+// ========== INIT ==========
+document.addEventListener('DOMContentLoaded', () => {
+  switchView('briefing');
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexa ERP — Co-Pilot Dock</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: { lexend: ['Lexend', 'sans-serif'], mono: ['IBM Plex Mono', 'monospace'] },
+      colors: {
+        bg: '#080c14', surface: '#111827', 'surface-hover': '#1a2332',
+        amber: { ai: '#f59e0b', light: '#fbbf24', glow: 'rgba(245,158,11,0.15)' },
+        blue: { primary: '#3b82f6' }, emerald: { pos: '#10b981' },
+        rose: { neg: '#ef4444' }, slate: { 100: '#f1f5f9', 400: '#94a3b8' },
+        border: 'rgba(51,65,85,0.5)'
+      }
+    }
+  }
+}
+</script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Lexend', sans-serif; background: #080c14; color: #f1f5f9; overflow: hidden; }
+.font-mono { font-family: 'IBM Plex Mono', monospace !important; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #080c14; }
+::-webkit-scrollbar-thumb { background: rgba(51,65,85,0.5); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(71,85,105,0.7); }
+
+@keyframes breathe {
+  0%, 100% { box-shadow: -4px 0 15px rgba(245,158,11,0.15), inset 3px 0 10px rgba(245,158,11,0.05); }
+  50% { box-shadow: -4px 0 25px rgba(245,158,11,0.35), inset 3px 0 15px rgba(245,158,11,0.12); }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+@keyframes stepSlideIn {
+  from { opacity: 0; transform: translateX(-30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes typingBounce {
+  0%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-6px); }
+}
+
+.animate-breathe { animation: breathe 3s ease-in-out infinite; }
+.animate-fadeInUp { animation: fadeInUp 0.5s ease-out forwards; opacity: 0; }
+.animate-slideInRight { animation: slideInRight 0.4s ease-out forwards; opacity: 0; }
+.animate-stepSlideIn { animation: stepSlideIn 0.6s ease-out forwards; opacity: 0; }
+
+.card-hover { transition: all 0.25s ease; }
+.card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
+.page-transition { transition: opacity 0.3s ease, transform 0.3s ease; }
+.page-hidden { opacity: 0; transform: translateY(10px); pointer-events: none; position: absolute; }
+.page-visible { opacity: 1; transform: translateY(0); pointer-events: auto; position: relative; }
+
+.nav-item { transition: all 0.2s ease; border-left: 3px solid transparent; }
+.nav-item:hover { background: rgba(245,158,11,0.08); border-left-color: rgba(245,158,11,0.3); }
+.nav-item.active { background: rgba(245,158,11,0.12); border-left-color: #f59e0b; color: #fbbf24; }
+
+.typing-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; margin: 0 2px; }
+.typing-dot:nth-child(1) { animation: typingBounce 1.2s infinite 0s; }
+.typing-dot:nth-child(2) { animation: typingBounce 1.2s infinite 0.2s; }
+.typing-dot:nth-child(3) { animation: typingBounce 1.2s infinite 0.4s; }
+
+.badge { padding: 2px 10px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.badge-overdue { background: rgba(239,68,68,0.15); color: #ef4444; }
+.badge-due { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.badge-paid { background: rgba(16,185,129,0.15); color: #10b981; }
+.badge-draft { background: rgba(148,163,184,0.15); color: #94a3b8; }
+.badge-posted { background: rgba(59,130,246,0.15); color: #3b82f6; }
+
+.sparkline { display: inline-block; }
+.ai-tag { color: #f59e0b; font-size: 0.75rem; font-weight: 400; }
+
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+.modal-content { background: #111827; border: 1px solid rgba(51,65,85,0.5); border-radius: 12px; max-width: 520px; width: 90%; padding: 28px; animation: fadeInUp 0.3s ease-out; }
+
+.step-circle { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 600; flex-shrink: 0; }
+.step-done { background: rgba(245,158,11,0.2); color: #fbbf24; border: 2px solid #f59e0b; }
+.step-active { background: rgba(245,158,11,0.3); color: #fbbf24; border: 2px solid #fbbf24; animation: pulse-dot 2s infinite; }
+.step-pending { background: rgba(51,65,85,0.3); color: #64748b; border: 2px solid rgba(51,65,85,0.5); }
+
+.chat-bubble-user { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.2); border-radius: 16px 16px 4px 16px; }
+.chat-bubble-ai { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.15); border-radius: 16px 16px 16px 4px; }
+
+table.report-table th { text-align: left; padding: 10px 14px; color: #94a3b8; font-weight: 500; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid rgba(51,65,85,0.5); }
+table.report-table td { padding: 12px 14px; border-bottom: 1px solid rgba(51,65,85,0.25); font-size: 0.88rem; }
+
+.confidence-bar { height: 4px; border-radius: 2px; background: rgba(51,65,85,0.4); overflow: hidden; }
+.confidence-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+</style>
+</head>
+<body class="bg-bg">
+
+<!-- APP SHELL -->
+<div class="h-screen flex flex-col">
+  <!-- TOP BAR -->
+  <header class="h-14 bg-surface border-b border-border flex items-center px-4 justify-between flex-shrink-0 z-50">
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 mr-6">
+        <svg class="w-7 h-7" viewBox="0 0 28 28"><rect width="28" height="28" rx="6" fill="#3b82f6"/><text x="14" y="19" text-anchor="middle" fill="white" font-size="14" font-weight="700" font-family="Lexend">N</text></svg>
+        <span class="font-semibold text-sm tracking-wide">NEXA</span>
+        <span class="text-xs text-slate-400 ml-1">ERP</span>
+      </div>
+      <div class="relative">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input type="text" placeholder="Quick search... (Ctrl+K)" class="bg-bg border border-border rounded-lg pl-10 pr-4 py-1.5 text-sm w-72 focus:outline-none focus:border-blue-primary/50 focus:ring-1 focus:ring-blue-primary/20 text-slate-100 placeholder-slate-400">
+      </div>
+    </div>
+    <div class="flex items-center gap-4">
+      <span class="text-xs text-slate-400">Monday, 17 February 2026</span>
+      <button class="relative p-2 rounded-lg hover:bg-surface-hover transition-colors">
+        <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+        <span class="absolute -top-0.5 -right-0.5 w-5 h-5 bg-rose-neg text-white text-[10px] font-bold rounded-full flex items-center justify-center">3</span>
+      </button>
+      <div class="flex items-center gap-2 pl-3 border-l border-border">
+        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-primary to-purple-500 flex items-center justify-center text-white text-xs font-semibold">SC</div>
+        <div>
+          <div class="text-xs font-medium">Sarah Chen</div>
+          <div class="text-[10px] text-slate-400">Business Owner</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="flex flex-1 overflow-hidden">
+    <!-- LEFT NAV -->
+    <nav class="w-56 bg-surface border-r border-border flex flex-col flex-shrink-0">
+      <div class="py-3 px-3 text-[10px] text-slate-400 uppercase tracking-widest font-medium">Navigation</div>
+      <div id="nav-list" class="flex-1 flex flex-col gap-0.5 px-1">
+        <button onclick="showPage('dashboard')" class="nav-item active flex items-center gap-3 px-4 py-2.5 rounded-r-lg text-sm cursor-pointer" data-page="dashboard">
+          <span class="text-base">&#x1F4CA;</span> Dashboard
+        </button>
+        <button onclick="showPage('invoices')" class="nav-item flex items-center gap-3 px-4 py-2.5 rounded-r-lg text-sm cursor-pointer" data-page="invoices">
+          <span class="text-base">&#x1F4C4;</span> Invoices
+        </button>
+        <button onclick="showPage('new-invoice')" class="nav-item flex items-center gap-3 px-4 py-2.5 rounded-r-lg text-sm cursor-pointer" data-page="new-invoice">
+          <span class="text-base">&#x2795;</span> New Invoice
+        </button>
+        <button onclick="showPage('ai-create')" class="nav-item flex items-center gap-3 px-4 py-2.5 rounded-r-lg text-sm cursor-pointer" data-page="ai-create">
+          <span class="text-base">&#x1F916;</span> AI Create
+        </button>
+        <button onclick="showPage('pnl')" class="nav-item flex items-center gap-3 px-4 py-2.5 rounded-r-lg text-sm cursor-pointer" data-page="pnl">
+          <span class="text-base">&#x1F4C8;</span> P&L Report
+        </button>
+        <button onclick="showPage('cashflow')" class="nav-item flex items-center gap-3 px-4 py-2.5 rounded-r-lg text-sm cursor-pointer" data-page="cashflow">
+          <span class="text-base">&#x1F4B0;</span> Cash Flow
+        </button>
+        <button onclick="showPage('chat')" class="nav-item flex items-center gap-3 px-4 py-2.5 rounded-r-lg text-sm cursor-pointer" data-page="chat">
+          <span class="text-base">&#x1F4AC;</span> AI Chat
+        </button>
+      </div>
+      <div class="p-4 border-t border-border">
+        <div class="text-[10px] text-slate-400 mb-1">Meridian Manufacturing Ltd</div>
+        <div class="text-[10px] text-slate-400">45 employees &middot; Active</div>
+      </div>
+    </nav>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="flex-1 overflow-y-auto" id="main-content" style="scroll-behavior:smooth;">
+
+      <!-- ========== PAGE: DASHBOARD ========== -->
+      <div id="page-dashboard" class="page-transition page-visible p-6">
+        <!-- Greeting -->
+        <div class="mb-6 animate-fadeInUp" style="animation-delay:0s">
+          <h1 class="text-2xl font-semibold mb-1">Good morning, Sarah</h1>
+          <p class="text-slate-400 text-sm">Here's your business overview for Monday, 17 February 2026</p>
+        </div>
+        <!-- AI Insight Banner -->
+        <div class="bg-amber-ai/5 border border-amber-ai/20 rounded-xl p-4 mb-6 flex items-start gap-3 animate-fadeInUp" style="animation-delay:0.1s">
+          <div class="w-8 h-8 rounded-full bg-amber-ai/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <svg class="w-4 h-4 text-amber-ai" fill="currentColor" viewBox="0 0 20 20"><path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"/></svg>
+          </div>
+          <div>
+            <span class="text-amber-light text-sm font-medium">Nexa AI Morning Briefing:</span>
+            <span class="text-slate-100 text-sm ml-1">Revenue is up 11% but cash is tightening. 3 invoices overdue &gt;60 days totalling &pound;55k need immediate attention. VAT payment in 6 weeks will reduce cash to &pound;41.2k.</span>
+          </div>
+        </div>
+        <!-- KPI Grid -->
+        <div class="grid grid-cols-3 gap-4 mb-6">
+          <!-- KPI 1: Revenue -->
+          <div class="bg-surface border border-border rounded-xl p-5 card-hover animate-fadeInUp" style="animation-delay:0.15s">
+            <div class="text-xs text-slate-400 font-medium mb-2">Revenue (Feb)</div>
+            <div class="font-mono text-2xl font-bold text-slate-100 mb-1">&pound;347,200</div>
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-xs text-slate-400">vs &pound;312,800</span>
+              <span class="text-xs font-medium text-emerald-pos bg-emerald-pos/10 px-2 py-0.5 rounded-full">+11.0% &#9650;</span>
+            </div>
+            <svg class="sparkline" width="120" height="30" viewBox="0 0 120 30"><polyline fill="none" stroke="#10b981" stroke-width="2" points="0,25 20,22 40,20 60,18 80,14 100,10 120,5"/></svg>
+            <div class="ai-tag mt-2">Driven by 3 large Acme orders</div>
+          </div>
+          <!-- KPI 2: Outstanding AR -->
+          <div class="bg-surface border border-border rounded-xl p-5 card-hover animate-fadeInUp" style="animation-delay:0.2s">
+            <div class="text-xs text-slate-400 font-medium mb-2">Outstanding AR</div>
+            <div class="font-mono text-2xl font-bold text-slate-100 mb-1">&pound;127,400</div>
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-xs text-slate-400">vs &pound;98,200</span>
+              <span class="text-xs font-medium text-rose-neg bg-rose-neg/10 px-2 py-0.5 rounded-full">+29.7% &#9650;</span>
+            </div>
+            <svg class="sparkline" width="120" height="30" viewBox="0 0 120 30"><polyline fill="none" stroke="#ef4444" stroke-width="2" points="0,20 20,18 40,15 60,14 80,10 100,7 120,3"/></svg>
+            <div class="ai-tag mt-2">7 overdue invoices — chase Acme first</div>
+          </div>
+          <!-- KPI 3: Cash Position -->
+          <div class="bg-surface border border-border rounded-xl p-5 card-hover animate-fadeInUp" style="animation-delay:0.25s">
+            <div class="text-xs text-slate-400 font-medium mb-2">Cash Position</div>
+            <div class="font-mono text-2xl font-bold text-slate-100 mb-1">&pound;89,300</div>
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-xs text-slate-400">vs &pound;102,500</span>
+              <span class="text-xs font-medium text-rose-neg bg-rose-neg/10 px-2 py-0.5 rounded-full">-12.9% &#9660;</span>
+            </div>
+            <svg class="sparkline" width="120" height="30" viewBox="0 0 120 30"><polyline fill="none" stroke="#ef4444" stroke-width="2" points="0,8 20,10 40,12 60,15 80,18 100,22 120,20"/></svg>
+            <div class="ai-tag mt-2">Dips to &pound;41.2k in week 6 (VAT)</div>
+          </div>
+          <!-- KPI 4: Overdue Invoices -->
+          <div class="bg-surface border border-border rounded-xl p-5 card-hover animate-fadeInUp" style="animation-delay:0.3s">
+            <div class="text-xs text-slate-400 font-medium mb-2">Overdue Invoices</div>
+            <div class="font-mono text-2xl font-bold text-rose-neg mb-1">7</div>
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-xs text-slate-400">vs 4 last month</span>
+              <span class="text-xs font-medium text-rose-neg bg-rose-neg/10 px-2 py-0.5 rounded-full">+75% &#9650;</span>
+            </div>
+            <svg class="sparkline" width="120" height="30" viewBox="0 0 120 30"><polyline fill="none" stroke="#ef4444" stroke-width="2" points="0,22 20,20 40,18 60,16 80,12 100,8 120,5"/></svg>
+            <div class="ai-tag mt-2">&pound;55k total — 3 over 60 days</div>
+          </div>
+          <!-- KPI 5: Pipeline -->
+          <div class="bg-surface border border-border rounded-xl p-5 card-hover animate-fadeInUp" style="animation-delay:0.35s">
+            <div class="text-xs text-slate-400 font-medium mb-2">Pipeline Value</div>
+            <div class="font-mono text-2xl font-bold text-slate-100 mb-1">&pound;215,000</div>
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-xs text-slate-400">vs &pound;188,000</span>
+              <span class="text-xs font-medium text-emerald-pos bg-emerald-pos/10 px-2 py-0.5 rounded-full">+14.4% &#9650;</span>
+            </div>
+            <svg class="sparkline" width="120" height="30" viewBox="0 0 120 30"><polyline fill="none" stroke="#10b981" stroke-width="2" points="0,24 20,20 40,18 60,14 80,12 100,8 120,5"/></svg>
+            <div class="ai-tag mt-2">2 deals likely to close this month</div>
+          </div>
+          <!-- KPI 6: Gross Margin -->
+          <div class="bg-surface border border-border rounded-xl p-5 card-hover animate-fadeInUp" style="animation-delay:0.4s">
+            <div class="text-xs text-slate-400 font-medium mb-2">Gross Margin</div>
+            <div class="font-mono text-2xl font-bold text-amber-ai mb-1">34.2%</div>
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-xs text-slate-400">vs 36.8%</span>
+              <span class="text-xs font-medium text-rose-neg bg-rose-neg/10 px-2 py-0.5 rounded-full">-2.6pp &#9660;</span>
+            </div>
+            <svg class="sparkline" width="120" height="30" viewBox="0 0 120 30"><polyline fill="none" stroke="#f59e0b" stroke-width="2" points="0,8 20,10 40,12 60,14 80,18 100,20 120,22"/></svg>
+            <div class="ai-tag mt-2">Widget-B pricing needs review</div>
+          </div>
+        </div>
+        <!-- Charts Row -->
+        <div class="grid grid-cols-2 gap-4 animate-fadeInUp" style="animation-delay:0.5s">
+          <div class="bg-surface border border-border rounded-xl p-5">
+            <div class="text-sm font-medium mb-4">Cash Flow Forecast (8 Weeks)</div>
+            <canvas id="dashCashChart" height="200"></canvas>
+          </div>
+          <div class="bg-surface border border-border rounded-xl p-5">
+            <div class="text-sm font-medium mb-4">AR Aging Breakdown</div>
+            <canvas id="dashARChart" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== PAGE: INVOICES ========== -->
+      <div id="page-invoices" class="page-transition page-hidden p-6">
+        <div class="flex items-center justify-between mb-5 animate-fadeInUp">
+          <div>
+            <h1 class="text-xl font-semibold">Invoices</h1>
+            <p class="text-xs text-slate-400 mt-1">8 invoices &middot; &pound;110,300 total outstanding</p>
+          </div>
+          <button onclick="showPage('new-invoice')" class="bg-blue-primary hover:bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">+ New Invoice</button>
+        </div>
+        <!-- Filter Chips -->
+        <div class="flex gap-2 mb-4 animate-fadeInUp" style="animation-delay:0.1s">
+          <button class="px-3 py-1.5 rounded-full text-xs font-medium bg-amber-ai/15 text-amber-light border border-amber-ai/30" onclick="filterInvoices('all')">All (8)</button>
+          <button class="px-3 py-1.5 rounded-full text-xs font-medium bg-surface text-slate-400 border border-border hover:border-rose-neg/30 hover:text-rose-neg transition-colors" onclick="filterInvoices('overdue')">Overdue (3)</button>
+          <button class="px-3 py-1.5 rounded-full text-xs font-medium bg-surface text-slate-400 border border-border hover:border-amber-ai/30 hover:text-amber-ai transition-colors" onclick="filterInvoices('due')">Due Soon (2)</button>
+          <button class="px-3 py-1.5 rounded-full text-xs font-medium bg-surface text-slate-400 border border-border hover:border-emerald-pos/30 hover:text-emerald-pos transition-colors" onclick="filterInvoices('paid')">Paid (1)</button>
+          <button class="px-3 py-1.5 rounded-full text-xs font-medium bg-surface text-slate-400 border border-border hover:border-slate-400/30 transition-colors" onclick="filterInvoices('draft')">Draft (1)</button>
+        </div>
+        <!-- Invoice Table -->
+        <div class="bg-surface border border-border rounded-xl overflow-hidden animate-fadeInUp" style="animation-delay:0.15s">
+          <table class="w-full report-table" id="invoice-table">
+            <thead><tr class="bg-bg/50">
+              <th class="w-8 px-3"><input type="checkbox" class="rounded border-border"></th>
+              <th class="w-10">AI</th><th>Invoice #</th><th>Customer</th><th class="text-right">Amount</th><th>Status</th><th>Days / Due</th><th class="w-10"></th>
+            </tr></thead>
+            <tbody>
+              <tr class="hover:bg-surface-hover transition-colors invoice-row" data-status="overdue">
+                <td class="px-3"><input type="checkbox" class="rounded border-border"></td>
+                <td><button onclick="showAIModal('Acme Corp','INV-2026-0042','31,000','OVERDUE','89 days overdue','92%','34 days','Send payment reminder — last contact was 23 days ago')" class="text-amber-ai hover:text-amber-light transition-colors text-lg cursor-pointer" title="AI Insights">&#10024;</button></td>
+                <td class="font-mono text-sm">INV-2026-0042</td><td>Acme Corp</td>
+                <td class="text-right font-mono font-semibold">&pound;31,000</td>
+                <td><span class="badge badge-overdue">OVERDUE</span></td>
+                <td class="text-rose-neg text-sm font-mono">89 days</td>
+                <td><button class="text-slate-400 hover:text-slate-100">&ctdot;</button></td>
+              </tr>
+              <tr class="hover:bg-surface-hover transition-colors invoice-row" data-status="overdue">
+                <td class="px-3"><input type="checkbox" class="rounded border-border"></td>
+                <td><button onclick="showAIModal('BlueStar Ltd','INV-2026-0045','15,800','OVERDUE','71 days overdue','78%','41 days','Escalate to accounts manager — payment pattern deteriorating')" class="text-amber-ai hover:text-amber-light transition-colors text-lg cursor-pointer">&#10024;</button></td>
+                <td class="font-mono text-sm">INV-2026-0045</td><td>BlueStar Ltd</td>
+                <td class="text-right font-mono font-semibold">&pound;15,800</td>
+                <td><span class="badge badge-overdue">OVERDUE</span></td>
+                <td class="text-rose-neg text-sm font-mono">71 days</td>
+                <td><button class="text-slate-400 hover:text-slate-100">&ctdot;</button></td>
+              </tr>
+              <tr class="hover:bg-surface-hover transition-colors invoice-row" data-status="overdue">
+                <td class="px-3"><input type="checkbox" class="rounded border-border"></td>
+                <td><button onclick="showAIModal('TechVault Inc','INV-2026-0048','8,200','OVERDUE','45 days overdue','87%','28 days','Send payment reminder — usually pays after first reminder')" class="text-amber-ai hover:text-amber-light transition-colors text-lg cursor-pointer">&#10024;</button></td>
+                <td class="font-mono text-sm">INV-2026-0048</td><td>TechVault Inc</td>
+                <td class="text-right font-mono font-semibold">&pound;8,200</td>
+                <td><span class="badge badge-overdue">OVERDUE</span></td>
+                <td class="text-rose-neg text-sm font-mono">45 days</td>
+                <td><button class="text-slate-400 hover:text-slate-100">&ctdot;</button></td>
+              </tr>
+              <tr class="hover:bg-surface-hover transition-colors invoice-row" data-status="due">
+                <td class="px-3"><input type="checkbox" class="rounded border-border"></td>
+                <td><button onclick="showAIModal('Meridian Supplies','INV-2026-0051','12,400','DUE','Due in 5 days','95%','22 days','On track — Meridian usually pays early')" class="text-amber-ai hover:text-amber-light transition-colors text-lg cursor-pointer">&#10024;</button></td>
+                <td class="font-mono text-sm">INV-2026-0051</td><td>Meridian Supplies</td>
+                <td class="text-right font-mono font-semibold">&pound;12,400</td>
+                <td><span class="badge badge-due">DUE</span></td>
+                <td class="text-amber-ai text-sm font-mono">5 days left</td>
+                <td><button class="text-slate-400 hover:text-slate-100">&ctdot;</button></td>
+              </tr>
+              <tr class="hover:bg-surface-hover transition-colors invoice-row" data-status="due">
+                <td class="px-3"><input type="checkbox" class="rounded border-border"></td>
+                <td><button onclick="showAIModal('CloudNine Digital','INV-2026-0053','4,800','DUE','Due in 12 days','91%','19 days','No action needed yet')" class="text-amber-ai hover:text-amber-light transition-colors text-lg cursor-pointer">&#10024;</button></td>
+                <td class="font-mono text-sm">INV-2026-0053</td><td>CloudNine Digital</td>
+                <td class="text-right font-mono font-semibold">&pound;4,800</td>
+                <td><span class="badge badge-due">DUE</span></td>
+                <td class="text-amber-ai text-sm font-mono">12 days left</td>
+                <td><button class="text-slate-400 hover:text-slate-100">&ctdot;</button></td>
+              </tr>
+              <tr class="hover:bg-surface-hover transition-colors invoice-row" data-status="paid">
+                <td class="px-3"><input type="checkbox" class="rounded border-border"></td>
+                <td><span class="text-slate-400/30 text-lg">&#10024;</span></td>
+                <td class="font-mono text-sm">INV-2026-0055</td><td>FreshFields Organic</td>
+                <td class="text-right font-mono font-semibold">&pound;22,100</td>
+                <td><span class="badge badge-paid">PAID</span></td>
+                <td class="text-emerald-pos text-sm">&mdash;</td>
+                <td><button class="text-slate-400 hover:text-slate-100">&ctdot;</button></td>
+              </tr>
+              <tr class="hover:bg-surface-hover transition-colors invoice-row" data-status="draft">
+                <td class="px-3"><input type="checkbox" class="rounded border-border"></td>
+                <td><span class="text-slate-400/30 text-lg">&#10024;</span></td>
+                <td class="font-mono text-sm">INV-2026-0057</td><td>UrbanCraft Studios</td>
+                <td class="text-right font-mono font-semibold">&pound;6,700</td>
+                <td><span class="badge badge-draft">DRAFT</span></td>
+                <td class="text-slate-400 text-sm">&mdash;</td>
+                <td><button class="text-slate-400 hover:text-slate-100">&ctdot;</button></td>
+              </tr>
+              <tr class="hover:bg-surface-hover transition-colors invoice-row" data-status="posted">
+                <td class="px-3"><input type="checkbox" class="rounded border-border"></td>
+                <td><span class="text-slate-400/30 text-lg">&#10024;</span></td>
+                <td class="font-mono text-sm">INV-2026-0059</td><td>NorthStar Logistics</td>
+                <td class="text-right font-mono font-semibold">&pound;9,300</td>
+                <td><span class="badge badge-posted">POSTED</span></td>
+                <td class="text-blue-primary text-sm">&mdash;</td>
+                <td><button class="text-slate-400 hover:text-slate-100">&ctdot;</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ========== PAGE: NEW INVOICE ========== -->
+      <div id="page-new-invoice" class="page-transition page-hidden p-6">
+        <div class="mb-5 animate-fadeInUp">
+          <h1 class="text-xl font-semibold">New Invoice</h1>
+          <p class="text-xs text-slate-400 mt-1">Create a new sales invoice</p>
+        </div>
+        <div class="bg-surface border border-border rounded-xl p-6 animate-fadeInUp" style="animation-delay:0.1s">
+          <!-- Invoice Header -->
+          <div class="grid grid-cols-3 gap-6 mb-6">
+            <div>
+              <label class="block text-xs text-slate-400 mb-1.5 font-medium">Customer</label>
+              <select class="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-primary/50">
+                <option>Acme Corp (AC-001)</option><option>BlueStar Ltd</option><option>TechVault Inc</option>
+              </select>
+              <p class="text-[10px] text-slate-400 mt-1">14 High Street, London EC2V 8AR</p>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1.5 font-medium">Invoice Date</label>
+              <input type="text" value="17/02/2026" class="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-primary/50">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1.5 font-medium">Due Date</label>
+              <input type="text" value="19/03/2026" class="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-primary/50">
+              <p class="text-[10px] text-slate-400 mt-1">Payment terms: NET30</p>
+            </div>
+          </div>
+          <!-- Line Items -->
+          <div class="mb-6">
+            <div class="text-xs text-slate-400 font-medium mb-2">Line Items</div>
+            <table class="w-full report-table">
+              <thead><tr class="bg-bg/50">
+                <th>Item</th><th>Description</th><th class="text-right">Qty</th><th class="text-right">Price</th><th class="text-right">VAT</th><th class="text-right">Total</th>
+              </tr></thead>
+              <tbody>
+                <tr>
+                  <td class="font-mono text-sm">WA-100</td><td>Widget-A</td>
+                  <td class="text-right font-mono">100</td><td class="text-right font-mono">&pound;50.00</td>
+                  <td class="text-right font-mono">20%</td><td class="text-right font-mono font-semibold">&pound;5,000.00</td>
+                </tr>
+                <tr>
+                  <td class="font-mono text-sm">WB-200</td><td>Widget-B</td>
+                  <td class="text-right font-mono">50</td><td class="text-right font-mono">&pound;30.00</td>
+                  <td class="text-right font-mono">20%</td><td class="text-right font-mono font-semibold">&pound;1,500.00</td>
+                </tr>
+              </tbody>
+            </table>
+            <button class="mt-3 text-blue-primary text-sm hover:text-blue-400 transition-colors">+ Add Line Item</button>
+          </div>
+          <!-- Totals -->
+          <div class="flex justify-end mb-6">
+            <div class="w-64 space-y-2">
+              <div class="flex justify-between text-sm"><span class="text-slate-400">Subtotal</span><span class="font-mono font-semibold">&pound;6,500.00</span></div>
+              <div class="flex justify-between text-sm"><span class="text-slate-400">VAT (20%)</span><span class="font-mono">&pound;1,300.00</span></div>
+              <div class="border-t border-border pt-2 flex justify-between text-base"><span class="font-semibold">Total</span><span class="font-mono font-bold text-lg">&pound;7,800.00</span></div>
+            </div>
+          </div>
+          <!-- Notes -->
+          <div class="mb-6">
+            <label class="block text-xs text-slate-400 mb-1.5 font-medium">Notes</label>
+            <textarea class="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm h-20 focus:outline-none focus:border-blue-primary/50" placeholder="Add any notes..."></textarea>
+          </div>
+          <!-- Actions -->
+          <div class="flex gap-3 justify-end">
+            <button class="px-4 py-2 text-sm text-slate-400 border border-border rounded-lg hover:bg-surface-hover transition-colors">Cancel</button>
+            <button class="px-4 py-2 text-sm text-slate-100 border border-border rounded-lg hover:bg-surface-hover transition-colors">Save Draft</button>
+            <button class="px-4 py-2 text-sm text-white bg-blue-primary rounded-lg hover:bg-blue-600 font-medium transition-colors">Submit for Approval</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== PAGE: AI CREATE ========== -->
+      <div id="page-ai-create" class="page-transition page-hidden p-6">
+        <div class="mb-5 animate-fadeInUp">
+          <h1 class="text-xl font-semibold">AI Create Invoice</h1>
+          <p class="text-xs text-slate-400 mt-1">Let Nexa AI build your invoice from a natural language command</p>
+        </div>
+        <!-- Command Input -->
+        <div class="bg-amber-ai/5 border border-amber-ai/20 rounded-xl p-4 mb-6 flex items-center gap-3 animate-fadeInUp" style="animation-delay:0.1s">
+          <div class="w-8 h-8 rounded-full bg-amber-ai/20 flex items-center justify-center flex-shrink-0">
+            <svg class="w-4 h-4 text-amber-ai" fill="currentColor" viewBox="0 0 20 20"><path d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7z"/></svg>
+          </div>
+          <div class="text-sm text-slate-100 font-mono">"Create invoice for Acme Corp &mdash; 100 Widget-A at &pound;50, 50 Widget-B at &pound;30"</div>
+        </div>
+        <!-- Steps -->
+        <div class="space-y-4" id="ai-steps">
+          <!-- Step 1 -->
+          <div class="flex gap-4 items-start animate-stepSlideIn" style="animation-delay:0.3s">
+            <div class="flex flex-col items-center"><div class="step-circle step-done">&#10003;</div><div class="w-0.5 h-12 bg-amber-ai/30 mt-1"></div></div>
+            <div class="bg-surface border border-border rounded-xl p-4 flex-1 card-hover">
+              <div class="text-sm font-medium mb-1">Understanding Intent</div>
+              <div class="text-xs text-slate-400">Identified: <span class="text-emerald-pos font-medium">Create sales invoice</span> for Acme Corp</div>
+            </div>
+          </div>
+          <!-- Step 2 -->
+          <div class="flex gap-4 items-start animate-stepSlideIn" style="animation-delay:0.6s">
+            <div class="flex flex-col items-center"><div class="step-circle step-done">&#10003;</div><div class="w-0.5 h-12 bg-amber-ai/30 mt-1"></div></div>
+            <div class="bg-surface border border-border rounded-xl p-4 flex-1 card-hover">
+              <div class="text-sm font-medium mb-1">Finding Customer</div>
+              <div class="text-xs text-slate-400">
+                <span class="text-emerald-pos">&#10003;</span> Acme Corp (AC-001) &bull; 14 High Street, London EC2V 8AR &bull; NET30 terms
+              </div>
+            </div>
+          </div>
+          <!-- Step 3 -->
+          <div class="flex gap-4 items-start animate-stepSlideIn" style="animation-delay:0.9s">
+            <div class="flex flex-col items-center"><div class="step-circle step-done">&#10003;</div><div class="w-0.5 h-12 bg-amber-ai/30 mt-1"></div></div>
+            <div class="bg-surface border border-border rounded-xl p-4 flex-1 card-hover">
+              <div class="text-sm font-medium mb-2">Looking Up Items</div>
+              <div class="grid grid-cols-4 gap-2 text-xs text-slate-400">
+                <div>Widget-A (WA-100)</div><div class="font-mono">&pound;50.00/unit</div><div class="font-mono text-emerald-pos">340 in stock &#10003;</div><div class="font-mono">Qty: 100</div>
+                <div>Widget-B (WB-200)</div><div class="font-mono">&pound;30.00/unit</div><div class="font-mono text-emerald-pos">180 in stock &#10003;</div><div class="font-mono">Qty: 50</div>
+              </div>
+            </div>
+          </div>
+          <!-- Step 4 -->
+          <div class="flex gap-4 items-start animate-stepSlideIn" style="animation-delay:1.2s">
+            <div class="flex flex-col items-center"><div class="step-circle step-done">&#10003;</div><div class="w-0.5 h-12 bg-amber-ai/30 mt-1"></div></div>
+            <div class="bg-surface border border-border rounded-xl p-4 flex-1 card-hover">
+              <div class="text-sm font-medium mb-1">Applying Defaults</div>
+              <div class="text-xs text-slate-400">Payment terms: <span class="text-slate-100">NET30</span> &bull; VAT: <span class="text-slate-100">20% standard rate</span> &bull; Discount: <span class="text-slate-100">None</span></div>
+            </div>
+          </div>
+          <!-- Step 5 -->
+          <div class="flex gap-4 items-start animate-stepSlideIn" style="animation-delay:1.5s">
+            <div class="flex flex-col items-center"><div class="step-circle step-done">&#10003;</div><div class="w-0.5 h-12 bg-amber-ai/30 mt-1"></div></div>
+            <div class="bg-surface border border-border rounded-xl p-4 flex-1 card-hover">
+              <div class="text-sm font-medium mb-1">Calculating Totals</div>
+              <div class="text-xs text-slate-400">Subtotal: <span class="font-mono text-slate-100">&pound;6,500</span> + VAT <span class="font-mono text-slate-100">&pound;1,300</span> = Total <span class="font-mono text-lg font-bold text-amber-light">&pound;7,800</span></div>
+            </div>
+          </div>
+          <!-- Step 6 -->
+          <div class="flex gap-4 items-start animate-stepSlideIn" style="animation-delay:1.8s">
+            <div class="flex flex-col items-center"><div class="step-circle step-done">&#10003;</div></div>
+            <div class="bg-surface border border-amber-ai/30 rounded-xl p-5 flex-1 card-hover">
+              <div class="text-sm font-medium mb-3 flex items-center gap-2">Ready for Approval <span class="w-2 h-2 rounded-full bg-emerald-pos animate-pulse"></span></div>
+              <!-- Invoice Preview -->
+              <div class="bg-bg rounded-lg p-4 mb-4 border border-border">
+                <div class="flex justify-between items-start mb-4">
+                  <div><div class="font-semibold">Meridian Manufacturing Ltd</div><div class="text-xs text-slate-400">To: Acme Corp (AC-001)</div><div class="text-xs text-slate-400">14 High Street, London EC2V 8AR</div></div>
+                  <div class="text-right"><div class="font-mono text-sm text-slate-400">INVOICE</div><div class="font-mono text-xs text-slate-400">Date: 17/02/2026</div><div class="font-mono text-xs text-slate-400">Due: 19/03/2026</div></div>
+                </div>
+                <table class="w-full text-xs mb-3">
+                  <thead><tr class="border-b border-border text-slate-400"><th class="text-left py-1">Item</th><th class="text-right py-1">Qty</th><th class="text-right py-1">Price</th><th class="text-right py-1">Total</th></tr></thead>
+                  <tbody>
+                    <tr class="border-b border-border/30"><td class="py-1.5">Widget-A (WA-100)</td><td class="text-right font-mono">100</td><td class="text-right font-mono">&pound;50.00</td><td class="text-right font-mono">&pound;5,000.00</td></tr>
+                    <tr class="border-b border-border/30"><td class="py-1.5">Widget-B (WB-200)</td><td class="text-right font-mono">50</td><td class="text-right font-mono">&pound;30.00</td><td class="text-right font-mono">&pound;1,500.00</td></tr>
+                  </tbody>
+                </table>
+                <div class="flex justify-end"><div class="w-48 space-y-1 text-xs">
+                  <div class="flex justify-between"><span class="text-slate-400">Subtotal</span><span class="font-mono">&pound;6,500.00</span></div>
+                  <div class="flex justify-between"><span class="text-slate-400">VAT (20%)</span><span class="font-mono">&pound;1,300.00</span></div>
+                  <div class="flex justify-between border-t border-border pt-1 font-semibold"><span>Total</span><span class="font-mono text-amber-light">&pound;7,800.00</span></div>
+                </div></div>
+              </div>
+              <div class="flex gap-3">
+                <button class="flex-1 bg-emerald-pos/20 text-emerald-pos border border-emerald-pos/30 py-2.5 rounded-lg text-sm font-medium hover:bg-emerald-pos/30 transition-colors">&#10003; Approve</button>
+                <button class="flex-1 bg-blue-primary/20 text-blue-primary border border-blue-primary/30 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-primary/30 transition-colors">&#9998; Edit</button>
+                <button class="flex-1 bg-rose-neg/10 text-rose-neg border border-rose-neg/20 py-2.5 rounded-lg text-sm font-medium hover:bg-rose-neg/20 transition-colors">&#10005; Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== PAGE: P&L ========== -->
+      <div id="page-pnl" class="page-transition page-hidden p-6">
+        <div class="flex items-center justify-between mb-5 animate-fadeInUp">
+          <div>
+            <h1 class="text-xl font-semibold">Profit &amp; Loss Statement</h1>
+            <p class="text-xs text-slate-400 mt-1">February 2026</p>
+          </div>
+          <select class="bg-bg border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-primary/50">
+            <option>vs Last Year (Feb 2025)</option><option>vs Last Month (Jan 2026)</option><option>vs Budget</option>
+          </select>
+        </div>
+        <!-- P&L Table -->
+        <div class="bg-surface border border-border rounded-xl overflow-hidden mb-6 animate-fadeInUp" style="animation-delay:0.1s">
+          <table class="w-full report-table">
+            <thead><tr class="bg-bg/50">
+              <th>Account</th><th class="text-right">Feb 2026</th><th class="text-right">Feb 2025</th><th class="text-right">Change &pound;</th><th class="text-right">Change %</th><th>AI Insight</th>
+            </tr></thead>
+            <tbody>
+              <tr class="hover:bg-surface-hover transition-colors">
+                <td class="font-semibold">Revenue</td>
+                <td class="text-right font-mono font-semibold">&pound;347,200</td>
+                <td class="text-right font-mono text-slate-400">&pound;298,400</td>
+                <td class="text-right font-mono text-emerald-pos">+&pound;48,800</td>
+                <td class="text-right"><span class="text-xs font-medium text-emerald-pos bg-emerald-pos/10 px-2 py-0.5 rounded-full">+16.3%</span></td>
+                <td class="ai-tag text-xs">Strong growth driven by Widget-A volume</td>
+              </tr>
+              <tr class="hover:bg-surface-hover transition-colors bg-amber-ai/[0.03]">
+                <td class="font-semibold">Cost of Goods Sold</td>
+                <td class="text-right font-mono font-semibold">&pound;228,800</td>
+                <td class="text-right font-mono text-slate-400">&pound;189,500</td>
+                <td class="text-right font-mono text-rose-neg">+&pound;39,300</td>
+                <td class="text-right"><span class="text-xs font-medium text-rose-neg bg-rose-neg/10 px-2 py-0.5 rounded-full">+20.7%</span></td>
+                <td><span class="text-xs px-2 py-0.5 rounded-full bg-amber-ai/15 text-amber-ai">&#9888; Growing faster than revenue &mdash; raw material costs up 14%</span></td>
+              </tr>
+              <tr class="hover:bg-surface-hover transition-colors border-t-2 border-amber-ai/20">
+                <td class="font-bold text-amber-light">Gross Profit</td>
+                <td class="text-right font-mono font-bold text-amber-light">&pound;118,400</td>
+                <td class="text-right font-mono text-slate-400">&pound;108,900</td>
+                <td class="text-right font-mono text-emerald-pos">+&pound;9,500</td>
+                <td class="text-right"><span class="text-xs font-medium text-emerald-pos bg-emerald-pos/10 px-2 py-0.5 rounded-full">+8.7%</span></td>
+                <td class="ai-tag text-xs">Margin compression: 34.2% vs 36.5%</td>
+              </tr>
+              <tr class="hover:bg-surface-hover transition-colors">
+                <td class="font-semibold">Operating Expenses</td>
+                <td class="text-right font-mono font-semibold">&pound;78,200</td>
+                <td class="text-right font-mono text-slate-400">&pound;72,100</td>
+                <td class="text-right font-mono text-rose-neg">+&pound;6,100</td>
+                <td class="text-right"><span class="text-xs font-medium text-amber-ai bg-amber-ai/10 px-2 py-0.5 rounded-full">+8.5%</span></td>
+                <td class="text-xs text-slate-400">&mdash;</td>
+              </tr>
+              <tr class="hover:bg-surface-hover transition-colors border-t-2 border-emerald-pos/20">
+                <td class="font-bold text-emerald-pos">Net Profit</td>
+                <td class="text-right font-mono font-bold text-emerald-pos">&pound;40,200</td>
+                <td class="text-right font-mono text-slate-400">&pound;36,800</td>
+                <td class="text-right font-mono text-emerald-pos">+&pound;3,400</td>
+                <td class="text-right"><span class="text-xs font-medium text-emerald-pos bg-emerald-pos/10 px-2 py-0.5 rounded-full">+9.2%</span></td>
+                <td class="ai-tag text-xs">Healthy but watch COGS trend</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- P&L Chart -->
+        <div class="bg-surface border border-border rounded-xl p-5 animate-fadeInUp" style="animation-delay:0.2s">
+          <div class="text-sm font-medium mb-4">Revenue vs COGS vs Net Profit &mdash; Year-on-Year Comparison</div>
+          <canvas id="pnlChart" height="140"></canvas>
+        </div>
+      </div>
+
+      <!-- ========== PAGE: CASH FLOW ========== -->
+      <div id="page-cashflow" class="page-transition page-hidden p-6">
+        <div class="mb-5 animate-fadeInUp">
+          <h1 class="text-xl font-semibold">8-Week Cash Flow Forecast</h1>
+          <p class="text-xs text-slate-400 mt-1">Projected closing balances with AI scenario analysis</p>
+        </div>
+        <!-- Chart -->
+        <div class="bg-surface border border-border rounded-xl p-5 mb-6 animate-fadeInUp" style="animation-delay:0.1s">
+          <canvas id="cashflowChart" height="180"></canvas>
+        </div>
+        <!-- Table -->
+        <div class="bg-surface border border-border rounded-xl overflow-hidden mb-6 animate-fadeInUp" style="animation-delay:0.2s">
+          <table class="w-full report-table">
+            <thead><tr class="bg-bg/50">
+              <th>Week</th><th>Date</th><th class="text-right">Opening</th><th class="text-right">Inflows</th><th class="text-right">Outflows</th><th class="text-right">Closing</th><th>Note</th>
+            </tr></thead>
+            <tbody>
+              <tr class="hover:bg-surface-hover transition-colors"><td class="font-mono">1</td><td>17 Feb</td><td class="text-right font-mono">&pound;89,300</td><td class="text-right font-mono text-emerald-pos">&pound;24,000</td><td class="text-right font-mono text-rose-neg">&pound;18,400</td><td class="text-right font-mono font-semibold">&pound;94,900</td><td class="text-xs text-slate-400">&mdash;</td></tr>
+              <tr class="hover:bg-surface-hover transition-colors"><td class="font-mono">2</td><td>24 Feb</td><td class="text-right font-mono">&pound;94,900</td><td class="text-right font-mono text-emerald-pos">&pound;15,000</td><td class="text-right font-mono text-rose-neg">&pound;67,200</td><td class="text-right font-mono font-semibold">&pound;42,700</td><td class="text-xs text-amber-ai">Payroll</td></tr>
+              <tr class="hover:bg-surface-hover transition-colors"><td class="font-mono">3</td><td>3 Mar</td><td class="text-right font-mono">&pound;42,700</td><td class="text-right font-mono text-emerald-pos">&pound;31,000</td><td class="text-right font-mono text-rose-neg">&pound;12,000</td><td class="text-right font-mono font-semibold">&pound;61,700</td><td class="text-xs text-amber-ai">Acme if chased</td></tr>
+              <tr class="hover:bg-surface-hover transition-colors"><td class="font-mono">4</td><td>10 Mar</td><td class="text-right font-mono">&pound;61,700</td><td class="text-right font-mono text-emerald-pos">&pound;18,000</td><td class="text-right font-mono text-rose-neg">&pound;22,000</td><td class="text-right font-mono font-semibold">&pound;57,700</td><td class="text-xs text-slate-400">&mdash;</td></tr>
+              <tr class="hover:bg-surface-hover transition-colors"><td class="font-mono">5</td><td>17 Mar</td><td class="text-right font-mono">&pound;57,700</td><td class="text-right font-mono text-emerald-pos">&pound;12,000</td><td class="text-right font-mono text-rose-neg">&pound;15,000</td><td class="text-right font-mono font-semibold">&pound;54,700</td><td class="text-xs text-slate-400">&mdash;</td></tr>
+              <tr class="hover:bg-surface-hover transition-colors bg-rose-neg/[0.04]"><td class="font-mono">6</td><td>24 Mar</td><td class="text-right font-mono">&pound;54,700</td><td class="text-right font-mono text-emerald-pos">&pound;8,000</td><td class="text-right font-mono text-rose-neg">&pound;21,500</td><td class="text-right font-mono font-semibold text-amber-ai">&pound;41,200</td><td><span class="text-xs px-2 py-0.5 rounded-full bg-amber-ai/15 text-amber-ai">&#9888; VAT payment</span></td></tr>
+              <tr class="hover:bg-surface-hover transition-colors"><td class="font-mono">7</td><td>31 Mar</td><td class="text-right font-mono">&pound;41,200</td><td class="text-right font-mono text-emerald-pos">&pound;35,000</td><td class="text-right font-mono text-rose-neg">&pound;14,000</td><td class="text-right font-mono font-semibold">&pound;62,200</td><td class="text-xs text-slate-400">Quarter-end</td></tr>
+              <tr class="hover:bg-surface-hover transition-colors"><td class="font-mono">8</td><td>7 Apr</td><td class="text-right font-mono">&pound;62,200</td><td class="text-right font-mono text-emerald-pos">&pound;22,000</td><td class="text-right font-mono text-rose-neg">&pound;16,000</td><td class="text-right font-mono font-semibold">&pound;68,200</td><td class="text-xs text-slate-400">&mdash;</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- AI Insight Cards -->
+        <div class="grid grid-cols-3 gap-4 animate-fadeInUp" style="animation-delay:0.3s">
+          <div class="bg-surface border border-amber-ai/20 rounded-xl p-4 card-hover">
+            <div class="text-amber-ai text-lg mb-2">&#9888;&#65039;</div>
+            <div class="text-sm font-medium mb-1">Cash Dip Warning</div>
+            <div class="text-xs text-slate-400">Cash dips to &pound;41,200 in week 6 due to VAT payment of &pound;21,500</div>
+          </div>
+          <div class="bg-surface border border-amber-ai/20 rounded-xl p-4 card-hover">
+            <div class="text-amber-ai text-lg mb-2">&#128161;</div>
+            <div class="text-sm font-medium mb-1">Acme Impact</div>
+            <div class="text-xs text-slate-400">If Acme pays &pound;31k by week 3, minimum position improves to &pound;72,200</div>
+          </div>
+          <div class="bg-surface border border-amber-ai/20 rounded-xl p-4 card-hover">
+            <div class="text-amber-ai text-lg mb-2">&#128204;</div>
+            <div class="text-sm font-medium mb-1">Recommendation</div>
+            <div class="text-xs text-slate-400">Chase Acme Corp immediately + consider delaying non-critical supplier payments</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== PAGE: AI CHAT ========== -->
+      <div id="page-chat" class="page-transition page-hidden flex flex-col h-full">
+        <!-- Chat Header -->
+        <div class="px-6 py-4 border-b border-border flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full bg-amber-ai/20 flex items-center justify-center">
+            <svg class="w-4 h-4 text-amber-ai" fill="currentColor" viewBox="0 0 20 20"><path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"/></svg>
+          </div>
+          <div>
+            <div class="text-sm font-semibold">Chat with Nexa AI</div>
+            <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-pos"></span><span class="text-[10px] text-slate-400">Active</span></div>
+          </div>
+        </div>
+        <!-- Chat Messages -->
+        <div class="flex-1 overflow-y-auto p-6 space-y-4" id="chat-messages">
+          <!-- User msg 1 -->
+          <div class="flex justify-end animate-fadeInUp" style="animation-delay:0.1s">
+            <div class="chat-bubble-user px-4 py-3 max-w-md"><div class="text-sm">What's our cash position looking like?</div></div>
+          </div>
+          <!-- AI msg 1 -->
+          <div class="flex justify-start animate-fadeInUp" style="animation-delay:0.2s">
+            <div class="chat-bubble-ai px-4 py-3 max-w-lg">
+              <div class="text-sm mb-2">Current cash: <span class="font-mono font-semibold text-amber-light">&pound;89,300</span>. Projected minimum: <span class="font-mono font-semibold text-amber-ai">&pound;41,200</span> in week 6 due to VAT payment. Here's the forecast:</div>
+              <div class="bg-bg/50 rounded-lg p-3 mb-2">
+                <canvas id="chatMiniChart" height="80"></canvas>
+              </div>
+              <div class="text-xs text-slate-400">Based on current receivables and scheduled payments</div>
+              <div class="flex items-center gap-1 mt-2"><span class="text-[10px] text-slate-400">AI Confidence:</span><div class="confidence-bar w-20"><div class="confidence-fill" style="width:94%"></div></div><span class="text-[10px] font-mono text-amber-ai">94%</span></div>
+            </div>
+          </div>
+          <!-- User msg 2 -->
+          <div class="flex justify-end animate-fadeInUp" style="animation-delay:0.3s">
+            <div class="chat-bubble-user px-4 py-3 max-w-md"><div class="text-sm">Which customers owe us the most?</div></div>
+          </div>
+          <!-- AI msg 2 -->
+          <div class="flex justify-start animate-fadeInUp" style="animation-delay:0.4s">
+            <div class="chat-bubble-ai px-4 py-3 max-w-lg">
+              <div class="text-sm mb-3">Top 3 overdue accounts:</div>
+              <div class="space-y-2 mb-3">
+                <div class="flex items-center gap-3 bg-bg/50 rounded-lg px-3 py-2"><span class="text-xs font-bold text-rose-neg w-4">1</span><span class="text-sm flex-1">Acme Corp</span><span class="font-mono text-sm font-semibold">&pound;31,000</span><span class="text-xs text-rose-neg">89 days</span></div>
+                <div class="flex items-center gap-3 bg-bg/50 rounded-lg px-3 py-2"><span class="text-xs font-bold text-rose-neg w-4">2</span><span class="text-sm flex-1">BlueStar Ltd</span><span class="font-mono text-sm font-semibold">&pound;15,800</span><span class="text-xs text-rose-neg">71 days</span></div>
+                <div class="flex items-center gap-3 bg-bg/50 rounded-lg px-3 py-2"><span class="text-xs font-bold text-amber-ai w-4">3</span><span class="text-sm flex-1">TechVault Inc</span><span class="font-mono text-sm font-semibold">&pound;8,200</span><span class="text-xs text-amber-ai">45 days</span></div>
+              </div>
+              <div class="text-sm mb-3">Total overdue: <span class="font-mono font-semibold text-rose-neg">&pound;55,000</span>. Shall I draft payment reminders?</div>
+              <div class="flex gap-2">
+                <button class="px-3 py-1.5 text-xs bg-amber-ai/15 text-amber-light border border-amber-ai/30 rounded-lg hover:bg-amber-ai/25 transition-colors">Send Reminders</button>
+                <button class="px-3 py-1.5 text-xs bg-surface text-slate-400 border border-border rounded-lg hover:bg-surface-hover transition-colors">View All</button>
+              </div>
+            </div>
+          </div>
+          <!-- User msg 3 -->
+          <div class="flex justify-end animate-fadeInUp" style="animation-delay:0.5s">
+            <div class="chat-bubble-user px-4 py-3 max-w-md"><div class="text-sm">Yes, draft reminders for all three</div></div>
+          </div>
+          <!-- AI msg 3 -->
+          <div class="flex justify-start animate-fadeInUp" style="animation-delay:0.6s">
+            <div class="chat-bubble-ai px-4 py-3 max-w-lg">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="w-5 h-5 rounded-full bg-emerald-pos/20 flex items-center justify-center"><svg class="w-3 h-3 text-emerald-pos" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg></span>
+                <span class="text-sm font-medium">Done! 3 payment reminder emails drafted and ready for your review:</span>
+              </div>
+              <div class="space-y-1.5 mb-3">
+                <div class="flex items-center gap-2 text-xs text-slate-400"><span class="w-1.5 h-1.5 rounded-full bg-emerald-pos"></span>Acme Corp &mdash; Firm reminder, references contract terms</div>
+                <div class="flex items-center gap-2 text-xs text-slate-400"><span class="w-1.5 h-1.5 rounded-full bg-emerald-pos"></span>BlueStar Ltd &mdash; Escalation notice, 71 days overdue</div>
+                <div class="flex items-center gap-2 text-xs text-slate-400"><span class="w-1.5 h-1.5 rounded-full bg-emerald-pos"></span>TechVault Inc &mdash; Friendly reminder, first chase</div>
+              </div>
+              <div class="flex gap-2">
+                <button class="px-3 py-1.5 text-xs bg-blue-primary/15 text-blue-primary border border-blue-primary/30 rounded-lg hover:bg-blue-primary/25 transition-colors">Review Emails</button>
+                <button class="px-3 py-1.5 text-xs bg-emerald-pos/15 text-emerald-pos border border-emerald-pos/30 rounded-lg hover:bg-emerald-pos/25 transition-colors">Send All</button>
+              </div>
+            </div>
+          </div>
+          <!-- Typing indicator -->
+          <div class="flex justify-start" id="typing-indicator" style="display:none;">
+            <div class="chat-bubble-ai px-4 py-3"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
+          </div>
+        </div>
+        <!-- Chat Input -->
+        <div class="p-4 border-t border-border">
+          <div class="flex gap-3">
+            <input type="text" id="chat-input" placeholder="Ask Nexa anything..." class="flex-1 bg-bg border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-amber-ai/50 focus:ring-1 focus:ring-amber-ai/20" onkeydown="if(event.key==='Enter')sendChat()">
+            <button onclick="sendChat()" class="bg-amber-ai hover:bg-amber-light text-bg px-5 py-3 rounded-xl font-medium text-sm transition-colors flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+              Send
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- AI CO-PILOT SIDEBAR -->
+    <aside class="w-80 bg-surface border-l-2 border-amber-ai/30 flex flex-col flex-shrink-0 animate-breathe" id="ai-sidebar">
+      <div class="p-4 border-b border-border flex items-center gap-2">
+        <div class="w-7 h-7 rounded-full bg-amber-ai/20 flex items-center justify-center">
+          <svg class="w-3.5 h-3.5 text-amber-ai" fill="currentColor" viewBox="0 0 20 20"><path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"/></svg>
+        </div>
+        <div>
+          <div class="text-sm font-semibold text-amber-light">AI Co-Pilot</div>
+          <div class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-pos"></span><span class="text-[10px] text-slate-400">Always listening</span></div>
+        </div>
+        <div class="ml-auto flex items-center gap-1">
+          <span class="text-[10px] text-slate-400">98%</span>
+          <div class="confidence-bar w-12"><div class="confidence-fill" style="width:98%"></div></div>
+        </div>
+      </div>
+      <!-- Dynamic sidebar content -->
+      <div class="flex-1 overflow-y-auto p-4 space-y-3" id="sidebar-content">
+        <!-- Dashboard sidebar (default) -->
+        <div class="sidebar-page" data-sidebar="dashboard">
+          <div class="text-xs text-slate-400 uppercase tracking-wider font-medium mb-3">Morning Briefing</div>
+          <div class="space-y-2">
+            <div class="bg-rose-neg/5 border border-rose-neg/15 rounded-lg p-3 card-hover cursor-pointer" onclick="showPage('invoices')">
+              <div class="text-sm mb-1"><span class="text-rose-neg">&#128308;</span> 3 invoices overdue &gt;60 days (&pound;55k)</div>
+              <div class="text-xs text-blue-primary hover:underline">Chase All &rarr;</div>
+            </div>
+            <div class="bg-amber-ai/5 border border-amber-ai/15 rounded-lg p-3 card-hover cursor-pointer" onclick="showPage('cashflow')">
+              <div class="text-sm mb-1"><span class="text-amber-ai">&#128993;</span> Cash dips to &pound;41.2k in week 6</div>
+              <div class="text-xs text-blue-primary hover:underline">View Forecast &rarr;</div>
+            </div>
+            <div class="bg-emerald-pos/5 border border-emerald-pos/15 rounded-lg p-3 card-hover cursor-pointer">
+              <div class="text-sm mb-1"><span class="text-emerald-pos">&#128994;</span> Pipeline up 14.4% &mdash; 2 deals likely</div>
+              <div class="text-xs text-blue-primary hover:underline">View Pipeline &rarr;</div>
+            </div>
+            <div class="bg-surface border border-border rounded-lg p-3 card-hover cursor-pointer" onclick="showPage('pnl')">
+              <div class="text-sm mb-1">&#128202; Gross margin declining</div>
+              <div class="text-xs text-slate-400">Widget-B pricing needs review</div>
+              <div class="text-xs text-blue-primary hover:underline mt-1">Investigate &rarr;</div>
+            </div>
+          </div>
+        </div>
+        <!-- Invoices sidebar -->
+        <div class="sidebar-page" data-sidebar="invoices" style="display:none">
+          <div class="text-xs text-slate-400 uppercase tracking-wider font-medium mb-3">Invoice Insights</div>
+          <div class="bg-amber-ai/5 border border-amber-ai/15 rounded-lg p-3 mb-3">
+            <div class="text-sm text-amber-light font-medium mb-1">Priority Action</div>
+            <div class="text-xs text-slate-400 mb-2">7 overdue invoices totalling &pound;55k</div>
+            <div class="text-xs text-slate-100">Recommendation: Chase <span class="font-semibold">Acme Corp</span> first (&pound;31k, 89 days overdue)</div>
+          </div>
+          <div class="space-y-2">
+            <div class="bg-surface border border-border rounded-lg p-3">
+              <div class="text-xs text-slate-400 mb-1">Collection probability</div>
+              <div class="text-sm mb-1">Next 14 days: <span class="font-mono text-emerald-pos font-semibold">&pound;23,400</span></div>
+              <div class="confidence-bar"><div class="confidence-fill" style="width:72%"></div></div>
+              <div class="text-[10px] text-slate-400 mt-1">72% confidence</div>
+            </div>
+            <div class="bg-surface border border-border rounded-lg p-3">
+              <div class="text-xs text-slate-400 mb-1">Aging distribution</div>
+              <div class="space-y-1.5 mt-2">
+                <div class="flex items-center gap-2 text-xs"><span class="text-slate-400 w-12">0-30d</span><div class="flex-1 h-2 bg-bg rounded-full overflow-hidden"><div class="h-full bg-emerald-pos rounded-full" style="width:35%"></div></div><span class="font-mono w-14 text-right">&pound;17.2k</span></div>
+                <div class="flex items-center gap-2 text-xs"><span class="text-slate-400 w-12">30-60d</span><div class="flex-1 h-2 bg-bg rounded-full overflow-hidden"><div class="h-full bg-amber-ai rounded-full" style="width:15%"></div></div><span class="font-mono w-14 text-right">&pound;8.2k</span></div>
+                <div class="flex items-center gap-2 text-xs"><span class="text-slate-400 w-12">60-90d</span><div class="flex-1 h-2 bg-bg rounded-full overflow-hidden"><div class="h-full bg-rose-neg rounded-full" style="width:50%"></div></div><span class="font-mono w-14 text-right">&pound;46.8k</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- New Invoice sidebar -->
+        <div class="sidebar-page" data-sidebar="new-invoice" style="display:none">
+          <div class="text-xs text-slate-400 uppercase tracking-wider font-medium mb-3">Invoice Assistant</div>
+          <div class="space-y-2">
+            <div class="bg-amber-ai/5 border border-amber-ai/15 rounded-lg p-3">
+              <div class="text-xs text-amber-light mb-1">&#10024; AI Suggestion</div>
+              <div class="text-xs text-slate-400">I've pre-filled based on Acme's order history</div>
+            </div>
+            <div class="bg-surface border border-border rounded-lg p-3">
+              <div class="text-xs text-slate-400 mb-1">Last Acme order</div>
+              <div class="text-sm">80 Widget-A on 15 Jan 2026</div>
+            </div>
+            <div class="bg-amber-ai/5 border border-amber-ai/15 rounded-lg p-3">
+              <div class="text-xs text-amber-light mb-1">&#128161; Cross-sell opportunity</div>
+              <div class="text-xs text-slate-400">Acme usually orders Widget-C too &mdash; add 30 units?</div>
+              <button class="mt-2 text-xs text-blue-primary hover:underline">Add Widget-C &rarr;</button>
+            </div>
+            <div class="bg-rose-neg/5 border border-rose-neg/15 rounded-lg p-3">
+              <div class="text-xs text-rose-neg mb-1">&#9888; Warning</div>
+              <div class="text-xs text-slate-400">Acme is currently 89 days overdue on INV-0042 (&pound;31k)</div>
+            </div>
+          </div>
+        </div>
+        <!-- AI Create sidebar -->
+        <div class="sidebar-page" data-sidebar="ai-create" style="display:none">
+          <div class="text-xs text-slate-400 uppercase tracking-wider font-medium mb-3">AI Processing</div>
+          <div class="space-y-2">
+            <div class="bg-amber-ai/5 border border-amber-ai/15 rounded-lg p-3">
+              <div class="text-xs text-amber-light mb-1">&#10024; Status</div>
+              <div class="text-sm text-emerald-pos">All steps completed</div>
+            </div>
+            <div class="bg-surface border border-border rounded-lg p-3">
+              <div class="text-xs text-slate-400 mb-1">Validation</div>
+              <div class="text-xs text-slate-400 space-y-1">
+                <div><span class="text-emerald-pos">&#10003;</span> All items in stock</div>
+                <div><span class="text-emerald-pos">&#10003;</span> No special discounts apply</div>
+                <div><span class="text-emerald-pos">&#10003;</span> VAT rate confirmed</div>
+                <div><span class="text-emerald-pos">&#10003;</span> Invoice ready for review</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-1 mt-2"><span class="text-[10px] text-slate-400">Confidence:</span><div class="confidence-bar w-full"><div class="confidence-fill" style="width:98%"></div></div><span class="text-[10px] font-mono text-amber-ai ml-1">98%</span></div>
+          </div>
+        </div>
+        <!-- P&L sidebar -->
+        <div class="sidebar-page" data-sidebar="pnl" style="display:none">
+          <div class="text-xs text-slate-400 uppercase tracking-wider font-medium mb-3">P&L Analysis</div>
+          <div class="bg-amber-ai/5 border border-amber-ai/15 rounded-lg p-3 mb-3">
+            <div class="text-xs text-amber-light font-medium mb-2">&#128270; Key Finding</div>
+            <div class="text-xs text-slate-400 leading-relaxed">Your COGS is growing <span class="text-rose-neg font-semibold">4.4pp faster</span> than revenue. This is primarily driven by raw material cost increases for Widget-B since October.</div>
+          </div>
+          <div class="space-y-2">
+            <div class="bg-surface border border-border rounded-lg p-3">
+              <div class="text-xs text-slate-400 mb-1">Recommended actions</div>
+              <div class="space-y-1.5">
+                <div class="text-xs text-slate-100 flex items-start gap-2"><span class="text-amber-ai mt-0.5">1.</span>Renegotiate supplier terms for raw materials</div>
+                <div class="text-xs text-slate-100 flex items-start gap-2"><span class="text-amber-ai mt-0.5">2.</span>Review Widget-B pricing (consider 8-12% increase)</div>
+                <div class="text-xs text-slate-100 flex items-start gap-2"><span class="text-amber-ai mt-0.5">3.</span>Explore alternative suppliers for key components</div>
+              </div>
+            </div>
+            <div class="bg-surface border border-border rounded-lg p-3">
+              <div class="text-xs text-slate-400 mb-1">Margin trend (6 months)</div>
+              <svg width="100%" height="40" viewBox="0 0 240 40"><polyline fill="none" stroke="#f59e0b" stroke-width="2" points="0,8 40,10 80,14 120,18 160,22 200,26 240,28"/><line x1="0" y1="35" x2="240" y2="35" stroke="rgba(51,65,85,0.3)" stroke-width="1"/></svg>
+              <div class="flex justify-between text-[10px] text-slate-400 mt-1"><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span><span>Jan</span><span>Feb</span></div>
+            </div>
+          </div>
+        </div>
+        <!-- Cashflow sidebar -->
+        <div class="sidebar-page" data-sidebar="cashflow" style="display:none">
+          <div class="text-xs text-slate-400 uppercase tracking-wider font-medium mb-3">Scenario Analysis</div>
+          <div class="space-y-2">
+            <div class="bg-emerald-pos/5 border border-emerald-pos/15 rounded-lg p-3 card-hover cursor-pointer">
+              <div class="text-xs text-emerald-pos font-medium mb-1">&#128154; What if Acme pays?</div>
+              <div class="text-xs text-slate-400">If Acme pays &pound;31k by week 3, your minimum balance improves from &pound;41.2k to &pound;72.2k</div>
+              <div class="text-xs text-emerald-pos font-mono mt-1">+&pound;31,000 improvement</div>
+            </div>
+            <div class="bg-amber-ai/5 border border-amber-ai/15 rounded-lg p-3 card-hover cursor-pointer">
+              <div class="text-xs text-amber-light font-medium mb-1">&#9203; What if you delay VAT?</div>
+              <div class="text-xs text-slate-400">Deferring VAT by 2 weeks keeps cash above &pound;54.7k through March</div>
+              <div class="text-xs text-amber-ai font-mono mt-1">Note: late payment interest applies</div>
+            </div>
+            <div class="bg-surface border border-border rounded-lg p-3">
+              <div class="text-xs text-slate-400 mb-1">Best-case scenario</div>
+              <div class="text-sm font-mono text-emerald-pos">&pound;99,200</div>
+              <div class="text-[10px] text-slate-400">If all overdue collected by week 4</div>
+            </div>
+            <div class="bg-surface border border-border rounded-lg p-3">
+              <div class="text-xs text-slate-400 mb-1">Worst-case scenario</div>
+              <div class="text-sm font-mono text-rose-neg">&pound;28,700</div>
+              <div class="text-[10px] text-slate-400">If no overdue collected + all scheduled outflows</div>
+            </div>
+          </div>
+        </div>
+        <!-- Chat sidebar -->
+        <div class="sidebar-page" data-sidebar="chat" style="display:none">
+          <div class="text-xs text-slate-400 uppercase tracking-wider font-medium mb-3">Chat Context</div>
+          <div class="space-y-2">
+            <div class="text-xs text-slate-400 mb-2">Related topics from this conversation:</div>
+            <button onclick="showPage('invoices')" class="w-full text-left bg-surface border border-border rounded-lg p-3 card-hover text-xs text-blue-primary hover:text-blue-400 transition-colors">&#128196; Overdue Invoices &rarr;</button>
+            <button onclick="showPage('cashflow')" class="w-full text-left bg-surface border border-border rounded-lg p-3 card-hover text-xs text-blue-primary hover:text-blue-400 transition-colors">&#128176; Cash Flow Forecast &rarr;</button>
+            <button class="w-full text-left bg-surface border border-border rounded-lg p-3 card-hover text-xs text-blue-primary hover:text-blue-400 transition-colors">&#128200; AR Aging Report &rarr;</button>
+          </div>
+          <div class="mt-4 bg-amber-ai/5 border border-amber-ai/15 rounded-lg p-3">
+            <div class="text-xs text-amber-light mb-1">&#10024; Quick Actions</div>
+            <div class="space-y-1.5">
+              <button class="text-xs text-slate-400 hover:text-slate-100 transition-colors block">&bull; Generate weekly summary report</button>
+              <button class="text-xs text-slate-400 hover:text-slate-100 transition-colors block">&bull; Schedule payment reminders</button>
+              <button class="text-xs text-slate-400 hover:text-slate-100 transition-colors block">&bull; Export AR aging to PDF</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Sidebar Chat Input -->
+      <div class="p-3 border-t border-border">
+        <div class="relative">
+          <input type="text" placeholder="Ask Nexa..." class="w-full bg-bg border border-amber-ai/20 rounded-lg pl-3 pr-10 py-2 text-xs focus:outline-none focus:border-amber-ai/50 text-slate-100 placeholder-slate-400">
+          <button class="absolute right-2 top-1/2 -translate-y-1/2 text-amber-ai hover:text-amber-light transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- AI MODAL -->
+<div id="ai-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeAIModal()">
+  <div class="modal-content">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-full bg-amber-ai/20 flex items-center justify-center"><svg class="w-3.5 h-3.5 text-amber-ai" fill="currentColor" viewBox="0 0 20 20"><path d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"/></svg></div>
+        <span class="text-sm font-semibold text-amber-light">AI Invoice Insight</span>
+      </div>
+      <button onclick="closeAIModal()" class="text-slate-400 hover:text-slate-100 transition-colors text-xl">&times;</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+// ==================== PAGE NAVIGATION ====================
+let currentPage = 'dashboard';
+const pages = ['dashboard','invoices','new-invoice','ai-create','pnl','cashflow','chat'];
+let chartsInitialized = {};
+
+function showPage(page) {
+  if (currentPage === page) return;
+  // Hide all pages
+  pages.forEach(p => {
+    const el = document.getElementById('page-' + p);
+    if (el) { el.classList.remove('page-visible'); el.classList.add('page-hidden'); }
+  });
+  // Show target
+  const target = document.getElementById('page-' + page);
+  if (target) {
+    setTimeout(() => { target.classList.remove('page-hidden'); target.classList.add('page-visible'); }, 50);
+  }
+  // Update nav
+  document.querySelectorAll('.nav-item').forEach(n => {
+    n.classList.remove('active');
+    if (n.dataset.page === page) n.classList.add('active');
+  });
+  // Update sidebar
+  document.querySelectorAll('.sidebar-page').forEach(s => s.style.display = 'none');
+  const sb = document.querySelector('[data-sidebar="' + page + '"]');
+  if (sb) sb.style.display = 'block';
+
+  currentPage = page;
+  // Init charts on demand
+  setTimeout(() => {
+    if (page === 'dashboard' && !chartsInitialized.dashboard) { initDashCharts(); chartsInitialized.dashboard = true; }
+    if (page === 'pnl' && !chartsInitialized.pnl) { initPNLChart(); chartsInitialized.pnl = true; }
+    if (page === 'cashflow' && !chartsInitialized.cashflow) { initCashflowChart(); chartsInitialized.cashflow = true; }
+    if (page === 'chat' && !chartsInitialized.chat) { initChatMiniChart(); chartsInitialized.chat = true; }
+  }, 100);
+}
+
+// ==================== CHARTS ====================
+const chartDefaults = { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94a3b8', font: { family: 'Lexend', size: 11 } } } }, scales: { x: { ticks: { color: '#64748b', font: { family: 'Lexend', size: 10 } }, grid: { color: 'rgba(51,65,85,0.2)' } }, y: { ticks: { color: '#64748b', font: { family: 'IBM Plex Mono', size: 10 }, callback: v => '\u00A3' + (v/1000) + 'k' }, grid: { color: 'rgba(51,65,85,0.2)' } } } };
+
+function initDashCharts() {
+  // Cash flow mini chart
+  const ctx1 = document.getElementById('dashCashChart');
+  if (!ctx1) return;
+  new Chart(ctx1, {
+    type: 'line',
+    data: {
+      labels: ['Wk1','Wk2','Wk3','Wk4','Wk5','Wk6','Wk7','Wk8'],
+      datasets: [{
+        label: 'Closing Balance',
+        data: [94900,42700,61700,57700,54700,41200,62200,68200],
+        borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.08)',
+        fill: true, tension: 0.4, pointBackgroundColor: function(ctx) { return ctx.dataIndex === 5 ? '#ef4444' : '#f59e0b'; },
+        pointRadius: function(ctx) { return ctx.dataIndex === 5 ? 6 : 3; }, borderWidth: 2
+      },{
+        label: 'Minimum Threshold', data: [40000,40000,40000,40000,40000,40000,40000,40000],
+        borderColor: '#ef4444', borderDash: [6,4], borderWidth: 1, pointRadius: 0, fill: false
+      }]
+    },
+    options: { ...chartDefaults, plugins: { ...chartDefaults.plugins, legend: { display: true, labels: { color: '#94a3b8', font: { family: 'Lexend', size: 10 }, usePointStyle: true, pointStyle: 'circle' } } } }
+  });
+  // AR Aging horizontal bar
+  const ctx2 = document.getElementById('dashARChart');
+  if (!ctx2) return;
+  new Chart(ctx2, {
+    type: 'bar',
+    data: {
+      labels: ['Current','30-60 days','60-90 days','90+ days'],
+      datasets: [{ label: 'Outstanding', data: [17200,8200,46800,55000], backgroundColor: ['#10b981','#f59e0b','#f97316','#ef4444'], borderRadius: 4, barThickness: 24 }]
+    },
+    options: { indexAxis: 'y', ...chartDefaults, plugins: { legend: { display: false } }, scales: { ...chartDefaults.scales, x: { ...chartDefaults.scales.x, ticks: { ...chartDefaults.scales.x.ticks, callback: v => '\u00A3' + (v/1000) + 'k' } }, y: { ...chartDefaults.scales.y, ticks: { color: '#94a3b8', font: { family: 'Lexend', size: 11 } } } } }
+  });
+}
+
+function initPNLChart() {
+  const ctx = document.getElementById('pnlChart');
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Revenue','COGS','Gross Profit','Operating Expenses','Net Profit'],
+      datasets: [
+        { label: 'Feb 2026', data: [347200,228800,118400,78200,40200], backgroundColor: 'rgba(59,130,246,0.7)', borderRadius: 4, barPercentage: 0.6 },
+        { label: 'Feb 2025', data: [298400,189500,108900,72100,36800], backgroundColor: 'rgba(148,163,184,0.3)', borderRadius: 4, barPercentage: 0.6 }
+      ]
+    },
+    options: { ...chartDefaults, plugins: { legend: { display: true, labels: { color: '#94a3b8', font: { family: 'Lexend', size: 11 }, usePointStyle: true } } } }
+  });
+}
+
+function initCashflowChart() {
+  const ctx = document.getElementById('cashflowChart');
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: ['17 Feb','24 Feb','3 Mar','10 Mar','17 Mar','24 Mar','31 Mar','7 Apr'],
+      datasets: [{
+        label: 'Closing Balance',
+        data: [94900,42700,61700,57700,54700,41200,62200,68200],
+        borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)',
+        fill: true, tension: 0.4, borderWidth: 2.5,
+        pointBackgroundColor: function(ctx) { return ctx.dataIndex === 5 ? '#ef4444' : '#f59e0b'; },
+        pointBorderColor: function(ctx) { return ctx.dataIndex === 5 ? '#ef4444' : '#f59e0b'; },
+        pointRadius: function(ctx) { return ctx.dataIndex === 5 ? 7 : 4; }
+      },{
+        label: 'Minimum Threshold (\u00A340k)', data: [40000,40000,40000,40000,40000,40000,40000,40000],
+        borderColor: 'rgba(239,68,68,0.5)', borderDash: [8,4], borderWidth: 1.5, pointRadius: 0, fill: false
+      }]
+    },
+    options: { ...chartDefaults, plugins: { legend: { display: true, labels: { color: '#94a3b8', font: { family: 'Lexend', size: 11 }, usePointStyle: true, pointStyle: 'circle' } } } }
+  });
+}
+
+function initChatMiniChart() {
+  const ctx = document.getElementById('chatMiniChart');
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: ['W1','W2','W3','W4','W5','W6','W7','W8'],
+      datasets: [{ data: [94900,42700,61700,57700,54700,41200,62200,68200], borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 2 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } }, y: { ticks: { color: '#64748b', font: { family: 'IBM Plex Mono', size: 9 }, callback: v => '\u00A3' + (v/1000) + 'k' }, grid: { color: 'rgba(51,65,85,0.15)' } } } }
+  });
+}
+
+// ==================== AI MODAL ====================
+function showAIModal(customer, inv, amount, status, daysInfo, prob, avgDays, recommendation) {
+  const statusClass = status === 'OVERDUE' ? 'badge-overdue' : status === 'DUE' ? 'badge-due' : 'badge-paid';
+  document.getElementById('modal-body').innerHTML = `
+    <div class="mb-4">
+      <div class="text-sm font-medium mb-1">${inv} &mdash; ${customer}</div>
+      <div class="flex items-center gap-2"><span class="font-mono text-lg font-bold">\u00A3${amount}</span><span class="badge ${statusClass}">${status}</span></div>
+      <div class="text-xs text-slate-400 mt-1">${daysInfo}</div>
+    </div>
+    <div class="space-y-3 mb-5">
+      <div class="bg-bg rounded-lg p-3">
+        <div class="text-xs text-slate-400 mb-1">Payment probability (14 days)</div>
+        <div class="flex items-center gap-3">
+          <div class="flex-1 confidence-bar h-2"><div class="confidence-fill h-2" style="width:${prob}"></div></div>
+          <span class="font-mono text-sm text-amber-light">${prob}</span>
+        </div>
+      </div>
+      <div class="bg-bg rounded-lg p-3">
+        <div class="text-xs text-slate-400 mb-1">Customer payment history</div>
+        <div class="text-sm">Average days to pay: <span class="font-mono font-semibold">${avgDays}</span></div>
+      </div>
+      <div class="bg-amber-ai/5 border border-amber-ai/15 rounded-lg p-3">
+        <div class="text-xs text-amber-light mb-1">\u2728 Recommended Action</div>
+        <div class="text-sm text-slate-100">${recommendation}</div>
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <button onclick="closeAIModal()" class="flex-1 bg-amber-ai/15 text-amber-light border border-amber-ai/30 py-2 rounded-lg text-xs font-medium hover:bg-amber-ai/25 transition-colors">Send Reminder</button>
+      <button onclick="closeAIModal()" class="flex-1 bg-blue-primary/15 text-blue-primary border border-blue-primary/30 py-2 rounded-lg text-xs font-medium hover:bg-blue-primary/25 transition-colors">Call Customer</button>
+      <button onclick="closeAIModal()" class="flex-1 bg-rose-neg/10 text-rose-neg border border-rose-neg/20 py-2 rounded-lg text-xs font-medium hover:bg-rose-neg/20 transition-colors">Escalate</button>
+      <button onclick="closeAIModal()" class="flex-1 bg-surface text-slate-400 border border-border py-2 rounded-lg text-xs font-medium hover:bg-surface-hover transition-colors">Dismiss</button>
+    </div>`;
+  document.getElementById('ai-modal').style.display = 'flex';
+}
+
+function closeAIModal() { document.getElementById('ai-modal').style.display = 'none'; }
+
+// ==================== INVOICE FILTER ====================
+function filterInvoices(status) {
+  document.querySelectorAll('.invoice-row').forEach(row => {
+    row.style.display = (status === 'all' || row.dataset.status === status) ? '' : 'none';
+  });
+}
+
+// ==================== CHAT ====================
+function sendChat() {
+  const input = document.getElementById('chat-input');
+  const val = input.value.trim();
+  if (!val) return;
+  const msgs = document.getElementById('chat-messages');
+  // User message
+  const userDiv = document.createElement('div');
+  userDiv.className = 'flex justify-end animate-fadeInUp';
+  userDiv.innerHTML = `<div class="chat-bubble-user px-4 py-3 max-w-md"><div class="text-sm">${val}</div></div>`;
+  msgs.appendChild(userDiv);
+  input.value = '';
+  // Show typing
+  document.getElementById('typing-indicator').style.display = 'flex';
+  msgs.scrollTop = msgs.scrollHeight;
+  // AI reply after delay
+  setTimeout(() => {
+    document.getElementById('typing-indicator').style.display = 'none';
+    const aiDiv = document.createElement('div');
+    aiDiv.className = 'flex justify-start animate-fadeInUp';
+    aiDiv.innerHTML = `<div class="chat-bubble-ai px-4 py-3 max-w-lg">
+      <div class="text-sm">I understand your question. Based on your current data, I can provide a detailed analysis. Would you like me to generate a report or take a specific action?</div>
+      <div class="flex items-center gap-1 mt-2"><span class="text-[10px] text-slate-400">AI Confidence:</span><div class="confidence-bar w-20"><div class="confidence-fill" style="width:91%"></div></div><span class="text-[10px] font-mono text-amber-ai">91%</span></div>
+    </div>`;
+    msgs.appendChild(aiDiv);
+    msgs.scrollTop = msgs.scrollHeight;
+  }, 1500);
+}
+
+// ==================== INIT ====================
+document.addEventListener('DOMContentLoaded', () => {
+  initDashCharts();
+  chartsInitialized.dashboard = true;
+});
+</script>
+</body>
+</html>
