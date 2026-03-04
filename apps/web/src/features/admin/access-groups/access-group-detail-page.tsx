@@ -37,22 +37,14 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/lib/form-utils';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/lib/form-utils';
 import { useZodForm } from '@/lib/form-utils';
 import { PageHeader } from '@/components/templates/page-header';
 
+import { NotesTab } from '@/features/cross-cutting';
+
 import { useAccessGroup } from './api/use-access-groups';
-import {
-  useUpdateAccessGroup,
-  useDeactivateAccessGroup,
-} from './api/use-access-group-mutations';
+import { useUpdateAccessGroup, useDeactivateAccessGroup } from './api/use-access-group-mutations';
 import { PermissionMatrix } from './components/permission-matrix';
 import { FieldOverridePanel } from './components/field-override-panel';
 
@@ -79,11 +71,7 @@ export function AccessGroupDetailPage({ id }: AccessGroupDetailPageProps) {
   const navigate = useNavigate();
 
   // --- Data fetching ---
-  const {
-    data: group,
-    isLoading,
-    isError,
-  } = useAccessGroup(id);
+  const { data: group, isLoading, isError } = useAccessGroup(id);
 
   // --- Mutations ---
   const updateMutation = useUpdateAccessGroup(id);
@@ -151,11 +139,7 @@ export function AccessGroupDetailPage({ id }: AccessGroupDetailPageProps) {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <PageHeader
-          title={t('accessGroups.detail.title')}
-          breadcrumbs={breadcrumbs}
-          isLoading
-        />
+        <PageHeader title={t('accessGroups.detail.title')} breadcrumbs={breadcrumbs} isLoading />
         <Card className="max-w-3xl">
           <CardContent className="space-y-4 pt-6">
             <Skeleton className="h-10 w-full" />
@@ -171,10 +155,7 @@ export function AccessGroupDetailPage({ id }: AccessGroupDetailPageProps) {
   if (isError || !group) {
     return (
       <div className="space-y-6">
-        <PageHeader
-          title={t('accessGroups.detail.title')}
-          breadcrumbs={breadcrumbs}
-        />
+        <PageHeader title={t('accessGroups.detail.title')} breadcrumbs={breadcrumbs} />
         <Card className="max-w-3xl">
           <CardContent className="py-8 text-center text-muted-foreground">
             {t('accessGroups.error.loadFailed')}
@@ -204,11 +185,7 @@ export function AccessGroupDetailPage({ id }: AccessGroupDetailPageProps) {
       {/* Overflow menu */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={t('actionBar.moreActions')}
-          >
+          <Button variant="ghost" size="icon" aria-label={t('actionBar.moreActions')}>
             <MoreHorizontal />
           </Button>
         </DropdownMenuTrigger>
@@ -255,11 +232,7 @@ export function AccessGroupDetailPage({ id }: AccessGroupDetailPageProps) {
       <Card className="max-w-3xl">
         <CardContent className="pt-6">
           <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit(onSubmit)}
-              noValidate
-              className="space-y-4"
-            >
+            <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="space-y-4">
               {/* Code field — always read-only */}
               <FormItem>
                 <FormLabel>{t('accessGroups.field.code')}</FormLabel>
@@ -282,10 +255,7 @@ export function AccessGroupDetailPage({ id }: AccessGroupDetailPageProps) {
                   <FormItem>
                     <FormLabel>{t('accessGroups.field.name')}</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder={t('accessGroups.field.namePlaceholder')}
-                        {...field}
-                      />
+                      <Input placeholder={t('accessGroups.field.namePlaceholder')} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -298,14 +268,10 @@ export function AccessGroupDetailPage({ id }: AccessGroupDetailPageProps) {
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>
-                      {t('accessGroups.field.description')}
-                    </FormLabel>
+                    <FormLabel>{t('accessGroups.field.description')}</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder={t(
-                          'accessGroups.field.descriptionPlaceholder',
-                        )}
+                        placeholder={t('accessGroups.field.descriptionPlaceholder')}
                         {...field}
                       />
                     </FormControl>
@@ -326,12 +292,9 @@ export function AccessGroupDetailPage({ id }: AccessGroupDetailPageProps) {
       {/* Tabbed layout: Permissions & Field Overrides */}
       <Tabs defaultValue="permissions" className="max-w-5xl">
         <TabsList>
-          <TabsTrigger value="permissions">
-            {t('accessGroups.tab.permissions')}
-          </TabsTrigger>
-          <TabsTrigger value="fieldOverrides">
-            {t('accessGroups.tab.fieldOverrides')}
-          </TabsTrigger>
+          <TabsTrigger value="permissions">{t('accessGroups.tab.permissions')}</TabsTrigger>
+          <TabsTrigger value="fieldOverrides">{t('accessGroups.tab.fieldOverrides')}</TabsTrigger>
+          <TabsTrigger value="notes">{t('common:notes')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="permissions" forceMount className="mt-4 data-[state=inactive]:hidden">
@@ -342,20 +305,25 @@ export function AccessGroupDetailPage({ id }: AccessGroupDetailPageProps) {
           />
         </TabsContent>
 
-        <TabsContent value="fieldOverrides" forceMount className="mt-4 data-[state=inactive]:hidden">
+        <TabsContent
+          value="fieldOverrides"
+          forceMount
+          className="mt-4 data-[state=inactive]:hidden"
+        >
           <FieldOverridePanel
             accessGroupId={id}
             fieldOverrides={group.fieldOverrides}
             readOnly={group.isSystem}
           />
         </TabsContent>
+
+        <TabsContent value="notes" forceMount className="mt-4 data-[state=inactive]:hidden">
+          <NotesTab entityType="AccessGroup" entityId={id} resourceCode="system.accessGroups" />
+        </TabsContent>
       </Tabs>
 
       {/* Deactivation confirmation dialog */}
-      <Dialog
-        open={showDeactivateDialog}
-        onOpenChange={setShowDeactivateDialog}
-      >
+      <Dialog open={showDeactivateDialog} onOpenChange={setShowDeactivateDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t('accessGroups.deactivate.title')}</DialogTitle>
@@ -364,10 +332,7 @@ export function AccessGroupDetailPage({ id }: AccessGroupDetailPageProps) {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setShowDeactivateDialog(false)}
-            >
+            <Button variant="ghost" onClick={() => setShowDeactivateDialog(false)}>
               {t('common:cancel')}
             </Button>
             <Button
@@ -375,9 +340,7 @@ export function AccessGroupDetailPage({ id }: AccessGroupDetailPageProps) {
               onClick={handleDeactivate}
               disabled={deactivateMutation.isPending}
             >
-              {deactivateMutation.isPending && (
-                <Loader2 className="animate-spin" />
-              )}
+              {deactivateMutation.isPending && <Loader2 className="animate-spin" />}
               {t('accessGroups.deactivate.confirm')}
             </Button>
           </DialogFooter>

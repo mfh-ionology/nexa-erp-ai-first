@@ -136,10 +136,45 @@
 
 ---
 
+---
+
+## Story E10.4: Email Template Management Frontend
+
+**User Story:** As an administrator, I want a frontend page to browse, create, edit, and preview email templates with live Handlebars rendering, so that I can configure professional email formatting per document type without developer assistance.
+
+**Acceptance Criteria:**
+1. GIVEN an ADMIN user navigates to `/system/email-templates` WHEN the page loads THEN a table displays all templates with Code, Name, Document Type, Language, Status, Last Updated columns with search and filter support
+2. GIVEN the user opens a template WHEN the editor loads THEN a split-pane layout shows a form (left) and live preview (right) with debounced 500ms re-rendering
+3. GIVEN the user selects a Document Type WHEN the variable reference panel updates THEN it shows all valid Handlebars variables for that type with copy and click-to-insert
+4. GIVEN the user saves the form WHEN the API call succeeds THEN a success toast appears, dirty state resets, and template is persisted via POST/PATCH
+5. GIVEN Handlebars syntax errors WHEN preview renders THEN the error is shown in the preview pane (not a crash)
+6. GIVEN any viewport WHEN the page renders THEN desktop shows split-pane, tablet stacks, mobile shows form-only with Preview button
+
+**Key Tasks:**
+- [ ] Create feature directory, API hooks, list page route, detail/create routes (AC: #1)
+- [ ] Build split-pane editor form with React Hook Form + Zod validation (AC: #2, #4)
+- [ ] Create preview pane and variable reference panel with debounced rendering (AC: #3, #5)
+- [ ] Implement responsive layout and Concept D visual polish (AC: #6)
+
+**FR/NFR:** FR189; NFR41 (TypeScript strict), NFR2 (CRUD < 500ms p95)
+
+**Reference Documents:**
+| Document | Section | Key Items |
+|----------|---------|-----------|
+| PRD | FR189 | Email templates with merge fields per document type |
+| Architecture | §2.29 Communications (COM-4) | EmailTemplate model, Handlebars engine, 7 document types |
+| UX Design Spec | §T7 Settings (split-pane variant) | Form left, preview right, responsive breakpoints |
+| API Contracts | §2.25 Communications | 6 REST endpoints for /email/templates CRUD + preview |
+| Data Models | §3.18 Communications | EmailTemplate: code, documentType, subjectTemplate, bodyHtmlTemplate |
+| Business Rules | §13 BR-COM-010 | Template fallback hierarchy |
+
+---
+
 ## Story Status Summary
 
 | Story | Title | Status |
 |-------|-------|--------|
-| E10.1 | SMTP Outbound Service | backlog |
-| E10.2 | Email Template Management | backlog |
-| E10.3 | Document-to-Email | backlog |
+| E10.1 | SMTP Outbound Service | done |
+| E10.2 | Email Template Management | done |
+| E10.3 | Document-to-Email | done |
+| E10.4 | Email Template Management Frontend | ready-for-dev |

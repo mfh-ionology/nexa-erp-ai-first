@@ -1,6 +1,7 @@
 import { Link, useRouterState } from '@tanstack/react-router';
 import {
   BarChart3,
+  Bell,
   BookOpen,
   Bot,
   Brain,
@@ -15,6 +16,7 @@ import {
   History,
   Landmark,
   LayoutDashboard,
+  Mail,
   Receipt,
   Settings,
   Shield,
@@ -152,6 +154,24 @@ const NAV_GROUPS: NavGroup[] = [
         path: '/ai/admin/knowledge',
         labelKey: 'navigation:ai.admin.knowledge',
         icon: BookOpen,
+        moduleKey: 'system',
+      },
+    ],
+  },
+  {
+    titleKey: 'navigation:communications',
+    showDivider: true,
+    items: [
+      {
+        path: '/system/notification-preferences',
+        labelKey: 'navigation:communications.notificationPreferences',
+        icon: Bell,
+        moduleKey: 'system',
+      },
+      {
+        path: '/system/email-templates',
+        labelKey: 'navigation:communications.emailTemplates',
+        icon: Mail,
         moduleKey: 'system',
       },
     ],

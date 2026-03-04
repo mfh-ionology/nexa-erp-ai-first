@@ -22,6 +22,8 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
+import { NotesPanel } from '@/features/cross-cutting';
+
 import { useUser } from './api/use-user-detail';
 import { AccessGroupAssignmentPanel } from './components/access-group-assignment-panel';
 import { ROLE_BADGE_STYLES } from './user-badge-styles';
@@ -307,6 +309,14 @@ export function UserDetailPage({ id }: UserDetailPageProps) {
             </TableBody>
           </Table>
         </div>
+      </div>
+
+      {/* ── Notes ──────────────────────────────────────────── */}
+      <div
+        className="animate-fade-in-up rounded-xl border border-border bg-card p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition-shadow hover:shadow-[0_4px_12px_rgba(124,58,237,0.10)]"
+        style={{ animationDelay: '250ms' }}
+      >
+        <NotesPanel entityType="User" entityId={id} resourceCode="system.users" />
       </div>
     </div>
   );

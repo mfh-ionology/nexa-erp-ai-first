@@ -209,5 +209,17 @@ export const queryKeys = {
       [...queryKeys.email.all, 'preview', documentType, recordId, templateId] as const,
     templates: (documentType: string) =>
       [...queryKeys.email.all, 'templates', documentType] as const,
+    templateAdmin: {
+      all: () => [...queryKeys.email.all, 'template-admin'] as const,
+      list: (params?: Record<string, unknown>) =>
+        params
+          ? ([...queryKeys.email.all, 'template-admin', 'list', params] as const)
+          : ([...queryKeys.email.all, 'template-admin', 'list'] as const),
+      listInfinite: (params?: Record<string, unknown>) =>
+        params
+          ? ([...queryKeys.email.all, 'template-admin', 'list', 'infinite', params] as const)
+          : ([...queryKeys.email.all, 'template-admin', 'list', 'infinite'] as const),
+      detail: (id: string) => [...queryKeys.email.all, 'template-admin', id] as const,
+    },
   },
 } as const;
