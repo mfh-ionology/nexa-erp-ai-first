@@ -3,7 +3,7 @@
 # Runs build verification, backend API tests, and (optionally) frontend E2E tests in sequence.
 # Frontend testing is auto-detected: if apps/web exists, it runs; otherwise it's skipped.
 # Compiles results, handles missing functionality, and optionally creates new stories.
-# Adapted for Nexa ERP: Node.js/Fastify backend (port 3000), React/Vite frontend (when present).
+# Adapted for Nexa ERP: Node.js/Fastify backend (port 5100), React/Vite frontend (when present).
 #
 # Usage: ./v7-post-epic-test-runner.sh <epic-id> [options]
 #
@@ -145,8 +145,8 @@ run_build_verification() {
         update_state_field "$RUNNER_STATE_FILE" "phases.build_verify" "skipped"
 
         # Use provided URLs or defaults
-        API_URL="${API_URL:-http://localhost:3000}"
-        FRONTEND_URL="${FRONTEND_URL:-http://localhost:5173}"
+        API_URL="${API_URL:-http://localhost:5100}"
+        FRONTEND_URL="${FRONTEND_URL:-http://localhost:5110}"
         export SERVER_API_URL="$API_URL"
         export SERVER_FRONTEND_URL="$FRONTEND_URL"
         return 0
@@ -163,8 +163,8 @@ run_build_verification() {
 
     if "${SCRIPT_DIR}/v7-post-epic-build-verify.sh" "${build_args[@]}" | tee "$build_output_file"; then
         # Extract URLs and PIDs from build script output (anchored grep for reliability)
-        API_URL=$(grep "^BUILD_VERIFY_API_URL=" "$build_output_file" 2>/dev/null | tail -1 | cut -d= -f2 || echo "${API_URL:-http://localhost:3000}")
-        FRONTEND_URL=$(grep "^BUILD_VERIFY_FRONTEND_URL=" "$build_output_file" 2>/dev/null | tail -1 | cut -d= -f2 || echo "${FRONTEND_URL:-http://localhost:5173}")
+        API_URL=$(grep "^BUILD_VERIFY_API_URL=" "$build_output_file" 2>/dev/null | tail -1 | cut -d= -f2 || echo "${API_URL:-http://localhost:5100}")
+        FRONTEND_URL=$(grep "^BUILD_VERIFY_FRONTEND_URL=" "$build_output_file" 2>/dev/null | tail -1 | cut -d= -f2 || echo "${FRONTEND_URL:-http://localhost:5110}")
         BUILD_BACKEND_PID=$(grep "^BUILD_VERIFY_BACKEND_PID=" "$build_output_file" 2>/dev/null | tail -1 | cut -d= -f2 || echo "")
         BUILD_FRONTEND_PID=$(grep "^BUILD_VERIFY_FRONTEND_PID=" "$build_output_file" 2>/dev/null | tail -1 | cut -d= -f2 || echo "")
 

@@ -1,0 +1,726 @@
+{
+  "epic_id": "E10",
+  "generated_at": "2026-03-04T14:30:00.000Z",
+  "frontend_url": "http://localhost:5110",
+  "total_journeys": 12,
+  "total_steps": 96,
+  "journeys": [
+    {
+      "id": "j1-open-email-dialog-from-invoice",
+      "name": "Open Email Dialog from Invoice Detail",
+      "description": "Navigate to a posted invoice and open the email composition dialog via the action bar overflow menu",
+      "priority": "critical",
+      "related_stories": ["E10-3"],
+      "acceptance_criteria": ["E10-3:AC1", "E10-3:AC3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices",
+          "input_data": {},
+          "expected_result": "Invoice list page loads with invoices visible",
+          "screenshot": true,
+          "visual_check": "AR Invoices list page with data table showing invoices, sidebar with AR section active"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "First invoice row with POSTED status",
+          "input_data": {},
+          "expected_result": "Invoice detail page loads showing invoice header, line items, and action bar"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Action bar with overflow menu (More Actions ⋯ button)",
+          "input_data": {},
+          "expected_result": "Action bar is visible at the top of the detail page with overflow menu button",
+          "screenshot": true,
+          "visual_check": "Invoice detail page with action bar visible, POSTED status badge, More Actions button present"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "More Actions ⋯ overflow menu button",
+          "input_data": {},
+          "expected_result": "Dropdown menu opens showing Document Actions section with Email option"
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Email to Customer menu item with Mail icon",
+          "input_data": {},
+          "expected_result": "Email to Customer action is visible in the Document Actions section of the overflow menu",
+          "screenshot": true,
+          "visual_check": "Overflow dropdown showing Document Actions section with 'Email to Customer' item and Mail icon, not greyed out"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Email to Customer menu item",
+          "input_data": {},
+          "expected_result": "Email composition dialog opens with pre-filled fields from template"
+        },
+        {
+          "step_number": 7,
+          "action": "verify_element",
+          "target": "Email composition dialog",
+          "input_data": {},
+          "expected_result": "Dialog is visible with title 'Send Invoice INV-XXXXX via Email', purple accent top border, From/To/Subject/Body fields pre-filled, PDF attachment card visible",
+          "screenshot": true,
+          "visual_check": "600px centered modal with purple accent top border, dialog title includes invoice number, From dropdown populated, To field has customer email chip, Subject contains 'Invoice' text from template, Body area has rendered template HTML, PDF attachment card at bottom with filename and auto-generated badge, Cancel and Send Email buttons in footer"
+        }
+      ]
+    },
+    {
+      "id": "j2-verify-prefilled-email-fields",
+      "name": "Verify Pre-filled Email Fields from Template",
+      "description": "Confirm the email composition dialog correctly pre-fills From, To, Subject, and Body from the document-type-specific email template with Handlebars variables populated",
+      "priority": "critical",
+      "related_stories": ["E10-3"],
+      "acceptance_criteria": ["E10-3:AC1", "E10-3:AC3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices",
+          "input_data": {},
+          "expected_result": "Invoice list page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "First invoice row with POSTED status",
+          "input_data": {},
+          "expected_result": "Invoice detail page loads"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "More Actions ⋯ overflow menu button",
+          "input_data": {},
+          "expected_result": "Overflow menu opens"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Email to Customer menu item",
+          "input_data": {},
+          "expected_result": "Email composition dialog opens with pre-filled fields"
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "From field — dropdown showing company email alias",
+          "input_data": {},
+          "expected_result": "From field is a dropdown (not free-text input) pre-filled with the company's configured SMTP fromEmail address"
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "To field — email chip with customer email",
+          "input_data": {},
+          "expected_result": "To field contains an email chip with the customer's email address auto-resolved from the invoice's customer record"
+        },
+        {
+          "step_number": 7,
+          "action": "verify_text",
+          "target": "Subject input field",
+          "input_data": { "expected_pattern": "Invoice .+ from .+" },
+          "expected_result": "Subject line matches the INVOICE_SEND template pattern: 'Invoice {invoiceNumber} from {companyName}' with actual values substituted"
+        },
+        {
+          "step_number": 8,
+          "action": "verify_element",
+          "target": "Body textarea with rendered template HTML",
+          "input_data": {},
+          "expected_result": "Body contains rendered HTML from the invoice email template with customer name greeting, invoice details, amount, due date, and company contact footer"
+        },
+        {
+          "step_number": 9,
+          "action": "verify_element",
+          "target": "PDF attachment preview card",
+          "input_data": {},
+          "expected_result": "Attachment card shows PDF icon, filename like 'Invoice-INV-XXXXX.pdf', file size, and 'Auto-generated' badge",
+          "screenshot": true,
+          "visual_check": "PDF attachment card with purple-tinted styling (12px radius, custom shadow), showing PDF file icon, filename matching 'Invoice-{number}.pdf' pattern, file size text, and auto-generated badge"
+        }
+      ]
+    },
+    {
+      "id": "j3-add-cc-bcc-recipients",
+      "name": "Add CC and BCC Recipients",
+      "description": "Expand CC/BCC fields and add multiple email recipients using the chip input",
+      "priority": "critical",
+      "related_stories": ["E10-3"],
+      "acceptance_criteria": ["E10-3:AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices",
+          "input_data": {},
+          "expected_result": "Invoice list page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "First POSTED invoice row",
+          "input_data": {},
+          "expected_result": "Invoice detail page loads"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "More Actions ⋯ → Email to Customer",
+          "input_data": {},
+          "expected_result": "Email composition dialog opens"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "[+ Cc] toggle link",
+          "input_data": {},
+          "expected_result": "CC toggle link is visible below the To field, BCC field is hidden"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "[+ Cc] toggle link",
+          "input_data": {},
+          "expected_result": "CC field expands with an empty multi-email chip input",
+          "screenshot": true,
+          "visual_check": "CC field now visible below To field with placeholder text, [+ Bcc] toggle link also visible"
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "CC email input",
+          "input_data": { "cc_email": "finance@partner.com" },
+          "expected_result": "Email text entered in CC input"
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Press Enter key in CC input",
+          "input_data": {},
+          "expected_result": "Email chip 'finance@partner.com' is created in the CC field"
+        },
+        {
+          "step_number": 8,
+          "action": "fill_form",
+          "target": "CC email input",
+          "input_data": { "cc_email_2": "manager@partner.com" },
+          "expected_result": "Second email text entered"
+        },
+        {
+          "step_number": 9,
+          "action": "click",
+          "target": "Press comma key in CC input",
+          "input_data": {},
+          "expected_result": "Second email chip 'manager@partner.com' is created in the CC field"
+        },
+        {
+          "step_number": 10,
+          "action": "click",
+          "target": "[+ Bcc] toggle link",
+          "input_data": {},
+          "expected_result": "BCC field expands below CC field"
+        },
+        {
+          "step_number": 11,
+          "action": "fill_form",
+          "target": "BCC email input",
+          "input_data": { "bcc_email": "audit@company.co.uk" },
+          "expected_result": "BCC email text entered"
+        },
+        {
+          "step_number": 12,
+          "action": "click",
+          "target": "Press Enter key in BCC input",
+          "input_data": {},
+          "expected_result": "Email chip 'audit@company.co.uk' created in BCC field",
+          "screenshot": true,
+          "visual_check": "Dialog showing To field with original customer email chip, CC field with two chips (finance@partner.com, manager@partner.com), BCC field with one chip (audit@company.co.uk)"
+        }
+      ]
+    },
+    {
+      "id": "j4-recipient-validation-invalid-email",
+      "name": "Email Recipient Validation — Invalid Format",
+      "description": "Verify that invalid email addresses are rejected with visual feedback in the recipient chip input",
+      "priority": "high",
+      "related_stories": ["E10-3"],
+      "acceptance_criteria": ["E10-3:AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices",
+          "input_data": {},
+          "expected_result": "Invoice list page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "First POSTED invoice → More Actions ⋯ → Email to Customer",
+          "input_data": {},
+          "expected_result": "Email composition dialog opens"
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "To email input (add additional recipient)",
+          "input_data": { "invalid_email": "not-an-email" },
+          "expected_result": "Text entered in the To input"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Press Enter key in To input",
+          "input_data": {},
+          "expected_result": "Invalid email chip is created but highlighted in red with error styling",
+          "screenshot": true,
+          "visual_check": "To field shows the original valid customer email chip (normal styling) and the invalid 'not-an-email' chip highlighted in red with error tooltip indicating RFC 5322 validation failure"
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "To email input",
+          "input_data": { "invalid_email_2": "missing@domain" },
+          "expected_result": "Another invalid email text entered"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Press Enter key in To input",
+          "input_data": {},
+          "expected_result": "Another red-highlighted invalid chip created"
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "× button on first invalid chip ('not-an-email')",
+          "input_data": {},
+          "expected_result": "Invalid chip is removed from the To field",
+          "screenshot": true,
+          "visual_check": "To field now shows only the valid customer email chip and the remaining invalid chip 'missing@domain'"
+        }
+      ]
+    },
+    {
+      "id": "j5-duplicate-recipient-detection",
+      "name": "Duplicate Recipient Detection Across Fields",
+      "description": "Verify that duplicate email addresses across TO/CC/BCC fields trigger a warning per BR-COM-002",
+      "priority": "high",
+      "related_stories": ["E10-3"],
+      "acceptance_criteria": ["E10-3:AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices",
+          "input_data": {},
+          "expected_result": "Invoice list page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "First POSTED invoice → More Actions ⋯ → Email to Customer",
+          "input_data": {},
+          "expected_result": "Email composition dialog opens with customer email in To field"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "[+ Cc] toggle link",
+          "input_data": {},
+          "expected_result": "CC field expands"
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "CC email input — enter the same email that's already in the To field",
+          "input_data": { "duplicate_email": "{{customer_email_from_to_field}}" },
+          "expected_result": "Duplicate email text entered in CC"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Press Enter key in CC input",
+          "input_data": {},
+          "expected_result": "Duplicate email chip is created but with a warning indicator (duplicate detected across TO/CC)",
+          "screenshot": true,
+          "visual_check": "CC field shows the duplicate email chip with a warning style (amber/orange highlight or warning tooltip) indicating the address already exists in the To field"
+        }
+      ]
+    },
+    {
+      "id": "j6-template-selector-switch",
+      "name": "Switch Email Template via Template Selector",
+      "description": "Use the template selector dropdown to switch between available templates and verify fields are repopulated",
+      "priority": "high",
+      "related_stories": ["E10-3"],
+      "acceptance_criteria": ["E10-3:AC3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices",
+          "input_data": {},
+          "expected_result": "Invoice list page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "First POSTED invoice → More Actions ⋯ → Email to Customer",
+          "input_data": {},
+          "expected_result": "Email composition dialog opens with default INVOICE_SEND template applied"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Template selector dropdown",
+          "input_data": {},
+          "expected_result": "Template selector dropdown is visible showing the current template name"
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "Subject field — manually modify",
+          "input_data": { "subject": "Custom subject override" },
+          "expected_result": "Subject field now shows the manually typed text instead of template-rendered subject"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Template selector dropdown",
+          "input_data": {},
+          "expected_result": "Dropdown opens listing available templates for CustomerInvoice document type",
+          "screenshot": true,
+          "visual_check": "Dropdown open showing list of available templates for CustomerInvoice type, including the default INVOICE_SEND template"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "A different template from the dropdown (if available), or re-select the same template",
+          "input_data": {},
+          "expected_result": "Template selection changes"
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Reset to Template button (ghost button)",
+          "input_data": {},
+          "expected_result": "Subject and Body fields are repopulated with the selected template's rendered output, overwriting manual changes",
+          "screenshot": true,
+          "visual_check": "Subject field restored to template-rendered value (no longer shows 'Custom subject override'), Body field shows freshly rendered template HTML"
+        }
+      ]
+    },
+    {
+      "id": "j7-send-email-successfully",
+      "name": "Send Document Email Successfully",
+      "description": "Complete the full email send flow: open dialog, verify pre-filled data, click Send, confirm success toast and dialog closure",
+      "priority": "critical",
+      "related_stories": ["E10-3"],
+      "acceptance_criteria": ["E10-3:AC1", "E10-3:AC4", "E10-3:AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices",
+          "input_data": {},
+          "expected_result": "Invoice list page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "First POSTED invoice row",
+          "input_data": {},
+          "expected_result": "Invoice detail page loads"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "More Actions ⋯ → Email to Customer",
+          "input_data": {},
+          "expected_result": "Email composition dialog opens with pre-filled fields"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Send Email button in dialog footer",
+          "input_data": {},
+          "expected_result": "Send Email button is visible and enabled (primary purple button)"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Send Email button",
+          "input_data": {},
+          "expected_result": "Send button shows loading spinner, becomes disabled to prevent double-click"
+        },
+        {
+          "step_number": 6,
+          "action": "verify_text",
+          "target": "Success toast notification",
+          "input_data": { "expected_text": "Email queued for delivery" },
+          "expected_result": "Success toast appears with message 'Email queued for delivery'",
+          "screenshot": true,
+          "visual_check": "Success toast (green) visible at top/bottom of screen with 'Email queued for delivery' message, email composition dialog has closed, invoice detail page is visible underneath"
+        },
+        {
+          "step_number": 7,
+          "action": "verify_element",
+          "target": "Email composition dialog is closed",
+          "input_data": {},
+          "expected_result": "Dialog is no longer visible, invoice detail page is fully accessible"
+        }
+      ]
+    },
+    {
+      "id": "j8-send-email-validation-no-recipient",
+      "name": "Send Email Blocked Without TO Recipient",
+      "description": "Attempt to send an email with no TO recipient and verify client-side validation prevents submission",
+      "priority": "high",
+      "related_stories": ["E10-3"],
+      "acceptance_criteria": ["E10-3:AC1", "E10-3:AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices",
+          "input_data": {},
+          "expected_result": "Invoice list page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "First POSTED invoice → More Actions ⋯ → Email to Customer",
+          "input_data": {},
+          "expected_result": "Email composition dialog opens"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "× button on the pre-filled TO email chip to remove it",
+          "input_data": {},
+          "expected_result": "TO email chip is removed, To field is now empty"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Send Email button",
+          "input_data": {},
+          "expected_result": "Send is blocked — validation error shown indicating at least one TO recipient is required",
+          "screenshot": true,
+          "visual_check": "To field highlighted with error styling (red border or error message below), Send button may be disabled or error toast shown, dialog remains open"
+        }
+      ]
+    },
+    {
+      "id": "j9-email-action-hidden-for-draft-invoice",
+      "name": "Email Action Hidden for Non-Sendable Status",
+      "description": "Verify the Email action is disabled or hidden when the document is in DRAFT status (not in SENDABLE_STATUS_MAP)",
+      "priority": "high",
+      "related_stories": ["E10-3"],
+      "acceptance_criteria": ["E10-3:AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices",
+          "input_data": {},
+          "expected_result": "Invoice list page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "An invoice row with DRAFT status",
+          "input_data": {},
+          "expected_result": "Invoice detail page loads showing DRAFT status badge"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "More Actions ⋯ overflow menu button",
+          "input_data": {},
+          "expected_result": "Overflow menu opens"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Email to Customer menu item — should be disabled or absent",
+          "input_data": {},
+          "expected_result": "Email action is either not shown in the menu or is greyed out/disabled for DRAFT invoices",
+          "screenshot": true,
+          "visual_check": "Overflow menu open showing Document Actions section, Email to Customer item is either missing from the list or visually greyed out with disabled styling, indicating the document is not in a sendable state"
+        }
+      ]
+    },
+    {
+      "id": "j10-attachment-preview-display",
+      "name": "Attachment Preview Card Display and Interaction",
+      "description": "Verify the auto-generated PDF attachment card shows correct information and can be removed",
+      "priority": "medium",
+      "related_stories": ["E10-3"],
+      "acceptance_criteria": ["E10-3:AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices",
+          "input_data": {},
+          "expected_result": "Invoice list page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "First POSTED invoice → More Actions ⋯ → Email to Customer",
+          "input_data": {},
+          "expected_result": "Email composition dialog opens"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Attachment preview card",
+          "input_data": {},
+          "expected_result": "Attachment card visible showing PDF file icon, filename matching 'Invoice-{number}.pdf', file size, and 'Auto-generated' badge",
+          "screenshot": true,
+          "visual_check": "Purple-tinted attachment card (12px radius, custom shadow) with PDF icon, filename like 'Invoice-INV-00XXX.pdf', file size text, auto-generated badge, and × remove button"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "× remove button on the attachment preview card",
+          "input_data": {},
+          "expected_result": "Attachment card is removed from the dialog"
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Attachment area — card should be gone",
+          "input_data": {},
+          "expected_result": "Attachment preview card is no longer visible, possibly showing '[+ Attach File]' button instead",
+          "screenshot": true,
+          "visual_check": "Attachment area now empty or showing an [+ Attach File] button, no PDF card visible"
+        }
+      ]
+    },
+    {
+      "id": "j11-dialog-cancel-and-close",
+      "name": "Cancel and Close Email Dialog",
+      "description": "Verify the email composition dialog can be cancelled and closed without sending",
+      "priority": "medium",
+      "related_stories": ["E10-3"],
+      "acceptance_criteria": ["E10-3:AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices",
+          "input_data": {},
+          "expected_result": "Invoice list page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "First POSTED invoice → More Actions ⋯ → Email to Customer",
+          "input_data": {},
+          "expected_result": "Email composition dialog opens"
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Subject field — modify to test unsaved changes",
+          "input_data": { "subject": "Modified subject text" },
+          "expected_result": "Subject field updated"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Cancel button in dialog footer",
+          "input_data": {},
+          "expected_result": "Dialog closes without sending email, no toast notification appears"
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Invoice detail page is fully visible, no dialog overlay",
+          "input_data": {},
+          "expected_result": "Dialog is closed, invoice detail page is accessible, no success/error toast visible",
+          "screenshot": true,
+          "visual_check": "Invoice detail page fully visible without any dialog overlay, no toast notifications"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "More Actions ⋯ → Email to Customer (reopen dialog)",
+          "input_data": {},
+          "expected_result": "Dialog reopens with original template-rendered fields (not the modified subject)"
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Close button (× in dialog header)",
+          "input_data": {},
+          "expected_result": "Dialog closes via the header close button",
+          "screenshot": true,
+          "visual_check": "Invoice detail page visible again, dialog fully closed"
+        }
+      ]
+    },
+    {
+      "id": "j12-responsive-dialog-layout",
+      "name": "Responsive Email Dialog Layout",
+      "description": "Verify the email composition dialog adapts to different viewport sizes per Concept D responsive rules",
+      "priority": "medium",
+      "related_stories": ["E10-3"],
+      "acceptance_criteria": ["E10-3:AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices",
+          "input_data": {},
+          "expected_result": "Invoice list page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "First POSTED invoice → More Actions ⋯ → Email to Customer",
+          "input_data": {},
+          "expected_result": "Email composition dialog opens at desktop width"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Dialog at desktop viewport (≥1024px)",
+          "input_data": { "viewport": "1280x720" },
+          "expected_result": "Dialog is a 600px centered modal with all fields visible",
+          "screenshot": true,
+          "visual_check": "600px wide centered modal dialog on desktop viewport, all form fields visible without scrolling, purple accent top border, Concept D styling"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Dialog at tablet viewport (768-1023px)",
+          "input_data": { "viewport": "800x600" },
+          "expected_result": "Dialog adapts to 90% viewport width",
+          "screenshot": true,
+          "visual_check": "Dialog fills approximately 90% of the 800px viewport width (~720px), all fields still usable"
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Dialog at mobile viewport (<768px)",
+          "input_data": { "viewport": "375x667" },
+          "expected_result": "Dialog becomes full-screen bottom sheet layout with Send button fixed at bottom",
+          "screenshot": true,
+          "visual_check": "Full-screen bottom sheet layout covering the viewport, form fields stacked vertically, Send Email button fixed at the bottom of the screen, scrollable content area above"
+        }
+      ]
+    }
+  ]
+}

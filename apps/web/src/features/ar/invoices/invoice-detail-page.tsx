@@ -28,6 +28,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { EmailCompositionDialog, useEmailAction } from '@/features/email';
 import {
   Table,
   TableHeader,
@@ -75,6 +76,16 @@ const timeline = [
 export function InvoiceDetailPage() {
   const { t } = useI18n();
   const locale = useLocale();
+
+  // Mock record data — will be replaced with real API data in E14
+  const mockRecordId = '00000000-0000-0000-0000-000000000001';
+  const mockStatus = 'POSTED'; // POSTED invoices are sendable
+
+  const { canEmail, openEmailDialog, emailDialogOpen, setEmailDialogOpen, emailActionLabel } =
+    useEmailAction({
+      documentType: 'CustomerInvoice',
+      status: mockStatus,
+    });
 
   function formatCurrency(amount: number) {
     return new Intl.NumberFormat(locale, {
@@ -126,8 +137,8 @@ export function InvoiceDetailPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem className="gap-2">
-                <Mail className="h-4 w-4" /> {t('actionBar.emailToCustomer')}
+              <DropdownMenuItem className="gap-2" disabled={!canEmail} onClick={openEmailDialog}>
+                <Mail className="h-4 w-4" /> {emailActionLabel}
               </DropdownMenuItem>
               <DropdownMenuItem className="gap-2">
                 <FileDown className="h-4 w-4" /> {t('actionBar.exportPdf')}
@@ -360,6 +371,15 @@ export function InvoiceDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Email Composition Dialog */}
+      <EmailCompositionDialog
+        open={emailDialogOpen}
+        onOpenChange={setEmailDialogOpen}
+        documentType="CustomerInvoice"
+        recordId={mockRecordId}
+        documentTitle="Invoice INV-2026-0042"
+      />
     </div>
   );
 }

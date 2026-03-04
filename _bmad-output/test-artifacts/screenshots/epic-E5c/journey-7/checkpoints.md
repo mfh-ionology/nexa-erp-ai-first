@@ -1,31 +1,26 @@
-# Journey 7: Agent Configuration CRUD Lifecycle — Visual Checkpoints
+# Journey 7: Prompt Variable Autocomplete and Test Rendering — Visual Checkpoints
 
-## Checkpoint 1: Agent List Page Loaded
-- **When**: After navigating to /ai/admin/agents (Step 1)
-- **Screenshot file**: step-1-agent-list-loaded.png
-- **What to look for**: T1 Entity List with 'Agent Configuration' heading. Table with columns: Name (mono, bold), Display Name, Model, Prompt (mono), Tools (mono), Routing Tags (purple badges), Max Turns (mono), Status (active/inactive dot). At least 10 seeded agents visible. Search bar and "New" button in action bar. Purple-themed Concept D styling.
+## Checkpoint 1: Prompt Editor Page Loaded
+- **When**: After navigating to prompt editor page (step 2)
+- **Screenshot file**: step-2-prompt-editor-loaded.png
+- **What to look for**: Prompt editor page with metadata section (name, category, description, active toggle), system prompt textarea with monospace font, user template textarea, version sidebar on right. Concept D purple theme.
 
-## Checkpoint 2: Agent Form with Tabs Visible
-- **When**: After clicking "Add Agent" and verifying tabs (Steps 2-3)
-- **Screenshot file**: step-3-agent-form-tabs.png
-- **What to look for**: Agent form page at /ai/admin/agents/new. Tab navigation with 4 tabs: Main, Tools, Guardrails, Triggers. Main tab active showing fields: Name (mono input), Display Name, Description (textarea), Model dropdown, Prompt dropdown, Routing Tags (chip buttons), Max Turns (number input), Active toggle. Breadcrumbs: "AI Administration > Agent Registry > New Agent".
+## Checkpoint 2: Variable Autocomplete Dropdown
+- **When**: After typing '{{' in system prompt textarea (step 4)
+- **Screenshot file**: step-4-variable-autocomplete-dropdown.png
+- **What to look for**: Autocomplete dropdown/popover visible below cursor position showing variables grouped by source type — System variables (today, currentUser.name, company.name, company.baseCurrency, etc.) with colored badges (blue for System, green for DB Fields, amber for Page Fields). Each variable shows name in monospace + display name. Keyboard navigable list.
 
-## Checkpoint 3: Main Tab Form Filled
-- **When**: After filling all Main tab fields (Step 4)
-- **Screenshot file**: step-4-main-tab-filled.png
-- **What to look for**: Name field contains "test-e2e-agent" in mono font. Display Name "E2E Test Agent". Description filled. Model dropdown shows selected model. Prompt dropdown shows selected prompt. "standard" routing tag shown as purple badge. Max Turns shows "15". Active toggle is on.
+## Checkpoint 3: Variable Inserted
+- **When**: After selecting 'company.baseCurrency' from autocomplete (step 5)
+- **Screenshot file**: step-5-variable-inserted.png
+- **What to look for**: The text '{{company.baseCurrency}}' inserted at cursor position in the system prompt textarea. Autocomplete dropdown should be closed.
 
-## Checkpoint 4: Guardrails Tab Visible
-- **When**: After clicking Guardrails tab (Step 7)
-- **Screenshot file**: step-7-guardrails-tab.png
-- **What to look for**: Guardrails tab active. Structured fields visible: Can Read (tag input with blue pills), Can Write (tag input with green pills), Require Approval toggle, Blocked Operations (tag input with red pills), Data Scope dropdown.
+## Checkpoint 4: Test Prompt Panel Open
+- **When**: After clicking 'Test Prompt' button (step 6)
+- **Screenshot file**: step-6-test-prompt-panel-open.png
+- **What to look for**: Right-side sheet/panel open showing input fields for each bound variable (with monospace labels and source type badges), a 'Render' button, and an empty output area. Panel should have proper Concept D styling.
 
-## Checkpoint 5: Agent Saved Successfully
-- **When**: After clicking Save (Step 9)
-- **Screenshot file**: step-9-agent-saved.png
-- **What to look for**: No validation errors visible. Page either shows edit view of saved agent or has redirected. If on edit page, breadcrumbs should show "AI Administration > Agent Registry > E2E Test Agent". Active badge visible.
-
-## Checkpoint 6: New Agent in List
-- **When**: After navigating back to agent list and verifying new agent (Steps 10-11)
-- **Screenshot file**: step-11-agent-in-list.png
-- **What to look for**: Agent list page with "test-e2e-agent" visible in the table. The new agent row should show: name "test-e2e-agent" (mono, bold), display name "E2E Test Agent", model column filled, "standard" routing tag as purple badge, "15" in max turns column, Active status dot (green).
+## Checkpoint 5: Rendered Prompt Output
+- **When**: After clicking 'Render' button (step 7)
+- **Screenshot file**: step-7-rendered-prompt-output.png
+- **What to look for**: Rendered system prompt and user template displayed in monospace font cards with green left border. Variables should be replaced with sample/default values. If any unresolved variables exist, an amber warning should be visible with the unresolved count. Resolved variables shown as a definition list below.

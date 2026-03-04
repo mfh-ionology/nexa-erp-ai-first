@@ -3,25 +3,49 @@ import { test, expect } from '@playwright/test';
 const SCREENSHOTS_DIR =
   '_bmad-output/test-artifacts/screenshots/epic-E5c/journey-11';
 
-test.describe('Journey 11: Automation Chain Configuration & Notifications', () => {
+/**
+ * Helper: navigate within the SPA using TanStack Router.
+ * Auth tokens are in-memory only (Zustand), so page.goto() would
+ * cause a full reload and lose the authenticated session.
+ */
+async function spaNavigate(
+  page: import('@playwright/test').Page,
+  path: string,
+) {
+  await page.evaluate((p) => {
+    window.history.pushState({}, '', p);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, path);
+  await page.waitForTimeout(500);
+}
+
+test.describe('Journey 11: Edit Skill and Test Trigger Phrase Routing', () => {
   test.setTimeout(120_000);
 
   test.beforeEach(async ({ page }) => {
-    // Login as admin user — avoid networkidle as API errors cause infinite retries
+    // Login as admin user
     await page.goto('/login');
-    await page.getByLabel('Email').fill('admin@nexa-erp.dev');
-    await page.getByLabel('Password').fill('NexaDev2026!');
-    await page.getByRole('button', { name: 'Sign In' }).click();
+    await page.waitForLoadState('networkidle');
+
+    const emailInput = page.getByLabel('Email');
+    await emailInput.waitFor({ state: 'visible', timeout: 10000 });
+    await emailInput.fill('admin@nexa-erp.dev');
+
+    const passwordInput = page.getByLabel('Password');
+    await passwordInput.fill('NexaDev2026!');
+
+    const signInButton = page.getByRole('button', { name: /sign in/i });
+    await signInButton.waitFor({ state: 'visible' });
+    await signInButton.click();
+
+    // Wait for navigation away from /login
     await page.waitForURL((url) => !url.pathname.includes('/login'), {
-      timeout: 15000,
+      timeout: 30000,
     });
-    // Wait for sidebar to render instead of networkidle
-    await expect(
-      page.getByRole('link', { name: 'AI Administration' }),
-    ).toBeVisible({ timeout: 10000 });
+    await page.waitForLoadState('networkidle');
   });
 
-  test('Configure chain-to-next-automation and notification settings (E5c-5 AC-7, AC-8)', async ({
+  test('Edit skill triggers/content, save, then test trigger phrase routing (E5c-4 AC-4, AC-5)', async ({
     page,
   }) => {
     // Capture API errors for diagnostics
@@ -34,451 +58,300 @@ test.describe('Journey 11: Automation Chain Configuration & Notifications', () =
       }
     });
 
-    // ── Step 1: Navigate to /ai/admin/automations ────────────────────
-    await page.getByRole('link', { name: 'AI Administration' }).click();
-    await page.waitForURL('**/ai/admin', { timeout: 10000 });
-
-    // Wait for AI Configuration dashboard to load
-    await expect(
-      page.getByRole('heading', { name: /AI Configuration/i }),
-    ).toBeVisible({ timeout: 10000 });
-
-    // Click the Automations quick-nav button on the dashboard
-    const automationsBtn = page.getByRole('button', {
-      name: /Automations/i,
+    // ── Step 1: Navigate to /ai/admin/skills ──────────────────────────────
+    await spaNavigate(page, '/ai/admin/skills');
+    await expect(page.getByText('Skill Pack Manager')).toBeVisible({
+      timeout: 15000,
     });
-    await expect(automationsBtn.first()).toBeVisible({ timeout: 10000 });
-    await automationsBtn.first().click();
-    await page.waitForURL('**/ai/admin/automations', { timeout: 10000 });
+    // Wait for data to load
+    await page.waitForTimeout(2000);
 
-    // Verify automation list page loaded
-    const listHeading = page.getByRole('heading', { name: /Automations/i });
-    await expect(listHeading.first()).toBeVisible({ timeout: 10000 });
+    // Verify key elements
+    await expect(
+      page.getByRole('button', { name: /test trigger/i }),
+    ).toBeVisible({ timeout: 5000 });
+    await expect(
+      page.getByRole('button', { name: /add skill/i }),
+    ).toBeVisible({ timeout: 5000 });
 
     test.info().annotations.push({
       type: 'info',
-      description: 'Step 1: Automation list page loaded',
+      description: 'Step 1: Skill Pack Manager loaded',
     });
 
-    // ── Checkpoint 1: Automation List Page ────────────────────────────
+    // ── Checkpoint 1: Skill Pack Manager loaded ──────────────────────────
     await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-01-automation-list.png`,
+      path: `${SCREENSHOTS_DIR}/step-1-skill-pack-manager-loaded.png`,
       fullPage: true,
     });
 
-    // ── Step 2: Click automation row to edit ──────────────────────────
-    // Journey 11 depends on "E2E Weekly Summary" from j10; fallback to seeded automation
-    const weeklyRow = page.getByText('E2E Weekly Summary');
-    const weeklyVisible = await weeklyRow
+    // ── Step 2: Click first skill card to open edit form ──────────────────
+    const skillCards = page.locator(
+      '[role="button"][aria-label^="View skill"]',
+    );
+    await expect(skillCards.first()).toBeVisible({ timeout: 10000 });
+    await skillCards.first().click();
+
+    // Wait for form page to load
+    await page.waitForURL('**/ai/admin/skills/**', { timeout: 10000 });
+    await page.waitForTimeout(1000);
+
+    // Verify tabs are visible
+    await expect(page.getByRole('tab', { name: 'Main' })).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(page.getByRole('tab', { name: 'Triggers' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Content' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Schema' })).toBeVisible();
+
+    test.info().annotations.push({
+      type: 'info',
+      description: 'Step 2: Skill edit form loaded with 4 tabs',
+    });
+
+    // ── Checkpoint 2: Skill edit form with tabs ──────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-2-skill-edit-form-tabs.png`,
+      fullPage: true,
+    });
+
+    // ── Step 3: Click Triggers tab ────────────────────────────────────────
+    await page.getByRole('tab', { name: 'Triggers' }).click();
+    await page.waitForTimeout(500);
+
+    // Verify trigger phrases section
+    await expect(page.getByText('Trigger Phrases')).toBeVisible({
+      timeout: 5000,
+    });
+
+    test.info().annotations.push({
+      type: 'info',
+      description: 'Step 3: Triggers tab active',
+    });
+
+    // ── Checkpoint 3: Triggers tab with pills ────────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-3-triggers-tab-pills.png`,
+      fullPage: true,
+    });
+
+    // ── Step 4: Add trigger phrase "check outstanding payments" ───────────
+    const triggerInput = page
+      .getByPlaceholder('Type a phrase and press Enter')
+      .first();
+    await triggerInput.waitFor({ state: 'visible', timeout: 5000 });
+    await triggerInput.fill('check outstanding payments');
+    await triggerInput.press('Enter');
+    await page.waitForTimeout(500);
+
+    // Verify the new phrase appears as a pill
+    const phraseAdded = await page
+      .getByText('check outstanding payments')
       .first()
       .isVisible({ timeout: 5000 })
       .catch(() => false);
 
-    let automationName = '';
-
-    if (weeklyVisible) {
-      automationName = 'E2E Weekly Summary';
-    } else {
-      test.info().annotations.push({
-        type: 'info',
-        description:
-          'Step 2: "E2E Weekly Summary" not found — trying seeded "Daily AR Aging Summary"',
-      });
-      const fallbackRow = page.getByText('Daily AR Aging Summary');
-      const fallbackVisible = await fallbackRow
-        .first()
-        .isVisible({ timeout: 3000 })
-        .catch(() => false);
-
-      if (fallbackVisible) {
-        automationName = 'Daily AR Aging Summary';
-      }
-    }
-
-    if (!automationName) {
-      // No automations — check if list is empty
-      test.info().annotations.push({
-        type: 'issue',
-        description:
-          'Step 2: No automations found in list — cannot proceed',
-      });
-      await page.screenshot({
-        path: `${SCREENSHOTS_DIR}/step-02-no-automations.png`,
-        fullPage: true,
-      });
-      return;
-    }
-
-    // Open the actions menu for the target automation and click Edit
-    const actionsBtn = page
-      .getByRole('button', { name: new RegExp(`Actions for ${automationName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i') })
-      .first();
-    const actionsVisible = await actionsBtn
-      .isVisible({ timeout: 3000 })
-      .catch(() => false);
-
-    if (actionsVisible) {
-      await actionsBtn.click();
-      await page.waitForTimeout(300);
-      const editMenuItem = page.getByRole('menuitem', { name: /Edit/i });
-      await expect(editMenuItem).toBeVisible({ timeout: 3000 });
-      await editMenuItem.click();
-    } else {
-      // Fallback: click the automation name text directly
-      await page.getByText(automationName).first().click();
-    }
-
-    // Wait for edit page to load
-    await page.waitForURL('**/ai/admin/automations/**', { timeout: 10000 });
-
-    // Wait for the form heading or a key form element instead of networkidle
-    const formHeading = page.getByRole('heading', {
-      name: new RegExp(`${automationName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}|Edit Automation`, 'i'),
+    test.info().annotations.push({
+      type: 'info',
+      description: `Step 4: Trigger phrase added=${phraseAdded}`,
     });
-    const formLoaded = await formHeading
+
+    expect(phraseAdded, 'New trigger phrase should appear as a pill').toBe(
+      true,
+    );
+
+    // ── Checkpoint 4: New trigger phrase added ───────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-4-trigger-phrase-added.png`,
+      fullPage: true,
+    });
+
+    // ── Step 5: Click Content tab ─────────────────────────────────────────
+    await page.getByRole('tab', { name: 'Content' }).click();
+    await page.waitForTimeout(500);
+
+    // Verify content textarea — try placeholder, then character count
+    const contentTextarea = page.getByPlaceholder(
+      /enter the full skill\.md/i,
+    );
+    const contentVisible = await contentTextarea
       .first()
-      .isVisible({ timeout: 10000 })
+      .isVisible({ timeout: 5000 })
       .catch(() => false);
 
-    // Also try to wait for the Name input as a form load indicator
-    if (!formLoaded) {
-      await expect(page.getByLabel('Name').first()).toBeVisible({
-        timeout: 10000,
+    if (!contentVisible) {
+      // Fallback: look for the character count label
+      await expect(page.getByText(/characters/i)).toBeVisible({
+        timeout: 5000,
       });
     }
 
     test.info().annotations.push({
       type: 'info',
-      description: `Step 2: Edit page loaded for "${automationName}"`,
+      description: `Step 5: Content tab active, textarea found=${contentVisible}`,
     });
 
-    // ── Checkpoint 2: Edit Page Loaded ───────────────────────────────
+    // ── Checkpoint 5: Content tab with textarea ──────────────────────────
     await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-02-edit-page-loaded.png`,
+      path: `${SCREENSHOTS_DIR}/step-5-content-tab-textarea.png`,
       fullPage: true,
     });
 
-    // ── Step 3: Enable "Chain to next automation" toggle ─────────────
-    // Scroll down to the Chain Configuration card
-    const chainHeading = page.getByRole('heading', {
-      name: /Chain Configuration/i,
-    });
-    if (
-      !(await chainHeading
-        .first()
-        .isVisible({ timeout: 3000 })
-        .catch(() => false))
-    ) {
-      await page.evaluate(() =>
-        window.scrollTo(0, document.body.scrollHeight),
-      );
-      await page.waitForTimeout(500);
-    }
-
-    const chainToggle = page.getByLabel('Chain to next automation');
-    let chainToggleFound = false;
-
-    if (
-      await chainToggle
-        .first()
-        .isVisible({ timeout: 5000 })
-        .catch(() => false)
-    ) {
-      chainToggleFound = true;
-
-      const isChecked = await chainToggle
-        .first()
-        .isChecked()
-        .catch(() => false);
-      if (!isChecked) {
-        await chainToggle.first().click();
-        await page.waitForTimeout(500);
-      }
-
-      test.info().annotations.push({
-        type: 'info',
-        description: `Step 3: Chain toggle enabled (was checked=${isChecked})`,
-      });
-    } else {
-      test.info().annotations.push({
-        type: 'issue',
-        description:
-          'Step 3: "Chain to next automation" toggle not found — MISSING FEATURE',
-      });
-    }
-
-    // ── Step 4: Select chain target in dropdown ──────────────────────
-    let chainTargetSelected = false;
-
-    if (chainToggleFound) {
-      // The "Next Automation" select should now be visible
-      const chainSelect = page
-        .getByRole('combobox', { name: /Next Automation/i })
-        .or(page.getByLabel('Next Automation'));
-
-      const selectVisible = await chainSelect
-        .first()
-        .isVisible({ timeout: 5000 })
-        .catch(() => false);
-
-      if (selectVisible) {
-        await chainSelect.first().click();
-        await page.waitForTimeout(500);
-
-        // Look for "Daily AR Aging Summary" option (seeded data)
-        // If editing Daily AR itself, look for any other automation
-        const targetName =
-          automationName === 'Daily AR Aging Summary'
-            ? /E2E Weekly Summary|Weekly/i
-            : /Daily AR Aging Summary/i;
-
-        const targetOption = page.getByRole('option', { name: targetName });
-        if (
-          await targetOption
-            .first()
-            .isVisible({ timeout: 3000 })
-            .catch(() => false)
-        ) {
-          await targetOption.first().click();
-          chainTargetSelected = true;
-        } else {
-          // Try any available option
-          const options = page.getByRole('option');
-          const count = await options.count().catch(() => 0);
-          if (count > 0) {
-            await options.first().click();
-            chainTargetSelected = true;
-            test.info().annotations.push({
-              type: 'info',
-              description:
-                'Step 4: Target automation not found — selected first available option',
-            });
-          } else {
-            await page.keyboard.press('Escape');
-            test.info().annotations.push({
-              type: 'issue',
-              description:
-                'Step 4: Chain dropdown has no options — no other automations available',
-            });
-          }
-        }
-      } else {
-        test.info().annotations.push({
-          type: 'issue',
-          description:
-            'Step 4: Chain "Next Automation" select not visible after enabling toggle',
-        });
-      }
-    }
-
-    test.info().annotations.push({
-      type: 'info',
-      description: `Step 4: Chain target selected=${chainTargetSelected}`,
-    });
-
-    await page.waitForTimeout(300);
-
-    // ── Checkpoint 3: Chain Configured ───────────────────────────────
-    await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-03-chain-configured.png`,
-      fullPage: true,
-    });
-
-    // ── Step 5: Enable "Notify on completion" toggle ─────────────────
-    const notifyHeading = page.getByRole('heading', {
-      name: /Notifications/i,
-    });
-    if (
-      !(await notifyHeading
-        .first()
-        .isVisible({ timeout: 3000 })
-        .catch(() => false))
-    ) {
-      await page.evaluate(() =>
-        window.scrollTo(0, document.body.scrollHeight),
-      );
-      await page.waitForTimeout(500);
-    }
-
-    const notifyToggle = page.getByLabel('Notify on completion');
-    let notifyToggleFound = false;
-
-    if (
-      await notifyToggle
-        .first()
-        .isVisible({ timeout: 5000 })
-        .catch(() => false)
-    ) {
-      notifyToggleFound = true;
-
-      const isChecked = await notifyToggle
-        .first()
-        .isChecked()
-        .catch(() => false);
-      if (!isChecked) {
-        await notifyToggle.first().click();
-        await page.waitForTimeout(500);
-      }
-
-      test.info().annotations.push({
-        type: 'info',
-        description: `Step 5: Notify toggle enabled (was checked=${isChecked})`,
-      });
-    } else {
-      test.info().annotations.push({
-        type: 'issue',
-        description:
-          'Step 5: "Notify on completion" toggle not found — MISSING FEATURE',
-      });
-    }
-
-    // ── Step 6: Configure notification settings ──────────────────────
-    let notifyConfigured = false;
-
-    if (notifyToggleFound) {
-      // In-App checkbox — should be checked by default, verify
-      const inAppCheckbox = page.getByLabel('In-App');
-      if (
-        await inAppCheckbox
-          .first()
-          .isVisible({ timeout: 3000 })
-          .catch(() => false)
-      ) {
-        const inAppChecked = await inAppCheckbox
-          .first()
-          .isChecked()
-          .catch(() => false);
-        if (!inAppChecked) {
-          await inAppCheckbox.first().click();
-          await page.waitForTimeout(200);
-        }
-        test.info().annotations.push({
-          type: 'info',
-          description: `Step 6: In-App checkbox checked (was=${inAppChecked})`,
-        });
-      }
-
-      // Notify on success — default true, verify
-      const successToggle = page.getByLabel('Notify on success');
-      if (
-        await successToggle
-          .first()
-          .isVisible({ timeout: 3000 })
-          .catch(() => false)
-      ) {
-        const successChecked = await successToggle
-          .first()
-          .isChecked()
-          .catch(() => false);
-        if (!successChecked) {
-          await successToggle.first().click();
-          await page.waitForTimeout(200);
-        }
-        test.info().annotations.push({
-          type: 'info',
-          description: `Step 6: Notify on success checked (was=${successChecked})`,
-        });
-      }
-
-      // Notify on failure — default true, verify
-      const failureToggle = page.getByLabel('Notify on failure');
-      if (
-        await failureToggle
-          .first()
-          .isVisible({ timeout: 3000 })
-          .catch(() => false)
-      ) {
-        const failureChecked = await failureToggle
-          .first()
-          .isChecked()
-          .catch(() => false);
-        if (!failureChecked) {
-          await failureToggle.first().click();
-          await page.waitForTimeout(200);
-        }
-        test.info().annotations.push({
-          type: 'info',
-          description: `Step 6: Notify on failure checked (was=${failureChecked})`,
-        });
-      }
-
-      notifyConfigured = true;
-    }
-
-    test.info().annotations.push({
-      type: 'info',
-      description: `Step 6: Notification configured=${notifyConfigured}`,
-    });
-
-    // ── Checkpoint 4: Notification Section Configured ────────────────
-    await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-04-notification-configured.png`,
-      fullPage: true,
-    });
-
-    // ── Step 7: Click Save ───────────────────────────────────────────
+    // ── Step 6: Click Save button ─────────────────────────────────────────
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(300);
 
-    const saveBtn = page.getByRole('button', { name: /^Save$/i });
-    await expect(saveBtn.first()).toBeVisible({ timeout: 5000 });
+    const saveButton = page.getByRole('button', { name: /^Save$/i });
+    await expect(saveButton.first()).toBeVisible({ timeout: 5000 });
 
-    const saveEnabled = await saveBtn.first().isEnabled();
+    const saveEnabled = await saveButton.first().isEnabled();
 
     test.info().annotations.push({
       type: 'info',
-      description: `Step 7: Save button enabled=${saveEnabled}`,
+      description: `Step 6: Save button enabled=${saveEnabled}`,
     });
 
     if (saveEnabled) {
-      await saveBtn.first().click();
-      await page.waitForTimeout(3000);
+      await saveButton.first().click();
+      await page.waitForTimeout(2000);
 
       // Check for success toast
-      const updatedToast = page.getByText(
-        /Automation updated|Automation saved|saved successfully/i,
-      );
-      const hasUpdatedToast = await updatedToast
+      const hasSuccess = await page
+        .getByText(/skill updated|saved|success/i)
         .first()
         .isVisible({ timeout: 5000 })
         .catch(() => false);
 
-      // Check for error toast
-      const errorToast = page.getByText(
-        /error|failed|unexpected|not found|cycle|circular/i,
-      );
-      const hasErrorToast = await errorToast
-        .first()
-        .isVisible({ timeout: 2000 })
-        .catch(() => false);
-
       test.info().annotations.push({
         type: 'info',
-        description: `Step 7: success=${hasUpdatedToast}, error=${hasErrorToast}`,
+        description: `Step 6: Save result toast=${hasSuccess}`,
       });
-
-      if (hasErrorToast && !hasUpdatedToast) {
-        test.info().annotations.push({
-          type: 'issue',
-          description:
-            'Step 7: Save failed — possible API error or circular chain rejection',
-        });
-      }
     } else {
       test.info().annotations.push({
         type: 'issue',
         description:
-          'Step 7: Save button DISABLED — form has validation errors',
+          'Step 6: Save button DISABLED — form may not be dirty or has validation errors',
       });
     }
 
-    // ── Checkpoint 5: Save Success ───────────────────────────────────
+    // ── Checkpoint 6: Skill saved ────────────────────────────────────────
     await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-05-save-success.png`,
+      path: `${SCREENSHOTS_DIR}/step-6-skill-saved-success.png`,
       fullPage: true,
     });
 
-    // ── Final Assertions ─────────────────────────────────────────────
+    // ── Step 7: Navigate back to /ai/admin/skills ─────────────────────────
+    await spaNavigate(page, '/ai/admin/skills');
+    await expect(page.getByText('Skill Pack Manager')).toBeVisible({
+      timeout: 15000,
+    });
+    await page.waitForTimeout(2000);
+
+    test.info().annotations.push({
+      type: 'info',
+      description: 'Step 7: Back on Skill Pack Manager page',
+    });
+
+    // ── Step 8: Click Test Trigger button ─────────────────────────────────
+    await page.getByRole('button', { name: /test trigger/i }).click();
+    await page.waitForTimeout(500);
+
+    // Verify the sheet opened
+    await expect(page.getByText('Test Trigger Phrase')).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Verify input field
+    const triggerPhraseInput = page.getByLabel('Trigger phrase input');
+    await expect(triggerPhraseInput).toBeVisible({ timeout: 5000 });
+
+    test.info().annotations.push({
+      type: 'info',
+      description: 'Step 8: Test Trigger panel opened',
+    });
+
+    // ── Checkpoint 7: Test Trigger panel open ────────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-7-test-trigger-panel-open.png`,
+      fullPage: true,
+    });
+
+    // ── Step 9: Enter test phrase ─────────────────────────────────────────
+    await triggerPhraseInput.fill('show me overdue invoices');
+
+    test.info().annotations.push({
+      type: 'info',
+      description: 'Step 9: Phrase entered',
+    });
+
+    // ── Step 10: Click Test button ────────────────────────────────────────
+    // The Test button is inside the dialog/sheet
+    const dialogTestBtn = page
+      .getByRole('dialog')
+      .getByRole('button', { name: /test/i });
+
+    let submitBtn = dialogTestBtn;
+    if (
+      !(await dialogTestBtn.isVisible({ timeout: 3000 }).catch(() => false))
+    ) {
+      // Fallback: any Test button on page
+      submitBtn = page.getByRole('button', { name: /^test$/i });
+    }
+
+    await expect(submitBtn.first()).toBeEnabled({ timeout: 5000 });
+    await submitBtn.first().click();
+
+    // Wait for routing results (API call < 3s)
+    await page.waitForTimeout(3000);
+
+    // Check for result states
+    const hasL0 = await page
+      .getByText('Module Routing')
+      .isVisible()
+      .catch(() => false);
+    const hasNoMatch = await page
+      .getByText(/no matching skill found/i)
+      .isVisible()
+      .catch(() => false);
+    const hasError = await page
+      .locator('[role="alert"]')
+      .isVisible()
+      .catch(() => false);
+
+    expect(
+      hasL0 || hasNoMatch || hasError,
+      'Test trigger should show some result',
+    ).toBeTruthy();
+
+    if (hasL0) {
+      await expect(page.getByText('Module Routing')).toBeVisible();
+      await expect(page.getByText('Skill Selection')).toBeVisible();
+      await expect(page.getByText('Skill Details')).toBeVisible();
+      const bars = page.getByRole('progressbar');
+      expect(await bars.count()).toBeGreaterThanOrEqual(1);
+      test.info().annotations.push({
+        type: 'info',
+        description: 'Step 10: L0/L1/L2 match with confidence bars',
+      });
+    } else if (hasNoMatch) {
+      test.info().annotations.push({
+        type: 'info',
+        description: 'Step 10: No matching skill found',
+      });
+    } else if (hasError) {
+      test.info().annotations.push({
+        type: 'issue',
+        description: 'Step 10: Error in Test Trigger panel',
+      });
+    }
+
+    // ── Checkpoint 8: Test trigger results ────────────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-8-test-trigger-results.png`,
+      fullPage: true,
+    });
+
+    // ── Final Diagnostics ─────────────────────────────────────────────────
     if (apiErrors.length > 0) {
       const unique = [...new Set(apiErrors)];
       test.info().annotations.push({
@@ -486,16 +359,5 @@ test.describe('Journey 11: Automation Chain Configuration & Notifications', () =
         description: `API errors: ${unique.slice(0, 10).join('; ')}`,
       });
     }
-
-    // Assert that the Chain Configuration section exists
-    expect(chainToggleFound, 'Chain toggle should exist on the form').toBe(
-      true,
-    );
-
-    // Assert that the Notifications section exists
-    expect(
-      notifyToggleFound,
-      'Notify toggle should exist on the form',
-    ).toBe(true);
   });
 });

@@ -43,11 +43,13 @@ import { Route as AuthenticatedArInvoicesIdRouteImport } from './routes/_authent
 import { Route as AuthenticatedAiAdminSkillsRouteImport } from './routes/_authenticated/ai/admin/skills'
 import { Route as AuthenticatedAiAdminPromptsRouteImport } from './routes/_authenticated/ai/admin/prompts'
 import { Route as AuthenticatedAiAdminModelsRouteImport } from './routes/_authenticated/ai/admin/models'
+import { Route as AuthenticatedAiAdminKnowledgeRouteImport } from './routes/_authenticated/ai/admin/knowledge'
 import { Route as AuthenticatedAiAdminAutomationsRouteImport } from './routes/_authenticated/ai/admin/automations'
 import { Route as AuthenticatedAiAdminAgentsRouteImport } from './routes/_authenticated/ai/admin/agents'
 import { Route as AuthenticatedAiAdminSkillsIndexRouteImport } from './routes/_authenticated/ai/admin/skills/index'
 import { Route as AuthenticatedAiAdminPromptsIndexRouteImport } from './routes/_authenticated/ai/admin/prompts/index'
 import { Route as AuthenticatedAiAdminModelsIndexRouteImport } from './routes/_authenticated/ai/admin/models/index'
+import { Route as AuthenticatedAiAdminKnowledgeIndexRouteImport } from './routes/_authenticated/ai/admin/knowledge/index'
 import { Route as AuthenticatedAiAdminAutomationsIndexRouteImport } from './routes/_authenticated/ai/admin/automations/index'
 import { Route as AuthenticatedAiAdminAgentsIndexRouteImport } from './routes/_authenticated/ai/admin/agents/index'
 import { Route as AuthenticatedAiAdminSkillsNewRouteImport } from './routes/_authenticated/ai/admin/skills/new'
@@ -257,6 +259,12 @@ const AuthenticatedAiAdminModelsRoute =
     path: '/ai/admin/models',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedAiAdminKnowledgeRoute =
+  AuthenticatedAiAdminKnowledgeRouteImport.update({
+    id: '/ai/admin/knowledge',
+    path: '/ai/admin/knowledge',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedAiAdminAutomationsRoute =
   AuthenticatedAiAdminAutomationsRouteImport.update({
     id: '/ai/admin/automations',
@@ -286,6 +294,12 @@ const AuthenticatedAiAdminModelsIndexRoute =
     id: '/',
     path: '/',
     getParentRoute: () => AuthenticatedAiAdminModelsRoute,
+  } as any)
+const AuthenticatedAiAdminKnowledgeIndexRoute =
+  AuthenticatedAiAdminKnowledgeIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedAiAdminKnowledgeRoute,
   } as any)
 const AuthenticatedAiAdminAutomationsIndexRoute =
   AuthenticatedAiAdminAutomationsIndexRouteImport.update({
@@ -395,6 +409,7 @@ export interface FileRoutesByFullPath {
   '/system/': typeof AuthenticatedSystemIndexRoute
   '/ai/admin/agents': typeof AuthenticatedAiAdminAgentsRouteWithChildren
   '/ai/admin/automations': typeof AuthenticatedAiAdminAutomationsRouteWithChildren
+  '/ai/admin/knowledge': typeof AuthenticatedAiAdminKnowledgeRouteWithChildren
   '/ai/admin/models': typeof AuthenticatedAiAdminModelsRouteWithChildren
   '/ai/admin/prompts': typeof AuthenticatedAiAdminPromptsRouteWithChildren
   '/ai/admin/skills': typeof AuthenticatedAiAdminSkillsRouteWithChildren
@@ -420,6 +435,7 @@ export interface FileRoutesByFullPath {
   '/ai/admin/skills/new': typeof AuthenticatedAiAdminSkillsNewRoute
   '/ai/admin/agents/': typeof AuthenticatedAiAdminAgentsIndexRoute
   '/ai/admin/automations/': typeof AuthenticatedAiAdminAutomationsIndexRoute
+  '/ai/admin/knowledge/': typeof AuthenticatedAiAdminKnowledgeIndexRoute
   '/ai/admin/models/': typeof AuthenticatedAiAdminModelsIndexRoute
   '/ai/admin/prompts/': typeof AuthenticatedAiAdminPromptsIndexRoute
   '/ai/admin/skills/': typeof AuthenticatedAiAdminSkillsIndexRoute
@@ -467,6 +483,7 @@ export interface FileRoutesByTo {
   '/ai/admin/skills/new': typeof AuthenticatedAiAdminSkillsNewRoute
   '/ai/admin/agents': typeof AuthenticatedAiAdminAgentsIndexRoute
   '/ai/admin/automations': typeof AuthenticatedAiAdminAutomationsIndexRoute
+  '/ai/admin/knowledge': typeof AuthenticatedAiAdminKnowledgeIndexRoute
   '/ai/admin/models': typeof AuthenticatedAiAdminModelsIndexRoute
   '/ai/admin/prompts': typeof AuthenticatedAiAdminPromptsIndexRoute
   '/ai/admin/skills': typeof AuthenticatedAiAdminSkillsIndexRoute
@@ -498,6 +515,7 @@ export interface FileRoutesById {
   '/_authenticated/system/': typeof AuthenticatedSystemIndexRoute
   '/_authenticated/ai/admin/agents': typeof AuthenticatedAiAdminAgentsRouteWithChildren
   '/_authenticated/ai/admin/automations': typeof AuthenticatedAiAdminAutomationsRouteWithChildren
+  '/_authenticated/ai/admin/knowledge': typeof AuthenticatedAiAdminKnowledgeRouteWithChildren
   '/_authenticated/ai/admin/models': typeof AuthenticatedAiAdminModelsRouteWithChildren
   '/_authenticated/ai/admin/prompts': typeof AuthenticatedAiAdminPromptsRouteWithChildren
   '/_authenticated/ai/admin/skills': typeof AuthenticatedAiAdminSkillsRouteWithChildren
@@ -523,6 +541,7 @@ export interface FileRoutesById {
   '/_authenticated/ai/admin/skills/new': typeof AuthenticatedAiAdminSkillsNewRoute
   '/_authenticated/ai/admin/agents/': typeof AuthenticatedAiAdminAgentsIndexRoute
   '/_authenticated/ai/admin/automations/': typeof AuthenticatedAiAdminAutomationsIndexRoute
+  '/_authenticated/ai/admin/knowledge/': typeof AuthenticatedAiAdminKnowledgeIndexRoute
   '/_authenticated/ai/admin/models/': typeof AuthenticatedAiAdminModelsIndexRoute
   '/_authenticated/ai/admin/prompts/': typeof AuthenticatedAiAdminPromptsIndexRoute
   '/_authenticated/ai/admin/skills/': typeof AuthenticatedAiAdminSkillsIndexRoute
@@ -554,6 +573,7 @@ export interface FileRouteTypes {
     | '/system/'
     | '/ai/admin/agents'
     | '/ai/admin/automations'
+    | '/ai/admin/knowledge'
     | '/ai/admin/models'
     | '/ai/admin/prompts'
     | '/ai/admin/skills'
@@ -579,6 +599,7 @@ export interface FileRouteTypes {
     | '/ai/admin/skills/new'
     | '/ai/admin/agents/'
     | '/ai/admin/automations/'
+    | '/ai/admin/knowledge/'
     | '/ai/admin/models/'
     | '/ai/admin/prompts/'
     | '/ai/admin/skills/'
@@ -626,6 +647,7 @@ export interface FileRouteTypes {
     | '/ai/admin/skills/new'
     | '/ai/admin/agents'
     | '/ai/admin/automations'
+    | '/ai/admin/knowledge'
     | '/ai/admin/models'
     | '/ai/admin/prompts'
     | '/ai/admin/skills'
@@ -656,6 +678,7 @@ export interface FileRouteTypes {
     | '/_authenticated/system/'
     | '/_authenticated/ai/admin/agents'
     | '/_authenticated/ai/admin/automations'
+    | '/_authenticated/ai/admin/knowledge'
     | '/_authenticated/ai/admin/models'
     | '/_authenticated/ai/admin/prompts'
     | '/_authenticated/ai/admin/skills'
@@ -681,6 +704,7 @@ export interface FileRouteTypes {
     | '/_authenticated/ai/admin/skills/new'
     | '/_authenticated/ai/admin/agents/'
     | '/_authenticated/ai/admin/automations/'
+    | '/_authenticated/ai/admin/knowledge/'
     | '/_authenticated/ai/admin/models/'
     | '/_authenticated/ai/admin/prompts/'
     | '/_authenticated/ai/admin/skills/'
@@ -934,6 +958,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAiAdminModelsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/ai/admin/knowledge': {
+      id: '/_authenticated/ai/admin/knowledge'
+      path: '/ai/admin/knowledge'
+      fullPath: '/ai/admin/knowledge'
+      preLoaderRoute: typeof AuthenticatedAiAdminKnowledgeRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/ai/admin/automations': {
       id: '/_authenticated/ai/admin/automations'
       path: '/ai/admin/automations'
@@ -968,6 +999,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/ai/admin/models/'
       preLoaderRoute: typeof AuthenticatedAiAdminModelsIndexRouteImport
       parentRoute: typeof AuthenticatedAiAdminModelsRoute
+    }
+    '/_authenticated/ai/admin/knowledge/': {
+      id: '/_authenticated/ai/admin/knowledge/'
+      path: '/'
+      fullPath: '/ai/admin/knowledge/'
+      preLoaderRoute: typeof AuthenticatedAiAdminKnowledgeIndexRouteImport
+      parentRoute: typeof AuthenticatedAiAdminKnowledgeRoute
     }
     '/_authenticated/ai/admin/automations/': {
       id: '/_authenticated/ai/admin/automations/'
@@ -1152,6 +1190,21 @@ const AuthenticatedAiAdminAutomationsRouteWithChildren =
     AuthenticatedAiAdminAutomationsRouteChildren,
   )
 
+interface AuthenticatedAiAdminKnowledgeRouteChildren {
+  AuthenticatedAiAdminKnowledgeIndexRoute: typeof AuthenticatedAiAdminKnowledgeIndexRoute
+}
+
+const AuthenticatedAiAdminKnowledgeRouteChildren: AuthenticatedAiAdminKnowledgeRouteChildren =
+  {
+    AuthenticatedAiAdminKnowledgeIndexRoute:
+      AuthenticatedAiAdminKnowledgeIndexRoute,
+  }
+
+const AuthenticatedAiAdminKnowledgeRouteWithChildren =
+  AuthenticatedAiAdminKnowledgeRoute._addFileChildren(
+    AuthenticatedAiAdminKnowledgeRouteChildren,
+  )
+
 interface AuthenticatedAiAdminModelsRouteChildren {
   AuthenticatedAiAdminModelsIdRoute: typeof AuthenticatedAiAdminModelsIdRoute
   AuthenticatedAiAdminModelsNewRoute: typeof AuthenticatedAiAdminModelsNewRoute
@@ -1228,6 +1281,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedSystemIndexRoute: typeof AuthenticatedSystemIndexRoute
   AuthenticatedAiAdminAgentsRoute: typeof AuthenticatedAiAdminAgentsRouteWithChildren
   AuthenticatedAiAdminAutomationsRoute: typeof AuthenticatedAiAdminAutomationsRouteWithChildren
+  AuthenticatedAiAdminKnowledgeRoute: typeof AuthenticatedAiAdminKnowledgeRouteWithChildren
   AuthenticatedAiAdminModelsRoute: typeof AuthenticatedAiAdminModelsRouteWithChildren
   AuthenticatedAiAdminPromptsRoute: typeof AuthenticatedAiAdminPromptsRouteWithChildren
   AuthenticatedAiAdminSkillsRoute: typeof AuthenticatedAiAdminSkillsRouteWithChildren
@@ -1262,6 +1316,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAiAdminAgentsRoute: AuthenticatedAiAdminAgentsRouteWithChildren,
   AuthenticatedAiAdminAutomationsRoute:
     AuthenticatedAiAdminAutomationsRouteWithChildren,
+  AuthenticatedAiAdminKnowledgeRoute:
+    AuthenticatedAiAdminKnowledgeRouteWithChildren,
   AuthenticatedAiAdminModelsRoute: AuthenticatedAiAdminModelsRouteWithChildren,
   AuthenticatedAiAdminPromptsRoute:
     AuthenticatedAiAdminPromptsRouteWithChildren,

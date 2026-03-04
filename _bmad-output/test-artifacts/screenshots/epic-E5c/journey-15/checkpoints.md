@@ -1,33 +1,26 @@
-# Journey 15 — Failed Run: View Error & Retry from Failed Step
+# Journey 15: Run Automation Manually (Run Now) — Visual Checkpoints
 
-## Visual Checkpoints
+## Checkpoint 1: Automation list loaded
+- **When**: After navigating to /ai/admin/automations and data loads
+- **Screenshot**: `step-1-automation-list-loaded.png`
+- **What to look for**: T1 Entity List with automation rows visible. "Daily AR Aging Summary" row present with name, trigger badge, schedule, steps count, last run status, and active toggle. Overflow menu (three dots) visible on each row.
 
-### CP-1: Run List Page Loaded
-- **When**: After navigating to /ai/admin/automations/runs
-- **Screenshot**: `step-1-run-list-loaded.png`
-- **What to look for**: Automation Runs page heading visible, table with columns (Automation, Trigger, Status, etc.), filter bar present with Status filter button
+## Checkpoint 2: Overflow menu open with Run Now option
+- **When**: After clicking overflow menu on "Daily AR Aging Summary" row
+- **Screenshot**: `step-2-overflow-menu-open.png`
+- **What to look for**: Dropdown menu visible with 4 options: Edit, View Runs, Run Now (with Play icon), Delete (red text). Menu positioned near the clicked row.
 
-### CP-2: Filtered to FAILED Runs
-- **When**: After applying FAILED status filter
-- **Screenshot**: `step-2-filtered-failed-runs.png`
-- **What to look for**: Status filter button shows "Failed" or active state (purple border), all visible rows show red FAILED status dots, non-FAILED runs are hidden
+## Checkpoint 3: Run Now confirmation dialog
+- **When**: After clicking "Run Now" in the overflow menu
+- **Screenshot**: `step-3-run-now-confirmation-dialog.png`
+- **What to look for**: AlertDialog modal visible with title "Run Automation", description asking confirmation to run now, automation name displayed, Cancel and Run Now (purple) buttons.
 
-### CP-3: Failed Run Detail Page
-- **When**: After clicking first FAILED run row
-- **Screenshot**: `step-3-failed-run-detail.png`
-- **What to look for**: Run detail page with red "Failed" status badge in header. Error banner visible: red-bordered alert card with "Run Failed" title and error message text. "Retry" primary button visible in header action bar. Metrics cards showing tokens, cost, steps, duration
+## Checkpoint 4: Automation started toast
+- **When**: After clicking "Run Now" confirm button in dialog
+- **Screenshot**: `step-4-automation-started-toast.png`
+- **What to look for**: Success toast "Automation started" visible. Dialog should be closed. Automation list should have refreshed.
 
-### CP-4: Failed Step in Timeline
-- **When**: After verifying the step timeline
-- **Screenshot**: `step-4-failed-step-timeline.png`
-- **What to look for**: Step timeline showing: completed steps with green check circles, one failed step with red X circle and red left-border accent (border-l-4 border-l-red-500) with error message in red alert box. If subsequent steps exist, they should show grey "Skipped" with italic label and reduced opacity
-
-### CP-5: Retry Confirmation Dialog
-- **When**: After clicking "Retry from This Step" button (or "Retry" header button)
-- **Screenshot**: `step-5-retry-confirmation-dialog.png`
-- **What to look for**: Confirmation dialog with title "Retry from Failed Step", description showing which step will be retried, automation name and run ID details, Cancel and Retry buttons
-
-### CP-6: Retry Initiated Result
-- **When**: After confirming retry
-- **Screenshot**: `step-6-retry-initiated.png`
-- **What to look for**: Either a success toast "Retry started" or navigation to new run detail page, or error if retry endpoint not available. If successful, new run detail page should show retryOfRunId linking to original
+## Checkpoint 5: Status badge updated on row
+- **When**: After toast appears and list refreshes
+- **Screenshot**: `step-5-status-badge-updated.png`
+- **What to look for**: The "Daily AR Aging Summary" row should show an updated Last Run column with a status badge (Running amber, Completed green, or Pending). Last Run Time should show a recent timestamp.

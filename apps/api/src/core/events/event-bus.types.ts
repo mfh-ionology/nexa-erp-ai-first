@@ -699,6 +699,52 @@ export interface BusinessEvents {
     mentions: Array<{ type: string; id: string; name: string }>;
   };
 
+  // ── AI Knowledge Articles (E5d) ──────────────────────────
+  'ai.knowledge.articleCreated': {
+    articleId: string;
+    companyId: string;
+    category: string;
+    source: string;
+    confidenceScore: number;
+  };
+  'ai.knowledge.articleUsed': {
+    articleId: string;
+    companyId: string;
+    conversationId: string;
+  };
+  'ai.knowledge.articleDeleted': {
+    articleId: string;
+    companyId: string;
+  };
+
+  // ── AI Correction Loop (E5d-2) ──────────────────────────
+  'ai.correction.logged': {
+    correctionId: string;
+    companyId: string;
+    userId: string;
+    skillKey: string | null;
+    correctionType: string;
+    // ISSUE #6 FIX: Carry full record data so event handler avoids DB round-trip
+    originalResponse: string;
+    correctedResponse: string;
+    conversationId: string | null;
+    messageId: string | null;
+    wasAutoResolved: boolean;
+    createdAt: string; // ISO string for serialisability
+  };
+  'ai.correction.autoArticleGenerated': {
+    articleId: string;
+    companyId: string;
+    correctionCount: number;
+    topic: string;
+  };
+  'ai.learning.signalAggregated': {
+    companyId: string;
+    skillKey: string;
+    successRate: number;
+    correctionRate: number;
+  };
+
   // ── AI Automation ────────────────────────────────────────
   'ai.automation.triggered': {
     automationId: string;
@@ -937,6 +983,14 @@ export const VALID_BUSINESS_EVENT_TYPES = new Set<string>([
   'ai.skillOverride.deleted',
   'ai.tool.queryExecuted',
   'ai.entityMention.resolved',
+  // AI Knowledge Articles (E5d)
+  'ai.knowledge.articleCreated',
+  'ai.knowledge.articleUsed',
+  'ai.knowledge.articleDeleted',
+  // AI Correction Loop (E5d-2)
+  'ai.correction.logged',
+  'ai.correction.autoArticleGenerated',
+  'ai.learning.signalAggregated',
   // AI Automation
   'ai.automation.triggered',
   'ai.automation.completed',

@@ -6,8 +6,8 @@
 # Usage: ./v7-post-epic-frontend-e2e.sh <epic-id> [options]
 #
 # Options:
-#   --frontend-url URL    Frontend URL (default: http://localhost:5173 or $SERVER_FRONTEND_URL)
-#   --api-url URL         Backend URL for reference (default: http://localhost:3777 or $SERVER_API_URL)
+#   --frontend-url URL    Frontend URL (default: http://localhost:5110 or $SERVER_FRONTEND_URL)
+#   --api-url URL         Backend URL for reference (default: http://localhost:5100 or $SERVER_API_URL)
 #   --fix-bugs            Auto-fix bugs found during testing
 #   --max-turns N         Claude turns per journey (default: 100)
 #   --max-fix-retries N   Max fix-retest cycles per journey (default: 3)
@@ -33,8 +33,8 @@ CONFIG_DIR="${SCRIPT_DIR}/../config"
 # ============================================================================
 
 EPIC_ID="${1:?Usage: $0 <epic-id> [options]}"
-FRONTEND_URL="${SERVER_FRONTEND_URL:-http://localhost:5173}"
-API_URL="${SERVER_API_URL:-http://localhost:3777}"
+FRONTEND_URL="${SERVER_FRONTEND_URL:-http://localhost:5110}"
+API_URL="${SERVER_API_URL:-http://localhost:5100}"
 FIX_BUGS=false
 MAX_TURNS=100
 MAX_FIX_RETRIES=3
@@ -154,7 +154,7 @@ export default defineConfig({
   fullyParallel: false,
   retries: 0,
   use: {
-    baseURL: process.env.FRONTEND_URL || 'http://localhost:5173',
+    baseURL: process.env.FRONTEND_URL || 'http://localhost:5110',
     headless: true,
     screenshot: 'on',
     trace: 'retain-on-failure',

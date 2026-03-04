@@ -1,30 +1,31 @@
 {
   "epic_id": "E5c",
   "epic_name": "AI Administration & Autonomous Workflows",
-  "generated_at": "2026-03-03T18:30:00.000Z",
+  "generated_at": "2026-03-04T12:00:00.000Z",
   "frontend_url": "http://localhost:5110",
   "login_credentials": {
-    "note": "Requires ADMIN role user to access /ai/admin/* routes",
+    "note": "Requires ADMIN role user to access /ai/admin/* routes. All admin routes enforce createAdminModuleBeforeLoad('system') guard.",
     "username": "admin@nexa.local",
     "password": "admin123"
   },
   "prerequisite_seed_data": [
     "3 AiModel records (claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5) seeded from E5",
-    "6 AiPrompt records seeded from E5",
+    "6 AiPrompt records seeded from E5 (categories: record-creation, query, analysis, briefing, skill, chat)",
     "10 AiAgent records seeded from E5/E5b",
     "Multiple AiSkill records grouped by moduleKey seeded from E5/E5b",
-    "1 example automation 'Daily AR Aging Summary' seeded from E5c-1",
-    "6 system AiPromptVariable records seeded from E5c-1"
+    "1 example automation 'Daily AR Aging Summary' seeded from E5c-1 with 2 steps",
+    "6 system AiPromptVariable records seeded from E5c-1 (today, currentUser.name, currentUser.role, company.name, company.baseCurrency, company.defaultCurrency)"
   ],
-  "total_journeys": 16,
-  "total_steps": 233,
+  "total_journeys": 24,
+  "total_steps": 178,
   "journeys": [
     {
-      "id": "j1-ai-dashboard",
-      "name": "AI Configuration Dashboard",
-      "description": "Verify the AI Configuration Dashboard loads with summary cards, token usage chart, and quick-nav links (E5c-3 AC-1, E5c-5 AC-10, E5c-6 AC-6)",
+      "id": "j1-ai-config-dashboard",
+      "name": "AI Configuration Dashboard Overview",
+      "description": "Verify the AI Configuration Dashboard loads with summary cards (models, agents, skills, automations), token usage chart, automation health section, and quick-nav cards linking to sub-pages.",
       "priority": "critical",
       "related_stories": ["E5c-3", "E5c-5", "E5c-6"],
+      "related_acs": ["E5c-3:AC-1", "E5c-5:AC-10", "E5c-6:AC-6"],
       "steps": [
         {
           "step_number": 1,
@@ -33,88 +34,115 @@
           "input_data": {},
           "expected_result": "AI Configuration Dashboard loads",
           "screenshot": true,
-          "visual_check": "Dashboard page with 'AI Configuration' heading, 4 summary cards visible (Active Models, Active Agents, Active Skills, Automations), purple-themed Concept D styling with #f4f2ff background"
+          "visual_check": "Dashboard page with 'AI Configuration' heading, four summary cards (Active Models, Active Agents, Active Skills, Automations) in a grid, Concept D purple theme (#f4f2ff background), Plus Jakarta Sans headings"
         },
         {
           "step_number": 2,
           "action": "verify_element",
           "target": "Active Models card",
           "input_data": {},
-          "expected_result": "Card shows model count in mono font with monthly cost subtitle"
+          "expected_result": "Active Models card shows count (at least 3 from seed) with mono font, subtitle showing monthly cost",
+          "screenshot": false
         },
         {
           "step_number": 3,
           "action": "verify_element",
           "target": "Active Agents card",
           "input_data": {},
-          "expected_result": "Card shows agent count"
+          "expected_result": "Active Agents card shows count badge",
+          "screenshot": false
         },
         {
           "step_number": 4,
           "action": "verify_element",
           "target": "Active Skills card",
           "input_data": {},
-          "expected_result": "Card shows total skill count with 'across N modules' subtitle"
+          "expected_result": "Active Skills card shows total count and 'across N modules' subtitle",
+          "screenshot": false
         },
         {
           "step_number": 5,
           "action": "verify_element",
           "target": "Automations card",
           "input_data": {},
-          "expected_result": "Card shows active count (green badge) and paused count (amber badge)"
+          "expected_result": "Automations card shows active count (green badge) and paused count (amber badge)",
+          "screenshot": false
         },
         {
           "step_number": 6,
           "action": "verify_element",
           "target": "Token Usage chart section",
           "input_data": {},
-          "expected_result": "Line chart visible with 'Token Usage (Last 30 Days)' heading, x-axis dates, y-axis tokens"
+          "expected_result": "Token Usage (Last 30 Days) section visible with a chart (line or area) showing input/output tokens",
+          "screenshot": true,
+          "visual_check": "Chart area visible with axes labels, Concept D card styling (12px radius, shadow), section heading in font-serif"
         },
         {
           "step_number": 7,
           "action": "verify_element",
-          "target": "Quick navigation cards",
+          "target": "Automation Health section",
           "input_data": {},
-          "expected_result": "Quick-nav cards for Model Registry, Prompt Templates, and Automations are visible with clickable links"
+          "expected_result": "Automation Health section visible with status pie/donut chart, failed runs count, upcoming runs list, token spend trend chart",
+          "screenshot": true,
+          "visual_check": "Automation Health section with 2x2 stats grid, 'View All Runs' link, charts with purple gradient fills"
         },
         {
           "step_number": 8,
           "action": "verify_element",
-          "target": "Automation Health section",
+          "target": "Quick-nav cards",
           "input_data": {},
-          "expected_result": "Automation Health section visible below quick-nav with: automations by status chart, failed runs count, upcoming scheduled runs list, token spend trend chart",
-          "screenshot": true,
-          "visual_check": "Automation Health section showing donut chart for automation statuses, failed runs badge, upcoming runs list, and 7-day token spend area chart. All cards have 12px radius and purple-tinted shadows"
+          "expected_result": "Quick-nav cards for 'Model Registry', 'Prompt Templates', and 'Automations' are visible and clickable",
+          "screenshot": false
         },
         {
           "step_number": 9,
           "action": "click",
           "target": "Model Registry quick-nav card",
           "input_data": {},
-          "expected_result": "Navigates to /ai/admin/models"
+          "expected_result": "Navigates to /ai/admin/models",
+          "screenshot": false
         },
         {
           "step_number": 10,
-          "action": "navigate",
-          "target": "/ai/admin",
-          "input_data": {},
-          "expected_result": "Return to dashboard"
+          "action": "verify_text",
+          "target": "page heading",
+          "input_data": {"text": "Model Registry"},
+          "expected_result": "Model Registry page loaded",
+          "screenshot": false
         },
         {
           "step_number": 11,
-          "action": "click",
-          "target": "Prompt Templates quick-nav card",
+          "action": "navigate",
+          "target": "/ai/admin",
           "input_data": {},
-          "expected_result": "Navigates to /ai/admin/prompts"
+          "expected_result": "Back to dashboard",
+          "screenshot": false
+        },
+        {
+          "step_number": 12,
+          "action": "click",
+          "target": "Automations quick-nav card",
+          "input_data": {},
+          "expected_result": "Navigates to /ai/admin/automations",
+          "screenshot": false
+        },
+        {
+          "step_number": 13,
+          "action": "verify_text",
+          "target": "page heading",
+          "input_data": {"text": "Automations"},
+          "expected_result": "Automations list page loaded",
+          "screenshot": false
         }
       ]
     },
     {
-      "id": "j2-model-crud-lifecycle",
-      "name": "Model Registry CRUD Lifecycle",
-      "description": "Create, view, edit, and delete an AI model through the Model Registry UI (E5c-3 AC-2, AC-3)",
+      "id": "j2-create-ai-model",
+      "name": "Create a New AI Model",
+      "description": "Test the full model creation flow: navigate to Model Registry, click Add Model, fill all fields including routing tags and fallback model, save, and verify the new model appears in the list.",
       "priority": "critical",
       "related_stories": ["E5c-3"],
+      "related_acs": ["E5c-3:AC-2", "E5c-3:AC-3"],
       "steps": [
         {
           "step_number": 1,
@@ -123,252 +151,228 @@
           "input_data": {},
           "expected_result": "Model Registry list page loads",
           "screenshot": true,
-          "visual_check": "T1 Entity List with 'Model Registry' heading, breadcrumbs showing 'AI Administration > Model Registry', table columns: name (mono), provider, model ID (mono), max tokens (mono), cost/M input (mono), cost/M output (mono), routing tags (purple badges), active status, default flag. At least 3 seeded models visible"
+          "visual_check": "T1 Entity List showing seeded models (claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5) with columns: name (mono), provider, model ID, max tokens, cost/M, routing tags (purple badges), status, default flag"
         },
         {
           "step_number": 2,
-          "action": "verify_text",
-          "target": "table body",
-          "input_data": {"text": "claude-opus-4-6"},
-          "expected_result": "Seeded model 'claude-opus-4-6' is visible in the list"
+          "action": "verify_element",
+          "target": "Model list rows",
+          "input_data": {},
+          "expected_result": "At least 3 seeded models displayed with correct column values and mono font for name/modelId/tokens/cost",
+          "screenshot": false
         },
         {
           "step_number": 3,
           "action": "click",
           "target": "Add Model button",
           "input_data": {},
-          "expected_result": "Navigates to /ai/admin/models/new"
+          "expected_result": "Model form page opens in create mode",
+          "screenshot": true,
+          "visual_check": "Model form with 'New Model' heading, breadcrumbs 'AI Administration > Model Registry > New Model', Primary and Advanced tabs, Save/Cancel buttons"
         },
         {
           "step_number": 4,
-          "action": "verify_element",
-          "target": "Model form page",
-          "input_data": {},
-          "expected_result": "Form page loads with 'New Model' heading, Primary and Advanced tabs visible, Save and Cancel buttons in action bar",
-          "screenshot": true,
-          "visual_check": "Model form with fields: Name, Display Name, Provider dropdown, Model ID, Max Input Tokens, Max Output Tokens, Cost fields. Save button is disabled (form not dirty). Concept D styling applied"
+          "action": "fill_form",
+          "target": "Model form — Primary tab",
+          "input_data": {
+            "name": "test-gpt-4o",
+            "displayName": "GPT-4o Test Model",
+            "provider": "openai",
+            "modelId": "gpt-4o-2024-08-06",
+            "maxInputTokens": "128000",
+            "maxOutputTokens": "16384",
+            "costPerMInput": "2.50",
+            "costPerMOutput": "10.00"
+          },
+          "expected_result": "All primary fields populated",
+          "screenshot": false
         },
         {
           "step_number": 5,
-          "action": "fill_form",
-          "target": "Model form - Primary tab",
-          "input_data": {
-            "Name": "test-gpt-4o",
-            "Display Name": "Test GPT-4o",
-            "Provider": "openai",
-            "Model ID": "gpt-4o-2024-11-20",
-            "Max Input Tokens": "128000",
-            "Max Output Tokens": "16384",
-            "Cost per Million Input Tokens": "2.50",
-            "Cost per Million Output Tokens": "10.00"
-          },
-          "expected_result": "Form fields populated, Save button becomes enabled"
-        },
-        {
-          "step_number": 6,
           "action": "click",
           "target": "Advanced tab",
           "input_data": {},
-          "expected_result": "Advanced tab content shows: Routing Tags, Capabilities JSON editor, Fallback Model dropdown, Config JSON editor"
+          "expected_result": "Advanced tab content shows routing tags, capabilities, fallback model, config fields",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "Model form — Advanced tab",
+          "input_data": {
+            "routingTags": ["standard", "vision"],
+            "capabilities": "{\"vision\": true, \"structured_output\": true}",
+            "fallbackModel": "claude-sonnet-4-6"
+          },
+          "expected_result": "Routing tags show as purple pill badges, JSON validates, fallback model dropdown excludes self",
+          "screenshot": true,
+          "visual_check": "Advanced tab with purple 'standard' and 'vision' tag pills, JSON editor with mono font, fallback model dropdown populated"
         },
         {
           "step_number": 7,
-          "action": "fill_form",
-          "target": "Model form - Advanced tab",
-          "input_data": {
-            "Routing Tags": ["standard", "vision"],
-            "Fallback Model": "claude-sonnet-4-6"
-          },
-          "expected_result": "Tags appear as purple pill badges, fallback model selected"
-        },
-        {
-          "step_number": 8,
           "action": "click",
           "target": "Save button",
           "input_data": {},
           "expected_result": "Model created successfully",
           "screenshot": true,
-          "visual_check": "Success toast 'Model created' visible. Page navigates to the model detail/edit page showing the saved data. Breadcrumbs show 'AI Administration > Model Registry > Test GPT-4o'"
+          "visual_check": "Success toast 'Model created' visible, navigated to model detail page showing all saved values"
         },
         {
-          "step_number": 9,
-          "action": "fill_form",
-          "target": "Display Name field",
-          "input_data": {"Display Name": "Test GPT-4o (Updated)"},
-          "expected_result": "Field updated, Save button becomes enabled"
-        },
-        {
-          "step_number": 10,
-          "action": "click",
-          "target": "Save button",
-          "input_data": {},
-          "expected_result": "Model updated successfully, success toast visible"
-        },
-        {
-          "step_number": 11,
+          "step_number": 8,
           "action": "navigate",
           "target": "/ai/admin/models",
           "input_data": {},
-          "expected_result": "Model list shows the new model with updated display name"
-        },
-        {
-          "step_number": 12,
-          "action": "verify_text",
-          "target": "table body",
-          "input_data": {"text": "test-gpt-4o"},
-          "expected_result": "New model visible in the list with mono font name"
-        },
-        {
-          "step_number": 13,
-          "action": "click",
-          "target": "test-gpt-4o row overflow menu > Delete",
-          "input_data": {},
-          "expected_result": "Confirmation dialog appears asking to confirm deletion"
-        },
-        {
-          "step_number": 14,
-          "action": "click",
-          "target": "Confirm delete button in dialog",
-          "input_data": {},
-          "expected_result": "Model deleted, toast shows success, model removed from list",
+          "expected_result": "Model list now shows the new model",
           "screenshot": true,
-          "visual_check": "Model list no longer contains 'test-gpt-4o'. Success toast visible"
+          "visual_check": "Model list with 4 models including 'test-gpt-4o' row with 'openai' provider, 'standard' and 'vision' routing tag badges"
         }
       ]
     },
     {
-      "id": "j3-model-business-rules",
-      "name": "Model Business Rules Enforcement",
-      "description": "Test model business rules: default model toggle, deactivation guard, circular fallback rejection (E5c-3 AC-3)",
+      "id": "j3-model-edit-and-defaults",
+      "name": "Edit Model — Default Toggle and Business Rules",
+      "description": "Test editing a model, toggling the default flag (which unsets the previous default), and verifying business rule: cannot deactivate a default model.",
       "priority": "high",
       "related_stories": ["E5c-3"],
+      "related_acs": ["E5c-3:AC-3"],
       "steps": [
         {
           "step_number": 1,
           "action": "navigate",
           "target": "/ai/admin/models",
           "input_data": {},
-          "expected_result": "Model list loads with seeded models"
+          "expected_result": "Model list loads",
+          "screenshot": false
         },
         {
           "step_number": 2,
           "action": "click",
-          "target": "Row for the model marked as Default",
+          "target": "Row for 'test-gpt-4o' model",
           "input_data": {},
-          "expected_result": "Model edit form opens for the default model"
+          "expected_result": "Model edit form opens with pre-populated data",
+          "screenshot": true,
+          "visual_check": "Model form showing 'GPT-4o Test Model' heading, all fields populated with saved values from creation"
         },
         {
           "step_number": 3,
           "action": "fill_form",
-          "target": "Active toggle",
-          "input_data": {"Active": "false"},
-          "expected_result": "Toggle switched off"
+          "target": "Default toggle",
+          "input_data": {"isDefault": "true"},
+          "expected_result": "Warning text appears: 'Setting as default will unset the current default model'",
+          "screenshot": false
         },
         {
           "step_number": 4,
           "action": "click",
           "target": "Save button",
           "input_data": {},
-          "expected_result": "422 error: 'Cannot deactivate the default model. Assign a new default first.'",
+          "expected_result": "Model updated, default flag set",
           "screenshot": true,
-          "visual_check": "Error toast or inline error message visible explaining that the default model cannot be deactivated"
+          "visual_check": "Success toast visible, model now shows purple 'Default' badge"
         },
         {
           "step_number": 5,
           "action": "navigate",
-          "target": "/ai/admin/models/new",
+          "target": "/ai/admin/models",
           "input_data": {},
-          "expected_result": "New model form loads"
+          "expected_result": "Only test-gpt-4o shows 'Default' badge, previous default model no longer has it",
+          "screenshot": true,
+          "visual_check": "Model list with exactly one 'Default' purple badge on 'test-gpt-4o' row"
         },
         {
           "step_number": 6,
-          "action": "fill_form",
-          "target": "Model form",
-          "input_data": {
-            "Name": "fallback-test-a",
-            "Display Name": "Fallback Test A",
-            "Provider": "anthropic",
-            "Model ID": "fallback-a",
-            "Max Input Tokens": "100000",
-            "Max Output Tokens": "4096",
-            "Cost per Million Input Tokens": "1.00",
-            "Cost per Million Output Tokens": "5.00"
-          },
-          "expected_result": "Form filled"
+          "action": "click",
+          "target": "Row for 'test-gpt-4o' model",
+          "input_data": {},
+          "expected_result": "Edit form opens",
+          "screenshot": false
         },
         {
           "step_number": 7,
-          "action": "click",
-          "target": "Save button",
-          "input_data": {},
-          "expected_result": "Model created"
+          "action": "fill_form",
+          "target": "Active toggle",
+          "input_data": {"isActive": "false"},
+          "expected_result": "Toggle switched off",
+          "screenshot": false
         },
         {
           "step_number": 8,
           "action": "click",
-          "target": "Advanced tab",
-          "input_data": {},
-          "expected_result": "Advanced tab visible"
-        },
-        {
-          "step_number": 9,
-          "action": "fill_form",
-          "target": "Fallback Model dropdown",
-          "input_data": {"Fallback Model": "claude-opus-4-6"},
-          "expected_result": "Fallback model set to claude-opus-4-6"
-        },
-        {
-          "step_number": 10,
-          "action": "click",
           "target": "Save button",
           "input_data": {},
-          "expected_result": "Model updated with fallback"
-        },
-        {
-          "step_number": 11,
-          "action": "navigate",
-          "target": "/ai/admin/models",
-          "input_data": {},
-          "expected_result": "Back to list"
-        },
-        {
-          "step_number": 12,
-          "action": "click",
-          "target": "claude-opus-4-6 row",
-          "input_data": {},
-          "expected_result": "Edit form for claude-opus-4-6"
-        },
-        {
-          "step_number": 13,
-          "action": "click",
-          "target": "Advanced tab",
-          "input_data": {},
-          "expected_result": "Advanced tab visible"
-        },
-        {
-          "step_number": 14,
-          "action": "fill_form",
-          "target": "Fallback Model dropdown",
-          "input_data": {"Fallback Model": "fallback-test-a"},
-          "expected_result": "Attempting to create circular fallback chain: opus -> fallback-test-a -> opus"
-        },
-        {
-          "step_number": 15,
-          "action": "click",
-          "target": "Save button",
-          "input_data": {},
-          "expected_result": "422 error about circular fallback chain",
+          "expected_result": "422 error: 'Cannot deactivate the default model. Assign a new default first.'",
           "screenshot": true,
-          "visual_check": "Error toast or inline error about circular fallback detected"
+          "visual_check": "Error toast or inline error message about not being able to deactivate the default model"
         }
       ]
     },
     {
-      "id": "j4-prompt-crud-versioning",
-      "name": "Prompt Template CRUD with Versioning",
-      "description": "Create a prompt, edit it (triggering version creation), view version history, and restore an old version (E5c-3 AC-4, AC-5, AC-6, AC-7)",
+      "id": "j4-model-search-and-delete",
+      "name": "Model List Search and Delete Guard",
+      "description": "Test model list search functionality and verify deletion guard: a model referenced by agents cannot be deleted.",
+      "priority": "high",
+      "related_stories": ["E5c-3"],
+      "related_acs": ["E5c-3:AC-2", "E5c-3:AC-3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/admin/models",
+          "input_data": {},
+          "expected_result": "Model list loads with all models",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Search input",
+          "input_data": {"search": "opus"},
+          "expected_result": "List filters to show only claude-opus-4-6",
+          "screenshot": true,
+          "visual_check": "Search input populated with 'opus', list shows only matching model(s)"
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Search input",
+          "input_data": {"search": ""},
+          "expected_result": "List resets to show all models",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Overflow menu on claude-opus-4-6 row (model referenced by agents)",
+          "input_data": {},
+          "expected_result": "Dropdown menu with Edit, Toggle Active, Delete options",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Delete action",
+          "input_data": {},
+          "expected_result": "Confirmation dialog appears",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Confirm delete button",
+          "input_data": {},
+          "expected_result": "422 error: 'This model is referenced by N agents. Remove agent references first.'",
+          "screenshot": true,
+          "visual_check": "Error toast explaining model cannot be deleted because agents reference it"
+        }
+      ]
+    },
+    {
+      "id": "j5-create-prompt-template",
+      "name": "Create a New Prompt Template",
+      "description": "Test the full prompt creation flow: navigate to Prompt Templates list, create a new prompt with system prompt and user template, verify initial version is created.",
       "priority": "critical",
       "related_stories": ["E5c-3"],
+      "related_acs": ["E5c-3:AC-4", "E5c-3:AC-5", "E5c-3:AC-6"],
       "steps": [
         {
           "step_number": 1,
@@ -377,209 +381,241 @@
           "input_data": {},
           "expected_result": "Prompt Templates list loads",
           "screenshot": true,
-          "visual_check": "T1 Entity List with 'Prompt Templates' heading, columns: name (mono), category (coloured badge), active version (mono 'vN'), variable count, active status, last updated. At least 6 seeded prompts visible with category badges (purple, blue, amber, green, etc.)"
+          "visual_check": "T1 Entity List showing seeded prompts with columns: name (mono), category (coloured badge), active version (mono 'v1'), variable count, status (StatusBadge), last updated"
         },
         {
           "step_number": 2,
-          "action": "click",
-          "target": "Add Prompt button / Create New",
+          "action": "verify_element",
+          "target": "Prompt list rows",
           "input_data": {},
-          "expected_result": "Navigates to /ai/admin/prompts/new"
+          "expected_result": "At least 6 seeded prompts visible with different category badges (purple, blue, amber, green, etc.)",
+          "screenshot": false
         },
         {
           "step_number": 3,
-          "action": "verify_element",
-          "target": "Prompt editor page",
+          "action": "click",
+          "target": "Add Prompt / Create New button",
           "input_data": {},
-          "expected_result": "Editor loads with metadata section, System Prompt editor, User Template editor, Parameters editor. No version sidebar (create mode)",
+          "expected_result": "Prompt editor page opens in create mode",
           "screenshot": true,
-          "visual_check": "Prompt editor page with 'New Prompt Template' heading, fields for Name, Description, Category dropdown, Active toggle. Two code editor areas: 'System Prompt' and 'User Template' with mono font. Concept D styling"
+          "visual_check": "Prompt editor with 'New Prompt Template' heading, metadata section (name, description, category, active toggle), system prompt editor, user template editor, and action bar (Save, Cancel)"
         },
         {
           "step_number": 4,
           "action": "fill_form",
-          "target": "Prompt metadata + content",
+          "target": "Prompt metadata section",
           "input_data": {
-            "Name": "test-e2e-prompt",
-            "Description": "E2E test prompt for automated testing",
-            "Category": "analysis",
-            "System Prompt": "You are an AI assistant helping with {{company.name}} data analysis. Today is {{today}}.",
-            "User Template": "Analyse the following data for {{currentUser.name}}: {{query_result}}"
+            "name": "test-invoice-reminder",
+            "description": "Generates personalised invoice reminder emails",
+            "category": "automation"
           },
-          "expected_result": "All fields populated"
+          "expected_result": "Metadata fields populated",
+          "screenshot": false
         },
         {
           "step_number": 5,
-          "action": "click",
-          "target": "Save button",
-          "input_data": {},
-          "expected_result": "Prompt created with version 1",
-          "screenshot": true,
-          "visual_check": "Success toast visible. Page shows the saved prompt. Version sidebar now visible showing 'v1' as the only version with changeReason 'Initial version'. Active version badge shows 'v1'"
+          "action": "fill_form",
+          "target": "System prompt editor",
+          "input_data": {
+            "systemPrompt": "You are an accounts receivable specialist for {{company.name}}. Today is {{today}}. Generate a professional reminder email for overdue invoices."
+          },
+          "expected_result": "System prompt text entered in mono font textarea",
+          "screenshot": false
         },
         {
           "step_number": 6,
           "action": "fill_form",
-          "target": "System Prompt editor",
+          "target": "User template editor",
           "input_data": {
-            "System Prompt": "You are an AI assistant helping with {{company.name}} data analysis. Today is {{today}}. You specialise in financial insights."
+            "userTemplate": "Draft a reminder for invoice {{customer.name}} overdue by {{overdueCount}} days. Use a {{reminderTone}} tone."
           },
-          "expected_result": "System prompt content updated"
+          "expected_result": "User template text entered",
+          "screenshot": false
         },
         {
           "step_number": 7,
           "action": "click",
           "target": "Save button",
           "input_data": {},
-          "expected_result": "Change reason modal appears",
+          "expected_result": "Prompt created successfully with version 1",
           "screenshot": true,
-          "visual_check": "Dialog/modal with title 'Save Prompt Changes', textarea for change reason, Cancel and Save buttons"
+          "visual_check": "Success toast, navigated to prompt editor page with saved data, version sidebar showing 'v1' with change reason 'Initial version'"
         },
         {
           "step_number": 8,
+          "action": "navigate",
+          "target": "/ai/admin/prompts",
+          "input_data": {},
+          "expected_result": "Prompt list now includes the new prompt",
+          "screenshot": true,
+          "visual_check": "Prompt list showing 'test-invoice-reminder' row with 'automation' orange category badge, version 'v1'"
+        }
+      ]
+    },
+    {
+      "id": "j6-prompt-versioning-and-diff",
+      "name": "Prompt Versioning — Edit, Diff, and Restore",
+      "description": "Test prompt version management: edit a prompt (requires changeReason), view version history with diff, and restore a previous version.",
+      "priority": "critical",
+      "related_stories": ["E5c-3"],
+      "related_acs": ["E5c-3:AC-5", "E5c-3:AC-6", "E5c-3:AC-7"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/admin/prompts",
+          "input_data": {},
+          "expected_result": "Prompt list loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Row for 'test-invoice-reminder' prompt",
+          "input_data": {},
+          "expected_result": "Prompt editor page opens with saved data",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
           "action": "fill_form",
-          "target": "Change reason textarea in modal",
-          "input_data": {"Change Reason": "Added financial specialisation to system prompt"},
-          "expected_result": "Change reason entered"
+          "target": "System prompt editor",
+          "input_data": {
+            "systemPrompt": "You are a senior accounts receivable specialist for {{company.name}}. Today is {{today}}. Your role is to generate professional but firm reminder emails for overdue invoices. Always include the exact amount owed."
+          },
+          "expected_result": "System prompt text updated",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Save button",
+          "input_data": {},
+          "expected_result": "Change reason modal appears",
+          "screenshot": true,
+          "visual_check": "Modal dialog with title 'Save Prompt Changes', textarea for change reason (required), Cancel and Save buttons"
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Change reason textarea",
+          "input_data": {"changeReason": "Added seniority and instruction to include exact amount owed"},
+          "expected_result": "Change reason entered",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Save button in change reason modal",
+          "input_data": {},
+          "expected_result": "Version 2 created, version sidebar updated",
+          "screenshot": true,
+          "visual_check": "Success toast, version sidebar now shows v2 (active, with purple left border) and v1 below it, change reason visible on v2"
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Version v1 in the version sidebar",
+          "input_data": {},
+          "expected_result": "Diff view shown between v1 and current active version v2",
+          "screenshot": true,
+          "visual_check": "Diff view with additions in green background (+) and deletions in red background (-), showing the system prompt changes between v1 and v2"
+        },
+        {
+          "step_number": 8,
+          "action": "verify_element",
+          "target": "Restore This Version button",
+          "input_data": {},
+          "expected_result": "'Restore This Version' button visible for selected old version v1",
+          "screenshot": false
         },
         {
           "step_number": 9,
           "action": "click",
-          "target": "Save button in change reason modal",
-          "input_data": {},
-          "expected_result": "Version 2 created",
-          "screenshot": true,
-          "visual_check": "Success toast. Version sidebar now shows 'v2' (active, with purple left border) and 'v1'. Active version badge shows 'v2'. Change reason 'Added financial specialisation...' visible on v2 entry"
-        },
-        {
-          "step_number": 10,
-          "action": "click",
-          "target": "Version v1 in version history sidebar",
-          "input_data": {},
-          "expected_result": "Diff view shown between v1 and v2",
-          "screenshot": true,
-          "visual_check": "Diff view visible showing additions in green background and deletions in red background with +/- prefix symbols. The added 'You specialise in financial insights.' line highlighted in green"
-        },
-        {
-          "step_number": 11,
-          "action": "click",
           "target": "Restore This Version button",
           "input_data": {},
-          "expected_result": "Version restored — v3 created as a copy of v1's content",
+          "expected_result": "Version 3 created with v1 content, change reason auto-populated as 'Restored from version 1'",
           "screenshot": true,
-          "visual_check": "Success toast 'Version restored. Now active: v3'. Version sidebar shows v3 (active), v2, v1. Change reason on v3 shows 'Restored from version 1'"
-        },
-        {
-          "step_number": 12,
-          "action": "navigate",
-          "target": "/ai/admin/prompts",
-          "input_data": {},
-          "expected_result": "List page shows the prompt with active version v3"
-        },
-        {
-          "step_number": 13,
-          "action": "verify_text",
-          "target": "table body",
-          "input_data": {"text": "test-e2e-prompt"},
-          "expected_result": "Prompt visible with 'v3' in active version column"
+          "visual_check": "Success toast 'Version restored. Now active: v3', version sidebar now shows v3 (active) with change reason 'Restored from version 1', v2, and v1"
         }
       ]
     },
     {
-      "id": "j5-prompt-variable-autocomplete",
-      "name": "Prompt Editor Variable Autocomplete",
-      "description": "Test the {{ variable autocomplete feature in the prompt editor (E5c-3 AC-5)",
+      "id": "j7-prompt-variable-autocomplete-and-test",
+      "name": "Prompt Variable Autocomplete and Test Rendering",
+      "description": "Test the {{ variable autocomplete in the prompt editor and the 'Test Prompt' rendering feature.",
       "priority": "high",
       "related_stories": ["E5c-3"],
+      "related_acs": ["E5c-3:AC-5"],
       "steps": [
         {
           "step_number": 1,
           "action": "navigate",
-          "target": "/ai/admin/prompts/new",
+          "target": "/ai/admin/prompts",
           "input_data": {},
-          "expected_result": "New prompt editor loads"
+          "expected_result": "Prompt list loads",
+          "screenshot": false
         },
         {
           "step_number": 2,
-          "action": "fill_form",
-          "target": "Name field",
-          "input_data": {"Name": "autocomplete-test"},
-          "expected_result": "Name filled"
+          "action": "click",
+          "target": "Row for 'test-invoice-reminder' prompt",
+          "input_data": {},
+          "expected_result": "Prompt editor page opens",
+          "screenshot": false
         },
         {
           "step_number": 3,
           "action": "click",
-          "target": "System Prompt textarea",
+          "target": "System prompt editor textarea",
           "input_data": {},
-          "expected_result": "Cursor in system prompt editor"
+          "expected_result": "Textarea focused for editing",
+          "screenshot": false
         },
         {
           "step_number": 4,
           "action": "fill_form",
-          "target": "System Prompt textarea",
-          "input_data": {"System Prompt": "Hello {{"},
-          "expected_result": "Autocomplete dropdown appears",
+          "target": "System prompt editor — type '{{' at end",
+          "input_data": {"appendText": "{{"},
+          "expected_result": "Variable autocomplete dropdown appears",
           "screenshot": true,
-          "visual_check": "Autocomplete popover visible below cursor showing variables grouped by source type: System (today, currentUser.name, currentUser.role, company.name, company.baseCurrency), DB Fields, Page Fields, Custom. Each variable shows name and source type badge"
+          "visual_check": "Autocomplete dropdown popover showing variables grouped by source type: System (today, currentUser.name, company.name, company.baseCurrency), DB Fields, Page Fields, Custom"
         },
         {
           "step_number": 5,
           "action": "click",
-          "target": "company.name in autocomplete dropdown",
+          "target": "Variable 'company.baseCurrency' in autocomplete dropdown",
           "input_data": {},
-          "expected_result": "Variable inserted: 'Hello {{company.name}}'",
+          "expected_result": "Variable inserted at cursor position as {{company.baseCurrency}}",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Test Prompt button in action bar",
+          "input_data": {},
+          "expected_result": "Test Prompt panel opens (Sheet slide-in from right or expandable section)",
           "screenshot": true,
-          "visual_check": "System prompt textarea shows 'Hello {{company.name}}' with the {{company.name}} portion potentially highlighted with purple background tint"
-        }
-      ]
-    },
-    {
-      "id": "j6-prompt-test-render",
-      "name": "Prompt Test Render Panel",
-      "description": "Test the 'Test Prompt' feature that renders a prompt with sample variables (E5c-3 AC-5e)",
-      "priority": "high",
-      "related_stories": ["E5c-3"],
-      "steps": [
-        {
-          "step_number": 1,
-          "action": "navigate",
-          "target": "/ai/admin/prompts",
-          "input_data": {},
-          "expected_result": "Prompt list loads"
+          "visual_check": "Test panel showing input fields for each bound variable (pre-populated from prompt's variables), 'Render' button, output area empty"
         },
         {
-          "step_number": 2,
+          "step_number": 7,
           "action": "click",
-          "target": "First prompt row (any seeded prompt with variables)",
-          "input_data": {},
-          "expected_result": "Prompt editor loads for the selected prompt"
-        },
-        {
-          "step_number": 3,
-          "action": "click",
-          "target": "Test Prompt button (beaker icon)",
-          "input_data": {},
-          "expected_result": "Test panel opens (slide-in sheet or expandable section)",
-          "screenshot": true,
-          "visual_check": "Test Prompt panel visible with variable input fields auto-populated from the prompt's bound variables. Each field shows variable name and source type badge. 'Render' button visible"
-        },
-        {
-          "step_number": 4,
-          "action": "click",
-          "target": "Render button in test panel",
+          "target": "Render button in Test Prompt panel",
           "input_data": {},
           "expected_result": "Rendered prompt output displayed",
           "screenshot": true,
-          "visual_check": "Output section shows rendered system prompt and user template in mono font cards with green left border. Variables replaced with resolved values. If unresolved variables exist, amber warning showing count"
+          "visual_check": "Rendered system prompt and user template in mono font cards with green left border, variables replaced with sample/default values. If unresolved count > 0, amber warning shown"
         }
       ]
     },
     {
-      "id": "j7-agent-crud-lifecycle",
-      "name": "Agent Configuration CRUD Lifecycle",
-      "description": "View agent list, create a new agent, edit with tabs (tools, guardrails, triggers), and verify business rules (E5c-4 AC-1, AC-2)",
+      "id": "j8-create-ai-agent",
+      "name": "Create a New AI Agent",
+      "description": "Test the agent creation flow: navigate to Agent Configuration, click Add Agent, fill main fields, configure tools and guardrails in tabs, save.",
       "priority": "critical",
       "related_stories": ["E5c-4"],
+      "related_acs": ["E5c-4:AC-1", "E5c-4:AC-2"],
       "steps": [
         {
           "step_number": 1,
@@ -588,73 +624,80 @@
           "input_data": {},
           "expected_result": "Agent Configuration list page loads",
           "screenshot": true,
-          "visual_check": "T1 Entity List with 'Agent Configuration' heading. Columns: name (mono, bold), display name, assigned model (or 'Auto-routed'), assigned prompt (mono), tool count (mono), routing tags (purple badges), max turns (mono), active status. At least 10 seeded agents visible"
+          "visual_check": "T1 Entity List showing seeded agents with columns: name (mono), display name, assigned model, assigned prompt (mono), tool count (mono), routing tags (purple badges), max turns (mono), active status (StatusBadge)"
         },
         {
           "step_number": 2,
-          "action": "click",
-          "target": "Add Agent button",
+          "action": "verify_element",
+          "target": "Agent list rows",
           "input_data": {},
-          "expected_result": "Agent form page loads at /ai/admin/agents/new"
+          "expected_result": "At least 10 seeded agents visible with correct column data",
+          "screenshot": false
         },
         {
           "step_number": 3,
-          "action": "verify_element",
-          "target": "Agent form tabs",
+          "action": "click",
+          "target": "Add Agent button",
           "input_data": {},
-          "expected_result": "Form has tabs: Main, Tools, Guardrails, Triggers",
+          "expected_result": "Agent form page opens in create mode with tabs (Main, Tools, Guardrails, Triggers)",
           "screenshot": true,
-          "visual_check": "Agent form with tab navigation (Main/Tools/Guardrails/Triggers). Main tab active showing: Name, Display Name, Description, Model dropdown, Prompt dropdown, Routing Tags, Max Turns slider/input, Active toggle"
+          "visual_check": "Agent form with tabs layout, Main tab active showing name, display name, description, model dropdown, prompt dropdown, routing tags, max turns, active toggle"
         },
         {
           "step_number": 4,
           "action": "fill_form",
-          "target": "Agent form - Main tab",
+          "target": "Agent form — Main tab",
           "input_data": {
-            "Name": "test-e2e-agent",
-            "Display Name": "E2E Test Agent",
-            "Description": "Agent created during E2E testing",
-            "Model": "claude-sonnet-4-6",
-            "Prompt": "record-creation-prompt",
-            "Routing Tags": ["standard"],
-            "Max Turns": "15"
+            "name": "test-ar-collector",
+            "displayName": "AR Collection Agent",
+            "description": "Handles accounts receivable collection workflows",
+            "model": "claude-sonnet-4-6",
+            "prompt": "test-invoice-reminder",
+            "routingTags": ["standard"],
+            "maxTurns": "15"
           },
-          "expected_result": "Form populated with model and prompt dropdowns selected"
+          "expected_result": "Main tab fields populated, model and prompt dropdowns show selected values",
+          "screenshot": false
         },
         {
           "step_number": 5,
           "action": "click",
-          "target": "Tools tab",
+          "target": "Guardrails tab",
           "input_data": {},
-          "expected_result": "Tools tab shows JSON editor for tools array"
+          "expected_result": "Guardrails tab content shows structured form",
+          "screenshot": false
         },
         {
           "step_number": 6,
           "action": "fill_form",
-          "target": "Tools JSON editor",
-          "input_data": {"Tools": "[\"query_invoices\", \"create_draft\"]"},
-          "expected_result": "JSON entered in tools editor"
+          "target": "Agent form — Guardrails tab",
+          "input_data": {
+            "canRead": ["customer", "customerInvoice"],
+            "canWrite": ["customerInvoice"],
+            "requiresApproval": "true",
+            "dataScope": "module"
+          },
+          "expected_result": "Guardrails configured with tag inputs for entity names",
+          "screenshot": true,
+          "visual_check": "Guardrails tab with canRead tags, canWrite tags, requiresApproval switch ON, dataScope dropdown set to 'module'"
         },
         {
           "step_number": 7,
           "action": "click",
-          "target": "Guardrails tab",
+          "target": "Tools tab",
           "input_data": {},
-          "expected_result": "Guardrails tab shows structured form",
-          "screenshot": true,
-          "visual_check": "Guardrails tab with structured fields: canRead (tag input), canWrite (tag input), requiresApproval toggle, blockedOperations (tag input), dataScope dropdown"
+          "expected_result": "Tools tab shows JSON editor",
+          "screenshot": false
         },
         {
           "step_number": 8,
           "action": "fill_form",
-          "target": "Guardrails form",
+          "target": "Agent form — Tools tab",
           "input_data": {
-            "canRead": ["invoice", "customer"],
-            "canWrite": ["invoice"],
-            "requiresApproval": "true",
-            "dataScope": "module"
+            "tools": "[\"query_overdue_invoices\", \"send_reminder_email\", \"create_follow_up_task\"]"
           },
-          "expected_result": "Guardrails configured with tags and toggles"
+          "expected_result": "Tools JSON entered and validates",
+          "screenshot": false
         },
         {
           "step_number": 9,
@@ -663,110 +706,147 @@
           "input_data": {},
           "expected_result": "Agent created successfully",
           "screenshot": true,
-          "visual_check": "Success toast 'Agent created'. Page shows saved agent detail. Breadcrumbs: 'AI Administration > Agent Configuration > E2E Test Agent'"
-        },
-        {
-          "step_number": 10,
-          "action": "navigate",
-          "target": "/ai/admin/agents",
-          "input_data": {},
-          "expected_result": "Agent list shows the new agent"
-        },
-        {
-          "step_number": 11,
-          "action": "verify_text",
-          "target": "table body",
-          "input_data": {"text": "test-e2e-agent"},
-          "expected_result": "New agent visible in list with correct columns"
+          "visual_check": "Success toast, navigated to agent detail page showing all saved values including tool count '3' and guardrails configuration"
         }
       ]
     },
     {
-      "id": "j8-skill-pack-manager",
-      "name": "Skill Pack Manager — Grouped View & Activation Toggle",
-      "description": "View skills grouped by module in accordion, toggle skill activation, search skills (E5c-4 AC-3, AC-6)",
-      "priority": "critical",
+      "id": "j9-agent-edit-and-list",
+      "name": "Agent List Search and Edit",
+      "description": "Test agent list search, row click to edit, and business rule: cannot delete agent referenced by automation steps.",
+      "priority": "high",
       "related_stories": ["E5c-4"],
+      "related_acs": ["E5c-4:AC-1", "E5c-4:AC-2"],
       "steps": [
         {
           "step_number": 1,
           "action": "navigate",
-          "target": "/ai/admin/skills",
+          "target": "/ai/admin/agents",
           "input_data": {},
-          "expected_result": "Skill Pack Manager loads with grouped accordion view",
-          "screenshot": true,
-          "visual_check": "Skill Pack Manager page with skills grouped by moduleKey in accordion sections. First module expanded. Each skill shown as a card with: name (mono, bold), display name, description, trigger phrases (blue pills), negative triggers (red pills), orchestration pattern badge (purple), priority (mono), active toggle. Search bar visible at top. 'Test Trigger' button visible"
+          "expected_result": "Agent list loads with all agents including the newly created one",
+          "screenshot": false
         },
         {
           "step_number": 2,
-          "action": "verify_element",
-          "target": "Module accordion sections",
-          "input_data": {},
-          "expected_result": "Multiple module sections visible (ar, ap, finance, sales, etc.) as collapsible accordions with module key heading badges"
+          "action": "fill_form",
+          "target": "Search input",
+          "input_data": {"search": "ar-collector"},
+          "expected_result": "List filters to show test-ar-collector agent",
+          "screenshot": true,
+          "visual_check": "Filtered list showing 'test-ar-collector' with 'AR Collection Agent' display name, 'claude-sonnet-4-6' model, '3' tool count"
         },
         {
           "step_number": 3,
           "action": "click",
-          "target": "Second module accordion header",
+          "target": "Row for 'test-ar-collector' agent",
           "input_data": {},
-          "expected_result": "Second module section expands showing its skills"
+          "expected_result": "Agent edit form opens with pre-populated data",
+          "screenshot": false
         },
         {
           "step_number": 4,
-          "action": "click",
-          "target": "Active toggle on any skill card",
-          "input_data": {},
-          "expected_result": "Skill deactivated — toggle switches off, toast 'Skill {name} deactivated'",
-          "screenshot": true,
-          "visual_check": "Toast notification visible confirming skill deactivation. Toggle switch in off position"
+          "action": "fill_form",
+          "target": "Display Name field",
+          "input_data": {"displayName": "AR Collection Specialist Agent"},
+          "expected_result": "Display name updated",
+          "screenshot": false
         },
         {
           "step_number": 5,
           "action": "click",
-          "target": "Same Active toggle (toggle back on)",
+          "target": "Save button",
           "input_data": {},
-          "expected_result": "Skill reactivated — toggle switches on, toast 'Skill {name} activated'"
-        },
-        {
-          "step_number": 6,
-          "action": "fill_form",
-          "target": "Search bar",
-          "input_data": {"Search": "overdue"},
-          "expected_result": "Skills filtered — only skills matching 'overdue' in name/description visible across all modules"
-        },
-        {
-          "step_number": 7,
-          "action": "verify_element",
-          "target": "Filtered skill results",
-          "input_data": {},
-          "expected_result": "Only skills with 'overdue' in their name or description are shown",
+          "expected_result": "Agent updated successfully",
           "screenshot": true,
-          "visual_check": "Filtered view showing only overdue-related skills. Non-matching modules may be hidden or empty"
+          "visual_check": "Success toast, heading now shows 'AR Collection Specialist Agent'"
         }
       ]
     },
     {
-      "id": "j9-skill-edit-and-test-trigger",
-      "name": "Skill Edit Form & Test Trigger Panel",
-      "description": "Edit a skill's details and test the L0>L1>L2 trigger routing simulation (E5c-4 AC-4, AC-5)",
-      "priority": "high",
+      "id": "j10-skill-pack-manager",
+      "name": "Skill Pack Manager — View, Search, and Toggle",
+      "description": "Test the Skill Pack Manager page: skills grouped by module in accordion sections, search across modules, and toggle skill activation.",
+      "priority": "critical",
       "related_stories": ["E5c-4"],
+      "related_acs": ["E5c-4:AC-3", "E5c-4:AC-6"],
       "steps": [
         {
           "step_number": 1,
           "action": "navigate",
           "target": "/ai/admin/skills",
           "input_data": {},
-          "expected_result": "Skill Pack Manager loads"
+          "expected_result": "Skill Pack Manager page loads with skills grouped by module",
+          "screenshot": true,
+          "visual_check": "Skills grouped in accordion sections by moduleKey (e.g., 'ar', 'finance', 'sales'), each skill showing as a card with: name (mono bold), display name, description, trigger phrases (blue pills), negative triggers (red pills), orchestration pattern badge, priority (mono), active toggle Switch"
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "First module accordion section",
+          "input_data": {},
+          "expected_result": "First module section expanded by default showing skill cards within it",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Search bar",
+          "input_data": {"search": "overdue"},
+          "expected_result": "Skills filtered across all modules to show only skills with 'overdue' in name or trigger phrases",
+          "screenshot": true,
+          "visual_check": "Search results showing relevant skills with 'overdue' highlighted or matched, filtered across module groups"
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "Search bar",
+          "input_data": {"search": ""},
+          "expected_result": "Search cleared, all skills visible again",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Active toggle Switch on any active skill",
+          "input_data": {},
+          "expected_result": "Skill toggled to inactive, toast: 'Skill {name} deactivated'",
+          "screenshot": true,
+          "visual_check": "Toggle switched off, toast notification confirming deactivation"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Active toggle Switch on the same skill (re-enable)",
+          "input_data": {},
+          "expected_result": "Skill toggled back to active, toast: 'Skill {name} activated'",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j11-edit-skill-and-test-trigger",
+      "name": "Edit Skill and Test Trigger Phrase Routing",
+      "description": "Test skill editing (trigger phrases, content) and the Test Trigger panel that simulates L0→L1→L2 routing.",
+      "priority": "high",
+      "related_stories": ["E5c-4"],
+      "related_acs": ["E5c-4:AC-4", "E5c-4:AC-5"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/admin/skills",
+          "input_data": {},
+          "expected_result": "Skill Pack Manager loads",
+          "screenshot": false
         },
         {
           "step_number": 2,
           "action": "click",
-          "target": "Any skill card (e.g., first skill in the AR module)",
+          "target": "Any skill card (e.g., first skill in the list)",
           "input_data": {},
-          "expected_result": "Skill edit form opens at /ai/admin/skills/{id}",
+          "expected_result": "Skill edit form opens with tabs (Main, Triggers, Content, Schema)",
           "screenshot": true,
-          "visual_check": "Skill form with tabs: Main, Triggers, Content, Schema. Main tab showing: name (mono), display name, description, category dropdown, module key dropdown, output type dropdown, priority input, active toggle"
+          "visual_check": "Skill form with tabs, Main tab showing name (mono), display name, description, category dropdown, module key, pack key, output type, priority, version (read-only), active toggle"
         },
         {
           "step_number": 3,
@@ -775,55 +855,76 @@
           "input_data": {},
           "expected_result": "Triggers tab shows trigger phrases (blue pills), negative triggers (red pills), context required (grey pills)",
           "screenshot": true,
-          "visual_check": "Triggers tab with tag inputs: trigger phrases shown as blue pill badges, negative triggers as red pill badges, context required as grey pill badges. Add/remove functionality on each"
+          "visual_check": "Triggers tab with tag inputs showing existing trigger phrases as blue pills with × remove buttons, negative triggers as red pills, context required as grey pills"
         },
         {
           "step_number": 4,
-          "action": "click",
-          "target": "Content tab",
-          "input_data": {},
-          "expected_result": "Content tab shows large mono font textarea with full skillContent (SKILL.md)"
+          "action": "fill_form",
+          "target": "Trigger phrases tag input — add new phrase",
+          "input_data": {"addTriggerPhrase": "check outstanding payments"},
+          "expected_result": "New trigger phrase added as blue pill tag",
+          "screenshot": false
         },
         {
           "step_number": 5,
-          "action": "navigate",
-          "target": "/ai/admin/skills",
+          "action": "click",
+          "target": "Content tab",
           "input_data": {},
-          "expected_result": "Back to Skill Pack Manager"
+          "expected_result": "Content tab shows large mono textarea with full skillContent",
+          "screenshot": true,
+          "visual_check": "Large textarea (min-height 400px) with mono font showing the SKILL.md instructions content"
         },
         {
           "step_number": 6,
           "action": "click",
-          "target": "Test Trigger button",
+          "target": "Save button",
           "input_data": {},
-          "expected_result": "Test Trigger panel opens (sheet slide-in from right)",
-          "screenshot": true,
-          "visual_check": "Test Trigger sheet visible with a text input for typing trigger phrases, and a results area below"
+          "expected_result": "Skill updated successfully",
+          "screenshot": false
         },
         {
           "step_number": 7,
-          "action": "fill_form",
-          "target": "Trigger phrase input",
-          "input_data": {"Phrase": "show me overdue invoices"},
-          "expected_result": "Phrase entered"
+          "action": "navigate",
+          "target": "/ai/admin/skills",
+          "input_data": {},
+          "expected_result": "Back to Skill Pack Manager",
+          "screenshot": false
         },
         {
           "step_number": 8,
           "action": "click",
-          "target": "Test / Run button in trigger panel",
+          "target": "Test Trigger button at top of page",
           "input_data": {},
-          "expected_result": "L0>L1>L2 routing results displayed",
+          "expected_result": "Test Trigger panel opens as a Sheet (slide-in from right)",
           "screenshot": true,
-          "visual_check": "Results showing: L0 matched module (e.g. 'ar') with confidence score, L1 matched skill name with confidence score, L2 required tools list and first 200 chars of skill content preview. Results appear within 3 seconds"
+          "visual_check": "Test Trigger panel/Sheet with text input for test phrase and empty results area"
+        },
+        {
+          "step_number": 9,
+          "action": "fill_form",
+          "target": "Test Trigger input field",
+          "input_data": {"phrase": "show me overdue invoices"},
+          "expected_result": "Phrase entered",
+          "screenshot": false
+        },
+        {
+          "step_number": 10,
+          "action": "click",
+          "target": "Test / Submit button in Test Trigger panel",
+          "input_data": {},
+          "expected_result": "L0→L1→L2 routing simulation results displayed",
+          "screenshot": true,
+          "visual_check": "Results showing: L0 matched module (e.g. 'ar') with confidence score, L1 matched skill with confidence score, L2 skill's requiredTools list and first 200 chars of skillContent. Response within 3 seconds."
         }
       ]
     },
     {
-      "id": "j10-automation-create-scheduled",
-      "name": "Create Scheduled Automation with Steps",
-      "description": "Create a new scheduled automation with multiple steps, cron configuration, and variable bindings (E5c-5 AC-1, AC-2, AC-3, AC-4, AC-5, AC-6)",
+      "id": "j12-create-scheduled-automation",
+      "name": "Create a Scheduled Automation with Steps",
+      "description": "Test the full automation creation flow: configure trigger, add multiple steps with agent assignment and goals, set schedule via cron builder, configure budget, and save.",
       "priority": "critical",
       "related_stories": ["E5c-5"],
+      "related_acs": ["E5c-5:AC-1", "E5c-5:AC-2", "E5c-5:AC-3", "E5c-5:AC-4"],
       "steps": [
         {
           "step_number": 1,
@@ -832,179 +933,238 @@
           "input_data": {},
           "expected_result": "Automation list page loads",
           "screenshot": true,
-          "visual_check": "T1 Entity List with 'Automations' heading. Columns: name (bold), trigger type badge (purple Scheduled/blue Event/amber Chain/grey Manual), schedule (human-readable cron), step count (mono), last run status (StatusBadge), last run time (relative), active toggle. At least 1 seeded automation visible. Empty state or data visible"
+          "visual_check": "T1 Entity List showing seeded automation 'Daily AR Aging Summary' with columns: name (bold), trigger type badge (purple 'Scheduled'), schedule (human-readable), step count (mono), last run status, last run time, active toggle"
         },
         {
           "step_number": 2,
           "action": "click",
           "target": "New Automation button",
           "input_data": {},
-          "expected_result": "Automation builder page loads at /ai/admin/automations/new",
+          "expected_result": "Automation builder page opens in create mode",
           "screenshot": true,
-          "visual_check": "Automation builder with sections: Header (name, description), Trigger (radio group: Scheduled/Event/Manual), Steps (empty with 'Add Step' button), Chain config, Notification config, Budget config. Concept D styling"
+          "visual_check": "Automation builder with sections: Basic Config (name, description), Trigger Config (radio group: Scheduled/Event/Manual), Steps section (empty), Budget section. Action bar with Save, Cancel."
         },
         {
           "step_number": 3,
           "action": "fill_form",
           "target": "Basic config section",
           "input_data": {
-            "Name": "E2E Weekly Summary",
-            "Description": "Weekly summary automation created during E2E testing"
+            "name": "Weekly PO Review",
+            "description": "Review open purchase orders every Monday morning and flag overdue deliveries"
           },
-          "expected_result": "Name and description filled"
+          "expected_result": "Name and description populated",
+          "screenshot": false
         },
         {
           "step_number": 4,
           "action": "click",
           "target": "Scheduled radio button in trigger type",
           "input_data": {},
-          "expected_result": "CronBuilder component appears with schedule fields",
+          "expected_result": "Cron builder component appears with schedule fields and timezone selector",
           "screenshot": true,
-          "visual_check": "CronBuilder visible with fields: minute, hour, day of month, month, day of week checkboxes. Preset buttons: 'Every minute', 'Hourly', 'Daily at midnight', 'Weekdays at 9 AM', 'Weekly on Monday'. Timezone selector with default 'Europe/London'. Human-readable preview below"
+          "visual_check": "CronBuilder component with fields (minute, hour, day-of-month, month, day-of-week), preset buttons ('Weekdays at 9 AM', etc.), human-readable preview, timezone dropdown defaulting to Europe/London"
         },
         {
           "step_number": 5,
           "action": "click",
-          "target": "Weekdays at 9 AM preset button",
+          "target": "Preset button 'Weekly on Monday'",
           "input_data": {},
-          "expected_result": "Cron fields populated with 0 9 * * 1-5",
+          "expected_result": "Cron fields update to 0 9 * * 1, preview shows 'At 9:00 AM, on Monday'",
           "screenshot": true,
-          "visual_check": "Cron fields show: minute=0, hour=9, day-of-month=*, month=*, day-of-week=Mon-Fri checked. Human-readable preview shows 'At 9:00 AM, Monday through Friday'. Raw cron input shows '0 9 * * 1-5'"
+          "visual_check": "Cron fields showing 0/9/*/*/1, human-readable preview 'At 9:00 AM, on Monday', timezone 'Europe/London'"
         },
         {
           "step_number": 6,
           "action": "click",
-          "target": "Add Step button",
+          "target": "Add Step button in steps section",
           "input_data": {},
-          "expected_result": "First step card appears with step number 1",
+          "expected_result": "First step card appears with agent dropdown, goal textarea, and I/O config panels",
           "screenshot": true,
-          "visual_check": "Step card visible with: step number circle badge '1', agent dropdown (empty), goal textarea (empty), drag handle on left, delete button on right. Vertical connector line from step to 'Add Step' below"
+          "visual_check": "Step 1 card with: step number circle badge '1', agent selection dropdown, goal textarea, collapsible input/output config, delete button. Vertical connector line below."
         },
         {
           "step_number": 7,
           "action": "fill_form",
           "target": "Step 1 fields",
           "input_data": {
-            "Agent": "general-analyst",
-            "Goal": "Analyse all transactions for {{company.name}} this week. Summarise key metrics including revenue, expenses, and anomalies."
+            "agent": "test-ar-collector",
+            "goal": "Review all open purchase orders. Flag any with delivery dates more than 7 days overdue. For each flagged PO, assess risk level.",
+            "maxTurns": "10"
           },
-          "expected_result": "Step 1 configured with agent selected from dropdown and goal text entered"
+          "expected_result": "Step 1 configured with agent and goal",
+          "screenshot": false
         },
         {
           "step_number": 8,
           "action": "click",
           "target": "Add Step button",
           "input_data": {},
-          "expected_result": "Second step card appears with step number 2"
+          "expected_result": "Step 2 card appears below step 1 with connector line between them",
+          "screenshot": true,
+          "visual_check": "Two step cards connected by vertical line, Step 2 with circle badge '2', empty agent/goal fields, 'Use Previous Step Output' shortcut visible"
         },
         {
           "step_number": 9,
           "action": "fill_form",
           "target": "Step 2 fields",
           "input_data": {
-            "Agent": "communication-drafter",
-            "Goal": "Draft a weekly summary email based on the analysis results."
+            "agent": "test-ar-collector",
+            "goal": "Summarise the flagged purchase orders and draft a report for the procurement manager."
           },
-          "expected_result": "Step 2 configured"
+          "expected_result": "Step 2 configured",
+          "screenshot": false
         },
         {
           "step_number": 10,
           "action": "click",
-          "target": "Step 2 input config expand (collapsible)",
+          "target": "'Use Previous Step Output' shortcut on Step 2",
           "input_data": {},
-          "expected_result": "Input configuration panel expands showing JSON editor and 'Use Previous Step Output' button"
+          "expected_result": "Step 2 input config auto-populated with PREVIOUS_STEP source referencing step 1",
+          "screenshot": false
         },
         {
           "step_number": 11,
-          "action": "click",
-          "target": "Use Previous Step Output shortcut button",
-          "input_data": {},
-          "expected_result": "inputConfig auto-populated with PREVIOUS_STEP source referencing step 1",
-          "screenshot": true,
-          "visual_check": "Input config JSON editor shows populated config referencing step 1 output. Two step cards visible connected by vertical line, both with agent selections and goal text"
-        },
-        {
-          "step_number": 12,
           "action": "fill_form",
           "target": "Budget section",
           "input_data": {
-            "Max Token Budget": "30000",
-            "Max Duration (seconds)": "180"
+            "maxTokenBudget": "75000",
+            "maxDuration": "600"
           },
-          "expected_result": "Budget configured"
+          "expected_result": "Budget fields set to 75,000 tokens and 600 seconds",
+          "screenshot": false
         },
         {
-          "step_number": 13,
+          "step_number": 12,
           "action": "click",
           "target": "Save button",
           "input_data": {},
           "expected_result": "Automation created successfully",
           "screenshot": true,
-          "visual_check": "Success toast 'Automation created'. Page navigates to edit page of the new automation. All configured data visible: name, scheduled trigger with cron preview, 2 steps with agents and goals, budget values"
-        },
-        {
-          "step_number": 14,
-          "action": "navigate",
-          "target": "/ai/admin/automations",
-          "input_data": {},
-          "expected_result": "Automation list shows the new automation with 'Scheduled' badge, '2' step count, and active toggle on"
+          "visual_check": "Success toast 'Automation created', navigated to automation edit page showing all saved configuration including 2 steps, schedule, and budget"
         }
       ]
     },
     {
-      "id": "j11-automation-chain-and-notification",
-      "name": "Automation Chain Configuration & Notifications",
-      "description": "Configure chain-to-next-automation and notification settings, verify circular chain rejection (E5c-5 AC-7, AC-8)",
+      "id": "j13-automation-step-reorder-and-variables",
+      "name": "Automation Step Reorder and Variable Autocomplete",
+      "description": "Test step drag-reorder in the automation builder and the {{ variable autocomplete in step goal text areas.",
       "priority": "high",
       "related_stories": ["E5c-5"],
+      "related_acs": ["E5c-5:AC-4", "E5c-5:AC-6"],
       "steps": [
         {
           "step_number": 1,
           "action": "navigate",
           "target": "/ai/admin/automations",
           "input_data": {},
-          "expected_result": "Automation list loads"
+          "expected_result": "Automation list loads",
+          "screenshot": false
         },
         {
           "step_number": 2,
           "action": "click",
-          "target": "E2E Weekly Summary row (created in j10)",
+          "target": "Row for 'Weekly PO Review' automation",
           "input_data": {},
-          "expected_result": "Automation builder/edit page loads"
+          "expected_result": "Automation builder opens with 2 configured steps",
+          "screenshot": true,
+          "visual_check": "Automation builder showing Step 1 and Step 2 cards with assigned agents, goals, and vertical connector line"
         },
         {
           "step_number": 3,
           "action": "click",
-          "target": "Chain to next automation toggle",
+          "target": "Add Step button",
           "input_data": {},
-          "expected_result": "Chain dropdown appears showing other active automations"
+          "expected_result": "Step 3 added at end",
+          "screenshot": false
         },
         {
           "step_number": 4,
-          "action": "fill_form",
-          "target": "Chain dropdown",
-          "input_data": {"Chain to": "Daily AR Aging Summary"},
-          "expected_result": "Chain target selected"
+          "action": "click",
+          "target": "Step 3 goal textarea — type '{{' to trigger autocomplete",
+          "input_data": {"appendText": "{{"},
+          "expected_result": "Variable autocomplete dropdown appears in step goal textarea",
+          "screenshot": true,
+          "visual_check": "Autocomplete dropdown grouped by source: System (today, currentUser.name, company.name), Previous Steps (step1.output.*, step2.output.*), Constants"
         },
         {
           "step_number": 5,
           "action": "click",
-          "target": "Notify on completion toggle",
+          "target": "Variable '{{step2.output.*}}' in autocomplete",
           "input_data": {},
-          "expected_result": "Notification config section appears",
+          "expected_result": "Variable reference inserted at cursor in goal text",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Delete button on Step 3",
+          "input_data": {},
+          "expected_result": "Step 3 removed, back to 2 steps with auto-updated numbering",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j14-automation-chain-and-notifications",
+      "name": "Automation Chain Configuration and Notifications",
+      "description": "Test automation chaining to another automation and notification configuration.",
+      "priority": "high",
+      "related_stories": ["E5c-5"],
+      "related_acs": ["E5c-5:AC-7", "E5c-5:AC-8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/admin/automations",
+          "input_data": {},
+          "expected_result": "Automation list loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Row for 'Weekly PO Review' automation",
+          "input_data": {},
+          "expected_result": "Automation builder opens",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Chain configuration toggle",
+          "input_data": {"chainToNextAutomation": "true"},
+          "expected_result": "Chain configuration expanded showing dropdown of other automations",
           "screenshot": true,
-          "visual_check": "Notification section showing: recipient input, channel checkboxes (In-App, Email), notify on success toggle, notify on failure toggle. Chain section shows selected target automation"
+          "visual_check": "Chain section expanded with dropdown showing other active automations (e.g. 'Daily AR Aging Summary'), current automation excluded from dropdown"
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "Chain target dropdown",
+          "input_data": {"chainNextId": "Daily AR Aging Summary"},
+          "expected_result": "Chain target selected",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Notification configuration toggle",
+          "input_data": {"notifyOnCompletion": "true"},
+          "expected_result": "Notification configuration expanded with recipient selection and channel options",
+          "screenshot": true,
+          "visual_check": "Notification section with recipient multi-select, channel checkboxes (In-App, Email), notify on success toggle (default true), notify on failure toggle (default true)"
         },
         {
           "step_number": 6,
           "action": "fill_form",
-          "target": "Notification config",
+          "target": "Notification config fields",
           "input_data": {
-            "Channels": ["In-App"],
-            "Notify on Success": "true",
-            "Notify on Failure": "true"
+            "channels": ["In-App", "Email"],
+            "notifyOnSuccess": "true",
+            "notifyOnFailure": "true"
           },
-          "expected_result": "Notification configured"
+          "expected_result": "Notification channels selected",
+          "screenshot": false
         },
         {
           "step_number": 7,
@@ -1013,382 +1173,649 @@
           "input_data": {},
           "expected_result": "Automation updated with chain and notification config",
           "screenshot": true,
-          "visual_check": "Success toast. Chain configuration visible. Notification configuration visible"
+          "visual_check": "Success toast, chain and notification configuration persisted in the form"
         }
       ]
     },
     {
-      "id": "j12-automation-run-now",
-      "name": "Automation Run Now & Real-Time Status",
-      "description": "Manually trigger an automation and observe the run appearing in the list (E5c-5 AC-9, E5c-6 AC-1)",
+      "id": "j15-run-automation-manually",
+      "name": "Run Automation Manually (Run Now)",
+      "description": "Test the 'Run Now' manual trigger from both the automation list page and the builder page.",
       "priority": "critical",
-      "related_stories": ["E5c-5", "E5c-6"],
+      "related_stories": ["E5c-5"],
+      "related_acs": ["E5c-5:AC-9"],
       "steps": [
         {
           "step_number": 1,
           "action": "navigate",
           "target": "/ai/admin/automations",
           "input_data": {},
-          "expected_result": "Automation list loads"
+          "expected_result": "Automation list loads",
+          "screenshot": false
         },
         {
           "step_number": 2,
           "action": "click",
-          "target": "Run Now button / action for the seeded 'Daily AR Aging Summary' automation",
+          "target": "Overflow menu / actions on 'Daily AR Aging Summary' row",
+          "input_data": {},
+          "expected_result": "Dropdown with Edit, Run Now, View Runs, Delete options",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Run Now action",
           "input_data": {},
           "expected_result": "Confirmation dialog appears",
           "screenshot": true,
-          "visual_check": "Confirmation dialog asking 'Run this automation now?' with Confirm and Cancel buttons"
+          "visual_check": "Confirmation dialog asking 'Run Daily AR Aging Summary now?' with Cancel and Confirm buttons"
         },
         {
-          "step_number": 3,
+          "step_number": 4,
           "action": "click",
           "target": "Confirm button in Run Now dialog",
           "input_data": {},
-          "expected_result": "Automation triggered — toast 'Automation started' with link to run detail",
+          "expected_result": "Automation execution triggered, toast shows 'Automation started' with link to run detail",
           "screenshot": true,
-          "visual_check": "Toast notification 'Automation started' with clickable link to view the run. Automation list refreshes — last run status may show 'Running' (amber) or 'Pending' (grey)"
-        },
-        {
-          "step_number": 4,
-          "action": "navigate",
-          "target": "/ai/admin/automations/runs",
-          "input_data": {},
-          "expected_result": "Automation Runs list page loads showing the new run",
-          "screenshot": true,
-          "visual_check": "Automation Runs list with the newly triggered run at top. Columns visible: automation name, trigger type badge, triggered by (showing manual user), started at, duration, status badge, total tokens (mono), total cost (mono)"
+          "visual_check": "Toast notification 'Automation started' with clickable link, automation list refreshed showing new run status (Running/Pending) on the row"
         },
         {
           "step_number": 5,
-          "action": "click",
-          "target": "The newly created run row",
+          "action": "verify_element",
+          "target": "Last run status on automation row",
           "input_data": {},
-          "expected_result": "Run detail page loads",
-          "screenshot": true,
-          "visual_check": "Run detail page with: run summary header (automation name, run ID in mono, status badge, triggered by, timestamps), metrics cards row (total tokens, total cost, steps completed/total, duration), step-by-step timeline with status indicators (green/red/amber/grey circles). Purple connector lines between steps"
+          "expected_result": "StatusBadge updated to show Running (amber) or Completed (green) or Pending",
+          "screenshot": false
         }
       ]
     },
     {
-      "id": "j13-automation-run-filters",
-      "name": "Automation Run History Filters",
-      "description": "Test run history list filtering by status, date range, and automation name (E5c-6 AC-1, AC-2)",
-      "priority": "high",
+      "id": "j16-automation-runs-list-and-filters",
+      "name": "Automation Runs List with Filters",
+      "description": "Test the Automation Runs list page with status filter, date range filter, automation name filter, pagination, and column data formatting.",
+      "priority": "critical",
       "related_stories": ["E5c-6"],
+      "related_acs": ["E5c-6:AC-1", "E5c-6:AC-2"],
       "steps": [
         {
           "step_number": 1,
           "action": "navigate",
           "target": "/ai/admin/automations/runs",
           "input_data": {},
-          "expected_result": "Automation Runs list loads with all runs"
+          "expected_result": "Automation Runs list page loads showing all runs across automations",
+          "screenshot": true,
+          "visual_check": "T1 Entity List with columns: automation name (bold), trigger type badge, triggered by, started at (formatted datetime), duration, status (StatusBadge), total tokens (mono with commas), total cost (mono £X.XXXX). Filter bar at top with status, date range, and automation filters."
         },
         {
           "step_number": 2,
           "action": "verify_element",
-          "target": "Filter bar",
+          "target": "Run list rows",
           "input_data": {},
-          "expected_result": "Filter controls visible: status multi-select, date range inputs (From/To), automation name dropdown, Clear Filters button",
-          "screenshot": true,
-          "visual_check": "Filter bar above the run list table with: status dropdown showing checkboxes for PENDING/RUNNING/COMPLETED/FAILED/CANCELLED, two date inputs, automation filter dropdown, Clear Filters button"
+          "expected_result": "At least one run visible (from the manual Run Now in j15), with correct column formatting",
+          "screenshot": false
         },
         {
           "step_number": 3,
           "action": "fill_form",
-          "target": "Status filter",
-          "input_data": {"Status": ["COMPLETED", "FAILED"]},
-          "expected_result": "List filters to show only COMPLETED and FAILED runs"
+          "target": "Status filter dropdown",
+          "input_data": {"status": ["COMPLETED"]},
+          "expected_result": "Run list filters to show only COMPLETED runs",
+          "screenshot": true,
+          "visual_check": "Run list filtered with only green 'Completed' status badges visible, filter chip showing 'COMPLETED'"
         },
         {
           "step_number": 4,
-          "action": "verify_element",
-          "target": "Filtered run list",
-          "input_data": {},
-          "expected_result": "Only runs with COMPLETED or FAILED status badges visible",
-          "screenshot": true,
-          "visual_check": "Filtered run list showing only green 'Completed' and red 'Failed' status badges. No 'Running', 'Pending', or 'Cancelled' rows"
+          "action": "fill_form",
+          "target": "Status filter dropdown — add FAILED",
+          "input_data": {"status": ["COMPLETED", "FAILED"]},
+          "expected_result": "Run list shows both COMPLETED and FAILED runs",
+          "screenshot": false
         },
         {
           "step_number": 5,
+          "action": "fill_form",
+          "target": "Date range filter",
+          "input_data": {
+            "dateFrom": "2026-03-01",
+            "dateTo": "2026-03-04"
+          },
+          "expected_result": "Run list scoped to date range",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
           "action": "click",
           "target": "Clear Filters button",
           "input_data": {},
-          "expected_result": "All filters reset, full run list visible"
-        },
-        {
-          "step_number": 6,
-          "action": "fill_form",
-          "target": "Automation name filter dropdown",
-          "input_data": {"Automation": "Daily AR Aging Summary"},
-          "expected_result": "List filters to runs for that automation only"
+          "expected_result": "All filters reset, full run list visible again",
+          "screenshot": false
         },
         {
           "step_number": 7,
-          "action": "verify_element",
-          "target": "Filtered results",
-          "input_data": {},
-          "expected_result": "All visible runs show 'Daily AR Aging Summary' in automation name column"
+          "action": "fill_form",
+          "target": "Automation name filter dropdown",
+          "input_data": {"automationFilter": "Daily AR Aging Summary"},
+          "expected_result": "Run list scoped to only runs from 'Daily AR Aging Summary'",
+          "screenshot": true,
+          "visual_check": "Run list showing only runs for 'Daily AR Aging Summary' automation, automation name column consistent"
         }
       ]
     },
     {
-      "id": "j14-run-detail-step-timeline",
-      "name": "Run Detail — Step Timeline & Expandable Details",
-      "description": "View run detail page with step-by-step timeline, expand steps to see input/output JSON, verify failed step UI (E5c-6 AC-3, AC-4)",
-      "priority": "high",
+      "id": "j17-run-detail-and-step-timeline",
+      "name": "Run Detail Page with Step Timeline",
+      "description": "Test the run detail page: run summary header, metrics cards, step-by-step timeline with expandable details, JSON viewer for step I/O.",
+      "priority": "critical",
       "related_stories": ["E5c-6"],
+      "related_acs": ["E5c-6:AC-3", "E5c-6:AC-4"],
       "steps": [
         {
           "step_number": 1,
           "action": "navigate",
           "target": "/ai/admin/automations/runs",
           "input_data": {},
-          "expected_result": "Run list loads"
+          "expected_result": "Automation Runs list loads",
+          "screenshot": false
         },
         {
           "step_number": 2,
           "action": "click",
-          "target": "Any run row (preferably a COMPLETED or FAILED run)",
+          "target": "First run row in the list",
           "input_data": {},
-          "expected_result": "Run detail page loads"
+          "expected_result": "Run detail page opens",
+          "screenshot": true,
+          "visual_check": "T2 Detail page with: run summary header (automation name link, run ID mono, large StatusBadge, triggered by, timestamps), metrics cards row (total tokens, total cost, steps progress, duration), step timeline section"
         },
         {
           "step_number": 3,
           "action": "verify_element",
-          "target": "Run summary header",
+          "target": "Metrics cards row",
           "input_data": {},
-          "expected_result": "Header shows: automation name (linked), run ID in mono, large status badge, triggered by, started/completed timestamps"
+          "expected_result": "Four metrics cards visible: Total Tokens (mono, input/output breakdown), Total Cost (£X.XXXX mono), Steps (completed/total), Duration",
+          "screenshot": false
         },
         {
           "step_number": 4,
           "action": "verify_element",
-          "target": "Metrics cards row",
+          "target": "Step timeline",
           "input_data": {},
-          "expected_result": "4 metrics cards visible: Total Tokens (with input/output breakdown), Total Cost, Steps (completed/total), Duration",
+          "expected_result": "Vertical timeline with purple connector line between steps, each step showing status indicator circle, step number, agent name, status badge, duration, token count",
           "screenshot": true,
-          "visual_check": "4 metrics cards in a row with large mono font numbers. Cards have 12px radius and subtle shadow. Token card shows input/output breakdown below. Steps card shows progress bar"
+          "visual_check": "Step timeline with coloured status circles (green=completed, red=failed, amber=running, grey=pending), purple connector line, step header showing 'Step N: AgentName' with metrics"
         },
         {
           "step_number": 5,
-          "action": "verify_element",
-          "target": "Step timeline",
+          "action": "click",
+          "target": "First step header in timeline (to expand)",
           "input_data": {},
-          "expected_result": "Vertical timeline visible with status indicators (coloured circles) per step, connected by purple line. Each step shows: step number, agent name, status badge, duration, token count"
+          "expected_result": "Step details expand showing goal, input data, output data, model, turns, token breakdown, timing",
+          "screenshot": true,
+          "visual_check": "Expanded step showing: goal text in subtle card, collapsible JSON viewers for input/output data (mono font), model ID (mono), turns count, 'Input: X / Output: Y' token breakdown, timing info"
         },
         {
           "step_number": 6,
-          "action": "click",
-          "target": "First step in the timeline (expand)",
+          "action": "verify_element",
+          "target": "Input JSON viewer",
           "input_data": {},
-          "expected_result": "Step details expand",
-          "screenshot": true,
-          "visual_check": "Expanded step showing: goal text in subtle background card, Input Data as collapsible JSON viewer (mono font, with copy button), Output Data as collapsible JSON viewer, model used (mono), turns count, token breakdown (input/output), timing details"
+          "expected_result": "Collapsible JSON viewer with formatted data, mono font, copy button, collapse/expand toggle",
+          "screenshot": false
         },
         {
           "step_number": 7,
           "action": "click",
-          "target": "Input Data collapse/expand toggle",
+          "target": "Copy button on JSON viewer",
           "input_data": {},
-          "expected_result": "JSON viewer expands/collapses showing formatted JSON with syntax highlighting"
+          "expected_result": "JSON content copied to clipboard (toast or visual feedback)",
+          "screenshot": false
         },
         {
           "step_number": 8,
-          "action": "click",
-          "target": "Copy button on JSON viewer",
+          "action": "verify_element",
+          "target": "Run metadata footer",
           "input_data": {},
-          "expected_result": "JSON copied to clipboard (toast or visual confirmation)"
-        },
-        {
-          "step_number": 9,
-          "action": "click",
-          "target": "First step (collapse)",
-          "input_data": {},
-          "expected_result": "Step details collapse back to summary view"
+          "expected_result": "Footer showing full run ID (mono, copyable), retryOfRunId if present, created at timestamp",
+          "screenshot": false
         }
       ]
     },
     {
-      "id": "j15-failed-run-retry",
-      "name": "Failed Run — View Error & Retry from Failed Step",
-      "description": "View a failed run's error details and retry from the failed step (E5c-6 AC-4, AC-5)",
+      "id": "j18-run-detail-failed-step-and-retry",
+      "name": "Failed Run — Error Display and Retry from Failed Step",
+      "description": "Test failed run detail: error banner, failed step with red accent, SKIPPED subsequent steps, and 'Retry from This Step' action.",
       "priority": "high",
       "related_stories": ["E5c-6"],
-      "preconditions": "Requires a FAILED automation run in the database. If none exists, this journey tests the UI structure only",
+      "related_acs": ["E5c-6:AC-4", "E5c-6:AC-5"],
       "steps": [
         {
           "step_number": 1,
           "action": "navigate",
           "target": "/ai/admin/automations/runs",
           "input_data": {},
-          "expected_result": "Run list loads"
+          "expected_result": "Automation Runs list loads",
+          "screenshot": false
         },
         {
           "step_number": 2,
           "action": "fill_form",
           "target": "Status filter",
-          "input_data": {"Status": ["FAILED"]},
-          "expected_result": "List filters to FAILED runs only"
+          "input_data": {"status": ["FAILED"]},
+          "expected_result": "List filters to show FAILED runs only",
+          "screenshot": false
         },
         {
           "step_number": 3,
           "action": "click",
-          "target": "First FAILED run row",
+          "target": "First FAILED run row (if available; otherwise skip to step 10)",
           "input_data": {},
-          "expected_result": "Run detail page loads for the failed run",
+          "expected_result": "Failed run detail page opens",
           "screenshot": true,
-          "visual_check": "Run detail with red 'Failed' status badge. Error banner visible: red-bordered alert card with error message text. 'Retry from Failed Step' primary button visible"
+          "visual_check": "Run detail with red FAILED StatusBadge, error banner at top (red-bordered alert card with error message text), 'Retry from Failed Step' primary button visible"
         },
         {
           "step_number": 4,
           "action": "verify_element",
-          "target": "Failed step in timeline",
+          "target": "Error banner",
           "input_data": {},
-          "expected_result": "The failed step has: red circle indicator, red left-border accent on expanded card, error message in red alert box. Subsequent steps show grey 'Skipped' with italic label",
-          "screenshot": true,
-          "visual_check": "Step timeline showing: completed steps with green circles, one failed step with red circle and red border accent showing error message, subsequent steps greyed out with 'Skipped (previous step failed)' italic label"
+          "expected_result": "Red-bordered alert card with error message text and 'Retry from Failed Step' button",
+          "screenshot": false
         },
         {
           "step_number": 5,
+          "action": "verify_element",
+          "target": "Step timeline with failed step",
+          "input_data": {},
+          "expected_result": "Failed step has red status circle and red left-border accent when expanded. Subsequent steps show as SKIPPED (grey, strikethrough) with label 'Skipped (previous step failed)'",
+          "screenshot": true,
+          "visual_check": "Timeline showing failed step with red circle, red border-l-4 accent, error in red alert box. Following steps greyed out with italic 'Skipped' label"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Failed step to expand details",
+          "input_data": {},
+          "expected_result": "Error message visible in red alert, input data shown (what was fed to agent), action buttons visible",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
           "action": "click",
           "target": "Retry from This Step button",
           "input_data": {},
           "expected_result": "Confirmation dialog appears",
           "screenshot": true,
-          "visual_check": "Confirmation dialog explaining: 'This will create a new run starting from step N. Previous step outputs will be preserved.' with Confirm and Cancel buttons"
+          "visual_check": "Confirmation dialog explaining 'This will create a new run starting from step N. Previous step outputs will be preserved.' with Cancel and Confirm buttons"
         },
         {
-          "step_number": 6,
+          "step_number": 8,
           "action": "click",
-          "target": "Confirm retry button",
+          "target": "Confirm button in retry dialog",
           "input_data": {},
-          "expected_result": "Retry initiated — toast 'Retry started' with link to new run, page navigates to new run detail",
+          "expected_result": "Retry started, toast with link to new run, navigated to new run detail",
           "screenshot": true,
-          "visual_check": "New run detail page showing the retry run. Run metadata footer shows retryOfRunId linking to the original failed run"
+          "visual_check": "Toast 'Retry started' with link, new run detail page showing PENDING or RUNNING status, linked to original run via retryOfRunId"
+        },
+        {
+          "step_number": 9,
+          "action": "verify_element",
+          "target": "retryOfRunId link in new run metadata",
+          "input_data": {},
+          "expected_result": "New run shows link to original failed run via retryOfRunId",
+          "screenshot": false
+        },
+        {
+          "step_number": 10,
+          "action": "navigate",
+          "target": "/ai/admin/automations/runs",
+          "input_data": {},
+          "expected_result": "Run list shows both original failed run and new retry run",
+          "screenshot": false
         }
       ]
     },
     {
-      "id": "j16-sidebar-navigation-complete",
-      "name": "Sidebar Navigation — All AI Admin Pages Accessible",
-      "description": "Verify all AI Admin navigation entries work and lead to the correct pages",
-      "priority": "critical",
+      "id": "j19-automation-health-and-circuit-breaker",
+      "name": "Automation Health Dashboard and Circuit Breaker Warning",
+      "description": "Test the Automation Health section on the dashboard: status pie chart, failed runs count, upcoming runs list, token spend chart, and circuit breaker warning banner.",
+      "priority": "high",
+      "related_stories": ["E5c-6"],
+      "related_acs": ["E5c-6:AC-6", "E5c-6:AC-7"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/admin",
+          "input_data": {},
+          "expected_result": "AI Configuration Dashboard loads with Automation Health section",
+          "screenshot": true,
+          "visual_check": "Dashboard with Automation Health section visible below quick-nav cards, showing 2x2 stats grid"
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Automations by status chart",
+          "input_data": {},
+          "expected_result": "Mini donut/pie chart showing active (green), paused (amber), inactive (grey) counts with legend",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Failed runs (24h) count",
+          "input_data": {},
+          "expected_result": "Count displayed — red if > 0, green '0' if none, with text 'failed in last 24 hours'",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Upcoming scheduled runs list",
+          "input_data": {},
+          "expected_result": "List showing next scheduled runs with automation name and relative time (e.g. 'in 2h 15m'), or 'No upcoming runs'",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Token spend trend chart",
+          "input_data": {},
+          "expected_result": "Mini area chart showing daily automation token usage for last 7 days with purple gradient fill",
+          "screenshot": true,
+          "visual_check": "Token spend area chart with purple gradient, x-axis day labels, y-axis token counts"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Failed runs count card",
+          "input_data": {},
+          "expected_result": "Navigates to /ai/admin/automations/runs filtered by status=FAILED and dateFrom=24h ago",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "navigate",
+          "target": "/ai/admin",
+          "input_data": {},
+          "expected_result": "Back to dashboard",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "verify_element",
+          "target": "Circuit breaker warning banner (if any automation paused by circuit breaker)",
+          "input_data": {"note": "This step only applies if an automation has been paused after 3 consecutive failures. If no circuit breaker has triggered, verify the warning area is absent."},
+          "expected_result": "If circuit breaker triggered: amber alert banner with '{automation name} has been paused after 3 consecutive failures' text, [View Runs] link, [Resume] button. If not triggered: no warning banner visible.",
+          "screenshot": true,
+          "visual_check": "If present: amber warning banner with automation name, View Runs link, Resume button. If absent: clean Automation Health section without warnings."
+        }
+      ]
+    },
+    {
+      "id": "j20-automation-list-integration",
+      "name": "Automation List — Run Status Links and View Runs Action",
+      "description": "Test the E5c-6 integration with the automation list: clicking last run status navigates to run detail, View Runs action navigates to filtered run list.",
+      "priority": "medium",
+      "related_stories": ["E5c-6"],
+      "related_acs": ["E5c-6:AC-8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/admin/automations",
+          "input_data": {},
+          "expected_result": "Automation list loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Last run status StatusBadge on 'Daily AR Aging Summary' row",
+          "input_data": {},
+          "expected_result": "Navigates to the specific run detail page (/ai/admin/automations/runs/{lastRunId})",
+          "screenshot": true,
+          "visual_check": "Run detail page for the specific run, with automation name matching 'Daily AR Aging Summary'"
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/ai/admin/automations",
+          "input_data": {},
+          "expected_result": "Back to automation list",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Overflow menu on 'Daily AR Aging Summary' row",
+          "input_data": {},
+          "expected_result": "Dropdown with Edit, Run Now, View Runs, Delete options",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "View Runs action",
+          "input_data": {},
+          "expected_result": "Navigates to /ai/admin/automations/runs filtered to that automation's runs",
+          "screenshot": true,
+          "visual_check": "Automation Runs list page scoped to 'Daily AR Aging Summary' runs only, automation filter pre-selected"
+        }
+      ]
+    },
+    {
+      "id": "j21-sidebar-navigation",
+      "name": "Sidebar Navigation for All AI Admin Pages",
+      "description": "Verify all AI Administration pages are accessible from the sidebar navigation, admin-only visibility, and correct active states.",
+      "priority": "medium",
       "related_stories": ["E5c-3", "E5c-4", "E5c-5", "E5c-6"],
+      "related_acs": ["E5c-3:AC-1", "E5c-4:AC-1", "E5c-5:AC-1", "E5c-6:AC-1"],
       "steps": [
         {
           "step_number": 1,
           "action": "navigate",
           "target": "/",
           "input_data": {},
-          "expected_result": "App shell loads with sidebar navigation"
+          "expected_result": "App loads with sidebar visible",
+          "screenshot": false
         },
         {
           "step_number": 2,
           "action": "verify_element",
-          "target": "AI Administration sidebar section",
+          "target": "AI section in sidebar",
           "input_data": {},
-          "expected_result": "AI Admin section visible in sidebar with Brain icon. Sub-items: Dashboard, Model Registry, Prompt Templates, Agents, Skills, Automations, Automation Runs",
+          "expected_result": "AI section (Bot icon) visible in sidebar with sub-items for admin users",
           "screenshot": true,
-          "visual_check": "Sidebar showing AI Admin navigation section with all 7 sub-items, each with its icon (Brain, Cpu, FileCode, Bot, Wand2, Workflow, History)"
+          "visual_check": "Sidebar showing AI section with sub-items: AI Administration (dashboard), Model Registry, Prompt Templates, Agents, Skills, Automations, Automation Runs"
         },
         {
           "step_number": 3,
           "action": "click",
-          "target": "AI Administration > Dashboard sidebar link",
+          "target": "AI Administration sidebar link",
           "input_data": {},
-          "expected_result": "Navigates to /ai/admin — Dashboard loads"
+          "expected_result": "Navigates to /ai/admin, sidebar item shows active state (purple bg + white text)",
+          "screenshot": true,
+          "visual_check": "AI Administration sidebar item highlighted with purple background and white text (Concept D active style)"
         },
         {
           "step_number": 4,
-          "action": "verify_text",
-          "target": "page heading",
-          "input_data": {"text": "AI Configuration"},
-          "expected_result": "Dashboard page heading visible"
+          "action": "click",
+          "target": "Model Registry sidebar link",
+          "input_data": {},
+          "expected_result": "Navigates to /ai/admin/models",
+          "screenshot": false
         },
         {
           "step_number": 5,
           "action": "click",
-          "target": "Model Registry sidebar link",
+          "target": "Prompt Templates sidebar link",
           "input_data": {},
-          "expected_result": "Navigates to /ai/admin/models"
+          "expected_result": "Navigates to /ai/admin/prompts",
+          "screenshot": false
         },
         {
           "step_number": 6,
-          "action": "verify_text",
-          "target": "page heading",
-          "input_data": {"text": "Model Registry"},
-          "expected_result": "Model list heading visible"
+          "action": "click",
+          "target": "Agents sidebar link",
+          "input_data": {},
+          "expected_result": "Navigates to /ai/admin/agents",
+          "screenshot": false
         },
         {
           "step_number": 7,
           "action": "click",
-          "target": "Prompt Templates sidebar link",
+          "target": "Skills sidebar link",
           "input_data": {},
-          "expected_result": "Navigates to /ai/admin/prompts"
+          "expected_result": "Navigates to /ai/admin/skills",
+          "screenshot": false
         },
         {
           "step_number": 8,
-          "action": "verify_text",
-          "target": "page heading",
-          "input_data": {"text": "Prompt Templates"},
-          "expected_result": "Prompt list heading visible"
+          "action": "click",
+          "target": "Automations sidebar link",
+          "input_data": {},
+          "expected_result": "Navigates to /ai/admin/automations",
+          "screenshot": false
         },
         {
           "step_number": 9,
           "action": "click",
-          "target": "Agents sidebar link",
-          "input_data": {},
-          "expected_result": "Navigates to /ai/admin/agents"
-        },
-        {
-          "step_number": 10,
-          "action": "verify_text",
-          "target": "page heading",
-          "input_data": {"text": "Agent Configuration"},
-          "expected_result": "Agent list heading visible"
-        },
-        {
-          "step_number": 11,
-          "action": "click",
-          "target": "Skills sidebar link",
-          "input_data": {},
-          "expected_result": "Navigates to /ai/admin/skills"
-        },
-        {
-          "step_number": 12,
-          "action": "verify_text",
-          "target": "page heading",
-          "input_data": {"text": "Skill Pack Manager"},
-          "expected_result": "Skill manager heading visible"
-        },
-        {
-          "step_number": 13,
-          "action": "click",
-          "target": "Automations sidebar link",
-          "input_data": {},
-          "expected_result": "Navigates to /ai/admin/automations"
-        },
-        {
-          "step_number": 14,
-          "action": "verify_text",
-          "target": "page heading",
-          "input_data": {"text": "Automations"},
-          "expected_result": "Automation list heading visible"
-        },
-        {
-          "step_number": 15,
-          "action": "click",
           "target": "Automation Runs sidebar link",
           "input_data": {},
-          "expected_result": "Navigates to /ai/admin/automations/runs"
+          "expected_result": "Navigates to /ai/admin/automations/runs",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j22-automation-active-toggle",
+      "name": "Automation Active Toggle (Inline Optimistic Mutation)",
+      "description": "Test the inline active toggle on the automation list — optimistic UI update with server sync.",
+      "priority": "medium",
+      "related_stories": ["E5c-5"],
+      "related_acs": ["E5c-5:AC-1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/admin/automations",
+          "input_data": {},
+          "expected_result": "Automation list loads",
+          "screenshot": false
         },
         {
-          "step_number": 16,
-          "action": "verify_text",
-          "target": "page heading",
-          "input_data": {"text": "Automation Runs"},
-          "expected_result": "Automation Runs list heading visible",
+          "step_number": 2,
+          "action": "click",
+          "target": "Active toggle Switch on 'Weekly PO Review' automation",
+          "input_data": {},
+          "expected_result": "Toggle switches off immediately (optimistic), server confirms deactivation",
           "screenshot": true,
-          "visual_check": "Automation Runs page loaded successfully from sidebar navigation. Active sidebar item highlighted with purple background + white text per Concept D"
+          "visual_check": "Toggle visually switched off on 'Weekly PO Review' row, no page reload needed"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Active toggle Switch on 'Weekly PO Review' automation (re-enable)",
+          "input_data": {},
+          "expected_result": "Toggle switches back on immediately (optimistic), server confirms activation",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j23-prompt-category-filter",
+      "name": "Prompt List — Category Filter",
+      "description": "Test the prompt list category filter dropdown to filter prompts by category.",
+      "priority": "medium",
+      "related_stories": ["E5c-3"],
+      "related_acs": ["E5c-3:AC-4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/admin/prompts",
+          "input_data": {},
+          "expected_result": "Prompt list loads with all prompts",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Category filter dropdown",
+          "input_data": {"category": "automation"},
+          "expected_result": "List filters to show only 'automation' category prompts",
+          "screenshot": true,
+          "visual_check": "Prompt list showing only prompts with orange 'automation' category badge, including 'test-invoice-reminder'"
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Category filter dropdown",
+          "input_data": {"category": "All"},
+          "expected_result": "Filter reset, all prompts visible",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j24-concept-d-visual-fidelity",
+      "name": "Concept D Visual Design Fidelity Check",
+      "description": "Visual verification across all AI admin pages: Concept D purple theme, correct typography, card styling, animations, and WCAG compliance.",
+      "priority": "high",
+      "related_stories": ["E5c-3", "E5c-4", "E5c-5", "E5c-6"],
+      "related_acs": ["E5c-3:AC-1", "E5c-4:AC-1", "E5c-5:AC-11", "E5c-6:AC-9"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai/admin",
+          "input_data": {},
+          "expected_result": "Dashboard loads with Concept D styling",
+          "screenshot": true,
+          "visual_check": "Background #f4f2ff (light purple, NOT white/grey), cards with 12px radius and purple-tinted hover shadow, primary buttons #7c3aed, headings in Plus Jakarta Sans (font-serif), body in Inter (font-sans), counts in JetBrains Mono (font-mono), fadeInUp animation on load"
+        },
+        {
+          "step_number": 2,
+          "action": "navigate",
+          "target": "/ai/admin/models",
+          "input_data": {},
+          "expected_result": "Model list with Concept D styling",
+          "screenshot": true,
+          "visual_check": "Model names in mono font, routing tags as purple badges (bg-primary-50 text-primary), StatusBadge green 'Active'/grey 'Inactive', 'Default' purple badge, table headers with aria-sort attributes"
+        },
+        {
+          "step_number": 3,
+          "action": "navigate",
+          "target": "/ai/admin/agents",
+          "input_data": {},
+          "expected_result": "Agent list with Concept D styling",
+          "screenshot": true,
+          "visual_check": "Agent list with Concept D card shadows, purple primary buttons, routing tag badges, status badges with coloured dots"
+        },
+        {
+          "step_number": 4,
+          "action": "navigate",
+          "target": "/ai/admin/skills",
+          "input_data": {},
+          "expected_result": "Skill pack manager with Concept D styling",
+          "screenshot": true,
+          "visual_check": "Skills grouped in accordion sections, trigger phrases as blue pills, negative triggers as red pills, orchestration pattern badges, active toggle switches, Concept D card styling"
+        },
+        {
+          "step_number": 5,
+          "action": "navigate",
+          "target": "/ai/admin/automations",
+          "input_data": {},
+          "expected_result": "Automation list with Concept D styling",
+          "screenshot": true,
+          "visual_check": "Trigger type badges (purple Scheduled, blue Event, amber Chain, grey Manual), step counts in mono, StatusBadge for last run, active toggle switches, Concept D card shadows"
+        },
+        {
+          "step_number": 6,
+          "action": "navigate",
+          "target": "/ai/admin/automations/runs",
+          "input_data": {},
+          "expected_result": "Automation runs list with Concept D styling",
+          "screenshot": true,
+          "visual_check": "Runs list with tokens/cost in JetBrains Mono, status badges with coloured dots, trigger type badges, formatted dates, Concept D card styling"
         }
       ]
     }

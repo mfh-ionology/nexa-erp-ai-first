@@ -16,6 +16,7 @@ import type { AdminDashboardService } from './admin-dashboard.service.js';
 import type { AdminAgentService } from './admin-agent.service.js';
 import type { AdminSkillService } from './admin-skill.service.js';
 import type { AdminTriggerTestService } from './admin-trigger-test.service.js';
+import type { LearningSignalsService } from '../learning-signals.service.js';
 import {
   modelIdParamsSchema,
   promptIdParamsSchema,
@@ -691,6 +692,51 @@ async function adminRoutes(fastify: FastifyInstance): Promise<void> {
       const skill = await fastify.aiAdminSkillService.deleteSkill(request.params.id);
 
       return sendSuccess(reply, skill);
+    },
+  );
+
+  // -----------------------------------------------------------------------
+  // POST /learning-signals/aggregate — Manually trigger aggregation (E5d-2 AC #6)
+  // Aggregates the previous day's data for all companies.
+  // -----------------------------------------------------------------------
+  function assertLearningSignalsService(
+    svc: LearningSignalsService | null | undefined,
+  ): asserts svc is LearningSignalsService {
+    if (!svc) {
+      throw Object.assign(new Error('AI learning signals service is not available'), {
+        statusCode: 503,
+      });
+    }
+  }
+
+  const aggregateResultSchema = z.object({
+    processedCompanies: z.number(),
+    signalsCreated: z.number(),
+  });
+
+  fastify.post(
+    '/learning-signals/aggregate',
+    {
+      schema: {
+        response: { 200: successEnvelope(aggregateResultSchema) },
+      },
+      preHandler: adminGuard,
+    },
+    async (request, reply) => {
+      assertLearningSignalsService(fastify.aiLearningSignalsService);
+
+      // ISSUE #9 FIX: Scope aggregation to the requester's company only.
+      // Previously aggregated ALL companies, allowing a company-level ADMIN
+      // to trigger processing for sister companies in the same tenant.
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      const signalsCreated = await fastify.aiLearningSignalsService.aggregateForCompany(
+        request.companyId,
+        yesterday,
+      );
+
+      return sendSuccess(reply, { processedCompanies: 1, signalsCreated });
     },
   );
 }

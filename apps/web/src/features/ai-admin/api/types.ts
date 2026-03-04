@@ -750,3 +750,219 @@ export interface TestTriggerResult {
   noMatch: boolean;
   suggestions: string[];
 }
+
+// ─── Knowledge article types ────────────────────────────────────────────────
+
+export type KnowledgeCategory =
+  | 'BUSINESS_PROCESS'
+  | 'TERMINOLOGY'
+  | 'INDUSTRY_RULES'
+  | 'CUSTOM_FIELDS'
+  | 'HISTORICAL_PATTERN';
+
+export type KnowledgeSource =
+  | 'ADMIN_UPLOADED'
+  | 'AI_GENERATED'
+  | 'PLATFORM_SUGGESTED'
+  | 'CORRECTION_DERIVED';
+
+export interface KnowledgeArticle {
+  id: string;
+  companyId: string;
+  title: string;
+  content: string;
+  category: KnowledgeCategory;
+  source: KnowledgeSource;
+  sourceRef: string | null;
+  confidenceScore: number;
+  isConfirmed: boolean;
+  usageCount: number;
+  lastUsedAt: string | null;
+  isActive: boolean;
+  chunkCount: number;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Knowledge article request types ────────────────────────────────────────
+
+export interface CreateKnowledgeArticleRequest {
+  title: string;
+  content: string;
+  category: KnowledgeCategory;
+}
+
+export interface UpdateKnowledgeArticleRequest {
+  title?: string;
+  content?: string;
+  category?: KnowledgeCategory;
+  isActive?: boolean;
+  confidenceScore?: number;
+  isConfirmed?: boolean;
+}
+
+// ─── Knowledge article list params ──────────────────────────────────────────
+
+export interface KnowledgeArticleListParams {
+  cursor?: string;
+  limit?: number;
+  category?: KnowledgeCategory | KnowledgeCategory[];
+  source?: KnowledgeSource;
+  isActive?: boolean;
+}
+
+// ─── Knowledge article list response ────────────────────────────────────────
+
+interface KnowledgeArticleListMeta {
+  cursor?: string;
+  hasMore: boolean;
+  total?: number;
+}
+
+export interface KnowledgeArticleListResponse {
+  data: KnowledgeArticle[];
+  meta: KnowledgeArticleListMeta;
+}
+
+// ─── Training example types ──────────────────────────────────────────────────
+
+export interface TrainingExample {
+  id: string;
+  companyId: string;
+  skillKey: string | null;
+  inputText: string;
+  outputText: string;
+  category: KnowledgeCategory;
+  source: 'ADMIN_CURATED' | 'CORRECTION_DERIVED';
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Training example request types ──────────────────────────────────────────
+
+export interface CreateTrainingExampleRequest {
+  inputText: string;
+  outputText: string;
+  category: KnowledgeCategory;
+  skillKey?: string;
+}
+
+export interface UpdateTrainingExampleRequest {
+  inputText?: string;
+  outputText?: string;
+  category?: KnowledgeCategory;
+  skillKey?: string | null;
+  isActive?: boolean;
+}
+
+// ─── Training example list params ────────────────────────────────────────────
+
+export interface TrainingExampleListParams {
+  cursor?: string;
+  limit?: number;
+  category?: KnowledgeCategory | KnowledgeCategory[];
+  skillKey?: string;
+  isActive?: boolean;
+}
+
+// ─── Training example list response ──────────────────────────────────────────
+
+interface TrainingExampleListMeta {
+  cursor?: string;
+  hasMore: boolean;
+}
+
+export interface TrainingExampleListResponse {
+  data: TrainingExample[];
+  meta: TrainingExampleListMeta;
+}
+
+// ─── Correction types ────────────────────────────────────────────────────────
+
+export type CorrectionType = 'TERMINOLOGY' | 'PROCESS' | 'DATA' | 'PREFERENCE' | 'OTHER';
+
+export interface CorrectionLog {
+  id: string;
+  userId: string;
+  conversationId: string | null;
+  skillKey: string | null;
+  originalResponse: string;
+  correctedResponse: string;
+  correctionType: CorrectionType;
+  wasAutoResolved: boolean;
+  createdAt: string;
+}
+
+export interface CorrectionStats {
+  total: number;
+  last30Days: number;
+  byType: Record<CorrectionType, number>;
+  bySkill: Record<string, number>;
+  autoResolvedCount: number;
+  trend: Array<{ date: string; count: number }>;
+}
+
+// ─── Correction list params ──────────────────────────────────────────────────
+
+export interface CorrectionListParams {
+  cursor?: string;
+  limit?: number;
+  correctionType?: CorrectionType;
+  skillKey?: string;
+  wasAutoResolved?: boolean;
+  from?: string;
+  to?: string;
+}
+
+// ─── Correction list response ────────────────────────────────────────────────
+
+interface CorrectionListMeta {
+  cursor?: string;
+  hasMore: boolean;
+}
+
+export interface CorrectionListResponse {
+  data: CorrectionLog[];
+  meta: CorrectionListMeta;
+}
+
+// ─── Suggested knowledge article types ───────────────────────────────────────
+
+export interface SuggestedKnowledgeArticle {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+  version: number;
+  publishedAt: string;
+  previousResponse: { status: 'ACCEPTED' | 'REJECTED'; articleVersion: number } | null;
+}
+
+// ─── Suggested knowledge list params ─────────────────────────────────────────
+
+export interface SuggestedKnowledgeListParams {
+  cursor?: string;
+  limit?: number;
+}
+
+// ─── Suggested knowledge list response ───────────────────────────────────────
+
+interface SuggestedKnowledgeListMeta {
+  cursor?: string;
+  hasMore: boolean;
+}
+
+export interface SuggestedKnowledgeListResponse {
+  data: SuggestedKnowledgeArticle[];
+  meta: SuggestedKnowledgeListMeta;
+}
+
+// ─── Accept edited suggestion request ────────────────────────────────────────
+
+export interface AcceptEditedSuggestionRequest {
+  title: string;
+  content: string;
+  category: KnowledgeCategory;
+}

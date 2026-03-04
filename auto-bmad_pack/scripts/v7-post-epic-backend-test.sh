@@ -5,7 +5,7 @@
 # Usage: ./v7-post-epic-backend-test.sh <epic-id> [options]
 #
 # Options:
-#   --api-url URL         Backend URL (default: http://localhost:3000 or $SERVER_API_URL)
+#   --api-url URL         Backend URL (default: http://localhost:5100 or $SERVER_API_URL)
 #   --skip-schema         Skip DB schema verification
 #   --fix-bugs            Auto-fix bugs found during testing
 #   --max-turns N         Claude turns per test phase (default: 50)
@@ -30,7 +30,7 @@ CONFIG_DIR="${SCRIPT_DIR}/../config"
 # ============================================================================
 
 EPIC_ID="${1:?Usage: $0 <epic-id> [options]}"
-API_URL="${SERVER_API_URL:-http://localhost:3000}"
+API_URL="${SERVER_API_URL:-http://localhost:5100}"
 SKIP_SCHEMA=false
 FIX_BUGS=false
 MAX_TURNS=50
@@ -62,10 +62,18 @@ TEST_PLAN_FILE="${TEST_ARTIFACTS}/backend-test-plan-epic-${EPIC_ID}.json"
 TEST_RESULTS_FILE="${TEST_ARTIFACTS}/backend-test-results-epic-${EPIC_ID}.json"
 TEST_REPORT_FILE="${TEST_ARTIFACTS}/backend-test-report-epic-${EPIC_ID}.md"
 
-# Auth token (populated by seed_and_auth phase)
+# Auth tokens (populated by seed_and_auth phase)
 AUTH_TOKEN=""
+STAFF_TOKEN=""
+MANAGER_TOKEN=""
+VIEWER_TOKEN=""
 SEED_USER_EMAIL="admin@nexa-erp.dev"
 SEED_USER_PASSWORD="NexaDev2026!"
+
+# Role-based test users (seeded by packages/db/prisma/seed.ts)
+STAFF_EMAIL="staff@nexa-erp.dev"
+MANAGER_EMAIL="manager@nexa-erp.dev"
+VIEWER_EMAIL="viewer@nexa-erp.dev"
 
 # ============================================================================
 # PHASE 0: SEED DATABASE & ACQUIRE AUTH TOKEN
@@ -103,9 +111,11 @@ acquire_auth_token() {
     echo -e "${BLUE}Logging in as seed admin user...${NC}"
 
     local login_response
+    local login_body
+    login_body=$(printf '{"email":"%s","password":"%s"}' "$SEED_USER_EMAIL" "$SEED_USER_PASSWORD")
     login_response=$(curl -s -X POST "${API_URL}/auth/login" \
         -H "Content-Type: application/json" \
-        -d "{\"email\":\"${SEED_USER_EMAIL}\",\"password\":\"${SEED_USER_PASSWORD}\"}" \
+        -d "$login_body" \
         --max-time 10 2>/dev/null)
 
     # Extract access token (handles both { data: { accessToken } } and { accessToken } shapes)
@@ -129,6 +139,50 @@ except:
 
     log "SUCCESS" "Auth token acquired (${#AUTH_TOKEN} chars)"
     echo -e "${GREEN}Auth token acquired${NC}"
+}
+
+acquire_role_tokens() {
+    # Acquire JWT tokens for STAFF, MANAGER, VIEWER roles (seeded users)
+    log "INFO" "Acquiring role-based auth tokens..."
+    echo -e "${BLUE}Logging in as STAFF, MANAGER, VIEWER users...${NC}"
+
+    local login_extract='import sys, json
+try:
+    d = json.load(sys.stdin)
+    token = d.get("data", d).get("accessToken", "")
+    print(token)
+except:
+    print("")'
+
+    for role_info in "STAFF:${STAFF_EMAIL}:STAFF_TOKEN" "MANAGER:${MANAGER_EMAIL}:MANAGER_TOKEN" "VIEWER:${VIEWER_EMAIL}:VIEWER_TOKEN"; do
+        local role_name="${role_info%%:*}"
+        local remainder="${role_info#*:}"
+        local role_email="${remainder%%:*}"
+        local token_var="${remainder##*:}"
+
+        local resp
+        resp=$(curl -s -X POST "${API_URL}/auth/login" \
+            -H "Content-Type: application/json" \
+            -d "{\"email\":\"${role_email}\",\"password\":\"${SEED_USER_PASSWORD}\"}" \
+            --max-time 10 2>/dev/null)
+
+        local token
+        token=$(echo "$resp" | python3 -c "$login_extract" 2>/dev/null)
+
+        if [[ -n "$token" ]]; then
+            eval "${token_var}=\"${token}\""
+            log "SUCCESS" "${role_name} token acquired"
+        else
+            log "WARN" "Failed to acquire ${role_name} token — RBAC tests for this role will be skipped"
+            echo -e "${YELLOW}${role_name} token failed — RBAC tests will be skipped${NC}"
+        fi
+    done
+
+    local acquired=0
+    [[ -n "$STAFF_TOKEN" ]] && ((acquired++))
+    [[ -n "$MANAGER_TOKEN" ]] && ((acquired++))
+    [[ -n "$VIEWER_TOKEN" ]] && ((acquired++))
+    echo -e "${GREEN}Role tokens acquired: ${acquired}/3${NC}"
 }
 
 # ============================================================================
@@ -214,7 +268,27 @@ For each API endpoint discovered:
 - Create happy path test cases (valid inputs, expected 200/201)
 - Create validation error tests (missing required fields, invalid types -> 400)
 - Create edge case tests (not found -> 404, empty lists -> 200 with [])
+- Create authorization tests (RBAC role checks: VIEWER denied -> 403, STAFF denied -> 403 where MANAGER+ required)
 - For mutating operations (POST/PUT/DELETE), include DB verification queries
+
+IMPORTANT UUID RULES:
+- For 'not found' tests, use a VALID UUID v4 that doesn't exist: 00000000-0000-4000-a000-ffffffffffff
+- NEVER use 00000000-0000-0000-0000-000000000999 or similar non-v4 formats — Zod schema validation rejects them as 400 before reaching the service layer
+- For 'invalid UUID' tests, use a clearly invalid format like 'not-a-uuid'
+
+RBAC TEST USERS AVAILABLE (all with password NexaDev2026!):
+- admin@nexa-erp.dev (SUPER_ADMIN) — can do everything
+- manager@nexa-erp.dev (MANAGER) — can do most operations
+- staff@nexa-erp.dev (STAFF) — limited operations
+- viewer@nexa-erp.dev (VIEWER) — read-only access
+Include RBAC authorization tests using these roles. Mark which role each test uses.
+
+ENTITY ID DISCOVERY:
+Before generating tests, use curl to discover real entity IDs in the database:
+- GET ${API_URL}/health to confirm API is up
+- Login to get a token, then query list endpoints to find real entity IDs for use in happy path tests
+- For attachments/notes/record-links, you need real entityType + entityId combos. Query list endpoints like GET /payment-terms or GET /users to find valid IDs.
+- Use these real IDs in happy-path tests so presign, confirm, and CRUD operations succeed end-to-end
 
 Order tests: creates first, then reads, then updates, then deletes.
 
@@ -274,12 +348,17 @@ execute_tests() {
     if [[ -n "$AUTH_TOKEN" ]]; then
         auth_context="
 IMPORTANT - Authentication:
-A valid JWT access token is available for authenticated requests:
-  Authorization: Bearer ${AUTH_TOKEN}
+Multiple JWT tokens are available for testing different roles:
 
-Seed user credentials (for login tests): email=${SEED_USER_EMAIL} password=${SEED_USER_PASSWORD}
-Use the token above for ALL endpoints that require authentication (anything except /health, /auth/login, /auth/refresh, /auth/logout).
-If the token expires during testing (you get 401), re-login with: curl -s -X POST ${API_URL}/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"${SEED_USER_EMAIL}\",\"password\":\"${SEED_USER_PASSWORD}\"}'
+SUPER_ADMIN token (admin@nexa-erp.dev): Bearer ${AUTH_TOKEN}
+$([ -n "$MANAGER_TOKEN" ] && echo "MANAGER token (manager@nexa-erp.dev): Bearer ${MANAGER_TOKEN}" || echo "MANAGER token: NOT AVAILABLE — skip MANAGER-specific tests")
+$([ -n "$STAFF_TOKEN" ] && echo "STAFF token (staff@nexa-erp.dev): Bearer ${STAFF_TOKEN}" || echo "STAFF token: NOT AVAILABLE — skip STAFF-specific tests")
+$([ -n "$VIEWER_TOKEN" ] && echo "VIEWER token (viewer@nexa-erp.dev): Bearer ${VIEWER_TOKEN}" || echo "VIEWER token: NOT AVAILABLE — skip VIEWER-specific tests")
+
+Use the SUPER_ADMIN token for standard tests. Use role-specific tokens for RBAC/authorization tests.
+For example, to test that VIEWER is denied access (403), use the VIEWER token.
+All users have password: ${SEED_USER_PASSWORD}
+If a token expires (401), re-login with: curl -s -X POST ${API_URL}/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"<user-email>\",\"password\":\"${SEED_USER_PASSWORD}\"}'
 and extract the new token from data.accessToken in the JSON response."
     else
         auth_context="
@@ -424,8 +503,9 @@ main() {
         exit 1
     fi
 
-    # Acquire fresh auth token just before test execution (15-min TTL)
+    # Acquire fresh auth tokens just before test execution (15-min TTL)
     acquire_auth_token || log "WARN" "Auth token failed — authenticated tests will return 401"
+    acquire_role_tokens
 
     # Phase 3: Execute tests
     execute_tests

@@ -1,8 +1,8 @@
 ---
 stepsCompleted: ['step-01-detect-mode', 'step-02-load-context', 'step-03-risk-and-testability', 'step-04-coverage-plan', 'step-05-generate-output']
 lastStep: 'step-05-generate-output'
-lastSaved: '2026-03-03'
-lastEpic: 'E9'
+lastSaved: '2026-03-04'
+lastEpic: 'E10'
 ---
 
 # Test Design Progress — Epic E1
@@ -532,6 +532,39 @@ lastEpic: 'E9'
 
 ---
 
+# Test Design Progress — Epic E5d
+
+## Step 1: Mode Detection
+- **Mode**: Epic-Level (Phase 4)
+- **Reason**: User explicitly requested E5d epic-level test design; sprint-status.yaml exists
+- **Epic**: E5d — AI Knowledge Evolution & Cross-Tenant Intelligence (6 stories: E5d.1-E5d.6)
+
+## Step 2: Context Loading
+- **Config**: tea_use_playwright_utils=true, tea_browser_automation=auto, test_framework=playwright
+- **Artifacts loaded**: Epic E5d (6 stories), Architecture §6, PRD FR4/FR6/NFR2/NFR27/NFR50, Dependencies E5/E5b/E5c/E3b, 5 tenant + 5 platform tables, 60+ AI test files from prior epics, 985 total test files
+- **Knowledge fragments**: risk-governance.md, probability-impact.md, test-levels-framework.md, test-priorities-matrix.md
+
+## Step 3: Risk Assessment
+- **Total risks**: 15
+- **High-priority (>=6)**: 7 — R-001 (SEC: PII leakage incl. dictionary keys, score=9 CRITICAL), R-002 (SEC: isolation, score=6), R-003 (DATA: RAG irrelevance, score=6), R-004 (DATA: correction loop, score=6), R-005 (DATA: anonymisation balance, score=6), R-013 (DATA: aggregation upsert not idempotent, score=6), R-014 (TECH: chunkAndEmbed race condition, score=6)
+- **Medium (3-5)**: 5 (R-006 through R-009, R-015), **Low (1-3)**: 3 (R-010 through R-012)
+- **Code review findings incorporated**: PII leaks through JSON keys, non-idempotent upserts, race condition in chunk replacement, timezone sensitivity, no concurrency protection
+
+## Step 4: Coverage Plan
+- **P0**: 13 tests (~28-45 hours), **P1**: 15 tests (~25-45 hours), **P2**: 11 tests (~8-16 hours), **P3**: 5 tests (~3-6 hours)
+- **Total**: 44 tests, ~64-112 hours (~1.5-3 weeks)
+- **New P0 tests added**: Aggregation idempotency (R-013), content update atomicity (R-014), PII in dictionary keys (R-001)
+
+## Step 5: Output Generation
+- **Output file**: `_bmad-output/test-artifacts/test-design-epic-E5d.md`
+- **Validated against checklist**: All criteria passed
+- **Updated with code review findings**: 3 new risks, 3 new P0 test scenarios
+
+## Completion
+- Workflow complete: 2026-03-04 (updated with code review findings)
+
+---
+
 # Test Design Progress — Epic E9
 
 ## Step 1: Mode Detection
@@ -578,3 +611,43 @@ lastEpic: 'E9'
 
 ## Completion
 - Workflow complete: 2026-03-03
+
+---
+
+# Test Design Progress — Epic E10
+
+## Step 1: Mode Detection
+- **Mode**: Epic-Level (Phase 4)
+- **Reason**: User explicitly requested E10 epic-level test design; sprint-status.yaml exists
+- **Epic**: E10 — Email Integration (3 stories: E10.1-E10.3)
+
+## Step 2: Context Loading
+- **Config**: tea_use_playwright_utils=true, tea_browser_automation=auto, test_framework=playwright
+- **Artifacts loaded**:
+  - Epic E10 (3 stories: E10.1 SMTP Outbound Service, E10.2 Email Template Management, E10.3 Document-to-Email)
+  - PRD: FR187 (email sending), FR188 (document-to-email), FR189 (email templates); NFR31 (retry backoff)
+  - Data Models: §3.18 Communications Module — EmailMessage, EmailRecipient, EmailQueue, EmailTemplate, EmailAlias, EmailSignature
+  - State Machines: §17.1 EmailMessage Status (DRAFT → QUEUED → SENT / FAILED / BOUNCED)
+  - Event Catalog: §14 — email.sent event
+  - API Contracts: §2.25 Communications endpoints
+  - Business Rules: BR-COM-001, 002, 003, 009, 010, 015
+  - Architecture: §7 Infrastructure (BullMQ, SMTP, Nodemailer)
+  - Dependencies: E3, E8, E9, E12
+  - Existing code: email-sender.service.ts (8 tests), notification-email-template.ts (7 tests)
+- **Knowledge fragments**: risk-governance.md, probability-impact.md, test-levels-framework.md, test-priorities-matrix.md
+
+## Step 3: Risk Assessment
+- **Total risks**: 11
+- **High-priority (>=6)**: 4 — R-001 (SEC: SMTP credential leakage), R-002 (SEC: Handlebars injection), R-003 (TECH: worker crash), R-004 (DATA: orphaned S3 objects)
+- **Medium (3-4)**: 4, **Low (1-2)**: 3
+
+## Step 4: Coverage Plan
+- **P0**: 10 tests (~15-25 hours), **P1**: 16 tests (~15-25 hours), **P2**: 10 tests (~5-10 hours), **P3**: 4 tests (~1-3 hours)
+- **Total**: 40 tests, ~36-63 hours (~1-2 weeks)
+
+## Step 5: Output Generation
+- **Output file**: `_bmad-output/test-artifacts/test-design-epic-E10.md`
+- **Validated against checklist**: All criteria passed
+
+## Completion
+- Workflow complete: 2026-03-04

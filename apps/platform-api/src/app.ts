@@ -8,10 +8,7 @@ import { loggerOptions } from './core/logger/logger.js';
 import { correlationIdPlugin } from './core/plugins/correlation-id.js';
 import { requestLoggerPlugin } from './core/middleware/request-logger.js';
 import { registerErrorHandler } from './core/middleware/error-handler.js';
-import {
-  zodValidatorCompiler,
-  zodSerializerCompiler,
-} from './core/validation/zod-compiler.js';
+import { zodValidatorCompiler, zodSerializerCompiler } from './core/validation/zod-compiler.js';
 import { healthRoutesPlugin } from './routes/admin/health.routes.js';
 import { platformJwtVerifyPlugin } from './core/auth/platform-jwt-verify.hook.js';
 import { platformAuthRoutesPlugin } from './core/auth/platform-auth.routes.js';
@@ -22,6 +19,10 @@ import { tenantRoutesPlugin } from './routes/admin/tenants.routes.js';
 import { plansRoutesPlugin } from './routes/admin/plans.routes.js';
 import { platformAuditPlugin } from './core/audit/platform-audit.plugin.js';
 import { auditOnResponsePlugin } from './core/audit/audit-on-response.hook.js';
+import { intelligenceRoutesPlugin } from './routes/admin/intelligence.routes.js';
+import { knowledgeRoutesPlugin } from './routes/admin/knowledge.routes.js';
+import { knowledgePlatformRoutesPlugin } from './routes/platform/knowledge.routes.js';
+import { validateIntelligenceEnv } from './services/index.js';
 
 const DEFAULT_RATE_LIMIT_MAX = 100;
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -108,6 +109,11 @@ export async function buildApp(opts: { logger?: boolean | Record<string, unknown
     );
   }
 
+  // Startup validation: intelligence pipeline env vars (Task 9.2 — graceful degradation)
+  for (const warning of validateIntelligenceEnv()) {
+    fastify.log.warn(warning);
+  }
+
   // 11. Routes
   await fastify.register(healthRoutesPlugin);
   await fastify.register(platformAuthRoutesPlugin, { prefix: '/admin/auth' });
@@ -116,6 +122,9 @@ export async function buildApp(opts: { logger?: boolean | Record<string, unknown
   await fastify.register(plansRoutesPlugin);
   await fastify.register(entitlementRoutesPlugin);
   await fastify.register(aiRoutesPlugin);
+  await fastify.register(intelligenceRoutesPlugin);
+  await fastify.register(knowledgeRoutesPlugin);
+  await fastify.register(knowledgePlatformRoutesPlugin);
 
   return fastify;
 }

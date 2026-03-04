@@ -1,0 +1,2139 @@
+{
+  "epic_id": "E9",
+  "epic_title": "Notifications (Templates, Preferences, In-App, Role Defaults)",
+  "generated_at": "2026-03-04T18:30:00.000Z",
+  "total_test_cases": 97,
+  "api_base_url": "http://localhost:5100",
+  "auth_note": "All endpoints require JWT. Use seeded test users: VIEWER (viewer@nexa-erp.dev, VIEWER), STAFF (staff@nexa-erp.dev, STAFF), MANAGER (manager@nexa-erp.dev, MANAGER), ADMIN (admin@nexa-erp.dev, SUPER_ADMIN). Password: NexaDev2026!. RBAC hierarchy: VIEWER < STAFF < MANAGER < ADMIN < SUPER_ADMIN. Template CRUD and role-defaults require ADMIN+. Notification and preference endpoints require STAFF+.",
+  "uuid_rules": {
+    "valid_nonexistent": "00000000-0000-4000-a000-ffffffffffff",
+    "invalid_format": "not-a-uuid",
+    "note": "Zod schema validates UUID v4 format. Non-v4 UUIDs (e.g. 00000000-0000-0000-0000-000000000999) are rejected as 400 before reaching the service layer."
+  },
+  "discovered_entities": {
+    "users": {
+      "admin": { "id": "00000000-0000-4000-a000-000000000002", "email": "admin@nexa-erp.dev", "role": "SUPER_ADMIN" },
+      "manager": { "id": "00000000-0000-4000-a000-000000000011", "email": "manager@nexa-erp.dev", "role": "MANAGER" },
+      "staff": { "id": "00000000-0000-4000-a000-000000000010", "email": "staff@nexa-erp.dev", "role": "STAFF" },
+      "viewer": { "id": "00000000-0000-4000-a000-000000000012", "email": "viewer@nexa-erp.dev", "role": "VIEWER" }
+    },
+    "templates": {
+      "APPROVAL_REQUESTED": "61ecee83-280e-47b1-8064-6af66355a387",
+      "INVOICE_APPROVED": "dbf1ae7e-4566-4cea-852c-3cf40c6a9863",
+      "ACCESS_GROUP_DELETED": "bf1600db-68b0-4cc4-b7da-95bc471370f0",
+      "STOCK_REORDER": "e485c9ab-ca3e-4b6b-8dce-d536e4e50605",
+      "ORDER_CONFIRMED": "24e5ab31-2d88-4114-9308-2c01b5fb8bc8"
+    }
+  },
+  "setup_dependencies": [
+    "PostgreSQL with Prisma migrations applied",
+    "Redis running (for BullMQ notification dispatch queues)",
+    "Seeded company with companyId 00000000-0000-4000-a000-000000000001",
+    "Seeded users with VIEWER, STAFF, MANAGER, SUPER_ADMIN roles",
+    "Seeded NotificationTemplates (11+ templates including APPROVAL_REQUESTED, INVOICE_APPROVED, etc.)",
+    "Event bus operational (for notification event subscribers)",
+    "Environment variables: DATABASE_URL, REDIS_URL"
+  ],
+  "state_machine_note": "Notification status state machine (§17.2): PENDING → DELIVERED → READ | PENDING → DELIVERED → DISMISSED | PENDING → FAILED. Only DELIVERED → READ and DELIVERED → DISMISSED are valid user-initiated transitions.",
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "description": "Authenticate user and return JWT (prerequisite for all other tests)",
+      "story": "Prerequisite",
+      "minimum_role": "none",
+      "test_cases": [
+        {
+          "id": "AUTH-01",
+          "name": "Login as admin - happy path",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "admin@nexa-erp.dev", "password": "NexaDev2026!" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "expiresIn", "user"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "AUTH-02",
+          "name": "Login as staff - happy path",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "staff@nexa-erp.dev", "password": "NexaDev2026!" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "user"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "AUTH-03",
+          "name": "Login as manager - happy path",
+          "type": "happy_path",
+          "role": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "manager@nexa-erp.dev", "password": "NexaDev2026!" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "user"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "AUTH-04",
+          "name": "Login as viewer - happy path",
+          "type": "happy_path",
+          "role": "VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "viewer@nexa-erp.dev", "password": "NexaDev2026!" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "user"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/notifications/templates",
+      "description": "Create a new notification template (ADMIN only)",
+      "story": "E9.1",
+      "acceptance_criteria": ["AC#1", "AC#4"],
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "TMPL-CREATE-01",
+          "name": "Create template - happy path with all fields",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/notifications/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {
+              "code": "TEST_INVOICE_APPROVED_E9_PLAN",
+              "name": "Invoice Approved Notification E9 Plan",
+              "description": "Sent when an invoice is approved by a manager",
+              "eventName": "invoice.approved.e9test.plan",
+              "titleTemplate": "Invoice {{invoiceNumber}} approved",
+              "bodyTemplate": "Your invoice {{invoiceNumber}} for {{customerName}} ({{amount}}) has been approved.",
+              "defaultChannels": ["IN_APP", "EMAIL"],
+              "defaultPriority": "NORMAL",
+              "actionUrl": "/invoices/{{entityId}}",
+              "isActive": true
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "code", "name", "eventName", "titleTemplate", "bodyTemplate", "defaultChannels", "defaultPriority", "isActive"],
+            "body_values": {
+              "data.code": "TEST_INVOICE_APPROVED_E9_PLAN",
+              "data.name": "Invoice Approved Notification E9 Plan",
+              "data.isActive": true,
+              "data.defaultPriority": "NORMAL"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id, code, name, event_name, is_active FROM notification_templates WHERE code = 'TEST_INVOICE_APPROVED_E9_PLAN'",
+            "expected": "Row exists with code='TEST_INVOICE_APPROVED_E9_PLAN', is_active=true"
+          },
+          "save_response": { "field": "data.id", "as": "CREATED_TEMPLATE_ID" }
+        },
+        {
+          "id": "TMPL-CREATE-02",
+          "name": "Create template - minimal required fields only",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/notifications/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {
+              "code": "TEST_MINIMAL_E9_PLAN",
+              "name": "Minimal Template E9 Plan",
+              "eventName": "test.minimal.e9plan",
+              "titleTemplate": "Test notification",
+              "bodyTemplate": "This is a minimal test notification.",
+              "defaultChannels": ["IN_APP"]
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "code"],
+            "body_values": {
+              "data.code": "TEST_MINIMAL_E9_PLAN",
+              "data.defaultPriority": "NORMAL",
+              "data.isActive": true,
+              "data.description": null,
+              "data.actionUrl": null
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id, code, default_priority, is_active FROM notification_templates WHERE code = 'TEST_MINIMAL_E9_PLAN'",
+            "expected": "Row exists with default_priority='NORMAL', is_active=true"
+          },
+          "save_response": { "field": "data.id", "as": "CREATED_MINIMAL_TEMPLATE_ID" }
+        },
+        {
+          "id": "TMPL-CREATE-03",
+          "name": "Create template - missing required field 'code' returns 400",
+          "type": "validation",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/notifications/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {
+              "name": "Missing Code Template",
+              "eventName": "test.missing",
+              "titleTemplate": "Title",
+              "bodyTemplate": "Body",
+              "defaultChannels": ["IN_APP"]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-CREATE-04",
+          "name": "Create template - missing required field 'eventName' returns 400",
+          "type": "validation",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/notifications/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {
+              "code": "TEST_NO_EVENT",
+              "name": "No Event Template",
+              "titleTemplate": "Title",
+              "bodyTemplate": "Body",
+              "defaultChannels": ["IN_APP"]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-CREATE-05",
+          "name": "Create template - empty defaultChannels array returns 400",
+          "type": "validation",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/notifications/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {
+              "code": "TEST_EMPTY_CHAN",
+              "name": "Empty Channels",
+              "eventName": "test.empty",
+              "titleTemplate": "Title",
+              "bodyTemplate": "Body",
+              "defaultChannels": []
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-CREATE-06",
+          "name": "Create template - invalid channel enum value returns 400",
+          "type": "validation",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/notifications/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {
+              "code": "TEST_BAD_CHAN",
+              "name": "Bad Channel",
+              "eventName": "test.bad",
+              "titleTemplate": "Title",
+              "bodyTemplate": "Body",
+              "defaultChannels": ["SMS"]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-CREATE-07",
+          "name": "Create template - invalid priority enum returns 400",
+          "type": "validation",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/notifications/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {
+              "code": "TEST_BAD_PRIO",
+              "name": "Bad Priority",
+              "eventName": "test.badprio",
+              "titleTemplate": "Title",
+              "bodyTemplate": "Body",
+              "defaultChannels": ["IN_APP"],
+              "defaultPriority": "SUPER_HIGH"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-CREATE-08",
+          "name": "Create template - VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/notifications/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{VIEWER_TOKEN}}" },
+            "body": {
+              "code": "VIEWER_ATTEMPT",
+              "name": "Viewer Attempt",
+              "eventName": "viewer.attempt",
+              "titleTemplate": "Title",
+              "bodyTemplate": "Body",
+              "defaultChannels": ["IN_APP"]
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-CREATE-09",
+          "name": "Create template - STAFF denied (403)",
+          "type": "authorization",
+          "role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/notifications/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{STAFF_TOKEN}}" },
+            "body": {
+              "code": "STAFF_ATTEMPT",
+              "name": "Staff Attempt",
+              "eventName": "staff.attempt",
+              "titleTemplate": "Title",
+              "bodyTemplate": "Body",
+              "defaultChannels": ["IN_APP"]
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-CREATE-10",
+          "name": "Create template - MANAGER denied (403)",
+          "type": "authorization",
+          "role": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/notifications/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{MANAGER_TOKEN}}" },
+            "body": {
+              "code": "MANAGER_ATTEMPT",
+              "name": "Manager Attempt",
+              "eventName": "manager.attempt",
+              "titleTemplate": "Title",
+              "bodyTemplate": "Body",
+              "defaultChannels": ["IN_APP"]
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-CREATE-11",
+          "name": "Create template - no auth token returns 401",
+          "type": "authorization",
+          "role": "none",
+          "request": {
+            "method": "POST",
+            "url": "/notifications/templates",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "code": "NO_AUTH",
+              "name": "No Auth",
+              "eventName": "no.auth",
+              "titleTemplate": "Title",
+              "bodyTemplate": "Body",
+              "defaultChannels": ["IN_APP"]
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/templates",
+      "description": "List notification templates with optional filtering (ADMIN only)",
+      "story": "E9.1",
+      "acceptance_criteria": ["AC#1"],
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "TMPL-LIST-01",
+          "name": "List templates - happy path (default params)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/templates",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items", "meta"],
+            "body_values": {
+              "data.meta.offset": 0
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-LIST-02",
+          "name": "List templates - filter by isActive=true",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/templates?isActive=true",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items"],
+            "assertion": "All items have isActive=true"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-LIST-03",
+          "name": "List templates - filter by isActive=false",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/templates?isActive=false",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items"],
+            "assertion": "All items have isActive=false"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-LIST-04",
+          "name": "List templates - search by name",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/templates?search=approval",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items"],
+            "assertion": "Results contain templates with 'approval' in name or code"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-LIST-05",
+          "name": "List templates - pagination with limit and offset",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/templates?limit=5&offset=0",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items", "meta"],
+            "body_values": {
+              "data.meta.limit": 5,
+              "data.meta.offset": 0
+            },
+            "assertion": "items.length <= 5"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-LIST-06",
+          "name": "List templates - search with no results returns empty array",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/templates?search=zzzznonexistent",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_values": {
+              "data.items": [],
+              "data.meta.total": 0
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-LIST-07",
+          "name": "List templates - VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/templates",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-LIST-08",
+          "name": "List templates - STAFF denied (403)",
+          "type": "authorization",
+          "role": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/templates",
+            "headers": { "Authorization": "Bearer {{STAFF_TOKEN}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/templates/:id",
+      "description": "Get notification template by ID (ADMIN only)",
+      "story": "E9.1",
+      "acceptance_criteria": ["AC#1"],
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "TMPL-GET-01",
+          "name": "Get template by ID - happy path (seeded APPROVAL_REQUESTED)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/templates/61ecee83-280e-47b1-8064-6af66355a387",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "code", "name", "eventName", "titleTemplate", "bodyTemplate"],
+            "body_values": {
+              "data.code": "APPROVAL_REQUESTED",
+              "data.id": "61ecee83-280e-47b1-8064-6af66355a387"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-GET-02",
+          "name": "Get template by ID - not found (valid UUID, no record)",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/templates/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-GET-03",
+          "name": "Get template by ID - invalid UUID format returns 400",
+          "type": "validation",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/templates/not-a-uuid",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-GET-04",
+          "name": "Get template by ID - VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/templates/61ecee83-280e-47b1-8064-6af66355a387",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/notifications/templates/:id",
+      "description": "Update notification template (ADMIN only)",
+      "story": "E9.1",
+      "acceptance_criteria": ["AC#1"],
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "TMPL-UPDATE-01",
+          "name": "Update template - happy path (update name and priority)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/notifications/templates/{{CREATED_TEMPLATE_ID}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {
+              "name": "Updated Invoice Approved Notification E9 Plan",
+              "defaultPriority": "HIGH",
+              "defaultChannels": ["IN_APP", "EMAIL", "PUSH"]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "name", "defaultPriority"],
+            "body_values": {
+              "data.name": "Updated Invoice Approved Notification E9 Plan",
+              "data.defaultPriority": "HIGH"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT name, default_priority FROM notification_templates WHERE id = '{{CREATED_TEMPLATE_ID}}'",
+            "expected": "name='Updated Invoice Approved Notification E9 Plan', default_priority='HIGH'"
+          }
+        },
+        {
+          "id": "TMPL-UPDATE-02",
+          "name": "Update template - set description to null",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/notifications/templates/{{CREATED_TEMPLATE_ID}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {
+              "description": null
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_values": {
+              "data.description": null
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-UPDATE-03",
+          "name": "Update template - not found returns 404",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/notifications/templates/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "name": "Does Not Exist" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-UPDATE-04",
+          "name": "Update template - invalid UUID returns 400",
+          "type": "validation",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/notifications/templates/not-a-uuid",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "name": "Bad UUID" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-UPDATE-05",
+          "name": "Update template - empty defaultChannels returns 400",
+          "type": "validation",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/notifications/templates/{{CREATED_TEMPLATE_ID}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "defaultChannels": [] }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-UPDATE-06",
+          "name": "Update template - STAFF denied (403)",
+          "type": "authorization",
+          "role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/notifications/templates/{{CREATED_TEMPLATE_ID}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{STAFF_TOKEN}}" },
+            "body": { "name": "Staff Attempt" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/notifications/templates/:id",
+      "description": "Soft-delete notification template (ADMIN only)",
+      "story": "E9.1",
+      "acceptance_criteria": ["AC#1"],
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "TMPL-DELETE-01",
+          "name": "Delete template - happy path (soft delete created template)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "DELETE",
+            "url": "/notifications/templates/{{CREATED_MINIMAL_TEMPLATE_ID}}",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id"],
+            "body_values": {
+              "data.isActive": false
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT is_active FROM notification_templates WHERE id = '{{CREATED_MINIMAL_TEMPLATE_ID}}'",
+            "expected": "is_active=false (soft-deleted, row still exists)"
+          }
+        },
+        {
+          "id": "TMPL-DELETE-02",
+          "name": "Delete template - not found returns 404",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "DELETE",
+            "url": "/notifications/templates/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-DELETE-03",
+          "name": "Delete template - invalid UUID returns 400",
+          "type": "validation",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "DELETE",
+            "url": "/notifications/templates/not-a-uuid",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-DELETE-04",
+          "name": "Delete template - STAFF denied (403)",
+          "type": "authorization",
+          "role": "STAFF",
+          "request": {
+            "method": "DELETE",
+            "url": "/notifications/templates/{{CREATED_TEMPLATE_ID}}",
+            "headers": { "Authorization": "Bearer {{STAFF_TOKEN}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TMPL-DELETE-05",
+          "name": "Delete template - MANAGER denied (403)",
+          "type": "authorization",
+          "role": "MANAGER",
+          "request": {
+            "method": "DELETE",
+            "url": "/notifications/templates/{{CREATED_TEMPLATE_ID}}",
+            "headers": { "Authorization": "Bearer {{MANAGER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/notifications",
+      "description": "List notifications for the authenticated user (STAFF+)",
+      "story": "E9.2",
+      "acceptance_criteria": ["AC#3"],
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "NOTIF-LIST-01",
+          "name": "List notifications - happy path (default params)",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/notifications",
+            "headers": { "Authorization": "Bearer {{STAFF_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items", "meta"],
+            "body_values": {
+              "data.meta.hasMore": false
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "NOTIF-LIST-02",
+          "name": "List notifications - filter by status=DELIVERED",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/notifications?status=DELIVERED",
+            "headers": { "Authorization": "Bearer {{STAFF_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items", "meta"],
+            "assertion": "All items have status=DELIVERED"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "NOTIF-LIST-03",
+          "name": "List notifications - with limit parameter",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/notifications?limit=5",
+            "headers": { "Authorization": "Bearer {{STAFF_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items", "meta"],
+            "assertion": "items.length <= 5"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "NOTIF-LIST-04",
+          "name": "List notifications - invalid status value returns 400",
+          "type": "validation",
+          "role": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/notifications?status=INVALID_STATUS",
+            "headers": { "Authorization": "Bearer {{STAFF_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "NOTIF-LIST-05",
+          "name": "List notifications - limit exceeds max (101) returns 400",
+          "type": "validation",
+          "role": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/notifications?limit=101",
+            "headers": { "Authorization": "Bearer {{STAFF_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "NOTIF-LIST-06",
+          "name": "List notifications - VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/notifications",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "NOTIF-LIST-07",
+          "name": "List notifications - no auth returns 401",
+          "type": "authorization",
+          "role": "none",
+          "request": {
+            "method": "GET",
+            "url": "/notifications"
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "NOTIF-LIST-08",
+          "name": "List notifications - MANAGER allowed (200)",
+          "type": "happy_path",
+          "role": "MANAGER",
+          "request": {
+            "method": "GET",
+            "url": "/notifications",
+            "headers": { "Authorization": "Bearer {{MANAGER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items", "meta"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/unread-count",
+      "description": "Get unread notification count for the authenticated user (STAFF+)",
+      "story": "E9.2",
+      "acceptance_criteria": ["AC#2"],
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "NOTIF-UNREAD-01",
+          "name": "Unread count - happy path",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/unread-count",
+            "headers": { "Authorization": "Bearer {{STAFF_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["count"],
+            "assertion": "count is a non-negative integer"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "NOTIF-UNREAD-02",
+          "name": "Unread count - VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/unread-count",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "NOTIF-UNREAD-03",
+          "name": "Unread count - no auth returns 401",
+          "type": "authorization",
+          "role": "none",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/unread-count"
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/notifications/:id/read",
+      "description": "Mark a notification as read (STAFF+)",
+      "story": "E9.2",
+      "acceptance_criteria": ["AC#4"],
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "NOTIF-READ-01",
+          "name": "Mark as read - happy path (requires DELIVERED notification)",
+          "type": "happy_path",
+          "role": "STAFF",
+          "note": "Requires a DELIVERED notification to exist for the staff user. Create one via event bus or direct DB insert before running.",
+          "request": {
+            "method": "PATCH",
+            "url": "/notifications/{{DELIVERED_NOTIFICATION_ID}}/read",
+            "headers": { "Authorization": "Bearer {{STAFF_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "status", "readAt"],
+            "body_values": {
+              "data.status": "READ"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT status, read_at FROM notifications WHERE id = '{{DELIVERED_NOTIFICATION_ID}}'",
+            "expected": "status='READ', read_at IS NOT NULL"
+          }
+        },
+        {
+          "id": "NOTIF-READ-02",
+          "name": "Mark as read - not found (valid UUID, no record)",
+          "type": "edge_case",
+          "role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/notifications/00000000-0000-4000-a000-ffffffffffff/read",
+            "headers": { "Authorization": "Bearer {{STAFF_TOKEN}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "NOTIF-READ-03",
+          "name": "Mark as read - invalid UUID returns 400",
+          "type": "validation",
+          "role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/notifications/not-a-uuid/read",
+            "headers": { "Authorization": "Bearer {{STAFF_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "NOTIF-READ-04",
+          "name": "Mark as read - VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "PATCH",
+            "url": "/notifications/00000000-0000-4000-a000-ffffffffffff/read",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/notifications/:id/dismiss",
+      "description": "Dismiss a notification (STAFF+)",
+      "story": "E9.2",
+      "acceptance_criteria": ["AC#5"],
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "NOTIF-DISMISS-01",
+          "name": "Dismiss notification - happy path (requires DELIVERED or READ notification)",
+          "type": "happy_path",
+          "role": "STAFF",
+          "note": "Requires a DELIVERED or READ notification to exist for the staff user.",
+          "request": {
+            "method": "POST",
+            "url": "/notifications/{{DISMISSABLE_NOTIFICATION_ID}}/dismiss",
+            "headers": { "Authorization": "Bearer {{STAFF_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "status", "dismissedAt"],
+            "body_values": {
+              "data.status": "DISMISSED"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT status, dismissed_at FROM notifications WHERE id = '{{DISMISSABLE_NOTIFICATION_ID}}'",
+            "expected": "status='DISMISSED', dismissed_at IS NOT NULL"
+          }
+        },
+        {
+          "id": "NOTIF-DISMISS-02",
+          "name": "Dismiss notification - not found (valid UUID)",
+          "type": "edge_case",
+          "role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/notifications/00000000-0000-4000-a000-ffffffffffff/dismiss",
+            "headers": { "Authorization": "Bearer {{STAFF_TOKEN}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "NOTIF-DISMISS-03",
+          "name": "Dismiss notification - invalid UUID returns 400",
+          "type": "validation",
+          "role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/notifications/not-a-uuid/dismiss",
+            "headers": { "Authorization": "Bearer {{STAFF_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "NOTIF-DISMISS-04",
+          "name": "Dismiss notification - VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/notifications/00000000-0000-4000-a000-ffffffffffff/dismiss",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/notifications/mark-all-read",
+      "description": "Mark all unread notifications as read for the authenticated user (STAFF+)",
+      "story": "E9.2",
+      "acceptance_criteria": ["AC#3"],
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "NOTIF-MARKALL-01",
+          "name": "Mark all as read - happy path",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/notifications/mark-all-read",
+            "headers": { "Authorization": "Bearer {{STAFF_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["updated"],
+            "assertion": "updated is a non-negative integer"
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT count(*) FROM notifications WHERE user_id = '00000000-0000-4000-a000-000000000010' AND status = 'DELIVERED'",
+            "expected": "count = 0 (all DELIVERED notifications are now READ)"
+          }
+        },
+        {
+          "id": "NOTIF-MARKALL-02",
+          "name": "Mark all as read - no unread notifications returns updated=0",
+          "type": "edge_case",
+          "role": "MANAGER",
+          "request": {
+            "method": "PATCH",
+            "url": "/notifications/mark-all-read",
+            "headers": { "Authorization": "Bearer {{MANAGER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_values": {
+              "data.updated": 0
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "NOTIF-MARKALL-03",
+          "name": "Mark all as read - VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "PATCH",
+            "url": "/notifications/mark-all-read",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/preferences",
+      "description": "Get notification preferences for the authenticated user (STAFF+)",
+      "story": "E9.4",
+      "acceptance_criteria": ["AC#1", "AC#2", "AC#5"],
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "PREF-GET-01",
+          "name": "Get preferences - happy path (staff user)",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/preferences",
+            "headers": { "Authorization": "Bearer {{STAFF_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items"],
+            "assertion": "Each item has templateId, templateCode, templateName, eventName, defaultChannels, defaultPriority, enableInApp, enableEmail, enablePush, hasUserPreference, source"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "PREF-GET-02",
+          "name": "Get preferences - returns all active templates with source field",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/preferences",
+            "headers": { "Authorization": "Bearer {{STAFF_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "assertion": "items count matches active NotificationTemplate count. Each item has source field (USER, ROLE_DEFAULT, or TEMPLATE_DEFAULT)"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "PREF-GET-03",
+          "name": "Get preferences - admin user gets preferences too",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/preferences",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "PREF-GET-04",
+          "name": "Get preferences - VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/preferences",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/notifications/preferences",
+      "description": "Bulk upsert notification preferences for the authenticated user (STAFF+)",
+      "story": "E9.4",
+      "acceptance_criteria": ["AC#3"],
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "PREF-UPDATE-01",
+          "name": "Update preferences - happy path (toggle off email for APPROVAL_REQUESTED)",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "PUT",
+            "url": "/notifications/preferences",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{STAFF_TOKEN}}" },
+            "body": {
+              "preferences": [
+                {
+                  "notificationTemplateId": "61ecee83-280e-47b1-8064-6af66355a387",
+                  "enableInApp": true,
+                  "enableEmail": false,
+                  "enablePush": false
+                }
+              ]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["updated"],
+            "body_values": {
+              "data.updated": 1
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT enable_in_app, enable_email, enable_push FROM notification_preferences WHERE user_id = '00000000-0000-4000-a000-000000000010' AND notification_template_id = '61ecee83-280e-47b1-8064-6af66355a387'",
+            "expected": "enable_in_app=true, enable_email=false, enable_push=false"
+          }
+        },
+        {
+          "id": "PREF-UPDATE-02",
+          "name": "Update preferences - bulk update multiple templates",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "PUT",
+            "url": "/notifications/preferences",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{STAFF_TOKEN}}" },
+            "body": {
+              "preferences": [
+                {
+                  "notificationTemplateId": "61ecee83-280e-47b1-8064-6af66355a387",
+                  "enableInApp": true,
+                  "enableEmail": true,
+                  "enablePush": true
+                },
+                {
+                  "notificationTemplateId": "dbf1ae7e-4566-4cea-852c-3cf40c6a9863",
+                  "enableInApp": true,
+                  "enableEmail": false,
+                  "enablePush": false
+                }
+              ]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["updated"],
+            "body_values": {
+              "data.updated": 2
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT count(*) FROM notification_preferences WHERE user_id = '00000000-0000-4000-a000-000000000010' AND notification_template_id IN ('61ecee83-280e-47b1-8064-6af66355a387', 'dbf1ae7e-4566-4cea-852c-3cf40c6a9863')",
+            "expected": "count = 2"
+          }
+        },
+        {
+          "id": "PREF-UPDATE-03",
+          "name": "Update preferences - with priority override and mute",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "PUT",
+            "url": "/notifications/preferences",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{STAFF_TOKEN}}" },
+            "body": {
+              "preferences": [
+                {
+                  "notificationTemplateId": "e485c9ab-ca3e-4b6b-8dce-d536e4e50605",
+                  "enableInApp": true,
+                  "enableEmail": true,
+                  "enablePush": false,
+                  "priorityOverride": "URGENT",
+                  "isMuted": true,
+                  "muteUntil": "2026-12-31T23:59:59.000Z"
+                }
+              ]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["updated"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT priority_override, is_muted, mute_until FROM notification_preferences WHERE user_id = '00000000-0000-4000-a000-000000000010' AND notification_template_id = 'e485c9ab-ca3e-4b6b-8dce-d536e4e50605'",
+            "expected": "priority_override='URGENT', is_muted=true, mute_until IS NOT NULL"
+          }
+        },
+        {
+          "id": "PREF-UPDATE-04",
+          "name": "Update preferences - empty preferences array returns 400",
+          "type": "validation",
+          "role": "STAFF",
+          "request": {
+            "method": "PUT",
+            "url": "/notifications/preferences",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{STAFF_TOKEN}}" },
+            "body": {
+              "preferences": []
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "PREF-UPDATE-05",
+          "name": "Update preferences - invalid template UUID returns 400",
+          "type": "validation",
+          "role": "STAFF",
+          "request": {
+            "method": "PUT",
+            "url": "/notifications/preferences",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{STAFF_TOKEN}}" },
+            "body": {
+              "preferences": [
+                {
+                  "notificationTemplateId": "not-a-uuid",
+                  "enableInApp": true
+                }
+              ]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "PREF-UPDATE-06",
+          "name": "Update preferences - invalid priority override returns 400",
+          "type": "validation",
+          "role": "STAFF",
+          "request": {
+            "method": "PUT",
+            "url": "/notifications/preferences",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{STAFF_TOKEN}}" },
+            "body": {
+              "preferences": [
+                {
+                  "notificationTemplateId": "61ecee83-280e-47b1-8064-6af66355a387",
+                  "priorityOverride": "SUPER_HIGH"
+                }
+              ]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "PREF-UPDATE-07",
+          "name": "Update preferences - VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "PUT",
+            "url": "/notifications/preferences",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{VIEWER_TOKEN}}" },
+            "body": {
+              "preferences": [
+                {
+                  "notificationTemplateId": "61ecee83-280e-47b1-8064-6af66355a387",
+                  "enableEmail": false
+                }
+              ]
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/notifications/preferences/reset",
+      "description": "Reset user preferences to defaults (STAFF+)",
+      "story": "E9.4",
+      "acceptance_criteria": ["AC#2"],
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "PREF-RESET-01",
+          "name": "Reset preferences - happy path (after setting some preferences)",
+          "type": "happy_path",
+          "role": "STAFF",
+          "note": "Run after PREF-UPDATE tests so there are preferences to delete",
+          "request": {
+            "method": "DELETE",
+            "url": "/notifications/preferences/reset",
+            "headers": { "Authorization": "Bearer {{STAFF_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["deleted"],
+            "assertion": "deleted >= 1 (number of preferences removed)"
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT count(*) FROM notification_preferences WHERE user_id = '00000000-0000-4000-a000-000000000010'",
+            "expected": "count = 0 (all user preferences deleted)"
+          }
+        },
+        {
+          "id": "PREF-RESET-02",
+          "name": "Reset preferences - no preferences to reset returns deleted=0",
+          "type": "edge_case",
+          "role": "MANAGER",
+          "request": {
+            "method": "DELETE",
+            "url": "/notifications/preferences/reset",
+            "headers": { "Authorization": "Bearer {{MANAGER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_values": {
+              "data.deleted": 0
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "PREF-RESET-03",
+          "name": "Reset preferences - VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "DELETE",
+            "url": "/notifications/preferences/reset",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/preferences/role-defaults",
+      "description": "Get role-based notification defaults (ADMIN only)",
+      "story": "E9.4",
+      "acceptance_criteria": ["AC#4"],
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "ROLEDEF-GET-01",
+          "name": "Get role defaults - happy path for STAFF role",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/preferences/role-defaults?role=STAFF",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["role", "items"],
+            "body_values": {
+              "data.role": "STAFF"
+            },
+            "assertion": "Each item has templateId, templateCode, templateName, eventName, defaultChannels, enableInApp, enableEmail, enablePush, hasRoleDefault"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "ROLEDEF-GET-02",
+          "name": "Get role defaults - happy path for MANAGER role",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/preferences/role-defaults?role=MANAGER",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["role", "items"],
+            "body_values": {
+              "data.role": "MANAGER"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "ROLEDEF-GET-03",
+          "name": "Get role defaults - missing required 'role' query param returns 400",
+          "type": "validation",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/preferences/role-defaults",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "ROLEDEF-GET-04",
+          "name": "Get role defaults - invalid role value returns 400",
+          "type": "validation",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/preferences/role-defaults?role=INVALID_ROLE",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "ROLEDEF-GET-05",
+          "name": "Get role defaults - STAFF denied (403)",
+          "type": "authorization",
+          "role": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/preferences/role-defaults?role=STAFF",
+            "headers": { "Authorization": "Bearer {{STAFF_TOKEN}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "ROLEDEF-GET-06",
+          "name": "Get role defaults - MANAGER denied (403)",
+          "type": "authorization",
+          "role": "MANAGER",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/preferences/role-defaults?role=STAFF",
+            "headers": { "Authorization": "Bearer {{MANAGER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "ROLEDEF-GET-07",
+          "name": "Get role defaults - VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/notifications/preferences/role-defaults?role=STAFF",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/notifications/preferences/role-defaults",
+      "description": "Update role-based notification defaults (ADMIN only)",
+      "story": "E9.4",
+      "acceptance_criteria": ["AC#4"],
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "ROLEDEF-UPDATE-01",
+          "name": "Update role defaults - happy path (set STAFF defaults)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/notifications/preferences/role-defaults",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {
+              "role": "STAFF",
+              "preferences": [
+                {
+                  "notificationTemplateId": "61ecee83-280e-47b1-8064-6af66355a387",
+                  "enableInApp": true,
+                  "enableEmail": false,
+                  "enablePush": false
+                }
+              ]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["updated"],
+            "body_values": {
+              "data.updated": 1
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT enable_in_app, enable_email, enable_push FROM notification_role_defaults WHERE role = 'STAFF' AND notification_template_id = '61ecee83-280e-47b1-8064-6af66355a387'",
+            "expected": "enable_in_app=true, enable_email=false, enable_push=false"
+          }
+        },
+        {
+          "id": "ROLEDEF-UPDATE-02",
+          "name": "Update role defaults - bulk update multiple templates for MANAGER",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/notifications/preferences/role-defaults",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {
+              "role": "MANAGER",
+              "preferences": [
+                {
+                  "notificationTemplateId": "61ecee83-280e-47b1-8064-6af66355a387",
+                  "enableInApp": true,
+                  "enableEmail": true,
+                  "enablePush": true
+                },
+                {
+                  "notificationTemplateId": "dbf1ae7e-4566-4cea-852c-3cf40c6a9863",
+                  "enableInApp": true,
+                  "enableEmail": true,
+                  "enablePush": false
+                }
+              ]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["updated"],
+            "body_values": {
+              "data.updated": 2
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT count(*) FROM notification_role_defaults WHERE role = 'MANAGER' AND notification_template_id IN ('61ecee83-280e-47b1-8064-6af66355a387', 'dbf1ae7e-4566-4cea-852c-3cf40c6a9863')",
+            "expected": "count = 2"
+          }
+        },
+        {
+          "id": "ROLEDEF-UPDATE-03",
+          "name": "Update role defaults - empty preferences array returns 400",
+          "type": "validation",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/notifications/preferences/role-defaults",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {
+              "role": "STAFF",
+              "preferences": []
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "ROLEDEF-UPDATE-04",
+          "name": "Update role defaults - missing 'role' field returns 400",
+          "type": "validation",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/notifications/preferences/role-defaults",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {
+              "preferences": [
+                {
+                  "notificationTemplateId": "61ecee83-280e-47b1-8064-6af66355a387",
+                  "enableInApp": true,
+                  "enableEmail": true,
+                  "enablePush": true
+                }
+              ]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "ROLEDEF-UPDATE-05",
+          "name": "Update role defaults - invalid role value returns 400",
+          "type": "validation",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/notifications/preferences/role-defaults",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {
+              "role": "INVALID_ROLE",
+              "preferences": [
+                {
+                  "notificationTemplateId": "61ecee83-280e-47b1-8064-6af66355a387",
+                  "enableInApp": true,
+                  "enableEmail": true,
+                  "enablePush": true
+                }
+              ]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "ROLEDEF-UPDATE-06",
+          "name": "Update role defaults - invalid template UUID returns 400",
+          "type": "validation",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/notifications/preferences/role-defaults",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {
+              "role": "STAFF",
+              "preferences": [
+                {
+                  "notificationTemplateId": "not-a-uuid",
+                  "enableInApp": true,
+                  "enableEmail": true,
+                  "enablePush": true
+                }
+              ]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "ROLEDEF-UPDATE-07",
+          "name": "Update role defaults - missing required boolean fields returns 400",
+          "type": "validation",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/notifications/preferences/role-defaults",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {
+              "role": "STAFF",
+              "preferences": [
+                {
+                  "notificationTemplateId": "61ecee83-280e-47b1-8064-6af66355a387"
+                }
+              ]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "ROLEDEF-UPDATE-08",
+          "name": "Update role defaults - STAFF denied (403)",
+          "type": "authorization",
+          "role": "STAFF",
+          "request": {
+            "method": "PUT",
+            "url": "/notifications/preferences/role-defaults",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{STAFF_TOKEN}}" },
+            "body": {
+              "role": "STAFF",
+              "preferences": [
+                {
+                  "notificationTemplateId": "61ecee83-280e-47b1-8064-6af66355a387",
+                  "enableInApp": true,
+                  "enableEmail": true,
+                  "enablePush": true
+                }
+              ]
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "ROLEDEF-UPDATE-09",
+          "name": "Update role defaults - MANAGER denied (403)",
+          "type": "authorization",
+          "role": "MANAGER",
+          "request": {
+            "method": "PUT",
+            "url": "/notifications/preferences/role-defaults",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{MANAGER_TOKEN}}" },
+            "body": {
+              "role": "STAFF",
+              "preferences": [
+                {
+                  "notificationTemplateId": "61ecee83-280e-47b1-8064-6af66355a387",
+                  "enableInApp": true,
+                  "enableEmail": true,
+                  "enablePush": true
+                }
+              ]
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "ROLEDEF-UPDATE-10",
+          "name": "Update role defaults - VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "PUT",
+            "url": "/notifications/preferences/role-defaults",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{VIEWER_TOKEN}}" },
+            "body": {
+              "role": "STAFF",
+              "preferences": [
+                {
+                  "notificationTemplateId": "61ecee83-280e-47b1-8064-6af66355a387",
+                  "enableInApp": true,
+                  "enableEmail": true,
+                  "enablePush": true
+                }
+              ]
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/notifications/templates/{{CREATED_TEMPLATE_ID}}",
+      "description": "Cleanup - soft-delete the test template created in TMPL-CREATE-01",
+      "story": "Cleanup",
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "CLEANUP-01",
+          "name": "Cleanup - soft-delete test template from TMPL-CREATE-01",
+          "type": "cleanup",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "DELETE",
+            "url": "/notifications/templates/{{CREATED_TEMPLATE_ID}}",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_values": {
+              "data.isActive": false
+            }
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    }
+  ],
+  "test_execution_order": [
+    "AUTH-01 through AUTH-04 (login all users, save tokens)",
+    "TMPL-CREATE-01 through TMPL-CREATE-11 (create templates, save IDs)",
+    "TMPL-LIST-01 through TMPL-LIST-08 (list templates)",
+    "TMPL-GET-01 through TMPL-GET-04 (get template by ID)",
+    "TMPL-UPDATE-01 through TMPL-UPDATE-06 (update templates)",
+    "NOTIF-LIST-01 through NOTIF-LIST-08 (list notifications)",
+    "NOTIF-UNREAD-01 through NOTIF-UNREAD-03 (unread count)",
+    "NOTIF-MARKALL-01 through NOTIF-MARKALL-03 (mark all read)",
+    "NOTIF-READ-01 through NOTIF-READ-04 (mark single read)",
+    "NOTIF-DISMISS-01 through NOTIF-DISMISS-04 (dismiss notification)",
+    "PREF-GET-01 through PREF-GET-04 (get preferences)",
+    "PREF-UPDATE-01 through PREF-UPDATE-07 (update preferences)",
+    "PREF-RESET-01 through PREF-RESET-03 (reset preferences)",
+    "ROLEDEF-GET-01 through ROLEDEF-GET-07 (get role defaults)",
+    "ROLEDEF-UPDATE-01 through ROLEDEF-UPDATE-10 (update role defaults)",
+    "TMPL-DELETE-01 through TMPL-DELETE-05 (delete templates)",
+    "CLEANUP-01 (soft-delete test template)"
+  ],
+  "test_summary": {
+    "total_test_cases": 97,
+    "by_type": {
+      "happy_path": 35,
+      "validation": 22,
+      "edge_case": 9,
+      "authorization": 30,
+      "cleanup": 1
+    },
+    "by_endpoint_group": {
+      "auth_login": 4,
+      "notification_templates_crud": 30,
+      "notification_list_and_actions": 18,
+      "notification_preferences": 14,
+      "notification_role_defaults": 17,
+      "preference_reset": 3,
+      "cleanup": 1
+    },
+    "rbac_coverage": {
+      "SUPER_ADMIN_tests": 42,
+      "MANAGER_tests": 7,
+      "STAFF_tests": 22,
+      "VIEWER_tests": 14,
+      "no_auth_tests": 2
+    },
+    "db_verification_tests": 10
+  }
+}

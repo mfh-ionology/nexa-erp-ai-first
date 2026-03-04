@@ -4,4 +4,5 @@ export {
   generatePresignedGetUrl,
   headObject,
   deleteObject,
+  putObject,
 } from './storage.service.js';

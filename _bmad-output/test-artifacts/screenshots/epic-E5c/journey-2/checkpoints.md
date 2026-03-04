@@ -1,26 +1,26 @@
-# Visual Checkpoint Manifest - Journey 2: Model Registry CRUD Lifecycle
+# Visual Checkpoint Manifest — Journey 2: Create a New AI Model
 
-## Checkpoint 1: Model List Page Loaded
-- **When**: After navigating to /ai/admin/models (step 1)
-- **Screenshot file**: step-1-model-list-loaded.png
-- **What to look for**: T1 Entity List page with "Model Registry" heading, breadcrumbs "AI Administration > Model Registry", table with columns (Name, Provider, Model ID, Max Tokens, Cost/M In, Cost/M Out, Routing Tags, Status, Default). At least 3 seeded models visible (claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5). Purple Concept D styling.
+## Checkpoint 1: Model Registry List Page
+- **When**: After navigating to /ai/admin/models (Step 1)
+- **Screenshot file**: step-1-model-registry-list.png
+- **What to look for**: T1 Entity List page showing at least 3 seeded models (claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5). Columns visible: Name (mono font), Provider (badge), Model ID, Max Tokens, Cost/M, Routing Tags (purple badges), Status (green dot), Default flag. Concept D purple theme with #f4f2ff background. "New" button visible in action bar.
 
-## Checkpoint 2: New Model Form Page
-- **When**: After clicking "Add Model" and form loads (step 4)
-- **Screenshot file**: step-4-new-model-form.png
-- **What to look for**: Form page with "New Model" heading, breadcrumbs "AI Administration > Model Registry > New Model". Primary tab visible with fields: Name, Display Name, Provider, Model ID, Max Input Tokens, Max Output Tokens, Cost fields. Save button should be disabled (form not dirty). Cancel button visible.
+## Checkpoint 2: Model Creation Form (Primary Tab)
+- **When**: After clicking "New" button and form loads (Step 3)
+- **Screenshot file**: step-3-new-model-form.png
+- **What to look for**: "New Model" heading, breadcrumbs showing "AI Administration > Model Registry > New Model". Primary tab active by default. Form fields visible: Name, Display Name, Provider, Model ID, Max Input Tokens, Max Output Tokens, Cost per Million Input/Output. Save and Cancel buttons in action bar.
 
-## Checkpoint 3: Model Created Successfully
-- **When**: After clicking Save with valid form data (step 8)
-- **Screenshot file**: step-8-model-created-toast.png
-- **What to look for**: Success toast "Model created successfully" visible. Page should show the model detail/edit page for the newly created model. Breadcrumbs should show "AI Administration > Model Registry > Test GPT-4o".
+## Checkpoint 3: Advanced Tab with Routing Tags
+- **When**: After filling Advanced tab fields (Step 6)
+- **Screenshot file**: step-6-advanced-tab-filled.png
+- **What to look for**: Advanced tab active. "standard" and "vision" routing tags shown as purple pill badges with X remove buttons. Capabilities JSON textarea with mono font showing {"vision": true, "structured_output": true}. Fallback Model dropdown showing a selected fallback. Config textarea visible.
 
-## Checkpoint 4: Updated Model in List
-- **When**: After navigating back to model list (steps 11-12)
-- **Screenshot file**: step-12-model-in-list.png
-- **What to look for**: Model list page showing "test-gpt-4o" row with mono font name. Updated display name "Test GPT-4o (Updated)" should be reflected. Provider should show "openai" badge.
+## Checkpoint 4: Model Created Successfully
+- **When**: After clicking Save (Step 7)
+- **Screenshot file**: step-7-model-created-toast.png
+- **What to look for**: Success toast with text "Model created successfully" visible. Page may show model detail or redirect to list. All saved values should be reflected.
 
-## Checkpoint 5: Model Deleted from List
-- **When**: After confirming delete and model removed (step 14)
-- **Screenshot file**: step-14-model-deleted.png
-- **What to look for**: Model list no longer contains "test-gpt-4o". Success toast "Model deleted successfully" visible. Seeded models (claude-opus-4-6, etc.) still present in list.
+## Checkpoint 5: Updated Model List
+- **When**: After navigating back to /ai/admin/models (Step 8)
+- **Screenshot file**: step-8-model-list-with-new.png
+- **What to look for**: Model list now shows 4+ models. New "test-gpt-4o" row visible with "openai" provider badge, "standard" and "vision" routing tag purple badges, Active status (green dot). The 3 original seeded models still present.

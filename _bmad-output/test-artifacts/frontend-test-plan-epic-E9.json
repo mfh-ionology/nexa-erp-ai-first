@@ -1,0 +1,883 @@
+{
+  "epic_id": "E9",
+  "epic_title": "Notifications — In-App, Preferences, Role Defaults",
+  "generated_at": "2026-03-04T19:00:00.000Z",
+  "frontend_url": "http://localhost:5110",
+  "api_base_url": "http://localhost:5100",
+  "auth_note": "Login as admin@nexa-erp.dev (SUPER_ADMIN) or staff@nexa-erp.dev (STAFF). Password: NexaDev2026!",
+  "total_journeys": 16,
+  "total_steps": 136,
+  "journeys": [
+    {
+      "id": "j1-notification-bell-badge",
+      "name": "Journey 1: Notification Bell Badge Display",
+      "description": "Verify the notification bell icon appears in the header with an unread badge count when notifications exist",
+      "priority": "critical",
+      "related_stories": ["E9.2"],
+      "preconditions": "User has at least one unread (DELIVERED) notification seeded in the database",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": { "email": "staff@nexa-erp.dev", "password": "NexaDev2026!" },
+          "expected_result": "Credentials entered",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "User is authenticated and redirected to dashboard",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Notification bell icon in header (Bell SVG icon button)",
+          "input_data": {},
+          "expected_result": "Bell icon is visible in the header toolbar area, to the right of the copilot button",
+          "screenshot": true,
+          "visual_check": "Header visible with purple 'N' logo, search bar, copilot icon, notification bell icon, favourites star, and user avatar. Bell icon has a red badge with unread count number."
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Unread count badge on bell icon (span with bg-destructive class)",
+          "input_data": {},
+          "expected_result": "Red badge is visible showing a number greater than 0",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "verify_text",
+          "target": "Bell button aria-label",
+          "input_data": { "attribute": "aria-label" },
+          "expected_result": "Aria label contains the notification count (e.g., 'Notifications (3)')",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j2-notification-dropdown-open",
+      "name": "Journey 2: Open Notification Dropdown",
+      "description": "Verify clicking the notification bell opens a popover dropdown showing recent notifications with priority indicators and timestamps",
+      "priority": "critical",
+      "related_stories": ["E9.2"],
+      "preconditions": "User is logged in as staff with at least 3 unread notifications of varying priorities (URGENT, HIGH, NORMAL)",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Dashboard loads with authenticated user",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Notification bell icon button in header",
+          "input_data": {},
+          "expected_result": "Notification dropdown popover opens below the bell icon",
+          "screenshot": true,
+          "visual_check": "Popover panel (380px wide) visible with 'Notifications' header, 'Mark All Read' button, list of notification items each showing title, body preview, relative timestamp, and coloured left border (red=URGENT, amber=HIGH, blue=NORMAL). Unread notifications have a blue dot indicator and slightly tinted background."
+        },
+        {
+          "step_number": 3,
+          "action": "verify_text",
+          "target": "Dropdown header",
+          "input_data": { "text": "Notifications" },
+          "expected_result": "'Notifications' heading visible in the popover header",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Mark All Read button in dropdown header",
+          "input_data": {},
+          "expected_result": "'Mark All Read' button is visible because there are unread notifications",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Notification item with priority border (border-l-red-500 for URGENT or border-l-amber-500 for HIGH)",
+          "input_data": {},
+          "expected_result": "At least one notification shows a coloured left border indicating priority",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "Unread dot indicator (blue circle, size-2 rounded-full bg-blue-500)",
+          "input_data": {},
+          "expected_result": "Blue dot appears next to unread notification titles",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "verify_element",
+          "target": "Relative timestamp on notification item (e.g., '5m ago', '2h ago')",
+          "input_data": {},
+          "expected_result": "Each notification shows a relative timestamp in monospace font",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "verify_element",
+          "target": "'View All' link at bottom of dropdown",
+          "input_data": {},
+          "expected_result": "'View All' button visible in the popover footer section",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j3-mark-notification-as-read",
+      "name": "Journey 3: Click Notification to Mark as Read",
+      "description": "Verify clicking a notification with an actionUrl navigates to the entity and marks the notification as READ (state machine §17.2: DELIVERED → READ)",
+      "priority": "critical",
+      "related_stories": ["E9.2"],
+      "preconditions": "User has at least one DELIVERED notification with a valid actionUrl (e.g., linking to an invoice)",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Dashboard loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Notification bell icon",
+          "input_data": {},
+          "expected_result": "Dropdown opens showing notifications",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "First unread notification item (with blue dot and bold title)",
+          "input_data": {},
+          "expected_result": "Unread notification is visible with blue dot indicator",
+          "screenshot": true,
+          "visual_check": "Notification dropdown open, first notification item has blue unread dot, bold title, body preview, and relative timestamp. Background is slightly tinted (#faf9ff) indicating unread status."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "First unread notification item (the clickable row)",
+          "input_data": {},
+          "expected_result": "Dropdown closes, user navigates to the entity page (actionUrl), notification is marked as READ",
+          "screenshot": true,
+          "visual_check": "Entity detail page loaded (e.g., invoice detail). Notification dropdown is closed. If we reopen the dropdown, the clicked notification should no longer have the blue dot and title should not be bold."
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Notification bell icon (reopen dropdown)",
+          "input_data": {},
+          "expected_result": "Dropdown reopens. The previously clicked notification now shows as READ (no blue dot, normal weight title, muted text colour)",
+          "screenshot": true,
+          "visual_check": "Dropdown open again. The notification that was clicked is now in READ state — no blue dot, normal font weight, muted text colours. Unread badge count has decreased by 1."
+        }
+      ]
+    },
+    {
+      "id": "j4-dismiss-notification",
+      "name": "Journey 4: Dismiss a Notification",
+      "description": "Verify hovering over a DELIVERED notification reveals a dismiss (X) button, and clicking it removes the notification from the list (DELIVERED → DISMISSED)",
+      "priority": "critical",
+      "related_stories": ["E9.2"],
+      "preconditions": "User has at least one DELIVERED notification",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Dashboard loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Notification bell icon",
+          "input_data": {},
+          "expected_result": "Dropdown opens",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Count the number of notifications in the dropdown list",
+          "input_data": {},
+          "expected_result": "Note the initial count of notifications visible",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Dismiss (X) button on a DELIVERED notification item (appears on hover, top-right of the item)",
+          "input_data": {},
+          "expected_result": "Notification is removed from the list via optimistic update. Unread badge count decreases by 1.",
+          "screenshot": true,
+          "visual_check": "Notification dropdown still open, the dismissed notification is no longer in the list. Notification count is one less than before. Badge on bell icon reflects decreased unread count."
+        }
+      ]
+    },
+    {
+      "id": "j5-mark-all-as-read",
+      "name": "Journey 5: Mark All Notifications as Read",
+      "description": "Verify the 'Mark All Read' button in the dropdown header marks all DELIVERED notifications as READ and resets the badge count",
+      "priority": "high",
+      "related_stories": ["E9.2"],
+      "preconditions": "User has multiple unread (DELIVERED) notifications",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Dashboard loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Notification bell badge showing unread count > 0",
+          "input_data": {},
+          "expected_result": "Badge shows a number (e.g., 5)",
+          "screenshot": true,
+          "visual_check": "Header with notification bell showing red badge with unread count number (e.g., '5')."
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Notification bell icon",
+          "input_data": {},
+          "expected_result": "Dropdown opens with Mark All Read button visible",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "'Mark All Read' button in dropdown header",
+          "input_data": {},
+          "expected_result": "All DELIVERED notifications transition to READ. Blue dots disappear from all items. Titles become normal weight. Unread badge resets to 0 (or badge disappears entirely if no PENDING items remain).",
+          "screenshot": true,
+          "visual_check": "Dropdown open, all notification items now show as READ — no blue dots, normal font weight, muted colours. 'Mark All Read' button is no longer visible (unread count is 0). Bell icon badge is gone or shows 0."
+        }
+      ]
+    },
+    {
+      "id": "j6-empty-state-dropdown",
+      "name": "Journey 6: Empty State When No Notifications",
+      "description": "Verify the notification dropdown shows an appropriate empty state with icon and message when the user has no notifications",
+      "priority": "medium",
+      "related_stories": ["E9.2"],
+      "preconditions": "User has zero notifications (new account or all dismissed)",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Dashboard loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Notification bell icon WITHOUT badge (no unread count)",
+          "input_data": {},
+          "expected_result": "Bell icon is visible but no red badge appears",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Notification bell icon",
+          "input_data": {},
+          "expected_result": "Dropdown opens showing empty state",
+          "screenshot": true,
+          "visual_check": "Notification dropdown popover open. Centre of the panel shows a muted Bell icon (size-8), followed by a primary 'No notifications' message and a secondary description message. 'Mark All Read' button is NOT visible. 'View All' link is still present in footer."
+        }
+      ]
+    },
+    {
+      "id": "j7-toast-urgent-notification",
+      "name": "Journey 7: Toast Appears for URGENT/HIGH Priority Notifications",
+      "description": "Verify that when a high-priority notification arrives via WebSocket, a toast notification appears. NORMAL/LOW priorities should NOT show toasts.",
+      "priority": "high",
+      "related_stories": ["E9.2"],
+      "preconditions": "WebSocket is connected. A test mechanism exists to trigger notifications (e.g., fire an event that generates a notification for the current user).",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Dashboard loads, WebSocket connects (NotificationProvider mounts)",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Notification bell icon visible (confirms NotificationProvider is active)",
+          "input_data": {},
+          "expected_result": "Bell icon present, indicating WebSocket and store are initialised",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Trigger an URGENT priority notification (via API call or test event that generates a notification for the logged-in user)",
+          "input_data": { "trigger_method": "API POST to /api/v1/test/notifications/trigger or backend event emission", "priority": "URGENT" },
+          "expected_result": "An URGENT notification is created for the user and delivered via WebSocket",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Sonner toast notification appearing at the top-right or bottom of the screen",
+          "input_data": {},
+          "expected_result": "Toast appears with the notification title, body description, and an action button. Toast has 8-second auto-dismiss duration for URGENT priority.",
+          "screenshot": true,
+          "visual_check": "Sonner toast visible with notification title and description body. An action button is present (e.g., 'View'). The bell icon badge count has also incremented."
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Bell icon badge count incremented by 1",
+          "input_data": {},
+          "expected_result": "Badge count increased, confirming both toast and badge updated from the same WebSocket event",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j8-notification-preferences-page-load",
+      "name": "Journey 8: Notification Preferences Page Load",
+      "description": "Verify the notification preferences page loads with the preference matrix showing event types grouped by category with In-App, Email, and Push toggle columns",
+      "priority": "critical",
+      "related_stories": ["E9.4"],
+      "preconditions": "User is logged in. Notification templates are seeded in the database.",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/notification-preferences",
+          "input_data": {},
+          "expected_result": "Notification preferences page loads",
+          "screenshot": true,
+          "visual_check": "Page with breadcrumbs 'System > Notification Preferences'. Page header with title. Action bar showing 'Reset to Defaults' and 'Save' buttons (Save disabled because no changes). Description text below header. Preference matrix with collapsible category sections (e.g., 'Approval', 'Invoice', 'Stock'), each containing event rows with three toggle columns: In-App, Email, Push."
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Preference matrix category sections (Collapsible cards with category headers)",
+          "input_data": {},
+          "expected_result": "At least one category section is visible with its group header (e.g., 'Approval', 'Invoice')",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Column headers: 'Event', 'In-App', 'Email', 'Push'",
+          "input_data": {},
+          "expected_result": "Four column headers visible within each expanded category section",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Switch toggles for each notification template row",
+          "input_data": {},
+          "expected_result": "Each event row has three Switch components (one per channel). Some show purple checked state, others show unchecked.",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "'(default)' labels under toggles inherited from template defaults",
+          "input_data": {},
+          "expected_result": "Templates with source 'TEMPLATE_DEFAULT' show the '(default)' label beneath the toggles",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "Save button (disabled state)",
+          "input_data": {},
+          "expected_result": "Save button is visible but disabled (no changes made yet)",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j9-toggle-preference-and-save",
+      "name": "Journey 9: Toggle a Preference and Save",
+      "description": "Verify that toggling a channel switch marks the form as dirty, shows the unsaved changes warning, enables the Save button, and persists the change on save",
+      "priority": "critical",
+      "related_stories": ["E9.4"],
+      "preconditions": "User is on the notification preferences page with at least one template loaded",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/notification-preferences",
+          "input_data": {},
+          "expected_result": "Preferences page loads with matrix",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Email toggle switch for the first notification template (e.g., 'Approval Requested' Email toggle)",
+          "input_data": {},
+          "expected_result": "Toggle flips (checked ↔ unchecked). Unsaved changes warning appears. Save button becomes enabled.",
+          "screenshot": true,
+          "visual_check": "Preference matrix with one toggle changed. Amber 'Unsaved Changes' warning with triangle icon visible in the action bar area. Save button is now enabled (purple background, not greyed out)."
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Unsaved changes warning (amber text with AlertTriangle icon, role='status')",
+          "input_data": {},
+          "expected_result": "Amber warning indicator with 'Unsaved Changes' text is visible in the action bar",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Save button (purple, now enabled)",
+          "input_data": {},
+          "expected_result": "Preferences are saved via PUT /notifications/preferences. Unsaved changes warning disappears. Save button returns to disabled state.",
+          "screenshot": true,
+          "visual_check": "Preferences page with no unsaved changes warning. Save button is disabled again. The toggle remains in its new position, confirming the save persisted."
+        },
+        {
+          "step_number": 5,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Navigate away from preferences",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "navigate",
+          "target": "/system/notification-preferences",
+          "input_data": {},
+          "expected_result": "Return to preferences page — the previously toggled channel should still reflect the saved state",
+          "screenshot": true,
+          "visual_check": "Preferences page loaded. The email toggle that was changed earlier still reflects the saved value (confirms persistence across page reloads)."
+        }
+      ]
+    },
+    {
+      "id": "j10-reset-preferences-to-defaults",
+      "name": "Journey 10: Reset Preferences to Defaults",
+      "description": "Verify the 'Reset to Defaults' button opens a confirmation dialog and, when confirmed, clears all user preferences back to template defaults",
+      "priority": "high",
+      "related_stories": ["E9.4"],
+      "preconditions": "User has at least one custom preference saved (different from template defaults)",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/notification-preferences",
+          "input_data": {},
+          "expected_result": "Preferences page loads with user's custom preferences",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "'Reset to Defaults' button (ghost variant with RotateCcw icon)",
+          "input_data": {},
+          "expected_result": "Confirmation dialog appears",
+          "screenshot": true,
+          "visual_check": "AlertDialog modal visible over the preferences page. Title says 'Reset to Defaults'. Description warns that all personal preferences will be cleared. Two buttons: 'Cancel' and 'Reset to Defaults' (destructive red style)."
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "'Reset to Defaults' button in the confirmation dialog (destructive action)",
+          "input_data": {},
+          "expected_result": "All user preferences are deleted via DELETE /notifications/preferences/reset. Matrix reloads showing template defaults. Source labels show '(default)' for all entries.",
+          "screenshot": true,
+          "visual_check": "Preferences page with matrix reloaded. All toggles now show template default values. Source labels beneath toggles show '(default)' text, indicating no user-level overrides exist."
+        }
+      ]
+    },
+    {
+      "id": "j11-unsaved-changes-navigation-blocker",
+      "name": "Journey 11: Navigation Blocker for Unsaved Changes",
+      "description": "Verify that navigating away from the preferences page with unsaved changes triggers a confirmation dialog to prevent accidental data loss",
+      "priority": "high",
+      "related_stories": ["E9.4"],
+      "preconditions": "User is on the notification preferences page",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/notification-preferences",
+          "input_data": {},
+          "expected_result": "Preferences page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Any channel toggle switch to create a dirty state",
+          "input_data": {},
+          "expected_result": "Toggle flips, unsaved changes warning appears",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sidebar navigation link (e.g., 'Dashboard' or any other page link)",
+          "input_data": {},
+          "expected_result": "Navigation is blocked. A confirmation dialog appears asking whether to discard changes.",
+          "screenshot": true,
+          "visual_check": "AlertDialog modal visible with 'Unsaved Changes' title and description. Two buttons: 'Cancel' (stay on page) and 'Discard & Leave' (destructive, navigate away)."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "'Cancel' button in the blocker dialog",
+          "input_data": {},
+          "expected_result": "Dialog closes, user remains on the preferences page with their unsaved changes intact",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Sidebar navigation link again",
+          "input_data": {},
+          "expected_result": "Blocker dialog appears again",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "'Discard & Leave' button in the blocker dialog",
+          "input_data": {},
+          "expected_result": "Dialog closes, user navigates to the target page, unsaved changes are discarded",
+          "screenshot": true,
+          "visual_check": "User has navigated to the new page (e.g., Dashboard). The preferences page changes were discarded."
+        }
+      ]
+    },
+    {
+      "id": "j12-category-collapse-expand",
+      "name": "Journey 12: Collapse and Expand Category Sections",
+      "description": "Verify the preference matrix category sections can be collapsed and expanded via the collapsible trigger",
+      "priority": "medium",
+      "related_stories": ["E9.4"],
+      "preconditions": "User is on the notification preferences page with multiple categories loaded",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/notification-preferences",
+          "input_data": {},
+          "expected_result": "Preferences page loads with all category sections expanded (defaultOpen)",
+          "screenshot": true,
+          "visual_check": "Multiple category sections visible, all expanded showing their event rows with toggle switches. Category headers have chevron-down icons."
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "First category section header (collapsible trigger button)",
+          "input_data": {},
+          "expected_result": "Category section collapses, hiding its event rows. Chevron rotates.",
+          "screenshot": true,
+          "visual_check": "First category section is collapsed — only the header bar is visible, no toggle rows. Other sections remain expanded. The chevron icon on the collapsed section has rotated."
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Same category section header (click again to expand)",
+          "input_data": {},
+          "expected_result": "Category section re-expands, showing event rows again",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j13-admin-role-defaults-section",
+      "name": "Journey 13: Admin Role Defaults Section Visibility",
+      "description": "Verify that the Role Defaults section is visible only for ADMIN/SUPER_ADMIN users and hidden for regular STAFF users",
+      "priority": "critical",
+      "related_stories": ["E9.4"],
+      "preconditions": "Two user accounts: admin@nexa-erp.dev (SUPER_ADMIN) and staff@nexa-erp.dev (STAFF)",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": { "email": "staff@nexa-erp.dev", "password": "NexaDev2026!" },
+          "expected_result": "Credentials entered",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Logged in as STAFF user",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "navigate",
+          "target": "/system/notification-preferences",
+          "input_data": {},
+          "expected_result": "Preferences page loads for STAFF user",
+          "screenshot": true,
+          "visual_check": "Preferences page showing the preference matrix for personal preferences. NO 'Role Defaults' section visible below the matrix. No separator, no shield icon, no role selector dropdown."
+        },
+        {
+          "step_number": 5,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Logout and return to login",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": { "email": "admin@nexa-erp.dev", "password": "NexaDev2026!" },
+          "expected_result": "Credentials entered for admin",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Logged in as SUPER_ADMIN user",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "navigate",
+          "target": "/system/notification-preferences",
+          "input_data": {},
+          "expected_result": "Preferences page loads for ADMIN user — role defaults section visible",
+          "screenshot": true,
+          "visual_check": "Preferences page showing personal preference matrix AND below a separator, the 'Role Defaults' section. Section has a purple shield icon, 'Role Defaults' title, description text, a role selector dropdown (defaulting to 'STAFF'), and a Save button. Below the selector, a matrix grid for the selected role's defaults."
+        }
+      ]
+    },
+    {
+      "id": "j14-admin-role-defaults-edit",
+      "name": "Journey 14: Edit Role Defaults as Admin",
+      "description": "Verify that an admin can select a role, toggle role-level default preferences, save them, and switch between roles",
+      "priority": "high",
+      "related_stories": ["E9.4"],
+      "preconditions": "Logged in as admin@nexa-erp.dev (SUPER_ADMIN). Notification templates are seeded.",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/notification-preferences",
+          "input_data": {},
+          "expected_result": "Preferences page loads with Role Defaults section visible",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Role selector dropdown in Role Defaults section (defaulting to 'STAFF')",
+          "input_data": {},
+          "expected_result": "Dropdown shows 'STAFF' as the selected role",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Email toggle for first template in the Role Defaults matrix",
+          "input_data": {},
+          "expected_result": "Toggle changes state. Amber unsaved indicator appears next to the role selector.",
+          "screenshot": true,
+          "visual_check": "Role Defaults section with 'STAFF' selected. One toggle has been changed. Amber warning triangle visible next to the role selector. Save button is now enabled (purple)."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Save button in Role Defaults section",
+          "input_data": {},
+          "expected_result": "Role defaults saved via PUT /notifications/preferences/role-defaults. Dirty indicator disappears.",
+          "screenshot": true,
+          "visual_check": "Role Defaults section — no amber indicator. Save button disabled again. Toggle remains in its new position."
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Role selector dropdown",
+          "input_data": {},
+          "expected_result": "Dropdown opens showing role options: SUPER_ADMIN, ADMIN, MANAGER, STAFF, VIEWER",
+          "screenshot": true,
+          "visual_check": "Select dropdown open showing five role options: SUPER_ADMIN, ADMIN, MANAGER, STAFF, VIEWER."
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "'MANAGER' option in the role dropdown",
+          "input_data": {},
+          "expected_result": "Role switches to MANAGER, matrix reloads with MANAGER's role defaults",
+          "screenshot": true,
+          "visual_check": "Role selector now shows 'MANAGER'. Matrix grid reloaded showing MANAGER role defaults (may differ from STAFF defaults). Save button disabled (no changes)."
+        }
+      ]
+    },
+    {
+      "id": "j15-role-switch-unsaved-changes-guard",
+      "name": "Journey 15: Role Switch With Unsaved Changes Guard",
+      "description": "Verify that switching roles when there are unsaved role default changes shows a confirmation dialog",
+      "priority": "medium",
+      "related_stories": ["E9.4"],
+      "preconditions": "Logged in as admin. On notification preferences page.",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/system/notification-preferences",
+          "input_data": {},
+          "expected_result": "Preferences page loads with Role Defaults section (STAFF selected)",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Any toggle in the Role Defaults matrix to create a dirty state",
+          "input_data": {},
+          "expected_result": "Toggle changes, amber dirty indicator appears",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Role selector dropdown, then select 'MANAGER'",
+          "input_data": {},
+          "expected_result": "Confirmation dialog appears (unsaved role switch guard)",
+          "screenshot": true,
+          "visual_check": "AlertDialog modal visible. Title asks about switching roles. Description warns that unsaved changes will be lost. Two buttons: 'Cancel' and 'Discard & Switch' (destructive style)."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "'Cancel' button in the confirmation dialog",
+          "input_data": {},
+          "expected_result": "Dialog closes, role stays on STAFF, unsaved changes preserved",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Role selector dropdown, then select 'MANAGER' again",
+          "input_data": {},
+          "expected_result": "Confirmation dialog appears again",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "'Discard & Switch' button",
+          "input_data": {},
+          "expected_result": "Dialog closes, role switches to MANAGER, matrix reloads with MANAGER defaults, unsaved STAFF changes are discarded",
+          "screenshot": true,
+          "visual_check": "Role selector shows 'MANAGER'. Matrix loaded with MANAGER defaults. No dirty indicator. Changes to STAFF defaults were discarded."
+        }
+      ]
+    },
+    {
+      "id": "j16-websocket-real-time-delivery",
+      "name": "Journey 16: WebSocket Real-Time Notification Delivery",
+      "description": "Verify that a new notification delivered via WebSocket appears in the dropdown without a page refresh, and the badge count updates live",
+      "priority": "critical",
+      "related_stories": ["E9.2"],
+      "preconditions": "User is logged in. WebSocket is connected. A test mechanism can trigger a notification for the current user.",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Dashboard loads, NotificationProvider mounts and establishes WebSocket connection",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Note the current unread badge count on the bell icon",
+          "input_data": {},
+          "expected_result": "Record current unread count (e.g., 3 or 0 if no badge)",
+          "screenshot": true,
+          "visual_check": "Header with notification bell. Record the current badge count (or note that no badge is showing)."
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Trigger a NORMAL priority notification for the current user (via backend event or test API)",
+          "input_data": { "trigger_method": "Backend event emission or test notification trigger endpoint", "priority": "NORMAL" },
+          "expected_result": "WebSocket delivers notification:new event to the client",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Bell icon badge count has incremented by 1",
+          "input_data": {},
+          "expected_result": "Badge count is now previous + 1. No toast appeared (NORMAL priority = silent badge update only).",
+          "screenshot": true,
+          "visual_check": "Header with bell icon badge showing incremented count. No toast notification visible (NORMAL priority is silent)."
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Notification bell icon",
+          "input_data": {},
+          "expected_result": "Dropdown opens with the new notification at the top of the list (most recent first)",
+          "screenshot": true,
+          "visual_check": "Notification dropdown open. The newest notification is at the top of the list with unread blue dot, bold title, body preview, and 'just now' relative timestamp. Priority left border colour matches the notification priority."
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "New notification item at top of dropdown list (prepended)",
+          "input_data": {},
+          "expected_result": "The newly received notification appears first in the list with 'just now' timestamp and unread indicators",
+          "screenshot": false
+        }
+      ]
+    }
+  ]
+}

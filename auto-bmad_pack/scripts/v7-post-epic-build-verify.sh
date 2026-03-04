@@ -6,7 +6,7 @@
 # Usage: ./v7-post-epic-build-verify.sh <epic-id> [options]
 #
 # Options:
-#   --api-url URL         Backend URL (default: http://localhost:3000)
+#   --api-url URL         Backend URL (default: http://localhost:5100)
 #   --frontend-url URL    Frontend URL (default: empty; set to enable frontend checks)
 #   --skip-build          Skip build, just start servers
 #   --keep-servers        Don't stop servers on exit (for subsequent scripts)
@@ -32,7 +32,7 @@ CONFIG_DIR="${SCRIPT_DIR}/../config"
 # ============================================================================
 
 EPIC_ID="${1:?Usage: $0 <epic-id> [options]}"
-API_URL="http://localhost:3000"
+API_URL="http://localhost:5100"
 FRONTEND_URL=""  # Empty by default; apps/web is a stub until React UI epics
 SKIP_BUILD=false
 KEEP_SERVERS=false
@@ -265,7 +265,7 @@ start_servers() {
     cd "$PROJECT_ROOT"
 
     # Extract port from API URL
-    local api_port="${API_URL##*:}"       # e.g. 3000 from http://localhost:3000
+    local api_port="${API_URL##*:}"       # e.g. 5100 from http://localhost:5100
 
     # Build list of ports to clear
     local ports_to_clear=("$api_port")

@@ -58,6 +58,11 @@ export type {
   NotificationPreference,
   NotificationRoleDefault,
   Notification,
+  EmailMessage,
+  EmailRecipient,
+  EmailQueue,
+  EmailSignature,
+  EmailTemplate,
 } from '../generated/prisma/client';
 
 // Enums
@@ -83,6 +88,11 @@ export {
   NotificationChannel,
   NotificationPriority,
   NotificationStatus,
+  EmailMessageStatus,
+  EmailDirection,
+  EmailRecipientType,
+  EmailRecipientStatus,
+  EmailQueueStatus,
 } from '../generated/prisma/client';
 
 // Utilities

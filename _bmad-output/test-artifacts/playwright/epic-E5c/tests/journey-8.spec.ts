@@ -1,340 +1,248 @@
 import { test, expect } from '@playwright/test';
 
-const SCREENSHOTS_DIR =
-  '_bmad-output/test-artifacts/screenshots/epic-E5c/journey-8';
+import * as path from 'path';
 
-test.describe('Journey 8: Skill Pack Manager — Grouped View & Activation Toggle', () => {
+// Resolve screenshots dir relative to this test file
+const SCREENSHOTS_DIR = path.resolve(__dirname, '..', '..', '..', 'screenshots', 'epic-E5c', 'journey-8');
+
+/**
+ * Helper: navigate within the SPA using TanStack Router.
+ * Auth tokens are in-memory only (Zustand), so page.goto() would
+ * cause a full reload and lose the authenticated session.
+ */
+async function spaNavigate(page: import('@playwright/test').Page, path: string) {
+  await page.evaluate((p) => {
+    window.history.pushState({}, '', p);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, path);
+  await page.waitForTimeout(500);
+  await page.waitForLoadState('networkidle');
+}
+
+// Unique suffix to avoid 409 conflicts on re-runs
+const AGENT_SLUG = `test-ar-collector-${Date.now()}`;
+const AGENT_DISPLAY_NAME = 'AR Collection Agent';
+
+test.describe('Journey 8: Create a New AI Agent', () => {
   test.setTimeout(120_000);
 
   test.beforeEach(async ({ page }) => {
     // Login as admin user
     await page.goto('/login');
-    await page.getByLabel('Email').fill('admin@nexa-erp.dev');
-    await page.getByLabel('Password').fill('NexaDev2026!');
-    await page.getByRole('button', { name: 'Sign In' }).click();
+    await page.waitForLoadState('networkidle');
 
-    // Wait for redirect away from login page
+    const emailInput = page.getByLabel('Email');
+    await emailInput.waitFor({ state: 'visible', timeout: 10000 });
+    await emailInput.fill('admin@nexa-erp.dev');
+
+    const passwordInput = page.getByLabel('Password');
+    await passwordInput.fill('NexaDev2026!');
+
+    const signInButton = page.getByRole('button', { name: /sign in/i });
+    await signInButton.waitFor({ state: 'visible' });
+    await signInButton.click();
+
+    // Wait for navigation away from /login
     await page.waitForURL((url) => !url.pathname.includes('/login'), {
-      timeout: 15000,
+      timeout: 30000,
     });
     await page.waitForLoadState('networkidle');
   });
 
-  test('View skills grouped by module, toggle activation, and search (E5c-4 AC-3, AC-6)', async ({
-    page,
-  }) => {
-    // Capture API errors for diagnostics
-    const apiErrors: string[] = [];
-    page.on('response', (response) => {
-      if (
-        response.url().includes('/api/') &&
-        response.status() >= 400
-      ) {
-        apiErrors.push(
-          `${response.status()} ${response.request().method()} ${response.url()}`,
-        );
-      }
-    });
+  test('Create a new AI agent with model, prompt, guardrails, and tools', async ({ page }) => {
+    // ── Step 1: Navigate to /ai/admin/agents ───────────────────────────
+    await spaNavigate(page, '/ai/admin/agents');
+    await page.waitForTimeout(2000);
 
-    // ── Step 1: Navigate to /ai/admin/skills via SPA ────────────────────
-    // IMPORTANT: page.goto() for authenticated routes resets the SPA session.
-    // Must use sidebar/link navigation to preserve auth state.
-    const sidebarNav = page.locator('nav');
+    // Verify agent list page loaded
+    const pageContent = page.getByText('Agent', { exact: false });
+    await expect(pageContent.first()).toBeVisible({ timeout: 15000 });
 
-    // Click "AI Administration" in sidebar
-    const aiAdminLink = sidebarNav.getByText('AI Administration').first();
-    await expect(aiAdminLink).toBeVisible({ timeout: 10000 });
-    await aiAdminLink.click();
-    await page.waitForURL('**/ai/admin', { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
-
-    // Click "Skill Packs" quick-nav button on the AI dashboard
-    const skillNavButton = page.getByRole('button', {
-      name: /Skill Packs/i,
-    });
-    await expect(skillNavButton.first()).toBeVisible({ timeout: 10000 });
-    await skillNavButton.first().click();
-    await page.waitForURL('**/ai/admin/skills', { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
-
-    // Verify Skill Pack Manager page loaded
-    const pageHeading = page
-      .getByRole('heading')
-      .filter({ hasText: /Skill Pack|Skills/i });
-    await expect(pageHeading.first()).toBeVisible({ timeout: 10000 });
-
-    // Verify accordion sections are visible (module groups)
-    // The accordion groups skills by moduleKey
-    const accordionItems = page.locator('[data-state="open"], [data-state="closed"]');
-    await page.waitForTimeout(1000); // Allow accordion data to load
-
-    // ── Checkpoint 1: Skill Pack Manager Initial Load ───────────────────
+    // ── Checkpoint 1: Agent List Page Loaded ────────────────────────────
     await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-1-skill-pack-manager-loaded.png`,
+      path: `${SCREENSHOTS_DIR}/step-1-agent-list-page.png`,
       fullPage: true,
     });
 
-    // Verify we have skill cards or table data
-    const skillCards = page.locator('[class*="card"]').filter({
-      has: page.locator('[class*="mono"], code, [class*="font-mono"]'),
-    });
+    // ── Step 2: Verify seeded agents visible ───────────────────────────
+    // The agent list uses a table; verify at least some seeded agents are showing
     const tableRows = page.locator('table tbody tr');
-    const hasSkillCards = await skillCards.first().isVisible({ timeout: 5000 }).catch(() => false);
-    const hasTableRows = await tableRows.first().isVisible({ timeout: 3000 }).catch(() => false);
+    await expect(tableRows.first()).toBeVisible({ timeout: 10000 });
+    const rowCount = await tableRows.count();
+    expect(rowCount).toBeGreaterThanOrEqual(1);
 
-    test.info().annotations.push({
-      type: 'info',
-      description: `Skill display mode: ${hasSkillCards ? 'card/accordion view' : hasTableRows ? 'table view' : 'no skills visible'}`,
-    });
+    // ── Step 3: Click "New" button to create a new agent ────────────────
+    const newButton = page.getByRole('button', { name: /new/i });
+    await expect(newButton).toBeVisible({ timeout: 5000 });
+    await newButton.click();
 
-    // Verify search bar exists
-    const searchInput = page.getByPlaceholder(/Search/i);
-    await expect(searchInput.first()).toBeVisible({ timeout: 5000 });
+    // Wait for navigation to agent form
+    await page.waitForURL('**/ai/admin/agents/new', { timeout: 10000 });
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
 
-    // Verify action buttons
-    const testTriggerButton = page.getByRole('button', { name: /Test Trigger/i });
-    const addSkillButton = page.getByRole('button', { name: /Add Skill|New/i });
+    // Verify tabs are visible
+    const mainTab = page.getByRole('tab', { name: 'Main' });
+    await expect(mainTab).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('tab', { name: 'Tools' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Guardrails' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Triggers' })).toBeVisible();
 
-    if (await testTriggerButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      test.info().annotations.push({
-        type: 'info',
-        description: 'Test Trigger button visible in action bar',
-      });
-    }
-
-    if (await addSkillButton.first().isVisible({ timeout: 3000 }).catch(() => false)) {
-      test.info().annotations.push({
-        type: 'info',
-        description: 'Add Skill / New button visible in action bar',
-      });
-    }
-
-    // ── Step 2: Verify module accordion sections ────────────────────────
-    // Look for accordion trigger buttons or section headings with module keys
-    const accordionTriggers = page.locator(
-      'button[data-state="open"], button[data-state="closed"], [role="button"][data-state]',
-    );
-    const accordionTriggerCount = await accordionTriggers.count();
-
-    if (accordionTriggerCount >= 2) {
-      test.info().annotations.push({
-        type: 'info',
-        description: `Found ${accordionTriggerCount} accordion module sections`,
-      });
-    } else {
-      // Try alternative: look for any collapsible sections or headings with module keys
-      const moduleHeadings = page.locator('h2, h3, h4').filter({
-        hasText: /^(ar|ap|finance|sales|purchasing|inventory|crm|hr|manufacturing|reporting|views|system|unassigned)/i,
-      });
-      const moduleCount = await moduleHeadings.count();
-      test.info().annotations.push({
-        type: 'info',
-        description: `Accordion triggers: ${accordionTriggerCount}, Module headings: ${moduleCount}`,
-      });
-    }
-
-    // ── Step 3: Click second module accordion header ────────────────────
-    // Expand a closed accordion section
-    const closedAccordions = page.locator('button[data-state="closed"]');
-    const closedCount = await closedAccordions.count();
-
-    if (closedCount > 0) {
-      // Click the first closed accordion (which is the "second" module since first is open)
-      await closedAccordions.first().click();
-      await page.waitForTimeout(500);
-
-      test.info().annotations.push({
-        type: 'info',
-        description: 'Clicked a closed accordion section to expand it',
-      });
-    } else {
-      test.info().annotations.push({
-        type: 'info',
-        description: 'No closed accordion sections found — all may already be expanded or using different UI pattern',
-      });
-    }
-
-    // ── Checkpoint 2: Second Module Accordion Expanded ──────────────────
+    // ── Checkpoint 2: Agent Form — Create Mode (Main Tab) ───────────────
     await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-3-second-module-expanded.png`,
+      path: `${SCREENSHOTS_DIR}/step-3-agent-form-create-mode.png`,
       fullPage: true,
     });
 
-    // ── Step 4: Click active toggle on a skill card to deactivate ───────
-    // Find a switch/toggle on a skill card
-    const activeToggles = page.getByRole('switch');
-    const toggleCount = await activeToggles.count();
-    test.info().annotations.push({
-      type: 'info',
-      description: `Found ${toggleCount} toggle switches on page`,
-    });
+    // ── Step 4: Fill Main tab fields ────────────────────────────────────
+    // Name field — use placeholder to disambiguate from "Display Name"
+    const nameInput = page.getByPlaceholder('invoice-creator');
+    await nameInput.fill(AGENT_SLUG);
 
-    let toggledSkillName = '';
-    let toggleWorked = false;
+    // Display Name field
+    const displayNameInput = page.getByPlaceholder('Invoice Creator Agent');
+    await displayNameInput.fill(AGENT_DISPLAY_NAME);
 
-    if (toggleCount > 0) {
-      // Find a toggle that is currently ON (checked)
-      let targetToggle = activeToggles.first();
-      for (let i = 0; i < toggleCount; i++) {
-        const toggle = activeToggles.nth(i);
-        const isChecked = await toggle.getAttribute('aria-checked');
-        if (isChecked === 'true') {
-          targetToggle = toggle;
-          break;
-        }
-      }
+    // Description field
+    const descriptionInput = page.getByPlaceholder('Describe what this agent does');
+    await descriptionInput.fill('Handles accounts receivable collection workflows');
 
-      // Try to get the skill name near this toggle for identification
-      const parentCard = targetToggle.locator('xpath=ancestor::div[contains(@class,"card") or contains(@class,"Card")]').first();
-      const skillNameEl = parentCard.locator('[class*="mono"], code, [class*="font-mono"]').first();
-      if (await skillNameEl.isVisible({ timeout: 2000 }).catch(() => false)) {
-        toggledSkillName = await skillNameEl.textContent() || 'unknown';
-      }
-
-      // Click the toggle to deactivate
-      await targetToggle.click();
-      await page.waitForTimeout(1000);
-
-      // Check for deactivation toast
-      const deactivateToast = page.locator('[role="status"], [data-sonner-toast], [class*="toast"]').filter({
-        hasText: /deactivated|disabled|off/i,
-      });
-      if (await deactivateToast.first().isVisible({ timeout: 5000 }).catch(() => false)) {
-        toggleWorked = true;
-        test.info().annotations.push({
-          type: 'info',
-          description: `Deactivation toast appeared for skill "${toggledSkillName}"`,
-        });
-      } else {
-        // Toast may have disappeared or have different text; check toggle state
-        const nowChecked = await targetToggle.getAttribute('aria-checked');
-        if (nowChecked === 'false') {
-          toggleWorked = true;
-          test.info().annotations.push({
-            type: 'info',
-            description: `Toggle switched to OFF for skill "${toggledSkillName}" (toast may have auto-dismissed)`,
-          });
-        }
-      }
-
-      // ── Checkpoint 3: Skill Deactivation ──────────────────────────────
-      await page.screenshot({
-        path: `${SCREENSHOTS_DIR}/step-4-skill-deactivated-toast.png`,
-        fullPage: true,
-      });
-
-      // ── Step 5: Click same toggle to reactivate ─────────────────────
-      await targetToggle.click();
-      await page.waitForTimeout(1000);
-
-      // Check for reactivation toast
-      const activateToast = page.locator('[role="status"], [data-sonner-toast], [class*="toast"]').filter({
-        hasText: /activated|enabled|on/i,
-      });
-      if (await activateToast.first().isVisible({ timeout: 5000 }).catch(() => false)) {
-        test.info().annotations.push({
-          type: 'info',
-          description: `Reactivation toast appeared for skill "${toggledSkillName}"`,
-        });
-      } else {
-        const reChecked = await targetToggle.getAttribute('aria-checked');
-        test.info().annotations.push({
-          type: 'info',
-          description: `Toggle back to ${reChecked} for skill "${toggledSkillName}"`,
-        });
-      }
+    // Model dropdown — select a model (look for Sonnet)
+    const modelTrigger = page.locator('button[role="combobox"]').first();
+    await modelTrigger.click();
+    await page.waitForTimeout(300);
+    // Try to find a Sonnet model option
+    const modelOption = page.getByRole('option').filter({ hasText: /sonnet/i }).first();
+    const modelOptionVisible = await modelOption.isVisible().catch(() => false);
+    if (modelOptionVisible) {
+      await modelOption.click();
     } else {
-      test.info().annotations.push({
-        type: 'missing-feature',
-        description: 'No toggle switches found on skill cards — inline activation toggle not rendered',
-      });
+      // Pick the first non-auto option (index 0 is auto-route)
+      const firstRealModel = page.getByRole('option').nth(1);
+      if (await firstRealModel.isVisible().catch(() => false)) {
+        await firstRealModel.click();
+      } else {
+        await page.keyboard.press('Escape');
+      }
+    }
+    await page.waitForTimeout(300);
+
+    // Prompt dropdown — select a prompt
+    const promptTrigger = page.locator('button[role="combobox"]').nth(1);
+    await promptTrigger.click();
+    await page.waitForTimeout(300);
+    // Pick the first available prompt
+    const firstPrompt = page.getByRole('option').first();
+    await expect(firstPrompt).toBeVisible({ timeout: 5000 });
+    await firstPrompt.click();
+    await page.waitForTimeout(300);
+
+    // Routing Tags — click the "+ standard" tag button
+    const standardTagButton = page.locator('button').filter({ hasText: '+ standard' });
+    if (await standardTagButton.isVisible().catch(() => false)) {
+      await standardTagButton.click();
     }
 
-    // ── Step 6: Search for "overdue" ────────────────────────────────────
-    const searchField = page.getByPlaceholder(/Search/i).first();
-    await searchField.clear();
-    await searchField.fill('overdue');
+    // Max Turns — clear and fill with 15
+    const maxTurnsInput = page.getByRole('spinbutton', { name: 'Max Turns' });
+    await maxTurnsInput.clear();
+    await maxTurnsInput.fill('15');
 
-    // Wait for debounced search to filter results (300ms debounce + rendering)
-    await page.waitForTimeout(800);
-
-    // ── Step 7: Verify filtered results ─────────────────────────────────
-    // After filtering, check what's visible
-    const filteredCards = page.locator('[class*="card"]').filter({
-      has: page.locator('[class*="mono"], code, [class*="font-mono"]'),
-    });
-    const filteredTableRows = page.locator('table tbody tr');
-
-    const visibleCards = await filteredCards.count();
-    const visibleRows = await filteredTableRows.count();
-
-    test.info().annotations.push({
-      type: 'info',
-      description: `After "overdue" filter: ${visibleCards} cards, ${visibleRows} table rows visible`,
-    });
-
-    // Check if any visible skills mention "overdue"
-    const overdueMatches = page.locator('text=/overdue/i');
-    const overdueCount = await overdueMatches.count();
-
-    if (overdueCount > 0) {
-      test.info().annotations.push({
-        type: 'info',
-        description: `Found ${overdueCount} elements matching "overdue" after search filter`,
-      });
-    } else {
-      // Maybe no skills have "overdue" in the seeded data
-      test.info().annotations.push({
-        type: 'info',
-        description: 'No skills matching "overdue" found — seed data may not include overdue-related skills',
-      });
-    }
-
-    // Check for empty state or "no results" message
-    const noResults = page.locator('text=/no skills|no results|not found|empty/i');
-    if (await noResults.first().isVisible({ timeout: 2000 }).catch(() => false)) {
-      test.info().annotations.push({
-        type: 'info',
-        description: 'Empty/no results state shown for "overdue" filter',
-      });
-    }
-
-    // ── Checkpoint 4: Search Filter Results ─────────────────────────────
+    // ── Checkpoint 3: Main Tab Filled ───────────────────────────────────
     await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-7-search-filtered-overdue.png`,
+      path: `${SCREENSHOTS_DIR}/step-4-main-tab-filled.png`,
       fullPage: true,
     });
 
-    // ── Final Assertions ────────────────────────────────────────────────
-    // The page must have loaded with a recognizable heading
-    await expect(pageHeading.first()).toBeVisible();
+    // ── Step 5: Click Guardrails tab ────────────────────────────────────
+    const guardrailsTab = page.getByRole('tab', { name: 'Guardrails' });
+    await guardrailsTab.click();
+    await page.waitForTimeout(500);
 
-    // Search input must exist and work
-    await expect(searchField).toBeVisible();
+    // ── Step 6: Fill Guardrails tab ─────────────────────────────────────
+    // canRead — TagInput: type entity name and press Enter
+    const canReadInput = page.getByPlaceholder(/entity name.*press Enter/i).first();
+    await expect(canReadInput).toBeVisible({ timeout: 5000 });
+    await canReadInput.fill('customer');
+    await canReadInput.press('Enter');
+    await page.waitForTimeout(200);
+    await canReadInput.fill('customerinvoice');
+    await canReadInput.press('Enter');
+    await page.waitForTimeout(200);
 
-    // Check if there were 404 errors indicating missing backend routes
-    const has404Errors = apiErrors.some((e) => e.includes('404'));
-    if (has404Errors) {
-      test.info().annotations.push({
-        type: 'issue',
-        description: `Backend API returned 404 errors: [${apiErrors.filter((e) => e.includes('404')).slice(0, 5).join('; ')}]`,
-      });
+    // canWrite — TagInput: type entity name and press Enter
+    const canWriteInput = page.getByPlaceholder(/entity name.*press Enter/i).nth(1);
+    await canWriteInput.fill('customerinvoice');
+    await canWriteInput.press('Enter');
+    await page.waitForTimeout(200);
+
+    // requiresApproval — toggle the switch ON
+    const approvalSection = page.locator('.flex.items-center').filter({ hasText: /Require Approval/i });
+    const approvalSwitch = approvalSection.locator('[role="switch"]');
+    if (await approvalSwitch.isVisible().catch(() => false)) {
+      const isChecked = await approvalSwitch.getAttribute('data-state');
+      if (isChecked !== 'checked') {
+        await approvalSwitch.click();
+        await page.waitForTimeout(300);
+      }
     }
 
-    // Report toggle test outcome
-    if (toggleCount > 0 && !toggleWorked) {
-      test.info().annotations.push({
-        type: 'issue',
-        description: `Toggle clicked but deactivation did not register — API may have returned error. Errors: [${apiErrors.slice(0, 3).join('; ')}]`,
-      });
+    // dataScope — select "Module data"
+    // The Data Scope select trigger
+    const guardrailsContent = page.locator('[role="tabpanel"]');
+    const dataScopeTrigger = guardrailsContent.locator('button[role="combobox"]').first();
+    if (await dataScopeTrigger.isVisible().catch(() => false)) {
+      await dataScopeTrigger.click();
+      await page.waitForTimeout(300);
+      const moduleOption = page.getByRole('option', { name: 'Module data' });
+      await expect(moduleOption).toBeVisible({ timeout: 3000 });
+      await moduleOption.click();
+      await page.waitForTimeout(300);
     }
 
-    // If toggles exist, assert the toggle actually worked
-    if (toggleCount > 0) {
-      expect(
-        toggleWorked,
-        `Skill activation toggle did not work. API errors: [${apiErrors.slice(0, 5).join('; ')}]`,
-      ).toBe(true);
-    }
+    // ── Checkpoint 4: Guardrails Tab Configured ─────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-6-guardrails-configured.png`,
+      fullPage: true,
+    });
+
+    // ── Step 7: Click Tools tab ─────────────────────────────────────────
+    const toolsTab = page.getByRole('tab', { name: 'Tools' });
+    await toolsTab.click();
+    await page.waitForTimeout(500);
+
+    // ── Step 8: Fill Tools tab — JSON array of tool names ───────────────
+    const toolsTextarea = page.getByLabel('Tool Configuration');
+    await expect(toolsTextarea).toBeVisible({ timeout: 5000 });
+    await toolsTextarea.clear();
+    await toolsTextarea.fill('["query_overdue_invoices", "send_reminder_email", "create_follow_up_task"]');
+    // Trigger blur to validate JSON
+    await toolsTextarea.blur();
+    await page.waitForTimeout(300);
+
+    // ── Step 9: Click Save button ───────────────────────────────────────
+    const saveButton = page.getByRole('button', { name: /save/i });
+    await expect(saveButton).toBeEnabled({ timeout: 5000 });
+    await saveButton.click();
+
+    // Wait for navigation to the newly created agent's detail page
+    await page.waitForURL((url) => {
+      return url.pathname.includes('/ai/admin/agents/') && !url.pathname.includes('/new');
+    }, { timeout: 15000 });
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1500);
+
+    // Verify we're on the agent detail page with correct data
+    await expect(page.getByRole('heading', { name: AGENT_DISPLAY_NAME })).toBeVisible({ timeout: 10000 });
+
+    // ── Checkpoint 5: Agent Created Successfully ────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-9-agent-created-success.png`,
+      fullPage: true,
+    });
+
+    // Verify the name field has the correct value in edit mode
+    const editNameInput = page.getByPlaceholder('invoice-creator');
+    await expect(editNameInput).toHaveValue(AGENT_SLUG);
   });
 });

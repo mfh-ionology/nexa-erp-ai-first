@@ -1,26 +1,36 @@
-# Visual Checkpoint Manifest — Journey 12: Automation Run Now & Real-Time Status
+# Visual Checkpoint Manifest — Journey 12: Create a Scheduled Automation with Steps
 
-## Checkpoint 1: Automation List Page Loaded
+## Checkpoint 1: Automation list page loaded
 - **When:** After navigating to /ai/admin/automations
-- **Screenshot file:** step-1-automation-list.png
-- **What to look for:** Automation list page with "Automations" heading, table with at least the seeded "Daily AR Aging Summary" automation visible. Columns: Name, Trigger, Schedule, Steps, Last Run, Last Run Time, Active toggle, Actions.
+- **Screenshot file:** step-1-automation-list-page.png
+- **What to look for:** T1 Entity List with seeded 'Daily AR Aging Summary' automation visible. Columns: name (bold), trigger type badge (purple 'Scheduled'), schedule (human-readable), step count, last run status, last run time, active toggle. "New Automation" button visible in action bar.
 
-## Checkpoint 2: Run Now Confirmation Dialog
-- **When:** After clicking "Run Now" from the overflow menu for "Daily AR Aging Summary"
-- **Screenshot file:** step-2-run-now-dialog.png
-- **What to look for:** Dialog titled "Run Automation" with description "Are you sure you want to run this automation now? It will execute immediately." Automation name displayed in monospace. "Cancel" and "Run Now" buttons visible, Run Now button in purple (#7c3aed).
+## Checkpoint 2: Automation builder in create mode
+- **When:** After clicking "New Automation" button
+- **Screenshot file:** step-2-automation-builder-create.png
+- **What to look for:** Automation builder page with sections: Basic Config (name, description fields), Trigger Config (radio group: Scheduled/Event/Manual), Steps section (empty), Budget section. Action bar with Save and Cancel buttons.
 
-## Checkpoint 3: Automation Triggered Toast
-- **When:** After clicking "Run Now" confirm button in the dialog
-- **Screenshot file:** step-3-automation-triggered.png
-- **What to look for:** Toast notification indicating automation was started. Dialog should have closed. Automation list may show updated "Last Run" status.
+## Checkpoint 3: Cron builder visible after selecting Scheduled
+- **When:** After selecting "Scheduled" radio button in trigger type
+- **Screenshot file:** step-4-cron-builder-visible.png
+- **What to look for:** CronBuilder component with preset buttons (including 'Weekly on Monday'), field selectors (minute, hour, day-of-month, month), day-of-week checkboxes, raw expression input, timezone dropdown defaulting to Europe/London.
 
-## Checkpoint 4: Automation Runs List Page
-- **When:** After navigating to /ai/admin/automations/runs
-- **Screenshot file:** step-4-runs-list.png
-- **What to look for:** "Automation Runs" page heading. Table showing the newly triggered run at or near the top. Columns visible: Automation name, Trigger badge, Triggered By (should show manual user), Started At, Duration, Status badge, Tokens (mono), Cost (mono). The new run should show a status of Running/Completed/Pending.
+## Checkpoint 4: Weekly Monday preset applied
+- **When:** After clicking "Weekly on Monday" preset button
+- **Screenshot file:** step-5-weekly-monday-preset.png
+- **What to look for:** Cron fields updated, "Weekly on Monday" preset highlighted in purple. Human-readable preview showing 'At 9:00 AM, on Monday' or similar. Timezone showing Europe/London.
 
-## Checkpoint 5: Run Detail Page
-- **When:** After clicking on the newly created run row
-- **Screenshot file:** step-5-run-detail.png
-- **What to look for:** Run detail page with: run ID in header (e.g. "Run abc12345"), status badge, "Triggered by" info showing manual trigger, metrics cards row (Total Tokens, Total Cost, Steps X/Y, Duration), step timeline section with status indicators. Purple-themed Concept D styling.
+## Checkpoint 5: First step card added
+- **When:** After clicking "Add Step" button
+- **Screenshot file:** step-6-first-step-added.png
+- **What to look for:** Step 1 card with step number badge '1', agent dropdown, goal textarea, max turns field, collapsible input/output config panels, delete button.
+
+## Checkpoint 6: Two step cards with connector
+- **When:** After adding Step 2
+- **Screenshot file:** step-8-two-steps-connected.png
+- **What to look for:** Two step cards connected by vertical line, Step 2 with badge '2', empty agent/goal fields, 'Use Previous Step Output' button visible on Step 2.
+
+## Checkpoint 7: Automation saved successfully
+- **When:** After clicking Save
+- **Screenshot file:** step-12-automation-saved.png
+- **What to look for:** Success toast 'Automation created' or similar. Page showing saved automation with all configuration: 2 steps, scheduled trigger, cron schedule, budget values.

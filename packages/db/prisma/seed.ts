@@ -12,6 +12,7 @@ import { seedViewsModuleKnowledge } from './seeds/module-knowledge/views.js';
 import { seedViewsEntityTriggers } from './seeds/entity-triggers/views.js';
 import { seedAutomationData } from './seeds/automation-seed.js';
 import { seedNotificationTemplates } from './seeds/notification-templates.seed.js';
+import { seedEmailTemplates } from './seeds/email-template-seed.js';
 
 // Seed uses DIRECT_URL (bypasses PgBouncer) for reliable transactional seeding.
 // Runtime client (src/client.ts) uses DATABASE_URL via PgBouncer instead.
@@ -84,6 +85,7 @@ const numberSeries = [
   { entityType: 'EMPLOYEE', prefix: 'EMP-', padding: 4 },
   { entityType: 'CUSTOMER', prefix: 'CUS-', padding: 5 },
   { entityType: 'SUPPLIER', prefix: 'SUP-', padding: 5 },
+  { entityType: 'EmailMessage', prefix: 'EM-', padding: 5 },
 ];
 
 // ---------------------------------------------------------------------------
@@ -767,6 +769,13 @@ async function main() {
     await seedNotificationTemplates(prisma);
   } catch (e) {
     console.error('Failed to seed notification templates:', e);
+  }
+
+  // ── Email Template Seed Data — E10-2 Task 7 ─────────────────────────
+  try {
+    await seedEmailTemplates(prisma, DEFAULT_USER_ID);
+  } catch (e) {
+    console.error('Failed to seed email templates:', e);
   }
 
   console.log('Seeding complete.');

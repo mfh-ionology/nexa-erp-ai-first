@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import fp from 'fastify-plugin';
+// fp import removed — not needed since aiPlugin is NOT wrapped with fp()
 import type { Logger } from 'pino';
 import Redis from 'ioredis';
 import { prisma } from '@nexa/db';
@@ -60,6 +60,19 @@ import { AdminAgentService } from './admin/admin-agent.service.js';
 import { AdminSkillService } from './admin/admin-skill.service.js';
 import { AdminTriggerTestService } from './admin/admin-trigger-test.service.js';
 import { adminRoutesPlugin } from './admin/admin.routes.js';
+import { KnowledgeArticleService } from './knowledge-article.service.js';
+import { knowledgeArticleRoutesPlugin } from './knowledge-article.routes.js';
+import { registerKnowledgeArticleEvents } from './knowledge-article.events.js';
+import { ChunkingService } from './chunking.service.js';
+import { KnowledgeRagService } from './knowledge-rag.service.js';
+import { LearningSignalsService } from './learning-signals.service.js';
+import { CorrectionCaptureService } from './correction-capture.service.js';
+import { CorrectionPatternService } from './correction-pattern.service.js';
+import { TrainingExampleService } from './training-example.service.js';
+import { TrainingExampleInjectionService } from './training-example-injection.service.js';
+import { correctionRoutesPlugin } from './correction.routes.js';
+import { trainingExampleRoutesPlugin } from './training-example.routes.js';
+import { registerCorrectionEvents } from './correction.events.js';
 import { registerViewsQueryHandlers } from './tools/views-query-handlers.js';
 import { PatternDetectionService } from './pattern-detection.service.js';
 import { MemoryParserService } from './memory-parser.service.js';
@@ -114,6 +127,14 @@ declare module 'fastify' {
     aiAdminAgentService: AdminAgentService | null;
     aiAdminSkillService: AdminSkillService | null;
     aiAdminTriggerTestService: AdminTriggerTestService | null;
+    aiKnowledgeArticleService: KnowledgeArticleService | null;
+    aiKnowledgeRagService: KnowledgeRagService | null;
+    aiLearningSignalsService: LearningSignalsService | null;
+    aiDb: typeof import('@nexa/db').prisma;
+    aiCorrectionCaptureService: CorrectionCaptureService | null;
+    aiCorrectionPatternService: CorrectionPatternService | null;
+    aiTrainingExampleService: TrainingExampleService | null;
+    aiTrainingExampleInjectionService: TrainingExampleInjectionService | null;
   }
 }
 
@@ -216,6 +237,29 @@ async function checkPgvectorAvailable(db: typeof prisma, logger: Logger): Promis
 // AI module plugin
 // ---------------------------------------------------------------------------
 
+/**
+ * Register all AI routes inside an encapsulated scope.
+ * This is necessary because the top-level aiPlugin uses fp() (fastify-plugin)
+ * for decorator sharing, which breaks encapsulation and would cause routes to
+ * lose their /ai prefix set by the caller in app.ts. By wrapping route
+ * registrations in a regular (non-fp) plugin, routes stay scoped under /ai.
+ */
+async function registerAiRoutes(fastify: FastifyInstance): Promise<void> {
+  await fastify.register(aiRoutesPlugin);
+  await fastify.register(predictionRoutesPlugin);
+  await fastify.register(briefingRoutesPlugin);
+  await fastify.register(memoryRoutesPlugin);
+  await fastify.register(skillsRoutesPlugin);
+  await fastify.register(knowledgeRoutesPlugin);
+  await fastify.register(entityTriggersRoutesPlugin);
+  await fastify.register(skillOverridesRoutesPlugin);
+  await fastify.register(knowledgeArticleRoutesPlugin);
+  await fastify.register(correctionRoutesPlugin);
+  await fastify.register(trainingExampleRoutesPlugin);
+  await fastify.register(automationRoutesPlugin);
+  await fastify.register(adminRoutesPlugin, { prefix: '/admin' });
+}
+
 const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
   // Check if AI Gateway can be configured
   const platformApiUrl = process.env.PLATFORM_API_URL ?? 'http://localhost:5101/api/v1';
@@ -259,17 +303,17 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     fastify.decorate('aiAdminAgentService', null);
     fastify.decorate('aiAdminSkillService', null);
     fastify.decorate('aiAdminTriggerTestService', null);
+    fastify.decorate('aiKnowledgeArticleService', null);
+    fastify.decorate('aiKnowledgeRagService', null);
+    fastify.decorate('aiLearningSignalsService', null);
+    fastify.decorate('aiDb', prisma);
+    fastify.decorate('aiCorrectionCaptureService', null);
+    fastify.decorate('aiCorrectionPatternService', null);
+    fastify.decorate('aiTrainingExampleService', null);
+    fastify.decorate('aiTrainingExampleInjectionService', null);
     // Still register routes — they will return 503 when orchestrator/service is null
-    await fastify.register(aiRoutesPlugin);
-    await fastify.register(predictionRoutesPlugin);
-    await fastify.register(briefingRoutesPlugin);
-    await fastify.register(memoryRoutesPlugin);
-    await fastify.register(skillsRoutesPlugin);
-    await fastify.register(knowledgeRoutesPlugin);
-    await fastify.register(entityTriggersRoutesPlugin);
-    await fastify.register(skillOverridesRoutesPlugin);
-    await fastify.register(automationRoutesPlugin);
-    await fastify.register(adminRoutesPlugin, { prefix: '/admin' });
+    // Use registerAiRoutes wrapper to preserve /ai prefix (see comment at line 226)
+    await fastify.register(registerAiRoutes);
     return;
   }
 
@@ -473,6 +517,17 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     // Create SkillOverrideService for CRUD endpoints (E5b-2 Task 12)
     const skillOverrideService = new SkillOverrideService(prisma, logger);
 
+    // Create E5d knowledge article services (E5d-1 Tasks 3-5, 7, 9)
+    const chunkingService = new ChunkingService(logger);
+    const knowledgeArticleService = new KnowledgeArticleService(
+      prisma,
+      logger,
+      chunkingService,
+      null, // EmbeddingService wired via setter below if pgvector available
+      fastify.eventBus,
+    );
+    const knowledgeRagService = new KnowledgeRagService(prisma, logger, knowledgeArticleService);
+
     // Create PatternDetectionService (E5b-3 Task 1) — optional, graceful degradation
     let patternDetectionService: PatternDetectionService | null = null;
     try {
@@ -576,6 +631,11 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
           memoryPruningService.setVectorSearchService(vectorSearchService);
         }
 
+        // Wire into E5d knowledge services (E5d-1 Task 9)
+        knowledgeArticleService.setEmbeddingService(embeddingService);
+        knowledgeRagService.setVectorSearchService(vectorSearchService);
+        knowledgeRagService.setEmbeddingService(embeddingService);
+
         logger.info('VectorSearchService initialized and wired into dependent services');
       } else {
         logger.info('pgvector not available — using keyword-based memory search');
@@ -651,6 +711,13 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     fastify.decorate('aiMemoryCitation', memoryCitationService);
     fastify.decorate('aiSemanticDedup', semanticDedupService);
     fastify.decorate('aiPreCompaction', preCompactionService);
+    fastify.decorate('aiKnowledgeArticleService', knowledgeArticleService);
+    fastify.decorate('aiKnowledgeRagService', knowledgeRagService);
+
+    // Wire KnowledgeRagService into DynamicContextService (E5d-1 Task 9.2)
+    if (dynamicContextService) {
+      dynamicContextService.setKnowledgeRagService(knowledgeRagService);
+    }
 
     // Create AutomationService (E5c-1 Task 10)
     const automationService = new AutomationService({
@@ -686,6 +753,38 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     fastify.decorate('aiAdminSkillService', adminSkillService);
     fastify.decorate('aiAdminTriggerTestService', adminTriggerTestService);
 
+    // Create LearningSignalsService (E5d-2 Task 6)
+    const learningSignalsService = new LearningSignalsService(prisma, logger, fastify.eventBus);
+    fastify.decorate('aiLearningSignalsService', learningSignalsService);
+
+    // Create E5d-2 correction loop & training example services (E5d-2 Task 8.2)
+    const correctionCaptureService = new CorrectionCaptureService(prisma, logger, fastify.eventBus);
+    const correctionPatternService = new CorrectionPatternService(
+      prisma,
+      logger,
+      knowledgeArticleService,
+      fastify.eventBus,
+    );
+    const trainingExampleService = new TrainingExampleService(prisma, logger);
+    const trainingExampleInjectionService = new TrainingExampleInjectionService(prisma, logger);
+
+    fastify.decorate('aiDb', prisma);
+    fastify.decorate('aiCorrectionCaptureService', correctionCaptureService);
+    fastify.decorate('aiCorrectionPatternService', correctionPatternService);
+    fastify.decorate('aiTrainingExampleService', trainingExampleService);
+    fastify.decorate('aiTrainingExampleInjectionService', trainingExampleInjectionService);
+
+    // Wire TrainingExampleInjectionService into DynamicContextService (E5d-2 Task 5.4)
+    if (dynamicContextService) {
+      dynamicContextService.setTrainingExampleInjection(trainingExampleInjectionService);
+    }
+
+    // Register correction event handlers (E5d-2 Task 3.3)
+    registerCorrectionEvents(fastify.eventBus, prisma, logger, correctionPatternService);
+
+    // Register knowledge article event handlers (E5d-1 Task 9.4)
+    registerKnowledgeArticleEvents(fastify.eventBus, prisma, logger);
+
     // Register audit mapping for AI action execution (AC: #5, NFR22)
     registerAuditMapping('ai.action.executed', (payload) => ({
       companyId: payload.companyId,
@@ -698,17 +797,8 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
       correlationId: payload.conversationId,
     }));
 
-    // Register AI routes under /ai prefix (set by the caller in app.ts)
-    await fastify.register(aiRoutesPlugin);
-    await fastify.register(predictionRoutesPlugin);
-    await fastify.register(briefingRoutesPlugin);
-    await fastify.register(memoryRoutesPlugin);
-    await fastify.register(skillsRoutesPlugin);
-    await fastify.register(knowledgeRoutesPlugin);
-    await fastify.register(entityTriggersRoutesPlugin);
-    await fastify.register(skillOverridesRoutesPlugin);
-    await fastify.register(automationRoutesPlugin);
-    await fastify.register(adminRoutesPlugin, { prefix: '/admin' });
+    // Register AI routes — use registerAiRoutes wrapper to preserve /ai prefix
+    await fastify.register(registerAiRoutes);
 
     // Graceful shutdown — close WebSocket handler, schedulers, and Redis connection
     fastify.addHook('onClose', async () => {
@@ -759,21 +849,23 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     fastify.decorate('aiAdminAgentService', null);
     fastify.decorate('aiAdminSkillService', null);
     fastify.decorate('aiAdminTriggerTestService', null);
+    fastify.decorate('aiKnowledgeArticleService', null);
+    fastify.decorate('aiKnowledgeRagService', null);
+    fastify.decorate('aiLearningSignalsService', null);
+    fastify.decorate('aiDb', prisma);
+    fastify.decorate('aiCorrectionCaptureService', null);
+    fastify.decorate('aiCorrectionPatternService', null);
+    fastify.decorate('aiTrainingExampleService', null);
+    fastify.decorate('aiTrainingExampleInjectionService', null);
     // Still register routes — they will return 503 when orchestrator/service is null
-    await fastify.register(aiRoutesPlugin);
-    await fastify.register(predictionRoutesPlugin);
-    await fastify.register(briefingRoutesPlugin);
-    await fastify.register(memoryRoutesPlugin);
-    await fastify.register(skillsRoutesPlugin);
-    await fastify.register(knowledgeRoutesPlugin);
-    await fastify.register(entityTriggersRoutesPlugin);
-    await fastify.register(skillOverridesRoutesPlugin);
-    await fastify.register(automationRoutesPlugin);
-    await fastify.register(adminRoutesPlugin, { prefix: '/admin' });
+    // Use registerAiRoutes wrapper to preserve /ai prefix (see comment at line 226)
+    await fastify.register(registerAiRoutes);
   }
 };
 
-export const aiPlugin = fp(aiPluginFn, {
-  name: 'ai-module',
-  dependencies: ['event-bus', 'platform-client'],
-});
+// NOTE: Do NOT wrap with fp() — using fp breaks Fastify encapsulation and
+// causes the /ai prefix (set in app.ts) to be ignored. The AI decorators are
+// only accessed by routes within this plugin, so scope-sharing is not needed.
+// Dependencies (event-bus, platform-client) are accessed via the parent scope
+// which is inherited by default.
+export const aiPlugin = aiPluginFn;

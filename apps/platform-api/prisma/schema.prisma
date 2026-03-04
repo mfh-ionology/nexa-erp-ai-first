@@ -58,6 +58,7 @@ model Tenant {
   dbHost         String        @map("db_host")
   dbName         String        @map("db_name")
   dbPort         Int           @default(5432) @map("db_port")
+  industry       String?       @map("industry") @db.VarChar(100)
   sandboxEnabled Boolean       @default(false) @map("sandbox_enabled")
   lastActivityAt DateTime?     @map("last_activity_at")
 
@@ -72,9 +73,12 @@ model Tenant {
   providerCredentials   TenantProviderCredential[]
   billing               TenantBilling?
   impersonations        ImpersonationSession[]
+  aiPatterns            TenantAiPattern[]
+  knowledgeResponses    PlatformKnowledgeResponse[]
 
   @@index([status], map: "idx_tenants_status")
   @@index([planId], map: "idx_tenants_plan_id")
+  @@index([industry], map: "idx_tenants_industry")
   @@map("tenants")
 }
 
@@ -287,4 +291,116 @@ model PlatformRefreshToken {
   @@unique([tokenHash], map: "uq_platform_refresh_tokens_token_hash")
   @@index([platformUserId, revokedAt], map: "idx_platform_refresh_tokens_user_revoked")
   @@map("platform_refresh_tokens")
+}
+
+// --- Cross-Tenant Intelligence Tables (E5d-3) ---
+
+model TenantAiPattern {
+  id              String   @id @default(uuid()) @map("id")
+  tenantId        String   @map("tenant_id")
+  patternDate     DateTime @map("pattern_date") @db.Date
+  industry        String?  @map("industry") @db.VarChar(100)
+  planTier        String?  @map("plan_tier") @db.VarChar(30)
+  queryCategories Json     @map("query_categories") @db.JsonB
+  skillUsage      Json     @map("skill_usage") @db.JsonB
+  viewPatterns    Json     @map("view_patterns") @db.JsonB
+  automationUsage Json     @map("automation_usage") @db.JsonB
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, patternDate], map: "uq_tenant_pattern_date")
+  @@index([patternDate], map: "idx_patterns_date")
+  @@index([industry], map: "idx_patterns_industry")
+  @@map("tenant_ai_patterns")
+}
+
+model TenantAiCorrection {
+  id               String   @id @default(uuid()) @map("id")
+  patternDate      DateTime @map("pattern_date") @db.Date
+  industry         String?  @map("industry") @db.VarChar(100)
+  correctionType   String   @map("correction_type") @db.VarChar(100)
+  skillKey         String   @default("") @map("skill_key") @db.VarChar(200)
+  occurrenceCount  Int      @map("occurrence_count")
+  tenantCount      Int      @map("tenant_count")
+  commonCorrection String?  @map("common_correction") @db.Text
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@unique([patternDate, correctionType, skillKey], map: "uq_corrections_date_type_skill")
+  @@index([patternDate, correctionType], map: "idx_corrections_date_type")
+  @@index([skillKey], map: "idx_corrections_skill")
+  @@map("tenant_ai_corrections")
+}
+
+model PlatformKnowledgeArticle {
+  id               String    @id @default(uuid()) @map("id")
+  title            String    @map("title") @db.VarChar(500)
+  content          String    @map("content") @db.Text
+  category         String    @map("category") @db.VarChar(100)
+  targetIndustries String[]  @map("target_industries")
+  targetPlanTiers  String[]  @map("target_plan_tiers")
+  version          Int       @default(1) @map("version")
+  status           String    @default("DRAFT") @map("status") @db.VarChar(30)
+  publishedAt      DateTime? @map("published_at")
+  createdById      String    @map("created_by_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  responses PlatformKnowledgeResponse[]
+
+  @@index([status, category], map: "idx_platform_knowledge_status")
+  @@map("platform_knowledge_base")
+}
+
+model AiSkillEffectiveness {
+  id                String   @id @default(uuid()) @map("id")
+  skillKey          String   @map("skill_key") @db.VarChar(200)
+  measureDate       DateTime @map("measure_date") @db.Date
+  tenantCount       Int      @map("tenant_count")
+  totalQueries      Int      @map("total_queries")
+  avgSuccessRate    Decimal  @map("avg_success_rate") @db.Decimal(5, 2)
+  avgCorrectionRate Decimal  @map("avg_correction_rate") @db.Decimal(5, 2)
+  avgConfidence     Decimal  @map("avg_confidence") @db.Decimal(3, 2)
+  trend             String?  @map("trend") @db.VarChar(20)
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@unique([skillKey, measureDate], map: "uq_skill_effectiveness")
+  @@index([measureDate], map: "idx_effectiveness_date")
+  @@map("ai_skill_effectiveness")
+}
+
+model PlatformAiInsight {
+  id           String    @id @default(uuid()) @map("id")
+  insightType  String    @map("insight_type") @db.VarChar(50)
+  title        String    @map("title") @db.VarChar(500)
+  description  String    @map("description") @db.Text
+  evidence     Json      @map("evidence") @db.JsonB
+  severity     String    @map("severity") @db.VarChar(20)
+  status       String    @default("NEW") @map("status") @db.VarChar(20)
+  reviewedById String?   @map("reviewed_by_id")
+  reviewedAt   DateTime? @map("reviewed_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@index([insightType, status], map: "idx_insights_type_status")
+  @@index([severity, status], map: "idx_insights_severity")
+  @@map("platform_ai_insights")
+}
+
+model PlatformKnowledgeResponse {
+  id             String   @id @default(uuid()) @map("id")
+  tenantId       String   @map("tenant_id")
+  articleId      String   @map("article_id")
+  articleVersion Int      @map("article_version")
+  status         String   @map("status") @db.VarChar(20)
+  tenantArticleId String? @map("tenant_article_id")
+  respondedAt    DateTime @default(now()) @map("responded_at")
+
+  tenant  Tenant                   @relation(fields: [tenantId], references: [id])
+  article PlatformKnowledgeArticle @relation(fields: [articleId], references: [id])
+
+  @@unique([tenantId, articleId], map: "uq_tenant_knowledge_response")
+  @@index([tenantId], map: "idx_knowledge_responses_tenant")
+  @@index([articleId], map: "idx_knowledge_responses_article")
+  @@map("platform_knowledge_responses")
 }

@@ -1,173 +1,243 @@
 import { test, expect } from '@playwright/test';
 
-const SCREENSHOTS_DIR =
-  '_bmad-output/test-artifacts/screenshots/epic-E5c/journey-5';
+const SCREENSHOTS_DIR = '../../screenshots/epic-E5c/journey-5';
 
-test.describe('Journey 5: Prompt Editor Variable Autocomplete', () => {
+/**
+ * Helper: navigate within the SPA using TanStack Router.
+ * Auth tokens are in-memory only (Zustand), so page.goto() would
+ * cause a full reload and lose the authenticated session.
+ */
+async function spaNavigate(page: import('@playwright/test').Page, path: string) {
+  await page.evaluate((p) => {
+    window.history.pushState({}, '', p);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, path);
+  await page.waitForTimeout(500);
+  await page.waitForLoadState('networkidle');
+}
+
+test.describe('Journey 5: Create a New Prompt Template', () => {
   test.setTimeout(120_000);
 
   test.beforeEach(async ({ page }) => {
     // Login as admin user
     await page.goto('/login');
-    await page.getByLabel('Email').fill('admin@nexa-erp.dev');
-    await page.getByLabel('Password').fill('NexaDev2026!');
-    await page.getByRole('button', { name: 'Sign In' }).click();
+    await page.waitForLoadState('networkidle');
 
-    // Wait for redirect away from login page
+    const emailInput = page.getByLabel('Email');
+    await emailInput.waitFor({ state: 'visible', timeout: 10000 });
+    // Use click + clear + type to ensure React Hook Form registers changes
+    await emailInput.click();
+    await emailInput.fill('');
+    await emailInput.pressSequentially('admin@nexa-erp.dev', { delay: 10 });
+
+    const passwordInput = page.getByLabel('Password');
+    await passwordInput.click();
+    await passwordInput.fill('');
+    await passwordInput.pressSequentially('NexaDev2026!', { delay: 10 });
+
+    // Wait for login API response after clicking Sign In
+    const loginResponsePromise = page.waitForResponse(
+      (resp) => resp.url().includes('/auth/login') && resp.request().method() === 'POST',
+      { timeout: 15000 },
+    );
+
+    const signInButton = page.getByRole('button', { name: /sign in/i });
+    await signInButton.waitFor({ state: 'visible' });
+    await signInButton.click();
+
+    // Wait for login API to respond first
+    await loginResponsePromise;
+
     await page.waitForURL((url) => !url.pathname.includes('/login'), {
-      timeout: 15000,
+      timeout: 30000,
     });
     await page.waitForLoadState('networkidle');
   });
 
-  test('Variable autocomplete triggers on {{ and inserts selected variable', async ({
+  test('Full prompt creation flow: list, create, fill fields, save, verify in list', async ({
     page,
   }) => {
-    // ── Step 1: Navigate to /ai/admin/prompts/new ──────────────────────
-    // Use SPA navigation via sidebar to preserve auth state
-    const sidebarNav = page.locator('nav');
-    const promptsLink = sidebarNav.getByText('Prompt Templates').first();
+    // Log API responses for debugging
+    page.on('response', async (response) => {
+      if (response.url().includes('/ai/admin/prompts')) {
+        const body = await response.text().catch(() => 'no body');
+        console.log(`[API] ${response.status()} ${response.url()} → ${body.substring(0, 500)}`);
+      }
+    });
 
-    if (await promptsLink.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await promptsLink.click();
-    } else {
-      const directLink = page.locator('a[href*="/ai/admin/prompts"]').first();
-      await directLink.click();
-    }
+    // ── Step 1: Navigate to /ai/admin/prompts ────────────────────────────────
+    await spaNavigate(page, '/ai/admin/prompts');
+    await expect(
+      page.getByLabel('breadcrumb').getByText('Prompt Templates'),
+    ).toBeVisible({ timeout: 15000 });
+    await page.waitForTimeout(2000);
 
-    await page.waitForURL('**/ai/admin/prompts', { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
+    // ── Checkpoint 1: Prompt Templates List Page ─────────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-1-prompt-list-loaded.png`,
+      fullPage: true,
+    });
 
-    // Click "New" to go to the new prompt editor
+    // ── Step 2: Verify seeded prompts are visible ────────────────────────────
+    const tableRows = page.locator('table tbody tr');
+    const rowCount = await tableRows.count();
+    expect(rowCount).toBeGreaterThanOrEqual(6);
+
+    // Verify different category badges exist (at least a few distinct ones)
+    await expect(page.locator('table').getByText('record-creation').first()).toBeVisible();
+    await expect(page.locator('table').getByText('query').first()).toBeVisible();
+
+    // Verify search input is visible
+    await expect(page.getByPlaceholder(/search/i)).toBeVisible();
+
+    // Verify category filter dropdown is visible
+    await expect(page.getByLabel('Filter by category')).toBeVisible();
+
+    // ── Step 3: Click "New" button to create a new prompt ────────────────────
     const newButton = page.getByRole('button', { name: /^New$/i });
+    await expect(newButton).toBeVisible();
     await newButton.click();
 
+    // Wait for navigation to /ai/admin/prompts/new
     await page.waitForURL('**/ai/admin/prompts/new', { timeout: 10000 });
     await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
 
-    // Verify the new prompt editor loaded
+    // Verify the editor page loaded in create mode
     await expect(
-      page.getByRole('heading').filter({ hasText: /New Prompt Template/i }),
+      page.getByText('New Prompt Template'),
     ).toBeVisible({ timeout: 10000 });
 
-    // ── Checkpoint 1: New Prompt Editor Page Loaded ─────────────────────
+    // ── Checkpoint 2: Prompt Editor Create Mode ──────────────────────────────
     await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-1-new-prompt-editor-loaded.png`,
+      path: `${SCREENSHOTS_DIR}/step-3-prompt-editor-create-mode.png`,
       fullPage: true,
     });
 
-    // Verify key form elements
-    const nameField = page
-      .getByPlaceholder('record-creation-invoice')
-      .or(page.getByLabel('Name'))
-      .first();
-    await expect(nameField).toBeVisible();
-
-    // Verify the System Prompt section exists
+    // Verify key form elements are present
+    await expect(page.getByLabel('Name')).toBeVisible();
     await expect(page.getByText('System Prompt')).toBeVisible();
+    await expect(page.getByText('User Template')).toBeVisible();
+    await expect(page.getByText('Parameters Schema')).toBeVisible();
+    await expect(page.getByRole('button', { name: /save/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /cancel/i })).toBeVisible();
 
-    // ── Step 2: Fill in the Name field ──────────────────────────────────
-    await nameField.fill('autocomplete-test');
+    // Save button should be disabled initially (form not dirty)
+    await expect(page.getByRole('button', { name: /save/i })).toBeDisabled();
 
-    // ── Step 3 & 4: Click System Prompt textarea and type "Hello {{" ────
-    // The system prompt textarea uses aria-label="System prompt editor"
-    const systemPromptTextarea = page.locator(
-      'textarea[aria-label="System prompt editor"]',
+    // ── Step 4: Fill metadata fields ─────────────────────────────────────────
+    const nameInput = page.getByLabel('Name');
+    await nameInput.fill('test-invoice-reminder');
+
+    // Select category "Automation" from the dropdown
+    // The category uses a Shadcn Select (not native), trigger has role="combobox"
+    const categoryTrigger = page.locator('button[role="combobox"]').first();
+    await categoryTrigger.click();
+    await page.waitForTimeout(300);
+    await page.getByRole('option', { name: 'Automation' }).click();
+    await page.waitForTimeout(300);
+
+    // Fill description
+    const descriptionInput = page.getByLabel('Description');
+    await descriptionInput.fill('Generates personalised invoice reminder emails');
+
+    // ── Step 5: Fill system prompt ───────────────────────────────────────────
+    const systemPromptTextarea = page.locator('textarea[aria-label="System prompt editor"]');
+    await expect(systemPromptTextarea).toBeVisible();
+    await systemPromptTextarea.fill(
+      'You are an accounts receivable specialist for {{company.name}}. Today is {{today}}. Generate a professional reminder email for overdue invoices.',
     );
-    await expect(systemPromptTextarea).toBeVisible({ timeout: 5000 });
 
-    // Click to focus the textarea
-    await systemPromptTextarea.click();
-
-    // Type "Hello " then "{{" character by character to trigger autocomplete
-    // Must use pressSequentially (not fill) to trigger the onChange/input handler
-    await systemPromptTextarea.pressSequentially('Hello {{', { delay: 50 });
-
-    // Wait for the autocomplete dropdown to appear
-    // The autocomplete uses role="listbox" with aria-label="Variable autocomplete"
-    const autocompleteListbox = page.locator(
-      '[role="listbox"][aria-label="Variable autocomplete"]',
+    // ── Step 6: Fill user template ───────────────────────────────────────────
+    const userTemplateTextarea = page.locator('textarea[aria-label="User template editor"]');
+    await expect(userTemplateTextarea).toBeVisible();
+    await userTemplateTextarea.fill(
+      'Draft a reminder for invoice {{customer.name}} overdue by {{overdueCount}} days. Use a {{reminderTone}} tone.',
     );
-    await expect(autocompleteListbox).toBeVisible({ timeout: 5000 });
 
-    // ── Checkpoint 2: Autocomplete Dropdown Visible ─────────────────────
-    await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-4-autocomplete-dropdown-visible.png`,
-      fullPage: true,
-    });
-
-    // Check if variables loaded or if "No matching variables" is shown
-    // The /ai/variables API endpoint may not be implemented yet
-    const noMatchingText = autocompleteListbox.getByText('No matching variables');
-    const hasNoVariables = await noMatchingText.isVisible({ timeout: 2000 }).catch(() => false);
-
-    if (hasNoVariables) {
-      // MISSING FEATURE: The /ai/variables API endpoint is not implemented,
-      // so the autocomplete has no data. The autocomplete trigger mechanism
-      // works correctly but cannot display variables without backend support.
-      //
-      // We still verify the autocomplete popup appeared and dismiss it.
-      console.log(
-        'MISSING: /ai/variables API endpoint — autocomplete shows "No matching variables"',
-      );
-
-      // Verify the autocomplete popup itself is structurally correct
-      await expect(autocompleteListbox).toHaveAttribute('role', 'listbox');
-
-      // Dismiss autocomplete with Escape
-      await systemPromptTextarea.press('Escape');
-      await expect(autocompleteListbox).not.toBeVisible({ timeout: 3000 });
-
-      // ── Checkpoint 3: Autocomplete dismissed (no variables available) ──
-      await page.screenshot({
-        path: `${SCREENSHOTS_DIR}/step-5-variable-inserted.png`,
-        fullPage: true,
-      });
-
-      // Annotate and fail — missing backend endpoint prevents full journey completion
-      test.info().annotations.push({
-        type: 'missing-feature',
-        description: 'Missing /ai/variables API endpoint — autocomplete has no data to display',
-      });
-      expect(hasNoVariables, 'Expected variables to be available but /ai/variables API endpoint is missing — autocomplete shows "No matching variables"').toBe(false);
-    }
-
-    // ── If variables ARE available, proceed with selection ───────────────
-
-    // Verify variables are grouped by source type — look for "System" group header
-    await expect(
-      autocompleteListbox.getByText('System', { exact: false }),
-    ).toBeVisible();
-
-    // Verify specific system variables are present
-    const companyNameOption = autocompleteListbox
-      .locator('[role="option"]')
-      .filter({ hasText: 'company.name' });
-    await expect(companyNameOption).toBeVisible({ timeout: 5000 });
-
-    // Verify multiple options exist
-    const optionCount = await autocompleteListbox
-      .locator('[role="option"]')
-      .count();
-    expect(optionCount).toBeGreaterThan(0);
-
-    // ── Step 5: Click company.name in autocomplete dropdown ─────────────
-    await companyNameOption.click();
-
-    // Wait for variable insertion
+    // Wait for form to register as dirty
     await page.waitForTimeout(500);
 
-    // ── Checkpoint 3: Variable Inserted ─────────────────────────────────
+    // ── Checkpoint 3: Form Filled Before Save ────────────────────────────────
     await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-5-variable-inserted.png`,
+      path: `${SCREENSHOTS_DIR}/step-6-form-filled-before-save.png`,
       fullPage: true,
     });
 
-    // Verify the textarea now contains "Hello {{company.name}}"
-    const textareaValue = await systemPromptTextarea.inputValue();
-    expect(textareaValue).toContain('Hello {{company.name}}');
+    // Save button should now be enabled (form is dirty)
+    await expect(page.getByRole('button', { name: /save/i })).toBeEnabled();
 
-    // Verify the autocomplete dropdown is dismissed
-    await expect(autocompleteListbox).not.toBeVisible({ timeout: 3000 });
+    // ── Step 7: Click Save ───────────────────────────────────────────────────
+    // Listen for the POST response
+    const createResponsePromise = page.waitForResponse(
+      (resp) =>
+        resp.url().includes('/ai/admin/prompts') &&
+        resp.request().method() === 'POST' &&
+        !resp.url().includes('/test'),
+      { timeout: 15000 },
+    );
+
+    await page.getByRole('button', { name: /save/i }).click();
+
+    // Wait for the API response
+    const createResponse = await createResponsePromise;
+    const createStatus = createResponse.status();
+
+    // In create mode, no changeReason dialog should appear — saves directly
+    expect(createStatus).toBeLessThan(300);
+
+    // Wait for navigation to the newly created prompt's edit page
+    await page.waitForURL((url) => {
+      const path = url.pathname;
+      return path.includes('/ai/admin/prompts/') && !path.endsWith('/new');
+    }, { timeout: 15000 });
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000);
+
+    // Verify success toast
+    await expect(
+      page.getByText(/prompt.*created/i).or(page.getByText('Prompt template created')),
+    ).toBeVisible({ timeout: 10000 });
+
+    // Verify we're on the edit page showing saved data
+    await expect(page.getByText('test-invoice-reminder')).toBeVisible({ timeout: 10000 });
+
+    // Verify version badge shows v1 (edit mode shows Active badge + version)
+    await expect(page.getByText('v1')).toBeVisible();
+
+    // Verify version sidebar is visible (edit mode only)
+    await expect(page.getByText('Version History')).toBeVisible();
+
+    // ── Checkpoint 4: Prompt Created Successfully ────────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-7-prompt-created-success.png`,
+      fullPage: true,
+    });
+
+    // ── Step 8: Navigate back to prompt list and verify new prompt appears ───
+    await spaNavigate(page, '/ai/admin/prompts');
+    await expect(
+      page.getByLabel('breadcrumb').getByText('Prompt Templates'),
+    ).toBeVisible({ timeout: 15000 });
+    await page.waitForTimeout(2000);
+
+    // Verify the new prompt appears in the list
+    await expect(
+      page.locator('table').getByText('test-invoice-reminder'),
+    ).toBeVisible({ timeout: 10000 });
+
+    // Verify the automation category badge in the row
+    const newPromptRow = page.getByRole('row').filter({ hasText: 'test-invoice-reminder' });
+    await expect(newPromptRow.getByText('automation')).toBeVisible();
+
+    // Verify version v1 in the row
+    await expect(newPromptRow.getByText('v1')).toBeVisible();
+
+    // ── Checkpoint 5: New Prompt in List ──────────────────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-8-prompt-in-list.png`,
+      fullPage: true,
+    });
   });
 });

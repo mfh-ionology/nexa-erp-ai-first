@@ -26,16 +26,16 @@ async function fetchAutomationHealth(): Promise<AutomationHealthStats> {
   const sevenDaysAgo = subDays(now, 7).toISOString();
 
   // Parallel fetch: automations list + failed runs (24h) + recent runs (7d for token spend).
-  // NOTE: Each fetch is capped at limit=200. The failed runs count uses meta.total (from the
-  // server's full count) when available, so the displayed count is accurate even if >200.
-  // Token spend aggregation is approximate if >200 runs exist in 7 days.
+  // NOTE: Each fetch is capped at limit=100 (backend max). The failed runs count uses meta.total
+  // (from the server's full count) when available, so the displayed count is accurate even if >100.
+  // Token spend aggregation is approximate if >100 runs exist in 7 days.
   const [automationsResult, failedRunsResult, recentRunsResult] = await Promise.all([
-    apiGet<AiAutomationListItem[]>('/ai/automations?limit=200'),
+    apiGet<AiAutomationListItem[]>('/ai/automations?limit=100'),
     apiGet<AiAutomationRunListItem[]>(
-      `/ai/automations/runs${buildQueryString({ status: 'FAILED', dateFrom: twentyFourHoursAgo, limit: 200 })}`,
+      `/ai/automations/runs${buildQueryString({ status: 'FAILED', dateFrom: twentyFourHoursAgo, limit: 100 })}`,
     ),
     apiGet<AiAutomationRunListItem[]>(
-      `/ai/automations/runs${buildQueryString({ dateFrom: sevenDaysAgo, limit: 200 })}`,
+      `/ai/automations/runs${buildQueryString({ dateFrom: sevenDaysAgo, limit: 100 })}`,
     ),
   ]);
 

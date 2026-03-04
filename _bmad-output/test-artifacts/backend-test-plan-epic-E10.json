@@ -1,0 +1,2143 @@
+{
+  "epic_id": "E10",
+  "epic_title": "Email Integration (SMTP Outbound, Templates, Document-to-Email)",
+  "generated_at": "2026-03-04T15:00:00.000Z",
+  "total_test_cases": 118,
+  "api_base_url": "http://localhost:5100",
+  "auth_note": "All endpoints (except /auth/login) require JWT Bearer token. Login each user to get a token before running tests. RBAC hierarchy: VIEWER < STAFF < MANAGER < ADMIN < SUPER_ADMIN.",
+  "uuid_rules": {
+    "valid_nonexistent_uuid": "00000000-0000-4000-a000-ffffffffffff",
+    "invalid_uuid_format": "not-a-uuid",
+    "note": "Zod schema uses z.uuid() which requires valid UUID v4 format. Non-v4 UUIDs like 00000000-0000-0000-0000-000000000999 will fail Zod validation (400) before reaching the service layer."
+  },
+  "test_users": {
+    "admin": {
+      "email": "admin@nexa-erp.dev",
+      "password": "NexaDev2026!",
+      "user_id": "00000000-0000-4000-a000-000000000002",
+      "role": "SUPER_ADMIN"
+    },
+    "manager": {
+      "email": "manager@nexa-erp.dev",
+      "password": "NexaDev2026!",
+      "user_id": "00000000-0000-4000-a000-000000000011",
+      "role": "MANAGER"
+    },
+    "staff": {
+      "email": "staff@nexa-erp.dev",
+      "password": "NexaDev2026!",
+      "user_id": "00000000-0000-4000-a000-000000000010",
+      "role": "STAFF"
+    },
+    "viewer": {
+      "email": "viewer@nexa-erp.dev",
+      "password": "NexaDev2026!",
+      "user_id": "00000000-0000-4000-a000-000000000012",
+      "role": "VIEWER"
+    }
+  },
+  "discovered_entities": {
+    "note": "Entity IDs must be discovered at runtime via API queries. Use GET /email/messages, GET /email/templates, etc. after creating test data. Seeded email templates (INVOICE_SEND, STATEMENT_SEND, etc.) provide template IDs."
+  },
+  "setup_dependencies": [
+    "PostgreSQL with Prisma migrations applied (including 20260304080956_add_email_integration and 20260304094345_add_email_templates)",
+    "Redis running for BullMQ email-send and batch-statement-email queues",
+    "MinIO running on localhost:9000 with bucket 'nexa-attachments' (for PDF attachments)",
+    "Seeded company: 00000000-0000-4000-a000-000000000001 (Default Company)",
+    "Seeded users: admin (SUPER_ADMIN), manager (MANAGER), staff (STAFF), viewer (VIEWER)",
+    "Seeded email templates: 7 default templates (INVOICE_SEND, STATEMENT_SEND, etc.)",
+    "Seeded NumberSeries for EmailMessage (prefix EM-)",
+    "Environment variables: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS (for email send tests)"
+  ],
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "description": "Authenticate user and return JWT (prerequisite for all E10 tests)",
+      "story": "Prerequisite",
+      "minimum_role": "none",
+      "test_cases": [
+        {
+          "id": "AUTH-01",
+          "name": "Login as admin (SUPER_ADMIN) - happy path",
+          "type": "happy_path",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "admin@nexa-erp.dev", "password": "NexaDev2026!" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "expiresIn", "user"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "AUTH-02",
+          "name": "Login as staff - happy path",
+          "type": "happy_path",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "staff@nexa-erp.dev", "password": "NexaDev2026!" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "expiresIn", "user"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "AUTH-03",
+          "name": "Login as manager - happy path",
+          "type": "happy_path",
+          "role_used": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "manager@nexa-erp.dev", "password": "NexaDev2026!" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "expiresIn", "user"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "AUTH-04",
+          "name": "Login as viewer - happy path",
+          "type": "happy_path",
+          "role_used": "VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "viewer@nexa-erp.dev", "password": "NexaDev2026!" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "expiresIn", "user"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/email/messages",
+      "description": "Create email message with recipients (E10-1, AC #8)",
+      "story": "E10-1",
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "EM-CREATE-01",
+          "name": "Create email with single TO recipient - happy path",
+          "type": "happy_path",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/email/messages",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "subject": "Test Invoice Email",
+              "bodyHtml": "<p>Please find attached your invoice.</p>",
+              "bodyText": "Please find attached your invoice.",
+              "recipients": [
+                { "recipientType": "TO", "emailAddress": "customer@example.com", "displayName": "Test Customer" },
+                { "recipientType": "FROM", "emailAddress": "billing@company.com", "displayName": "Company Billing" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "messageNumber", "subject", "recipients", "status"],
+            "body_match": {
+              "data.status": "DRAFT",
+              "data.direction": "OUTBOUND",
+              "data.subject": "Test Invoice Email"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT * FROM email_messages WHERE id = '{{created_id}}'",
+            "expected": "status = DRAFT, direction = OUTBOUND, messageNumber starts with EM-"
+          }
+        },
+        {
+          "id": "EM-CREATE-02",
+          "name": "Create email with TO, CC, BCC recipients - happy path",
+          "type": "happy_path",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/email/messages",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "subject": "Multi-recipient email",
+              "bodyHtml": "<p>Hello</p>",
+              "recipients": [
+                { "recipientType": "FROM", "emailAddress": "sender@company.com" },
+                { "recipientType": "TO", "emailAddress": "to1@example.com" },
+                { "recipientType": "CC", "emailAddress": "cc1@example.com" },
+                { "recipientType": "BCC", "emailAddress": "bcc1@example.com" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["recipients"],
+            "body_match": {
+              "data.recipients.length": 4
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM email_recipients WHERE email_message_id = '{{created_id}}'",
+            "expected": "count = 4"
+          }
+        },
+        {
+          "id": "EM-CREATE-03",
+          "name": "Create email with source entity reference - happy path",
+          "type": "happy_path",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/email/messages",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "subject": "Invoice INV-00001",
+              "bodyHtml": "<p>Invoice attached</p>",
+              "recipients": [
+                { "recipientType": "TO", "emailAddress": "accounts@customer.com" },
+                { "recipientType": "FROM", "emailAddress": "billing@company.com" }
+              ],
+              "sourceEntityType": "CustomerInvoice",
+              "sourceEntityId": "00000000-0000-4000-a000-000000000099"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_match": {
+              "data.sourceEntityType": "CustomerInvoice",
+              "data.sourceEntityId": "00000000-0000-4000-a000-000000000099"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-CREATE-04",
+          "name": "Create email with priority 1 (high) - happy path",
+          "type": "happy_path",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/email/messages",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "subject": "Urgent Notice",
+              "bodyHtml": "<p>Urgent</p>",
+              "recipients": [
+                { "recipientType": "TO", "emailAddress": "urgent@example.com" },
+                { "recipientType": "FROM", "emailAddress": "billing@company.com" }
+              ],
+              "priority": 1
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_match": { "data.priority": 1 }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-CREATE-05",
+          "name": "Create email - missing subject (validation error)",
+          "type": "validation_error",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/email/messages",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "bodyHtml": "<p>No subject</p>",
+              "recipients": [
+                { "recipientType": "TO", "emailAddress": "test@example.com" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["subject"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-CREATE-06",
+          "name": "Create email - empty recipients array (validation error)",
+          "type": "validation_error",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/email/messages",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "subject": "No recipients",
+              "bodyHtml": "<p>Test</p>",
+              "recipients": []
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["recipients"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-CREATE-07",
+          "name": "Create email - no TO recipient (only CC) (validation error)",
+          "type": "validation_error",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/email/messages",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "subject": "No TO recipient",
+              "bodyHtml": "<p>Test</p>",
+              "recipients": [
+                { "recipientType": "CC", "emailAddress": "cc@example.com" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["TO recipient"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-CREATE-08",
+          "name": "Create email - subject exceeds 500 chars (validation error)",
+          "type": "validation_error",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/email/messages",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "subject": "A very long subject that exceeds the maximum allowed length of five hundred characters. This subject line is intentionally made extremely long to test the Zod validation schema's max(500) constraint on the subject field. We need to ensure that the backend properly rejects requests with excessively long subjects and returns a meaningful validation error message to the client. Adding more text to ensure we definitely exceed the five hundred character limit for this particular validation test case scenario.",
+              "bodyHtml": "<p>Test</p>",
+              "recipients": [
+                { "recipientType": "TO", "emailAddress": "test@example.com" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["subject"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-CREATE-09",
+          "name": "Create email - invalid priority value (validation error)",
+          "type": "validation_error",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/email/messages",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "subject": "Test",
+              "bodyHtml": "<p>Test</p>",
+              "recipients": [
+                { "recipientType": "TO", "emailAddress": "test@example.com" }
+              ],
+              "priority": 5
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["priority"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-CREATE-10",
+          "name": "Create email - VIEWER denied (RBAC)",
+          "type": "authorization",
+          "role_used": "VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/email/messages",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" },
+            "body": {
+              "subject": "Viewer attempt",
+              "bodyHtml": "<p>Test</p>",
+              "recipients": [
+                { "recipientType": "TO", "emailAddress": "test@example.com" },
+                { "recipientType": "FROM", "emailAddress": "billing@company.com" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["forbidden", "permission"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-CREATE-11",
+          "name": "Create email - no auth token (unauthorized)",
+          "type": "authorization",
+          "role_used": "none",
+          "request": {
+            "method": "POST",
+            "url": "/email/messages",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "subject": "No auth",
+              "bodyHtml": "<p>Test</p>",
+              "recipients": [
+                { "recipientType": "TO", "emailAddress": "test@example.com" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 401
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/email/messages",
+      "description": "List outbound emails with pagination and filters (E10-1, AC #8)",
+      "story": "E10-1",
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "EM-LIST-01",
+          "name": "List emails - happy path (default pagination)",
+          "type": "happy_path",
+          "role_used": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/email/messages",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items", "meta"],
+            "body_match": {
+              "data.meta.hasMore": "boolean"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-LIST-02",
+          "name": "List emails - filter by status DRAFT",
+          "type": "happy_path",
+          "role_used": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/email/messages?status=DRAFT",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items"],
+            "body_match": {
+              "all items have status": "DRAFT"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-LIST-03",
+          "name": "List emails - filter by direction OUTBOUND",
+          "type": "happy_path",
+          "role_used": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/email/messages?direction=OUTBOUND",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-LIST-04",
+          "name": "List emails - custom limit",
+          "type": "happy_path",
+          "role_used": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/email/messages?limit=5",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_match": {
+              "data.items.length": "≤ 5"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-LIST-05",
+          "name": "List emails - invalid status filter (validation error)",
+          "type": "validation_error",
+          "role_used": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/email/messages?status=INVALID_STATUS",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["status"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-LIST-06",
+          "name": "List emails - limit exceeds max 100 (validation error)",
+          "type": "validation_error",
+          "role_used": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/email/messages?limit=200",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["limit"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-LIST-07",
+          "name": "List emails - VIEWER denied (RBAC)",
+          "type": "authorization",
+          "role_used": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/email/messages",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/email/messages/:id",
+      "description": "Get single email with recipients and queue entry (E10-1, AC #8)",
+      "story": "E10-1",
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "EM-GET-01",
+          "name": "Get email by ID - happy path",
+          "type": "happy_path",
+          "role_used": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/email/messages/{{created_email_id}}",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "messageNumber", "subject", "recipients", "queueEntry"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-GET-02",
+          "name": "Get email - not found (valid UUID)",
+          "type": "edge_case",
+          "role_used": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/email/messages/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["EMAIL_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-GET-03",
+          "name": "Get email - invalid UUID format (validation error)",
+          "type": "validation_error",
+          "role_used": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/email/messages/not-a-uuid",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["id"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-GET-04",
+          "name": "Get email - VIEWER denied (RBAC)",
+          "type": "authorization",
+          "role_used": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/email/messages/{{created_email_id}}",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/email/messages/:id/send",
+      "description": "Queue email for sending or re-queue FAILED email (E10-1, AC #8)",
+      "story": "E10-1",
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "EM-SEND-01",
+          "name": "Send (queue) a DRAFT email - happy path",
+          "type": "happy_path",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/email/messages/{{created_email_id}}/send",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["emailMessageId", "queueEntry"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT status FROM email_messages WHERE id = '{{created_email_id}}'",
+            "expected": "status = QUEUED"
+          }
+        },
+        {
+          "id": "EM-SEND-02",
+          "name": "Send email - not found (valid UUID)",
+          "type": "edge_case",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/email/messages/00000000-0000-4000-a000-ffffffffffff/send",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 404
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-SEND-03",
+          "name": "Send email - invalid UUID format (validation error)",
+          "type": "validation_error",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/email/messages/not-a-uuid/send",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-SEND-04",
+          "name": "Send email - already QUEUED (BR-COM-003 violation)",
+          "type": "edge_case",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/email/messages/{{already_queued_email_id}}/send",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["cannot", "queue"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-SEND-05",
+          "name": "Send email - VIEWER denied (RBAC)",
+          "type": "authorization",
+          "role_used": "VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/email/messages/{{created_email_id}}/send",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/email/messages/:id/read",
+      "description": "Toggle read/unread status for current user (E10-1, AC #8)",
+      "story": "E10-1",
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "EM-READ-01",
+          "name": "Mark email as read - happy path",
+          "type": "happy_path",
+          "role_used": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/email/messages/{{created_email_id}}/read",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["status", "readAt"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT status, read_at FROM email_recipients WHERE email_message_id = '{{created_email_id}}' AND user_id = '{{staff_user_id}}'",
+            "expected": "status = READ, read_at IS NOT NULL"
+          }
+        },
+        {
+          "id": "EM-READ-02",
+          "name": "Mark email as read - not a recipient (404)",
+          "type": "edge_case",
+          "role_used": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/email/messages/{{email_without_staff_recipient}}/read",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["EMAIL_RECIPIENT_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-READ-03",
+          "name": "Mark email as read - invalid UUID (validation error)",
+          "type": "validation_error",
+          "role_used": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/email/messages/not-a-uuid/read",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-READ-04",
+          "name": "Mark email as read - VIEWER denied (RBAC)",
+          "type": "authorization",
+          "role_used": "VIEWER",
+          "request": {
+            "method": "PATCH",
+            "url": "/email/messages/{{created_email_id}}/read",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/email/messages/:id",
+      "description": "Soft-delete email for current user (E10-1, AC #8)",
+      "story": "E10-1",
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "EM-DEL-01",
+          "name": "Soft-delete email - happy path",
+          "type": "happy_path",
+          "role_used": "STAFF",
+          "request": {
+            "method": "DELETE",
+            "url": "/email/messages/{{created_email_id_for_delete}}",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_match": { "data.deleted": true }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT status FROM email_recipients WHERE email_message_id = '{{created_email_id_for_delete}}' AND user_id = '{{staff_user_id}}'",
+            "expected": "status = DELETED (soft-delete, EmailMessage still exists)"
+          }
+        },
+        {
+          "id": "EM-DEL-02",
+          "name": "Delete email - not found (valid UUID)",
+          "type": "edge_case",
+          "role_used": "STAFF",
+          "request": {
+            "method": "DELETE",
+            "url": "/email/messages/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["EMAIL_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-DEL-03",
+          "name": "Delete email - invalid UUID (validation error)",
+          "type": "validation_error",
+          "role_used": "STAFF",
+          "request": {
+            "method": "DELETE",
+            "url": "/email/messages/not-a-uuid",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "EM-DEL-04",
+          "name": "Delete email - VIEWER denied (RBAC)",
+          "type": "authorization",
+          "role_used": "VIEWER",
+          "request": {
+            "method": "DELETE",
+            "url": "/email/messages/{{created_email_id_for_delete}}",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/email/templates",
+      "description": "Create email template (E10-2, AC #1, #6) — ADMIN only",
+      "story": "E10-2",
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "TPL-CREATE-01",
+          "name": "Create email template - happy path",
+          "type": "happy_path",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/email/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "code": "TEST_TEMPLATE_ONE",
+              "name": "Test Template One",
+              "description": "A test email template for integration testing",
+              "documentType": "CustomerInvoice",
+              "subjectTemplate": "Invoice {{invoiceNumber}} from {{companyName}}",
+              "bodyHtmlTemplate": "<h1>Invoice {{invoiceNumber}}</h1><p>Dear {{customerName}},</p><p>Please find attached your invoice for {{totalAmount}} {{currency}}.</p>",
+              "bodyTextTemplate": "Invoice {{invoiceNumber}} - Dear {{customerName}}, Please find attached your invoice.",
+              "languageCode": "en",
+              "attachPdf": true,
+              "autoSend": false
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "code", "name", "documentType", "subjectTemplate", "bodyHtmlTemplate"],
+            "body_match": {
+              "data.code": "TEST_TEMPLATE_ONE",
+              "data.isActive": true,
+              "data.documentType": "CustomerInvoice"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT * FROM email_templates WHERE code = 'TEST_TEMPLATE_ONE'",
+            "expected": "code = TEST_TEMPLATE_ONE, is_active = true, document_type = CustomerInvoice"
+          }
+        },
+        {
+          "id": "TPL-CREATE-02",
+          "name": "Create template - minimal required fields",
+          "type": "happy_path",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/email/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "code": "TEST_MINIMAL",
+              "name": "Minimal Template",
+              "documentType": "SalesQuote",
+              "subjectTemplate": "Quote from {{companyName}}",
+              "bodyHtmlTemplate": "<p>Your quote is ready.</p>"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_match": {
+              "data.languageCode": "en",
+              "data.attachPdf": true,
+              "data.autoSend": false
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-CREATE-03",
+          "name": "Create template - duplicate code (conflict)",
+          "type": "edge_case",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/email/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "code": "INVOICE_SEND",
+              "name": "Duplicate Invoice",
+              "documentType": "CustomerInvoice",
+              "subjectTemplate": "Duplicate {{invoiceNumber}}",
+              "bodyHtmlTemplate": "<p>Duplicate</p>"
+            }
+          },
+          "expected": {
+            "status": 409,
+            "body_contains": ["code", "exists"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-CREATE-04",
+          "name": "Create template - invalid code format (lowercase)",
+          "type": "validation_error",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/email/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "code": "invalid_lowercase",
+              "name": "Bad Code",
+              "documentType": "CustomerInvoice",
+              "subjectTemplate": "Test",
+              "bodyHtmlTemplate": "<p>Test</p>"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["Code must be uppercase"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-CREATE-05",
+          "name": "Create template - invalid documentType (validation error)",
+          "type": "validation_error",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/email/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "code": "BAD_DOCTYPE",
+              "name": "Bad DocType",
+              "documentType": "InvalidDocument",
+              "subjectTemplate": "Test",
+              "bodyHtmlTemplate": "<p>Test</p>"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["documentType"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-CREATE-06",
+          "name": "Create template - missing required fields (validation error)",
+          "type": "validation_error",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/email/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "name": "Missing Code and DocType"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["code"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-CREATE-07",
+          "name": "Create template - invalid Handlebars syntax (validation error)",
+          "type": "validation_error",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/email/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "code": "BAD_SYNTAX",
+              "name": "Bad Syntax",
+              "documentType": "CustomerInvoice",
+              "subjectTemplate": "Test",
+              "bodyHtmlTemplate": "{{#if}}<p>Unclosed block</p>"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["template", "syntax"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-CREATE-08",
+          "name": "Create template - unknown Handlebars variable (validation error)",
+          "type": "validation_error",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/email/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "code": "BAD_VARS",
+              "name": "Unknown Variable",
+              "documentType": "CustomerInvoice",
+              "subjectTemplate": "{{nonExistentVariable}}",
+              "bodyHtmlTemplate": "<p>{{anotherFakeVar}}</p>"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["variable", "unknown"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-CREATE-09",
+          "name": "Create template - STAFF denied (RBAC, ADMIN required)",
+          "type": "authorization",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/email/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "code": "STAFF_ATTEMPT",
+              "name": "Staff Attempt",
+              "documentType": "CustomerInvoice",
+              "subjectTemplate": "Test",
+              "bodyHtmlTemplate": "<p>Test</p>"
+            }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-CREATE-10",
+          "name": "Create template - VIEWER denied (RBAC, ADMIN required)",
+          "type": "authorization",
+          "role_used": "VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/email/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" },
+            "body": {
+              "code": "VIEWER_ATTEMPT",
+              "name": "Viewer Attempt",
+              "documentType": "CustomerInvoice",
+              "subjectTemplate": "Test",
+              "bodyHtmlTemplate": "<p>Test</p>"
+            }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-CREATE-11",
+          "name": "Create template - MANAGER denied (RBAC, ADMIN required)",
+          "type": "authorization",
+          "role_used": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/email/templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": {
+              "code": "MANAGER_ATTEMPT",
+              "name": "Manager Attempt",
+              "documentType": "CustomerInvoice",
+              "subjectTemplate": "Test",
+              "bodyHtmlTemplate": "<p>Test</p>"
+            }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/email/templates",
+      "description": "List email templates with filters (E10-2, AC #6) — ADMIN only",
+      "story": "E10-2",
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "TPL-LIST-01",
+          "name": "List templates - happy path (includes seeded defaults)",
+          "type": "happy_path",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/email/templates",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items", "meta"],
+            "body_match": {
+              "data.items.length": "≥ 7 (seeded defaults)"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-LIST-02",
+          "name": "List templates - filter by documentType",
+          "type": "happy_path",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/email/templates?documentType=CustomerInvoice",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_match": {
+              "all items have documentType": "CustomerInvoice"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-LIST-03",
+          "name": "List templates - filter by isActive=true",
+          "type": "happy_path",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/email/templates?isActive=true",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_match": {
+              "all items have isActive": true
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-LIST-04",
+          "name": "List templates - STAFF denied (RBAC)",
+          "type": "authorization",
+          "role_used": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/email/templates",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/email/templates/:id",
+      "description": "Get single email template (E10-2, AC #6) — ADMIN only",
+      "story": "E10-2",
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "TPL-GET-01",
+          "name": "Get template by ID - happy path",
+          "type": "happy_path",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/email/templates/{{created_template_id}}",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "code", "name", "documentType", "subjectTemplate", "bodyHtmlTemplate"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-GET-02",
+          "name": "Get template - not found (valid UUID)",
+          "type": "edge_case",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/email/templates/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["EMAIL_TEMPLATE_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-GET-03",
+          "name": "Get template - invalid UUID (validation error)",
+          "type": "validation_error",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/email/templates/not-a-uuid",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-GET-04",
+          "name": "Get template - STAFF denied (RBAC)",
+          "type": "authorization",
+          "role_used": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/email/templates/{{created_template_id}}",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/email/templates/:id",
+      "description": "Update email template (E10-2, AC #6) — ADMIN only",
+      "story": "E10-2",
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "TPL-UPDATE-01",
+          "name": "Update template name and subject - happy path",
+          "type": "happy_path",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/email/templates/{{created_template_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "name": "Updated Template Name",
+              "subjectTemplate": "Updated: Invoice {{invoiceNumber}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_match": {
+              "data.name": "Updated Template Name",
+              "data.subjectTemplate": "Updated: Invoice {{invoiceNumber}}"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT name, subject_template FROM email_templates WHERE id = '{{created_template_id}}'",
+            "expected": "name = Updated Template Name, subject_template = Updated: Invoice {{invoiceNumber}}"
+          }
+        },
+        {
+          "id": "TPL-UPDATE-02",
+          "name": "Update template - not found (valid UUID)",
+          "type": "edge_case",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/email/templates/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": { "name": "Ghost" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["EMAIL_TEMPLATE_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-UPDATE-03",
+          "name": "Update template - invalid UUID (validation error)",
+          "type": "validation_error",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/email/templates/not-a-uuid",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": { "name": "Bad ID" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-UPDATE-04",
+          "name": "Update template - invalid Handlebars syntax in body (validation error)",
+          "type": "validation_error",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/email/templates/{{created_template_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "bodyHtmlTemplate": "{{#if}}<p>Unclosed block</p>"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["template", "syntax"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-UPDATE-05",
+          "name": "Update template - STAFF denied (RBAC)",
+          "type": "authorization",
+          "role_used": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/email/templates/{{created_template_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "name": "Staff Attempt" }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/email/templates/:id/preview",
+      "description": "Render template with sample data (E10-2, AC #3, #6) — ADMIN only",
+      "story": "E10-2",
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "TPL-PREVIEW-01",
+          "name": "Preview template - happy path (CustomerInvoice)",
+          "type": "happy_path",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/email/templates/{{invoice_template_id}}/preview",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["subject", "bodyHtml", "sampleData"],
+            "body_match": {
+              "data.subject contains": "INV-00042",
+              "data.bodyHtml contains": "Acme Ltd"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-PREVIEW-02",
+          "name": "Preview template - not found (valid UUID)",
+          "type": "edge_case",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/email/templates/00000000-0000-4000-a000-ffffffffffff/preview",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["EMAIL_TEMPLATE_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-PREVIEW-03",
+          "name": "Preview template - invalid UUID (validation error)",
+          "type": "validation_error",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/email/templates/not-a-uuid/preview",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-PREVIEW-04",
+          "name": "Preview template - STAFF denied (RBAC)",
+          "type": "authorization",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/email/templates/{{invoice_template_id}}/preview",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/email/templates/:id",
+      "description": "Soft-delete email template (set isActive=false) (E10-2, AC #6) — ADMIN only",
+      "story": "E10-2",
+      "minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "TPL-DEL-01",
+          "name": "Soft-delete template - happy path",
+          "type": "happy_path",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "DELETE",
+            "url": "/email/templates/{{created_template_id_for_delete}}",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_match": { "data.deleted": true }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT is_active FROM email_templates WHERE id = '{{created_template_id_for_delete}}'",
+            "expected": "is_active = false (soft-delete, record still exists)"
+          }
+        },
+        {
+          "id": "TPL-DEL-02",
+          "name": "Delete template - not found (valid UUID)",
+          "type": "edge_case",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "DELETE",
+            "url": "/email/templates/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["EMAIL_TEMPLATE_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-DEL-03",
+          "name": "Delete template - invalid UUID (validation error)",
+          "type": "validation_error",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "DELETE",
+            "url": "/email/templates/not-a-uuid",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "TPL-DEL-04",
+          "name": "Delete template - STAFF denied (RBAC)",
+          "type": "authorization",
+          "role_used": "STAFF",
+          "request": {
+            "method": "DELETE",
+            "url": "/email/templates/{{created_template_id_for_delete}}",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/documents/email",
+      "description": "Send document as email with PDF attachment (E10-3, AC #6)",
+      "story": "E10-3",
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "DOCEMAIL-SEND-01",
+          "name": "Send document email - happy path (CustomerInvoice)",
+          "type": "happy_path",
+          "role_used": "STAFF",
+          "note": "Requires a real CustomerInvoice in POSTED/APPROVED status. Discover ID via GET /ar/invoices first.",
+          "request": {
+            "method": "POST",
+            "url": "/documents/email",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "documentType": "CustomerInvoice",
+              "recordId": "{{real_invoice_id}}",
+              "recipientOverrides": ["customer@example.com"]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["emailMessageId", "queueStatus", "recipientEmail"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT em.status, em.source_entity_type, em.source_entity_id, em.has_attachments FROM email_messages em WHERE em.id = '{{created_email_message_id}}'",
+            "expected": "status = QUEUED, source_entity_type = CustomerInvoice, has_attachments = true"
+          }
+        },
+        {
+          "id": "DOCEMAIL-SEND-02",
+          "name": "Send document email with CC and BCC - happy path",
+          "type": "happy_path",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/documents/email",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "documentType": "CustomerInvoice",
+              "recordId": "{{real_invoice_id}}",
+              "recipientOverrides": ["to@example.com"],
+              "cc": ["cc@example.com"],
+              "bcc": ["bcc@example.com"]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["emailMessageId", "queueStatus"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM email_recipients WHERE email_message_id = '{{created_email_message_id}}'",
+            "expected": "count ≥ 4 (FROM + TO + CC + BCC)"
+          }
+        },
+        {
+          "id": "DOCEMAIL-SEND-03",
+          "name": "Send document email with custom templateId - happy path",
+          "type": "happy_path",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/documents/email",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "documentType": "CustomerInvoice",
+              "recordId": "{{real_invoice_id}}",
+              "recipientOverrides": ["custom@example.com"],
+              "templateId": "{{invoice_template_id}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["emailMessageId"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DOCEMAIL-SEND-04",
+          "name": "Send document email - invalid documentType (validation error)",
+          "type": "validation_error",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/documents/email",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "documentType": "InvalidDocType",
+              "recordId": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["documentType"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DOCEMAIL-SEND-05",
+          "name": "Send document email - missing recordId (validation error)",
+          "type": "validation_error",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/documents/email",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "documentType": "CustomerInvoice"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["recordId"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DOCEMAIL-SEND-06",
+          "name": "Send document email - invalid recordId UUID format (validation error)",
+          "type": "validation_error",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/documents/email",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "documentType": "CustomerInvoice",
+              "recordId": "not-a-uuid"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["recordId"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DOCEMAIL-SEND-07",
+          "name": "Send document email - document not found (valid UUID)",
+          "type": "edge_case",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/documents/email",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "documentType": "CustomerInvoice",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff"
+            }
+          },
+          "expected": {
+            "status": 404
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DOCEMAIL-SEND-08",
+          "name": "Send document email - invalid recipient email format (validation error)",
+          "type": "validation_error",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/documents/email",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "documentType": "CustomerInvoice",
+              "recordId": "{{real_invoice_id}}",
+              "recipientOverrides": ["not-an-email"]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["email"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DOCEMAIL-SEND-09",
+          "name": "Send document email - invalid CC email format (validation error)",
+          "type": "validation_error",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/documents/email",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "documentType": "CustomerInvoice",
+              "recordId": "{{real_invoice_id}}",
+              "recipientOverrides": ["valid@example.com"],
+              "cc": ["invalid-cc-email"]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["email"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DOCEMAIL-SEND-10",
+          "name": "Send document email - VIEWER denied (RBAC)",
+          "type": "authorization",
+          "role_used": "VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/documents/email",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" },
+            "body": {
+              "documentType": "CustomerInvoice",
+              "recordId": "{{real_invoice_id}}",
+              "recipientOverrides": ["test@example.com"]
+            }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DOCEMAIL-SEND-11",
+          "name": "Send document email - RecordLink created after send",
+          "type": "happy_path",
+          "role_used": "STAFF",
+          "note": "After successful send, verify a RecordLink exists between source document and EmailMessage",
+          "request": {
+            "method": "POST",
+            "url": "/documents/email",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "documentType": "CustomerInvoice",
+              "recordId": "{{real_invoice_id}}",
+              "recipientOverrides": ["recordlink-test@example.com"]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["emailMessageId"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT * FROM record_links WHERE source_entity_type = 'CustomerInvoice' AND source_entity_id = '{{real_invoice_id}}' AND target_entity_type = 'EmailMessage' AND target_entity_id = '{{created_email_message_id}}'",
+            "expected": "link_type = RELATES_TO, is_system_generated = true"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/documents/email/preview",
+      "description": "Preview document email without sending (E10-3, AC #6)",
+      "story": "E10-3",
+      "minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "DOCEMAIL-PREVIEW-01",
+          "name": "Preview document email - happy path (CustomerInvoice)",
+          "type": "happy_path",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/documents/email/preview",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "documentType": "CustomerInvoice",
+              "recordId": "{{real_invoice_id}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["from", "to", "subject", "bodyHtml", "attachmentFileName"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DOCEMAIL-PREVIEW-02",
+          "name": "Preview with custom templateId - happy path",
+          "type": "happy_path",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/documents/email/preview",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "documentType": "CustomerInvoice",
+              "recordId": "{{real_invoice_id}}",
+              "templateId": "{{invoice_template_id}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["subject", "bodyHtml"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DOCEMAIL-PREVIEW-03",
+          "name": "Preview - invalid documentType (validation error)",
+          "type": "validation_error",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/documents/email/preview",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "documentType": "FakeDocType",
+              "recordId": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["documentType"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DOCEMAIL-PREVIEW-04",
+          "name": "Preview - missing recordId (validation error)",
+          "type": "validation_error",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/documents/email/preview",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "documentType": "CustomerInvoice"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["recordId"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DOCEMAIL-PREVIEW-05",
+          "name": "Preview - document not found (valid UUID)",
+          "type": "edge_case",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/documents/email/preview",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "documentType": "CustomerInvoice",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff"
+            }
+          },
+          "expected": {
+            "status": 404
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DOCEMAIL-PREVIEW-06",
+          "name": "Preview - VIEWER denied (RBAC)",
+          "type": "authorization",
+          "role_used": "VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/documents/email/preview",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" },
+            "body": {
+              "documentType": "CustomerInvoice",
+              "recordId": "{{real_invoice_id}}"
+            }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/ar/reports/statements/batch",
+      "description": "Trigger batch statement email generation (E10-3, AC #5) — MANAGER+ only",
+      "story": "E10-3",
+      "minimum_role": "MANAGER",
+      "test_cases": [
+        {
+          "id": "BATCH-STMT-01",
+          "name": "Trigger batch statement email - happy path",
+          "type": "happy_path",
+          "role_used": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/ar/reports/statements/batch",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": {
+              "dateRange": {
+                "from": "2026-01-01",
+                "to": "2026-03-04"
+              }
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["batchJobId"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "BATCH-STMT-02",
+          "name": "Trigger batch with customer filter - happy path",
+          "type": "happy_path",
+          "role_used": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/ar/reports/statements/batch",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": {
+              "dateRange": {
+                "from": "2026-01-01",
+                "to": "2026-03-04"
+              },
+              "customerIds": ["00000000-0000-4000-a000-000000000099"]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["batchJobId"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "BATCH-STMT-03",
+          "name": "Batch statement - missing dateRange (validation error)",
+          "type": "validation_error",
+          "role_used": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/ar/reports/statements/batch",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["dateRange"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "BATCH-STMT-04",
+          "name": "Batch statement - invalid date format (validation error)",
+          "type": "validation_error",
+          "role_used": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/ar/reports/statements/batch",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": {
+              "dateRange": {
+                "from": "not-a-date",
+                "to": "2026-03-04"
+              }
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["date"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "BATCH-STMT-05",
+          "name": "Batch statement - invalid customerIds UUID (validation error)",
+          "type": "validation_error",
+          "role_used": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/ar/reports/statements/batch",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": {
+              "dateRange": {
+                "from": "2026-01-01",
+                "to": "2026-03-04"
+              },
+              "customerIds": ["not-a-uuid"]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["uuid"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "BATCH-STMT-06",
+          "name": "Batch statement - STAFF denied (RBAC, MANAGER+ required)",
+          "type": "authorization",
+          "role_used": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/ar/reports/statements/batch",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "dateRange": {
+                "from": "2026-01-01",
+                "to": "2026-03-04"
+              }
+            }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "BATCH-STMT-07",
+          "name": "Batch statement - VIEWER denied (RBAC, MANAGER+ required)",
+          "type": "authorization",
+          "role_used": "VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/ar/reports/statements/batch",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" },
+            "body": {
+              "dateRange": {
+                "from": "2026-01-01",
+                "to": "2026-03-04"
+              }
+            }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "BATCH-STMT-08",
+          "name": "Batch statement - SUPER_ADMIN can trigger (happy path)",
+          "type": "happy_path",
+          "role_used": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/ar/reports/statements/batch",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "dateRange": {
+                "from": "2026-01-01",
+                "to": "2026-03-04"
+              }
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["batchJobId"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    }
+  ],
+  "test_execution_order": [
+    "1. AUTH-01 through AUTH-04: Login all users and store tokens",
+    "2. TPL-CREATE-01, TPL-CREATE-02: Create test templates (need IDs for later tests)",
+    "3. TPL-CREATE-03 through TPL-CREATE-11: Template create validation & RBAC tests",
+    "4. TPL-LIST-01 through TPL-LIST-04: List template tests",
+    "5. TPL-GET-01 through TPL-GET-04: Get template tests",
+    "6. TPL-UPDATE-01 through TPL-UPDATE-05: Update template tests",
+    "7. TPL-PREVIEW-01 through TPL-PREVIEW-04: Preview template tests",
+    "8. EM-CREATE-01 through EM-CREATE-04: Create email messages (need IDs for later tests)",
+    "9. EM-CREATE-05 through EM-CREATE-11: Email create validation & RBAC tests",
+    "10. EM-LIST-01 through EM-LIST-07: List email tests",
+    "11. EM-GET-01 through EM-GET-04: Get email tests",
+    "12. EM-SEND-01 through EM-SEND-05: Send/queue email tests",
+    "13. EM-READ-01 through EM-READ-04: Mark read tests",
+    "14. DOCEMAIL-PREVIEW-01 through DOCEMAIL-PREVIEW-06: Document email preview tests",
+    "15. DOCEMAIL-SEND-01 through DOCEMAIL-SEND-11: Document email send tests",
+    "16. BATCH-STMT-01 through BATCH-STMT-08: Batch statement email tests",
+    "17. EM-DEL-01 through EM-DEL-04: Delete email tests (last — destroys test data)",
+    "18. TPL-DEL-01 through TPL-DEL-04: Delete template tests (last — destroys test data)"
+  ],
+  "test_summary": {
+    "by_story": {
+      "E10-1 (SMTP Outbound Service)": {
+        "endpoints": 6,
+        "test_cases": 37,
+        "breakdown": "POST /email/messages (11), GET /email/messages (7), GET /email/messages/:id (4), POST /email/messages/:id/send (5), PATCH /email/messages/:id/read (4), DELETE /email/messages/:id (4)"
+      },
+      "E10-2 (Email Template Management)": {
+        "endpoints": 6,
+        "test_cases": 32,
+        "breakdown": "POST /email/templates (11), GET /email/templates (4), GET /email/templates/:id (4), PATCH /email/templates/:id (5), POST /email/templates/:id/preview (4), DELETE /email/templates/:id (4)"
+      },
+      "E10-3 (Document-to-Email)": {
+        "endpoints": 3,
+        "test_cases": 25,
+        "breakdown": "POST /documents/email (11), POST /documents/email/preview (6), POST /ar/reports/statements/batch (8)"
+      }
+    },
+    "by_type": {
+      "happy_path": 32,
+      "validation_error": 38,
+      "edge_case": 16,
+      "authorization": 28
+    },
+    "total_auth_login_tests": 4,
+    "total_e10_tests": 94,
+    "grand_total": 118
+  }
+}

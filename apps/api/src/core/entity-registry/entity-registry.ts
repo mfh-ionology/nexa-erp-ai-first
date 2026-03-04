@@ -23,6 +23,7 @@ export const VALID_ENTITY_TYPES = new Set([
   'Department',
   'VatCode',
   'PaymentTerms',
+  'EmailMessage',
 ] as const);
 
 export type ValidEntityType = typeof VALID_ENTITY_TYPES extends Set<infer T> ? T : never;

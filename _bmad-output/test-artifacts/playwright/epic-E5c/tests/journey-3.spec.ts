@@ -2,240 +2,275 @@ import { test, expect } from '@playwright/test';
 
 const SCREENSHOTS_DIR = '../../screenshots/epic-E5c/journey-3';
 
-test.describe('Journey 3: Model Business Rules Enforcement', () => {
-  test.setTimeout(120_000);
+/**
+ * Helper: navigate within the SPA using TanStack Router.
+ * Auth tokens are in-memory only (Zustand), so page.goto() would
+ * cause a full reload and lose the authenticated session.
+ */
+async function spaNavigate(page: import('@playwright/test').Page, path: string) {
+  await page.evaluate((p) => {
+    window.history.pushState({}, '', p);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, path);
+  await page.waitForTimeout(500);
+  await page.waitForLoadState('networkidle');
+}
+
+test.describe('Journey 3: Edit Model — Default Toggle and Business Rules', () => {
+  test.setTimeout(180_000);
 
   test.beforeEach(async ({ page }) => {
     // Login as admin user
     await page.goto('/login');
-    await page.getByLabel('Email').fill('admin@nexa-erp.dev');
-    await page.getByLabel('Password').fill('NexaDev2026!');
-    await page.getByRole('button', { name: 'Sign In' }).click();
+    await page.waitForLoadState('networkidle');
 
-    // Wait for redirect away from login page
-    await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 15000 });
+    const emailInput = page.getByLabel('Email');
+    await emailInput.waitFor({ state: 'visible', timeout: 10000 });
+    await emailInput.fill('admin@nexa-erp.dev');
+
+    const passwordInput = page.getByLabel('Password');
+    await passwordInput.fill('NexaDev2026!');
+
+    const signInButton = page.getByRole('button', { name: /sign in/i });
+    await signInButton.waitFor({ state: 'visible' });
+    await signInButton.click();
+
+    await page.waitForURL((url) => !url.pathname.includes('/login'), {
+      timeout: 30000,
+    });
     await page.waitForLoadState('networkidle');
   });
 
-  test('Default model deactivation guard and circular fallback rejection', async ({ page }) => {
-    // ── Step 1: Navigate to Model Registry ─────────────────────────────
-    const sidebarNav = page.locator('nav');
-
-    // Expand the AI sidebar group if it exists
-    const aiGroupLabel = sidebarNav.getByText('AI', { exact: true }).first();
-    if (await aiGroupLabel.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await aiGroupLabel.click();
-      await page.waitForTimeout(300);
-    }
-
-    // Click "Model Registry" in the sidebar
-    const modelRegistryLink = sidebarNav.getByText('Model Registry').first();
-    if (await modelRegistryLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await modelRegistryLink.click();
-    } else {
-      await page.locator('a[href="/ai/admin/models"]').first().click();
-    }
-
-    await page.waitForURL('**/ai/admin/models', { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
-
-    // Wait for table to load
-    await expect(page.getByRole('table')).toBeVisible({ timeout: 15000 });
-    await page.waitForTimeout(2000);
-
-    // Verify breadcrumb confirms page loaded
+  test('Edit model default toggle and verify cannot deactivate default model', async ({
+    page,
+  }) => {
+    // ── Setup: Ensure 'test-gpt-4o' model exists (prerequisite from journey 2) ──
+    await spaNavigate(page, '/ai/admin/models');
     await expect(
       page.getByLabel('breadcrumb').getByText('Model Registry'),
     ).toBeVisible({ timeout: 15000 });
+    await page.waitForTimeout(2000);
 
-    // Verify seeded models visible
-    await expect(page.getByText('claude-opus-4-6').first()).toBeVisible();
+    const modelVisible = await page
+      .getByText('test-gpt-4o')
+      .first()
+      .isVisible()
+      .catch(() => false);
 
-    // Verify at least one model has the "Default" badge
-    await expect(page.getByText('Default').first()).toBeVisible();
+    if (!modelVisible) {
+      // Create the prerequisite model
+      await page.getByRole('button', { name: /New/i }).click();
+      await page.waitForURL('**/ai/admin/models/new', { timeout: 10000 });
+      await page.waitForLoadState('networkidle');
+      await expect(page.getByRole('heading', { name: 'New Model' })).toBeVisible({ timeout: 10000 });
 
-    // ── Checkpoint 1: Model List with Default Badge ────────────────────
+      await page.getByLabel('Name', { exact: true }).fill('test-gpt-4o');
+      await page.getByLabel('Display Name').fill('GPT-4o Test Model');
+
+      const providerTrigger = page.locator('button[role="combobox"]').first();
+      await providerTrigger.click();
+      await page.getByRole('option', { name: 'Openai' }).click();
+      // Wait for dropdown to close
+      await page.waitForTimeout(500);
+
+      await page.getByLabel('Model ID').fill('gpt-4o-2024-08-06');
+      await page.getByLabel('Max Input Tokens').fill('128000');
+      await page.getByLabel('Max Output Tokens').fill('16384');
+      await page.getByLabel('Cost per Million Input Tokens ($)').fill('2.50');
+      await page.getByLabel('Cost per Million Output Tokens ($)').fill('10.00');
+
+      // Listen for the API response
+      const saveResponsePromise = page.waitForResponse(
+        (resp) => resp.url().includes('/ai/admin/models') && resp.request().method() === 'POST',
+        { timeout: 20000 },
+      );
+
+      await page.getByRole('button', { name: 'Save' }).click();
+
+      // Wait for the API response
+      const saveResponse = await saveResponsePromise;
+      const status = saveResponse.status();
+      if (status >= 400) {
+        const body = await saveResponse.text().catch(() => 'no body');
+        throw new Error(`Setup: model creation failed with ${status}: ${body}`);
+      }
+
+      // Wait for navigation or toast
+      await page.waitForTimeout(3000);
+      await page.waitForLoadState('networkidle');
+
+      // Navigate back to model list
+      await spaNavigate(page, '/ai/admin/models');
+      await expect(
+        page.getByLabel('breadcrumb').getByText('Model Registry'),
+      ).toBeVisible({ timeout: 10000 });
+      await page.waitForTimeout(2000);
+
+      // Confirm model now appears
+      await expect(page.getByText('test-gpt-4o').first()).toBeVisible({ timeout: 10000 });
+    }
+
+    // ── Step 1: Navigate to /ai/admin/models ──────────────────────────────────
+    // Already on this page from setup
+    await expect(page.getByText('test-gpt-4o').first()).toBeVisible({
+      timeout: 10000,
+    });
+
+    // ── Step 2: Click on 'test-gpt-4o' row to open edit form ──────────────────
+    await page.getByText('test-gpt-4o').first().click();
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    // Verify edit form loaded with correct data
+    await expect(page.getByText('GPT-4o Test Model')).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(page.getByRole('tab', { name: 'Primary' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Advanced' })).toBeVisible();
+
+    // ── Checkpoint 1: Model Edit Form Loaded ──────────────────────────────────
     await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-1-model-list-with-default.png`,
+      path: `${SCREENSHOTS_DIR}/step-2-model-edit-form.png`,
       fullPage: true,
     });
 
-    // ── Step 2: Click the row for the model marked as Default ──────────
-    // Find the table row that contains the "Default" badge and click it
-    const defaultRow = page.getByRole('row').filter({ hasText: 'Default' });
-    await defaultRow.first().click();
+    // ── Step 3: Toggle Default Model to ON ────────────────────────────────────
+    const defaultToggleContainer = page
+      .locator('.rounded-lg.border.p-4')
+      .filter({ hasText: 'Default Model' });
+    await expect(defaultToggleContainer).toBeVisible();
 
-    // Wait for model edit form to load
-    await page.waitForURL('**/ai/admin/models/**', { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
+    const defaultSwitch = defaultToggleContainer.getByRole('switch');
+    await expect(defaultSwitch).toBeVisible();
 
-    // Verify we're on the edit form (should show Primary tab)
-    await expect(page.getByRole('tab', { name: 'Primary' })).toBeVisible({ timeout: 10000 });
-
-    // Verify the "Default" badge is shown in the page header
-    await expect(page.getByText('Default').first()).toBeVisible();
-
-    // ── Step 3: Toggle Active to false ─────────────────────────────────
-    // Click the Primary tab to ensure we see the Active toggle
-    await page.getByRole('tab', { name: 'Primary' }).click();
-    await page.waitForTimeout(500);
-
-    // Find and toggle the Active switch off
-    const activeSwitch = page.getByRole('switch', { name: /^active$/i });
-    await expect(activeSwitch).toBeVisible({ timeout: 5000 });
-
-    // Only toggle if it's currently checked (active)
-    const isChecked = await activeSwitch.isChecked();
-    if (isChecked) {
-      await activeSwitch.click();
+    // Ensure it's toggled ON
+    const defaultState = await defaultSwitch.getAttribute('data-state');
+    if (defaultState !== 'checked') {
+      await defaultSwitch.click();
     }
 
-    // ── Step 4: Click Save — expect error ──────────────────────────────
+    // Verify the description text about unsetting previous default is visible
+    await expect(
+      page.getByText('Setting as default will unset the current default model'),
+    ).toBeVisible();
+
+    // ── Step 4: Click Save ────────────────────────────────────────────────────
     const saveButton = page.getByRole('button', { name: 'Save' });
     await expect(saveButton).toBeEnabled({ timeout: 5000 });
     await saveButton.click();
 
-    // Wait for error toast about deactivating default model
-    // The API should return 422: "Cannot deactivate the default model"
-    await expect(
-      page.getByText(/cannot deactivate/i).or(page.getByText(/default model/i)),
-    ).toBeVisible({ timeout: 15000 });
-
-    // ── Checkpoint 2: Default Model Deactivation Error ─────────────────
-    await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-4-deactivation-error.png`,
-      fullPage: true,
-    });
-
-    // ── Step 5: Navigate to new model form ─────────────────────────────
-    // Use breadcrumb to go back to list, then click New
-    const modelRegistryBreadcrumb = page.locator('a').filter({ hasText: 'Model Registry' }).first();
-    await modelRegistryBreadcrumb.click();
-
-    await page.waitForURL('**/ai/admin/models', { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
-    await expect(page.getByRole('table')).toBeVisible({ timeout: 15000 });
-
-    // Click New button
-    await page.getByRole('button', { name: 'New' }).click();
-    await page.waitForURL('**/ai/admin/models/new', { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
-
-    await expect(page.getByText('New Model')).toBeVisible({ timeout: 10000 });
-
-    // ── Step 6: Fill form with fallback-test-a data ────────────────────
-    await page.getByLabel('Name').fill('fallback-test-a');
-    await page.getByLabel('Display Name').fill('Fallback Test A');
-
-    // Provider dropdown — select Anthropic
-    const providerTrigger = page.locator('button[role="combobox"]').first();
-    await providerTrigger.click();
-    await page.getByRole('option', { name: 'Anthropic' }).click();
-
-    await page.getByLabel('Model ID').fill('fallback-a');
-    await page.getByLabel('Max Input Tokens').fill('100000');
-    await page.getByLabel('Max Output Tokens').fill('4096');
-    await page.getByLabel('Cost per Million Input Tokens ($)').fill('1.00');
-    await page.getByLabel('Cost per Million Output Tokens ($)').fill('5.00');
-
-    // ── Step 7: Click Save to create model ─────────────────────────────
-    await expect(saveButton).toBeEnabled({ timeout: 5000 });
-    await saveButton.click();
-
     // Wait for success toast
-    await expect(page.getByText('Model created successfully')).toBeVisible({ timeout: 15000 });
-    await page.waitForLoadState('networkidle');
+    await expect(page.getByText('Model updated successfully')).toBeVisible({
+      timeout: 15000,
+    });
+    await page.waitForTimeout(1000);
 
-    // Verify we're now on the edit page for this model
-    await expect(page.getByText('Fallback Test A').first()).toBeVisible({ timeout: 10000 });
-
-    // ── Checkpoint 3: New Model Created ────────────────────────────────
+    // ── Checkpoint 2: Default Toggle Set — Success Toast ──────────────────────
     await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-7-model-created.png`,
+      path: `${SCREENSHOTS_DIR}/step-4-default-set-success.png`,
       fullPage: true,
     });
 
-    // ── Step 8: Click Advanced tab ─────────────────────────────────────
-    await page.getByRole('tab', { name: 'Advanced' }).click();
-    await page.waitForTimeout(500);
-
-    // Verify Advanced tab content visible
-    await expect(page.getByText('Routing Tags')).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText('Fallback Model')).toBeVisible();
-
-    // ── Step 9: Set fallback model to claude-opus-4-6 ──────────────────
-    const fallbackTrigger = page.locator('button[role="combobox"]').filter({ hasText: /No fallback model/i });
-    await fallbackTrigger.click();
-
-    // Select claude-opus-4-6 from the dropdown
-    const opusOption = page.getByRole('option').filter({ hasText: /opus/i });
-    await opusOption.first().click();
-
-    // ── Step 10: Click Save to update fallback ─────────────────────────
-    await expect(saveButton).toBeEnabled({ timeout: 5000 });
-    await saveButton.click();
-
-    // Wait for save to complete (no explicit success toast for updates per the codebase,
-    // but the form should reset dirty state)
-    await page.waitForTimeout(2000);
-    await page.waitForLoadState('networkidle');
-
-    // ── Checkpoint 4: Fallback Set ─────────────────────────────────────
-    await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-10-fallback-saved.png`,
-      fullPage: true,
-    });
-
-    // ── Step 11: Navigate back to model list ───────────────────────────
-    const breadcrumbBack = page.locator('a').filter({ hasText: 'Model Registry' }).first();
-    await breadcrumbBack.click();
-
-    await page.waitForURL('**/ai/admin/models', { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
-    await expect(page.getByRole('table')).toBeVisible({ timeout: 15000 });
-    await page.waitForTimeout(2000);
-
-    // ── Step 12: Click claude-opus-4-6 row ─────────────────────────────
-    await page.getByText('claude-opus-4-6').first().click();
-
-    // Wait for edit form to load
-    await page.waitForURL('**/ai/admin/models/**', { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
-    await expect(page.getByRole('tab', { name: 'Primary' })).toBeVisible({ timeout: 10000 });
-
-    // ── Step 13: Click Advanced tab ────────────────────────────────────
-    await page.getByRole('tab', { name: 'Advanced' }).click();
-    await page.waitForTimeout(500);
-
-    await expect(page.getByText('Fallback Model')).toBeVisible({ timeout: 5000 });
-
-    // ── Step 14: Set fallback to fallback-test-a (creating circular chain) ──
-    // opus -> fallback-test-a -> opus would be circular
-    const opusFallbackTrigger = page.locator('button[role="combobox"]').filter({
-      hasText: /No fallback model|Select/i,
-    });
-
-    // If there's already a fallback set, we might need to change it
-    const fallbackCombobox = page.locator('button[role="combobox"]').last();
-    await fallbackCombobox.click();
-
-    // Select fallback-test-a
-    const fallbackTestAOption = page.getByRole('option').filter({ hasText: /fallback-test-a|Fallback Test A/i });
-    await fallbackTestAOption.first().click();
-
-    // ── Step 15: Click Save — expect circular fallback error ───────────
-    await expect(saveButton).toBeEnabled({ timeout: 5000 });
-    await saveButton.click();
-
-    // Wait for error toast about circular fallback chain
+    // ── Step 5: Navigate back to model list ───────────────────────────────────
+    await spaNavigate(page, '/ai/admin/models');
     await expect(
-      page.getByText(/circular/i).or(page.getByText(/fallback.*chain/i)).or(page.getByText(/fallback.*loop/i)),
+      page.getByLabel('breadcrumb').getByText('Model Registry'),
+    ).toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(2000);
+
+    // Verify test-gpt-4o row has the Default badge
+    const testModelRow = page.getByRole('row').filter({ hasText: 'test-gpt-4o' });
+    await expect(testModelRow).toBeVisible();
+    await expect(testModelRow.getByText('Default')).toBeVisible();
+
+    // Count total Default badges in the table — should be exactly 1
+    const allDefaultBadges = page.locator(
+      'table td >> text=Default',
+    );
+    await expect(allDefaultBadges).toHaveCount(1);
+
+    // ── Checkpoint 3: Model List — Only One Default Badge ─────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-5-model-list-single-default.png`,
+      fullPage: true,
+    });
+
+    // ── Step 6: Click on 'test-gpt-4o' again ──────────────────────────────────
+    await page.getByText('test-gpt-4o').first().click();
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    await expect(page.getByText('GPT-4o Test Model')).toBeVisible({
+      timeout: 10000,
+    });
+
+    // ── Step 7: Toggle Active to OFF ──────────────────────────────────────────
+    const activeToggleContainer = page
+      .locator('.rounded-lg.border.p-4')
+      .filter({ hasText: /^Active/ });
+    await expect(activeToggleContainer).toBeVisible();
+
+    const activeSwitch = activeToggleContainer.getByRole('switch');
+    await expect(activeSwitch).toBeVisible();
+
+    // Toggle OFF if currently checked
+    const activeState = await activeSwitch.getAttribute('data-state');
+    if (activeState === 'checked') {
+      await activeSwitch.click();
+    }
+
+    // ── Step 8: Click Save — expect 422 error ─────────────────────────────────
+    const saveButton2 = page.getByRole('button', { name: 'Save' });
+    await expect(saveButton2).toBeEnabled({ timeout: 5000 });
+    await saveButton2.click();
+
+    // Expect error toast about deactivating default model
+    await expect(
+      page
+        .getByText(/cannot deactivate/i)
+        .or(page.getByText(/deactivate.*default/i))
+        .first(),
     ).toBeVisible({ timeout: 15000 });
 
-    // ── Checkpoint 5: Circular Fallback Error ──────────────────────────
+    // ── Checkpoint 4: Deactivate Default Model — Error Toast ──────────────────
     await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-15-circular-fallback-error.png`,
+      path: `${SCREENSHOTS_DIR}/step-8-deactivate-default-error.png`,
       fullPage: true,
     });
+
+    // ── Cleanup: Unset default flag and delete test model ─────────────────────
+    // Reload to reset the form state (the failed save may have left the form dirty)
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000);
+
+    // Unset the Default toggle
+    const cleanupDefaultContainer = page
+      .locator('.rounded-lg.border.p-4')
+      .filter({ hasText: 'Default Model' });
+    const cleanupDefaultSwitch = cleanupDefaultContainer.getByRole('switch');
+    const cleanupDefaultState = await cleanupDefaultSwitch
+      .getAttribute('data-state')
+      .catch(() => 'unchecked');
+    if (cleanupDefaultState === 'checked') {
+      await cleanupDefaultSwitch.click();
+    }
+
+    // Save to clear default
+    const cleanupSave = page.getByRole('button', { name: 'Save' });
+    if (await cleanupSave.isEnabled()) {
+      await cleanupSave.click();
+      await page.waitForTimeout(3000);
+    }
+
+    // Delete the test model
+    const deleteButton = page.getByRole('button', { name: 'Delete' });
+    if (await deleteButton.isVisible().catch(() => false)) {
+      await deleteButton.click();
+      const dialog = page.locator('[role="dialog"]');
+      await expect(dialog).toBeVisible({ timeout: 5000 });
+      await dialog.getByRole('button', { name: 'Delete' }).click();
+      await page.waitForURL('**/ai/admin/models', { timeout: 10000 });
+    }
   });
 });

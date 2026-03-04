@@ -12,3 +12,4 @@ export { AutomationListPage } from './automations/automation-list-page';
 export { AutomationFormPage } from './automations/automation-form-page';
 export { AutomationRunListPage } from './automation-runs/automation-run-list-page';
 export { AutomationRunDetailPage } from './automation-runs/automation-run-detail-page';
+export { KnowledgeManagementPage } from './knowledge/knowledge-management-page';

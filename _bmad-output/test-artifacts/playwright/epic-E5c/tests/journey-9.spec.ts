@@ -1,346 +1,242 @@
 import { test, expect } from '@playwright/test';
+import * as path from 'path';
 
-const SCREENSHOTS_DIR =
-  '_bmad-output/test-artifacts/screenshots/epic-E5c/journey-9';
+const SCREENSHOTS_DIR = path.resolve(__dirname, '..', '..', '..', 'screenshots', 'epic-E5c', 'journey-9');
 
-test.describe('Journey 9: Skill Edit Form & Test Trigger Panel', () => {
+/**
+ * Helper: navigate within the SPA using TanStack Router.
+ * Auth tokens are in-memory only (Zustand), so page.goto() would
+ * cause a full reload and lose the authenticated session.
+ */
+async function spaNavigate(page: import('@playwright/test').Page, navPath: string) {
+  await page.evaluate((p) => {
+    window.history.pushState({}, '', p);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, navPath);
+  await page.waitForTimeout(500);
+  await page.waitForLoadState('networkidle');
+}
+
+// Unique suffix for this test run
+const AGENT_SLUG = `test-ar-collector-${Date.now()}`;
+const AGENT_DISPLAY_NAME = 'AR Collection Agent';
+const UPDATED_DISPLAY_NAME = 'AR Collection Specialist Agent';
+
+test.describe('Journey 9: Agent List Search and Edit', () => {
   test.setTimeout(120_000);
 
   test.beforeEach(async ({ page }) => {
+    // Capture the access token from the login API response.
+    // Frontend calls /api/v1/auth/login (Vite proxies to backend /auth/login).
+    let accessToken = '';
+    page.on('response', async (response) => {
+      if (response.url().includes('/auth/login') && response.ok()) {
+        try {
+          const body = await response.json();
+          // Response envelope: { success: true, data: { user, tokens: { accessToken, refreshToken }, ... } }
+          accessToken = body?.data?.tokens?.accessToken || '';
+        } catch { /* skip */ }
+      }
+    });
+
     // Login as admin user
     await page.goto('/login');
-    await page.getByLabel('Email').fill('admin@nexa-erp.dev');
-    await page.getByLabel('Password').fill('NexaDev2026!');
-    await page.getByRole('button', { name: 'Sign In' }).click();
+    await page.waitForLoadState('networkidle');
 
-    // Wait for redirect away from login page
+    const emailInput = page.getByLabel('Email');
+    await emailInput.waitFor({ state: 'visible', timeout: 10000 });
+    await emailInput.fill('admin@nexa-erp.dev');
+
+    const passwordInput = page.getByLabel('Password');
+    await passwordInput.fill('NexaDev2026!');
+
+    const signInButton = page.getByRole('button', { name: /sign in/i });
+    await signInButton.waitFor({ state: 'visible' });
+    await signInButton.click();
+
+    // Wait for navigation away from /login
     await page.waitForURL((url) => !url.pathname.includes('/login'), {
-      timeout: 15000,
+      timeout: 30000,
     });
     await page.waitForLoadState('networkidle');
+
+    // Give time for the response listener to capture the token
+    await page.waitForTimeout(1000);
+
+    // Create the test agent via API so the search test has data
+    if (accessToken) {
+      // Vite proxies /api/v1/* → http://localhost:5100/*
+      // Use the page's base URL to go through the proxy
+      const proxyBase = '';
+
+      // Get models and prompts to use valid IDs
+      const modelsRes = await page.request.get(`/api/v1/ai/admin/models?isActive=true`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const modelsData = await modelsRes.json();
+      const models = modelsData?.data ?? [];
+      const sonnetModel = models.find(
+        (m: { name: string }) => m.name.includes('sonnet'),
+      );
+      const modelId = sonnetModel?.id || models[0]?.id;
+
+      const promptsRes = await page.request.get(`/api/v1/ai/admin/prompts?isActive=true`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const promptsData = await promptsRes.json();
+      const prompts = promptsData?.data ?? [];
+      const promptId = prompts[0]?.id;
+
+      if (promptId) {
+        const createRes = await page.request.post(`/api/v1/ai/admin/agents`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          data: {
+            name: AGENT_SLUG,
+            displayName: AGENT_DISPLAY_NAME,
+            description: 'Handles accounts receivable collection workflows',
+            modelId: modelId || null,
+            promptId,
+            routingTags: ['standard'],
+            maxTurns: 15,
+            isActive: true,
+            tools: ['query_overdue_invoices', 'send_reminder_email', 'create_follow_up_task'],
+            guardrails: {
+              canRead: ['customer', 'customerinvoice'],
+              canWrite: ['customerinvoice'],
+              requiresApproval: true,
+              blockedOperations: [],
+              dataScope: 'module',
+            },
+            triggerConfig: [],
+          },
+        });
+
+        if (!createRes.ok()) {
+          const errBody = await createRes.text();
+          console.warn(`Agent creation failed (${createRes.status()}): ${errBody}`);
+        } else {
+          console.log(`Created test agent: ${AGENT_SLUG}`);
+        }
+      } else {
+        console.warn('No prompts available — agent creation skipped');
+      }
+    } else {
+      console.warn('Could not capture access token from login response');
+    }
   });
 
-  test('Edit skill form tabs and test trigger routing (E5c-4 AC-4, AC-5)', async ({
-    page,
-  }) => {
-    // Capture API errors for diagnostics
-    const apiErrors: string[] = [];
-    page.on('response', (response) => {
-      if (
-        response.url().includes('/api/') &&
-        response.status() >= 400
-      ) {
-        apiErrors.push(
-          `${response.status()} ${response.request().method()} ${response.url()}`,
-        );
-      }
+  test('Search agent list and edit agent display name', async ({ page }) => {
+    // ── Step 1: Navigate to /ai/admin/agents ───────────────────────────
+    await spaNavigate(page, '/ai/admin/agents');
+    await page.waitForTimeout(2000);
+
+    // Verify agent list page loaded — table with rows visible
+    const tableRows = page.locator('table tbody tr');
+    await expect(tableRows.first()).toBeVisible({ timeout: 15000 });
+
+    // ── Checkpoint 1: Agent List Page Loaded ────────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-1-agent-list-page.png`,
+      fullPage: true,
     });
 
-    // ── Step 1: Navigate to /ai/admin/skills via sidebar ─────────────────
-    // IMPORTANT: Never use page.goto() for authenticated routes — it resets SPA session.
-    // Use sidebar navigation → AI Administration → dashboard quick-nav button.
-    const sidebarNav = page.locator('nav');
+    // ── Step 2: Search for "ar-collector" ──────────────────────────────
+    const searchInput = page.getByPlaceholder(/search/i);
+    await expect(searchInput).toBeVisible({ timeout: 5000 });
+    await searchInput.fill('ar-collector');
 
-    // Click "AI Administration" in sidebar
-    const aiAdminLink = sidebarNav.getByText('AI Administration').first();
-    await expect(aiAdminLink).toBeVisible({ timeout: 10000 });
-    await aiAdminLink.click();
-    await page.waitForURL('**/ai/admin', { timeout: 10000 });
+    // Wait for debounce (300ms) + network response
+    await page.waitForTimeout(1000);
     await page.waitForLoadState('networkidle');
 
-    // Click "Skill Packs" quick-nav button on the AI dashboard
-    const skillNavButton = page.getByRole('button', { name: /Skill Packs/i });
-    await expect(skillNavButton.first()).toBeVisible({ timeout: 15000 });
-    await skillNavButton.first().click();
-    await page.waitForURL('**/ai/admin/skills', { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
+    // Verify filtered results show our test agent
+    const filteredRows = page.locator('table tbody tr');
+    await expect(filteredRows.first()).toBeVisible({ timeout: 10000 });
 
-    // Verify Skill Pack Manager page loaded
-    const pageHeading = page
-      .getByRole('heading')
-      .filter({ hasText: /Skill Pack|Skills/i });
-    await expect(pageHeading.first()).toBeVisible({ timeout: 10000 });
+    // Verify the agent slug appears in the filtered results
+    const agentNameCell = page.locator('table tbody tr').first().getByText(/ar-collector/i);
+    await expect(agentNameCell).toBeVisible({ timeout: 5000 });
 
-    test.info().annotations.push({
-      type: 'info',
-      description: 'Step 1: Skill Pack Manager loaded',
+    // ── Checkpoint 2: Search Results Filtered ───────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-2-search-results-filtered.png`,
+      fullPage: true,
     });
 
-    // ── Step 2: Check if skills exist, then click first card ─────────────
-    // Skill cards have role="button" and aria-label="View skill {displayName}"
-    await page.waitForTimeout(2000); // Allow data to load
+    // ── Step 3: Click on the agent row to open edit form ────────────────
+    const agentRow = page.locator('table tbody tr').first();
+    await agentRow.click();
 
-    const skillCards = page.locator('[role="button"][aria-label^="View skill"]');
-    const noSkillsMessage = page.locator('text=/No skills found/i');
-    const cardCount = await skillCards.count();
-    const hasNoSkills = await noSkillsMessage.isVisible({ timeout: 2000 }).catch(() => false);
+    // Wait for navigation to agent edit page
+    await page.waitForURL('**/ai/admin/agents/**', { timeout: 10000 });
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1500);
 
-    let clickedSkill = false;
-    let skillName = '';
-    let mainVisible = false;
-    let triggersVisible = false;
-    let contentVisible = false;
-    let schemaVisible = false;
+    // Verify edit form loaded with tabs
+    const mainTab = page.getByRole('tab', { name: 'Main' });
+    await expect(mainTab).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('tab', { name: 'Tools' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Guardrails' })).toBeVisible();
 
-    if (hasNoSkills || cardCount === 0) {
-      // No skills seeded — record this as missing test data
-      test.info().annotations.push({
-        type: 'missing-feature',
-        description: `Step 2: No skills found in database (cards: ${cardCount}, noSkillsMsg: ${hasNoSkills}). Cannot test skill edit form. Skill seed data from E5/E5b not present for this tenant.`,
-      });
+    // ── Checkpoint 3: Agent Edit Form Loaded ────────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-3-agent-edit-form.png`,
+      fullPage: true,
+    });
 
-      // ── Checkpoint 1: Skills Empty State ──────────────────────────────
-      await page.screenshot({
-        path: `${SCREENSHOTS_DIR}/step-2-skill-edit-form.png`,
-        fullPage: true,
-      });
-    } else {
-      // Skills exist — click the first one
-      const ariaLabel = (await skillCards.first().getAttribute('aria-label')) || '';
-      skillName = ariaLabel.replace('View skill ', '');
-      await skillCards.first().click();
-      clickedSkill = true;
+    // ── Step 4: Update the display name ─────────────────────────────────
+    // Read the current display name to ensure we're actually changing it
+    const displayNameInput = page.getByPlaceholder('Invoice Creator Agent');
+    await expect(displayNameInput).toBeVisible({ timeout: 5000 });
+    const currentDisplayName = await displayNameInput.inputValue();
 
-      await page.waitForURL('**/ai/admin/skills/**', { timeout: 10000 });
-      await page.waitForLoadState('networkidle');
+    // Pick a different name based on what's currently set
+    const newDisplayName = currentDisplayName === UPDATED_DISPLAY_NAME
+      ? AGENT_DISPLAY_NAME  // Toggle back to original
+      : UPDATED_DISPLAY_NAME;
 
-      test.info().annotations.push({
-        type: 'info',
-        description: `Step 2: Opened skill edit form for "${skillName.trim()}"`,
-      });
+    await displayNameInput.clear();
+    await displayNameInput.fill(newDisplayName);
 
-      // Verify tabs: Main, Triggers, Content, Schema
-      const tabsList = page.getByRole('tablist');
-      await expect(tabsList.first()).toBeVisible({ timeout: 10000 });
-
-      const mainTab = page.getByRole('tab', { name: /Main/i });
-      const triggersTab = page.getByRole('tab', { name: /Trigger/i });
-      const contentTab = page.getByRole('tab', { name: /Content/i });
-      const schemaTab = page.getByRole('tab', { name: /Schema/i });
-
-      mainVisible = await mainTab.isVisible({ timeout: 3000 }).catch(() => false);
-      triggersVisible = await triggersTab.isVisible({ timeout: 3000 }).catch(() => false);
-      contentVisible = await contentTab.isVisible({ timeout: 3000 }).catch(() => false);
-      schemaVisible = await schemaTab.isVisible({ timeout: 3000 }).catch(() => false);
-
-      test.info().annotations.push({
-        type: 'info',
-        description: `Tabs: Main=${mainVisible}, Triggers=${triggersVisible}, Content=${contentVisible}, Schema=${schemaVisible}`,
-      });
-
-      // ── Checkpoint 1: Skill Edit Form ──────────────────────────────────
-      await page.screenshot({
-        path: `${SCREENSHOTS_DIR}/step-2-skill-edit-form.png`,
-        fullPage: true,
-      });
-
-      // ── Step 3: Click Triggers tab ─────────────────────────────────────
-      if (triggersVisible) {
-        await triggersTab.click();
-        await page.waitForTimeout(500);
-
-        const bluePills = page.locator('.bg-blue-50');
-        const redPills = page.locator('.bg-red-50');
-
-        test.info().annotations.push({
-          type: 'info',
-          description: `Step 3: Triggers tab — blue pills: ${await bluePills.count()}, red pills: ${await redPills.count()}`,
-        });
-
-        // ── Checkpoint 2: Triggers Tab ────────────────────────────────────
-        await page.screenshot({
-          path: `${SCREENSHOTS_DIR}/step-3-triggers-tab.png`,
-          fullPage: true,
-        });
+    // Ensure the Prompt field is populated — required for save.
+    // If the loaded agent's promptId doesn't resolve in the dropdown, select one.
+    const promptCombobox = page.locator('button[role="combobox"]').nth(1);
+    const promptText = await promptCombobox.textContent();
+    if (promptText?.includes('Select a prompt')) {
+      await promptCombobox.click();
+      await page.waitForTimeout(300);
+      const firstPromptOption = page.getByRole('option').first();
+      if (await firstPromptOption.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await firstPromptOption.click();
+        await page.waitForTimeout(300);
       }
-
-      // ── Step 4: Click Content tab ──────────────────────────────────────
-      if (contentVisible) {
-        await contentTab.click();
-        await page.waitForTimeout(500);
-
-        const contentTextarea = page.locator('textarea');
-        const hasTextarea = await contentTextarea.first().isVisible({ timeout: 5000 }).catch(() => false);
-
-        if (hasTextarea) {
-          const val = await contentTextarea.first().inputValue();
-          test.info().annotations.push({
-            type: 'info',
-            description: `Step 4: Content tab textarea — ${val.length} chars`,
-          });
-        }
-
-        // ── Checkpoint 3: Content Tab ─────────────────────────────────────
-        await page.screenshot({
-          path: `${SCREENSHOTS_DIR}/step-4-content-tab.png`,
-          fullPage: true,
-        });
-      }
-
-      // ── Step 5: Navigate back to Skill Pack Manager ────────────────────
-      const breadcrumbLink = page.getByRole('link', { name: /AI Administration/i });
-      const backButton = page.getByRole('button', { name: /Back|Cancel/i });
-
-      if (await breadcrumbLink.first().isVisible({ timeout: 3000 }).catch(() => false)) {
-        // Click AI Administration breadcrumb → then navigate to skills again
-        await breadcrumbLink.first().click();
-        await page.waitForURL('**/ai/admin', { timeout: 10000 });
-        await page.waitForLoadState('networkidle');
-
-        // Navigate back to skills via quick-nav
-        const skillBtn = page.getByRole('button', { name: /Skill Packs/i });
-        await expect(skillBtn.first()).toBeVisible({ timeout: 10000 });
-        await skillBtn.first().click();
-        await page.waitForURL('**/ai/admin/skills', { timeout: 10000 });
-      } else if (await backButton.first().isVisible({ timeout: 3000 }).catch(() => false)) {
-        await backButton.first().click();
-        await page.waitForURL('**/ai/admin/skills', { timeout: 10000 });
-      } else {
-        await page.goBack();
-        await page.waitForURL('**/ai/admin/skills', { timeout: 10000 });
-      }
-
-      await page.waitForLoadState('networkidle');
-      await expect(pageHeading.first()).toBeVisible({ timeout: 10000 });
-
-      test.info().annotations.push({
-        type: 'info',
-        description: 'Step 5: Navigated back to Skill Pack Manager',
-      });
     }
 
-    // ── Step 6: Click Test Trigger button ────────────────────────────────
-    // This can be tested even without skills — the panel is independent
-    const testTriggerButton = page.getByRole('button', { name: /Test Trigger/i });
-    const hasTestTriggerBtn = await testTriggerButton.isVisible({ timeout: 5000 }).catch(() => false);
+    // ── Step 5: Click Save ──────────────────────────────────────────────
+    const saveButton = page.getByRole('button', { name: /save/i });
+    await expect(saveButton).toBeEnabled({ timeout: 5000 });
+    await saveButton.click();
 
-    if (hasTestTriggerBtn) {
-      await testTriggerButton.click();
-      await page.waitForTimeout(500);
+    // Wait for the success toast
+    const successToast = page.getByText(/agent updated successfully/i);
+    await expect(successToast).toBeVisible({ timeout: 10000 });
 
-      // Verify Sheet panel opened (shadcn Sheet renders as role="dialog")
-      const sheetContent = page.locator('[role="dialog"]');
-      const sheetVisible = await sheetContent.first().isVisible({ timeout: 5000 }).catch(() => false);
+    // Wait for page to update
+    await page.waitForTimeout(1000);
+    await page.waitForLoadState('networkidle');
 
-      test.info().annotations.push({
-        type: 'info',
-        description: `Step 6: Test Trigger clicked — dialog visible=${sheetVisible}`,
-      });
+    // Verify heading updated to new display name
+    await expect(
+      page.getByRole('heading', { name: newDisplayName }),
+    ).toBeVisible({ timeout: 10000 });
 
-      // ── Checkpoint 4: Test Trigger Panel Open ───────────────────────────
-      await page.screenshot({
-        path: `${SCREENSHOTS_DIR}/step-6-test-trigger-panel.png`,
-        fullPage: true,
-      });
-
-      // ── Step 7: Fill trigger phrase ─────────────────────────────────────
-      const phraseInput = page.getByPlaceholder(/phrase|trigger|type/i);
-      const dialogInput = sheetContent.first().locator('input[type="text"], input:not([type])');
-
-      let filledPhrase = false;
-
-      if (await phraseInput.first().isVisible({ timeout: 3000 }).catch(() => false)) {
-        await phraseInput.first().fill('show me overdue invoices');
-        filledPhrase = true;
-      } else if (await dialogInput.first().isVisible({ timeout: 3000 }).catch(() => false)) {
-        await dialogInput.first().fill('show me overdue invoices');
-        filledPhrase = true;
-      }
-
-      test.info().annotations.push({
-        type: 'info',
-        description: `Step 7: Phrase input filled=${filledPhrase}`,
-      });
-
-      // ── Step 8: Click Test / Run button ────────────────────────────────
-      if (filledPhrase) {
-        const testButton = sheetContent.first().getByRole('button', { name: /^Test$|Run|Route/i });
-        const fallbackBtn = page.getByRole('button', { name: /^Test$|Run|Route/i });
-
-        let clickedTestBtn = false;
-
-        if (await testButton.first().isVisible({ timeout: 3000 }).catch(() => false)) {
-          await testButton.first().click();
-          clickedTestBtn = true;
-        } else if (await fallbackBtn.first().isVisible({ timeout: 3000 }).catch(() => false)) {
-          await fallbackBtn.first().click();
-          clickedTestBtn = true;
-        }
-
-        if (clickedTestBtn) {
-          // Wait for results (API call + rendering)
-          await page.waitForTimeout(3000);
-
-          // TestTriggerPanel renders ConfidenceBar with role="progressbar"
-          const confidenceBars = page.locator('[role="progressbar"]');
-          const noMatchWarning = page.locator('text=/No match|No skill|not found|no results/i');
-
-          const confidenceCount = await confidenceBars.count();
-          const hasNoMatch = await noMatchWarning.first().isVisible({ timeout: 3000 }).catch(() => false);
-
-          test.info().annotations.push({
-            type: 'info',
-            description: `Step 8: Results — confidence bars: ${confidenceCount}, no-match: ${hasNoMatch}`,
-          });
-
-          if (confidenceCount === 0 && !hasNoMatch) {
-            const spinner = page.locator('[class*="animate-spin"]');
-            const isLoading = await spinner.first().isVisible({ timeout: 2000 }).catch(() => false);
-            test.info().annotations.push({
-              type: 'issue',
-              description: `No trigger test results after 3s. Loading=${isLoading}. Errors: [${apiErrors.slice(-3).join('; ')}]`,
-            });
-          }
-
-          // ── Checkpoint 5: Trigger Test Results ────────────────────────────
-          await page.screenshot({
-            path: `${SCREENSHOTS_DIR}/step-8-trigger-test-results.png`,
-            fullPage: true,
-          });
-        } else {
-          test.info().annotations.push({
-            type: 'missing-feature',
-            description: 'Step 8: Test/Run button not found inside trigger panel',
-          });
-        }
-      } else {
-        test.info().annotations.push({
-          type: 'missing-feature',
-          description: 'Step 7: Could not find input field in test trigger panel',
-        });
-      }
-    } else {
-      test.info().annotations.push({
-        type: 'missing-feature',
-        description: 'Step 6: Test Trigger button not visible on Skill Pack Manager page',
-      });
-    }
-
-    // ── Close any open dialogs before final assertions ─────────────────
-    // The Test Trigger Sheet adds aria-hidden to background, hiding headings
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(500);
-
-    // ── Final Assertions ────────────────────────────────────────────────
-    // The Skill Pack Manager page must be the current route
-    await expect(page).toHaveURL(/\/ai\/admin\/skills/);
-
-    // If skills existed, tabs should have been visible on the edit form
-    if (clickedSkill) {
-      expect(
-        mainVisible || triggersVisible || contentVisible,
-        'At least one expected tab (Main, Triggers, Content) should be visible',
-      ).toBe(true);
-    }
-
-    // Test Trigger button should always exist on the Skill Pack Manager
-    expect(hasTestTriggerBtn, 'Test Trigger button should be visible on Skill Pack Manager').toBe(true);
-
-    if (apiErrors.length > 0) {
-      test.info().annotations.push({
-        type: 'issue',
-        description: `API errors: [${apiErrors.slice(0, 5).join('; ')}]`,
-      });
-    }
+    // ── Checkpoint 4: Agent Updated Successfully ────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-4-agent-updated-success.png`,
+      fullPage: true,
+    });
   });
 });

@@ -1,27 +1,21 @@
-# Journey 4: Prompt Template CRUD with Versioning — Visual Checkpoints
+# Journey 4: Model List Search and Delete Guard — Visual Checkpoints
 
-## Checkpoint 1: Prompt List Page Loaded
-- **When:** After navigating to /ai/admin/prompts (Step 1)
-- **Screenshot file:** step-1-prompt-list-loaded.png
-- **What to look for:** T1 Entity List with "Prompt Templates" heading. Table with columns: Name (mono), Category (coloured badge), Version (mono vN), Variables, Status (active dot + text), Last Updated. At least 6 seeded prompt rows visible. Purple-themed Concept D styling.
-- **ACTUAL RESULT:** PARTIAL PASS. Page structure correct — heading "Prompt Templates", breadcrumb "AI Administration > Prompt Templates", table columns (NAME, CATEGORY, VERSION, VARIABLES, STATUS, LAST UPDATED), search bar, "All Categories" filter dropdown, "+ New" button. Sidebar navigation shows AI Administration and Prompt Templates highlighted in purple. However, table shows "No results found" because GET `/api/v1/ai/admin/prompts` returns 404 (API route not registered).
+## Checkpoint 1: Search Filters Model List
+- **When:** After step 2 — typing "opus" into the search input
+- **Screenshot file:** step-2-search-filtered-opus.png
+- **What to look for:** Search input shows "opus" text, model list is filtered to show only claude-opus-4-6 row, other models are hidden. Table maintains correct column layout.
 
-## Checkpoint 2: New Prompt Editor Page
-- **When:** After clicking "+ New" and navigating to /ai/admin/prompts/new (Step 3)
-- **Screenshot file:** step-3-new-prompt-editor.png
-- **What to look for:** "New Prompt Template" heading. Form fields: Name input, Category dropdown, Description textarea, Active toggle. Two editor areas: "System Prompt" and "User Template" with mono font. No version sidebar (create mode). Concept D styling.
-- **ACTUAL RESULT:** PASS. "New Prompt Template" heading visible. Breadcrumb: "AI Administration > Prompt Templates > New Prompt Template". Fields present: Name (placeholder "record-creation-invoice"), Category (dropdown "Select category"), Description (textarea with placeholder), Active toggle (ON by default). System Prompt section with "Type {{ to insert variables" help text. Cancel and Save buttons in action bar. Concept D purple-themed styling with rounded cards and proper shadows. No version sidebar (correct for create mode).
+## Checkpoint 2: Overflow Menu Actions
+- **When:** After step 4 — clicking the overflow (⋮) menu on the claude-opus-4-6 row
+- **Screenshot file:** step-4-overflow-menu-open.png
+- **What to look for:** Dropdown menu visible with three actions: "Edit" (pencil icon), "Deactivate" or "Activate" (power icon), and "Delete" (trash icon, red text). Menu is positioned near the row.
 
-## Checkpoint 3: Prompt Created — Version 1
-- **When:** After saving the new prompt (Step 5)
-- **Screenshot file:** step-5-prompt-created-v1.png
-- **What to look for:** Success toast "Prompt template created". Page shows saved prompt in edit mode. Version sidebar visible on right showing "Version History" with v1 as only entry, marked "Active".
-- **ACTUAL RESULT:** FAIL. Red error toast "Route not found" visible in top-right. POST to `/api/v1/ai/admin/prompts` returned 404. Page remains on "New Prompt Template" (create mode). No version sidebar. Form data is still populated (Name: "test-e2e-prompt", Category: "Analysis", Description: "E2E test prompt for automated testing", System Prompt with template variables). The frontend correctly filled all fields and attempted save, but the backend route does not exist.
+## Checkpoint 3: Delete Confirmation Dialog
+- **When:** After step 5 — clicking "Delete" from the overflow menu
+- **Screenshot file:** step-5-delete-confirmation-dialog.png
+- **What to look for:** AlertDialog modal visible with title "Delete Model", description warning about irreversibility, model name displayed in mono font on muted background, Cancel and red Delete buttons.
 
-## Checkpoint 4: Change Reason Modal — NOT REACHED
-## Checkpoint 5: Version 2 Created — NOT REACHED
-## Checkpoint 6: Diff View — v1 vs v2 — NOT REACHED
-## Checkpoint 7: Version Restored — v3 Created — NOT REACHED
-## Checkpoint 8: List Shows v3 — NOT REACHED
-
-**Root Cause:** AI admin API routes (`/ai/admin/*`) return 404 on the running API server. The AI plugin's route registration fails silently. All steps from 5 onwards are blocked.
+## Checkpoint 4: Delete Blocked Error Toast
+- **When:** After step 6 — confirming the delete of a model referenced by agents
+- **Screenshot file:** step-6-delete-blocked-error-toast.png
+- **What to look for:** Error toast visible indicating the model cannot be deleted because it is referenced by agents. Model should still appear in the list (not deleted). The error message should mention agent references.

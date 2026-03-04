@@ -9,6 +9,8 @@ import type { ToolDefinition, ToolRegistry } from '@nexa/ai-tools';
 import type { Logger } from 'pino';
 import type { SkillRouter } from './skill-router.js';
 import type { MemoryInjectionService } from './memory-injection.service.js';
+import type { KnowledgeRagService } from './knowledge-rag.service.js';
+import type { TrainingExampleInjectionService } from './training-example-injection.service.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────
 
@@ -20,10 +22,10 @@ const BUDGET_INTERACTIVE = {
   base: 500,
   memories: 2000,
   skills: 1000,
-  knowledge: 500,
+  knowledge: 1000,
   permissions: 200,
   screen: 300,
-  total: 5000,
+  total: 5500,
 } as const;
 
 /** Token budgets per section (AUTONOMOUS mode, ~3000 total) */
@@ -52,6 +54,7 @@ export interface InteractiveContextParams {
 
 export interface AutonomousContextParams {
   moduleKey: string;
+  companyId?: string;
   skillName?: string;
   inputData: Record<string, unknown>;
   basePrompt: string;
@@ -79,6 +82,9 @@ export interface AssembledContext {
 // ─── DynamicContextService ───────────────────────────────────────────────
 
 export class DynamicContextService {
+  private knowledgeRagService: KnowledgeRagService | null = null;
+  private trainingExampleInjection: TrainingExampleInjectionService | null = null;
+
   constructor(
     private skillRouter: SkillRouter,
     private memoryInjection: MemoryInjectionService,
@@ -86,6 +92,16 @@ export class DynamicContextService {
     private db: PrismaClient,
     private logger: Logger,
   ) {}
+
+  /** Setter for optional KnowledgeRagService (E5d tenant knowledge RAG) */
+  setKnowledgeRagService(svc: KnowledgeRagService): void {
+    this.knowledgeRagService = svc;
+  }
+
+  /** Setter for optional TrainingExampleInjectionService (E5d-2 few-shot injection) */
+  setTrainingExampleInjection(svc: TrainingExampleInjectionService): void {
+    this.trainingExampleInjection = svc;
+  }
 
   // ─── INTERACTIVE Mode (Chat Sessions) ───────────────────────────────
 
@@ -95,7 +111,10 @@ export class DynamicContextService {
    * Assembly order:
    *   1. Base system prompt (~500 tokens)
    *   2. User memories via MemoryInjectionService (≤2000 tokens)
+   *   2.5. Tenant knowledge via RAG (E5d) — shares knowledge budget
    *   3. Skill routing chain L0→L1→L2 (≤1000 tokens)
+   *   3.5. Training examples via few-shot injection (E5d-2) — shares remaining knowledge budget
+   *        (runs after skill routing so skillKey/category are available for AC#5 priority)
    *   4. Module knowledge for active module (≤500 tokens)
    *   5. User permissions summary (~200 tokens)
    *   6. Current screen context (~300 tokens)
@@ -154,7 +173,28 @@ export class DynamicContextService {
         }
       }
 
-      // 3. Skill routing chain L0→L1→L2
+      // 2.5 Tenant knowledge via RAG (E5d)
+      if (this.knowledgeRagService) {
+        try {
+          const ragResult = await this.knowledgeRagService.retrieveRelevantKnowledge(
+            userMessage,
+            companyId,
+            { tokenBudget: BUDGET_INTERACTIVE.knowledge },
+          );
+          if (ragResult.chunks.length > 0) {
+            sections.push(ragResult.formattedContext);
+            breakdown.knowledge = ragResult.totalTokens;
+          }
+        } catch {
+          this.logger.warn(
+            { userId, companyId },
+            'DynamicContext: knowledge RAG failed, continuing without',
+          );
+        }
+      }
+
+      // 3. Skill routing chain L0→L1→L2 (runs before training example injection so
+      //    skillKey/category are available for AC#5 priority ordering)
       let skillSection = '';
       try {
         // L0: classify module
@@ -217,46 +257,86 @@ export class DynamicContextService {
       }
 
       if (skillSection) {
+        // Remaining knowledge budget after tenant knowledge (step 2.5)
+        const remainingKnowledgeBudget = Math.max(
+          0,
+          BUDGET_INTERACTIVE.knowledge - breakdown.knowledge,
+        );
+        const skillBudget = BUDGET_INTERACTIVE.skills + remainingKnowledgeBudget;
         const skillTokens = estimateTokens(skillSection);
-        if (skillTokens <= BUDGET_INTERACTIVE.skills + BUDGET_INTERACTIVE.knowledge) {
+
+        if (skillTokens <= skillBudget) {
           sections.push(skillSection);
-          // Split tokens between skills and knowledge based on content
           breakdown.skills = Math.min(skillTokens, BUDGET_INTERACTIVE.skills);
-          breakdown.knowledge = Math.max(0, skillTokens - BUDGET_INTERACTIVE.skills);
+          // Module knowledge (E5b) tokens — overflow beyond skills budget, added to knowledge
+          breakdown.knowledge += Math.max(0, skillTokens - BUDGET_INTERACTIVE.skills);
         } else {
-          const truncated = truncateToTokenBudget(
-            skillSection,
-            BUDGET_INTERACTIVE.skills + BUDGET_INTERACTIVE.knowledge,
-          );
+          const truncated = truncateToTokenBudget(skillSection, skillBudget);
           sections.push(truncated);
           breakdown.skills = BUDGET_INTERACTIVE.skills;
-          breakdown.knowledge = BUDGET_INTERACTIVE.knowledge;
+          breakdown.knowledge += remainingKnowledgeBudget;
         }
       }
 
-      // 4. Module knowledge (loaded as part of L2 above via contextKnowledge)
-      //    If L2 didn't activate but L0 identified a module, load OVERVIEW knowledge
-      if (skillChain.l0Module && !skillChain.l2Activated && breakdown.knowledge === 0) {
-        try {
-          const overview = await this.db.aiModuleKnowledge.findFirst({
-            where: {
-              moduleKey: skillChain.l0Module,
-              knowledgeType: 'OVERVIEW',
-              isActive: true,
-            },
-            select: { content: true },
-          });
-
-          if (overview?.content) {
-            const knowledgeBlock = `<module_knowledge>\n${overview.content}\n</module_knowledge>`;
-            const knowledgeTokens = estimateTokens(knowledgeBlock);
-            if (knowledgeTokens <= BUDGET_INTERACTIVE.knowledge) {
-              sections.push(knowledgeBlock);
-              breakdown.knowledge = knowledgeTokens;
+      // 3.5 Training examples via few-shot injection (E5d-2)
+      // Runs AFTER skill routing so skillKey/category are available for AC#5 priority ordering
+      if (this.trainingExampleInjection) {
+        const remainingKnowledgeBudget = Math.max(
+          0,
+          BUDGET_INTERACTIVE.knowledge - breakdown.knowledge,
+        );
+        if (remainingKnowledgeBudget > 0) {
+          try {
+            // ISSUE #1 FIX: Pass undefined for category — l0Module is a module key
+            // (e.g. "finance") which never matches knowledge categories (e.g.
+            // "BUSINESS_PROCESS"). Tier 2 category matching is skipped; tier 1
+            // (skillKey) and tier 3 (fallback) still provide relevant examples.
+            const injectionResult = await this.trainingExampleInjection.retrieveRelevantExamples(
+              companyId,
+              skillChain.l1Skill ?? undefined,
+              undefined,
+              remainingKnowledgeBudget,
+            );
+            if (injectionResult.examples.length > 0) {
+              sections.push(injectionResult.formattedContext);
+              breakdown.knowledge += injectionResult.totalTokens;
             }
+          } catch {
+            this.logger.warn(
+              { userId, companyId },
+              'DynamicContext: training example injection failed, continuing without',
+            );
           }
-        } catch {
-          // Swallowed — non-critical
+        }
+      }
+
+      // 4. Module knowledge (E5b — loaded as part of L2 above via contextKnowledge)
+      //    If L2 didn't activate but L0 identified a module, load OVERVIEW knowledge.
+      //    Coexists with tenant knowledge (E5d step 2.5) — both share the knowledge budget.
+      if (skillChain.l0Module && !skillChain.l2Activated) {
+        const remainingKnowledgeBudget = BUDGET_INTERACTIVE.knowledge - breakdown.knowledge;
+        if (remainingKnowledgeBudget > 0) {
+          try {
+            const overview = await this.db.aiModuleKnowledge.findFirst({
+              where: {
+                moduleKey: skillChain.l0Module,
+                knowledgeType: 'OVERVIEW',
+                isActive: true,
+              },
+              select: { content: true },
+            });
+
+            if (overview?.content) {
+              const knowledgeBlock = `<module_knowledge>\n${overview.content}\n</module_knowledge>`;
+              const knowledgeTokens = estimateTokens(knowledgeBlock);
+              if (knowledgeTokens <= remainingKnowledgeBudget) {
+                sections.push(knowledgeBlock);
+                breakdown.knowledge += knowledgeTokens;
+              }
+            }
+          } catch {
+            // Swallowed — non-critical
+          }
         }
       }
 
@@ -335,7 +415,8 @@ export class DynamicContextService {
    *
    * Assembly order:
    *   1. Base system prompt (~500 tokens)
-   *   2. Module knowledge for the specified module (≤500 tokens)
+   *   1.5. Tenant knowledge via RAG (≤500 tokens, if companyId provided)
+   *   2. Module knowledge for the specified module (≤remaining knowledge budget)
    *   3. Skill instructions for the specified skill (≤1000 tokens)
    *   4. Automation-specific input data (≤1000 tokens)
    *   5. NO user memories, NO screen context
@@ -344,7 +425,7 @@ export class DynamicContextService {
    * Never throws — returns base prompt on any error (graceful degradation).
    */
   async assembleAutonomous(params: AutonomousContextParams): Promise<AssembledContext> {
-    const { moduleKey, skillName, inputData, basePrompt } = params;
+    const { moduleKey, companyId, skillName, inputData, basePrompt } = params;
 
     const breakdown = {
       base: 0,
@@ -369,36 +450,68 @@ export class DynamicContextService {
       sections.push(basePrompt);
       breakdown.base = estimateTokens(basePrompt);
 
-      // 2. Module knowledge
-      try {
-        const knowledgeEntries = await this.db.aiModuleKnowledge.findMany({
-          where: {
-            moduleKey,
-            isActive: true,
-            knowledgeType: { in: ['OVERVIEW', 'ENTITIES', 'WORKFLOWS', 'BUSINESS_RULES'] },
-          },
-          orderBy: [{ priority: 'desc' }],
-          select: { title: true, content: true, knowledgeType: true },
-        });
-
-        if (knowledgeEntries.length > 0) {
-          const parts: string[] = ['<module_knowledge>'];
-          let knowledgeTokens = 0;
-
-          for (const entry of knowledgeEntries) {
-            const entryText = `[${entry.knowledgeType}] ${entry.title}: ${entry.content}`;
-            const entryTokens = estimateTokens(entryText);
-
-            if (knowledgeTokens + entryTokens > BUDGET_AUTONOMOUS.knowledge) break;
-
-            parts.push(entryText);
-            knowledgeTokens += entryTokens;
+      // 1.5 Tenant knowledge via RAG (E5d) — optional, requires companyId
+      if (this.knowledgeRagService && companyId) {
+        try {
+          // Build a meaningful semantic query from inputData context rather than
+          // just using the skill/module identifier (which yields poor vector matches).
+          const inputSummary = Object.values(inputData)
+            .filter((v) => typeof v === 'string' && v.length > 0)
+            .slice(0, 5)
+            .join(' ');
+          const ragQuery = inputSummary
+            ? `${moduleKey} ${skillName ?? ''} ${inputSummary}`.trim()
+            : `${moduleKey} ${skillName ?? ''}`.trim();
+          const ragResult = await this.knowledgeRagService.retrieveRelevantKnowledge(
+            ragQuery,
+            companyId,
+            { tokenBudget: BUDGET_AUTONOMOUS.knowledge },
+          );
+          if (ragResult.chunks.length > 0) {
+            sections.push(ragResult.formattedContext);
+            breakdown.knowledge = ragResult.totalTokens;
           }
+        } catch {
+          this.logger.warn(
+            { moduleKey, companyId },
+            'DynamicContext: autonomous knowledge RAG failed, continuing without',
+          );
+        }
+      }
 
-          parts.push('</module_knowledge>');
-          const knowledgeBlock = parts.join('\n');
-          sections.push(knowledgeBlock);
-          breakdown.knowledge = knowledgeTokens;
+      // 2. Module knowledge (E5b) — shares knowledge budget with tenant knowledge (step 1.5)
+      try {
+        const remainingKnowledgeBudget = BUDGET_AUTONOMOUS.knowledge - breakdown.knowledge;
+        if (remainingKnowledgeBudget > 0) {
+          const knowledgeEntries = await this.db.aiModuleKnowledge.findMany({
+            where: {
+              moduleKey,
+              isActive: true,
+              knowledgeType: { in: ['OVERVIEW', 'ENTITIES', 'WORKFLOWS', 'BUSINESS_RULES'] },
+            },
+            orderBy: [{ priority: 'desc' }],
+            select: { title: true, content: true, knowledgeType: true },
+          });
+
+          if (knowledgeEntries.length > 0) {
+            const parts: string[] = ['<module_knowledge>'];
+            let knowledgeTokens = 0;
+
+            for (const entry of knowledgeEntries) {
+              const entryText = `[${entry.knowledgeType}] ${entry.title}: ${entry.content}`;
+              const entryTokens = estimateTokens(entryText);
+
+              if (knowledgeTokens + entryTokens > remainingKnowledgeBudget) break;
+
+              parts.push(entryText);
+              knowledgeTokens += entryTokens;
+            }
+
+            parts.push('</module_knowledge>');
+            const knowledgeBlock = parts.join('\n');
+            sections.push(knowledgeBlock);
+            breakdown.knowledge += knowledgeTokens;
+          }
         }
       } catch {
         // Swallowed — non-critical

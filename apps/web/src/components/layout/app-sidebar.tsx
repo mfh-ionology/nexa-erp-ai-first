@@ -1,6 +1,8 @@
 import { Link, useRouterState } from '@tanstack/react-router';
 import {
   BarChart3,
+  BookOpen,
+  Bot,
   Brain,
   Briefcase,
   ChevronLeft,
@@ -10,17 +12,18 @@ import {
   Factory,
   FileCode,
   FileText,
+  History,
   Landmark,
   LayoutDashboard,
   Receipt,
   Settings,
-  Settings2,
   Shield,
   ShoppingCart,
   Sun,
   Users as UsersIcon,
   Wand2,
   Warehouse,
+  Workflow,
 } from 'lucide-react';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -103,8 +106,18 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { path: '/ai/briefing', labelKey: 'navigation:ai.briefing', icon: Sun, moduleKey: null },
       { path: '/ai/memory', labelKey: 'navigation:ai.memory', icon: Brain, moduleKey: null },
-      { path: '/ai/skills', labelKey: 'navigation:ai.skills', icon: Wand2, moduleKey: null },
-      { path: '/ai/admin', labelKey: 'navigation:ai.admin', icon: Settings2, moduleKey: 'system' },
+      {
+        path: '/ai/admin/automations/runs',
+        labelKey: 'navigation:ai.admin.automationRuns',
+        icon: History,
+        moduleKey: null,
+      },
+    ],
+  },
+  {
+    titleKey: 'navigation:ai.admin',
+    showDivider: true,
+    items: [
       {
         path: '/ai/admin/models',
         labelKey: 'navigation:ai.admin.models',
@@ -115,6 +128,30 @@ const NAV_GROUPS: NavGroup[] = [
         path: '/ai/admin/prompts',
         labelKey: 'navigation:ai.admin.prompts',
         icon: FileCode,
+        moduleKey: 'system',
+      },
+      {
+        path: '/ai/admin/agents',
+        labelKey: 'navigation:ai.admin.agents',
+        icon: Bot,
+        moduleKey: 'system',
+      },
+      {
+        path: '/ai/admin/skills',
+        labelKey: 'navigation:ai.admin.skills',
+        icon: Wand2,
+        moduleKey: 'system',
+      },
+      {
+        path: '/ai/admin/automations',
+        labelKey: 'navigation:ai.admin.automations',
+        icon: Workflow,
+        moduleKey: 'system',
+      },
+      {
+        path: '/ai/admin/knowledge',
+        labelKey: 'navigation:ai.admin.knowledge',
+        icon: BookOpen,
         moduleKey: 'system',
       },
     ],

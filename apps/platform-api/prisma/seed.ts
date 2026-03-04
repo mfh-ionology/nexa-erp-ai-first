@@ -210,6 +210,50 @@ async function seedPlatformAdmin() {
   console.log('Seeded platform admin (admin@nexa-platform.local)');
 }
 
+async function seedDefaultFeatureFlags() {
+  const activeTenants = await prisma.tenant.findMany({
+    where: { status: TenantStatus.ACTIVE },
+    select: { id: true, code: true },
+  });
+
+  for (const tenant of activeTenants) {
+    await prisma.tenantFeatureFlag.upsert({
+      where: {
+        tenantId_featureKey: {
+          tenantId: tenant.id,
+          featureKey: 'share_anonymised_ai_patterns',
+        },
+      },
+      update: {},
+      create: {
+        tenantId: tenant.id,
+        featureKey: 'share_anonymised_ai_patterns',
+        enabled: true,
+        changedBy: 'system',
+      },
+    });
+  }
+  console.log(
+    `Seeded share_anonymised_ai_patterns feature flag for ${activeTenants.length} active tenant(s)`,
+  );
+}
+
+async function verifyIntelligenceTables() {
+  const tables = [
+    { name: 'TenantAiPattern', fn: () => prisma.tenantAiPattern.count() },
+    { name: 'TenantAiCorrection', fn: () => prisma.tenantAiCorrection.count() },
+    { name: 'PlatformKnowledgeArticle', fn: () => prisma.platformKnowledgeArticle.count() },
+    { name: 'AiSkillEffectiveness', fn: () => prisma.aiSkillEffectiveness.count() },
+    { name: 'PlatformAiInsight', fn: () => prisma.platformAiInsight.count() },
+  ] as const;
+
+  for (const table of tables) {
+    const count = await table.fn();
+    console.log(`  ✓ ${table.name} — queryable (${count} rows)`);
+  }
+  console.log('All 5 cross-tenant intelligence tables verified.');
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -221,6 +265,8 @@ async function main() {
   await seedDevTenantBilling();
   await seedDevTenantAiQuota();
   await seedPlatformAdmin();
+  await seedDefaultFeatureFlags();
+  await verifyIntelligenceTables();
   console.log('Platform seeding complete.');
 }
 

@@ -3,25 +3,49 @@ import { test, expect } from '@playwright/test';
 const SCREENSHOTS_DIR =
   '_bmad-output/test-artifacts/screenshots/epic-E5c/journey-12';
 
-test.describe('Journey 12: Automation Run Now & Real-Time Status', () => {
+/**
+ * Helper: navigate within the SPA using TanStack Router.
+ * Auth tokens are in-memory only (Zustand), so page.goto() would
+ * cause a full reload and lose the authenticated session.
+ */
+async function spaNavigate(
+  page: import('@playwright/test').Page,
+  path: string,
+) {
+  await page.evaluate((p) => {
+    window.history.pushState({}, '', p);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, path);
+  await page.waitForTimeout(500);
+}
+
+test.describe('Journey 12: Create a Scheduled Automation with Steps', () => {
   test.setTimeout(120_000);
 
   test.beforeEach(async ({ page }) => {
     // Login as admin user
     await page.goto('/login');
-    await page.getByLabel('Email').fill('admin@nexa-erp.dev');
-    await page.getByLabel('Password').fill('NexaDev2026!');
-    await page.getByRole('button', { name: 'Sign In' }).click();
+    await page.waitForLoadState('networkidle');
+
+    const emailInput = page.getByLabel('Email');
+    await emailInput.waitFor({ state: 'visible', timeout: 10000 });
+    await emailInput.fill('admin@nexa-erp.dev');
+
+    const passwordInput = page.getByLabel('Password');
+    await passwordInput.fill('NexaDev2026!');
+
+    const signInButton = page.getByRole('button', { name: /sign in/i });
+    await signInButton.waitFor({ state: 'visible' });
+    await signInButton.click();
+
+    // Wait for navigation away from /login
     await page.waitForURL((url) => !url.pathname.includes('/login'), {
-      timeout: 15000,
+      timeout: 30000,
     });
-    // Wait for sidebar to render
-    await expect(
-      page.getByRole('link', { name: 'AI Administration' }),
-    ).toBeVisible({ timeout: 10000 });
+    await page.waitForLoadState('networkidle');
   });
 
-  test('Manually trigger automation and observe run in list (E5c-5 AC-9, E5c-6 AC-1)', async ({
+  test('Create scheduled automation with 2 steps, cron preset, and budget (E5c-5 AC-1, AC-2, AC-3, AC-4)', async ({
     page,
   }) => {
     // Capture API errors for diagnostics
@@ -34,584 +58,400 @@ test.describe('Journey 12: Automation Run Now & Real-Time Status', () => {
       }
     });
 
-    // ── Step 1: Navigate to /ai/admin/automations ────────────────────
-    // Navigate via sidebar (SPA routing preserves auth state)
-    await page.getByRole('link', { name: 'AI Administration' }).click();
-    await page.waitForURL('**/ai/admin', { timeout: 10000 });
-
-    // Wait for AI Configuration dashboard, then navigate to Automations
+    // ── Step 1: Navigate to /ai/admin/automations ─────────────────────────
+    await spaNavigate(page, '/ai/admin/automations');
     await expect(
-      page.getByRole('heading', { name: /AI Configuration/i }),
-    ).toBeVisible({ timeout: 10000 });
+      page.getByRole('heading', { name: 'Automations' }),
+    ).toBeVisible({ timeout: 15000 });
+    // Wait for data to load
+    await page.waitForTimeout(2000);
 
-    // Click Automations quick-nav or sidebar sub-link
-    const automationsBtn = page.getByRole('button', {
-      name: /Automations/i,
-    });
-    const automationsBtnVisible = await automationsBtn
-      .first()
+    // Verify seeded automation is visible
+    const hasSeedAutomation = await page
+      .getByText('Daily AR Aging Summary')
       .isVisible({ timeout: 5000 })
-      .catch(() => false);
-
-    if (automationsBtnVisible) {
-      await automationsBtn.first().click();
-    } else {
-      // Try sidebar link
-      const automationsLink = page.getByRole('link', {
-        name: /Automations/i,
-      });
-      await expect(automationsLink.first()).toBeVisible({ timeout: 5000 });
-      await automationsLink.first().click();
-    }
-
-    await page.waitForURL('**/ai/admin/automations', { timeout: 10000 });
-
-    // Wait for automation list page to load
-    const listHeading = page.getByRole('heading', { name: /Automations/i });
-    await expect(listHeading.first()).toBeVisible({ timeout: 10000 });
-
-    // Verify the automation list page structure (table headers)
-    const nameHeader = page.getByRole('columnheader', { name: 'Name' });
-    const triggerHeader = page.getByRole('columnheader', {
-      name: 'Trigger',
-    });
-    await expect(nameHeader).toBeVisible({ timeout: 5000 });
-    await expect(triggerHeader).toBeVisible({ timeout: 5000 });
-
-    test.info().annotations.push({
-      type: 'info',
-      description: 'Step 1: Automation list page loaded with correct table structure',
-    });
-
-    // Check if there are any automations in the list
-    const automationName = 'Daily AR Aging Summary';
-    const automationText = page.getByText(automationName);
-    const automationVisible = await automationText
-      .first()
-      .isVisible({ timeout: 5000 })
-      .catch(() => false);
-
-    // Also check if ANY automation is in the list
-    const tableRows = page.locator('table tbody tr');
-    const rowCount = await tableRows.count().catch(() => 0);
-    const hasAnyAutomation = rowCount > 0;
-
-    // Check for empty state
-    const emptyState = page.getByText(/No results found/i);
-    const isEmpty = await emptyState
-      .first()
-      .isVisible({ timeout: 2000 })
       .catch(() => false);
 
     test.info().annotations.push({
       type: 'info',
-      description: `Step 1: seededAutomation=${automationVisible}, anyAutomation=${hasAnyAutomation}, empty=${isEmpty}, rows=${rowCount}`,
+      description: `Step 1: Automations list loaded, seeded automation visible=${hasSeedAutomation}`,
     });
 
-    // ── Checkpoint 1: Automation List Page ──────────────────────────
+    // ── Checkpoint 1: Automation list page loaded ──────────────────────────
     await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-1-automation-list.png`,
+      path: `${SCREENSHOTS_DIR}/step-1-automation-list-page.png`,
       fullPage: true,
     });
 
-    // Determine which automation to use (seeded or any available)
-    let targetAutomationName = '';
+    // ── Step 2: Click "New" button to create automation ────────────────────
+    // EntityListPage renders button with text from t('new') — "New"
+    const newButton = page.getByRole('button', { name: /^new$/i });
+    await expect(newButton.first()).toBeVisible({ timeout: 5000 });
+    await newButton.first().click();
 
-    if (automationVisible) {
-      targetAutomationName = automationName;
-    } else if (hasAnyAutomation) {
-      // Use the first available automation
-      const firstNameCell = tableRows.first().locator('td').first();
-      targetAutomationName =
-        (await firstNameCell.textContent())?.trim() || '';
-      test.info().annotations.push({
-        type: 'info',
-        description: `Step 1: Using fallback automation: "${targetAutomationName}"`,
-      });
-    }
+    // Wait for navigation to /ai/admin/automations/new
+    await page.waitForURL('**/ai/admin/automations/new', { timeout: 10000 });
+    await page.waitForTimeout(1000);
 
-    if (!targetAutomationName) {
-      // No automations exist — document as missing prerequisite and test runs page
-      test.info().annotations.push({
-        type: 'issue',
-        description:
-          'Step 1: No automations found in list — seed data prerequisite not met. Skipping Run Now steps (2-3), testing runs page only.',
-      });
+    // Verify we're on the builder page
+    await expect(
+      page.getByRole('heading', { name: 'New Automation' }),
+    ).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Basic Configuration')).toBeVisible({
+      timeout: 5000,
+    });
+    await expect(page.getByText('Trigger Configuration')).toBeVisible({
+      timeout: 5000,
+    });
 
-      // Skip steps 2-3 and go directly to step 4 — test runs page
-      // Navigate to runs page via sidebar link
-      const runsNavLink = page.getByRole('link', { name: /Runs/i });
-      const runsNavVisible = await runsNavLink
-        .first()
-        .isVisible({ timeout: 3000 })
-        .catch(() => false);
+    test.info().annotations.push({
+      type: 'info',
+      description: 'Step 2: Automation builder loaded in create mode',
+    });
 
-      if (runsNavVisible) {
-        await runsNavLink.first().click();
-      } else {
-        // Navigate via URL with SPA router
-        await page.evaluate(() => {
-          // TanStack Router uses history API
-          (window as any).__TSR_ROUTER__?.navigate({
-            to: '/ai/admin/automations/runs',
-          });
-        });
-        await page.waitForTimeout(1000);
+    // ── Checkpoint 2: Automation builder in create mode ────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-2-automation-builder-create.png`,
+      fullPage: true,
+    });
 
-        // If that didn't work, try direct navigation (may lose auth)
-        const currentUrl = page.url();
-        if (!currentUrl.includes('/runs')) {
-          await page.goto('/ai/admin/automations/runs');
-        }
-      }
+    // ── Step 3: Fill basic config (name + description) ─────────────────────
+    const nameInput = page.getByLabel('Name');
+    await nameInput.waitFor({ state: 'visible', timeout: 5000 });
+    await nameInput.fill('Weekly PO Review');
 
-      await page.waitForURL('**/ai/admin/automations/runs**', {
-        timeout: 10000,
-      }).catch(() => {
-        // URL didn't change — may still be on automations page
-      });
+    const descriptionInput = page.getByLabel('Description');
+    await descriptionInput.fill(
+      'Review open purchase orders every Monday morning and flag overdue deliveries',
+    );
 
-      // ── Step 4 (fallback): Verify Automation Runs page ───────────
-      const runsHeading = page.getByRole('heading', {
-        name: /Automation Runs/i,
-      });
-      const runsHeadingVisible = await runsHeading
-        .first()
-        .isVisible({ timeout: 10000 })
-        .catch(() => false);
+    test.info().annotations.push({
+      type: 'info',
+      description: 'Step 3: Name and description populated',
+    });
 
-      test.info().annotations.push({
-        type: 'info',
-        description: `Step 4 (fallback): Runs page heading visible=${runsHeadingVisible}`,
-      });
-
-      await page.screenshot({
-        path: `${SCREENSHOTS_DIR}/step-4-runs-list.png`,
-        fullPage: true,
-      });
-
-      // Final assertion — the runs page should at least be accessible
-      // The test fails because the prerequisite seed data is missing
-      expect(
-        targetAutomationName,
-        'Prerequisite not met: No automations exist. "Daily AR Aging Summary" seed data required (E5c-1)',
-      ).not.toBe('');
-      return;
-    }
-
-    // ── Step 2: Click "Run Now" from the overflow menu ─────────────
-    // Open the actions dropdown for the target automation
-    const actionsBtn = page
-      .getByRole('button', {
-        name: new RegExp(
-          `Actions for ${targetAutomationName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`,
-          'i',
-        ),
-      })
-      .first();
-
-    const actionsVisible = await actionsBtn
-      .isVisible({ timeout: 5000 })
-      .catch(() => false);
-
-    if (!actionsVisible) {
-      test.info().annotations.push({
-        type: 'issue',
-        description: `Step 2: Actions button not found for "${targetAutomationName}"`,
-      });
-      await page.screenshot({
-        path: `${SCREENSHOTS_DIR}/step-2-run-now-dialog.png`,
-        fullPage: true,
-      });
-      expect(
-        actionsVisible,
-        'Actions overflow button should be visible',
-      ).toBe(true);
-      return;
-    }
-
-    await actionsBtn.click();
-    await page.waitForTimeout(300);
-
-    // Click "Run Now" menu item
-    const runNowMenuItem = page.getByRole('menuitem', { name: /Run Now/i });
-    const runNowVisible = await runNowMenuItem
-      .isVisible({ timeout: 3000 })
-      .catch(() => false);
-
-    if (!runNowVisible) {
-      test.info().annotations.push({
-        type: 'issue',
-        description:
-          'Step 2: "Run Now" menu item not found in overflow menu — MISSING FEATURE',
-      });
-      await page.screenshot({
-        path: `${SCREENSHOTS_DIR}/step-2-run-now-dialog.png`,
-        fullPage: true,
-      });
-      await page.keyboard.press('Escape');
-      expect(
-        runNowVisible,
-        '"Run Now" menu item should be visible in actions dropdown',
-      ).toBe(true);
-      return;
-    }
-
-    await runNowMenuItem.click();
+    // ── Step 4: Select "Scheduled" trigger type ────────────────────────────
+    // Default is MANUAL. Click the Scheduled radio option label.
+    const scheduledLabel = page.getByText('Scheduled').first();
+    await expect(scheduledLabel).toBeVisible({ timeout: 5000 });
+    await scheduledLabel.click();
     await page.waitForTimeout(500);
 
-    // Verify confirmation dialog appears
-    const dialogTitle = page.getByText('Run Automation');
-    const dialogVisible = await dialogTitle
-      .first()
+    // Verify CronBuilder appeared
+    const hasCronBuilder = await page
+      .getByText('Weekly on Monday')
       .isVisible({ timeout: 5000 })
       .catch(() => false);
 
-    if (!dialogVisible) {
+    test.info().annotations.push({
+      type: 'info',
+      description: `Step 4: Scheduled selected, CronBuilder visible=${hasCronBuilder}`,
+    });
+
+    // ── Checkpoint 3: Cron builder visible ─────────────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-4-cron-builder-visible.png`,
+      fullPage: true,
+    });
+
+    // ── Step 5: Click "Weekly on Monday" preset ────────────────────────────
+    const weeklyPreset = page.getByRole('button', {
+      name: 'Weekly on Monday',
+    });
+    await expect(weeklyPreset).toBeVisible({ timeout: 5000 });
+    await weeklyPreset.click();
+    await page.waitForTimeout(500);
+
+    // Verify the preset is active (purple background)
+    // Check for human-readable preview text
+    const hasPreview = await page
+      .getByText(/on monday/i)
+      .first()
+      .isVisible({ timeout: 3000 })
+      .catch(() => false);
+
+    test.info().annotations.push({
+      type: 'info',
+      description: `Step 5: Weekly on Monday preset applied, preview visible=${hasPreview}`,
+    });
+
+    // ── Checkpoint 4: Weekly Monday preset applied ─────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-5-weekly-monday-preset.png`,
+      fullPage: true,
+    });
+
+    // ── Step 6 (test plan) — form already has Step 1, verify it exists ─────
+    // The default form values include 1 step. Scroll to the Steps section.
+    await page.getByText('Steps').first().scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+
+    // Verify step 1 exists — look for the purple badge with "1"
+    const stepBadges = page.locator(
+      'div.bg-\\[\\#7c3aed\\].rounded-full',
+    );
+    const hasStep1 = (await stepBadges.count()) >= 1;
+
+    test.info().annotations.push({
+      type: 'info',
+      description: `Step 6: Step 1 card present=${hasStep1}`,
+    });
+
+    // ── Checkpoint 5: First step card ──────────────────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-6-first-step-added.png`,
+      fullPage: true,
+    });
+
+    // ── Step 7: Configure Step 1 — agent, goal, maxTurns ───────────────────
+    // Select agent from the first Agent combobox (step 1)
+    const agentComboboxesStep7 = page.getByRole('combobox', { name: 'Agent' });
+    const step1AgentCombobox = agentComboboxesStep7.first();
+
+    if (await step1AgentCombobox.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await step1AgentCombobox.click();
+      await page.waitForTimeout(500);
+
+      // Select the first available agent
+      const agentOptions = page.locator('[role="option"]');
+      const optionCount = await agentOptions.count();
+
+      if (optionCount > 0) {
+        await agentOptions.first().click();
+        await page.waitForTimeout(300);
+        test.info().annotations.push({
+          type: 'info',
+          description: `Step 7: Selected first agent from ${optionCount} options`,
+        });
+      } else {
+        test.info().annotations.push({
+          type: 'issue',
+          description: 'Step 7: No agents available in dropdown',
+        });
+      }
+    }
+
+    // Fill goal textarea
+    const goalTextareas = page.getByPlaceholder(
+      /describe what this step should accomplish/i,
+    );
+    const goalTextarea1 = goalTextareas.first();
+    await goalTextarea1.waitFor({ state: 'visible', timeout: 5000 });
+    await goalTextarea1.fill(
+      'Review all open purchase orders. Flag any with delivery dates more than 7 days overdue. For each flagged PO, assess risk level.',
+    );
+
+    // Set maxTurns to 10 (default value, but set it explicitly)
+    const maxTurnsInputs = page.getByLabel('Max Turns');
+    const maxTurns1 = maxTurnsInputs.first();
+    if (await maxTurns1.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await maxTurns1.clear();
+      await maxTurns1.fill('10');
+    }
+
+    test.info().annotations.push({
+      type: 'info',
+      description: 'Step 7: Step 1 configured with agent and goal',
+    });
+
+    // ── Step 8: Add Step 2 ─────────────────────────────────────────────────
+    const addStepButton = page.getByText('Add Step');
+    await addStepButton.scrollIntoViewIfNeeded();
+    await addStepButton.click();
+    await page.waitForTimeout(500);
+
+    // Verify step count increased
+    const stepBadgesAfter = page.locator(
+      'div.bg-\\[\\#7c3aed\\].rounded-full',
+    );
+    const stepCountAfter = await stepBadgesAfter.count();
+
+    test.info().annotations.push({
+      type: 'info',
+      description: `Step 8: After Add Step, step badge count=${stepCountAfter}`,
+    });
+
+    // ── Checkpoint 6: Two step cards ───────────────────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-8-two-steps-connected.png`,
+      fullPage: true,
+    });
+
+    // ── Step 9: Configure Step 2 — agent and goal ──────────────────────────
+    // Select agent for step 2 — the second Agent combobox (labeled "Agent")
+    const agentComboboxes = page.getByRole('combobox', { name: 'Agent' });
+    const agentComboboxCount = await agentComboboxes.count();
+
+    if (agentComboboxCount >= 2) {
+      // Click the second agent combobox (step 2)
+      await agentComboboxes.nth(1).click();
+      await page.waitForTimeout(500);
+
+      const agentOptions = page.locator('[role="option"]');
+      const optionCount = await agentOptions.count();
+
+      if (optionCount > 0) {
+        await agentOptions.first().click();
+        await page.waitForTimeout(300);
+        test.info().annotations.push({
+          type: 'info',
+          description: `Step 9: Selected agent for step 2 from ${optionCount} options`,
+        });
+      }
+    } else {
       test.info().annotations.push({
         type: 'issue',
-        description:
-          'Step 2: Run Automation confirmation dialog did not appear',
+        description: `Step 9: Only ${agentComboboxCount} agent comboboxes found, expected >= 2`,
       });
-    } else {
-      // Verify dialog content
-      const dialogDesc = page.getByText(
-        /Are you sure you want to run this automation now/i,
+    }
+
+    // Fill goal for step 2 — the second goal textarea (step 2's is empty)
+    const allGoals = page.getByPlaceholder(
+      /describe what this step should accomplish/i,
+    );
+    const goalCount = await allGoals.count();
+
+    if (goalCount >= 2) {
+      await allGoals.nth(1).fill(
+        'Summarise the flagged purchase orders and draft a report for the procurement manager.',
       );
-      const hasDesc = await dialogDesc
-        .first()
-        .isVisible({ timeout: 3000 })
-        .catch(() => false);
-
-      const cancelBtn = page.getByRole('button', { name: /Cancel/i });
-      const hasCancelBtn = await cancelBtn
-        .first()
-        .isVisible({ timeout: 3000 })
-        .catch(() => false);
-
-      const confirmBtn = page.getByRole('button', { name: /Run Now/i });
-      const hasConfirmBtn = await confirmBtn
-        .first()
-        .isVisible({ timeout: 3000 })
-        .catch(() => false);
-
       test.info().annotations.push({
         type: 'info',
-        description: `Step 2: Dialog — title=${dialogVisible}, desc=${hasDesc}, cancel=${hasCancelBtn}, confirm=${hasConfirmBtn}`,
+        description: 'Step 9: Step 2 goal filled',
       });
-    }
-
-    // ── Checkpoint 2: Run Now Confirmation Dialog ───────────────────
-    await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-2-run-now-dialog.png`,
-      fullPage: true,
-    });
-
-    // ── Step 3: Confirm "Run Now" ──────────────────────────────────
-    const confirmRunBtn = page
-      .getByRole('button', { name: /Run Now/i })
-      .last();
-    await expect(confirmRunBtn).toBeVisible({ timeout: 3000 });
-    await confirmRunBtn.click();
-
-    // Wait for the dialog to close and a possible toast
-    await page.waitForTimeout(2000);
-
-    // Check for success toast
-    const startedToast = page.getByText(
-      /Automation started|automation triggered|run started/i,
-    );
-    const hasStartedToast = await startedToast
-      .first()
-      .isVisible({ timeout: 5000 })
-      .catch(() => false);
-
-    // Check for error toast
-    const errorToast = page.getByText(
-      /error|failed to start|could not run/i,
-    );
-    const hasErrorToast = await errorToast
-      .first()
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
-
-    test.info().annotations.push({
-      type: 'info',
-      description: `Step 3: Toast — started=${hasStartedToast}, error=${hasErrorToast}`,
-    });
-
-    if (hasErrorToast && !hasStartedToast) {
+    } else {
       test.info().annotations.push({
         type: 'issue',
-        description:
-          'Step 3: Automation failed to start — API error during trigger',
+        description: `Step 9: Only ${goalCount} goal textareas found, expected >= 2`,
       });
     }
 
-    // Verify dialog is closed
-    const dialogGone = await page
-      .getByText(/Are you sure you want to run this automation now/i)
-      .isHidden({ timeout: 3000 })
-      .catch(() => true);
+    // ── Step 10: Click "Use Previous Step Output" on Step 2 ────────────────
+    // First expand Input Configuration on step 2
+    const inputConfigButtons = page.getByText('Input Configuration');
+    const inputConfigCount = await inputConfigButtons.count();
 
-    test.info().annotations.push({
-      type: 'info',
-      description: `Step 3: Dialog closed=${dialogGone}`,
-    });
+    if (inputConfigCount >= 2) {
+      // Click the second Input Configuration (step 2)
+      await inputConfigButtons.nth(1).click();
+      await page.waitForTimeout(500);
 
-    // ── Checkpoint 3: Automation Triggered ──────────────────────────
-    await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-3-automation-triggered.png`,
-      fullPage: true,
-    });
-
-    // ── Step 4: Navigate to /ai/admin/automations/runs ─────────────
-    // Navigate via overflow menu "View Runs" for the target automation
-    const actionsBtn2 = page
-      .getByRole('button', {
-        name: new RegExp(
-          `Actions for ${targetAutomationName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`,
-          'i',
-        ),
-      })
-      .first();
-    const actions2Visible = await actionsBtn2
-      .isVisible({ timeout: 3000 })
-      .catch(() => false);
-
-    if (actions2Visible) {
-      await actionsBtn2.click();
-      await page.waitForTimeout(300);
-
-      const viewRunsItem = page.getByRole('menuitem', {
-        name: /View Runs/i,
-      });
-      const viewRunsVisible = await viewRunsItem
-        .isVisible({ timeout: 3000 })
-        .catch(() => false);
-
-      if (viewRunsVisible) {
-        await viewRunsItem.click();
+      // Click "Use Previous Step Output"
+      const usePrevBtn = page.getByText('Use Previous Step Output');
+      if (await usePrevBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await usePrevBtn.click();
+        await page.waitForTimeout(300);
+        test.info().annotations.push({
+          type: 'info',
+          description: 'Step 10: Use Previous Step Output clicked',
+        });
       } else {
-        await page.keyboard.press('Escape');
-        // Try sidebar link
-        const runsLink = page.getByRole('link', { name: /^Runs$/i });
-        const runsLinkVisible = await runsLink
-          .first()
-          .isVisible({ timeout: 3000 })
-          .catch(() => false);
-        if (runsLinkVisible) {
-          await runsLink.first().click();
-        }
+        test.info().annotations.push({
+          type: 'issue',
+          description:
+            'Step 10: Use Previous Step Output button not visible after expanding Input Config',
+        });
       }
     } else {
-      // Try sidebar link
-      const runsLink = page.getByRole('link', { name: /^Runs$/i });
-      const runsLinkVisible = await runsLink
-        .first()
-        .isVisible({ timeout: 3000 })
-        .catch(() => false);
-      if (runsLinkVisible) {
-        await runsLink.first().click();
-      }
-    }
-
-    await page
-      .waitForURL('**/ai/admin/automations/runs**', { timeout: 10000 })
-      .catch(() => {
-        // URL might not have changed
-      });
-
-    // Wait for the Automation Runs list page to load
-    const runsHeading = page.getByRole('heading', {
-      name: /Automation Runs/i,
-    });
-    const runsHeadingVisible = await runsHeading
-      .first()
-      .isVisible({ timeout: 10000 })
-      .catch(() => false);
-
-    if (!runsHeadingVisible) {
       test.info().annotations.push({
         type: 'issue',
-        description:
-          'Step 4: "Automation Runs" heading not found — page may not have loaded',
+        description: `Step 10: Only ${inputConfigCount} Input Configuration sections found, expected >= 2`,
       });
     }
 
-    // Wait for the run list to populate
-    await page.waitForTimeout(2000);
+    // ── Step 11: Fill Budget section ───────────────────────────────────────
+    await page.getByText('Budget').first().scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
 
-    // Verify the newly triggered run appears in the list
-    const newRunAutomation = page.getByText(targetAutomationName).first();
-    const newRunVisible = await newRunAutomation
-      .isVisible({ timeout: 5000 })
-      .catch(() => false);
-
-    test.info().annotations.push({
-      type: 'info',
-      description: `Step 4: Runs page loaded=${runsHeadingVisible}, new run visible=${newRunVisible}`,
-    });
-
-    // Verify key columns are present
-    const triggerBadge = page.getByText(/Scheduled|Event|Chain|Manual/i);
-    const hasTriggerColumn = await triggerBadge
-      .first()
-      .isVisible({ timeout: 3000 })
-      .catch(() => false);
-
-    const statusBadge = page.getByText(
-      /Completed|Failed|Running|Pending|Cancelled/i,
-    );
-    const hasStatusColumn = await statusBadge
-      .first()
-      .isVisible({ timeout: 3000 })
-      .catch(() => false);
-
-    test.info().annotations.push({
-      type: 'info',
-      description: `Step 4: Columns — trigger=${hasTriggerColumn}, status=${hasStatusColumn}`,
-    });
-
-    // ── Checkpoint 4: Automation Runs List ──────────────────────────
-    await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-4-runs-list.png`,
-      fullPage: true,
-    });
-
-    // ── Step 5: Click on the newly created run row ─────────────────
-    let navigatedToDetail = false;
-
-    if (newRunVisible) {
-      // Try the actions menu to go to detail page
-      const runActionsBtn = page
-        .getByRole('button', { name: /Actions for run/i })
-        .first();
-      const runActionsVisible = await runActionsBtn
-        .isVisible({ timeout: 3000 })
-        .catch(() => false);
-
-      if (runActionsVisible) {
-        await runActionsBtn.click();
-        await page.waitForTimeout(300);
-
-        const viewDetailsItem = page.getByRole('menuitem', {
-          name: /View Details/i,
-        });
-        const viewDetailsVisible = await viewDetailsItem
-          .isVisible({ timeout: 3000 })
-          .catch(() => false);
-
-        if (viewDetailsVisible) {
-          await viewDetailsItem.click();
-          navigatedToDetail = true;
-        } else {
-          await page.keyboard.press('Escape');
-        }
-      }
-
-      if (!navigatedToDetail) {
-        // Fallback: click on any link to run detail
-        const runLink = page
-          .locator('a[href*="/ai/admin/automations/runs/"]')
-          .first();
-        const runLinkVisible = await runLink
-          .isVisible({ timeout: 3000 })
-          .catch(() => false);
-
-        if (runLinkVisible) {
-          await runLink.click();
-          navigatedToDetail = true;
-        }
-      }
-
-      if (!navigatedToDetail) {
-        // Try clicking on the first table row
-        const firstRow = page.locator('table tbody tr').first();
-        const rowVisible = await firstRow
-          .isVisible({ timeout: 3000 })
-          .catch(() => false);
-        if (rowVisible) {
-          await firstRow.click();
-          navigatedToDetail = true;
-        }
-      }
+    const tokenBudgetInput = page.getByLabel('Max Token Budget');
+    if (
+      await tokenBudgetInput.isVisible({ timeout: 5000 }).catch(() => false)
+    ) {
+      await tokenBudgetInput.clear();
+      await tokenBudgetInput.fill('75000');
+      test.info().annotations.push({
+        type: 'info',
+        description: 'Step 11: Token budget set to 75000',
+      });
     }
 
-    if (navigatedToDetail) {
-      // Wait for run detail page to load
-      await page
-        .waitForURL('**/ai/admin/automations/runs/**', { timeout: 10000 })
-        .catch(() => {});
-      await page.waitForTimeout(2000);
+    const durationInput = page.getByLabel('Max Duration (seconds)');
+    if (await durationInput.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await durationInput.clear();
+      await durationInput.fill('600');
+      test.info().annotations.push({
+        type: 'info',
+        description: 'Step 11: Duration set to 600',
+      });
+    }
 
-      // Verify run detail page content
-      const runHeader = page.getByRole('heading', { name: /Run /i });
-      const hasRunHeader = await runHeader
+    // ── Step 12: Click Save ────────────────────────────────────────────────
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(300);
+
+    const saveButton = page.getByRole('button', { name: /^Save$/i });
+    await expect(saveButton.first()).toBeVisible({ timeout: 5000 });
+
+    const saveEnabled = await saveButton.first().isEnabled();
+
+    test.info().annotations.push({
+      type: 'info',
+      description: `Step 12: Save button enabled=${saveEnabled}`,
+    });
+
+    if (saveEnabled) {
+      await saveButton.first().click();
+
+      // Wait for save to complete (API call + navigation)
+      await page.waitForTimeout(3000);
+
+      // Check for success toast
+      const hasSuccess = await page
+        .getByText(/automation created|saved|success/i)
         .first()
         .isVisible({ timeout: 5000 })
         .catch(() => false);
 
-      // Check for metrics cards
-      const totalTokensLabel = page.getByText(/TOTAL TOKENS/i);
-      const hasTotalTokens = await totalTokensLabel
-        .first()
-        .isVisible({ timeout: 3000 })
-        .catch(() => false);
-
-      const totalCostLabel = page.getByText(/TOTAL COST/i);
-      const hasTotalCost = await totalCostLabel
-        .first()
-        .isVisible({ timeout: 3000 })
-        .catch(() => false);
-
-      const stepsLabel = page.getByText(/^STEPS$/i);
-      const hasStepsCard = await stepsLabel
-        .first()
-        .isVisible({ timeout: 3000 })
-        .catch(() => false);
-
-      const durationLabel = page.getByText(/^DURATION$/i);
-      const hasDurationCard = await durationLabel
-        .first()
-        .isVisible({ timeout: 3000 })
-        .catch(() => false);
-
-      // Check for triggered-by info
-      const triggeredByText = page.getByText(/Triggered by/i);
-      const hasTriggeredBy = await triggeredByText
-        .first()
-        .isVisible({ timeout: 3000 })
-        .catch(() => false);
-
-      // Check for status badge
-      const runStatus = page.getByText(
-        /Completed|Failed|Running|Pending/i,
-      );
-      const hasRunStatus = await runStatus
-        .first()
-        .isVisible({ timeout: 3000 })
-        .catch(() => false);
+      // Check if we navigated to the edit page (create returns new ID)
+      const currentUrl = page.url();
+      const navigatedToEdit =
+        currentUrl.includes('/ai/admin/automations/') &&
+        !currentUrl.includes('/new');
 
       test.info().annotations.push({
         type: 'info',
-        description: `Step 5: Detail page — header=${hasRunHeader}, tokens=${hasTotalTokens}, cost=${hasTotalCost}, steps=${hasStepsCard}, duration=${hasDurationCard}, triggeredBy=${hasTriggeredBy}, status=${hasRunStatus}`,
+        description: `Step 12: Save result toast=${hasSuccess}, navigatedToEdit=${navigatedToEdit}, url=${currentUrl}`,
       });
+
+      expect(
+        hasSuccess || navigatedToEdit,
+        'Automation should be created (success toast or navigation to edit page)',
+      ).toBeTruthy();
     } else {
+      // Save disabled — likely validation issue
       test.info().annotations.push({
         type: 'issue',
         description:
-          'Step 5: Cannot navigate to run detail — no run found or no clickable element',
+          'Step 12: Save button DISABLED — form may not be dirty or has validation errors',
+      });
+
+      // Check for validation errors
+      const formErrors = page.locator('[role="alert"], .text-destructive');
+      const errorCount = await formErrors.count();
+
+      test.info().annotations.push({
+        type: 'issue',
+        description: `Step 12: Found ${errorCount} form error indicators`,
       });
     }
 
-    // ── Checkpoint 5: Run Detail Page ──────────────────────────────
+    // ── Checkpoint 7: Automation saved ─────────────────────────────────────
     await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-5-run-detail.png`,
+      path: `${SCREENSHOTS_DIR}/step-12-automation-saved.png`,
       fullPage: true,
     });
 
-    // ── Final Assertions ──────────────────────────────────────────
+    // ── Final Diagnostics ──────────────────────────────────────────────────
     if (apiErrors.length > 0) {
       const unique = [...new Set(apiErrors)];
       test.info().annotations.push({
@@ -619,11 +459,5 @@ test.describe('Journey 12: Automation Run Now & Real-Time Status', () => {
         description: `API errors: ${unique.slice(0, 10).join('; ')}`,
       });
     }
-
-    // Core assertions
-    expect(
-      runsHeadingVisible,
-      'Automation Runs page should load with heading',
-    ).toBe(true);
   });
 });

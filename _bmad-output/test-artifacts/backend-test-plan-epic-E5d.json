@@ -1,0 +1,2771 @@
+{
+  "epic_id": "E5d",
+  "epic_title": "AI Knowledge Evolution & Cross-Tenant Intelligence",
+  "generated_at": "2026-03-04T12:00:00.000Z",
+  "total_test_cases": 156,
+  "notes": [
+    "E5d spans TWO APIs: Tenant API (port 5100) for stories E5d-1/E5d-2, Platform API (port 5101) for stories E5d-3/E5d-4",
+    "Tenant API RBAC users: admin@nexa-erp.dev (SUPER_ADMIN), manager@nexa-erp.dev (MANAGER), staff@nexa-erp.dev (STAFF), viewer@nexa-erp.dev (VIEWER) — password: NexaDev2026!",
+    "Platform API uses platform JWT auth with PLATFORM_ADMIN role — separate auth flow",
+    "Valid UUID for not-found tests: 00000000-0000-4000-a000-ffffffffffff",
+    "Invalid UUID for validation tests: not-a-uuid",
+    "Knowledge article categories: BUSINESS_PROCESS, TERMINOLOGY, INDUSTRY_RULES, CUSTOM_FIELDS, HISTORICAL_PATTERN",
+    "Knowledge article sources: ADMIN_UPLOADED, AI_GENERATED, PLATFORM_SUGGESTED, CORRECTION_DERIVED",
+    "Training example categories: same 5 as knowledge articles",
+    "Training example sources: ADMIN_CURATED, CORRECTION_DERIVED",
+    "Correction types: TERMINOLOGY, PROCESS, DATA, PREFERENCE, OTHER",
+    "Platform knowledge categories: BEST_PRACTICE, HELP, DEFAULT_CONFIG, SKILL_UPDATE",
+    "Platform knowledge statuses: DRAFT, PUBLISHED, ARCHIVED"
+  ],
+  "apis": [
+    {
+      "name": "Tenant API",
+      "base_url": "http://localhost:5100",
+      "auth_method": "POST /api/auth/login with email+password → Bearer token"
+    },
+    {
+      "name": "Platform API",
+      "base_url": "http://localhost:5101",
+      "auth_method": "Platform JWT with PLATFORM_ADMIN role"
+    }
+  ],
+  "entity_discovery": {
+    "description": "Before running tests, discover real entity IDs",
+    "steps": [
+      {
+        "step": 1,
+        "action": "GET http://localhost:5100/health",
+        "purpose": "Confirm Tenant API is up"
+      },
+      {
+        "step": 2,
+        "action": "POST http://localhost:5100/api/auth/login with admin@nexa-erp.dev",
+        "purpose": "Get admin JWT token for Tenant API"
+      },
+      {
+        "step": 3,
+        "action": "GET http://localhost:5101/admin/health",
+        "purpose": "Confirm Platform API is up"
+      },
+      {
+        "step": 4,
+        "action": "Authenticate to Platform API as PLATFORM_ADMIN",
+        "purpose": "Get platform JWT token"
+      }
+    ]
+  },
+  "endpoints": [
+    {
+      "story": "E5d-1",
+      "method": "POST",
+      "path": "/ai/knowledge-articles",
+      "api": "Tenant API",
+      "description": "Create a knowledge article with chunking and embedding pipeline",
+      "auth_requirement": "ADMIN role minimum",
+      "test_cases": [
+        {
+          "id": "E5d-TC-001",
+          "name": "Create knowledge article — happy path (ADMIN)",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/knowledge-articles",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "title": "Test Knowledge Article for E5d",
+              "content": "This is a test knowledge article with enough content to demonstrate the chunking pipeline. The article covers business processes for handling VAT codes in the UK.",
+              "category": "BUSINESS_PROCESS"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "title", "content", "category", "source", "confidenceScore", "chunkCount"],
+            "body_values": {
+              "source": "ADMIN_UPLOADED",
+              "confidenceScore": 1,
+              "isConfirmed": true,
+              "isActive": true,
+              "category": "BUSINESS_PROCESS"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) as chunk_count FROM ai_knowledge_chunks WHERE article_id = '{{created_article_id}}'",
+            "expected": "chunk_count >= 1"
+          },
+          "save_id_as": "created_article_id"
+        },
+        {
+          "id": "E5d-TC-002",
+          "name": "Create knowledge article — TERMINOLOGY category",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/knowledge-articles",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "title": "Company Terminology Guide",
+              "content": "VAT code 3 means reverse charge for EU purchases in our company.",
+              "category": "TERMINOLOGY"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_values": { "category": "TERMINOLOGY", "source": "ADMIN_UPLOADED" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-003",
+          "name": "Create knowledge article — INDUSTRY_RULES category",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/knowledge-articles",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "title": "Construction Retention Rules",
+              "content": "In construction, retention invoices hold 5% for 12 months per standard contract terms.",
+              "category": "INDUSTRY_RULES"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_values": { "category": "INDUSTRY_RULES" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-004",
+          "name": "Create knowledge article — missing title (validation error)",
+          "type": "validation_error",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/knowledge-articles",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "content": "Some content without a title",
+              "category": "BUSINESS_PROCESS"
+            }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-005",
+          "name": "Create knowledge article — missing content (validation error)",
+          "type": "validation_error",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/knowledge-articles",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "title": "Title Without Content",
+              "category": "BUSINESS_PROCESS"
+            }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-006",
+          "name": "Create knowledge article — invalid category (validation error)",
+          "type": "validation_error",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/knowledge-articles",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "title": "Invalid Category Test",
+              "content": "Some content",
+              "category": "INVALID_CATEGORY"
+            }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-007",
+          "name": "Create knowledge article — empty title (validation error)",
+          "type": "validation_error",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/knowledge-articles",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "title": "",
+              "content": "Content with empty title",
+              "category": "BUSINESS_PROCESS"
+            }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-008",
+          "name": "Create knowledge article — VIEWER denied (RBAC)",
+          "type": "authorization",
+          "role": "viewer@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/knowledge-articles",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" },
+            "body": {
+              "title": "Viewer Should Not Create",
+              "content": "This should fail",
+              "category": "BUSINESS_PROCESS"
+            }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-009",
+          "name": "Create knowledge article — STAFF denied (RBAC)",
+          "type": "authorization",
+          "role": "staff@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/knowledge-articles",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "title": "Staff Should Not Create",
+              "content": "This should fail",
+              "category": "BUSINESS_PROCESS"
+            }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-010",
+          "name": "Create knowledge article — MANAGER denied (ADMIN required)",
+          "type": "authorization",
+          "role": "manager@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/knowledge-articles",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": {
+              "title": "Manager Should Not Create",
+              "content": "This should fail",
+              "category": "BUSINESS_PROCESS"
+            }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-1",
+      "method": "GET",
+      "path": "/ai/knowledge-articles",
+      "api": "Tenant API",
+      "description": "List knowledge articles with optional filters",
+      "auth_requirement": "ai.chat view permission (any authenticated role)",
+      "test_cases": [
+        {
+          "id": "E5d-TC-011",
+          "name": "List knowledge articles — happy path (ADMIN)",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/knowledge-articles",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data", "meta"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-012",
+          "name": "List knowledge articles — VIEWER can read",
+          "type": "happy_path",
+          "role": "viewer@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/knowledge-articles",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 200 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-013",
+          "name": "List knowledge articles — filter by category",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/knowledge-articles?category=TERMINOLOGY",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "all items have category=TERMINOLOGY"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-014",
+          "name": "List knowledge articles — filter by source",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/knowledge-articles?source=ADMIN_UPLOADED",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "all items have source=ADMIN_UPLOADED"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-015",
+          "name": "List knowledge articles — filter isActive=true",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/knowledge-articles?isActive=true",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "all items have isActive=true"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-016",
+          "name": "List knowledge articles — pagination with limit",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/knowledge-articles?limit=1",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data array has at most 1 item, meta.hasMore may be true"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-017",
+          "name": "List knowledge articles — empty result with non-matching filter",
+          "type": "edge_case",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/knowledge-articles?source=PLATFORM_SUGGESTED",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data is empty array"
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-1",
+      "method": "GET",
+      "path": "/ai/knowledge-articles/:id",
+      "api": "Tenant API",
+      "description": "Get single knowledge article by ID",
+      "auth_requirement": "ai.chat view permission",
+      "test_cases": [
+        {
+          "id": "E5d-TC-018",
+          "name": "Get knowledge article — happy path",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/knowledge-articles/{{created_article_id}}",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "title", "content", "category", "source", "chunkCount"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-019",
+          "name": "Get knowledge article — VIEWER can read",
+          "type": "happy_path",
+          "role": "viewer@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/knowledge-articles/{{created_article_id}}",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 200 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-020",
+          "name": "Get knowledge article — not found (valid UUID)",
+          "type": "edge_case",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/knowledge-articles/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": { "status": 404 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-021",
+          "name": "Get knowledge article — invalid UUID format",
+          "type": "validation_error",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/knowledge-articles/not-a-uuid",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-1",
+      "method": "PATCH",
+      "path": "/ai/knowledge-articles/:id",
+      "api": "Tenant API",
+      "description": "Update knowledge article (re-chunks if content changes)",
+      "auth_requirement": "ADMIN role minimum",
+      "test_cases": [
+        {
+          "id": "E5d-TC-022",
+          "name": "Update knowledge article title — happy path",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "PATCH",
+            "url": "/ai/knowledge-articles/{{created_article_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": { "title": "Updated Title for E5d Test" }
+          },
+          "expected": {
+            "status": 200,
+            "body_values": { "title": "Updated Title for E5d Test" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT title FROM ai_knowledge_articles WHERE id = '{{created_article_id}}'",
+            "expected": "title = 'Updated Title for E5d Test'"
+          }
+        },
+        {
+          "id": "E5d-TC-023",
+          "name": "Update knowledge article content — triggers re-chunking",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "PATCH",
+            "url": "/ai/knowledge-articles/{{created_article_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": { "content": "Completely new content that should trigger re-chunking of the knowledge article." }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "content matches new value"
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT content FROM ai_knowledge_chunks WHERE article_id = '{{created_article_id}}' ORDER BY chunk_index ASC LIMIT 1",
+            "expected": "content contains new text"
+          }
+        },
+        {
+          "id": "E5d-TC-024",
+          "name": "Update knowledge article — confirm auto-upgrades confidence to 0.8",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "PATCH",
+            "url": "/ai/knowledge-articles/{{correction_derived_article_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": { "isConfirmed": true }
+          },
+          "expected": {
+            "status": 200,
+            "body_values": { "isConfirmed": true, "confidenceScore": 0.8 }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT confidence_score, is_confirmed FROM ai_knowledge_articles WHERE id = '{{correction_derived_article_id}}'",
+            "expected": "confidence_score = 0.80, is_confirmed = true"
+          },
+          "prerequisite": "Requires a CORRECTION_DERIVED article with isConfirmed=false"
+        },
+        {
+          "id": "E5d-TC-025",
+          "name": "Update knowledge article — source field rejected (immutable)",
+          "type": "validation_error",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "PATCH",
+            "url": "/ai/knowledge-articles/{{created_article_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": { "source": "AI_GENERATED" }
+          },
+          "expected": {
+            "status": 400,
+            "body_assertion": ".strict() rejects unknown field 'source'"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-026",
+          "name": "Update knowledge article — not found",
+          "type": "edge_case",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "PATCH",
+            "url": "/ai/knowledge-articles/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": { "title": "Should not find" }
+          },
+          "expected": { "status": 404 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-027",
+          "name": "Update knowledge article — invalid UUID",
+          "type": "validation_error",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "PATCH",
+            "url": "/ai/knowledge-articles/not-a-uuid",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": { "title": "Invalid UUID" }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-028",
+          "name": "Update knowledge article — VIEWER denied",
+          "type": "authorization",
+          "role": "viewer@nexa-erp.dev",
+          "request": {
+            "method": "PATCH",
+            "url": "/ai/knowledge-articles/{{created_article_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" },
+            "body": { "title": "Viewer Cannot Update" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-029",
+          "name": "Update knowledge article — STAFF denied",
+          "type": "authorization",
+          "role": "staff@nexa-erp.dev",
+          "request": {
+            "method": "PATCH",
+            "url": "/ai/knowledge-articles/{{created_article_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "title": "Staff Cannot Update" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-030",
+          "name": "Update knowledge article — invalid category",
+          "type": "validation_error",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "PATCH",
+            "url": "/ai/knowledge-articles/{{created_article_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": { "category": "NONEXISTENT" }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-1",
+      "method": "DELETE",
+      "path": "/ai/knowledge-articles/:id",
+      "api": "Tenant API",
+      "description": "Soft-delete knowledge article (sets isActive=false)",
+      "auth_requirement": "ADMIN role minimum",
+      "test_cases": [
+        {
+          "id": "E5d-TC-031",
+          "name": "Delete knowledge article — happy path (soft-delete)",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "DELETE",
+            "url": "/ai/knowledge-articles/{{article_to_delete_id}}",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": { "status": 204 },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT is_active FROM ai_knowledge_articles WHERE id = '{{article_to_delete_id}}'",
+            "expected": "is_active = false (soft-deleted, not physically removed)"
+          },
+          "prerequisite": "Create an article first to delete"
+        },
+        {
+          "id": "E5d-TC-032",
+          "name": "Delete knowledge article — not found",
+          "type": "edge_case",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "DELETE",
+            "url": "/ai/knowledge-articles/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": { "status": 404 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-033",
+          "name": "Delete knowledge article — invalid UUID",
+          "type": "validation_error",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "DELETE",
+            "url": "/ai/knowledge-articles/not-a-uuid",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-034",
+          "name": "Delete knowledge article — VIEWER denied",
+          "type": "authorization",
+          "role": "viewer@nexa-erp.dev",
+          "request": {
+            "method": "DELETE",
+            "url": "/ai/knowledge-articles/{{created_article_id}}",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-035",
+          "name": "Delete knowledge article — STAFF denied",
+          "type": "authorization",
+          "role": "staff@nexa-erp.dev",
+          "request": {
+            "method": "DELETE",
+            "url": "/ai/knowledge-articles/{{created_article_id}}",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-2",
+      "method": "POST",
+      "path": "/ai/training-examples",
+      "api": "Tenant API",
+      "description": "Create a training example (input/output pair for few-shot injection)",
+      "auth_requirement": "ADMIN role minimum",
+      "test_cases": [
+        {
+          "id": "E5d-TC-036",
+          "name": "Create training example — happy path",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/training-examples",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "inputText": "What VAT code should I use for EU purchases?",
+              "outputText": "Use reverse charge — VAT code 3. This applies to all EU B2B purchases.",
+              "category": "TERMINOLOGY"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "inputText", "outputText", "category", "source"],
+            "body_values": {
+              "source": "ADMIN_CURATED",
+              "isActive": true,
+              "category": "TERMINOLOGY"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT source, is_active FROM ai_training_examples WHERE id = '{{created_example_id}}'",
+            "expected": "source = 'ADMIN_CURATED', is_active = true"
+          },
+          "save_id_as": "created_example_id"
+        },
+        {
+          "id": "E5d-TC-037",
+          "name": "Create training example — with skillKey",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/training-examples",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "inputText": "How do we handle returns?",
+              "outputText": "Process via credit note, not void. Use the Credit Note action.",
+              "category": "BUSINESS_PROCESS",
+              "skillKey": "create_credit_note"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_values": { "skillKey": "create_credit_note" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-038",
+          "name": "Create training example — missing inputText",
+          "type": "validation_error",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/training-examples",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "outputText": "Missing input",
+              "category": "TERMINOLOGY"
+            }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-039",
+          "name": "Create training example — missing outputText",
+          "type": "validation_error",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/training-examples",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "inputText": "Some input",
+              "category": "TERMINOLOGY"
+            }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-040",
+          "name": "Create training example — invalid category",
+          "type": "validation_error",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/training-examples",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "inputText": "Input",
+              "outputText": "Output",
+              "category": "INVALID"
+            }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-041",
+          "name": "Create training example — VIEWER denied",
+          "type": "authorization",
+          "role": "viewer@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/training-examples",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" },
+            "body": {
+              "inputText": "Input",
+              "outputText": "Output",
+              "category": "TERMINOLOGY"
+            }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-042",
+          "name": "Create training example — STAFF denied",
+          "type": "authorization",
+          "role": "staff@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/training-examples",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "inputText": "Input",
+              "outputText": "Output",
+              "category": "TERMINOLOGY"
+            }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-2",
+      "method": "GET",
+      "path": "/ai/training-examples",
+      "api": "Tenant API",
+      "description": "List training examples with optional filters",
+      "auth_requirement": "ai.chat view permission (any authenticated role)",
+      "test_cases": [
+        {
+          "id": "E5d-TC-043",
+          "name": "List training examples — happy path",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/training-examples",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data", "meta"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-044",
+          "name": "List training examples — VIEWER can read",
+          "type": "happy_path",
+          "role": "viewer@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/training-examples",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 200 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-045",
+          "name": "List training examples — filter by category",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/training-examples?category=TERMINOLOGY",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "all items have category=TERMINOLOGY"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-046",
+          "name": "List training examples — filter by skillKey",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/training-examples?skillKey=create_credit_note",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "all items have skillKey=create_credit_note"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-047",
+          "name": "List training examples — pagination",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/training-examples?limit=1",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data array has at most 1 item"
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-2",
+      "method": "GET",
+      "path": "/ai/training-examples/:id",
+      "api": "Tenant API",
+      "description": "Get single training example",
+      "auth_requirement": "ai.chat view permission",
+      "test_cases": [
+        {
+          "id": "E5d-TC-048",
+          "name": "Get training example — happy path",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/training-examples/{{created_example_id}}",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "inputText", "outputText", "category", "source"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-049",
+          "name": "Get training example — not found",
+          "type": "edge_case",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/training-examples/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": { "status": 404 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-050",
+          "name": "Get training example — invalid UUID",
+          "type": "validation_error",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/training-examples/not-a-uuid",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-2",
+      "method": "PATCH",
+      "path": "/ai/training-examples/:id",
+      "api": "Tenant API",
+      "description": "Update training example (source immutable)",
+      "auth_requirement": "ADMIN role minimum",
+      "test_cases": [
+        {
+          "id": "E5d-TC-051",
+          "name": "Update training example — happy path",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "PATCH",
+            "url": "/ai/training-examples/{{created_example_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "inputText": "Updated: What VAT code for EU purchases?",
+              "outputText": "Updated: Use reverse charge — VAT code 3"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_values": { "inputText": "Updated: What VAT code for EU purchases?" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT input_text FROM ai_training_examples WHERE id = '{{created_example_id}}'",
+            "expected": "input_text matches updated value"
+          }
+        },
+        {
+          "id": "E5d-TC-052",
+          "name": "Update training example — source rejected (immutable)",
+          "type": "validation_error",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "PATCH",
+            "url": "/ai/training-examples/{{created_example_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": { "source": "CORRECTION_DERIVED" }
+          },
+          "expected": {
+            "status": 400,
+            "body_assertion": ".strict() rejects unknown field 'source'"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-053",
+          "name": "Update training example — not found",
+          "type": "edge_case",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "PATCH",
+            "url": "/ai/training-examples/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": { "inputText": "Should not find" }
+          },
+          "expected": { "status": 404 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-054",
+          "name": "Update training example — VIEWER denied",
+          "type": "authorization",
+          "role": "viewer@nexa-erp.dev",
+          "request": {
+            "method": "PATCH",
+            "url": "/ai/training-examples/{{created_example_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" },
+            "body": { "inputText": "Viewer cannot update" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-055",
+          "name": "Update training example — STAFF denied",
+          "type": "authorization",
+          "role": "staff@nexa-erp.dev",
+          "request": {
+            "method": "PATCH",
+            "url": "/ai/training-examples/{{created_example_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "inputText": "Staff cannot update" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-2",
+      "method": "DELETE",
+      "path": "/ai/training-examples/:id",
+      "api": "Tenant API",
+      "description": "Soft-delete training example (sets isActive=false)",
+      "auth_requirement": "ADMIN role minimum",
+      "test_cases": [
+        {
+          "id": "E5d-TC-056",
+          "name": "Delete training example — happy path (soft-delete)",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "DELETE",
+            "url": "/ai/training-examples/{{example_to_delete_id}}",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": { "status": 204 },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT is_active FROM ai_training_examples WHERE id = '{{example_to_delete_id}}'",
+            "expected": "is_active = false"
+          },
+          "prerequisite": "Create an example first to delete"
+        },
+        {
+          "id": "E5d-TC-057",
+          "name": "Delete training example — not found",
+          "type": "edge_case",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "DELETE",
+            "url": "/ai/training-examples/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": { "status": 404 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-058",
+          "name": "Delete training example — VIEWER denied",
+          "type": "authorization",
+          "role": "viewer@nexa-erp.dev",
+          "request": {
+            "method": "DELETE",
+            "url": "/ai/training-examples/{{created_example_id}}",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-2",
+      "method": "GET",
+      "path": "/ai/corrections",
+      "api": "Tenant API",
+      "description": "List corrections with filters, pagination, and inline stats",
+      "auth_requirement": "ADMIN role minimum",
+      "test_cases": [
+        {
+          "id": "E5d-TC-059",
+          "name": "List corrections — happy path",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/corrections",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items", "stats"],
+            "body_assertion": "stats contains total, byType, bySkill"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-060",
+          "name": "List corrections — filter by correctionType",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/corrections?correctionType=TERMINOLOGY",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "all items have correctionType=TERMINOLOGY"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-061",
+          "name": "List corrections — filter by date range",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/corrections?from=2026-01-01&to=2026-12-31",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": { "status": 200 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-062",
+          "name": "List corrections — filter by wasAutoResolved",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/corrections?wasAutoResolved=false",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "all items have wasAutoResolved=false"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-063",
+          "name": "List corrections — pagination",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/corrections?limit=1",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "items array has at most 1 item"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-064",
+          "name": "List corrections — empty result",
+          "type": "edge_case",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/corrections?correctionType=TERMINOLOGY&skillKey=nonexistent_skill",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "items is empty array, stats.total = 0"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-065",
+          "name": "List corrections — VIEWER denied",
+          "type": "authorization",
+          "role": "viewer@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/corrections",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-066",
+          "name": "List corrections — STAFF denied",
+          "type": "authorization",
+          "role": "staff@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/corrections",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-067",
+          "name": "List corrections — invalid correctionType",
+          "type": "validation_error",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/corrections?correctionType=INVALID_TYPE",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-2",
+      "method": "GET",
+      "path": "/ai/corrections/stats",
+      "api": "Tenant API",
+      "description": "Aggregated correction stats (total, byType, bySkill, trend)",
+      "auth_requirement": "ADMIN role minimum",
+      "test_cases": [
+        {
+          "id": "E5d-TC-068",
+          "name": "Correction stats — happy path",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/corrections/stats",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["total", "totalLast30Days", "byType", "bySkill", "autoResolvedCount", "trend"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-069",
+          "name": "Correction stats — with date range filter",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/corrections/stats?from=2026-03-01&to=2026-03-04",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": { "status": 200 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-070",
+          "name": "Correction stats — VIEWER denied",
+          "type": "authorization",
+          "role": "viewer@nexa-erp.dev",
+          "request": {
+            "method": "GET",
+            "url": "/ai/corrections/stats",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-2",
+      "method": "POST",
+      "path": "/ai/corrections/:correctionId/create-article",
+      "api": "Tenant API",
+      "description": "Create knowledge article from a correction",
+      "auth_requirement": "ADMIN role minimum",
+      "test_cases": [
+        {
+          "id": "E5d-TC-071",
+          "name": "Create article from correction — happy path",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/corrections/{{real_correction_id}}/create-article",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "title", "content", "source"],
+            "body_values": {
+              "source": "CORRECTION_DERIVED"
+            }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT was_auto_resolved FROM ai_correction_log WHERE id = '{{real_correction_id}}'",
+            "expected": "was_auto_resolved = true"
+          },
+          "prerequisite": "Requires a real correction ID — discover via GET /ai/corrections first"
+        },
+        {
+          "id": "E5d-TC-072",
+          "name": "Create article from correction — correction not found",
+          "type": "edge_case",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/corrections/00000000-0000-4000-a000-ffffffffffff/create-article",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": { "status": 404 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-073",
+          "name": "Create article from correction — invalid UUID",
+          "type": "validation_error",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/corrections/not-a-uuid/create-article",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-074",
+          "name": "Create article from correction — VIEWER denied",
+          "type": "authorization",
+          "role": "viewer@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/corrections/00000000-0000-4000-a000-ffffffffffff/create-article",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-2",
+      "method": "POST",
+      "path": "/ai/admin/learning-signals/aggregate",
+      "api": "Tenant API",
+      "description": "Manually trigger learning signals aggregation for yesterday",
+      "auth_requirement": "ADMIN role minimum",
+      "test_cases": [
+        {
+          "id": "E5d-TC-075",
+          "name": "Trigger learning signals aggregation — happy path",
+          "type": "happy_path",
+          "role": "admin@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/admin/learning-signals/aggregate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["processedCompanies", "signalsCreated"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-076",
+          "name": "Trigger learning signals aggregation — VIEWER denied",
+          "type": "authorization",
+          "role": "viewer@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/admin/learning-signals/aggregate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-077",
+          "name": "Trigger learning signals aggregation — STAFF denied",
+          "type": "authorization",
+          "role": "staff@nexa-erp.dev",
+          "request": {
+            "method": "POST",
+            "url": "/ai/admin/learning-signals/aggregate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-3",
+      "method": "GET",
+      "path": "/admin/intelligence/patterns",
+      "api": "Platform API",
+      "description": "List aggregated tenant patterns with filters",
+      "auth_requirement": "PLATFORM_ADMIN role",
+      "test_cases": [
+        {
+          "id": "E5d-TC-078",
+          "name": "List patterns — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/patterns",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data", "meta"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-079",
+          "name": "List patterns — filter by industry",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/patterns?industry=construction",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": { "status": 200 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-080",
+          "name": "List patterns — filter by date range",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/patterns?dateFrom=2026-01-01&dateTo=2026-03-04",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": { "status": 200 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-081",
+          "name": "List patterns — pagination",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/patterns?limit=1",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data array has at most 1 item"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-082",
+          "name": "List patterns — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/patterns",
+            "headers": { "Authorization": "Bearer {{platform_viewer_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-3",
+      "method": "GET",
+      "path": "/admin/intelligence/corrections",
+      "api": "Platform API",
+      "description": "List aggregated cross-tenant correction patterns",
+      "auth_requirement": "PLATFORM_ADMIN role",
+      "test_cases": [
+        {
+          "id": "E5d-TC-083",
+          "name": "List platform corrections — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/corrections",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": { "status": 200 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-084",
+          "name": "List platform corrections — filter by correctionType",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/corrections?correctionType=TERMINOLOGY",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": { "status": 200 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-085",
+          "name": "List platform corrections — filter by skillKey",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/corrections?skillKey=create_invoice",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": { "status": 200 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-086",
+          "name": "List platform corrections — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/corrections",
+            "headers": { "Authorization": "Bearer {{platform_viewer_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-3",
+      "method": "GET",
+      "path": "/admin/intelligence/skill-effectiveness",
+      "api": "Platform API",
+      "description": "List cross-tenant skill effectiveness metrics",
+      "auth_requirement": "PLATFORM_ADMIN role",
+      "test_cases": [
+        {
+          "id": "E5d-TC-087",
+          "name": "List skill effectiveness — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/skill-effectiveness",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": { "status": 200 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-088",
+          "name": "List skill effectiveness — filter by trend",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/skill-effectiveness?trend=IMPROVING",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": { "status": 200 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-089",
+          "name": "List skill effectiveness — filter by skillKey + date range",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/skill-effectiveness?skillKey=create_invoice&dateFrom=2026-01-01",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": { "status": 200 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-090",
+          "name": "List skill effectiveness — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/skill-effectiveness",
+            "headers": { "Authorization": "Bearer {{platform_viewer_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-3",
+      "method": "GET",
+      "path": "/admin/intelligence/insights",
+      "api": "Platform API",
+      "description": "List platform AI insights with filters",
+      "auth_requirement": "PLATFORM_ADMIN role",
+      "test_cases": [
+        {
+          "id": "E5d-TC-091",
+          "name": "List insights — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/insights",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": { "status": 200 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-092",
+          "name": "List insights — filter by insightType",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/insights?insightType=FEATURE_GAP",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "all items have insightType=FEATURE_GAP"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-093",
+          "name": "List insights — filter by severity",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/insights?severity=HIGH",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": { "status": 200 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-094",
+          "name": "List insights — filter by status",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/insights?status=NEW",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": { "status": 200 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-095",
+          "name": "List insights — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/insights",
+            "headers": { "Authorization": "Bearer {{platform_viewer_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-3",
+      "method": "PATCH",
+      "path": "/admin/intelligence/insights/:id",
+      "api": "Platform API",
+      "description": "Update insight status (NEW → REVIEWED → ACTIONED/DISMISSED)",
+      "auth_requirement": "PLATFORM_ADMIN role",
+      "test_cases": [
+        {
+          "id": "E5d-TC-096",
+          "name": "Update insight status — NEW to REVIEWED",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/intelligence/insights/{{real_insight_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" },
+            "body": { "status": "REVIEWED" }
+          },
+          "expected": {
+            "status": 200,
+            "body_values": { "status": "REVIEWED" },
+            "body_contains": ["reviewedAt", "reviewedById"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT status, reviewed_at FROM platform_ai_insights WHERE id = '{{real_insight_id}}'",
+            "expected": "status = 'REVIEWED', reviewed_at IS NOT NULL"
+          },
+          "prerequisite": "Requires a real insight ID — create via POST /admin/intelligence/generate-insights first"
+        },
+        {
+          "id": "E5d-TC-097",
+          "name": "Update insight status — to ACTIONED",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/intelligence/insights/{{real_insight_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" },
+            "body": { "status": "ACTIONED" }
+          },
+          "expected": {
+            "status": 200,
+            "body_values": { "status": "ACTIONED" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-098",
+          "name": "Update insight status — to DISMISSED",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/intelligence/insights/{{real_insight_id_2}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" },
+            "body": { "status": "DISMISSED" }
+          },
+          "expected": {
+            "status": 200,
+            "body_values": { "status": "DISMISSED" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-099",
+          "name": "Update insight — not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/intelligence/insights/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" },
+            "body": { "status": "REVIEWED" }
+          },
+          "expected": { "status": 404 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-100",
+          "name": "Update insight — invalid status",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/intelligence/insights/{{real_insight_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" },
+            "body": { "status": "INVALID_STATUS" }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-101",
+          "name": "Update insight — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/intelligence/insights/{{real_insight_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_viewer_token}}" },
+            "body": { "status": "REVIEWED" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-3",
+      "method": "GET",
+      "path": "/admin/intelligence/summary",
+      "api": "Platform API",
+      "description": "Dashboard summary with top-level metrics",
+      "auth_requirement": "PLATFORM_ADMIN role",
+      "test_cases": [
+        {
+          "id": "E5d-TC-102",
+          "name": "Get intelligence summary — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/summary",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["totalContributingTenants", "totalPatterns", "totalCorrections", "overallAiSuccessRate", "topSkillsByUsage", "topInsightsBySeverity"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-103",
+          "name": "Get intelligence summary — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/summary",
+            "headers": { "Authorization": "Bearer {{platform_viewer_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-3",
+      "method": "POST",
+      "path": "/admin/intelligence/aggregate",
+      "api": "Platform API",
+      "description": "Trigger daily cross-tenant aggregation",
+      "auth_requirement": "PLATFORM_ADMIN role",
+      "test_cases": [
+        {
+          "id": "E5d-TC-104",
+          "name": "Trigger aggregation — happy path (default yesterday)",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/intelligence/aggregate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["processedTenants", "skippedTenants", "patternsCreated", "correctionsCreated"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-105",
+          "name": "Trigger aggregation — specific date",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/intelligence/aggregate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" },
+            "body": { "date": "2026-03-03" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["processedTenants"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-106",
+          "name": "Trigger aggregation — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/admin/intelligence/aggregate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_viewer_token}}" },
+            "body": {}
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-3",
+      "method": "POST",
+      "path": "/admin/intelligence/generate-insights",
+      "api": "Platform API",
+      "description": "Trigger weekly insights generation",
+      "auth_requirement": "PLATFORM_ADMIN role",
+      "test_cases": [
+        {
+          "id": "E5d-TC-107",
+          "name": "Generate insights — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/intelligence/generate-insights",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["insightsGenerated", "byType"],
+            "body_assertion": "byType contains featureGap, workflowOpportunity, defaultCandidate, skillImprovement"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-108",
+          "name": "Generate insights — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/admin/intelligence/generate-insights",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_viewer_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-4",
+      "method": "POST",
+      "path": "/admin/intelligence/knowledge",
+      "api": "Platform API",
+      "description": "Create platform knowledge article (DRAFT status)",
+      "auth_requirement": "PLATFORM_ADMIN role",
+      "test_cases": [
+        {
+          "id": "E5d-TC-109",
+          "name": "Create platform knowledge article — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/intelligence/knowledge",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" },
+            "body": {
+              "title": "Best Practice: AR Follow-up Automation",
+              "content": "Setting up automated AR follow-up reduces days sales outstanding by 23% on average across tenants.",
+              "category": "BEST_PRACTICE",
+              "targetIndustries": [],
+              "targetPlanTiers": []
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "title", "content", "category", "status"],
+            "body_values": { "status": "DRAFT", "version": 1, "category": "BEST_PRACTICE" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT status, version FROM platform_knowledge_base WHERE id = '{{created_platform_article_id}}'",
+            "expected": "status = 'DRAFT', version = 1"
+          },
+          "save_id_as": "created_platform_article_id"
+        },
+        {
+          "id": "E5d-TC-110",
+          "name": "Create platform knowledge article — HELP category with targeting",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/intelligence/knowledge",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" },
+            "body": {
+              "title": "Construction Retention Invoice Help",
+              "content": "How to set up retention invoices for construction companies.",
+              "category": "HELP",
+              "targetIndustries": ["construction"],
+              "targetPlanTiers": ["professional", "enterprise"]
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_values": { "category": "HELP" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-111",
+          "name": "Create platform knowledge — missing title",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/intelligence/knowledge",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" },
+            "body": {
+              "content": "Missing title",
+              "category": "BEST_PRACTICE"
+            }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-112",
+          "name": "Create platform knowledge — invalid category",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/intelligence/knowledge",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" },
+            "body": {
+              "title": "Invalid Category",
+              "content": "Some content",
+              "category": "INVALID_CATEGORY"
+            }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-113",
+          "name": "Create platform knowledge — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/admin/intelligence/knowledge",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_viewer_token}}" },
+            "body": {
+              "title": "Should Fail",
+              "content": "Content",
+              "category": "BEST_PRACTICE"
+            }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-4",
+      "method": "GET",
+      "path": "/admin/intelligence/knowledge",
+      "api": "Platform API",
+      "description": "List platform knowledge articles with filters and distribution summary",
+      "auth_requirement": "PLATFORM_ADMIN role",
+      "test_cases": [
+        {
+          "id": "E5d-TC-114",
+          "name": "List platform knowledge — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/knowledge",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "items include distributionSummary object"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-115",
+          "name": "List platform knowledge — filter by status",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/knowledge?status=DRAFT",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "all items have status=DRAFT"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-116",
+          "name": "List platform knowledge — filter by category",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/knowledge?category=BEST_PRACTICE",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": { "status": 200 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-117",
+          "name": "List platform knowledge — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/knowledge",
+            "headers": { "Authorization": "Bearer {{platform_viewer_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-4",
+      "method": "GET",
+      "path": "/admin/intelligence/knowledge/:id",
+      "api": "Platform API",
+      "description": "Get single platform knowledge article with distribution stats",
+      "auth_requirement": "PLATFORM_ADMIN role",
+      "test_cases": [
+        {
+          "id": "E5d-TC-118",
+          "name": "Get platform knowledge article — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/knowledge/{{created_platform_article_id}}",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "title", "content", "distributionStats"],
+            "body_assertion": "distributionStats contains totalEligibleTenants, accepted, rejected, pending"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-119",
+          "name": "Get platform knowledge article — not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/knowledge/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": { "status": 404 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-120",
+          "name": "Get platform knowledge article — invalid UUID",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/intelligence/knowledge/not-a-uuid",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-4",
+      "method": "PATCH",
+      "path": "/admin/intelligence/knowledge/:id",
+      "api": "Platform API",
+      "description": "Update platform knowledge article (auto-versions on content change for PUBLISHED)",
+      "auth_requirement": "PLATFORM_ADMIN role",
+      "test_cases": [
+        {
+          "id": "E5d-TC-121",
+          "name": "Update platform knowledge — title change",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/intelligence/knowledge/{{created_platform_article_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" },
+            "body": { "title": "Updated Best Practice Title" }
+          },
+          "expected": {
+            "status": 200,
+            "body_values": { "title": "Updated Best Practice Title" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-122",
+          "name": "Update platform knowledge — not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/intelligence/knowledge/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" },
+            "body": { "title": "Should not find" }
+          },
+          "expected": { "status": 404 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-123",
+          "name": "Update platform knowledge — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/intelligence/knowledge/{{created_platform_article_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_viewer_token}}" },
+            "body": { "title": "Should fail" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-4",
+      "method": "POST",
+      "path": "/admin/intelligence/knowledge/:id/publish",
+      "api": "Platform API",
+      "description": "Publish platform knowledge article (DRAFT → PUBLISHED)",
+      "auth_requirement": "PLATFORM_ADMIN role",
+      "test_cases": [
+        {
+          "id": "E5d-TC-124",
+          "name": "Publish platform knowledge — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/intelligence/knowledge/{{created_platform_article_id}}/publish",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_values": { "status": "PUBLISHED" },
+            "body_assertion": "publishedAt is not null"
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT status, published_at FROM platform_knowledge_base WHERE id = '{{created_platform_article_id}}'",
+            "expected": "status = 'PUBLISHED', published_at IS NOT NULL"
+          }
+        },
+        {
+          "id": "E5d-TC-125",
+          "name": "Publish platform knowledge — already PUBLISHED (invalid transition)",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/intelligence/knowledge/{{created_platform_article_id}}/publish",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_assertion": "Only DRAFT articles can be published"
+          },
+          "db_verification": { "enabled": false },
+          "prerequisite": "Run after TC-124 so article is already PUBLISHED"
+        },
+        {
+          "id": "E5d-TC-126",
+          "name": "Publish platform knowledge — not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/intelligence/knowledge/00000000-0000-4000-a000-ffffffffffff/publish",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": { "status": 404 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-127",
+          "name": "Publish platform knowledge — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/admin/intelligence/knowledge/{{created_platform_article_id}}/publish",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_viewer_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-4",
+      "method": "POST",
+      "path": "/admin/intelligence/knowledge/:id/archive",
+      "api": "Platform API",
+      "description": "Archive platform knowledge article (PUBLISHED → ARCHIVED)",
+      "auth_requirement": "PLATFORM_ADMIN role",
+      "test_cases": [
+        {
+          "id": "E5d-TC-128",
+          "name": "Archive platform knowledge — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/intelligence/knowledge/{{published_platform_article_id}}/archive",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_values": { "status": "ARCHIVED" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT status FROM platform_knowledge_base WHERE id = '{{published_platform_article_id}}'",
+            "expected": "status = 'ARCHIVED'"
+          },
+          "prerequisite": "Requires a PUBLISHED article — publish one first"
+        },
+        {
+          "id": "E5d-TC-129",
+          "name": "Archive platform knowledge — DRAFT cannot be archived",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/intelligence/knowledge/{{draft_platform_article_id}}/archive",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_assertion": "Only PUBLISHED articles can be archived"
+          },
+          "db_verification": { "enabled": false },
+          "prerequisite": "Create a DRAFT article and try to archive it directly"
+        },
+        {
+          "id": "E5d-TC-130",
+          "name": "Archive platform knowledge — not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/intelligence/knowledge/00000000-0000-4000-a000-ffffffffffff/archive",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": { "status": 404 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-4",
+      "method": "DELETE",
+      "path": "/admin/intelligence/knowledge/:id",
+      "api": "Platform API",
+      "description": "Delete platform knowledge article (DRAFT only, hard-delete)",
+      "auth_requirement": "PLATFORM_ADMIN role",
+      "test_cases": [
+        {
+          "id": "E5d-TC-131",
+          "name": "Delete platform knowledge — DRAFT article (happy path)",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "DELETE",
+            "url": "/admin/intelligence/knowledge/{{draft_to_delete_id}}",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": { "status": 204 },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) as count FROM platform_knowledge_base WHERE id = '{{draft_to_delete_id}}'",
+            "expected": "count = 0 (hard-deleted)"
+          },
+          "prerequisite": "Create a DRAFT article to delete"
+        },
+        {
+          "id": "E5d-TC-132",
+          "name": "Delete platform knowledge — PUBLISHED cannot be deleted",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "DELETE",
+            "url": "/admin/intelligence/knowledge/{{published_platform_article_id}}",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_assertion": "Only DRAFT articles can be deleted"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-133",
+          "name": "Delete platform knowledge — not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "DELETE",
+            "url": "/admin/intelligence/knowledge/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{platform_admin_token}}" }
+          },
+          "expected": { "status": 404 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-134",
+          "name": "Delete platform knowledge — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "DELETE",
+            "url": "/admin/intelligence/knowledge/{{draft_to_delete_id}}",
+            "headers": { "Authorization": "Bearer {{platform_viewer_token}}" }
+          },
+          "expected": { "status": 403 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-4",
+      "method": "GET",
+      "path": "/platform/tenants/:tenantId/knowledge/suggested",
+      "api": "Platform API",
+      "description": "Get suggested knowledge articles for a tenant (service token auth)",
+      "auth_requirement": "Service token (ERP-to-platform internal call)",
+      "test_cases": [
+        {
+          "id": "E5d-TC-135",
+          "name": "Get suggested knowledge — happy path",
+          "type": "happy_path",
+          "role": "SERVICE_TOKEN",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/{{real_tenant_id}}/knowledge/suggested",
+            "headers": { "Authorization": "Bearer {{service_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data", "nextCursor", "hasMore"]
+          },
+          "db_verification": { "enabled": false },
+          "prerequisite": "Requires real tenant ID and PUBLISHED articles"
+        },
+        {
+          "id": "E5d-TC-136",
+          "name": "Get suggested knowledge — pagination",
+          "type": "happy_path",
+          "role": "SERVICE_TOKEN",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/{{real_tenant_id}}/knowledge/suggested?limit=1",
+            "headers": { "Authorization": "Bearer {{service_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data array has at most 1 item"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-137",
+          "name": "Get suggested knowledge — invalid tenant UUID",
+          "type": "validation_error",
+          "role": "SERVICE_TOKEN",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/not-a-uuid/knowledge/suggested",
+            "headers": { "Authorization": "Bearer {{service_token}}" }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-138",
+          "name": "Get suggested knowledge — no auth (401)",
+          "type": "authorization",
+          "role": "none",
+          "request": {
+            "method": "GET",
+            "url": "/platform/tenants/{{real_tenant_id}}/knowledge/suggested"
+          },
+          "expected": { "status": 401 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-4",
+      "method": "POST",
+      "path": "/platform/tenants/:tenantId/knowledge/:articleId/respond",
+      "api": "Platform API",
+      "description": "Record tenant acceptance/rejection of a platform knowledge article",
+      "auth_requirement": "Service token (ERP-to-platform internal call)",
+      "test_cases": [
+        {
+          "id": "E5d-TC-139",
+          "name": "Accept suggested knowledge — happy path",
+          "type": "happy_path",
+          "role": "SERVICE_TOKEN",
+          "request": {
+            "method": "POST",
+            "url": "/platform/tenants/{{real_tenant_id}}/knowledge/{{published_platform_article_id}}/respond",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{service_token}}" },
+            "body": { "status": "ACCEPTED" }
+          },
+          "expected": { "status": 204 },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT status FROM platform_knowledge_responses WHERE tenant_id = '{{real_tenant_id}}' AND article_id = '{{published_platform_article_id}}'",
+            "expected": "status = 'ACCEPTED'"
+          },
+          "prerequisite": "Requires PUBLISHED article and real tenant ID"
+        },
+        {
+          "id": "E5d-TC-140",
+          "name": "Reject suggested knowledge — happy path",
+          "type": "happy_path",
+          "role": "SERVICE_TOKEN",
+          "request": {
+            "method": "POST",
+            "url": "/platform/tenants/{{real_tenant_id}}/knowledge/{{published_platform_article_id_2}}/respond",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{service_token}}" },
+            "body": { "status": "REJECTED" }
+          },
+          "expected": { "status": 204 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-141",
+          "name": "Respond to knowledge — article not found",
+          "type": "edge_case",
+          "role": "SERVICE_TOKEN",
+          "request": {
+            "method": "POST",
+            "url": "/platform/tenants/{{real_tenant_id}}/knowledge/00000000-0000-4000-a000-ffffffffffff/respond",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{service_token}}" },
+            "body": { "status": "ACCEPTED" }
+          },
+          "expected": { "status": 404 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-142",
+          "name": "Respond to knowledge — invalid status value",
+          "type": "validation_error",
+          "role": "SERVICE_TOKEN",
+          "request": {
+            "method": "POST",
+            "url": "/platform/tenants/{{real_tenant_id}}/knowledge/{{published_platform_article_id}}/respond",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{service_token}}" },
+            "body": { "status": "MAYBE" }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-143",
+          "name": "Respond to knowledge — invalid tenant UUID",
+          "type": "validation_error",
+          "role": "SERVICE_TOKEN",
+          "request": {
+            "method": "POST",
+            "url": "/platform/tenants/not-a-uuid/knowledge/{{published_platform_article_id}}/respond",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{service_token}}" },
+            "body": { "status": "ACCEPTED" }
+          },
+          "expected": { "status": 400 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E5d-TC-144",
+          "name": "Respond to knowledge — no auth (401)",
+          "type": "authorization",
+          "role": "none",
+          "request": {
+            "method": "POST",
+            "url": "/platform/tenants/{{real_tenant_id}}/knowledge/{{published_platform_article_id}}/respond",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "status": "ACCEPTED" }
+          },
+          "expected": { "status": 401 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "story": "E5d-4",
+      "method": "PATCH",
+      "path": "/admin/intelligence/knowledge/:id (content change on PUBLISHED)",
+      "api": "Platform API",
+      "description": "Update PUBLISHED article content triggers version bump",
+      "auth_requirement": "PLATFORM_ADMIN role",
+      "test_cases": [
+        {
+          "id": "E5d-TC-145",
+          "name": "Update PUBLISHED article content — auto-version bump",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/intelligence/knowledge/{{published_platform_article_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{platform_admin_token}}" },
+            "body": { "content": "Updated content that triggers version bump for published article." }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "version incremented by 1 from previous value"
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT version FROM platform_knowledge_base WHERE id = '{{published_platform_article_id}}'",
+            "expected": "version = previous_version + 1"
+          },
+          "prerequisite": "Requires a PUBLISHED article"
+        }
+      ]
+    }
+  ],
+  "test_execution_order": {
+    "description": "Recommended execution order: creates first, then reads, then updates, then deletes",
+    "phases": [
+      {
+        "phase": 1,
+        "name": "Authentication",
+        "description": "Login as all test users to get tokens",
+        "test_ids": ["Login all 4 tenant roles + platform admin + service token"]
+      },
+      {
+        "phase": 2,
+        "name": "Creates (Tenant API)",
+        "description": "Create knowledge articles and training examples",
+        "test_ids": ["E5d-TC-001", "E5d-TC-002", "E5d-TC-003", "E5d-TC-036", "E5d-TC-037"]
+      },
+      {
+        "phase": 3,
+        "name": "Create Validations (Tenant API)",
+        "description": "Validation and RBAC tests for create operations",
+        "test_ids": ["E5d-TC-004", "E5d-TC-005", "E5d-TC-006", "E5d-TC-007", "E5d-TC-008", "E5d-TC-009", "E5d-TC-010", "E5d-TC-038", "E5d-TC-039", "E5d-TC-040", "E5d-TC-041", "E5d-TC-042"]
+      },
+      {
+        "phase": 4,
+        "name": "Reads (Tenant API)",
+        "description": "List and get operations",
+        "test_ids": ["E5d-TC-011", "E5d-TC-012", "E5d-TC-013", "E5d-TC-014", "E5d-TC-015", "E5d-TC-016", "E5d-TC-017", "E5d-TC-018", "E5d-TC-019", "E5d-TC-020", "E5d-TC-021", "E5d-TC-043", "E5d-TC-044", "E5d-TC-045", "E5d-TC-046", "E5d-TC-047", "E5d-TC-048", "E5d-TC-049", "E5d-TC-050", "E5d-TC-059", "E5d-TC-060", "E5d-TC-061", "E5d-TC-062", "E5d-TC-063", "E5d-TC-064", "E5d-TC-065", "E5d-TC-066", "E5d-TC-067", "E5d-TC-068", "E5d-TC-069", "E5d-TC-070"]
+      },
+      {
+        "phase": 5,
+        "name": "Updates (Tenant API)",
+        "description": "Update operations",
+        "test_ids": ["E5d-TC-022", "E5d-TC-023", "E5d-TC-024", "E5d-TC-025", "E5d-TC-026", "E5d-TC-027", "E5d-TC-028", "E5d-TC-029", "E5d-TC-030", "E5d-TC-051", "E5d-TC-052", "E5d-TC-053", "E5d-TC-054", "E5d-TC-055"]
+      },
+      {
+        "phase": 6,
+        "name": "Special Operations (Tenant API)",
+        "description": "Correction-to-article creation, learning signals trigger",
+        "test_ids": ["E5d-TC-071", "E5d-TC-072", "E5d-TC-073", "E5d-TC-074", "E5d-TC-075", "E5d-TC-076", "E5d-TC-077"]
+      },
+      {
+        "phase": 7,
+        "name": "Deletes (Tenant API)",
+        "description": "Delete operations (run last for tenant API)",
+        "test_ids": ["E5d-TC-031", "E5d-TC-032", "E5d-TC-033", "E5d-TC-034", "E5d-TC-035", "E5d-TC-056", "E5d-TC-057", "E5d-TC-058"]
+      },
+      {
+        "phase": 8,
+        "name": "Creates (Platform API)",
+        "description": "Create platform knowledge articles",
+        "test_ids": ["E5d-TC-109", "E5d-TC-110", "E5d-TC-111", "E5d-TC-112", "E5d-TC-113"]
+      },
+      {
+        "phase": 9,
+        "name": "Reads (Platform API)",
+        "description": "List and get operations for intelligence and knowledge",
+        "test_ids": ["E5d-TC-078", "E5d-TC-079", "E5d-TC-080", "E5d-TC-081", "E5d-TC-082", "E5d-TC-083", "E5d-TC-084", "E5d-TC-085", "E5d-TC-086", "E5d-TC-087", "E5d-TC-088", "E5d-TC-089", "E5d-TC-090", "E5d-TC-091", "E5d-TC-092", "E5d-TC-093", "E5d-TC-094", "E5d-TC-095", "E5d-TC-102", "E5d-TC-103", "E5d-TC-114", "E5d-TC-115", "E5d-TC-116", "E5d-TC-117", "E5d-TC-118", "E5d-TC-119", "E5d-TC-120"]
+      },
+      {
+        "phase": 10,
+        "name": "Updates & Transitions (Platform API)",
+        "description": "Update, publish, archive operations",
+        "test_ids": ["E5d-TC-096", "E5d-TC-097", "E5d-TC-098", "E5d-TC-099", "E5d-TC-100", "E5d-TC-101", "E5d-TC-121", "E5d-TC-122", "E5d-TC-123", "E5d-TC-124", "E5d-TC-125", "E5d-TC-126", "E5d-TC-127", "E5d-TC-128", "E5d-TC-129", "E5d-TC-130", "E5d-TC-145"]
+      },
+      {
+        "phase": 11,
+        "name": "Triggers (Platform API)",
+        "description": "Aggregation and insights generation triggers",
+        "test_ids": ["E5d-TC-104", "E5d-TC-105", "E5d-TC-106", "E5d-TC-107", "E5d-TC-108"]
+      },
+      {
+        "phase": 12,
+        "name": "Service Token Endpoints (Platform API)",
+        "description": "Internal ERP-facing knowledge distribution endpoints",
+        "test_ids": ["E5d-TC-135", "E5d-TC-136", "E5d-TC-137", "E5d-TC-138", "E5d-TC-139", "E5d-TC-140", "E5d-TC-141", "E5d-TC-142", "E5d-TC-143", "E5d-TC-144"]
+      },
+      {
+        "phase": 13,
+        "name": "Deletes (Platform API)",
+        "description": "Delete operations (run last)",
+        "test_ids": ["E5d-TC-131", "E5d-TC-132", "E5d-TC-133", "E5d-TC-134"]
+      }
+    ]
+  },
+  "summary": {
+    "stories_covered": ["E5d-1", "E5d-2", "E5d-3", "E5d-4"],
+    "stories_not_covered": ["E5d-5 (UI only)", "E5d-6 (UI only)"],
+    "tenant_api_endpoints": 10,
+    "platform_api_endpoints": 15,
+    "total_endpoints": 25,
+    "test_type_breakdown": {
+      "happy_path": 62,
+      "validation_error": 29,
+      "edge_case": 28,
+      "authorization": 37
+    },
+    "db_verification_count": 14
+  }
+}

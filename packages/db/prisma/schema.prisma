@@ -323,6 +323,11 @@ model CompanyProfile {
   dateRangePresets       DateRangePreset[]
   savedViews             SavedView[]
   automations            AiAutomation[]
+  aiKnowledgeArticles    AiKnowledgeArticle[]
+  aiTrainingExamples     AiTrainingExample[]
+  aiCorrectionLogs       AiCorrectionLog[]
+  aiLearningSignals      AiLearningSignal[]
+  emailMessages          EmailMessage[]
 
   @@index([baseCurrencyCode], map: "idx_company_profiles_base_currency_code")
   @@index([countryCode], map: "idx_company_profiles_country_code")
@@ -533,6 +538,14 @@ model User {
   columnPreferences      UserColumnPreference[]
   savedViews             SavedView[]
   createdAutomations     AiAutomation[] @relation("UserCreatedAutomations")
+  createdKnowledgeArticles AiKnowledgeArticle[] @relation("UserCreatedKnowledgeArticles")
+  createdTrainingExamples  AiTrainingExample[] @relation("UserCreatedTrainingExamples")
+  correctionLogs           AiCorrectionLog[] @relation("UserCorrectionLogs")
+  createdEmailMessages     EmailMessage[]    @relation("UserCreatedEmails")
+  emailRecipients          EmailRecipient[]  @relation("UserEmailRecipients")
+  emailSignatures          EmailSignature[]  @relation("UserEmailSignatures")
+  createdEmailTemplates    EmailTemplate[]   @relation("UserCreatedEmailTemplates")
+  updatedEmailTemplates    EmailTemplate[]   @relation("UserUpdatedEmailTemplates")
 
   @@unique([email], map: "uq_users_email")
   @@index([companyId], map: "idx_users_company_id")
@@ -1352,6 +1365,129 @@ model AiPromptVariable {
 }
 
 // ---------------------------------------------------------------------------
+// AI Knowledge Base & Learning — E5d-1
+// ---------------------------------------------------------------------------
+// Tenant-scoped knowledge base with RAG retrieval, correction logging,
+// training examples, and learning signal aggregation.
+// ---------------------------------------------------------------------------
+
+model AiKnowledgeArticle {
+  id              String    @id @default(uuid()) @map("id")
+  companyId       String    @map("company_id")
+  title           String    @map("title") @db.VarChar(500)
+  content         String    @map("content") @db.Text
+  category        String    @map("category") // BUSINESS_PROCESS, TERMINOLOGY, INDUSTRY_RULES, CUSTOM_FIELDS, HISTORICAL_PATTERN
+  source          String    @map("source") // ADMIN_UPLOADED, AI_GENERATED, PLATFORM_SUGGESTED, CORRECTION_DERIVED
+  sourceRef       String?   @map("source_ref")
+  confidenceScore Decimal   @default(0.5) @map("confidence_score") @db.Decimal(3, 2)
+  isConfirmed     Boolean   @default(false) @map("is_confirmed")
+  usageCount      Int       @default(0) @map("usage_count")
+  lastUsedAt      DateTime? @map("last_used_at")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdById     String    @map("created_by_id")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  company   CompanyProfile     @relation(fields: [companyId], references: [id])
+  createdBy User               @relation("UserCreatedKnowledgeArticles", fields: [createdById], references: [id])
+  chunks    AiKnowledgeChunk[]
+
+  @@index([companyId, category, isActive], map: "idx_ai_knowledge_articles_company_category_active")
+  @@index([companyId, source], map: "idx_ai_knowledge_articles_company_source")
+  @@map("ai_knowledge_articles")
+}
+
+model AiKnowledgeChunk {
+  id         String @id @default(uuid()) @map("id")
+  articleId  String @map("article_id")
+  chunkIndex Int    @map("chunk_index")
+  content    String @map("content") @db.Text
+  tokenCount Int    @map("token_count")
+
+  // Vector search columns — managed via raw SQL in migration (Prisma doesn't support pgvector natively)
+  embedding    Unsupported("vector(1536)")? @map("embedding")
+  searchVector Unsupported("tsvector")?     @map("search_vector")
+
+  // Relations
+  article AiKnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, chunkIndex], map: "uq_ai_knowledge_chunks_article_chunk_index")
+  @@map("ai_knowledge_chunks")
+}
+
+model AiTrainingExample {
+  id         String  @id @default(uuid()) @map("id")
+  companyId  String  @map("company_id")
+  skillKey   String? @map("skill_key")
+  inputText  String  @map("input_text") @db.Text
+  outputText String  @map("output_text") @db.Text
+  category   String  @map("category")
+  source     String  @map("source")
+  isActive   Boolean @default(true) @map("is_active")
+  createdById String @map("created_by_id")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  company   CompanyProfile @relation(fields: [companyId], references: [id])
+  createdBy User           @relation("UserCreatedTrainingExamples", fields: [createdById], references: [id])
+
+  @@index([companyId, skillKey, isActive], map: "idx_ai_training_examples_company_skill_active")
+  @@map("ai_training_examples")
+}
+
+model AiCorrectionLog {
+  id                String   @id @default(uuid()) @map("id")
+  companyId         String   @map("company_id")
+  userId            String   @map("user_id")
+  conversationId    String?  @map("conversation_id")
+  messageId         String?  @map("message_id")
+  skillKey          String?  @map("skill_key")
+  originalResponse  String   @map("original_response") @db.Text
+  correctedResponse String   @map("corrected_response") @db.Text
+  correctionType    String   @map("correction_type")
+  wasAutoResolved   Boolean  @default(false) @map("was_auto_resolved")
+
+  // Append-only — no updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  company CompanyProfile @relation(fields: [companyId], references: [id])
+  user    User           @relation("UserCorrectionLogs", fields: [userId], references: [id])
+
+  @@index([companyId, correctionType], map: "idx_ai_correction_log_company_correction_type")
+  @@index([companyId, skillKey], map: "idx_ai_correction_log_company_skill")
+  @@index([createdAt], map: "idx_ai_correction_log_created_at")
+  @@map("ai_correction_log")
+}
+
+model AiLearningSignal {
+  id              String  @id @default(uuid()) @map("id")
+  companyId       String  @map("company_id")
+  skillKey        String  @map("skill_key")
+  signalDate      DateTime @map("signal_date") @db.Date
+  totalQueries    Int     @default(0) @map("total_queries")
+  successCount    Int     @default(0) @map("success_count")
+  correctionCount Int     @default(0) @map("correction_count")
+  avgConfidence   Decimal @default(0) @map("avg_confidence") @db.Decimal(3, 2)
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  company CompanyProfile @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, skillKey, signalDate], map: "uq_ai_learning_signals_company_skill_date")
+  @@map("ai_learning_signals")
+}
+
+// ---------------------------------------------------------------------------
 // Metadata-Driven DataTable Infrastructure — E7.1
 // ---------------------------------------------------------------------------
 // 3-tier architecture:
@@ -1835,4 +1971,240 @@ model Notification {
   @@index([channel, status], map: "idx_notifications_channel_status")
   @@index([entityType, entityId], map: "idx_notifications_entity")
   @@index([templateId], map: "idx_notifications_template")
+}
+
+// ---------------------------------------------------------------------------
+// Email Enums — E10.1 (Architecture §2.29 Communications)
+// ---------------------------------------------------------------------------
+
+enum EmailMessageStatus {
+  DRAFT
+  QUEUED
+  SENT
+  FAILED
+  BOUNCED
+
+  @@map("email_message_status")
+}
+
+enum EmailDirection {
+  INBOUND
+  OUTBOUND
+
+  @@map("email_direction")
+}
+
+enum EmailRecipientType {
+  FROM
+  TO
+  CC
+  BCC
+
+  @@map("email_recipient_type")
+}
+
+enum EmailRecipientStatus {
+  UNREAD
+  READ
+  DELETED
+  ARCHIVED
+
+  @@map("email_recipient_status")
+}
+
+enum EmailQueueStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  RETRYING
+
+  @@map("email_queue_status")
+}
+
+// ---------------------------------------------------------------------------
+// Email Message — E10.1 (Architecture §2.29, Data Models §3.18)
+// ---------------------------------------------------------------------------
+// Core email record for inbound/outbound messages. Status machine:
+// DRAFT → QUEUED → SENT / FAILED / BOUNCED
+// Per-company scoped. Number series: EM-00001
+// ---------------------------------------------------------------------------
+
+model EmailMessage {
+  id                String             @id @default(uuid()) @map("id")
+  messageNumber     String             @unique @map("message_number")
+  subject           String             @map("subject") @db.VarChar(500)
+  bodyText          String?            @map("body_text") @db.Text
+  bodyHtml          String?            @map("body_html") @db.Text
+  direction         EmailDirection     @map("direction")
+  status            EmailMessageStatus @default(DRAFT) @map("status")
+  externalMessageId String?            @map("external_message_id") @db.VarChar(500)
+  inReplyTo         String?            @map("in_reply_to") @db.VarChar(500)
+  threadId          String?            @map("thread_id") @db.VarChar(500)
+  emailTemplateId   String?            @map("email_template_id")
+  sourceEntityType  String?            @map("source_entity_type") @db.VarChar(100)
+  sourceEntityId    String?            @map("source_entity_id")
+  priority          Int                @default(0) @map("priority")
+  isHtml            Boolean            @default(true) @map("is_html")
+  hasAttachments    Boolean            @default(false) @map("has_attachments")
+  isAutoGenerated   Boolean            @default(false) @map("is_auto_generated")
+  isBounce          Boolean            @default(false) @map("is_bounce")
+  isMailingList     Boolean            @default(false) @map("is_mailing_list")
+  sentAt            DateTime?          @map("sent_at")
+  companyId         String             @map("company_id")
+  createdBy         String             @map("created_by")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  company       CompanyProfile   @relation(fields: [companyId], references: [id])
+  creator       User             @relation("UserCreatedEmails", fields: [createdBy], references: [id])
+  emailTemplate EmailTemplate?   @relation(fields: [emailTemplateId], references: [id])
+  recipients    EmailRecipient[]
+  queueEntry    EmailQueue?
+
+  @@index([status], map: "idx_email_messages_status")
+  @@index([direction], map: "idx_email_messages_direction")
+  @@index([sentAt], map: "idx_email_messages_sent_at")
+  @@index([createdBy], map: "idx_email_messages_created_by")
+  @@index([sourceEntityType, sourceEntityId], map: "idx_email_messages_source_entity")
+  @@index([threadId], map: "idx_email_messages_thread")
+  @@index([externalMessageId], map: "idx_email_messages_external_id")
+  @@index([companyId], map: "idx_email_messages_company")
+  @@map("email_messages")
+}
+
+// ---------------------------------------------------------------------------
+// Email Recipient — E10.1 (Architecture §2.29)
+// ---------------------------------------------------------------------------
+// Per-recipient record for each email message. Supports FROM, TO, CC, BCC.
+// BR-COM-002: unique constraint on (emailMessageId, emailAddress, recipientType)
+// ---------------------------------------------------------------------------
+
+model EmailRecipient {
+  id               String               @id @default(uuid()) @map("id")
+  emailMessageId   String               @map("email_message_id")
+  recipientType    EmailRecipientType   @map("recipient_type")
+  userId           String?              @map("user_id")
+  emailAddress     String               @map("email_address") @db.VarChar(320)
+  displayName      String?              @map("display_name") @db.VarChar(200)
+  status           EmailRecipientStatus @default(UNREAD) @map("status")
+  readAt           DateTime?            @map("read_at")
+  acceptanceStatus String?              @map("acceptance_status") @db.VarChar(20)
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  emailMessage EmailMessage @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
+  user         User?        @relation("UserEmailRecipients", fields: [userId], references: [id])
+
+  @@unique([emailMessageId, emailAddress, recipientType], map: "uq_email_recipients_message_address_type")
+  @@index([emailMessageId], map: "idx_email_recipients_message")
+  @@index([userId, status], map: "idx_email_recipients_user_status")
+  @@index([emailAddress], map: "idx_email_recipients_address")
+  @@index([userId, recipientType], map: "idx_email_recipients_user_type")
+  @@map("email_recipients")
+}
+
+// ---------------------------------------------------------------------------
+// Email Queue — E10.1 (Architecture §2.29)
+// ---------------------------------------------------------------------------
+// 1:1 with EmailMessage. Tracks send attempts, retry schedule, SMTP response.
+// BullMQ-backed processing with exponential backoff [30s, 120s, 300s].
+// ---------------------------------------------------------------------------
+
+model EmailQueue {
+  id             String           @id @default(uuid()) @map("id")
+  emailMessageId String           @unique @map("email_message_id")
+  status         EmailQueueStatus @default(PENDING) @map("status")
+  priority       Int              @default(0) @map("priority")
+  attempts       Int              @default(0) @map("attempts")
+  maxAttempts    Int              @default(3) @map("max_attempts")
+  lastError      String?          @map("last_error") @db.Text
+  nextRetryAt    DateTime?        @map("next_retry_at")
+  smtpResponse   String?          @map("smtp_response") @db.VarChar(500)
+  deliveredAt    DateTime?        @map("delivered_at")
+  bouncedAt      DateTime?        @map("bounced_at")
+  queuedAt       DateTime         @default(now()) @map("queued_at")
+  processedAt    DateTime?        @map("processed_at")
+
+  // Relations
+  emailMessage EmailMessage @relation(fields: [emailMessageId], references: [id])
+
+  @@index([status, priority], map: "idx_email_queue_status_priority")
+  @@index([nextRetryAt], map: "idx_email_queue_retry")
+  @@index([queuedAt], map: "idx_email_queue_queued_at")
+  @@map("email_queue")
+}
+
+// ---------------------------------------------------------------------------
+// Email Signature — E10.1 (Architecture §2.29)
+// ---------------------------------------------------------------------------
+// Per-user HTML/text email signatures. Multiple signatures per user,
+// one marked as default. BR-COM-009: prevent double-append.
+// ---------------------------------------------------------------------------
+
+model EmailSignature {
+  id        String  @id @default(uuid()) @map("id")
+  userId    String  @map("user_id")
+  name      String  @map("name") @db.VarChar(200)
+  bodyHtml  String  @map("body_html") @db.Text
+  bodyText  String? @map("body_text") @db.Text
+  isDefault Boolean @default(false) @map("is_default")
+  isActive  Boolean @default(true) @map("is_active")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation("UserEmailSignatures", fields: [userId], references: [id])
+
+  @@index([userId], map: "idx_email_signatures_user")
+  @@index([userId, isDefault], map: "idx_email_signatures_user_default")
+  @@map("email_signatures")
+}
+
+// ---------------------------------------------------------------------------
+// Email Template — E10.2 (Architecture §2.29, FR189)
+// ---------------------------------------------------------------------------
+// Handlebars-based email templates with merge fields per document type.
+// System-wide configuration (no companyId). 7 seeded defaults.
+// BR-COM-010: document-to-email requires valid template with fallback.
+// ---------------------------------------------------------------------------
+
+model EmailTemplate {
+  id               String  @id @default(uuid()) @map("id")
+  code             String  @unique @map("code") @db.VarChar(100)
+  name             String  @map("name") @db.VarChar(200)
+  description      String? @map("description") @db.Text
+  documentType     String  @map("document_type") @db.VarChar(100)
+  subjectTemplate  String  @map("subject_template") @db.VarChar(500)
+  bodyHtmlTemplate String  @map("body_html_template") @db.Text
+  bodyTextTemplate String? @map("body_text_template") @db.Text
+  openingTextCode  String? @map("opening_text_code") @db.VarChar(60)
+  closingTextCode  String? @map("closing_text_code") @db.VarChar(60)
+  languageCode     String  @default("en") @map("language_code") @db.VarChar(5)
+  attachPdf        Boolean @default(true) @map("attach_pdf")
+  autoSend         Boolean @default(false) @map("auto_send")
+  isActive         Boolean @default(true) @map("is_active")
+  createdBy        String  @map("created_by")
+  updatedBy        String  @map("updated_by")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  creator       User           @relation("UserCreatedEmailTemplates", fields: [createdBy], references: [id])
+  updater       User           @relation("UserUpdatedEmailTemplates", fields: [updatedBy], references: [id])
+  emailMessages EmailMessage[]
+
+  @@index([documentType, languageCode], map: "idx_email_templates_doctype_lang")
+  @@index([isActive], map: "idx_email_templates_active")
+  @@map("email_templates")
 }

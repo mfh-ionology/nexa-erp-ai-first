@@ -97,6 +97,28 @@ export async function headObject(
 }
 
 /**
+ * Upload a Buffer directly to S3/MinIO (server-side upload).
+ * Used for system-generated files (e.g. PDF attachments) that don't go
+ * through the presigned-URL browser upload flow.
+ */
+export async function putObject(
+  bucket: string,
+  key: string,
+  body: Buffer,
+  contentType: string,
+): Promise<void> {
+  const command = new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: body,
+    ContentType: contentType,
+    ContentLength: body.length,
+  });
+
+  await getS3Client().send(command);
+}
+
+/**
  * Delete an object from S3/MinIO.
  */
 export async function deleteObject(bucket: string, key: string): Promise<void> {

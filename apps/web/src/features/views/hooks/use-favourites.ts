@@ -11,6 +11,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/query-keys';
+import { useAuthStore } from '@/stores/auth-store';
 
 import { fetchFavourites } from '../api';
 import type { FavouriteViewDto } from '../types';
@@ -22,9 +23,12 @@ export interface FavouritesReturn {
 }
 
 export function useFavourites(): FavouritesReturn {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.views.favourites(),
     queryFn: fetchFavourites,
+    enabled: isAuthenticated,
     staleTime: 60_000, // 1 min — favourites don't change often
   });
 

@@ -1,392 +1,222 @@
 import { test, expect } from '@playwright/test';
 
-const SCREENSHOTS_DIR =
-  '_bmad-output/test-artifacts/screenshots/epic-E5c/journey-6';
+const SCREENSHOTS_DIR = '../../screenshots/epic-E5c/journey-6';
 
-test.describe('Journey 6: Prompt Test Render Panel', () => {
+/**
+ * Helper: navigate within the SPA using TanStack Router.
+ * Auth tokens are in-memory only (Zustand), so page.goto() would
+ * cause a full reload and lose the authenticated session.
+ */
+async function spaNavigate(page: import('@playwright/test').Page, path: string) {
+  await page.evaluate((p) => {
+    window.history.pushState({}, '', p);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, path);
+  await page.waitForTimeout(500);
+  await page.waitForLoadState('networkidle');
+}
+
+test.describe('Journey 6: Prompt Versioning — Edit, Diff, and Restore', () => {
   test.setTimeout(120_000);
 
   test.beforeEach(async ({ page }) => {
     // Login as admin user
     await page.goto('/login');
-    await page.getByLabel('Email').fill('admin@nexa-erp.dev');
-    await page.getByLabel('Password').fill('NexaDev2026!');
-    await page.getByRole('button', { name: 'Sign In' }).click();
+    await page.waitForLoadState('networkidle');
 
-    // Wait for redirect away from login page
+    const emailInput = page.getByLabel('Email');
+    await emailInput.waitFor({ state: 'visible', timeout: 10000 });
+    await emailInput.click();
+    await emailInput.fill('');
+    await emailInput.pressSequentially('admin@nexa-erp.dev', { delay: 10 });
+
+    const passwordInput = page.getByLabel('Password');
+    await passwordInput.click();
+    await passwordInput.fill('');
+    await passwordInput.pressSequentially('NexaDev2026!', { delay: 10 });
+
+    const loginResponsePromise = page.waitForResponse(
+      (resp) => resp.url().includes('/auth/login') && resp.request().method() === 'POST',
+      { timeout: 15000 },
+    );
+
+    const signInButton = page.getByRole('button', { name: /sign in/i });
+    await signInButton.waitFor({ state: 'visible' });
+    await signInButton.click();
+
+    await loginResponsePromise;
+
     await page.waitForURL((url) => !url.pathname.includes('/login'), {
-      timeout: 15000,
+      timeout: 30000,
     });
     await page.waitForLoadState('networkidle');
   });
 
-  test('Test Prompt renders a prompt with sample variables (E5c-3 AC-5e)', async ({
-    page,
-  }) => {
-    // Capture API errors for diagnostics
-    const apiErrors: string[] = [];
-    page.on('response', (response) => {
-      if (
-        response.url().includes('/api/ai/') &&
-        response.status() >= 400
-      ) {
-        apiErrors.push(
-          `${response.status()} ${response.request().method()} ${response.url()}`,
-        );
+  test('Edit prompt, view version diff, and restore previous version', async ({ page }) => {
+    // Log API responses for debugging
+    page.on('response', async (response) => {
+      if (response.url().includes('/ai/admin/prompts')) {
+        const body = await response.text().catch(() => 'no body');
+        console.log(`[API] ${response.status()} ${response.url()} → ${body.substring(0, 500)}`);
       }
     });
 
-    // ── Step 1: Navigate to /ai/admin/prompts via sidebar ──────────────
-    const sidebarNav = page.locator('nav');
-    const promptsLink = sidebarNav.getByText('Prompt Templates').first();
-
-    if (await promptsLink.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await promptsLink.click();
-    } else {
-      const aiAdminLink = sidebarNav.getByText('AI Administration').first();
-      if (await aiAdminLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await aiAdminLink.click();
-        await page.waitForLoadState('networkidle');
-      }
-      const retryLink = sidebarNav.getByText('Prompt Templates').first();
-      if (await retryLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await retryLink.click();
-      }
-    }
-
-    await page.waitForURL('**/ai/admin/prompts', { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
-
+    // ── Step 1: Navigate to /ai/admin/prompts ────────────────────────────────
+    await spaNavigate(page, '/ai/admin/prompts');
     await expect(
-      page.getByRole('heading').filter({ hasText: /Prompt Templates/i }),
-    ).toBeVisible({ timeout: 10000 });
+      page.getByLabel('breadcrumb').getByText('Prompt Templates'),
+    ).toBeVisible({ timeout: 15000 });
+    await page.waitForTimeout(2000);
 
-    // ── Checkpoint 1: Prompt List Page Loaded ─────────────────────────
-    await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-1-prompt-list-loaded.png`,
-      fullPage: true,
-    });
+    // ── Step 2: Click on 'test-invoice-reminder' prompt row ──────────────────
+    const promptRow = page.getByRole('row').filter({ hasText: 'test-invoice-reminder' });
+    await expect(promptRow).toBeVisible({ timeout: 10000 });
+    await promptRow.click();
 
-    // Check if any prompt rows exist
-    const promptRows = page.locator('table tbody tr');
-    const rowCount = await promptRows.count();
-
-    if (rowCount === 0) {
-      // No seed data — create a prompt through the UI
-      test.info().annotations.push({
-        type: 'info',
-        description:
-          'No seeded AiPrompt records — creating one via UI to test Test Prompt panel',
-      });
-
-      await page.getByRole('button', { name: 'New' }).click();
-      await page.waitForURL('**/ai/admin/prompts/new', { timeout: 10000 });
-      await page.waitForLoadState('networkidle');
-
-      // Wait for the form to fully render
-      await expect(
-        page.getByRole('heading').filter({ hasText: /New Prompt Template/i }),
-      ).toBeVisible({ timeout: 10000 });
-
-      // Fill Name
-      const nameField = page
-        .getByPlaceholder('record-creation-invoice')
-        .or(page.getByLabel('Name'))
-        .first();
-      await expect(nameField).toBeVisible({ timeout: 5000 });
-      await nameField.fill('test-render-prompt');
-
-      // Select Category (REQUIRED) — Radix/Shadcn Select
-      const categoryTrigger = page.getByText('Select category');
-      if (await categoryTrigger.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await categoryTrigger.click();
-        const option = page.getByRole('option', { name: 'Record Creation' });
-        await expect(option).toBeVisible({ timeout: 3000 });
-        await option.click();
-        await page.waitForTimeout(500);
-      }
-
-      // Fill Description
-      const descField = page
-        .getByLabel('Description')
-        .or(page.getByPlaceholder(/description/i))
-        .first();
-      if (await descField.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await descField.fill('E2E journey 6 test prompt');
-      }
-
-      // Fill System Prompt
-      const systemPromptTextarea = page.locator(
-        'textarea[aria-label="System prompt editor"]',
-      );
-      if (
-        await systemPromptTextarea.isVisible({ timeout: 3000 }).catch(() => false)
-      ) {
-        await systemPromptTextarea.fill(
-          'You are an assistant for {{company.name}}. Today is {{current_date}}.',
-        );
-      }
-
-      // Fill User Template
-      const userTemplateTextarea = page.locator(
-        'textarea[aria-label="User template editor"]',
-      );
-      if (
-        await userTemplateTextarea.isVisible({ timeout: 2000 }).catch(() => false)
-      ) {
-        await userTemplateTextarea.fill('Help with: {{user_query}}');
-      }
-
-      // Take screenshot of filled form
-      await page.screenshot({
-        path: `${SCREENSHOTS_DIR}/debug-form-filled.png`,
-        fullPage: true,
-      });
-
-      // Click Save and wait for API response
-      const saveButton = page.getByRole('button', { name: /Save/i });
-      await expect(saveButton.first()).toBeVisible({ timeout: 5000 });
-
-      // Listen for the create API response
-      const createResponsePromise = page.waitForResponse(
-        (resp) =>
-          resp.url().includes('/ai/admin/prompts') &&
-          resp.request().method() === 'POST',
-        { timeout: 15000 },
-      ).catch(() => null);
-
-      await saveButton.first().click();
-
-      const createResponse = await createResponsePromise;
-
-      if (createResponse) {
-        const status = createResponse.status();
-        if (status >= 400) {
-          let body = '';
-          try {
-            body = await createResponse.text();
-          } catch { /* ignore */ }
-
-          await page.screenshot({
-            path: `${SCREENSHOTS_DIR}/debug-create-api-error.png`,
-            fullPage: true,
-          });
-
-          test.info().annotations.push({
-            type: 'issue',
-            description: `Create prompt API returned ${status}: ${body.slice(0, 200)}`,
-          });
-          expect(
-            status,
-            `Create prompt API returned error ${status}: ${body.slice(0, 200)}`,
-          ).toBeLessThan(400);
-        }
-      } else {
-        // No API response captured — endpoint might not exist
-        await page.screenshot({
-          path: `${SCREENSHOTS_DIR}/debug-no-api-response.png`,
-          fullPage: true,
-        });
-        test.info().annotations.push({
-          type: 'issue',
-          description: 'No POST response from /ai/admin/prompts — endpoint may not be registered',
-        });
-      }
-
-      // Wait for redirect to edit page
-      try {
-        await page.waitForURL(
-          (url) => /\/ai\/admin\/prompts\/[0-9a-f-]{36}/.test(url.pathname),
-          { timeout: 10000 },
-        );
-      } catch {
-        await page.screenshot({
-          path: `${SCREENSHOTS_DIR}/debug-after-save.png`,
-          fullPage: true,
-        });
-
-        // Navigate back to list to check
-        const navLink = sidebarNav.getByText('Prompt Templates').first();
-        if (await navLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-          await navLink.click();
-          await page.waitForURL('**/ai/admin/prompts', { timeout: 10000 });
-          await page.waitForLoadState('networkidle');
-
-          const newRowCount = await promptRows.count();
-          if (newRowCount > 0) {
-            await promptRows.first().click();
-            await page.waitForTimeout(2000);
-          } else {
-            test.info().annotations.push({
-              type: 'missing-feature',
-              description:
-                `No seeded prompts and create via UI failed. API errors: [${apiErrors.join(', ')}]. Prereq: 6 AiPrompt records from E5.`,
-            });
-            expect(
-              newRowCount,
-              `No prompts available. Create failed. API errors: [${apiErrors.join(', ')}]`,
-            ).toBeGreaterThan(0);
-          }
-        }
-      }
-    } else {
-      // Click first prompt row to open editor
-      await promptRows.first().click();
-      await page.waitForTimeout(2000);
-    }
-
-    // Now on editor page
+    // Wait for navigation to the prompt editor page
+    await page.waitForURL((url) => {
+      const path = url.pathname;
+      return path.includes('/ai/admin/prompts/') && !path.endsWith('/prompts') && !path.endsWith('/new');
+    }, { timeout: 15000 });
     await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000);
 
-    // Scroll to top in case we're at the bottom
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await page.waitForTimeout(500);
+    // Verify editor loaded with existing data
+    await expect(page.getByText('test-invoice-reminder')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Version History')).toBeVisible();
+    await expect(page.getByText('v1')).toBeVisible();
 
-    // Verify System Prompt section (need to scroll down on editor)
-    const systemPromptLabel = page.getByText('System Prompt').first();
-    await expect(systemPromptLabel).toBeVisible({ timeout: 10000 });
-
-    // ── Checkpoint 2: Prompt Editor Loaded ────────────────────────────
+    // ── Checkpoint 1: Prompt Editor Loaded ────────────────────────────────────
     await page.screenshot({
       path: `${SCREENSHOTS_DIR}/step-2-prompt-editor-loaded.png`,
       fullPage: true,
     });
 
-    // ── Step 3: Click Test Prompt button ──────────────────────────────
-    const testPromptButton = page.getByRole('button', {
-      name: /Test Prompt/i,
-    });
+    // ── Step 3: Edit the system prompt text ───────────────────────────────────
+    const systemPromptTextarea = page.locator('textarea[aria-label="System prompt editor"]');
+    await expect(systemPromptTextarea).toBeVisible();
 
-    const onEditPage = /\/ai\/admin\/prompts\/[0-9a-f-]{36}/.test(page.url());
+    // Clear and fill with updated text
+    await systemPromptTextarea.fill(
+      'You are a senior accounts receivable specialist for {{company.name}}. Today is {{today}}. Your role is to generate professional but firm reminder emails for overdue invoices. Always include the exact amount owed.',
+    );
 
-    if (!onEditPage) {
-      test.info().annotations.push({
-        type: 'info',
-        description: 'On /new — saving to switch to edit mode',
-      });
+    // Wait for form to register as dirty
+    await page.waitForTimeout(500);
 
-      const saveBtn = page.getByRole('button', { name: /Save/i });
-      if (await saveBtn.first().isVisible({ timeout: 2000 }).catch(() => false)) {
-        await saveBtn.first().click();
-        try {
-          await page.waitForURL(
-            (url) => /\/ai\/admin\/prompts\/[0-9a-f-]{36}/.test(url.pathname),
-            { timeout: 10000 },
-          );
-          await page.waitForLoadState('networkidle');
-        } catch {
-          await page.screenshot({
-            path: `${SCREENSHOTS_DIR}/debug-save-from-new.png`,
-            fullPage: true,
-          });
-          test.info().annotations.push({
-            type: 'missing-feature',
-            description: 'Could not save prompt to edit mode — Test Prompt unavailable',
-          });
-          expect(false, 'Cannot switch to edit mode for Test Prompt').toBe(true);
-        }
-      }
-    }
+    // Verify Save button is enabled after editing
+    await expect(page.getByRole('button', { name: /save/i })).toBeEnabled();
 
-    await expect(testPromptButton.first()).toBeVisible({ timeout: 5000 });
-    await testPromptButton.first().click();
+    // ── Step 4: Click Save — change reason modal should appear ───────────────
+    await page.getByRole('button', { name: /save/i }).click();
 
-    // Wait for the test panel sheet
-    const testPanel = page
-      .locator('[role="dialog"]')
-      .or(page.locator('[data-testid="test-panel"]'));
-    await expect(testPanel.first()).toBeVisible({ timeout: 5000 });
+    // Wait for the change reason modal to appear
+    await expect(page.getByText('Save Prompt Changes')).toBeVisible({ timeout: 10000 });
 
-    await page.waitForTimeout(1000);
-
-    // ── Checkpoint 3: Test Panel Open with Variable Fields ────────────
+    // ── Checkpoint 2: Change Reason Modal ─────────────────────────────────────
     await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-3-test-panel-open.png`,
+      path: `${SCREENSHOTS_DIR}/step-4-change-reason-modal.png`,
       fullPage: true,
     });
 
-    const variableInputs = testPanel.first().locator('input');
-    const variableCount = await variableInputs.count();
+    // Verify modal structure
+    await expect(page.getByText('Describe what changed in this version')).toBeVisible();
 
-    if (variableCount === 0) {
-      test.info().annotations.push({
-        type: 'info',
-        description: 'Test panel has no variable inputs',
-      });
-    }
+    // ── Step 5: Fill change reason ───────────────────────────────────────────
+    const changeReasonTextarea = page.locator('div[role="dialog"] textarea');
+    await expect(changeReasonTextarea).toBeVisible();
+    await changeReasonTextarea.fill('Added seniority and instruction to include exact amount owed');
 
-    // ── Step 4: Click Render button ──────────────────────────────────
-    const renderButton = testPanel
-      .first()
-      .getByRole('button', { name: /Render/i })
-      .or(testPanel.first().locator('button:has-text("Render")'));
+    // ── Step 6: Click Save in change reason modal ────────────────────────────
+    // Wait for the PATCH response
+    const updateResponsePromise = page.waitForResponse(
+      (resp) =>
+        resp.url().includes('/ai/admin/prompts/') &&
+        resp.request().method() === 'PATCH',
+      { timeout: 15000 },
+    );
 
-    await expect(renderButton.first()).toBeVisible({ timeout: 5000 });
-    await renderButton.first().click();
+    // Click the Save button inside the modal dialog
+    const modalSaveButton = page.locator('div[role="dialog"]').getByRole('button', { name: /save/i });
+    await expect(modalSaveButton).toBeEnabled();
+    await modalSaveButton.click();
 
-    const renderedOutput = testPanel
-      .first()
-      .getByText(/Rendered System Prompt|Rendered User Template/i);
+    // Wait for the API response
+    const updateResponse = await updateResponsePromise;
+    expect(updateResponse.status()).toBeLessThan(300);
 
-    let renderSucceeded = false;
+    // Wait for UI to update
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000);
 
-    try {
-      await expect(renderedOutput.first()).toBeVisible({ timeout: 10000 });
-      renderSucceeded = true;
-    } catch {
-      const errorAlert = testPanel.first().locator('[role="alert"]');
-      const hasError = await errorAlert
-        .first()
-        .isVisible({ timeout: 2000 })
-        .catch(() => false);
+    // Verify version 2 is now active in the sidebar
+    await expect(page.getByText('v2')).toBeVisible({ timeout: 10000 });
 
-      if (hasError) {
-        await page.screenshot({
-          path: `${SCREENSHOTS_DIR}/step-4-render-error.png`,
-          fullPage: true,
-        });
-        test.info().annotations.push({
-          type: 'issue',
-          description: 'Test Prompt render returned an error',
-        });
-      }
-    }
-
-    // ── Checkpoint 4: Rendered Output ────────────────────────────────
+    // ── Checkpoint 3: Version 2 Created ───────────────────────────────────────
     await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-4-rendered-output.png`,
+      path: `${SCREENSHOTS_DIR}/step-6-version-2-created.png`,
       fullPage: true,
     });
 
-    if (renderSucceeded) {
-      await expect(
-        testPanel.first().getByText('Rendered System Prompt'),
-      ).toBeVisible();
+    // ── Step 7: Click on v1 in version sidebar to see diff ───────────────────
+    // The version sidebar lists versions. Click on v1 (the non-active one)
+    const versionList = page.locator('[role="list"][aria-label="Version history"]');
+    await expect(versionList).toBeVisible({ timeout: 10000 });
 
-      const resolvedVars = testPanel.first().getByText(/Resolved Variables/i);
-      if (await resolvedVars.isVisible({ timeout: 2000 }).catch(() => false)) {
-        const count = await testPanel.first().locator('table tbody tr').count();
-        expect(count).toBeGreaterThanOrEqual(0);
-      }
+    // Click on v1 item in the version list
+    const v1Item = versionList.locator('[role="listitem"]').filter({ hasText: 'v1' });
+    await expect(v1Item).toBeVisible();
+    await v1Item.click();
 
-      const unresolved = testPanel.first().getByText(/unresolved/i);
-      if (await unresolved.isVisible({ timeout: 2000 }).catch(() => false)) {
-        test.info().annotations.push({
-          type: 'info',
-          description: 'Some variables unresolved — amber warning visible',
-        });
-      }
-    } else {
-      test.info().annotations.push({
-        type: 'missing-feature',
-        description:
-          'Rendered output not displayed — POST /ai/admin/prompts/{id}/test may not be implemented',
-      });
+    // Wait for the version detail to load and diff to render
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000);
 
-      expect(
-        renderSucceeded,
-        'Expected rendered output after clicking Render',
-      ).toBe(true);
-    }
+    // Verify diff view is shown
+    await expect(page.getByText(/changes.*v1.*vs.*current/i)).toBeVisible({ timeout: 10000 });
+
+    // ── Checkpoint 4: Diff View Shown ─────────────────────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-7-diff-view-shown.png`,
+      fullPage: true,
+    });
+
+    // ── Step 8: Verify 'Restore This Version' button is visible ──────────────
+    const restoreButton = page.getByRole('button', { name: /restore this version/i });
+    await expect(restoreButton).toBeVisible({ timeout: 10000 });
+
+    // ── Step 9: Click 'Restore This Version' ─────────────────────────────────
+    // Wait for the restore POST response
+    const restoreResponsePromise = page.waitForResponse(
+      (resp) =>
+        resp.url().includes('/versions/') &&
+        resp.url().includes('/restore') &&
+        resp.request().method() === 'POST',
+      { timeout: 15000 },
+    );
+
+    await restoreButton.click();
+
+    // Wait for the API response
+    const restoreResponse = await restoreResponsePromise;
+    expect(restoreResponse.status()).toBeLessThan(300);
+
+    // Wait for UI to update
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000);
+
+    // Verify success toast
+    await expect(
+      page.getByText(/version restored/i).or(page.getByText(/now active.*v3/i)),
+    ).toBeVisible({ timeout: 10000 });
+
+    // Verify v3 is now shown in the version sidebar
+    await expect(page.getByText('v3')).toBeVisible({ timeout: 10000 });
+
+    // ── Checkpoint 5: Version 3 Restored ──────────────────────────────────────
+    await page.screenshot({
+      path: `${SCREENSHOTS_DIR}/step-9-version-3-restored.png`,
+      fullPage: true,
+    });
   });
 });

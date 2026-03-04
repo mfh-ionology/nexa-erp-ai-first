@@ -1,6 +1,6 @@
 # Epic E5c - Post-Epic Test Summary
 
-**Date**: 2026-03-03 22:20:47
+**Date**: 2026-03-04 04:23:41
 
 ## Overall Status
 
@@ -9,7 +9,7 @@
 | Build Verification | success |
 | DB Schema Alignment | not checked |
 | Backend API Tests | 22/91 passed |
-| Frontend E2E Tests | **Total**: 16 | **Passed**: 4 | **Failed**: 12 |
+| Frontend E2E Tests | **Total**: 24 | **Passed**: 16 | **Failed**: 8 |
 | Missing Features | 14 found |
 
 ## Backend API Tests

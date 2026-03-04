@@ -168,5 +168,46 @@ export const queryKeys = {
       params
         ? ([...queryKeys.aiAdmin.all, 'variables', params] as const)
         : ([...queryKeys.aiAdmin.all, 'variables'] as const),
+    // Knowledge articles
+    knowledgeArticles: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'knowledge-articles', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'knowledge-articles'] as const),
+    knowledgeArticlesInfinite: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'knowledge-articles', 'infinite', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'knowledge-articles', 'infinite'] as const),
+    knowledgeArticle: (id: string) => [...queryKeys.aiAdmin.all, 'knowledge-articles', id] as const,
+    knowledgeArticlesSuggested: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'knowledge-articles', 'suggested', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'knowledge-articles', 'suggested'] as const),
+    // Training examples
+    trainingExamples: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'training-examples', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'training-examples'] as const),
+    trainingExamplesInfinite: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'training-examples', 'infinite', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'training-examples', 'infinite'] as const),
+    trainingExample: (id: string) => [...queryKeys.aiAdmin.all, 'training-examples', id] as const,
+    // Corrections
+    corrections: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'corrections', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'corrections'] as const),
+    correctionsInfinite: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'corrections', 'infinite', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'corrections', 'infinite'] as const),
+    correctionStats: () => [...queryKeys.aiAdmin.all, 'corrections', 'stats'] as const,
+  },
+  email: {
+    all: ['email'] as const,
+    preview: (documentType: string, recordId: string, templateId?: string) =>
+      [...queryKeys.email.all, 'preview', documentType, recordId, templateId] as const,
+    templates: (documentType: string) =>
+      [...queryKeys.email.all, 'templates', documentType] as const,
   },
 } as const;
