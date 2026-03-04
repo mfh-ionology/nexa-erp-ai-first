@@ -349,15 +349,17 @@ export function useViewState(viewKey: string): ViewState {
       setActiveFilters(conditions);
       setActiveSortRules(sortRules);
       setFilterLogicState(logic);
+      if (activeViewId) setIsDirty(true);
     },
-    [],
+    [activeViewId],
   );
 
   const clearFilters = useCallback(() => {
     setActiveFilters([]);
     setActiveSortRules([]);
     setFilterLogicState('AND');
-  }, []);
+    if (activeViewId) setIsDirty(true);
+  }, [activeViewId]);
 
   // Count active conditions that have a meaningful value or are no-value operators
   const activeFilterCount = useMemo(
