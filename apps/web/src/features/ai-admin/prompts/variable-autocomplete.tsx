@@ -109,7 +109,8 @@ export const VariableAutocomplete = forwardRef<
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const { data: variables = [] } = useAiVariables();
+  const { data: rawVariables } = useAiVariables();
+  const variables = Array.isArray(rawVariables) ? rawVariables : [];
 
   // Filter + group variables
   const filteredVariables = useMemo(() => {

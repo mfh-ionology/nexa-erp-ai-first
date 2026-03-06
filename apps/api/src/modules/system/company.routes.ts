@@ -1,8 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma, resolveUserRole, UserRole } from '@nexa/db';
 
-import { companySwitchParamsSchema, companySwitchResponseSchema } from './company.schema.js';
-import type { CompanySwitchParams, CompanySwitchResponse } from './company.schema.js';
+import {
+  companySwitchParamsSchema,
+  companySwitchResponseSchema,
+  companyListResponseSchema,
+} from './company.schema.js';
+import type { CompanySwitchParams, CompanySwitchResponse, CompanyItem } from './company.schema.js';
 import { tServer } from '@nexa/i18n/server';
 import { AuthError } from '../../core/errors/index.js';
 import { sendSuccess } from '../../core/utils/response.js';
@@ -10,11 +14,74 @@ import { successEnvelope } from '../../core/schemas/envelope.js';
 import { createRbacGuard } from '../../core/rbac/index.js';
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Convert a company name to a URL-friendly slug (kebab-case). */
+function toSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+// ---------------------------------------------------------------------------
 // System company routes plugin
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/require-await -- Fastify plugin signature requires async
 async function companyRoutes(fastify: FastifyInstance): Promise<void> {
+  // -------------------------------------------------------------------------
+  // GET /system/companies — List companies accessible to the current user
+  // -------------------------------------------------------------------------
+  fastify.get(
+    '/companies',
+    {
+      schema: {
+        response: { 200: successEnvelope(companyListResponseSchema) },
+      },
+      preHandler: createRbacGuard({ minimumRole: UserRole.VIEWER }),
+    },
+    async (request, reply) => {
+      // Find all company roles for the current user
+      const userRoles = await prisma.userCompanyRole.findMany({
+        where: { userId: request.userId },
+        select: { companyId: true },
+      });
+
+      // A null companyId means a global role — user has access to all companies
+      const hasGlobalRole = userRoles.some((r) => r.companyId === null);
+
+      let companies;
+      if (hasGlobalRole) {
+        companies = await prisma.companyProfile.findMany({
+          where: { isActive: true },
+          select: { id: true, name: true, baseCurrencyCode: true, isDefault: true },
+          orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
+        });
+      } else {
+        const companyIds = userRoles
+          .map((r) => r.companyId)
+          .filter((id): id is string => id !== null);
+
+        companies = await prisma.companyProfile.findMany({
+          where: { id: { in: companyIds }, isActive: true },
+          select: { id: true, name: true, baseCurrencyCode: true, isDefault: true },
+          orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
+        });
+      }
+
+      const result: CompanyItem[] = companies.map((c) => ({
+        id: c.id,
+        name: c.name,
+        slug: toSlug(c.name),
+        baseCurrencyCode: c.baseCurrencyCode,
+        isDefault: c.isDefault,
+      }));
+
+      return sendSuccess(reply, result);
+    },
+  );
+
   // -------------------------------------------------------------------------
   // POST /system/companies/:id/switch
   // -------------------------------------------------------------------------
@@ -39,7 +106,12 @@ async function companyRoutes(fastify: FastifyInstance): Promise<void> {
       });
 
       if (!company || !company.isActive) {
-        throw new AuthError('COMPANY_ACCESS_DENIED', tServer('errors:COMPANY_ACCESS_DENIED'), 403, 'errors:COMPANY_ACCESS_DENIED');
+        throw new AuthError(
+          'COMPANY_ACCESS_DENIED',
+          tServer('errors:COMPANY_ACCESS_DENIED'),
+          403,
+          'errors:COMPANY_ACCESS_DENIED',
+        );
       }
 
       // 7.4 — Verify user has access to target company
@@ -47,7 +119,12 @@ async function companyRoutes(fastify: FastifyInstance): Promise<void> {
 
       // 7.5 — If no access: return 403
       if (!role) {
-        throw new AuthError('COMPANY_ACCESS_DENIED', tServer('errors:COMPANY_ACCESS_DENIED'), 403, 'errors:COMPANY_ACCESS_DENIED');
+        throw new AuthError(
+          'COMPANY_ACCESS_DENIED',
+          tServer('errors:COMPANY_ACCESS_DENIED'),
+          403,
+          'errors:COMPANY_ACCESS_DENIED',
+        );
       }
 
       // 7.6 — Update User.companyId in database to the new company ID

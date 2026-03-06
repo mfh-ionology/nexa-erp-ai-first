@@ -15,6 +15,7 @@ import { deadLetterRoutesPlugin } from './dead-letter.routes.js';
 // Registers all system sub-plugins under the /system prefix.
 //
 // Route layout:
+//   GET  /system/companies              (list accessible companies)
 //   POST /system/companies/:id/switch   (company switch)
 //   GET|POST|PATCH /system/company-profile
 //   GET|POST|PATCH|DELETE /system/users[/:id[/role|/modules]]
