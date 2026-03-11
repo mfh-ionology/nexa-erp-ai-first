@@ -72,7 +72,7 @@ import { TrainingExampleService } from './training-example.service.js';
 import { TrainingExampleInjectionService } from './training-example-injection.service.js';
 import { correctionRoutesPlugin } from './correction.routes.js';
 import { trainingExampleRoutesPlugin } from './training-example.routes.js';
-import { variablesRoutesPlugin } from './variables.routes.js';
+// variablesRoutesPlugin removed — GET /variables already in automationRoutesPlugin
 import { registerCorrectionEvents } from './correction.events.js';
 import { registerViewsQueryHandlers } from './tools/views-query-handlers.js';
 import { PatternDetectionService } from './pattern-detection.service.js';
@@ -258,7 +258,7 @@ async function registerAiRoutes(fastify: FastifyInstance): Promise<void> {
   await fastify.register(correctionRoutesPlugin);
   await fastify.register(trainingExampleRoutesPlugin);
   await fastify.register(automationRoutesPlugin);
-  await fastify.register(variablesRoutesPlugin);
+  // variablesRoutesPlugin removed — GET /variables is already in automationRoutesPlugin
   await fastify.register(adminRoutesPlugin, { prefix: '/admin' });
 }
 

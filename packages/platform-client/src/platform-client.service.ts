@@ -7,8 +7,11 @@ import type {
   AiQuotaCheck,
   AiUsageRecord,
   EntitlementResult,
+  KnowledgeResponseInput,
   ModuleAccess,
   PlatformClientConfig,
+  SuggestedKnowledgeArticle,
+  SuggestedKnowledgeResult,
   TenantEntitlements,
   TenantStatusResponse,
   UserQuota,
@@ -136,10 +139,7 @@ export class PlatformClientService implements PlatformClient {
 
   async checkUserQuota(tenantId: string): Promise<UserQuota> {
     return this.circuitBreaker.execute(
-      async () => this.fetchJson<UserQuota>(
-        'GET',
-        `/platform/tenants/${tenantId}/users/quota`,
-      ),
+      async () => this.fetchJson<UserQuota>('GET', `/platform/tenants/${tenantId}/users/quota`),
       // Fail-open default
       () => ({ currentCount: -1, maxUsers: -1, canAddUser: true }),
     );
@@ -147,10 +147,8 @@ export class PlatformClientService implements PlatformClient {
 
   async getTenantStatus(tenantId: string): Promise<TenantStatusResponse> {
     return this.circuitBreaker.execute(
-      async () => this.fetchJson<TenantStatusResponse>(
-        'GET',
-        `/platform/tenants/${tenantId}/status`,
-      ),
+      async () =>
+        this.fetchJson<TenantStatusResponse>('GET', `/platform/tenants/${tenantId}/status`),
       // Fail-open default (BR-PLT-020: ERP degrades gracefully if Platform unreachable)
       () => ({
         status: 'ACTIVE' as const,
@@ -195,6 +193,80 @@ export class PlatformClientService implements PlatformClient {
     });
   }
 
+  // ─── Knowledge Distribution (always live, no cache) ────────────────
+
+  async getSuggestedKnowledge(
+    tenantId: string,
+    opts?: { cursor?: string; limit?: number },
+  ): Promise<SuggestedKnowledgeResult> {
+    const params = new URLSearchParams();
+    if (opts?.cursor) params.set('cursor', opts.cursor);
+    if (opts?.limit != null) params.set('limit', String(opts.limit));
+    const qs = params.toString();
+    const path = `/platform/tenants/${tenantId}/knowledge/suggested${qs ? `?${qs}` : ''}`;
+
+    return this.circuitBreaker.execute<SuggestedKnowledgeResult>(
+      async () => {
+        // Use fetchJsonWithMeta to get both the article array (data) and pagination (meta)
+        const { data, meta } = await this.fetchJsonWithMeta<SuggestedKnowledgeArticle[]>(
+          'GET',
+          path,
+        );
+        return {
+          data: data ?? [],
+          nextCursor: (meta?.cursor as string) ?? null,
+          hasMore: (meta?.hasMore as boolean) ?? false,
+        };
+      },
+      // Fail-open: return empty suggestions when platform is unreachable
+      () => ({ data: [], nextCursor: null, hasMore: false }),
+    );
+  }
+
+  async getPlatformArticle(
+    tenantId: string,
+    articleId: string,
+  ): Promise<SuggestedKnowledgeArticle | null> {
+    try {
+      return await this.circuitBreaker.execute<SuggestedKnowledgeArticle | null>(
+        async () =>
+          this.fetchJson<SuggestedKnowledgeArticle>(
+            'GET',
+            `/platform/tenants/${tenantId}/knowledge/${articleId}`,
+          ),
+        // Fail-open: return null when platform is unreachable
+        () => null,
+      );
+    } catch (err) {
+      // 404 means article not found/not eligible — return null, don't throw
+      if (
+        err instanceof Error &&
+        'statusCode' in err &&
+        (err as { statusCode: number }).statusCode === 404
+      ) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  async respondToKnowledge(
+    tenantId: string,
+    articleId: string,
+    response: KnowledgeResponseInput,
+  ): Promise<void> {
+    await this.circuitBreaker.execute(
+      async () =>
+        this.fetchJson<void>(
+          'POST',
+          `/platform/tenants/${tenantId}/knowledge/${articleId}/respond`,
+          response,
+        ),
+      // No fail-open fallback for writes — let it throw so the caller knows the response wasn't recorded
+      undefined,
+    );
+  }
+
   // ─── Cache management ──────────────────────────────────────────────
 
   invalidateCache(tenantId: string): void {
@@ -205,15 +277,18 @@ export class PlatformClientService implements PlatformClient {
     // unreachable when getEntitlements re-fetches, the stale data is better than
     // fail-open defaults (which could e.g. return status=ACTIVE for a suspended tenant).
     // The stale cache is replaced with fresh data on the next successful fetch.
-    const invalidationPromise = this.cache.delete(tenantId).then(() => {
-      this.pendingInvalidations.delete(tenantId);
-    }).catch((err) => {
-      this.pendingInvalidations.delete(tenantId);
-      this.logger?.error(
-        { tenantId, error: (err as Error).message },
-        'PlatformClient: failed to invalidate cache',
-      );
-    });
+    const invalidationPromise = this.cache
+      .delete(tenantId)
+      .then(() => {
+        this.pendingInvalidations.delete(tenantId);
+      })
+      .catch((err) => {
+        this.pendingInvalidations.delete(tenantId);
+        this.logger?.error(
+          { tenantId, error: (err as Error).message },
+          'PlatformClient: failed to invalidate cache',
+        );
+      });
     this.pendingInvalidationPromises.push(invalidationPromise);
   }
 
@@ -239,20 +314,18 @@ export class PlatformClientService implements PlatformClient {
   // ─── Internal helpers ──────────────────────────────────────────────
 
   private async fetchEntitlements(tenantId: string): Promise<TenantEntitlements> {
-    return this.fetchJson<TenantEntitlements>(
-      'GET',
-      `/platform/tenants/${tenantId}/entitlements`,
-    );
+    return this.fetchJson<TenantEntitlements>('GET', `/platform/tenants/${tenantId}/entitlements`);
   }
 
   /**
-   * Generic HTTP fetch helper that handles:
-   * - Authorization header with service token
-   * - AbortSignal timeout (5s)
-   * - Platform API response envelope unwrapping ({ data: ... })
-   * - 4xx vs 5xx error classification
+   * Shared HTTP fetch helper that handles auth, timeout, error classification,
+   * and response envelope parsing. Returns the full envelope { data, meta }.
    */
-  private async fetchJson<T>(method: string, path: string, body?: unknown): Promise<T> {
+  private async fetchRawEnvelope<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+  ): Promise<{ data: T; meta: Record<string, unknown> | null }> {
     const url = `${this.platformApiUrl}${path}`;
 
     this.logger?.debug({ method, url }, 'PlatformClient: HTTP request');
@@ -283,23 +356,42 @@ export class PlatformClientService implements PlatformClient {
     // Handle 204 No Content (common for fire-and-forget endpoints like recordAiUsage)
     if (response.status === 204) {
       this.logger?.debug({ method, url }, 'PlatformClient: HTTP response 204 No Content');
-      return undefined as T;
+      return { data: undefined as T, meta: null };
     }
 
     // Read body as text first to safely handle empty responses
     const text = await response.text();
     if (!text) {
       this.logger?.debug({ method, url }, 'PlatformClient: HTTP response OK (empty body)');
-      return undefined as T;
+      return { data: undefined as T, meta: null };
     }
 
-    const json = JSON.parse(text) as { data?: T } & T;
-    // Unwrap Platform API envelope: { data: ... }
-    const data: T = json.data ?? json;
+    const json = JSON.parse(text) as { data?: T; meta?: Record<string, unknown> };
+    const data: T = (json.data ?? json) as T;
 
     this.logger?.debug({ method, url }, 'PlatformClient: HTTP response OK');
 
+    return { data, meta: json.meta ?? null };
+  }
+
+  /**
+   * Generic HTTP fetch helper — unwraps the envelope and returns only data.
+   */
+  private async fetchJson<T>(method: string, path: string, body?: unknown): Promise<T> {
+    const { data } = await this.fetchRawEnvelope<T>(method, path, body);
     return data;
+  }
+
+  /**
+   * Like fetchJson but also returns the envelope `meta` field for endpoints
+   * that include pagination info in the envelope metadata.
+   */
+  private async fetchJsonWithMeta<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+  ): Promise<{ data: T; meta: Record<string, unknown> | null }> {
+    return this.fetchRawEnvelope<T>(method, path, body);
   }
 
   /** Serve stale cached entitlements with degraded flag when circuit is OPEN. */

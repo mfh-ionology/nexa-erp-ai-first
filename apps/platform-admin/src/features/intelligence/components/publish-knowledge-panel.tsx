@@ -115,6 +115,40 @@ function MultiSelectChips({
 // Markdown Preview (simple)
 // ---------------------------------------------------------------------------
 
+/** Parse inline markdown markers (bold, inline code) into React nodes. */
+function parseInlineMarkdown(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  // Combined regex: inline code (`...`) or bold (**...**) — code takes priority
+  const inlineRegex = /`([^`]+)`|\*\*(.+?)\*\*/g;
+  let lastIndex = 0;
+  let partIdx = 0;
+  let match: RegExpExecArray | null;
+  while ((match = inlineRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    if (match[1] !== undefined) {
+      // Inline code
+      parts.push(
+        <code
+          key={`c${partIdx++}`}
+          className="rounded bg-muted px-1 py-0.5 text-xs font-mono text-foreground"
+        >
+          {match[1]}
+        </code>,
+      );
+    } else if (match[2] !== undefined) {
+      // Bold
+      parts.push(<strong key={`b${partIdx++}`}>{match[2]}</strong>);
+    }
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+  return parts.length > 0 ? parts : [text];
+}
+
 function MarkdownPreview({ content }: { content: string }) {
   if (!content.trim()) {
     return (
@@ -124,53 +158,113 @@ function MarkdownPreview({ content }: { content: string }) {
     );
   }
 
-  // Simple markdown rendering: headings, bold, code, paragraphs
+  // Simple markdown rendering: headings, lists, code blocks, bold, inline code
   const lines = content.split('\n');
-  const rendered = lines.map((line, i) => {
-    // Headings
-    if (line.startsWith('### '))
-      return (
-        <h4 key={i} className="mt-3 mb-1 text-sm font-semibold text-foreground">
-          {line.slice(4)}
-        </h4>
-      );
-    if (line.startsWith('## '))
-      return (
-        <h3 key={i} className="mt-4 mb-1.5 text-base font-semibold text-foreground">
-          {line.slice(3)}
-        </h3>
-      );
-    if (line.startsWith('# '))
-      return (
-        <h2 key={i} className="mt-4 mb-2 text-lg font-bold text-foreground">
-          {line.slice(2)}
-        </h2>
-      );
-    // Empty line
-    if (line.trim() === '') return <br key={i} />;
-    // Bold markers — parse safely with React elements (no dangerouslySetInnerHTML)
-    const parts: React.ReactNode[] = [];
-    let remaining = line;
-    let partIdx = 0;
-    const boldRegex = /\*\*(.+?)\*\*/g;
-    let match: RegExpExecArray | null;
-    let lastIndex = 0;
-    while ((match = boldRegex.exec(remaining)) !== null) {
-      if (match.index > lastIndex) {
-        parts.push(remaining.slice(lastIndex, match.index));
+  const rendered: React.ReactNode[] = [];
+  let inCodeBlock = false;
+  let codeBlockLines: string[] = [];
+  let codeBlockStart = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+
+    // Code block fences
+    if (line.startsWith('```')) {
+      if (!inCodeBlock) {
+        inCodeBlock = true;
+        codeBlockLines = [];
+        codeBlockStart = i;
+      } else {
+        rendered.push(
+          <pre
+            key={`code-${codeBlockStart}`}
+            className="my-2 overflow-x-auto rounded bg-muted p-3 text-xs font-mono text-foreground"
+          >
+            {codeBlockLines.join('\n')}
+          </pre>,
+        );
+        inCodeBlock = false;
       }
-      parts.push(<strong key={`b${partIdx++}`}>{match[1]}</strong>);
-      lastIndex = match.index + match[0].length;
+      continue;
     }
-    if (lastIndex < remaining.length) {
-      parts.push(remaining.slice(lastIndex));
+    if (inCodeBlock) {
+      codeBlockLines.push(line);
+      continue;
     }
-    return (
+
+    // Headings
+    if (line.startsWith('### ')) {
+      rendered.push(
+        <h4 key={i} className="mt-3 mb-1 text-sm font-semibold text-foreground">
+          {parseInlineMarkdown(line.slice(4))}
+        </h4>,
+      );
+      continue;
+    }
+    if (line.startsWith('## ')) {
+      rendered.push(
+        <h3 key={i} className="mt-4 mb-1.5 text-base font-semibold text-foreground">
+          {parseInlineMarkdown(line.slice(3))}
+        </h3>,
+      );
+      continue;
+    }
+    if (line.startsWith('# ')) {
+      rendered.push(
+        <h2 key={i} className="mt-4 mb-2 text-lg font-bold text-foreground">
+          {parseInlineMarkdown(line.slice(2))}
+        </h2>,
+      );
+      continue;
+    }
+
+    // Unordered list items (- or *)
+    const ulMatch = line.match(/^(\s*)[-*]\s+(.+)/);
+    if (ulMatch) {
+      rendered.push(
+        <li key={i} className="ml-5 list-disc text-sm text-foreground leading-relaxed">
+          {parseInlineMarkdown(ulMatch[2]!)}
+        </li>,
+      );
+      continue;
+    }
+
+    // Ordered list items (1. 2. etc.)
+    const olMatch = line.match(/^(\s*)\d+\.\s+(.+)/);
+    if (olMatch) {
+      rendered.push(
+        <li key={i} className="ml-5 list-decimal text-sm text-foreground leading-relaxed">
+          {parseInlineMarkdown(olMatch[2]!)}
+        </li>,
+      );
+      continue;
+    }
+
+    // Empty line
+    if (line.trim() === '') {
+      rendered.push(<br key={i} />);
+      continue;
+    }
+
+    // Paragraph with inline formatting
+    rendered.push(
       <p key={i} className="text-sm text-foreground leading-relaxed">
-        {parts.length > 0 ? parts : remaining}
-      </p>
+        {parseInlineMarkdown(line)}
+      </p>,
     );
-  });
+  }
+
+  // Handle unterminated code block
+  if (inCodeBlock && codeBlockLines.length > 0) {
+    rendered.push(
+      <pre
+        key={`code-${codeBlockStart}`}
+        className="my-2 overflow-x-auto rounded bg-muted p-3 text-xs font-mono text-foreground"
+      >
+        {codeBlockLines.join('\n')}
+      </pre>,
+    );
+  }
 
   return <div className="space-y-0.5">{rendered}</div>;
 }
@@ -317,7 +411,7 @@ export function PublishKnowledgePanel({ isOpen, onClose, prefill }: PublishKnowl
   );
 
   // ---- Save as Draft ----
-  const handleSaveAsDraft = useCallback(async () => {
+  const handleSaveAsDraft = useCallback(() => {
     if (!validate()) return;
 
     const body = {
@@ -356,7 +450,7 @@ export function PublishKnowledgePanel({ isOpen, onClose, prefill }: PublishKnowl
   ]);
 
   // ---- Publish (create + publish in sequence) ----
-  const handlePublish = useCallback(async () => {
+  const handlePublish = useCallback(() => {
     if (!validate()) return;
 
     const body = {
@@ -597,7 +691,7 @@ export function PublishKnowledgePanel({ isOpen, onClose, prefill }: PublishKnowl
         <div className="flex items-center justify-end gap-3 border-t border-border px-5 py-4">
           <button
             type="button"
-            onClick={() => void handleSaveAsDraft()}
+            onClick={handleSaveAsDraft}
             disabled={isBusy}
             className={cn(
               'flex items-center gap-1.5 rounded-[var(--radius-button)] border border-border px-4 py-2 text-sm font-medium',
@@ -615,7 +709,7 @@ export function PublishKnowledgePanel({ isOpen, onClose, prefill }: PublishKnowl
 
           <button
             type="button"
-            onClick={() => void handlePublish()}
+            onClick={handlePublish}
             disabled={isBusy}
             className={cn(
               'flex items-center gap-1.5 rounded-[var(--radius-button)] bg-primary px-4 py-2 text-sm font-medium text-white',

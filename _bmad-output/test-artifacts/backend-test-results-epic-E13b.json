@@ -1,0 +1,2159 @@
+{
+  "epic_id": "E13b",
+  "epic_title": "Platform Admin Portal",
+  "executed_at": "2026-03-11T13:23:44.304Z",
+  "api_base_url": "http://localhost:5101",
+  "summary": {
+    "total": 136,
+    "passed": 97,
+    "failed": 14,
+    "skipped": 25
+  },
+  "results": [
+    {
+      "endpoint": "GET /admin/monitoring/health",
+      "test_name": "Health check — unauthenticated (minimal)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        },
+        {
+          "check": "body_contains_status",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"status\":\"ok\"}}"
+    },
+    {
+      "endpoint": "POST /admin/auth/login",
+      "test_name": "Login PLATFORM_ADMIN — MFA challenge (no code provided)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 202,
+      "actual_status": 202,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 202,
+          "actual": 202
+        },
+        {
+          "check": "body_contains_requiresMfa",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"requiresMfa\":true}}"
+    },
+    {
+      "endpoint": "POST /admin/auth/login",
+      "test_name": "Login — invalid credentials",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 401,
+      "actual_status": 401,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 401,
+          "actual": 401
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"INVALID_CREDENTIALS\",\"message\":\"Invalid email or password\"}}"
+    },
+    {
+      "endpoint": "POST /admin/auth/login",
+      "test_name": "Login — missing email field",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"email\":[\"Invalid input: expected string, received undefined\"]}}}"
+    },
+    {
+      "endpoint": "POST /admin/auth/login",
+      "test_name": "Login — invalid MFA code",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 401,
+      "actual_status": 401,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 401,
+          "actual": 401
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"MFA_INVALID\",\"message\":\"Invalid MFA code\"}}"
+    },
+    {
+      "endpoint": "POST /admin/auth/login",
+      "test_name": "Login PLATFORM_ADMIN — happy path with MFA code",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true
+        },
+        {
+          "check": "got_token",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "response_preview": "token_obtained"
+    },
+    {
+      "endpoint": "GET /admin/monitoring/health",
+      "test_name": "Health check — authenticated (full details)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        },
+        {
+          "check": "body_contains_status",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"status\":\"degraded\",\"version\":\"0.0.0\",\"uptime\":222.535295125,\"database\":{\"connected\":true,\"latencyMs\":2},\"redis\":{\"connected\":false,\"latencyMs\":2}}}"
+    },
+    {
+      "endpoint": "POST /admin/users",
+      "test_name": "Create PLATFORM_VIEWER user for RBAC tests",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": 201,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": false
+        }
+      ],
+      "error": "Expected 201/409, got 400",
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"password\":[\"Password must contain at least one uppercase letter\",\"Password must contain at least one digit"
+    },
+    {
+      "endpoint": "GET /admin/tenants",
+      "test_name": "List tenants — happy path",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":[{\"id\":\"00000000-0000-4000-b000-000000000010\",\"code\":\"dev-tenant\",\"displayName\":\"Development Tenant\",\"legalName\":null,\"status\":\"ACTIVE\",\"billingStatus\":\"CURRENT\",\"region\":\"uk-south\",\"sandboxEnabled\":false,\"lastActivityAt\":null,\"createdAt\":\"2026-03-04T04:30:36.340Z\",\"plan\":{\"id"
+    },
+    {
+      "endpoint": "GET /admin/tenants",
+      "test_name": "List tenants — PLATFORM_VIEWER allowed",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 200,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "GET /admin/tenants",
+      "test_name": "List tenants — unauthenticated",
+      "type": "authorization",
+      "status": "pass",
+      "expected_status": 401,
+      "actual_status": 401,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 401,
+          "actual": 401
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication required\"}}"
+    },
+    {
+      "endpoint": "GET /admin/plans",
+      "test_name": "List plans — happy path",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":[{\"id\":\"00000000-0000-4000-b000-000000000003\",\"code\":\"enterprise\",\"displayName\":\"Enterprise\",\"maxUsers\":100,\"maxCompanies\":10,\"monthlyAiTokenAllowance\":\"2000000\",\"aiHardLimit\":false,\"enabledModules\":[\"finance\",\"ar\",\"ap\",\"sales\",\"purchasing\",\"inventory\",\"crm\",\"hr\",\"manufacturin"
+    },
+    {
+      "endpoint": "GET /admin/plans",
+      "test_name": "List plans — PLATFORM_VIEWER allowed",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 200,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "GET /admin/users",
+      "test_name": "List platform users — happy path",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":[{\"id\":\"00000000-0000-4000-b000-000000000020\",\"email\":\"admin@nexa-platform.local\",\"displayName\":\"Platform Admin\",\"role\":\"PLATFORM_ADMIN\",\"mfaEnabled\":true,\"isActive\":true,\"lastLoginAt\":\"2026-03-11T13:22:53.080Z\",\"createdAt\":\"2026-03-04T04:30:36.365Z\"},{\"id\":\"a60c4dd3-0e47-4e3e"
+    },
+    {
+      "endpoint": "GET /admin/tenants/:id/billing",
+      "test_name": "Tenant billing — happy path",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"tenantId\":\"00000000-0000-4000-b000-000000000010\",\"billingStatus\":\"CURRENT\",\"stripeCustomerId\":null,\"subscriptionStatus\":null,\"currentPeriodEnd\":null,\"gracePeriodDays\":14,\"lastPaymentAt\":null,\"dunningLevel\":0,\"enforcementAction\":\"NONE\"}}"
+    },
+    {
+      "endpoint": "GET /admin/tenants/:id/billing",
+      "test_name": "Tenant billing — tenant not found",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 404,
+      "actual_status": 404,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 404,
+          "actual": 404
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"TENANT_NOT_FOUND\",\"message\":\"Tenant not found\"}}"
+    },
+    {
+      "endpoint": "GET /admin/tenants/:id/ai/quota",
+      "test_name": "Tenant AI quota — happy path",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"tenantId\":\"00000000-0000-4000-b000-000000000010\",\"planCode\":\"pro\",\"tokenAllowance\":\"500000\",\"tokensUsed\":\"0\",\"quotaPct\":0,\"softLimitPct\":80,\"hardLimitPct\":100,\"burstAllowance\":null,\"periodStart\":\"2026-03-01T00:00:00.000Z\",\"periodEnd\":\"2026-03-30T00:00:00.000Z\"}}"
+    },
+    {
+      "endpoint": "GET /admin/tenants/:id/ai/quota",
+      "test_name": "Tenant AI quota — tenant not found",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 404,
+      "actual_status": 404,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 404,
+          "actual": 404
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"TENANT_NOT_FOUND\",\"message\":\"Tenant not found\"}}"
+    },
+    {
+      "endpoint": "GET /admin/ai/usage/summary",
+      "test_name": "AI usage summary — happy path as PLATFORM_ADMIN",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        },
+        {
+          "check": "body_contains_tokensToday",
+          "passed": true
+        },
+        {
+          "check": "body_contains_tokensThisMonth",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"tokensToday\":0,\"tokensThisMonth\":0,\"costEstimateToday\":\"0.000000\",\"costEstimateThisMonth\":\"0.000000\",\"dailyTrend\":[{\"date\":\"2026-02-10\",\"tokens\":0,\"cost\":\"0.000000\"},{\"date\":\"2026-02-11\",\"tokens\":0,\"cost\":\"0.000000\"},{\"date\":\"2026-02-12\",\"tokens\":0,\"cost\":\"0.000000\"},{\"date\""
+    },
+    {
+      "endpoint": "GET /admin/ai/usage/summary",
+      "test_name": "AI usage summary — happy path as PLATFORM_VIEWER",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 200,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "GET /admin/ai/usage/summary",
+      "test_name": "AI usage summary — unauthenticated",
+      "type": "authorization",
+      "status": "pass",
+      "expected_status": 401,
+      "actual_status": 401,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 401,
+          "actual": 401
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication required\"}}"
+    },
+    {
+      "endpoint": "GET /admin/ai/usage/summary",
+      "test_name": "AI usage summary — daily trend has 30 entries",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"tokensToday\":0,\"tokensThisMonth\":0,\"costEstimateToday\":\"0.000000\",\"costEstimateThisMonth\":\"0.000000\",\"dailyTrend\":[{\"date\":\"2026-02-10\",\"tokens\":0,\"cost\":\"0.000000\"},{\"date\":\"2026-02-11\",\"tokens\":0,\"cost\":\"0.000000\"},{\"date\":\"2026-02-12\",\"tokens\":0,\"cost\":\"0.000000\"},{\"date\""
+    },
+    {
+      "endpoint": "GET /admin/tenants/:id/ai/usage",
+      "test_name": "Tenant AI usage — happy path",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        },
+        {
+          "check": "body_contains_tokensToday",
+          "passed": true
+        },
+        {
+          "check": "body_contains_tokensThisMonth",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"tokensToday\":0,\"tokensThisMonth\":0,\"costEstimate\":\"0.000000\",\"dailyTrend\":[{\"date\":\"2026-02-10\",\"tokens\":0,\"cost\":\"0.000000\"},{\"date\":\"2026-02-11\",\"tokens\":0,\"cost\":\"0.000000\"},{\"date\":\"2026-02-12\",\"tokens\":0,\"cost\":\"0.000000\"},{\"date\":\"2026-02-13\",\"tokens\":0,\"cost\":\"0.00000"
+    },
+    {
+      "endpoint": "GET /admin/tenants/:id/ai/usage",
+      "test_name": "Tenant AI usage — as PLATFORM_VIEWER (allowed)",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 200,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "GET /admin/tenants/:id/ai/usage",
+      "test_name": "Tenant AI usage — tenant not found",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 404,
+      "actual_status": 404,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 404,
+          "actual": 404
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"TENANT_NOT_FOUND\",\"message\":\"Tenant 00000000-0000-4000-a000-ffffffffffff not found\"}}"
+    },
+    {
+      "endpoint": "GET /admin/tenants/:id/ai/usage",
+      "test_name": "Tenant AI usage — invalid UUID format",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"id\":[\"Invalid UUID\"]}}}"
+    },
+    {
+      "endpoint": "GET /admin/tenants/:id/ai/usage",
+      "test_name": "Tenant AI usage — unauthenticated",
+      "type": "authorization",
+      "status": "pass",
+      "expected_status": 401,
+      "actual_status": 401,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 401,
+          "actual": 401
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication required\"}}"
+    },
+    {
+      "endpoint": "GET /admin/tenants/:id/ai/usage/by-feature",
+      "test_name": "AI usage by feature — happy path",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"features\":[]}}"
+    },
+    {
+      "endpoint": "GET /admin/tenants/:id/ai/usage/by-feature",
+      "test_name": "AI usage by feature — empty features list",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"features\":[]}}"
+    },
+    {
+      "endpoint": "GET /admin/tenants/:id/ai/usage/by-feature",
+      "test_name": "AI usage by feature — tenant not found",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 404,
+      "actual_status": 404,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 404,
+          "actual": 404
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"TENANT_NOT_FOUND\",\"message\":\"Tenant 00000000-0000-4000-a000-ffffffffffff not found\"}}"
+    },
+    {
+      "endpoint": "GET /admin/tenants/:id/ai/usage/by-feature",
+      "test_name": "AI usage by feature — PLATFORM_VIEWER allowed",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 200,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "GET /admin/ai/alerts",
+      "test_name": "List AI alerts — happy path (no filters)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":[]}"
+    },
+    {
+      "endpoint": "GET /admin/ai/alerts",
+      "test_name": "List AI alerts — filter by type QUOTA_WARNING",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":[]}"
+    },
+    {
+      "endpoint": "GET /admin/ai/alerts",
+      "test_name": "List AI alerts — filter by acknowledged=false",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":[]}"
+    },
+    {
+      "endpoint": "GET /admin/ai/alerts",
+      "test_name": "List AI alerts — PLATFORM_VIEWER allowed",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 200,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "GET /admin/ai/alerts",
+      "test_name": "List AI alerts — unauthenticated",
+      "type": "authorization",
+      "status": "pass",
+      "expected_status": 401,
+      "actual_status": 401,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 401,
+          "actual": 401
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication required\"}}"
+    },
+    {
+      "endpoint": "GET /admin/ai/providers",
+      "test_name": "List AI providers — happy path",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":[{\"providerId\":\"anthropic\",\"displayName\":\"Anthropic (Claude)\",\"isActive\":false,\"hasApiKey\":true,\"lastUsedAt\":null},{\"providerId\":\"google\",\"displayName\":\"Google (Gemini)\",\"isActive\":false,\"hasApiKey\":true,\"lastUsedAt\":null},{\"providerId\":\"openai\",\"displayName\":\"OpenAI (GPT)\",\"i"
+    },
+    {
+      "endpoint": "GET /admin/ai/providers",
+      "test_name": "List AI providers — response never exposes actual API keys",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":[{\"providerId\":\"anthropic\",\"displayName\":\"Anthropic (Claude)\",\"isActive\":false,\"hasApiKey\":true,\"lastUsedAt\":null},{\"providerId\":\"google\",\"displayName\":\"Google (Gemini)\",\"isActive\":false,\"hasApiKey\":true,\"lastUsedAt\":null},{\"providerId\":\"openai\",\"displayName\":\"OpenAI (GPT)\",\"i"
+    },
+    {
+      "endpoint": "GET /admin/ai/providers",
+      "test_name": "List AI providers — PLATFORM_VIEWER allowed",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 200,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "GET /admin/tenants/:id/ai/byok",
+      "test_name": "List BYOK keys — happy path (empty list for dev-tenant)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":[]}"
+    },
+    {
+      "endpoint": "GET /admin/tenants/:id/ai/byok",
+      "test_name": "List BYOK keys — tenant not found",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 404,
+      "actual_status": 404,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 404,
+          "actual": 404
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"TENANT_NOT_FOUND\",\"message\":\"Tenant 00000000-0000-4000-a000-ffffffffffff not found\"}}"
+    },
+    {
+      "endpoint": "GET /admin/tenants/:id/ai/byok",
+      "test_name": "List BYOK keys — PLATFORM_VIEWER allowed",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 200,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "POST /admin/ai/spike-detection",
+      "test_name": "Spike detection — happy path (no date)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        },
+        {
+          "check": "body_contains_tenantsChecked",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"tenantsChecked\":0,\"spikesDetected\":0,\"alertsCreated\":0}}"
+    },
+    {
+      "endpoint": "POST /admin/ai/spike-detection",
+      "test_name": "Spike detection — with specific date",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        },
+        {
+          "check": "body_contains_tenantsChecked",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"tenantsChecked\":0,\"spikesDetected\":0,\"alertsCreated\":0}}"
+    },
+    {
+      "endpoint": "POST /admin/ai/spike-detection",
+      "test_name": "Spike detection — invalid date format",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"date\":[\"Invalid ISO date\"]}}}"
+    },
+    {
+      "endpoint": "POST /admin/ai/spike-detection",
+      "test_name": "Spike detection — PLATFORM_VIEWER denied",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 403,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "POST /admin/ai/alerts/:id/acknowledge",
+      "test_name": "Acknowledge alert — happy path",
+      "type": "happy_path",
+      "status": "skip",
+      "expected_status": 200,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No alerts exist to acknowledge",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "POST /admin/ai/alerts/:id/acknowledge",
+      "test_name": "Acknowledge alert — PLATFORM_VIEWER denied",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 403,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "PUT /admin/ai/providers/:providerId/key",
+      "test_name": "Update provider key — happy path",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": 200,
+      "actual_status": 500,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": false,
+          "expected": 200,
+          "actual": 500
+        }
+      ],
+      "error": "Expected status 200, got 500",
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"INTERNAL_ERROR\",\"message\":\"An unexpected error occurred\"}}"
+    },
+    {
+      "endpoint": "PUT /admin/ai/providers/:providerId/key",
+      "test_name": "Update provider key — provider not found",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 404,
+      "actual_status": 404,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 404,
+          "actual": 404
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"PROVIDER_NOT_FOUND\",\"message\":\"Provider nonexistent-provider not found\"}}"
+    },
+    {
+      "endpoint": "PUT /admin/ai/providers/:providerId/key",
+      "test_name": "Update provider key — empty apiKey",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"apiKey\":[\"Too small: expected string to have >=1 characters\"]}}}"
+    },
+    {
+      "endpoint": "PUT /admin/ai/providers/:providerId/key",
+      "test_name": "Update provider key — missing apiKey field",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"apiKey\":[\"Invalid input: expected string, received undefined\"]}}}"
+    },
+    {
+      "endpoint": "PUT /admin/ai/providers/:providerId/key",
+      "test_name": "Update provider key — PLATFORM_VIEWER denied",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 403,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "PATCH /admin/ai/providers/:providerId",
+      "test_name": "Toggle provider — activate",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"providerId\":\"anthropic\",\"isActive\":true,\"updatedAt\":\"2026-03-11T13:22:54.210Z\"}}"
+    },
+    {
+      "endpoint": "PATCH /admin/ai/providers/:providerId",
+      "test_name": "Toggle provider — deactivate",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"providerId\":\"anthropic\",\"isActive\":false,\"updatedAt\":\"2026-03-11T13:22:54.235Z\"}}"
+    },
+    {
+      "endpoint": "PATCH /admin/ai/providers/:providerId",
+      "test_name": "Toggle provider — not found",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 404,
+      "actual_status": 404,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 404,
+          "actual": 404
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"PROVIDER_NOT_FOUND\",\"message\":\"Provider nonexistent not found\"}}"
+    },
+    {
+      "endpoint": "PATCH /admin/ai/providers/:providerId",
+      "test_name": "Toggle provider — missing isActive",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"isActive\":[\"Invalid input: expected boolean, received undefined\"]}}}"
+    },
+    {
+      "endpoint": "PATCH /admin/ai/providers/:providerId",
+      "test_name": "Toggle provider — PLATFORM_VIEWER denied",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 403,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "PUT /admin/tenants/:id/ai/byok/:providerId",
+      "test_name": "Add BYOK key — rejected for non-Enterprise tenant",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 403,
+      "actual_status": 403,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 403,
+          "actual": 403
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"BYOK_ENTERPRISE_ONLY\",\"message\":\"BYOK keys are only available for Enterprise plan tenants (FR224)\"}}"
+    },
+    {
+      "endpoint": "PUT /admin/tenants/:id/ai/byok/:providerId",
+      "test_name": "Add BYOK key — tenant not found",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 404,
+      "actual_status": 404,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 404,
+          "actual": 404
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"TENANT_NOT_FOUND\",\"message\":\"Tenant 00000000-0000-4000-a000-ffffffffffff not found\"}}"
+    },
+    {
+      "endpoint": "PUT /admin/tenants/:id/ai/byok/:providerId",
+      "test_name": "Add BYOK key — missing apiKey",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"apiKey\":[\"Invalid input: expected string, received undefined\"]}}}"
+    },
+    {
+      "endpoint": "PUT /admin/tenants/:id/ai/byok/:providerId",
+      "test_name": "Add BYOK key — PLATFORM_VIEWER denied",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 403,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "PUT /admin/tenants/:id/ai/byok/:providerId",
+      "test_name": "Add BYOK key — invalid tenant UUID",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"id\":[\"Invalid UUID\"]}}}"
+    },
+    {
+      "endpoint": "DELETE /admin/tenants/:id/ai/byok/:providerId",
+      "test_name": "Delete BYOK key — PLATFORM_VIEWER denied",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 403,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "PATCH /admin/tenants/:id/ai/byok/:providerId",
+      "test_name": "Toggle BYOK key — not found",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 404,
+      "actual_status": 404,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 404,
+          "actual": 404
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"BYOK_KEY_NOT_FOUND\",\"message\":\"BYOK key for provider anthropic not found on tenant 00000000-0000-4000-b000-000000000010\"}}"
+    },
+    {
+      "endpoint": "PATCH /admin/tenants/:id/ai/byok/:providerId",
+      "test_name": "Toggle BYOK key — PLATFORM_VIEWER denied",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 403,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "GET /admin/ai/usage/export",
+      "test_name": "AI usage export — happy path CSV",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "date,tenantCode,tenantName,featureKey,totalTokens,costEstimate,isByok"
+    },
+    {
+      "endpoint": "GET /admin/ai/usage/export",
+      "test_name": "AI usage export — PLATFORM_VIEWER denied",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 403,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "GET /admin/ai/usage/export",
+      "test_name": "AI usage export — missing startDate",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"startDate\":[\"Invalid input: expected string, received undefined\"]}}}"
+    },
+    {
+      "endpoint": "GET /admin/ai/usage/export",
+      "test_name": "AI usage export — invalid date format",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"startDate\":[\"Invalid ISO date\"]}}}"
+    },
+    {
+      "endpoint": "GET /admin/ai/usage/export",
+      "test_name": "AI usage export — startDate after endDate",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"INVALID_DATE_RANGE\",\"message\":\"startDate must be before endDate\"}}"
+    },
+    {
+      "endpoint": "GET /admin/ai/usage/export",
+      "test_name": "AI usage export — date range exceeds 90 days",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"DATE_RANGE_TOO_LARGE\",\"message\":\"Export date range cannot exceed 90 days\"}}"
+    },
+    {
+      "endpoint": "POST /admin/tenants/:id/impersonate",
+      "test_name": "Start impersonation — happy path",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 201,
+      "actual_status": 201,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true
+        }
+      ],
+      "error": null,
+      "response_preview": "session_created"
+    },
+    {
+      "endpoint": "POST /admin/tenants/:id/impersonate",
+      "test_name": "Start impersonation — default 60 min duration",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": 201,
+      "actual_status": 409,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": false,
+          "expected": 201,
+          "actual": 409
+        }
+      ],
+      "error": "Expected status 201, got 409",
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"CONCURRENT_SESSION\",\"message\":\"You already have an active impersonation session. End it before starting a new one.\"}}"
+    },
+    {
+      "endpoint": "POST /admin/tenants/:id/impersonate",
+      "test_name": "Start impersonation — empty reason rejected (BR-PLT-012)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"reason\":[\"Impersonation reason is required\"]}}}"
+    },
+    {
+      "endpoint": "POST /admin/tenants/:id/impersonate",
+      "test_name": "Start impersonation — missing reason field",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"reason\":[\"Invalid input: expected string, received undefined\"]}}}"
+    },
+    {
+      "endpoint": "POST /admin/tenants/:id/impersonate",
+      "test_name": "Start impersonation — duration exceeds max (480 min)",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"durationMinutes\":[\"Too big: expected number to be <=480\"]}}}"
+    },
+    {
+      "endpoint": "POST /admin/tenants/:id/impersonate",
+      "test_name": "Start impersonation — tenant not found",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 404,
+      "actual_status": 404,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 404,
+          "actual": 404
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"TENANT_NOT_FOUND\",\"message\":\"Tenant not found\"}}"
+    },
+    {
+      "endpoint": "POST /admin/tenants/:id/impersonate",
+      "test_name": "Start impersonation — invalid tenant UUID",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"id\":[\"Invalid UUID\"]}}}"
+    },
+    {
+      "endpoint": "POST /admin/tenants/:id/impersonate",
+      "test_name": "Start impersonation — PLATFORM_VIEWER denied",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 403,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "POST /admin/tenants/:id/impersonate",
+      "test_name": "Start impersonation — unauthenticated",
+      "type": "authorization",
+      "status": "pass",
+      "expected_status": 401,
+      "actual_status": 401,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 401,
+          "actual": 401
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication required\"}}"
+    },
+    {
+      "endpoint": "GET /admin/impersonation-sessions/active",
+      "test_name": "Active session — returns active session when one exists",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"id\":\"2f119496-f010-41c6-95dd-c706b6a40a49\",\"platformUser\":{\"id\":\"00000000-0000-4000-b000-000000000020\",\"email\":\"admin@nexa-platform.local\",\"displayName\":\"Platform Admin\"},\"tenant\":{\"id\":\"00000000-0000-4000-b000-000000000010\",\"code\":\"dev-tenant\",\"displayName\":\"Development Ten"
+    },
+    {
+      "endpoint": "GET /admin/impersonation-sessions",
+      "test_name": "List sessions — happy path (no filters)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"items\":[{\"id\":\"2f119496-f010-41c6-95dd-c706b6a40a49\",\"platformUser\":{\"id\":\"00000000-0000-4000-b000-000000000020\",\"email\":\"admin@nexa-platform.local\",\"displayName\":\"Platform Admin\"},\"tenant\":{\"id\":\"00000000-0000-4000-b000-000000000010\",\"code\":\"dev-tenant\",\"displayName\":\"Devel"
+    },
+    {
+      "endpoint": "GET /admin/impersonation-sessions",
+      "test_name": "List sessions — filter by tenantId",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"items\":[{\"id\":\"2f119496-f010-41c6-95dd-c706b6a40a49\",\"platformUser\":{\"id\":\"00000000-0000-4000-b000-000000000020\",\"email\":\"admin@nexa-platform.local\",\"displayName\":\"Platform Admin\"},\"tenant\":{\"id\":\"00000000-0000-4000-b000-000000000010\",\"code\":\"dev-tenant\",\"displayName\":\"Devel"
+    },
+    {
+      "endpoint": "GET /admin/impersonation-sessions",
+      "test_name": "List sessions — pagination with limit",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"items\":[{\"id\":\"2f119496-f010-41c6-95dd-c706b6a40a49\",\"platformUser\":{\"id\":\"00000000-0000-4000-b000-000000000020\",\"email\":\"admin@nexa-platform.local\",\"displayName\":\"Platform Admin\"},\"tenant\":{\"id\":\"00000000-0000-4000-b000-000000000010\",\"code\":\"dev-tenant\",\"displayName\":\"Devel"
+    },
+    {
+      "endpoint": "GET /admin/impersonation-sessions",
+      "test_name": "List sessions — PLATFORM_VIEWER allowed (read-only)",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 200,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "GET /admin/impersonation-sessions",
+      "test_name": "List sessions — invalid tenantId UUID filter",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"tenantId\":[\"Invalid UUID\"]}}}"
+    },
+    {
+      "endpoint": "GET /admin/impersonation-sessions/:sessionId",
+      "test_name": "Session detail — happy path",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"id\":\"2f119496-f010-41c6-95dd-c706b6a40a49\",\"platformUser\":{\"id\":\"00000000-0000-4000-b000-000000000020\",\"email\":\"admin@nexa-platform.local\",\"displayName\":\"Platform Admin\"},\"tenant\":{\"id\":\"00000000-0000-4000-b000-000000000010\",\"code\":\"dev-tenant\",\"displayName\":\"Development Ten"
+    },
+    {
+      "endpoint": "GET /admin/impersonation-sessions/:sessionId",
+      "test_name": "Session detail — PLATFORM_VIEWER allowed",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 200,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "GET /admin/impersonation-sessions/:sessionId",
+      "test_name": "Session detail — not found",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 404,
+      "actual_status": 404,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 404,
+          "actual": 404
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"SESSION_NOT_FOUND\",\"message\":\"Impersonation session not found\"}}"
+    },
+    {
+      "endpoint": "GET /admin/impersonation-sessions/:sessionId",
+      "test_name": "Session detail — invalid UUID",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"sessionId\":[\"Invalid UUID\"]}}}"
+    },
+    {
+      "endpoint": "POST /admin/impersonation-sessions/:sessionId/end",
+      "test_name": "End impersonation — PLATFORM_VIEWER denied",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 403,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "GET /admin/impersonation-sessions/active",
+      "test_name": "Active session — no active session (null response)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"id\":\"2f119496-f010-41c6-95dd-c706b6a40a49\",\"platformUser\":{\"id\":\"00000000-0000-4000-b000-000000000020\",\"email\":\"admin@nexa-platform.local\",\"displayName\":\"Platform Admin\"},\"tenant\":{\"id\":\"00000000-0000-4000-b000-000000000010\",\"code\":\"dev-tenant\",\"displayName\":\"Development Ten"
+    },
+    {
+      "endpoint": "GET /admin/support/search",
+      "test_name": "Search by name — happy path",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"items\":[{\"id\":\"00000000-0000-4000-b000-000000000010\",\"code\":\"dev-tenant\",\"displayName\":\"Development Tenant\",\"status\":\"ACTIVE\",\"planCode\":\"pro\",\"billingStatus\":\"CURRENT\",\"lastActivityAt\":null,\"matchField\":\"displayName\",\"matchValue\":\"Development Tenant\"}],\"total\":1}}"
+    },
+    {
+      "endpoint": "GET /admin/support/search",
+      "test_name": "Search by code (domain) — exact match",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"items\":[{\"id\":\"00000000-0000-4000-b000-000000000010\",\"code\":\"dev-tenant\",\"displayName\":\"Development Tenant\",\"status\":\"ACTIVE\",\"planCode\":\"pro\",\"billingStatus\":\"CURRENT\",\"lastActivityAt\":null,\"matchField\":\"code\",\"matchValue\":\"dev-tenant\"}],\"total\":1}}"
+    },
+    {
+      "endpoint": "GET /admin/support/search",
+      "test_name": "Search by ID — exact match",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"items\":[{\"id\":\"00000000-0000-4000-b000-000000000010\",\"code\":\"dev-tenant\",\"displayName\":\"Development Tenant\",\"status\":\"ACTIVE\",\"planCode\":\"pro\",\"billingStatus\":\"CURRENT\",\"lastActivityAt\":null,\"matchField\":\"id\",\"matchValue\":\"00000000-0000-4000-b000-000000000010\"}],\"total\":1}}"
+    },
+    {
+      "endpoint": "GET /admin/support/search",
+      "test_name": "Search by email — cross-reference",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"items\":[{\"id\":\"00000000-0000-4000-b000-000000000010\",\"code\":\"dev-tenant\",\"displayName\":\"Development Tenant\",\"status\":\"ACTIVE\",\"planCode\":\"pro\",\"billingStatus\":\"CURRENT\",\"lastActivityAt\":null,\"matchField\":\"code\",\"matchValue\":\"dev-tenant\"}],\"total\":1}}"
+    },
+    {
+      "endpoint": "GET /admin/support/search",
+      "test_name": "Search general (no type) — matches name/code/id",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"items\":[{\"id\":\"00000000-0000-4000-b000-000000000010\",\"code\":\"dev-tenant\",\"displayName\":\"Development Tenant\",\"status\":\"ACTIVE\",\"planCode\":\"pro\",\"billingStatus\":\"CURRENT\",\"lastActivityAt\":null,\"matchField\":\"displayName\",\"matchValue\":\"Development Tenant\"}],\"total\":1}}"
+    },
+    {
+      "endpoint": "GET /admin/support/search",
+      "test_name": "Search — no results",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"items\":[],\"total\":0}}"
+    },
+    {
+      "endpoint": "GET /admin/support/search",
+      "test_name": "Search — missing q parameter",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"q\":[\"Invalid input: expected string, received undefined\"]}}}"
+    },
+    {
+      "endpoint": "GET /admin/support/search",
+      "test_name": "Search — empty q parameter",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"q\":[\"Search query is required\"]}}}"
+    },
+    {
+      "endpoint": "GET /admin/support/search",
+      "test_name": "Search — PLATFORM_VIEWER allowed",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 200,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "GET /admin/support/search",
+      "test_name": "Search — unauthenticated",
+      "type": "authorization",
+      "status": "pass",
+      "expected_status": 401,
+      "actual_status": 401,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 401,
+          "actual": 401
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication required\"}}"
+    },
+    {
+      "endpoint": "GET /admin/audit-log",
+      "test_name": "List audit log — happy path (no filters)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":[{\"id\":\"0e447869-09e4-40ad-b971-2003193dfd64\",\"platformUser\":{\"id\":\"00000000-0000-4000-b000-000000000020\",\"email\":\"admin@nexa-platform.local\",\"displayName\":\"Platform Admin\"},\"action\":\"platform.impersonation_started\",\"targetType\":\"tenant\",\"targetId\":\"00000000-0000-4000-b000-000"
+    },
+    {
+      "endpoint": "GET /admin/audit-log",
+      "test_name": "List audit log — filter by action",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":[{\"id\":\"f319207e-9ff0-4342-9759-a78cfdd67ab0\",\"platformUser\":{\"id\":\"00000000-0000-4000-b000-000000000020\",\"email\":\"admin@nexa-platform.local\",\"displayName\":\"Platform Admin\"},\"action\":\"auth.login\",\"targetType\":\"platform_user\",\"targetId\":\"00000000-0000-4000-b000-000000000020\",\"i"
+    },
+    {
+      "endpoint": "GET /admin/audit-log",
+      "test_name": "List audit log — filter by targetType",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":[{\"id\":\"0e447869-09e4-40ad-b971-2003193dfd64\",\"platformUser\":{\"id\":\"00000000-0000-4000-b000-000000000020\",\"email\":\"admin@nexa-platform.local\",\"displayName\":\"Platform Admin\"},\"action\":\"platform.impersonation_started\",\"targetType\":\"tenant\",\"targetId\":\"00000000-0000-4000-b000-000"
+    },
+    {
+      "endpoint": "GET /admin/audit-log",
+      "test_name": "List audit log — filter by platformUserId",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":[{\"id\":\"0e447869-09e4-40ad-b971-2003193dfd64\",\"platformUser\":{\"id\":\"00000000-0000-4000-b000-000000000020\",\"email\":\"admin@nexa-platform.local\",\"displayName\":\"Platform Admin\"},\"action\":\"platform.impersonation_started\",\"targetType\":\"tenant\",\"targetId\":\"00000000-0000-4000-b000-000"
+    },
+    {
+      "endpoint": "GET /admin/audit-log",
+      "test_name": "List audit log — filter by date range",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":[{\"id\":\"0e447869-09e4-40ad-b971-2003193dfd64\",\"platformUser\":{\"id\":\"00000000-0000-4000-b000-000000000020\",\"email\":\"admin@nexa-platform.local\",\"displayName\":\"Platform Admin\"},\"action\":\"platform.impersonation_started\",\"targetType\":\"tenant\",\"targetId\":\"00000000-0000-4000-b000-000"
+    },
+    {
+      "endpoint": "GET /admin/audit-log",
+      "test_name": "List audit log — combined filters (action + date range)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":[{\"id\":\"f319207e-9ff0-4342-9759-a78cfdd67ab0\",\"platformUser\":{\"id\":\"00000000-0000-4000-b000-000000000020\",\"email\":\"admin@nexa-platform.local\",\"displayName\":\"Platform Admin\"},\"action\":\"auth.login\",\"targetType\":\"platform_user\",\"targetId\":\"00000000-0000-4000-b000-000000000020\",\"i"
+    },
+    {
+      "endpoint": "GET /admin/audit-log",
+      "test_name": "List audit log — pagination with limit=2",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":[{\"id\":\"0e447869-09e4-40ad-b971-2003193dfd64\",\"platformUser\":{\"id\":\"00000000-0000-4000-b000-000000000020\",\"email\":\"admin@nexa-platform.local\",\"displayName\":\"Platform Admin\"},\"action\":\"platform.impersonation_started\",\"targetType\":\"tenant\",\"targetId\":\"00000000-0000-4000-b000-000"
+    },
+    {
+      "endpoint": "GET /admin/audit-log",
+      "test_name": "List audit log — cursor-based pagination (page 2)",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":[],\"meta\":{\"hasMore\":false,\"cursor\":null}}"
+    },
+    {
+      "endpoint": "GET /admin/audit-log",
+      "test_name": "List audit log — empty result with tight filters",
+      "type": "edge_case",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":[],\"meta\":{\"hasMore\":false,\"cursor\":null}}"
+    },
+    {
+      "endpoint": "GET /admin/audit-log",
+      "test_name": "List audit log — invalid from date format",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"from\":[\"Invalid ISO datetime\"]}}}"
+    },
+    {
+      "endpoint": "GET /admin/audit-log",
+      "test_name": "List audit log — invalid platformUserId format",
+      "type": "validation_error",
+      "status": "pass",
+      "expected_status": 400,
+      "actual_status": 400,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 400,
+          "actual": 400
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Validation failed\",\"details\":{\"platformUserId\":[\"Invalid UUID\"]}}}"
+    },
+    {
+      "endpoint": "GET /admin/audit-log",
+      "test_name": "List audit log — PLATFORM_VIEWER allowed",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 200,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "GET /admin/audit-log",
+      "test_name": "List audit log — unauthenticated",
+      "type": "authorization",
+      "status": "pass",
+      "expected_status": 401,
+      "actual_status": 401,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 401,
+          "actual": 401
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication required\"}}"
+    },
+    {
+      "endpoint": "GET /admin/audit-log/:id",
+      "test_name": "Audit log detail — happy path",
+      "type": "happy_path",
+      "status": "pass",
+      "expected_status": 200,
+      "actual_status": 200,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 200,
+          "actual": 200
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":true,\"data\":{\"id\":\"0e447869-09e4-40ad-b971-2003193dfd64\",\"platformUser\":{\"id\":\"00000000-0000-4000-b000-000000000020\",\"email\":\"admin@nexa-platform.local\",\"displayName\":\"Platform Admin\"},\"action\":\"platform.impersonation_started\",\"targetType\":\"tenant\",\"targetId\":\"00000000-0000-4000-b000-0000"
+    },
+    {
+      "endpoint": "GET /admin/audit-log/:id",
+      "test_name": "Audit log detail — PLATFORM_VIEWER allowed",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 200,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "GET /admin/audit-log/:id",
+      "test_name": "Audit log detail — not found",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": 404,
+      "actual_status": 429,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": false,
+          "expected": 404,
+          "actual": 429
+        }
+      ],
+      "error": "Expected status 404, got 429",
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"RATE_LIMITED\",\"message\":\"Rate limit exceeded, retry in 58 seconds\"}}"
+    },
+    {
+      "endpoint": "GET /admin/audit-log/:id",
+      "test_name": "Audit log detail — invalid UUID",
+      "type": "validation_error",
+      "status": "fail",
+      "expected_status": 400,
+      "actual_status": 429,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": false,
+          "expected": 400,
+          "actual": 429
+        }
+      ],
+      "error": "Expected status 400, got 429",
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"RATE_LIMITED\",\"message\":\"Rate limit exceeded, retry in 58 seconds\"}}"
+    },
+    {
+      "endpoint": "GET /admin/audit-log/export",
+      "test_name": "Audit log export — happy path CSV",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": 200,
+      "actual_status": 429,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": false,
+          "expected": 200,
+          "actual": 429
+        }
+      ],
+      "error": "Expected status 200, got 429",
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"RATE_LIMITED\",\"message\":\"Rate limit exceeded, retry in 58 seconds\"}}"
+    },
+    {
+      "endpoint": "GET /admin/audit-log/export",
+      "test_name": "Audit log export — with action filter",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": 200,
+      "actual_status": 429,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": false,
+          "expected": 200,
+          "actual": 429
+        }
+      ],
+      "error": "Expected status 200, got 429",
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"RATE_LIMITED\",\"message\":\"Rate limit exceeded, retry in 58 seconds\"}}"
+    },
+    {
+      "endpoint": "GET /admin/audit-log/export",
+      "test_name": "Audit log export — with date range filter",
+      "type": "happy_path",
+      "status": "fail",
+      "expected_status": 200,
+      "actual_status": 429,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": false,
+          "expected": 200,
+          "actual": 429
+        }
+      ],
+      "error": "Expected status 200, got 429",
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"RATE_LIMITED\",\"message\":\"Rate limit exceeded, retry in 58 seconds\"}}"
+    },
+    {
+      "endpoint": "GET /admin/audit-log/export",
+      "test_name": "Audit log export — empty result returns headers only",
+      "type": "edge_case",
+      "status": "fail",
+      "expected_status": 200,
+      "actual_status": 429,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": false,
+          "expected": 200,
+          "actual": 429
+        }
+      ],
+      "error": "Expected status 200, got 429",
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"RATE_LIMITED\",\"message\":\"Rate limit exceeded, retry in 57 seconds\"}}"
+    },
+    {
+      "endpoint": "GET /admin/audit-log/export",
+      "test_name": "Audit log export — invalid targetType filter",
+      "type": "validation_error",
+      "status": "fail",
+      "expected_status": 400,
+      "actual_status": 429,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": false,
+          "expected": 400,
+          "actual": 429
+        }
+      ],
+      "error": "Expected status 400, got 429",
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"RATE_LIMITED\",\"message\":\"Rate limit exceeded, retry in 57 seconds\"}}"
+    },
+    {
+      "endpoint": "GET /admin/audit-log/export",
+      "test_name": "Audit log export — PLATFORM_VIEWER allowed",
+      "type": "authorization",
+      "status": "skip",
+      "expected_status": 200,
+      "actual_status": 0,
+      "assertions": [],
+      "error": "No VIEWER_TOKEN",
+      "response_preview": ""
+    },
+    {
+      "endpoint": "GET /admin/audit-log/export",
+      "test_name": "Audit log export — unauthenticated",
+      "type": "authorization",
+      "status": "pass",
+      "expected_status": 401,
+      "actual_status": 401,
+      "assertions": [
+        {
+          "check": "status_code",
+          "passed": true,
+          "expected": 401,
+          "actual": 401
+        }
+      ],
+      "error": null,
+      "response_preview": "{\"success\":false,\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication required\"}}"
+    }
+  ]
+}

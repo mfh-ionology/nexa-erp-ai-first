@@ -50,13 +50,15 @@ export const createKnowledgeBodySchema = z.object({
   targetPlanTiers: z.array(z.string()).default([]),
 });
 
-export const updateKnowledgeBodySchema = z.object({
-  title: z.string().min(1).max(500).optional(),
-  content: z.string().min(1).max(100000).optional(),
-  category: knowledgeCategoryEnum.optional(),
-  targetIndustries: z.array(z.string()).optional(),
-  targetPlanTiers: z.array(z.string()).optional(),
-});
+export const updateKnowledgeBodySchema = z
+  .object({
+    title: z.string().min(1).max(500).optional(),
+    content: z.string().min(1).max(100000).optional(),
+    category: knowledgeCategoryEnum.optional(),
+    targetIndustries: z.array(z.string()).optional(),
+    targetPlanTiers: z.array(z.string()).optional(),
+  })
+  .strict(); // AC#6: reject unknown fields (e.g. version) with 400
 
 // ---------------------------------------------------------------------------
 // Response Schemas

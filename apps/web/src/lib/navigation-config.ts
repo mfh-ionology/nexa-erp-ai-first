@@ -429,6 +429,13 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         path: '/system/settings',
       },
       {
+        key: 'system.documentTemplates',
+        labelKey: 'navigation:system.documentTemplates',
+        icon: 'FileText',
+        path: '/settings/document-templates',
+        resourceCode: 'system.settings.detail',
+      },
+      {
         key: 'system.notificationPreferences',
         labelKey: 'navigation:system.notificationPreferences',
         icon: 'Bell',

@@ -1,0 +1,1350 @@
+{
+  "epic_id": "E12",
+  "epic_name": "Document Templates & PDF",
+  "generated_at": "2026-03-11T14:30:00.000Z",
+  "frontend_url": "http://localhost:5110",
+  "auth_requirements": {
+    "role": "ADMIN",
+    "module_access": "system",
+    "resource_code": "system.settings.detail"
+  },
+  "preconditions": [
+    "Database seeded with E12-3 default templates (14 templates for test company)",
+    "User authenticated as ADMIN with system module access",
+    "API server running at http://localhost:5100",
+    "Puppeteer/PDF generation service initialised on API"
+  ],
+  "total_journeys": 17,
+  "total_steps": 187,
+  "journeys": [
+    {
+      "id": "j1-page-navigation-and-layout",
+      "name": "Navigate to Document Templates Page",
+      "description": "Verify the Document Templates page is accessible via sidebar navigation, loads with correct T7 Settings layout, breadcrumbs, and displays seeded default templates",
+      "priority": "critical",
+      "related_stories": ["E12-2"],
+      "acceptance_criteria": ["AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Application dashboard loads with sidebar visible",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "System section in sidebar navigation",
+          "input_data": {},
+          "expected_result": "System navigation section expands showing sub-items",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Document Templates link in sidebar (FileText icon)",
+          "input_data": {},
+          "expected_result": "Page navigates to /settings/document-templates",
+          "screenshot": true,
+          "visual_check": "T7 Settings layout visible with breadcrumb 'System > Document Templates', page title 'Document Templates', and template list grouped by document type. Purple 'Add Template' button in top-right. Concept D background #f4f2ff visible."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_text",
+          "target": "Breadcrumb area",
+          "input_data": {},
+          "expected_result": "Breadcrumb shows 'System' and 'Document Templates'",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Add Template button (primary purple)",
+          "input_data": {},
+          "expected_result": "Add Template button is visible with purple background (#7c3aed)",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "Document type filter dropdown",
+          "input_data": {},
+          "expected_result": "Filter dropdown is present with 'All types' default",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "verify_element",
+          "target": "Search input for template name",
+          "input_data": {},
+          "expected_result": "Search input is present with placeholder text",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "verify_element",
+          "target": "Template cards grouped by document type (collapsible accordion sections)",
+          "input_data": {},
+          "expected_result": "At least 5 document type sections visible (first 5 expanded by default), each with document type badge and template count. Seeded default templates (14 total) shown across groups.",
+          "screenshot": true,
+          "visual_check": "Template cards with 12px border-radius, each showing name, green 'Active' badge, purple 'Default' badge, page size info, and version count in JetBrains Mono font. Accordion headers show document type labels with count badges."
+        }
+      ]
+    },
+    {
+      "id": "j2-create-sales-invoice-template",
+      "name": "Create a Custom Sales Invoice Template",
+      "description": "Create a new SALES_INVOICE document template with all form fields populated, including page settings, branding toggles, HTML template body, and optional CSS/header/footer sections",
+      "priority": "critical",
+      "related_stories": ["E12-2"],
+      "acceptance_criteria": ["AC1", "AC6", "AC7"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/settings/document-templates",
+          "input_data": {},
+          "expected_result": "Document Templates page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Add Template button",
+          "input_data": {},
+          "expected_result": "Template editor form opens with 'New Template' heading",
+          "screenshot": true,
+          "visual_check": "Editor form visible with Document Type dropdown, Name input, Description textarea, Page Settings section, Branding section with toggle switches, HTML Template editor area (monospace JetBrains Mono font, 400px min-height), and collapsible CSS/Header/Footer editors. Save and Cancel buttons at bottom."
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Template editor form",
+          "input_data": {
+            "documentType": "SALES_INVOICE",
+            "name": "E2E Test Invoice Template",
+            "description": "Custom invoice template created during E2E testing",
+            "pageSize": "A4",
+            "orientation": "portrait",
+            "marginTop": "25",
+            "marginBottom": "25",
+            "marginLeft": "15",
+            "marginRight": "15",
+            "showLogo": true,
+            "logoPosition": "top-center",
+            "showBankDetails": true,
+            "showVatNumber": true,
+            "showCompanyReg": true,
+            "htmlTemplate": "<html><head><style>body{font-family:Arial,sans-serif;}</style></head><body><h1>INVOICE</h1><p>Invoice: {{document.number}}</p><p>Date: {{formatDate document.date}}</p><p>Customer: {{counterparty.name}}</p><table>{{#each lines}}<tr><td>{{lineNumber @index}}</td><td>{{description}}</td><td>{{formatCurrency lineTotal ../metadata.currencyCode}}</td></tr>{{/each}}</table><p>Total: {{formatCurrency totals.total metadata.currencyCode}}</p>{{#if showBankDetails}}<p>Bank: {{company.bankName}}</p>{{/if}}</body></html>",
+            "isDefault": false
+          },
+          "expected_result": "All form fields populated with provided values",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "CSS Styles collapsible section header",
+          "input_data": {},
+          "expected_result": "CSS Styles editor expands showing textarea with monospace font",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "CSS Styles textarea",
+          "input_data": {
+            "cssStyles": "body { margin: 0; padding: 20px; } h1 { color: #333; } table { width: 100%; border-collapse: collapse; } td { padding: 8px; border-bottom: 1px solid #ddd; }"
+          },
+          "expected_result": "CSS styles entered in collapsible editor",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Save button",
+          "input_data": {},
+          "expected_result": "Template created successfully, success toast shown, returns to list view",
+          "screenshot": true,
+          "visual_check": "Success toast notification visible (e.g., 'Template created successfully'). Template list refreshed showing the new 'E2E Test Invoice Template' in the SALES_INVOICE group with green 'Active' badge. No purple 'Default' badge since isDefault was false."
+        },
+        {
+          "step_number": 7,
+          "action": "verify_text",
+          "target": "SALES_INVOICE group in template list",
+          "input_data": {},
+          "expected_result": "'E2E Test Invoice Template' appears in the SALES_INVOICE section alongside the seeded default template",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j3-create-credit-note-template",
+      "name": "Create a Credit Note Template for Filter Testing",
+      "description": "Create a CREDIT_NOTE template so multiple document types have custom templates for filter and search testing",
+      "priority": "high",
+      "related_stories": ["E12-2"],
+      "acceptance_criteria": ["AC1", "AC7"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/settings/document-templates",
+          "input_data": {},
+          "expected_result": "Document Templates page loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Add Template button",
+          "input_data": {},
+          "expected_result": "Template editor form opens",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Template editor form",
+          "input_data": {
+            "documentType": "CREDIT_NOTE",
+            "name": "E2E Credit Note Compact",
+            "description": "Compact credit note layout for E2E testing",
+            "pageSize": "A5",
+            "orientation": "landscape",
+            "showLogo": false,
+            "showBankDetails": false,
+            "showVatNumber": true,
+            "showCompanyReg": false,
+            "htmlTemplate": "<html><body><h1>CREDIT NOTE</h1><p>{{document.number}}</p><p>{{counterparty.name}}</p>{{#each lines}}<p>{{description}}: {{formatCurrency lineTotal ../metadata.currencyCode}}</p>{{/each}}<p>Total Credit: {{formatCurrency totals.total metadata.currencyCode}}</p></body></html>",
+            "isDefault": false
+          },
+          "expected_result": "Form populated with Credit Note template data",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Save button",
+          "input_data": {},
+          "expected_result": "Template created, success toast, list refreshed",
+          "screenshot": true,
+          "visual_check": "Success toast visible. CREDIT_NOTE group now shows 2 templates — the seeded default and the new 'E2E Credit Note Compact' with green Active badge, A5/landscape metadata displayed."
+        }
+      ]
+    },
+    {
+      "id": "j4-template-list-grouped-display",
+      "name": "Verify Template List Grouping and Badges",
+      "description": "Verify templates are correctly grouped by document type with collapsible accordion sections, and badges (Active, Default, version count) are displayed correctly",
+      "priority": "critical",
+      "related_stories": ["E12-2"],
+      "acceptance_criteria": ["AC2", "AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/settings/document-templates",
+          "input_data": {},
+          "expected_result": "Template list loads with grouped sections",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "SALES_INVOICE accordion section header",
+          "input_data": {},
+          "expected_result": "SALES_INVOICE section visible with badge showing template count (2: seeded default + custom)",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Default template card in SALES_INVOICE section",
+          "input_data": {},
+          "expected_result": "Seeded 'Standard Invoice' template shows: green 'Active' badge, purple 'Default' badge, version count '0', page size 'A4/portrait'",
+          "screenshot": true,
+          "visual_check": "Template card with 12px rounded corners. Name clearly visible with 2-line clamp. Green Active badge and purple Default badge side by side. Version count displayed in JetBrains Mono tabular-nums font. Three-dot overflow menu button visible on hover/focus."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Custom 'E2E Test Invoice Template' card",
+          "input_data": {},
+          "expected_result": "Custom template shows: green 'Active' badge, NO purple 'Default' badge (isDefault=false), A4/portrait metadata",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "DELIVERY_NOTE accordion section header (collapsed)",
+          "input_data": {},
+          "expected_result": "DELIVERY_NOTE section expands showing seeded default template",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "DELIVERY_NOTE seeded template card",
+          "input_data": {},
+          "expected_result": "Standard Delivery Note template visible with Active and Default badges",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "DELIVERY_NOTE accordion section header (expanded)",
+          "input_data": {},
+          "expected_result": "DELIVERY_NOTE section collapses, hiding the template cards",
+          "screenshot": true,
+          "visual_check": "Accordion section collapsed with only the header row visible showing DELIVERY_NOTE label and count badge. Other expanded sections still visible above/below."
+        }
+      ]
+    },
+    {
+      "id": "j5-filter-by-document-type",
+      "name": "Filter Templates by Document Type",
+      "description": "Use the document type dropdown filter to narrow the template list to a specific document type, then clear the filter",
+      "priority": "high",
+      "related_stories": ["E12-2"],
+      "acceptance_criteria": ["AC2", "AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/settings/document-templates",
+          "input_data": {},
+          "expected_result": "Full template list loads showing all document types",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Document type filter dropdown",
+          "input_data": {},
+          "expected_result": "Dropdown opens showing 'All types' plus 14 document type options",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "SALES_INVOICE option in document type dropdown",
+          "input_data": {},
+          "expected_result": "List filters to show only SALES_INVOICE templates",
+          "screenshot": true,
+          "visual_check": "Only SALES_INVOICE group visible with 2 templates (seeded 'Standard Invoice' + custom 'E2E Test Invoice Template'). All other document type groups hidden. Filter dropdown shows 'Sales Invoice' as selected value. Clear button appears near filters."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Template cards in filtered list",
+          "input_data": {},
+          "expected_result": "Exactly 2 template cards visible — only SALES_INVOICE type",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Document type filter dropdown",
+          "input_data": {},
+          "expected_result": "Dropdown opens again",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "PURCHASE_ORDER option in document type dropdown",
+          "input_data": {},
+          "expected_result": "List filters to PURCHASE_ORDER templates only",
+          "screenshot": true,
+          "visual_check": "Only PURCHASE_ORDER group visible with 1 template (seeded 'Standard Purchase Order'). Previous SALES_INVOICE results gone."
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Clear filters button",
+          "input_data": {},
+          "expected_result": "All filters cleared, full template list restored with all document type groups",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j6-search-templates-by-name",
+      "name": "Search Templates by Name",
+      "description": "Use the search input to find templates by partial name match, verify case-insensitive searching",
+      "priority": "high",
+      "related_stories": ["E12-2"],
+      "acceptance_criteria": ["AC2", "AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/settings/document-templates",
+          "input_data": {},
+          "expected_result": "Full template list loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Search input",
+          "input_data": {
+            "search": "E2E"
+          },
+          "expected_result": "List filters to templates matching 'E2E' in name",
+          "screenshot": true,
+          "visual_check": "Only 2 templates visible: 'E2E Test Invoice Template' (SALES_INVOICE) and 'E2E Credit Note Compact' (CREDIT_NOTE). Search input shows 'E2E' text. Other seeded templates hidden."
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Search input",
+          "input_data": {
+            "search": "standard"
+          },
+          "expected_result": "List filters to templates matching 'standard' (case-insensitive) — shows all seeded 'Standard ...' templates",
+          "screenshot": true,
+          "visual_check": "Multiple seeded templates visible across different document type groups, all with names starting with 'Standard'. Custom E2E templates hidden. Results include 'Standard Invoice', 'Standard Credit Note', etc."
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "Search input",
+          "input_data": {
+            "search": ""
+          },
+          "expected_result": "Search cleared, full template list restored",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j7-edit-existing-template",
+      "name": "Edit an Existing Template",
+      "description": "Open the custom invoice template for editing, change the description and page settings, save and verify the updates",
+      "priority": "critical",
+      "related_stories": ["E12-2"],
+      "acceptance_criteria": ["AC3", "AC7"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/settings/document-templates",
+          "input_data": {},
+          "expected_result": "Template list loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Three-dot overflow menu on 'E2E Test Invoice Template' card",
+          "input_data": {},
+          "expected_result": "Overflow menu opens showing: Edit, Preview, Clone, Set as Default, Deactivate",
+          "screenshot": true,
+          "visual_check": "Dropdown menu visible with 5 action items. Edit option at top. Menu positioned relative to the overflow button."
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Edit option in overflow menu",
+          "input_data": {},
+          "expected_result": "Template editor form opens pre-populated with existing template data",
+          "screenshot": true,
+          "visual_check": "Editor form showing 'Edit Template' heading. Document Type dropdown showing 'Sales Invoice' and DISABLED (grey, non-clickable). Name field shows 'E2E Test Invoice Template'. Description field shows existing description. Page settings show A4/portrait/25mm margins. Branding toggles in correct positions. HTML Template textarea populated with template HTML."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Document Type dropdown",
+          "input_data": {},
+          "expected_result": "Document Type dropdown is disabled (immutable on edit per AC3)",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Template editor form",
+          "input_data": {
+            "description": "Updated: Custom invoice template with enhanced styling for E2E testing",
+            "marginTop": "30",
+            "marginBottom": "30"
+          },
+          "expected_result": "Description and margin fields updated",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Show Logo toggle switch",
+          "input_data": {},
+          "expected_result": "Show Logo toggled from true to false",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Save button",
+          "input_data": {},
+          "expected_result": "Template updated successfully, success toast shown, returns to list view",
+          "screenshot": true,
+          "visual_check": "Success toast notification visible (e.g., 'Template updated successfully'). Template list refreshed. 'E2E Test Invoice Template' card still visible in SALES_INVOICE group."
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Three-dot overflow menu on 'E2E Test Invoice Template' card",
+          "input_data": {},
+          "expected_result": "Overflow menu opens",
+          "screenshot": false
+        },
+        {
+          "step_number": 9,
+          "action": "click",
+          "target": "Edit option",
+          "input_data": {},
+          "expected_result": "Editor reopens showing updated values",
+          "screenshot": false
+        },
+        {
+          "step_number": 10,
+          "action": "verify_text",
+          "target": "Description textarea",
+          "input_data": {},
+          "expected_result": "Description shows 'Updated: Custom invoice template with enhanced styling for E2E testing'",
+          "screenshot": false
+        },
+        {
+          "step_number": 11,
+          "action": "click",
+          "target": "Cancel button",
+          "input_data": {},
+          "expected_result": "Returns to list view without saving",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j8-set-template-as-default",
+      "name": "Set a Template as Default",
+      "description": "Set the custom E2E invoice template as default via overflow menu, verify the previous default loses its badge and the new one gains it",
+      "priority": "critical",
+      "related_stories": ["E12-2"],
+      "acceptance_criteria": ["AC1", "AC3", "AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/settings/document-templates",
+          "input_data": {},
+          "expected_result": "Template list loads. In SALES_INVOICE group, 'Standard Invoice' has purple Default badge",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Purple 'Default' badge on 'Standard Invoice' template card",
+          "input_data": {},
+          "expected_result": "'Standard Invoice' currently shows the Default badge",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Three-dot overflow menu on 'E2E Test Invoice Template' card",
+          "input_data": {},
+          "expected_result": "Overflow menu opens with 'Set as Default' option visible",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Set as Default option",
+          "input_data": {},
+          "expected_result": "Template set as default, success toast, list refreshed",
+          "screenshot": true,
+          "visual_check": "Success toast visible. 'E2E Test Invoice Template' now shows purple 'Default' badge. 'Standard Invoice' no longer shows Default badge (only Active badge remains). Only one template per document type has the Default badge."
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Purple 'Default' badge on 'E2E Test Invoice Template' card",
+          "input_data": {},
+          "expected_result": "'E2E Test Invoice Template' now has the Default badge",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "'Standard Invoice' template card",
+          "input_data": {},
+          "expected_result": "'Standard Invoice' no longer has the Default badge",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j9-view-template-detail-and-create-version",
+      "name": "View Template Detail and Create a Version",
+      "description": "Navigate to template detail view showing version management section, then create a new template version with selection criteria and override fields",
+      "priority": "critical",
+      "related_stories": ["E12-2"],
+      "acceptance_criteria": ["AC4", "AC8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/settings/document-templates",
+          "input_data": {},
+          "expected_result": "Template list loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "'E2E Test Invoice Template' card (click on name/card body, not overflow menu)",
+          "input_data": {},
+          "expected_result": "Template detail view opens showing template info and Versions section",
+          "screenshot": true,
+          "visual_check": "Detail view visible with template name, description, page settings summary. 'Versions (0)' section header with purple 'Create Version' button. Empty state message in versions area: dashed border box with message about creating first version."
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Preview panel or preview button",
+          "input_data": {},
+          "expected_result": "Preview capability visible in the detail view",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Create Version button (purple)",
+          "input_data": {},
+          "expected_result": "Version editor dialog opens as modal overlay",
+          "screenshot": true,
+          "visual_check": "Modal dialog visible (max-width 2xl, max-height 85vh) with scrollable content. Selection Criteria section (2-column grid): Language Code, Branch Code, Number Series ID, Access Group, Customer Group ID inputs. Override Editors (4 collapsible sections). Email Settings section. Priority number input and Active toggle. Cancel and Create buttons at bottom."
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Version editor dialog",
+          "input_data": {
+            "languageCode": "fr",
+            "branchCode": "PARIS",
+            "priority": 10,
+            "isActive": true,
+            "emailSubject": "Votre facture {{document.number}}",
+            "emailBody": "Veuillez trouver ci-joint votre facture.",
+            "replyToEmail": "facturation@acme.fr"
+          },
+          "expected_result": "Version form fields populated with French locale version data",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "HTML Override collapsible section header",
+          "input_data": {},
+          "expected_result": "HTML Override editor expands showing textarea",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "fill_form",
+          "target": "HTML Override textarea",
+          "input_data": {
+            "htmlOverride": "<html><body><h1>FACTURE</h1><p>Facture: {{document.number}}</p><p>Date: {{formatDate document.date}}</p><p>Client: {{counterparty.name}}</p>{{#each lines}}<p>{{description}}: {{formatCurrency lineTotal ../metadata.currencyCode}}</p>{{/each}}<p>Total: {{formatCurrency totals.total metadata.currencyCode}}</p></body></html>"
+          },
+          "expected_result": "French HTML override entered",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Create button in version editor dialog",
+          "input_data": {},
+          "expected_result": "Version created successfully, dialog closes, versions list refreshed",
+          "screenshot": true,
+          "visual_check": "Version editor dialog dismissed. Versions section now shows '(1)' count. New version card visible with: priority '10' in JetBrains Mono font, green 'Active' badge, selection criteria summary showing 'Lang: fr, Branch: PARIS'. Three-dot overflow menu on version card."
+        },
+        {
+          "step_number": 9,
+          "action": "verify_text",
+          "target": "Version card selection criteria summary",
+          "input_data": {},
+          "expected_result": "Shows 'Lang: fr' and 'Branch: PARIS' in criteria summary",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j10-edit-template-version",
+      "name": "Edit a Template Version",
+      "description": "Edit the previously created version to change its priority and add an access group criterion",
+      "priority": "high",
+      "related_stories": ["E12-2"],
+      "acceptance_criteria": ["AC4", "AC8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/settings/document-templates",
+          "input_data": {},
+          "expected_result": "Template list loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "'E2E Test Invoice Template' card to enter detail view",
+          "input_data": {},
+          "expected_result": "Detail view opens with versions section showing 1 version",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Three-dot overflow menu on the French version card",
+          "input_data": {},
+          "expected_result": "Version overflow menu opens with: Edit, Preview, Clone, Activate/Deactivate, Delete",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Edit option in version overflow menu",
+          "input_data": {},
+          "expected_result": "Version editor dialog opens pre-populated with existing version data",
+          "screenshot": true,
+          "visual_check": "Version editor dialog showing pre-filled fields: Language Code 'fr', Branch Code 'PARIS', Priority '10', Active toggle ON. Email Subject shows Handlebars template text. HTML Override section expanded showing French template HTML."
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Version editor dialog",
+          "input_data": {
+            "priority": 20,
+            "accessGroup": "SALES"
+          },
+          "expected_result": "Priority changed to 20, Access Group set to SALES",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Update button in version editor dialog",
+          "input_data": {},
+          "expected_result": "Version updated successfully, dialog closes, version card refreshed",
+          "screenshot": true,
+          "visual_check": "Version card now shows priority '20', criteria summary updated to include 'Group: SALES' alongside 'Lang: fr, Branch: PARIS'. Active badge still green."
+        }
+      ]
+    },
+    {
+      "id": "j11-preview-template-pdf",
+      "name": "Preview a Template as PDF",
+      "description": "Generate a PDF preview of the custom invoice template using sample data, verify the PDF is displayed inline with download/print controls",
+      "priority": "critical",
+      "related_stories": ["E12-2"],
+      "acceptance_criteria": ["AC5", "AC9"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/settings/document-templates",
+          "input_data": {},
+          "expected_result": "Template list loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Three-dot overflow menu on 'E2E Test Invoice Template' card",
+          "input_data": {},
+          "expected_result": "Overflow menu opens",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Preview option in overflow menu",
+          "input_data": {},
+          "expected_result": "Template detail view opens with preview panel visible",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Preview panel initial state",
+          "input_data": {},
+          "expected_result": "Preview panel shows dashed border box with Eye icon and 'Click Generate Preview to see a PDF preview with sample data' message. Generate Preview button visible (purple).",
+          "screenshot": true,
+          "visual_check": "Preview panel in initial state with dashed border container, Eye icon centered, instructional text, and purple 'Generate Preview' button."
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Generate Preview button",
+          "input_data": {},
+          "expected_result": "Loading state shown while PDF generates",
+          "screenshot": true,
+          "visual_check": "Spinner animation visible (purple #7c3aed). 'Generating PDF preview...' text below spinner. Generate Preview button disabled with spinner icon."
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "PDF preview iframe",
+          "input_data": {},
+          "expected_result": "PDF rendered successfully in an iframe/object element. Three control buttons visible below: Download, Open in New Tab, Print. Regenerate button replaces Generate Preview button.",
+          "screenshot": true,
+          "visual_check": "PDF document visible in iframe (responsive height). Invoice content rendered with sample data — 'INVOICE' heading, invoice number, customer name, line items table, totals. Three action buttons below: Download (with download icon), Open in New Tab (with external link icon), Print (with printer icon). 'Regenerate' outline button visible."
+        },
+        {
+          "step_number": 7,
+          "action": "verify_element",
+          "target": "Download button in preview controls",
+          "input_data": {},
+          "expected_result": "Download button is clickable",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "verify_element",
+          "target": "Open in New Tab button in preview controls",
+          "input_data": {},
+          "expected_result": "Open in New Tab button is clickable",
+          "screenshot": false
+        },
+        {
+          "step_number": 9,
+          "action": "verify_element",
+          "target": "Print button in preview controls",
+          "input_data": {},
+          "expected_result": "Print button is clickable",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j12-preview-specific-version",
+      "name": "Preview a Specific Template Version",
+      "description": "Generate a preview using a specific version's overrides (French locale version) to verify version-specific rendering",
+      "priority": "high",
+      "related_stories": ["E12-2"],
+      "acceptance_criteria": ["AC5", "AC9"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/settings/document-templates",
+          "input_data": {},
+          "expected_result": "Template list loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "'E2E Test Invoice Template' card to enter detail view",
+          "input_data": {},
+          "expected_result": "Detail view with versions section visible, showing 1 version (French locale)",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Three-dot overflow menu on French version card",
+          "input_data": {},
+          "expected_result": "Version overflow menu opens",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Preview option in version overflow menu",
+          "input_data": {},
+          "expected_result": "Preview initiated for this specific version with overrides applied",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "PDF preview iframe after loading completes",
+          "input_data": {},
+          "expected_result": "PDF rendered with French version's HTML override — 'FACTURE' heading visible instead of 'INVOICE'",
+          "screenshot": true,
+          "visual_check": "PDF in iframe showing French-language invoice. 'FACTURE' heading visible at top. French field labels ('Facture:', 'Date:', 'Client:'). Sample data rendered with formatCurrency and formatDate helpers. This confirms version-specific overrides are applied to the preview."
+        }
+      ]
+    },
+    {
+      "id": "j13-clone-template",
+      "name": "Clone an Existing Template",
+      "description": "Clone the custom invoice template, verify the clone form is pre-populated with the source template's data, save the clone with a new name",
+      "priority": "high",
+      "related_stories": ["E12-2"],
+      "acceptance_criteria": ["AC1", "AC6", "AC7"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/settings/document-templates",
+          "input_data": {},
+          "expected_result": "Template list loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Three-dot overflow menu on 'E2E Test Invoice Template' card",
+          "input_data": {},
+          "expected_result": "Overflow menu opens",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Clone option in overflow menu",
+          "input_data": {},
+          "expected_result": "Clone editor form opens pre-populated with source template data, name field modified to indicate clone",
+          "screenshot": true,
+          "visual_check": "Editor form visible with 'Clone Template' heading. Document Type dropdown shows 'Sales Invoice' and IS ENABLED (can change type on clone). Name field pre-populated with source name (possibly with 'Copy of' prefix or '(Copy)' suffix). HTML Template textarea pre-populated with source template HTML. All branding toggles match source. isDefault checkbox unchecked."
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "Template name input",
+          "input_data": {
+            "name": "E2E Cloned Invoice Template"
+          },
+          "expected_result": "Name updated to unique clone name",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Save button",
+          "input_data": {},
+          "expected_result": "Cloned template created successfully, success toast, list refreshed",
+          "screenshot": true,
+          "visual_check": "Success toast visible. SALES_INVOICE group now shows 3 templates: 'Standard Invoice' (seeded), 'E2E Test Invoice Template' (custom), and 'E2E Cloned Invoice Template' (new clone). Clone has green Active badge, no Default badge."
+        }
+      ]
+    },
+    {
+      "id": "j14-form-validation-errors",
+      "name": "Verify Form Validation Errors",
+      "description": "Test form validation by submitting with missing required fields and exceeding field length limits",
+      "priority": "high",
+      "related_stories": ["E12-2"],
+      "acceptance_criteria": ["AC1", "AC7"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/settings/document-templates",
+          "input_data": {},
+          "expected_result": "Template list loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Add Template button",
+          "input_data": {},
+          "expected_result": "Empty editor form opens",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Save button (without filling any fields)",
+          "input_data": {},
+          "expected_result": "Validation errors shown for required fields",
+          "screenshot": true,
+          "visual_check": "Field-level validation error messages visible in red below: Document Type (required), Name (required), HTML Template (required). Save button may be disabled or form shows error state. No success toast — form remains open."
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "Template editor form",
+          "input_data": {
+            "documentType": "SALES_INVOICE",
+            "name": "",
+            "htmlTemplate": ""
+          },
+          "expected_result": "Name and HTML Template still show required errors after attempting empty strings",
+          "screenshot": false
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Name input",
+          "input_data": {
+            "name": "A"
+          },
+          "expected_result": "Name accepted (min length 1)",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "Margin Top input",
+          "input_data": {
+            "marginTop": "150"
+          },
+          "expected_result": "Validation error on marginTop — max value is 100mm",
+          "screenshot": true,
+          "visual_check": "Margin Top input shows red border/error state with validation message about maximum value (100). Other margin fields remain valid."
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Cancel button",
+          "input_data": {},
+          "expected_result": "Returns to list view without saving. No template created.",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j15-duplicate-name-conflict",
+      "name": "Verify Duplicate Name Constraint (409 Conflict)",
+      "description": "Attempt to create a template with the same name and document type as an existing template, verify 409 conflict error is shown",
+      "priority": "high",
+      "related_stories": ["E12-2"],
+      "acceptance_criteria": ["AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/settings/document-templates",
+          "input_data": {},
+          "expected_result": "Template list loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Add Template button",
+          "input_data": {},
+          "expected_result": "Editor form opens",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Template editor form",
+          "input_data": {
+            "documentType": "SALES_INVOICE",
+            "name": "E2E Test Invoice Template",
+            "htmlTemplate": "<html><body>Duplicate test</body></html>"
+          },
+          "expected_result": "Form fields populated with duplicate name+type combination",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Save button",
+          "input_data": {},
+          "expected_result": "409 Conflict error displayed — 'A template with this name already exists for this document type'",
+          "screenshot": true,
+          "visual_check": "Error toast or inline error message visible showing duplicate name conflict. Form remains open (not dismissed). Template list not refreshed with a duplicate entry."
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Cancel button",
+          "input_data": {},
+          "expected_result": "Returns to list view. No duplicate template created.",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j16-deactivate-and-show-inactive",
+      "name": "Deactivate a Template and Show Inactive Templates",
+      "description": "Deactivate (soft-delete) the cloned template via overflow menu, verify it disappears from active list, then toggle 'Show Inactive' to see it",
+      "priority": "high",
+      "related_stories": ["E12-2"],
+      "acceptance_criteria": ["AC3", "AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/settings/document-templates",
+          "input_data": {},
+          "expected_result": "Template list loads showing active templates. SALES_INVOICE group shows 3 templates.",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Three-dot overflow menu on 'E2E Cloned Invoice Template' card",
+          "input_data": {},
+          "expected_result": "Overflow menu opens with 'Deactivate' option",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Deactivate option in overflow menu",
+          "input_data": {},
+          "expected_result": "Template deactivated (soft-deleted), success toast, template removed from active list",
+          "screenshot": true,
+          "visual_check": "Success toast visible (e.g., 'Template deactivated'). SALES_INVOICE group now shows 2 templates. 'E2E Cloned Invoice Template' no longer visible in the list."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Show Inactive toggle button",
+          "input_data": {},
+          "expected_result": "List switches to show inactive templates",
+          "screenshot": true,
+          "visual_check": "List now shows inactive templates. 'E2E Cloned Invoice Template' visible with gray 'Inactive' badge instead of green 'Active' badge. Show Inactive button appears pressed/active."
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "'E2E Cloned Invoice Template' card with gray 'Inactive' badge",
+          "input_data": {},
+          "expected_result": "Deactivated template visible with Inactive badge, overflow menu shows 'Activate' option instead of 'Deactivate'",
+          "screenshot": false
+        }
+      ]
+    },
+    {
+      "id": "j17-reactivate-template",
+      "name": "Reactivate a Deactivated Template",
+      "description": "Reactivate the previously deactivated cloned template and verify it reappears in the active list",
+      "priority": "medium",
+      "related_stories": ["E12-2"],
+      "acceptance_criteria": ["AC3", "AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/settings/document-templates",
+          "input_data": {},
+          "expected_result": "Template list loads (active templates by default)",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Show Inactive toggle button",
+          "input_data": {},
+          "expected_result": "List shows inactive templates, 'E2E Cloned Invoice Template' visible",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Three-dot overflow menu on 'E2E Cloned Invoice Template' card (inactive)",
+          "input_data": {},
+          "expected_result": "Overflow menu opens with 'Activate' option",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Activate option in overflow menu",
+          "input_data": {},
+          "expected_result": "Template reactivated, success toast",
+          "screenshot": true,
+          "visual_check": "Success toast visible (e.g., 'Template activated'). Template should disappear from inactive list (since it's now active again)."
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Show Inactive toggle button (to switch back to active view)",
+          "input_data": {},
+          "expected_result": "Active template list shown. SALES_INVOICE group shows 3 templates again including reactivated clone.",
+          "screenshot": true,
+          "visual_check": "All 3 SALES_INVOICE templates visible again: 'Standard Invoice', 'E2E Test Invoice Template', 'E2E Cloned Invoice Template'. All showing green 'Active' badge."
+        }
+      ]
+    },
+    {
+      "id": "j18-delete-version-with-confirmation",
+      "name": "Delete a Template Version with Confirmation Dialog",
+      "description": "Delete the French locale version from the custom invoice template, verifying the confirmation dialog appears before hard-deletion",
+      "priority": "high",
+      "related_stories": ["E12-2"],
+      "acceptance_criteria": ["AC4", "AC8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/settings/document-templates",
+          "input_data": {},
+          "expected_result": "Template list loads",
+          "screenshot": false
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "'E2E Test Invoice Template' card to enter detail view",
+          "input_data": {},
+          "expected_result": "Detail view with versions section showing 1 version (French locale, priority 20)",
+          "screenshot": false
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Three-dot overflow menu on French version card",
+          "input_data": {},
+          "expected_result": "Version overflow menu opens",
+          "screenshot": false
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Delete option (red text) in version overflow menu",
+          "input_data": {},
+          "expected_result": "Confirmation dialog appears asking to confirm deletion",
+          "screenshot": true,
+          "visual_check": "Confirmation dialog/modal visible with warning text about permanent deletion (hard-delete). Red 'Delete' confirmation button and 'Cancel' button visible. Dialog overlay dims the background."
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Cancel button in confirmation dialog",
+          "input_data": {},
+          "expected_result": "Dialog closes, version NOT deleted, still shows in list",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "verify_element",
+          "target": "French version card still present",
+          "input_data": {},
+          "expected_result": "Version card still visible — Cancel prevented deletion",
+          "screenshot": false
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Three-dot overflow menu on French version card",
+          "input_data": {},
+          "expected_result": "Version overflow menu opens again",
+          "screenshot": false
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Delete option in version overflow menu",
+          "input_data": {},
+          "expected_result": "Confirmation dialog appears again",
+          "screenshot": false
+        },
+        {
+          "step_number": 9,
+          "action": "click",
+          "target": "Delete confirmation button (red)",
+          "input_data": {},
+          "expected_result": "Version hard-deleted, dialog closes, version list refreshed",
+          "screenshot": true,
+          "visual_check": "Version removed from list. Versions section now shows '(0)' count. Empty state message visible in versions area (dashed border box). Success toast may be shown."
+        }
+      ]
+    },
+    {
+      "id": "j19-concept-d-visual-fidelity",
+      "name": "Concept D Design System Visual Fidelity Check",
+      "description": "Comprehensive visual verification that the Document Templates page adheres to the Concept D design system specifications: colours, typography, spacing, animations, and responsive behaviour",
+      "priority": "medium",
+      "related_stories": ["E12-2"],
+      "acceptance_criteria": ["AC6", "AC7", "AC8", "AC9"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/settings/document-templates",
+          "input_data": {},
+          "expected_result": "Document Templates page loads",
+          "screenshot": true,
+          "visual_check": "Page background is #f4f2ff (light purple), NOT white or grey. Sidebar has purple active item highlight. Header is 56px height with purple 'N' logo mark."
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Add Template button styling",
+          "input_data": {},
+          "expected_result": "Button uses primary purple (#7c3aed), 8px border-radius, white text",
+          "screenshot": true,
+          "visual_check": "Primary 'Add Template' button with: background-color #7c3aed (violet-600), white text, rounded-lg (8px radius). On hover state: background darkens to #5b21b6 (violet-700)."
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Template card styling",
+          "input_data": {},
+          "expected_result": "Cards have 12px radius, custom shadow, proper typography",
+          "screenshot": true,
+          "visual_check": "Template cards with: 12px border-radius (rounded-xl), subtle shadow (shadow-sm), white background. Plus Jakarta Sans font for card headings. Inter font for body text. Version count in JetBrains Mono (tabular-nums). Purple-tinted hover shadow on mouse-over."
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Badge styling — Active (green), Default (purple), Inactive (grey)",
+          "input_data": {},
+          "expected_result": "Active badge is green, Default badge is purple (#ede9fe bg), Inactive badge is grey",
+          "screenshot": true,
+          "visual_check": "Green 'Active' badge with green background tint. Purple 'Default' badge with violet/purple background tint (#ede9fe). Both badges have small text, rounded-full pill shape, consistent padding."
+        },
+        {
+          "step_number": 5,
+          "action": "verify_element",
+          "target": "Document type badge styling in accordion headers",
+          "input_data": {},
+          "expected_result": "Document type labels use purple-tinted badge background (#ede9fe)",
+          "screenshot": false
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Add Template button",
+          "input_data": {},
+          "expected_result": "Editor form opens",
+          "screenshot": true,
+          "visual_check": "Editor form with: Plus Jakarta Sans headings. Form inputs with proper border styling and focus states (purple focus ring). Toggle switches with purple active colour. HTML Template textarea uses JetBrains Mono monospace font with minimum 400px height and 1.5 line-height. Collapsible sections with disclosure triangles."
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Cancel button",
+          "input_data": {},
+          "expected_result": "Returns to list",
+          "screenshot": false
+        }
+      ]
+    }
+  ],
+  "coverage_matrix": {
+    "E12-2_AC1_Template_CRUD": ["j2-create-sales-invoice-template", "j3-create-credit-note-template", "j8-set-template-as-default", "j13-clone-template", "j15-duplicate-name-conflict"],
+    "E12-2_AC2_Template_Listing": ["j4-template-list-grouped-display", "j5-filter-by-document-type", "j6-search-templates-by-name"],
+    "E12-2_AC3_Template_Update_SoftDelete": ["j7-edit-existing-template", "j8-set-template-as-default", "j16-deactivate-and-show-inactive", "j17-reactivate-template"],
+    "E12-2_AC4_Version_Management": ["j9-view-template-detail-and-create-version", "j10-edit-template-version", "j18-delete-version-with-confirmation"],
+    "E12-2_AC5_Template_Preview": ["j11-preview-template-pdf", "j12-preview-specific-version"],
+    "E12-2_AC6_UI_Template_List": ["j1-page-navigation-and-layout", "j4-template-list-grouped-display", "j5-filter-by-document-type", "j6-search-templates-by-name", "j16-deactivate-and-show-inactive", "j19-concept-d-visual-fidelity"],
+    "E12-2_AC7_UI_Editor_Form": ["j2-create-sales-invoice-template", "j7-edit-existing-template", "j13-clone-template", "j14-form-validation-errors", "j19-concept-d-visual-fidelity"],
+    "E12-2_AC8_UI_Version_Management": ["j9-view-template-detail-and-create-version", "j10-edit-template-version", "j18-delete-version-with-confirmation"],
+    "E12-2_AC9_UI_Preview_Panel": ["j11-preview-template-pdf", "j12-preview-specific-version"],
+    "E12-1_AC5_PDF_Generation": ["j11-preview-template-pdf"],
+    "E12-1_AC8_Version_Override_Merging": ["j12-preview-specific-version"],
+    "E12-3_AC1_Seeded_Default_Templates": ["j1-page-navigation-and-layout", "j4-template-list-grouped-display"]
+  },
+  "notes": [
+    "E12-1 and E12-3 are backend-only stories — frontend E2E coverage is limited to what's visible through E12-2's UI (e.g., seeded templates visible in list, PDF preview exercises the Puppeteer pipeline).",
+    "The database must be seeded with E12-3 default templates before running these tests. All 14 DocumentType values should have a seeded 'Standard ...' template.",
+    "Preview tests (j11, j12) depend on Puppeteer being initialised on the API server. These may need a longer timeout (up to 10s) for PDF generation.",
+    "The 'Show Inactive' toggle may filter to ONLY inactive templates (not all templates), per known issue #6 in E12-2 code review. Tests j16/j17 should account for this behaviour.",
+    "Visual checks reference Concept D design tokens: primary purple #7c3aed, hover purple #5b21b6, background #f4f2ff, badge purple bg #ede9fe.",
+    "Clone behaviour (j13): the Document Type dropdown should be enabled on clone (unlike edit where it is disabled), allowing the user to clone a template to a different document type.",
+    "Version delete (j18) is a hard-delete (permanent), unlike template delete which is a soft-delete (sets isActive=false)."
+  ]
+}

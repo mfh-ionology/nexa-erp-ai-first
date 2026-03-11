@@ -146,7 +146,7 @@ function toUserColumnPreferenceDto(p: UserColumnPreference): UserColumnPreferenc
 export class ViewsService {
   constructor(
     private repo: ViewsRepository,
-    private redis: Redis,
+    private redis: Redis | null,
     private logger: Logger,
   ) {}
 
@@ -162,6 +162,7 @@ export class ViewsService {
     companyId: string,
     viewKey: string,
   ): Promise<CachedViewMetadata | null> {
+    if (!this.redis) return null;
     const key = this.metadataCacheKey(companyId, viewKey);
     const cached = await this.redis.get(key);
     if (!cached) return null;
@@ -180,11 +181,13 @@ export class ViewsService {
     viewKey: string,
     data: CachedViewMetadata,
   ): Promise<void> {
+    if (!this.redis) return;
     const key = this.metadataCacheKey(companyId, viewKey);
     await this.redis.set(key, JSON.stringify(data), 'EX', METADATA_CACHE_TTL_SECONDS);
   }
 
   async invalidateMetadataCache(companyId: string, viewKey: string): Promise<void> {
+    if (!this.redis) return;
     const key = this.metadataCacheKey(companyId, viewKey);
     await this.redis.del(key);
   }

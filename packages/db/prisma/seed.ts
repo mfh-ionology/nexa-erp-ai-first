@@ -20,6 +20,7 @@ import { seedAutomationData } from './seeds/automation-seed.js';
 import { seedNotificationTemplates } from './seeds/notification-templates.seed.js';
 import { seedEmailTemplates } from './seeds/email-template-seed.js';
 import { seedKnowledgeData } from './seeds/knowledge-seed.js';
+import { seedDocumentTemplates } from './seeds/document-template-seed.js';
 
 // Seed uses DIRECT_URL (bypasses PgBouncer) for reliable transactional seeding.
 // Runtime client (src/client.ts) uses DATABASE_URL via PgBouncer instead.
@@ -884,6 +885,13 @@ async function main() {
     await seedKnowledgeData(prisma, DEFAULT_COMPANY_ID, DEFAULT_USER_ID);
   } catch (e) {
     console.error('Failed to seed knowledge data:', e);
+  }
+
+  // ── Document Template Seed Data — E12-3 ─────────────────────────
+  try {
+    await seedDocumentTemplates(prisma, DEFAULT_COMPANY_ID, DEFAULT_USER_ID);
+  } catch (e) {
+    console.error('Failed to seed document templates:', e);
   }
 
   // ── Task Seed Data — E11.1 Task 8 ────────────────────────────────

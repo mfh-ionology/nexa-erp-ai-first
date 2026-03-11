@@ -1,0 +1,2185 @@
+{
+  "epic_id": "E12",
+  "epic_title": "Document Templates & PDF",
+  "generated_at": "2026-03-11T13:10:00.000Z",
+  "total_test_cases": 103,
+  "api_base_url": "http://localhost:5100",
+  "notes": {
+    "uuid_rules": "Non-existent valid UUID v4: 00000000-0000-4000-a000-ffffffffffff. Invalid UUID: 'not-a-uuid'. NEVER use 00000000-0000-0000-0000-000000000999.",
+    "rbac_roles": {
+      "SUPER_ADMIN": { "email": "admin@nexa-erp.dev", "user_id": "00000000-0000-4000-a000-000000000002" },
+      "MANAGER": { "email": "manager@nexa-erp.dev", "user_id": "00000000-0000-4000-a000-000000000011" },
+      "STAFF": { "email": "staff@nexa-erp.dev", "user_id": "00000000-0000-4000-a000-000000000010" },
+      "VIEWER": { "email": "viewer@nexa-erp.dev", "user_id": "00000000-0000-4000-a000-000000000012" }
+    },
+    "password": "NexaDev2026!",
+    "company_id": "00000000-0000-4000-a000-000000000001",
+    "discovered_template_ids": {
+      "SALES_INVOICE": "dfba9023-773c-49fb-8251-367544d8bf8e",
+      "CREDIT_NOTE": "460c5906-d47f-4b43-a456-5c2d488884d5",
+      "CASH_RECEIPT": "617787f5-9236-4ebc-8809-6b5343bc76b1",
+      "PROFORMA_INVOICE": "8ef6a074-f71f-402c-a3af-07d27ddb5086",
+      "CUSTOMER_STATEMENT": "e8f37033-633e-493c-a5cc-2bb4b4775f67",
+      "SALES_ORDER": "9ba7a645-9119-47db-b284-9fa4b3eadd89",
+      "SALES_QUOTE": "6a44662e-2210-4bb0-afc1-89f41a50aa4d",
+      "DELIVERY_NOTE": "afc69874-371e-4bb3-acb7-7c904749d985",
+      "PURCHASE_ORDER": "ec2dbf61-2537-4b31-a5af-6203d913391b",
+      "GOODS_RECEIPT_NOTE": "ffb57382-6d40-4a9e-b20a-d786254a18df",
+      "SUPPLIER_REMITTANCE": "8438288d-7a5e-44f7-b80a-f17c4e0a7b2b",
+      "PAYSLIP": "9c724cd5-e5c8-439c-b253-56f5b0305e9e",
+      "P45": "76bd5abb-cdf7-45e8-8d8b-8e902dd85698",
+      "P60": "f890b024-c589-4ee5-828a-3b02cfce6de6"
+    }
+  },
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "description": "Authenticate user and return JWT access token",
+      "test_cases": [
+        {
+          "id": "E12-AUTH-001",
+          "name": "Login - happy path (admin)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "admin@nexa-erp.dev", "password": "NexaDev2026!" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "expiresIn", "user"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-AUTH-002",
+          "name": "Login - invalid credentials",
+          "type": "validation_error",
+          "role": "N/A",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "admin@nexa-erp.dev", "password": "WrongPassword!" }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["INVALID_CREDENTIALS"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-AUTH-003",
+          "name": "Login - missing email field",
+          "type": "validation_error",
+          "role": "N/A",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "password": "NexaDev2026!" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["email"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/system/document-templates",
+      "description": "Create a new document template (ADMIN only)",
+      "test_cases": [
+        {
+          "id": "E12-TPL-CREATE-001",
+          "name": "Create template - happy path",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "name": "Test Invoice Template E12",
+              "description": "A test template for E12 backend testing",
+              "htmlTemplate": "<html><body><h1>Invoice {{document.number}}</h1><p>{{company.name}}</p></body></html>",
+              "pageSize": "A4",
+              "orientation": "portrait",
+              "marginTop": 20,
+              "marginBottom": 20,
+              "marginLeft": 15,
+              "marginRight": 15,
+              "showLogo": true,
+              "logoPosition": "top-left",
+              "showBankDetails": true,
+              "showVatNumber": true,
+              "showCompanyReg": true,
+              "isDefault": false
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "name", "documentType", "SALES_INVOICE", "Test Invoice Template E12"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id, name, \"documentType\", \"isActive\", \"isDefault\", \"companyId\" FROM document_templates WHERE name = 'Test Invoice Template E12'",
+            "expected": "Row exists with isActive=true, isDefault=false, companyId=00000000-0000-4000-a000-000000000001"
+          }
+        },
+        {
+          "id": "E12-TPL-CREATE-002",
+          "name": "Create template - minimal required fields only",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "CREDIT_NOTE",
+              "name": "Minimal Test Template E12",
+              "htmlTemplate": "<html><body>Minimal</body></html>"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "CREDIT_NOTE", "Minimal Test Template E12"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-CREATE-003",
+          "name": "Create template - with isDefault=true unsets previous default",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "name": "New Default Invoice E12",
+              "htmlTemplate": "<html><body>New Default</body></html>",
+              "isDefault": true
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "New Default Invoice E12"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id, name, \"isDefault\" FROM document_templates WHERE \"documentType\" = 'SALES_INVOICE' AND \"companyId\" = '00000000-0000-4000-a000-000000000001' AND \"isDefault\" = true",
+            "expected": "Exactly 1 row returned with name='New Default Invoice E12' (previous default 'Standard Invoice' now isDefault=false)"
+          }
+        },
+        {
+          "id": "E12-TPL-CREATE-004",
+          "name": "Create template - duplicate name for same documentType → 409",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "name": "Standard Invoice",
+              "htmlTemplate": "<html><body>Duplicate</body></html>"
+            }
+          },
+          "expected": {
+            "status": 409,
+            "body_contains": ["TEMPLATE_NAME_EXISTS"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-CREATE-005",
+          "name": "Create template - missing required documentType → 400",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "name": "No Type Template",
+              "htmlTemplate": "<html><body>Missing type</body></html>"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["documentType"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-CREATE-006",
+          "name": "Create template - missing required name → 400",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "htmlTemplate": "<html><body>Missing name</body></html>"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["name"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-CREATE-007",
+          "name": "Create template - missing required htmlTemplate → 400",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "name": "No HTML Template"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["htmlTemplate"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-CREATE-008",
+          "name": "Create template - invalid documentType → 400",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "INVALID_TYPE",
+              "name": "Invalid Type",
+              "htmlTemplate": "<html><body>Bad type</body></html>"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["documentType"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-CREATE-009",
+          "name": "Create template - name too long (>200 chars) → 400",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "name": "A very long template name that exceeds the 200 character limit. AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "htmlTemplate": "<html><body>Too long</body></html>"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["name"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-CREATE-010",
+          "name": "Create template - invalid pageSize → 400",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "name": "Invalid Page Size",
+              "htmlTemplate": "<html><body>Bad page size</body></html>",
+              "pageSize": "B5"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["pageSize"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-CREATE-011",
+          "name": "Create template - MANAGER role → 403",
+          "type": "authorization",
+          "role": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "name": "Manager Test",
+              "htmlTemplate": "<html><body>Manager</body></html>"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-CREATE-012",
+          "name": "Create template - STAFF role → 403",
+          "type": "authorization",
+          "role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "name": "Staff Test",
+              "htmlTemplate": "<html><body>Staff</body></html>"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-CREATE-013",
+          "name": "Create template - VIEWER role → 403",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "name": "Viewer Test",
+              "htmlTemplate": "<html><body>Viewer</body></html>"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-CREATE-014",
+          "name": "Create template - no auth token → 401",
+          "type": "authorization",
+          "role": "N/A",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "name": "No Auth Test",
+              "htmlTemplate": "<html><body>No auth</body></html>"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system/document-templates",
+      "description": "List document templates with filtering and pagination (ADMIN only)",
+      "test_cases": [
+        {
+          "id": "E12-TPL-LIST-001",
+          "name": "List templates - happy path (all defaults)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/system/document-templates",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data", "meta", "total"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-LIST-002",
+          "name": "List templates - filter by documentType",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/system/document-templates?documentType=SALES_INVOICE",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["SALES_INVOICE"],
+            "body_not_contains": ["CREDIT_NOTE", "PURCHASE_ORDER"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-LIST-003",
+          "name": "List templates - search by name",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/system/document-templates?search=Invoice",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["Invoice"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-LIST-004",
+          "name": "List templates - search returns empty for non-matching name",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/system/document-templates?search=NonExistentTemplate12345",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"],
+            "custom_assertion": "data array is empty, total=0"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-LIST-005",
+          "name": "List templates - pagination with limit",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/system/document-templates?limit=5",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data", "meta"],
+            "custom_assertion": "data array has at most 5 items, meta.hasMore=true, meta.cursor is present"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-LIST-006",
+          "name": "List templates - filter by isActive=false (inactive templates)",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/system/document-templates?isActive=false",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["data"],
+            "custom_assertion": "All returned templates have isActive=false (may be empty if none soft-deleted)"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-LIST-007",
+          "name": "List templates - invalid limit value → 400",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/system/document-templates?limit=0",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["limit"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-LIST-008",
+          "name": "List templates - limit exceeds max (101) → 400",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/system/document-templates?limit=101",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["limit"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-LIST-009",
+          "name": "List templates - invalid documentType filter → 400",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/system/document-templates?documentType=INVALID",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["documentType"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-LIST-010",
+          "name": "List templates - MANAGER role → 403",
+          "type": "authorization",
+          "role": "MANAGER",
+          "request": {
+            "method": "GET",
+            "url": "/system/document-templates",
+            "headers": { "Authorization": "Bearer {{manager_token}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-LIST-011",
+          "name": "List templates - STAFF role → 403",
+          "type": "authorization",
+          "role": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/system/document-templates",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-LIST-012",
+          "name": "List templates - VIEWER role → 403",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/system/document-templates",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system/document-templates/:id",
+      "description": "Get template detail with versions (ADMIN only)",
+      "test_cases": [
+        {
+          "id": "E12-TPL-DETAIL-001",
+          "name": "Get template detail - happy path (seeded SALES_INVOICE)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "name", "Standard Invoice", "SALES_INVOICE", "versions", "htmlTemplate"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-DETAIL-002",
+          "name": "Get template detail - non-existent ID → 404",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/system/document-templates/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["TEMPLATE_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-DETAIL-003",
+          "name": "Get template detail - MANAGER role → 403",
+          "type": "authorization",
+          "role": "MANAGER",
+          "request": {
+            "method": "GET",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e",
+            "headers": { "Authorization": "Bearer {{manager_token}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-DETAIL-004",
+          "name": "Get template detail - no auth → 401",
+          "type": "authorization",
+          "role": "N/A",
+          "request": {
+            "method": "GET",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e",
+            "headers": {}
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/system/document-templates/:id",
+      "description": "Update an existing document template (ADMIN only)",
+      "test_cases": [
+        {
+          "id": "E12-TPL-UPDATE-001",
+          "name": "Update template - happy path (change name and description)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/document-templates/{{created_template_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "name": "Updated Test Invoice Template E12",
+              "description": "Updated description for E12 testing"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["Updated Test Invoice Template E12", "Updated description"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT name, description FROM document_templates WHERE id = '{{created_template_id}}'",
+            "expected": "name='Updated Test Invoice Template E12', description='Updated description for E12 testing'"
+          }
+        },
+        {
+          "id": "E12-TPL-UPDATE-002",
+          "name": "Update template - change pageSize and orientation",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/document-templates/{{created_template_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "pageSize": "Letter",
+              "orientation": "landscape"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["Letter", "landscape"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-UPDATE-003",
+          "name": "Update template - toggle branding flags",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/document-templates/{{created_template_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "showLogo": false,
+              "showBankDetails": false,
+              "showVatNumber": false,
+              "showCompanyReg": false
+            }
+          },
+          "expected": {
+            "status": 200,
+            "custom_assertion": "showLogo=false, showBankDetails=false, showVatNumber=false, showCompanyReg=false"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-UPDATE-004",
+          "name": "Update template - set isDefault=true (swaps default)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/document-templates/{{created_template_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "isDefault": true
+            }
+          },
+          "expected": {
+            "status": 200,
+            "custom_assertion": "isDefault=true on updated template; previous default for same documentType is now isDefault=false"
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id, name, \"isDefault\" FROM document_templates WHERE \"documentType\" = 'SALES_INVOICE' AND \"companyId\" = '00000000-0000-4000-a000-000000000001' AND \"isDefault\" = true",
+            "expected": "Exactly 1 row, matching created_template_id"
+          }
+        },
+        {
+          "id": "E12-TPL-UPDATE-005",
+          "name": "Update template - empty body (no fields) → 400",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/document-templates/{{created_template_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["At least one field"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-UPDATE-006",
+          "name": "Update template - non-existent ID → 404",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/document-templates/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": { "name": "Ghost Template" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["TEMPLATE_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-UPDATE-007",
+          "name": "Update template - invalid pageSize → 400",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/document-templates/{{created_template_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": { "pageSize": "TABLOID" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["pageSize"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-UPDATE-008",
+          "name": "Update template - STAFF role → 403",
+          "type": "authorization",
+          "role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "name": "Staff Update" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/system/document-templates/:id",
+      "description": "Soft-delete a document template (sets isActive=false, ADMIN only)",
+      "test_cases": [
+        {
+          "id": "E12-TPL-DELETE-001",
+          "name": "Soft-delete template - happy path",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/document-templates/{{created_template_id}}",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 204,
+            "body_contains": []
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id, \"isActive\" FROM document_templates WHERE id = '{{created_template_id}}'",
+            "expected": "Row exists with isActive=false (soft-deleted, not hard-deleted)"
+          }
+        },
+        {
+          "id": "E12-TPL-DELETE-002",
+          "name": "Soft-delete template - non-existent ID → 404",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/document-templates/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["TEMPLATE_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-DELETE-003",
+          "name": "Soft-delete template - VIEWER role → 403",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-TPL-DELETE-004",
+          "name": "Soft-delete template - no auth → 401",
+          "type": "authorization",
+          "role": "N/A",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e",
+            "headers": {}
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/system/document-templates/:id/versions",
+      "description": "Create a template version (ADMIN only)",
+      "test_cases": [
+        {
+          "id": "E12-VER-CREATE-001",
+          "name": "Create version - happy path with selection criteria",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e/versions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "languageCode": "fr",
+              "branchCode": "MAIN",
+              "htmlOverride": "<html><body><h1>Facture {{document.number}}</h1></body></html>",
+              "priority": 10,
+              "isActive": true
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "templateId", "languageCode", "fr", "branchCode", "MAIN"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id, \"templateId\", \"languageCode\", \"branchCode\", priority, \"isActive\" FROM document_template_versions WHERE \"templateId\" = 'dfba9023-773c-49fb-8251-367544d8bf8e' AND \"languageCode\" = 'fr'",
+            "expected": "Row exists with priority=10, isActive=true"
+          }
+        },
+        {
+          "id": "E12-VER-CREATE-002",
+          "name": "Create version - minimal (no overrides, just priority)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e/versions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "priority": 5,
+              "isActive": false
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "templateId"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-VER-CREATE-003",
+          "name": "Create version - with email settings",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e/versions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "emailSubject": "Invoice {{document.number}}",
+              "emailBody": "Please find attached invoice {{document.number}}.",
+              "replyToEmail": "accounts@acme.co.uk",
+              "ccEmails": "finance@acme.co.uk",
+              "priority": 0,
+              "isActive": true
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["emailSubject", "emailBody", "replyToEmail", "ccEmails"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-VER-CREATE-004",
+          "name": "Create version - non-existent template ID → 404",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates/00000000-0000-4000-a000-ffffffffffff/versions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": { "priority": 1 }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["TEMPLATE_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-VER-CREATE-005",
+          "name": "Create version - invalid replyToEmail format → 400",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e/versions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "replyToEmail": "not-an-email",
+              "priority": 0
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["replyToEmail"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-VER-CREATE-006",
+          "name": "Create version - STAFF role → 403",
+          "type": "authorization",
+          "role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e/versions",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "priority": 1 }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/system/document-templates/:id/versions/:versionId",
+      "description": "Update a template version (ADMIN only)",
+      "test_cases": [
+        {
+          "id": "E12-VER-UPDATE-001",
+          "name": "Update version - happy path (change priority and language)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e/versions/{{created_version_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "priority": 20,
+              "languageCode": "de"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["priority", "languageCode", "de"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT priority, \"languageCode\" FROM document_template_versions WHERE id = '{{created_version_id}}'",
+            "expected": "priority=20, languageCode='de'"
+          }
+        },
+        {
+          "id": "E12-VER-UPDATE-002",
+          "name": "Update version - toggle isActive",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e/versions/{{created_version_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": { "isActive": false }
+          },
+          "expected": {
+            "status": 200,
+            "custom_assertion": "isActive=false in response"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-VER-UPDATE-003",
+          "name": "Update version - empty body → 400",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e/versions/{{created_version_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["At least one field"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-VER-UPDATE-004",
+          "name": "Update version - non-existent version ID → 404",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e/versions/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": { "priority": 99 }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["TEMPLATE_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-VER-UPDATE-005",
+          "name": "Update version - non-existent template ID → 404",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/document-templates/00000000-0000-4000-a000-ffffffffffff/versions/{{created_version_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": { "priority": 99 }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["TEMPLATE_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-VER-UPDATE-006",
+          "name": "Update version - VIEWER role → 403",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "PATCH",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e/versions/{{created_version_id}}",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" },
+            "body": { "priority": 1 }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/system/document-templates/:id/versions/:versionId",
+      "description": "Hard-delete a template version (ADMIN only)",
+      "test_cases": [
+        {
+          "id": "E12-VER-DELETE-001",
+          "name": "Delete version - happy path",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e/versions/{{created_version_id}}",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 204,
+            "body_contains": []
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) FROM document_template_versions WHERE id = '{{created_version_id}}'",
+            "expected": "count=0 (hard-deleted)"
+          }
+        },
+        {
+          "id": "E12-VER-DELETE-002",
+          "name": "Delete version - non-existent version ID → 404",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e/versions/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["TEMPLATE_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-VER-DELETE-003",
+          "name": "Delete version - non-existent template ID → 404",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/document-templates/00000000-0000-4000-a000-ffffffffffff/versions/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["TEMPLATE_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-VER-DELETE-004",
+          "name": "Delete version - MANAGER role → 403",
+          "type": "authorization",
+          "role": "MANAGER",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e/versions/{{created_version_id}}",
+            "headers": { "Authorization": "Bearer {{manager_token}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/system/document-templates/:id/preview",
+      "description": "Generate preview PDF with sample data (ADMIN only)",
+      "test_cases": [
+        {
+          "id": "E12-PREVIEW-001",
+          "name": "Preview template - happy path (SALES_INVOICE base template)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e/preview",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/pdf",
+              "content-disposition": "inline; filename=\"preview-SALES_INVOICE.pdf\""
+            },
+            "custom_assertion": "Response body starts with %PDF (valid PDF binary)"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-PREVIEW-002",
+          "name": "Preview template - with specific versionId",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e/preview",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": { "versionId": "{{created_version_id}}" }
+          },
+          "expected": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/pdf"
+            },
+            "custom_assertion": "PDF is generated using version override HTML, not base template"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-PREVIEW-003",
+          "name": "Preview template - CREDIT_NOTE template",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates/460c5906-d47f-4b43-a456-5c2d488884d5/preview",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "headers": { "content-type": "application/pdf" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-PREVIEW-004",
+          "name": "Preview template - PURCHASE_ORDER template",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates/ec2dbf61-2537-4b31-a5af-6203d913391b/preview",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "headers": { "content-type": "application/pdf" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-PREVIEW-005",
+          "name": "Preview template - PAYSLIP template",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates/9c724cd5-e5c8-439c-b253-56f5b0305e9e/preview",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "headers": { "content-type": "application/pdf" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-PREVIEW-006",
+          "name": "Preview template - non-existent template ID → 404",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates/00000000-0000-4000-a000-ffffffffffff/preview",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["TEMPLATE_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-PREVIEW-007",
+          "name": "Preview template - non-existent versionId → 404",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e/preview",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": { "versionId": "00000000-0000-4000-a000-ffffffffffff" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["VERSION_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-PREVIEW-008",
+          "name": "Preview template - MANAGER role → 403",
+          "type": "authorization",
+          "role": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e/preview",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-PREVIEW-009",
+          "name": "Preview template - STAFF role → 403",
+          "type": "authorization",
+          "role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e/preview",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-PREVIEW-010",
+          "name": "Preview template - no auth → 401",
+          "type": "authorization",
+          "role": "N/A",
+          "request": {
+            "method": "POST",
+            "url": "/system/document-templates/dfba9023-773c-49fb-8251-367544d8bf8e/preview",
+            "headers": { "Content-Type": "application/json" },
+            "body": {}
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/system/documents/generate",
+      "description": "Generate a single document PDF (STAFF+ role)",
+      "test_cases": [
+        {
+          "id": "E12-GEN-001",
+          "name": "Generate PDF - happy path (SALES_INVOICE with stub data)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff",
+              "outputFormat": "inline"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/pdf",
+              "content-disposition": "inline",
+              "x-document-type": "SALES_INVOICE",
+              "x-template-id": "dfba9023-773c-49fb-8251-367544d8bf8e"
+            },
+            "custom_assertion": "Response body starts with %PDF. Note: uses stub data since no real invoice records exist. X-Template-Version-Id header present (may be empty string)."
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-GEN-002",
+          "name": "Generate PDF - attachment output format",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff",
+              "outputFormat": "attachment"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/pdf",
+              "content-disposition": "attachment; filename=\"SALES_INVOICE-{{stub_doc_number}}.pdf\""
+            },
+            "custom_assertion": "Content-Disposition is attachment with a filename containing SALES_INVOICE"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-GEN-003",
+          "name": "Generate PDF - CREDIT_NOTE document type",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "CREDIT_NOTE",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/pdf",
+              "x-document-type": "CREDIT_NOTE"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-GEN-004",
+          "name": "Generate PDF - PURCHASE_ORDER document type",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "PURCHASE_ORDER",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/pdf",
+              "x-document-type": "PURCHASE_ORDER"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-GEN-005",
+          "name": "Generate PDF - PAYSLIP document type",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "PAYSLIP",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "headers": {
+              "content-type": "application/pdf",
+              "x-document-type": "PAYSLIP"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-GEN-006",
+          "name": "Generate PDF - with version context",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff",
+              "versionContext": {
+                "languageCode": "en",
+                "branchCode": "MAIN"
+              }
+            }
+          },
+          "expected": {
+            "status": 200,
+            "headers": { "content-type": "application/pdf" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-GEN-007",
+          "name": "Generate PDF - STAFF role allowed",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "headers": { "content-type": "application/pdf" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-GEN-008",
+          "name": "Generate PDF - MANAGER role allowed",
+          "type": "happy_path",
+          "role": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "headers": { "content-type": "application/pdf" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-GEN-009",
+          "name": "Generate PDF - missing documentType → 400",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "recordId": "00000000-0000-4000-a000-ffffffffffff"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["documentType"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-GEN-010",
+          "name": "Generate PDF - missing recordId → 400",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["recordId"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-GEN-011",
+          "name": "Generate PDF - invalid recordId format (not UUID) → 400",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordId": "not-a-uuid"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["recordId"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-GEN-012",
+          "name": "Generate PDF - invalid documentType → 400",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "INVALID_DOCTYPE",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["documentType"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-GEN-013",
+          "name": "Generate PDF - invalid outputFormat → 400",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff",
+              "outputFormat": "html"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["outputFormat"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-GEN-014",
+          "name": "Generate PDF - VIEWER role denied → 403",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-GEN-015",
+          "name": "Generate PDF - no auth → 401",
+          "type": "authorization",
+          "role": "N/A",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/system/documents/batch-generate",
+      "description": "Batch generate PDFs via BullMQ (MANAGER+ role, async 202)",
+      "test_cases": [
+        {
+          "id": "E12-BATCH-001",
+          "name": "Batch generate - happy path (MANAGER role, 3 records)",
+          "type": "happy_path",
+          "role": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordIds": [
+                "00000000-0000-4000-a000-000000000101",
+                "00000000-0000-4000-a000-000000000102",
+                "00000000-0000-4000-a000-000000000103"
+              ]
+            }
+          },
+          "expected": {
+            "status": 202,
+            "body_contains": ["batchJobId"],
+            "custom_assertion": "Returns 202 Accepted with a batchJobId string. Note: may return 503 if Redis/BullMQ queue is not initialised."
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-BATCH-002",
+          "name": "Batch generate - SUPER_ADMIN role allowed",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "documentType": "CREDIT_NOTE",
+              "recordIds": [
+                "00000000-0000-4000-a000-000000000201"
+              ]
+            }
+          },
+          "expected": {
+            "status": 202,
+            "body_contains": ["batchJobId"],
+            "custom_assertion": "May return 503 if Redis not available"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-BATCH-003",
+          "name": "Batch generate - missing documentType → 400",
+          "type": "validation_error",
+          "role": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": {
+              "recordIds": ["00000000-0000-4000-a000-000000000101"]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["documentType"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-BATCH-004",
+          "name": "Batch generate - missing recordIds → 400",
+          "type": "validation_error",
+          "role": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["recordIds"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-BATCH-005",
+          "name": "Batch generate - empty recordIds array → 400",
+          "type": "validation_error",
+          "role": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordIds": []
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["recordIds"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-BATCH-006",
+          "name": "Batch generate - invalid UUID in recordIds → 400",
+          "type": "validation_error",
+          "role": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordIds": ["not-a-uuid"]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["recordIds"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-BATCH-007",
+          "name": "Batch generate - exceed 500 record limit → 400",
+          "type": "validation_error",
+          "role": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordIds": "{{generate_501_valid_uuids}}"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["recordIds"],
+            "custom_assertion": "Array of 501 valid UUIDs exceeds the max(500) limit in the Zod schema"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-BATCH-008",
+          "name": "Batch generate - invalid documentType → 400",
+          "type": "validation_error",
+          "role": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": {
+              "documentType": "INVALID_TYPE",
+              "recordIds": ["00000000-0000-4000-a000-000000000101"]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["documentType"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-BATCH-009",
+          "name": "Batch generate - STAFF role denied → 403",
+          "type": "authorization",
+          "role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordIds": ["00000000-0000-4000-a000-000000000101"]
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-BATCH-010",
+          "name": "Batch generate - VIEWER role denied → 403",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordIds": ["00000000-0000-4000-a000-000000000101"]
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-BATCH-011",
+          "name": "Batch generate - no auth → 401",
+          "type": "authorization",
+          "role": "N/A",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordIds": ["00000000-0000-4000-a000-000000000101"]
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system/documents/batch-generate/:batchJobId/status",
+      "description": "Query batch generation job status (STAFF+ role)",
+      "test_cases": [
+        {
+          "id": "E12-BATCH-STATUS-001",
+          "name": "Batch status - happy path (query existing batch job)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/system/documents/batch-generate/{{batch_job_id}}/status",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["batchJobId", "status", "total", "completed", "failed", "errors"],
+            "custom_assertion": "status is one of: waiting, active, completed, failed. May return 503 if Redis not available."
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-BATCH-STATUS-002",
+          "name": "Batch status - STAFF role allowed",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/system/documents/batch-generate/{{batch_job_id}}/status",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["batchJobId", "status"],
+            "custom_assertion": "STAFF can query batch status. May return 503 if Redis not available."
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-BATCH-STATUS-003",
+          "name": "Batch status - non-existent batch job ID → 404",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/system/documents/batch-generate/00000000-0000-4000-a000-ffffffffffff/status",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["BATCH_NOT_FOUND"],
+            "custom_assertion": "May return 503 if Redis/BullMQ queue is not initialised"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-BATCH-STATUS-004",
+          "name": "Batch status - empty batchJobId → 400 or 404",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/system/documents/batch-generate//status",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["batchJobId"],
+            "custom_assertion": "Empty param should fail validation (min(1) on batchJobId) or return 404 for route not found"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-BATCH-STATUS-005",
+          "name": "Batch status - VIEWER role denied → 403",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/system/documents/batch-generate/some-job-id/status",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "E12-BATCH-STATUS-006",
+          "name": "Batch status - no auth → 401",
+          "type": "authorization",
+          "role": "N/A",
+          "request": {
+            "method": "GET",
+            "url": "/system/documents/batch-generate/some-job-id/status",
+            "headers": {}
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["UNAUTHORIZED"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    }
+  ],
+  "test_execution_order": [
+    "E12-AUTH-001 — Login admin (obtain token for all subsequent tests)",
+    "E12-AUTH-002 — Login invalid credentials",
+    "E12-AUTH-003 — Login missing email",
+    "--- TEMPLATE CRUD: Creates first ---",
+    "E12-TPL-CREATE-001 — Create template (save created_template_id)",
+    "E12-TPL-CREATE-002 — Create minimal template",
+    "E12-TPL-CREATE-003 — Create with isDefault=true",
+    "E12-TPL-CREATE-004 — Duplicate name → 409",
+    "E12-TPL-CREATE-005 to 010 — Validation error tests",
+    "E12-TPL-CREATE-011 to 014 — RBAC tests",
+    "--- TEMPLATE CRUD: Reads ---",
+    "E12-TPL-LIST-001 to 009 — List templates with filters",
+    "E12-TPL-LIST-010 to 012 — RBAC tests",
+    "E12-TPL-DETAIL-001 to 004 — Detail and RBAC tests",
+    "--- TEMPLATE CRUD: Updates ---",
+    "E12-TPL-UPDATE-001 to 004 — Happy path updates",
+    "E12-TPL-UPDATE-005 to 008 — Validation and RBAC tests",
+    "--- VERSION MANAGEMENT: Creates first ---",
+    "E12-VER-CREATE-001 — Create version (save created_version_id)",
+    "E12-VER-CREATE-002 to 006 — More creates, validation, RBAC",
+    "--- VERSION MANAGEMENT: Updates ---",
+    "E12-VER-UPDATE-001 to 006 — Update and RBAC tests",
+    "--- VERSION MANAGEMENT: Deletes ---",
+    "E12-VER-DELETE-001 to 004 — Delete and RBAC tests",
+    "--- PREVIEW ---",
+    "E12-PREVIEW-001 to 010 — Preview various templates, RBAC",
+    "--- DOCUMENT GENERATION ---",
+    "E12-GEN-001 to 008 — Generate PDFs for various types and roles",
+    "E12-GEN-009 to 015 — Validation and RBAC tests",
+    "--- BATCH GENERATION ---",
+    "E12-BATCH-001 to 002 — Batch happy path",
+    "E12-BATCH-003 to 008 — Validation tests",
+    "E12-BATCH-009 to 011 — RBAC tests",
+    "E12-BATCH-STATUS-001 to 002 — Status query happy path",
+    "E12-BATCH-STATUS-003 to 006 — Edge cases and RBAC",
+    "--- CLEANUP: Deletes last ---",
+    "E12-TPL-DELETE-001 — Soft-delete created template",
+    "E12-TPL-DELETE-002 to 004 — Edge cases and RBAC"
+  ],
+  "summary": {
+    "total_endpoints": 12,
+    "test_breakdown": {
+      "happy_path": 37,
+      "validation_error": 27,
+      "edge_case": 14,
+      "authorization": 25
+    },
+    "rbac_coverage": {
+      "SUPER_ADMIN_tests": "Majority — used for all happy path, validation, and edge case tests",
+      "MANAGER_tests": "Template CRUD denied (403), batch generate allowed, batch status",
+      "STAFF_tests": "Template CRUD denied (403), document generate allowed, batch denied",
+      "VIEWER_tests": "All endpoints denied (403)",
+      "no_auth_tests": "401 on all authenticated endpoints"
+    },
+    "endpoints_covered": [
+      "POST /auth/login",
+      "GET /system/document-templates",
+      "GET /system/document-templates/:id",
+      "POST /system/document-templates",
+      "PATCH /system/document-templates/:id",
+      "DELETE /system/document-templates/:id",
+      "POST /system/document-templates/:id/versions",
+      "PATCH /system/document-templates/:id/versions/:versionId",
+      "DELETE /system/document-templates/:id/versions/:versionId",
+      "POST /system/document-templates/:id/preview",
+      "POST /system/documents/generate",
+      "POST /system/documents/batch-generate",
+      "GET /system/documents/batch-generate/:batchJobId/status"
+    ],
+    "known_caveats": [
+      "Document generation uses stub data for all document types since no real business records (invoices, POs) exist yet — all 14 types return 200 with stub PDFs",
+      "Batch generate endpoints may return 503 SERVICE_UNAVAILABLE if Redis/BullMQ is not running in the test environment",
+      "Template IDs are UUIDs (not CUIDs) despite CLAUDE.md spec saying cuid — this is a known code review issue (#1 from E12-1)",
+      "Batch status endpoint allows STAFF to query any batch in the company, even ones created by MANAGER — known design issue (#11 from E12-1)",
+      "recordId validated as UUID by Zod but Prisma models may use CUID IDs in future epics — known issue (#1 from E12-1)"
+    ]
+  }
+}

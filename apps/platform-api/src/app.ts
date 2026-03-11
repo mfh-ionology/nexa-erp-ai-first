@@ -22,7 +22,12 @@ import { auditOnResponsePlugin } from './core/audit/audit-on-response.hook.js';
 import { intelligenceRoutesPlugin } from './routes/admin/intelligence.routes.js';
 import { knowledgeRoutesPlugin } from './routes/admin/knowledge.routes.js';
 import { knowledgePlatformRoutesPlugin } from './routes/platform/knowledge.routes.js';
+import { adminAiRoutesPlugin } from './routes/admin/ai.routes.js';
+import { impersonationRoutesPlugin } from './routes/admin/impersonation.routes.js';
+import { supportRoutesPlugin } from './routes/admin/support.routes.js';
+import { auditLogRoutesPlugin } from './routes/admin/audit-log.routes.js';
 import { validateIntelligenceEnv } from './services/index.js';
+import { startExpiryCheck, stopExpiryCheck } from './services/impersonation-expiry.service.js';
 
 const DEFAULT_RATE_LIMIT_MAX = 100;
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -125,6 +130,19 @@ export async function buildApp(opts: { logger?: boolean | Record<string, unknown
   await fastify.register(intelligenceRoutesPlugin);
   await fastify.register(knowledgeRoutesPlugin);
   await fastify.register(knowledgePlatformRoutesPlugin);
+  await fastify.register(adminAiRoutesPlugin);
+  await fastify.register(impersonationRoutesPlugin);
+  await fastify.register(supportRoutesPlugin);
+  await fastify.register(auditLogRoutesPlugin);
+
+  // 12. Impersonation session expiry background job (Task 2, BR-PLT-013)
+  fastify.addHook('onReady', () => {
+    startExpiryCheck();
+    fastify.log.info('Impersonation session expiry check started (60s interval)');
+  });
+  fastify.addHook('onClose', () => {
+    stopExpiryCheck();
+  });
 
   return fastify;
 }

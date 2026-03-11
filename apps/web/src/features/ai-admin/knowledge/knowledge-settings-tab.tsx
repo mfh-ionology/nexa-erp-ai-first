@@ -9,10 +9,21 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useBlocker } from '@tanstack/react-router';
 import { z } from 'zod';
 import { Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -30,10 +41,11 @@ import {
 import { useZodForm } from '@/lib/form-utils';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/stores/auth-store';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const STORAGE_KEY = 'nexa:knowledge-settings';
+const STORAGE_KEY_PREFIX = 'nexa:knowledge-settings';
 
 const CATEGORY_OPTIONS = [
   { value: 'BUSINESS_PROCESS', label: 'Business Processes' },
@@ -87,9 +99,13 @@ const DEFAULT_SETTINGS: SettingsFormValues = {
 
 // ─── Persistence (localStorage interim — TODO: replace with backend settings endpoint) ──
 
-function loadSettings(): SettingsFormValues {
+function getStorageKey(companyId: string | null): string {
+  return companyId ? `${STORAGE_KEY_PREFIX}:${companyId}` : STORAGE_KEY_PREFIX;
+}
+
+function loadSettings(companyId: string | null): SettingsFormValues {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getStorageKey(companyId));
     if (!raw) return DEFAULT_SETTINGS;
     const parsed = JSON.parse(raw);
     const result = settingsSchema.safeParse(parsed);
@@ -99,8 +115,8 @@ function loadSettings(): SettingsFormValues {
   }
 }
 
-function saveSettings(values: SettingsFormValues): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(values));
+function saveSettings(companyId: string | null, values: SettingsFormValues): void {
+  localStorage.setItem(getStorageKey(companyId), JSON.stringify(values));
 }
 
 // ─── Setting Row Layout ─────────────────────────────────────────────────────
@@ -142,8 +158,9 @@ export function KnowledgeSettingsTab({ onDirtyChange }: KnowledgeSettingsTabProp
   const breakpoint = useBreakpoint();
   const isDesktop = breakpoint === 'desktop';
   const [isSaving, setIsSaving] = useState(false);
+  const activeCompanyId = useAuthStore((s) => s.activeCompanyId);
 
-  const savedSettings = useMemo(() => loadSettings(), []);
+  const savedSettings = useMemo(() => loadSettings(activeCompanyId), [activeCompanyId]);
 
   const form = useZodForm<SettingsFormValues>({
     schema: settingsSchema,
@@ -167,12 +184,18 @@ export function KnowledgeSettingsTab({ onDirtyChange }: KnowledgeSettingsTabProp
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
 
+  // Block in-app navigation when dirty — show confirmation dialog
+  const blocker = useBlocker({
+    shouldBlockFn: () => isDirty,
+    withResolver: true,
+  });
+
   const handleSave = useCallback(
     async (values: SettingsFormValues) => {
       setIsSaving(true);
       try {
         // TODO: Replace with API call when backend settings endpoint is available
-        saveSettings(values);
+        saveSettings(activeCompanyId, values);
         // Simulate a brief save delay for UX feedback
         await new Promise((resolve) => setTimeout(resolve, 300));
         form.reset(values);
@@ -183,7 +206,7 @@ export function KnowledgeSettingsTab({ onDirtyChange }: KnowledgeSettingsTabProp
         setIsSaving(false);
       }
     },
-    [form],
+    [form, activeCompanyId],
   );
 
   const handleReset = useCallback(() => {
@@ -402,6 +425,34 @@ export function KnowledgeSettingsTab({ onDirtyChange }: KnowledgeSettingsTabProp
           </SettingRow>
         </form>
       </Form>
+
+      {/* Navigation blocker confirmation dialog */}
+      {blocker.status === 'blocked' && (
+        <AlertDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) blocker.reset();
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-serif">Unsaved Changes</AlertDialogTitle>
+              <AlertDialogDescription>
+                You have unsaved settings changes. Are you sure you want to leave?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => blocker.reset()}>Stay</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => blocker.proceed()}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Discard & Leave
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }

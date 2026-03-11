@@ -92,22 +92,22 @@ function AdoptionBar({ percentage }: { percentage: number }) {
 // ---------------------------------------------------------------------------
 
 function MakeDefaultButton({ insight, disabled }: { insight: PlatformInsight; disabled: boolean }) {
-  const updateStatus = useUpdateInsightStatus();
+  const { mutate, isPending } = useUpdateInsightStatus();
   const user = usePlatformAuthStore((s) => s.user);
 
   const handleMakeDefault = useCallback(() => {
-    updateStatus.mutate({
+    mutate({
       id: insight.id,
       body: { status: 'ACTIONED', reviewedById: user?.id },
     });
-  }, [insight.id, updateStatus, user?.id]);
+  }, [insight.id, mutate, user?.id]);
 
   const isActioned = insight.status === 'ACTIONED';
 
   return (
     <button
       onClick={handleMakeDefault}
-      disabled={disabled || isActioned || updateStatus.isPending}
+      disabled={disabled || isActioned || isPending}
       className={cn(
         'inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
         'focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2',
@@ -120,7 +120,7 @@ function MakeDefaultButton({ insight, disabled }: { insight: PlatformInsight; di
         isActioned ? `Already actioned: ${insight.title}` : `Make default: ${insight.title}`
       }
     >
-      {updateStatus.isPending ? (
+      {isPending ? (
         <RefreshCw className="h-3 w-3 animate-spin" aria-hidden="true" />
       ) : isActioned ? (
         <>
@@ -220,10 +220,10 @@ export function DefaultOptimisationSection() {
     useInsights({ insightType: 'DEFAULT_CANDIDATE' });
 
   const user = usePlatformAuthStore((s) => s.user);
-  const isViewerOnly = user?.role === 'PLATFORM_VIEWER';
+  const isViewerOnly = user?.role !== 'PLATFORM_ADMIN';
 
   // Flatten paginated pages
-  const allInsights = data?.pages.flatMap((p) => p.data) ?? [];
+  const allInsights = useMemo(() => data?.pages.flatMap((p) => p.data) ?? [], [data]);
 
   // Group by module, sorted by adoption percentage descending within each group
   const moduleGroups = useMemo<ModuleGroup[]>(() => {

@@ -244,6 +244,118 @@ async function seedDefaultFeatureFlags() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// E5d-4 Task 8.3: Example platform knowledge articles (seeded as DRAFT)
+// ---------------------------------------------------------------------------
+
+const KNOWLEDGE_ARTICLE_IDS = {
+  bestPractice: '00000000-0000-4000-b000-000000000030',
+  defaultConfig: '00000000-0000-4000-b000-000000000031',
+  skillUpdate: '00000000-0000-4000-b000-000000000032',
+};
+
+const EXAMPLE_KNOWLEDGE_ARTICLES = [
+  {
+    id: KNOWLEDGE_ARTICLE_IDS.bestPractice,
+    title: 'Construction Industry: Invoice Approval Best Practices',
+    content: `## Best Practice: Multi-Stage Invoice Approval for Construction
+
+Construction companies benefit from a structured invoice approval workflow:
+
+1. **Site Manager Review** — Verify quantities and rates match the subcontractor agreement
+2. **Quantity Surveyor Sign-off** — Cross-reference with valuations and retention schedules
+3. **Finance Approval** — Check against budget allocations and CIS deductions
+4. **Director Authorisation** — Final approval for invoices above the defined threshold
+
+### Key Recommendations
+- Set approval thresholds per project value (e.g. <£5k auto-approve if QS signed off)
+- Require photo evidence for material deliveries before goods-received matching
+- Integrate CIS deduction calculations into the AP workflow to avoid manual errors
+- Use retention tracking to automatically hold the agreed percentage until practical completion`,
+    category: 'BEST_PRACTICE',
+    targetIndustries: ['construction'],
+    targetPlanTiers: [] as string[],
+  },
+  {
+    id: KNOWLEDGE_ARTICLE_IDS.defaultConfig,
+    title: 'Recommended Default Chart of Accounts — UK SME',
+    content: `## Default Chart of Accounts Setup
+
+Recommended nominal code structure for UK SMEs following FRS 102 Section 1A:
+
+### Sales (4000-4999)
+- 4000 Sales — Goods
+- 4100 Sales — Services
+- 4200 Sales — Other Income
+
+### Cost of Sales (5000-5999)
+- 5000 Purchases — Materials
+- 5100 Purchases — Subcontractors
+- 5200 Direct Labour Costs
+
+### Overheads (6000-7999)
+- 6000 Staff Costs
+- 6100 Premises Costs
+- 6200 Administrative Expenses
+- 6300 Motor & Travel Expenses
+
+### Balance Sheet (0000-3999, 8000-9999)
+- 1100 Trade Debtors
+- 2100 Trade Creditors
+- 3000 Share Capital
+- 3200 Retained Earnings
+
+This structure aligns with Making Tax Digital requirements and standard UK accounting software exports.`,
+    category: 'DEFAULT_CONFIG',
+    targetIndustries: [] as string[],
+    targetPlanTiers: [] as string[],
+  },
+  {
+    id: KNOWLEDGE_ARTICLE_IDS.skillUpdate,
+    title: 'Skill Update: invoice_categorisation — improved guidance',
+    content: `## Skill Update: invoice_categorisation
+
+### Problem
+The invoice_categorisation skill has shown a below-average success rate when handling invoices with ambiguous line items (e.g. "Professional Services" that could map to multiple nominal codes).
+
+### Improved Guidance
+1. **Context priority** — Always check the supplier's previous invoice history before categorising. If 80%+ of their invoices map to the same nominal, use that as the default.
+2. **Multi-line handling** — When an invoice has mixed line items, categorise each line independently rather than applying one category to the whole invoice.
+3. **Confidence thresholds** — Set confidence below 0.7 when the description is generic (fewer than 3 words). This triggers human review rather than auto-posting.
+4. **Industry context** — Construction invoices with "labour" should check CIS status. Retail invoices with "stock" should use the purchase-for-resale nominal, not consumables.
+
+### Expected Improvement
+These corrections address the top 3 failure modes identified across tenants. Expected success rate improvement: 45% → 70%+.`,
+    category: 'SKILL_UPDATE',
+    targetIndustries: [] as string[],
+    targetPlanTiers: [] as string[],
+  },
+];
+
+async function seedExampleKnowledgeArticles() {
+  for (const article of EXAMPLE_KNOWLEDGE_ARTICLES) {
+    await prisma.platformKnowledgeArticle.upsert({
+      where: { id: article.id },
+      update: {
+        title: article.title,
+        content: article.content,
+        category: article.category,
+        targetIndustries: article.targetIndustries,
+        targetPlanTiers: article.targetPlanTiers,
+      },
+      create: {
+        ...article,
+        status: 'DRAFT',
+        version: 1,
+        createdById: PLATFORM_ADMIN_ID,
+      },
+    });
+  }
+  console.log(
+    `Seeded ${EXAMPLE_KNOWLEDGE_ARTICLES.length} example platform knowledge articles (DRAFT)`,
+  );
+}
+
 async function verifyIntelligenceTables() {
   const tables = [
     { name: 'TenantAiPattern', fn: () => prisma.tenantAiPattern.count() },
@@ -261,6 +373,49 @@ async function verifyIntelligenceTables() {
 }
 
 // ---------------------------------------------------------------------------
+// E13b-4 Task 8.5: Default vendor provider credentials
+// ---------------------------------------------------------------------------
+
+const DEFAULT_VENDOR_PROVIDERS = [
+  {
+    providerId: 'anthropic',
+    displayName: 'Anthropic (Claude)',
+  },
+  {
+    providerId: 'openai',
+    displayName: 'OpenAI (GPT)',
+  },
+  {
+    providerId: 'google',
+    displayName: 'Google (Gemini)',
+  },
+];
+
+// Empty string means no key configured — in production, real keys are set via
+// the admin UI which encrypts them using AES-256-GCM with AI_KEY_ENCRYPTION_SECRET.
+const PLACEHOLDER_ENCRYPTED_KEY = '';
+
+async function seedVendorProviders() {
+  for (const provider of DEFAULT_VENDOR_PROVIDERS) {
+    await prisma.vendorProviderCredential.upsert({
+      where: { providerId: provider.providerId },
+      update: {
+        displayName: provider.displayName,
+      },
+      create: {
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        encryptedKey: PLACEHOLDER_ENCRYPTED_KEY,
+        isActive: false, // inactive until a real key is configured
+      },
+    });
+  }
+  console.log(
+    `Seeded ${DEFAULT_VENDOR_PROVIDERS.length} default vendor providers (inactive — configure keys via admin UI)`,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -272,6 +427,8 @@ async function main() {
   await seedDevTenantAiQuota();
   await seedPlatformAdmin();
   await seedDefaultFeatureFlags();
+  await seedExampleKnowledgeArticles();
+  await seedVendorProviders();
   await verifyIntelligenceTables();
   console.log('Platform seeding complete.');
 }

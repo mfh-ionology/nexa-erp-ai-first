@@ -12,33 +12,44 @@ import Fastify from 'fastify';
 // Mocks — vi.hoisted ensures variables exist when vi.mock is hoisted
 // ---------------------------------------------------------------------------
 
-const { mockPrisma, mockResolveUserRole, mockPermissionService, mockArticleService } = vi.hoisted(
-  () => ({
-    mockPrisma: {
-      user: { findUnique: vi.fn() },
-      companyProfile: { findUnique: vi.fn() },
-    },
-    mockResolveUserRole: vi.fn(),
-    mockPermissionService: {
-      getEffectivePermissions: vi.fn(),
-      hasPermission: vi.fn(),
-      invalidateUser: vi.fn(),
-      invalidateGroup: vi.fn(),
-      invalidateAll: vi.fn(),
-      clearCache: vi.fn(),
-      getCacheSize: vi.fn(),
-      deriveEnabledModules: vi.fn(),
-      getFieldVisibility: vi.fn(),
-    },
-    mockArticleService: {
-      createArticle: vi.fn(),
-      listArticles: vi.fn(),
-      getArticle: vi.fn(),
-      updateArticle: vi.fn(),
-      deleteArticle: vi.fn(),
-    },
-  }),
-);
+const {
+  mockPrisma,
+  mockResolveUserRole,
+  mockPermissionService,
+  mockArticleService,
+  mockPlatformClient,
+} = vi.hoisted(() => ({
+  mockPrisma: {
+    user: { findUnique: vi.fn() },
+    companyProfile: { findUnique: vi.fn() },
+  },
+  mockResolveUserRole: vi.fn(),
+  mockPermissionService: {
+    getEffectivePermissions: vi.fn(),
+    hasPermission: vi.fn(),
+    invalidateUser: vi.fn(),
+    invalidateGroup: vi.fn(),
+    invalidateAll: vi.fn(),
+    clearCache: vi.fn(),
+    getCacheSize: vi.fn(),
+    deriveEnabledModules: vi.fn(),
+    getFieldVisibility: vi.fn(),
+  },
+  mockArticleService: {
+    createArticle: vi.fn(),
+    createArticleIfNotExists: vi.fn(),
+    listArticles: vi.fn(),
+    getArticle: vi.fn(),
+    updateArticle: vi.fn(),
+    deleteArticle: vi.fn(),
+    findBySourceRef: vi.fn(),
+  },
+  mockPlatformClient: {
+    getSuggestedKnowledge: vi.fn(),
+    getPlatformArticle: vi.fn(),
+    respondToKnowledge: vi.fn(),
+  },
+}));
 
 vi.mock('@nexa/db', () => ({
   prisma: mockPrisma,
@@ -73,7 +84,9 @@ import { makeTestJwt, authHeaders, TEST_JWT_SECRET, TEST_COMPANY_ID } from '../t
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function buildTestApp(opts: { withService?: boolean } = {}): Promise<FastifyInstance> {
+async function buildTestApp(
+  opts: { withService?: boolean; withPlatformClient?: boolean } = {},
+): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   app.setValidatorCompiler(zodValidatorCompiler);
   app.setSerializerCompiler(zodSerializerCompiler);
@@ -83,6 +96,10 @@ async function buildTestApp(opts: { withService?: boolean } = {}): Promise<Fasti
 
   const service = opts.withService !== false ? mockArticleService : null;
   app.decorate('aiKnowledgeArticleService', service as any);
+
+  // Platform client — null simulates unconfigured (graceful degradation)
+  const platformClient = opts.withPlatformClient !== false ? mockPlatformClient : null;
+  app.decorate('platformClient', platformClient as any);
 
   await app.register(knowledgeArticleRoutesPlugin, { prefix: '/ai' });
   await app.ready();
@@ -563,5 +580,495 @@ describe('DELETE /ai/knowledge-articles/:id', () => {
     });
 
     expect(res.statusCode).toBe(403);
+  });
+});
+
+// ===========================================================================
+// E5d-4 Task 9.5 — Suggested Knowledge Endpoint Tests (AC: #5)
+// ===========================================================================
+
+const PLATFORM_ARTICLE_ID = '00000000-0000-4000-b000-000000000500';
+
+function makeSuggestedArticle(overrides: Record<string, unknown> = {}) {
+  return {
+    id: PLATFORM_ARTICLE_ID,
+    title: 'Best Practice: Invoice Automation',
+    content: 'Detailed guidance on automating invoice processing...',
+    category: 'BEST_PRACTICE',
+    version: 1,
+    publishedAt: '2026-03-10T12:00:00.000Z',
+    previousResponse: null,
+    ...overrides,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tests: GET /ai/knowledge-articles/suggested
+// ---------------------------------------------------------------------------
+
+describe('GET /ai/knowledge-articles/suggested (E5d-4)', () => {
+  let app: FastifyInstance;
+
+  afterEach(async () => {
+    await app?.close();
+  });
+
+  it('returns suggested articles from platform (mock platformClient)', async () => {
+    setupMocks({ role: 'ADMIN' });
+    mockPlatformClient.getSuggestedKnowledge.mockResolvedValue({
+      data: [makeSuggestedArticle()],
+      nextCursor: null,
+      hasMore: false,
+    });
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/ai/knowledge-articles/suggested',
+      headers: authHeaders(adminJwt),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.success).toBe(true);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].title).toBe('Best Practice: Invoice Automation');
+    expect(body.data[0].version).toBe(1);
+    expect(body.data[0].previousResponse).toBeNull();
+  });
+
+  it('passes tenantId from request context to platform client', async () => {
+    setupMocks({ role: 'ADMIN' });
+    mockPlatformClient.getSuggestedKnowledge.mockResolvedValue({
+      data: [],
+      nextCursor: null,
+      hasMore: false,
+    });
+    app = await buildTestApp();
+
+    await app.inject({
+      method: 'GET',
+      url: '/ai/knowledge-articles/suggested',
+      headers: authHeaders(adminJwt),
+    });
+
+    // tenantId comes from JWT claim, which is TEST_COMPANY_ID in makeTestJwt
+    expect(mockPlatformClient.getSuggestedKnowledge).toHaveBeenCalledWith(TEST_COMPANY_ID);
+  });
+
+  it('returns empty results when platformClient is null (graceful degradation)', async () => {
+    setupMocks({ role: 'ADMIN' });
+    app = await buildTestApp({ withPlatformClient: false });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/ai/knowledge-articles/suggested',
+      headers: authHeaders(adminJwt),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.success).toBe(true);
+    expect(body.data).toEqual([]);
+  });
+
+  it('returns empty results when platform API throws (graceful degradation)', async () => {
+    setupMocks({ role: 'ADMIN' });
+    mockPlatformClient.getSuggestedKnowledge.mockRejectedValue(
+      new Error('Platform API unreachable'),
+    );
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/ai/knowledge-articles/suggested',
+      headers: authHeaders(adminJwt),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data).toEqual([]);
+  });
+
+  it('ADMIN permission guard on suggested endpoint', async () => {
+    setupMocks({ role: 'STAFF' });
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/ai/knowledge-articles/suggested',
+      headers: authHeaders(staffJwt),
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: POST /ai/knowledge-articles/suggested/:platformArticleId/accept
+// ---------------------------------------------------------------------------
+
+describe('POST /ai/knowledge-articles/suggested/:id/accept (E5d-4)', () => {
+  let app: FastifyInstance;
+
+  afterEach(async () => {
+    await app?.close();
+  });
+
+  it('creates tenant article with correct source/confidence/sourceRef', async () => {
+    setupMocks({ role: 'ADMIN' });
+    const suggestedArticle = makeSuggestedArticle();
+    mockPlatformClient.getPlatformArticle.mockResolvedValue(suggestedArticle);
+
+    const tenantArticle = makeArticleResponse({
+      id: randomUUID(),
+      source: 'PLATFORM_SUGGESTED',
+      sourceRef: PLATFORM_ARTICLE_ID,
+      confidenceScore: 0.9,
+      isConfirmed: true,
+    });
+    mockArticleService.createArticleIfNotExists.mockResolvedValue({
+      article: tenantArticle,
+      created: true,
+    });
+    mockPlatformClient.respondToKnowledge.mockResolvedValue(undefined);
+
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/ai/knowledge-articles/suggested/${PLATFORM_ARTICLE_ID}/accept`,
+      headers: authHeaders(adminJwt),
+    });
+
+    expect(res.statusCode).toBe(201);
+
+    // Verify createArticleIfNotExists called with correct params
+    expect(mockArticleService.createArticleIfNotExists).toHaveBeenCalledWith(
+      TEST_COMPANY_ID,
+      expect.any(String),
+      expect.objectContaining({
+        title: 'Best Practice: Invoice Automation',
+        content: 'Detailed guidance on automating invoice processing...',
+        source: 'PLATFORM_SUGGESTED',
+        sourceRef: PLATFORM_ARTICLE_ID,
+        confidenceScore: 0.9,
+        isConfirmed: true,
+      }),
+    );
+
+    // Verify respondToKnowledge called with ACCEPTED
+    expect(mockPlatformClient.respondToKnowledge).toHaveBeenCalledWith(
+      TEST_COMPANY_ID,
+      PLATFORM_ARTICLE_ID,
+      expect.objectContaining({
+        status: 'ACCEPTED',
+        tenantArticleId: tenantArticle.id,
+      }),
+    );
+  });
+
+  it('returns 503 when platformClient is null', async () => {
+    setupMocks({ role: 'ADMIN' });
+    app = await buildTestApp({ withPlatformClient: false });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/ai/knowledge-articles/suggested/${PLATFORM_ARTICLE_ID}/accept`,
+      headers: authHeaders(adminJwt),
+    });
+
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('returns 404 when platform article not found', async () => {
+    setupMocks({ role: 'ADMIN' });
+    mockPlatformClient.getPlatformArticle.mockResolvedValue(null);
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/ai/knowledge-articles/suggested/${PLATFORM_ARTICLE_ID}/accept`,
+      headers: authHeaders(adminJwt),
+    });
+
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('ADMIN permission guard on accept endpoint', async () => {
+    setupMocks({ role: 'STAFF' });
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/ai/knowledge-articles/suggested/${PLATFORM_ARTICLE_ID}/accept`,
+      headers: authHeaders(staffJwt),
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('returns existing article on duplicate accept (idempotency)', async () => {
+    setupMocks({ role: 'ADMIN' });
+    const existingArticle = makeArticleResponse({
+      source: 'PLATFORM_SUGGESTED',
+      sourceRef: PLATFORM_ARTICLE_ID,
+    });
+    // getPlatformArticle still returns the article (it exists on platform)
+    mockPlatformClient.getPlatformArticle.mockResolvedValue(makeSuggestedArticle());
+    // createArticleIfNotExists detects existing and returns it without creating
+    mockArticleService.createArticleIfNotExists.mockResolvedValue({
+      article: existingArticle,
+      created: false,
+    });
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/ai/knowledge-articles/suggested/${PLATFORM_ARTICLE_ID}/accept`,
+      headers: authHeaders(adminJwt),
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(body.data.id).toBe(existingArticle.id);
+    // Should NOT call respondToKnowledge on duplicate (created=false)
+    expect(mockPlatformClient.respondToKnowledge).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: POST /ai/knowledge-articles/suggested/:platformArticleId/reject
+// ---------------------------------------------------------------------------
+
+describe('POST /ai/knowledge-articles/suggested/:id/reject (E5d-4)', () => {
+  let app: FastifyInstance;
+
+  afterEach(async () => {
+    await app?.close();
+  });
+
+  it('records rejection via platformClient', async () => {
+    setupMocks({ role: 'ADMIN' });
+    mockPlatformClient.respondToKnowledge.mockResolvedValue(undefined);
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/ai/knowledge-articles/suggested/${PLATFORM_ARTICLE_ID}/reject`,
+      headers: authHeaders(adminJwt),
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(mockPlatformClient.respondToKnowledge).toHaveBeenCalledWith(
+      TEST_COMPANY_ID,
+      PLATFORM_ARTICLE_ID,
+      { status: 'REJECTED' },
+    );
+  });
+
+  it('returns 503 when platformClient is null', async () => {
+    setupMocks({ role: 'ADMIN' });
+    app = await buildTestApp({ withPlatformClient: false });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/ai/knowledge-articles/suggested/${PLATFORM_ARTICLE_ID}/reject`,
+      headers: authHeaders(adminJwt),
+    });
+
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('ADMIN permission guard on reject endpoint', async () => {
+    setupMocks({ role: 'STAFF' });
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/ai/knowledge-articles/suggested/${PLATFORM_ARTICLE_ID}/reject`,
+      headers: authHeaders(staffJwt),
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: POST /ai/knowledge-articles/suggested/:platformArticleId/accept-edited
+// ---------------------------------------------------------------------------
+
+describe('POST /ai/knowledge-articles/suggested/:id/accept-edited (E5d-4)', () => {
+  let app: FastifyInstance;
+
+  afterEach(async () => {
+    await app?.close();
+  });
+
+  it('applies content overrides before creating tenant article', async () => {
+    setupMocks({ role: 'ADMIN' });
+    const suggestedArticle = makeSuggestedArticle();
+    mockPlatformClient.getPlatformArticle.mockResolvedValue(suggestedArticle);
+
+    const tenantArticle = makeArticleResponse({
+      id: randomUUID(),
+      title: 'My Custom Title',
+      content: 'My edited content.',
+      category: 'BUSINESS_PROCESS',
+      source: 'PLATFORM_SUGGESTED',
+      sourceRef: PLATFORM_ARTICLE_ID,
+    });
+    mockArticleService.createArticleIfNotExists.mockResolvedValue({
+      article: tenantArticle,
+      created: true,
+    });
+    mockPlatformClient.respondToKnowledge.mockResolvedValue(undefined);
+
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/ai/knowledge-articles/suggested/${PLATFORM_ARTICLE_ID}/accept-edited`,
+      headers: authHeaders(adminJwt),
+      payload: {
+        title: 'My Custom Title',
+        content: 'My edited content.',
+        category: 'BUSINESS_PROCESS',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+
+    // Verify overrides were applied
+    expect(mockArticleService.createArticleIfNotExists).toHaveBeenCalledWith(
+      TEST_COMPANY_ID,
+      expect.any(String),
+      expect.objectContaining({
+        title: 'My Custom Title',
+        content: 'My edited content.',
+        category: 'BUSINESS_PROCESS',
+        source: 'PLATFORM_SUGGESTED',
+        sourceRef: PLATFORM_ARTICLE_ID,
+        confidenceScore: 0.9,
+        isConfirmed: true,
+      }),
+    );
+
+    // Verify acceptance recorded
+    expect(mockPlatformClient.respondToKnowledge).toHaveBeenCalledWith(
+      TEST_COMPANY_ID,
+      PLATFORM_ARTICLE_ID,
+      expect.objectContaining({ status: 'ACCEPTED' }),
+    );
+  });
+
+  it('rejects empty body (use /accept for unmodified acceptance)', async () => {
+    setupMocks({ role: 'ADMIN' });
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/ai/knowledge-articles/suggested/${PLATFORM_ARTICLE_ID}/accept-edited`,
+      headers: authHeaders(adminJwt),
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('uses platform article values as defaults for non-overridden fields', async () => {
+    setupMocks({ role: 'ADMIN' });
+    const suggestedArticle = makeSuggestedArticle({
+      title: 'Platform Title',
+      content: 'Platform Content',
+      category: 'HELP',
+    });
+    mockPlatformClient.getPlatformArticle.mockResolvedValue(suggestedArticle);
+
+    const tenantArticle = makeArticleResponse({ source: 'PLATFORM_SUGGESTED' });
+    mockArticleService.createArticleIfNotExists.mockResolvedValue({
+      article: tenantArticle,
+      created: true,
+    });
+    mockPlatformClient.respondToKnowledge.mockResolvedValue(undefined);
+
+    app = await buildTestApp();
+
+    // Only override title — content and category should come from platform article
+    const res = await app.inject({
+      method: 'POST',
+      url: `/ai/knowledge-articles/suggested/${PLATFORM_ARTICLE_ID}/accept-edited`,
+      headers: authHeaders(adminJwt),
+      payload: { title: 'My Custom Title' },
+    });
+
+    expect(res.statusCode).toBe(201);
+
+    // Verify platform article values used as defaults for non-overridden fields
+    expect(mockArticleService.createArticleIfNotExists).toHaveBeenCalledWith(
+      TEST_COMPANY_ID,
+      expect.any(String),
+      expect.objectContaining({
+        title: 'My Custom Title',
+        content: 'Platform Content',
+      }),
+    );
+  });
+
+  it('returns 503 when platformClient is null', async () => {
+    setupMocks({ role: 'ADMIN' });
+    app = await buildTestApp({ withPlatformClient: false });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/ai/knowledge-articles/suggested/${PLATFORM_ARTICLE_ID}/accept-edited`,
+      headers: authHeaders(adminJwt),
+      payload: { title: 'Custom Title' },
+    });
+
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('ADMIN permission guard on accept-edited endpoint', async () => {
+    setupMocks({ role: 'STAFF' });
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/ai/knowledge-articles/suggested/${PLATFORM_ARTICLE_ID}/accept-edited`,
+      headers: authHeaders(staffJwt),
+      payload: { title: 'Hacked' },
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('returns existing article on duplicate accept-edited (idempotency)', async () => {
+    setupMocks({ role: 'ADMIN' });
+    const existingArticle = makeArticleResponse({
+      source: 'PLATFORM_SUGGESTED',
+      sourceRef: PLATFORM_ARTICLE_ID,
+    });
+    // getPlatformArticle still returns the article (it exists on platform)
+    mockPlatformClient.getPlatformArticle.mockResolvedValue(makeSuggestedArticle());
+    // createArticleIfNotExists detects existing and returns it without creating
+    mockArticleService.createArticleIfNotExists.mockResolvedValue({
+      article: existingArticle,
+      created: false,
+    });
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/ai/knowledge-articles/suggested/${PLATFORM_ARTICLE_ID}/accept-edited`,
+      headers: authHeaders(adminJwt),
+      payload: { title: 'Different Title' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(body.data.id).toBe(existingArticle.id);
+    // Should NOT call respondToKnowledge on duplicate (created=false)
+    expect(mockPlatformClient.respondToKnowledge).not.toHaveBeenCalled();
   });
 });

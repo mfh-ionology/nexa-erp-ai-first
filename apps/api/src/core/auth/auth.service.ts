@@ -98,6 +98,34 @@ export async function verifyAccessToken(token: string): Promise<AccessTokenPaylo
 }
 
 // ---------------------------------------------------------------------------
+// Impersonation JWT Verification (Story E13b.5 Task 6.4)
+// Impersonation tokens are signed with PLATFORM_JWT_SECRET by the platform API.
+// ---------------------------------------------------------------------------
+
+export interface ImpersonationTokenPayload extends JWTPayload {
+  sub: string;
+  tenantId: string;
+  sessionId: string;
+  type: 'impersonation';
+}
+
+export async function verifyImpersonationToken(
+  token: string,
+): Promise<ImpersonationTokenPayload | null> {
+  const platformSecret = process.env.PLATFORM_JWT_SECRET;
+  if (!platformSecret) return null;
+
+  try {
+    const secret = new TextEncoder().encode(platformSecret);
+    const { payload } = await jwtVerify(token, secret, { issuer: 'nexa-platform' });
+    if (payload.type !== 'impersonation') return null;
+    return payload as ImpersonationTokenPayload;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Refresh Token
 // ---------------------------------------------------------------------------
 

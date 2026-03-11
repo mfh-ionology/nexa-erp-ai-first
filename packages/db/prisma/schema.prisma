@@ -329,6 +329,7 @@ model CompanyProfile {
   aiLearningSignals      AiLearningSignal[]
   emailMessages          EmailMessage[]
   tasks                  Task[]
+  documentTemplates      DocumentTemplate[]
 
   @@index([baseCurrencyCode], map: "idx_company_profiles_base_currency_code")
   @@index([countryCode], map: "idx_company_profiles_country_code")
@@ -2213,6 +2214,34 @@ model EmailTemplate {
 }
 
 // ---------------------------------------------------------------------------
+// Document Templates & PDF — E12.1 (Architecture §2.12, FR78, FR190-192)
+// ---------------------------------------------------------------------------
+// DocumentType enum covers all printable business document types.
+// DocumentTemplate: Handlebars HTML templates with branding & layout settings.
+// DocumentTemplateVersion: Context-specific overrides (language, branch, etc.)
+// with match-scoring selection algorithm.
+// ---------------------------------------------------------------------------
+
+enum DocumentType {
+  SALES_INVOICE
+  CREDIT_NOTE
+  CASH_RECEIPT
+  PROFORMA_INVOICE
+  CUSTOMER_STATEMENT
+  SALES_ORDER
+  SALES_QUOTE
+  DELIVERY_NOTE
+  PURCHASE_ORDER
+  GOODS_RECEIPT_NOTE
+  SUPPLIER_REMITTANCE
+  PAYSLIP
+  P45
+  P60
+
+  @@map("document_type")
+}
+
+// ---------------------------------------------------------------------------
 // Task System — E11.1
 // ---------------------------------------------------------------------------
 
@@ -2267,4 +2296,102 @@ model TaskAssignee {
 
   @@unique([taskId, userId], map: "uq_task_assignees_task_user")
   @@map("task_assignees")
+}
+
+// ---------------------------------------------------------------------------
+// Document Template — E12.1 (Architecture §2.12)
+// ---------------------------------------------------------------------------
+// Handlebars HTML templates for generating PDFs of business documents.
+// Tenant-scoped via companyId. One default template per documentType per company.
+// ---------------------------------------------------------------------------
+
+model DocumentTemplate {
+  id              String       @id @default(uuid()) @map("id")
+  companyId       String       @map("company_id")
+  name            String       @map("name") @db.VarChar(200)
+  documentType    DocumentType @map("document_type")
+  description     String?      @map("description") @db.Text
+  isDefault       Boolean      @default(false) @map("is_default")
+  isActive        Boolean      @default(true) @map("is_active")
+
+  // Template content
+  htmlTemplate String  @map("html_template") @db.Text
+  headerHtml   String? @map("header_html") @db.Text
+  footerHtml   String? @map("footer_html") @db.Text
+  cssStyles    String? @map("css_styles") @db.Text
+
+  // Page layout
+  pageSize     String  @default("A4") @map("page_size") @db.VarChar(20)
+  orientation  String  @default("portrait") @map("orientation") @db.VarChar(20)
+  marginTop    Decimal @default(20) @map("margin_top") @db.Decimal(5, 1)
+  marginBottom Decimal @default(20) @map("margin_bottom") @db.Decimal(5, 1)
+  marginLeft   Decimal @default(15) @map("margin_left") @db.Decimal(5, 1)
+  marginRight  Decimal @default(15) @map("margin_right") @db.Decimal(5, 1)
+
+  // Branding toggles
+  showLogo        Boolean @default(true) @map("show_logo")
+  logoPosition    String  @default("top-left") @map("logo_position") @db.VarChar(20)
+  showBankDetails Boolean @default(true) @map("show_bank_details")
+  showVatNumber   Boolean @default(true) @map("show_vat_number")
+  showCompanyReg  Boolean @default(true) @map("show_company_reg")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdBy String   @map("created_by")
+
+  // Relations
+  company  CompanyProfile           @relation(fields: [companyId], references: [id])
+  versions DocumentTemplateVersion[]
+
+  @@unique([companyId, documentType, name], map: "uq_document_templates_company_type_name")
+  @@index([companyId, documentType, isActive], map: "idx_document_templates_company_type_active")
+  @@map("document_templates")
+}
+
+// ---------------------------------------------------------------------------
+// Document Template Version — E12.1 (Architecture §2.12)
+// ---------------------------------------------------------------------------
+// Context-specific overrides for a DocumentTemplate. Versions are scored
+// against the document/user context (language, branch, number series, etc.)
+// using a match-scoring algorithm. Highest score wins.
+// ---------------------------------------------------------------------------
+
+model DocumentTemplateVersion {
+  id         String @id @default(uuid()) @map("id")
+  templateId String @map("template_id")
+
+  // Selection criteria (null = wildcard, non-null = match/mismatch scoring)
+  languageCode    String? @map("language_code") @db.VarChar(10)
+  branchCode      String? @map("branch_code") @db.VarChar(50)
+  numberSeriesId  String? @map("number_series_id")
+  accessGroup     String? @map("access_group") @db.VarChar(50)
+  customerGroupId String? @map("customer_group_id")
+
+  // Overrides (non-null replaces base template field)
+  htmlOverride   String? @map("html_override") @db.Text
+  cssOverride    String? @map("css_override") @db.Text
+  headerOverride String? @map("header_override") @db.Text
+  footerOverride String? @map("footer_override") @db.Text
+
+  // Email settings (used by email pipeline, not by PDF generation)
+  emailSubject String? @map("email_subject") @db.VarChar(500)
+  emailBody    String? @map("email_body") @db.Text
+  replyToEmail String? @map("reply_to_email") @db.VarChar(255)
+  ccEmails     String? @map("cc_emails") @db.VarChar(500)
+
+  priority Int     @default(0) @map("priority")
+  isActive Boolean @default(true) @map("is_active")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  template DocumentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId, isActive, priority], map: "idx_doc_template_versions_template_active_priority")
+  @@index([languageCode], map: "idx_doc_template_versions_language")
+  @@index([branchCode], map: "idx_doc_template_versions_branch")
+  @@map("document_template_versions")
 }

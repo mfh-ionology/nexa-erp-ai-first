@@ -62,18 +62,18 @@ function ActionDropdown({
   onCreateAutomation?: (insight: PlatformInsight) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const updateStatus = useUpdateInsightStatus();
+  const { mutate, isPending } = useUpdateInsightStatus();
   const user = usePlatformAuthStore((s) => s.user);
 
   const handleStatusChange = useCallback(
     (status: InsightStatus) => {
-      updateStatus.mutate({
+      mutate({
         id: insight.id,
         body: { status, reviewedById: user?.id },
       });
       setIsOpen(false);
     },
-    [insight.id, updateStatus, user?.id],
+    [insight.id, mutate, user?.id],
   );
 
   const handleCreateAutomation = useCallback(() => {
@@ -100,7 +100,7 @@ function ActionDropdown({
     <div className="relative">
       <button
         onClick={() => setIsOpen((prev) => !prev)}
-        disabled={disabled || updateStatus.isPending}
+        disabled={disabled || isPending}
         className={cn(
           'flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium',
           'hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/50',
@@ -233,12 +233,16 @@ export function WorkflowOpportunitiesSection({
     useInsights({ insightType: 'WORKFLOW_OPPORTUNITY' });
 
   const user = usePlatformAuthStore((s) => s.user);
-  const isViewerOnly = user?.role === 'PLATFORM_VIEWER';
+  const isViewerOnly = user?.role !== 'PLATFORM_ADMIN';
 
-  // Flatten paginated pages and sort by tenant count descending (AC#4)
+  // Flatten paginated pages and sort by tenant count descending (AC#4).
+  // NOTE: This client-side sort is best-effort — it only sorts currently loaded
+  // pages. For fully correct ordering, the API should support a sortBy parameter.
+  // For MVP this is acceptable since the server returns data in a stable order and
+  // the first pages typically contain the most relevant items.
   const allInsights = useMemo(() => {
     const flat = data?.pages.flatMap((p) => p.data) ?? [];
-    return flat.sort((a, b) => extractTenantCount(b) - extractTenantCount(a));
+    return [...flat].sort((a, b) => extractTenantCount(b) - extractTenantCount(a));
   }, [data]);
 
   // ----- Loading -----

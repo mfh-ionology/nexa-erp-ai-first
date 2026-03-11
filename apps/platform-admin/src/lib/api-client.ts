@@ -1,4 +1,10 @@
-import { usePlatformAuthStore } from '@/stores/auth-store';
+import { usePlatformAuthStore, type PlatformRole, type PlatformUser } from '@/stores/auth-store';
+
+const VALID_PLATFORM_ROLES: PlatformRole[] = [
+  'PLATFORM_ADMIN',
+  'PLATFORM_VIEWER',
+  'PLATFORM_SUPPORT',
+];
 
 /**
  * Base URL for Platform API requests.
@@ -9,7 +15,7 @@ import { usePlatformAuthStore } from '@/stores/auth-store';
  *       (e.g., 'https://platform-api.nexa.example.com'). In production the
  *       API paths (/admin/intelligence/*) are appended directly to this URL.
  */
-const BASE_URL = import.meta.env.VITE_PLATFORM_API_BASE_URL ?? '/api/v1';
+export const BASE_URL = import.meta.env.VITE_PLATFORM_API_BASE_URL ?? '/api/v1';
 
 /** Typed API error for Platform API responses. */
 export class PlatformApiError extends Error {
@@ -47,9 +53,10 @@ interface ApiEnvelope<T> {
 async function request<T>(method: string, path: string, body?: unknown): Promise<ApiResult<T>> {
   const { accessToken } = usePlatformAuthStore.getState();
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
+  const headers: Record<string, string> = {};
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (accessToken) {
     headers['Authorization'] = `Bearer ${accessToken}`;
   }
@@ -141,6 +148,8 @@ export function tryBootstrapAuth(): Promise<boolean> {
   // Deduplicate concurrent bootstrap attempts
   if (bootstrapPromise) return bootstrapPromise;
 
+  usePlatformAuthStore.getState().setLoading(true);
+
   bootstrapPromise = (async () => {
     try {
       const res = await fetch(`${BASE_URL}/admin/auth/refresh`, {
@@ -158,10 +167,16 @@ export function tryBootstrapAuth(): Promise<boolean> {
       if (json.success && json.data.accessToken) {
         const store = usePlatformAuthStore.getState();
         if (json.data.user) {
-          store.login(
-            json.data.user as import('@/stores/auth-store').PlatformUser,
-            json.data.accessToken,
-          );
+          if (!VALID_PLATFORM_ROLES.includes(json.data.user.role as PlatformRole)) {
+            return false;
+          }
+          const user: PlatformUser = {
+            id: json.data.user.id,
+            email: json.data.user.email,
+            displayName: json.data.user.displayName,
+            role: json.data.user.role as PlatformRole,
+          };
+          store.login(user, json.data.accessToken);
         } else {
           store.setAccessToken(json.data.accessToken);
         }
@@ -171,6 +186,7 @@ export function tryBootstrapAuth(): Promise<boolean> {
     } catch {
       return false;
     } finally {
+      usePlatformAuthStore.getState().setLoading(false);
       bootstrapPromise = null;
     }
   })();
@@ -188,6 +204,10 @@ export function apiPost<T>(path: string, body?: unknown): Promise<ApiResult<T>> 
 
 export function apiPatch<T>(path: string, body?: unknown): Promise<ApiResult<T>> {
   return request<T>('PATCH', path, body);
+}
+
+export function apiPut<T>(path: string, body?: unknown): Promise<ApiResult<T>> {
+  return request<T>('PUT', path, body);
 }
 
 export function apiDelete<T>(path: string): Promise<ApiResult<T>> {

@@ -44,6 +44,14 @@ enum PlatformRole {
   @@map("platform_role")
 }
 
+enum AiAlertType {
+  QUOTA_WARNING
+  QUOTA_EXCEEDED
+  USAGE_SPIKE
+
+  @@map("ai_alert_type")
+}
+
 // --- Models ---
 
 model Tenant {
@@ -75,6 +83,7 @@ model Tenant {
   impersonations        ImpersonationSession[]
   aiPatterns            TenantAiPattern[]
   knowledgeResponses    PlatformKnowledgeResponse[]
+  aiAlerts              PlatformAiAlert[]
 
   @@index([status], map: "idx_tenants_status")
   @@index([planId], map: "idx_tenants_plan_id")
@@ -253,6 +262,7 @@ model PlatformAuditLog {
 
   @@index([platformUserId, timestamp], map: "idx_platform_audit_log_user_timestamp")
   @@index([targetType, targetId], map: "idx_platform_audit_log_target")
+  @@index([action, timestamp], map: "idx_platform_audit_log_action_timestamp")
   @@map("platform_audit_log")
 }
 
@@ -403,4 +413,42 @@ model PlatformKnowledgeResponse {
   @@index([tenantId], map: "idx_knowledge_responses_tenant")
   @@index([articleId], map: "idx_knowledge_responses_article")
   @@map("platform_knowledge_responses")
+}
+
+// --- Vendor Provider Credentials (E13b-4 Task 3) ---
+
+model VendorProviderCredential {
+  id           String   @id @default(uuid()) @map("id")
+  providerId   String   @unique @map("provider_id") @db.VarChar(50)
+  displayName  String   @map("display_name")
+  encryptedKey String   @map("encrypted_key")
+  isActive     Boolean  @default(true) @map("is_active")
+  lastUsedAt   DateTime? @map("last_used_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("vendor_provider_credentials")
+}
+
+// --- AI Alert Tables (E13b-4 Task 2.3) ---
+
+model PlatformAiAlert {
+  id               String      @id @default(uuid()) @map("id")
+  type             AiAlertType @map("type")
+  tenantId         String      @map("tenant_id")
+  message          String      @map("message")
+  usagePct         Float       @map("usage_pct")
+  threshold        Float?      @map("threshold")
+  dailyTokens      BigInt?     @map("daily_tokens")
+  rollingAvgTokens BigInt?     @map("rolling_avg_tokens")
+  acknowledged     Boolean     @default(false) @map("acknowledged")
+  acknowledgedBy   String?     @map("acknowledged_by")
+  acknowledgedAt   DateTime?   @map("acknowledged_at")
+  createdAt        DateTime    @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt], map: "idx_platform_ai_alerts_tenant_created")
+  @@index([type, acknowledged], map: "idx_platform_ai_alerts_type_ack")
+  @@map("platform_ai_alerts")
 }

@@ -7,13 +7,17 @@ import { serviceTokenGuard } from '../../core/auth/service-token.guard.js';
 import { NotFoundError } from '../../core/errors/app-error.js';
 import { successEnvelope } from '../../core/schemas/envelope.js';
 import { sendSuccess } from '../../core/utils/response.js';
-import { KnowledgeDistributionService } from '../../services/knowledge-distribution.service.js';
+import {
+  KnowledgeDistributionService,
+  KnowledgeArticleNotFoundError,
+} from '../../services/knowledge-distribution.service.js';
 import {
   tenantIdParamsSchema,
   articleIdParamsSchema,
   suggestedKnowledgeQuerySchema,
   knowledgeRespondBodySchema,
-  suggestedKnowledgeListResponseSchema,
+  suggestedArticleArraySchema,
+  suggestedArticleResponseSchema,
 } from './knowledge.schema.js';
 
 // ---------------------------------------------------------------------------
@@ -38,7 +42,7 @@ async function knowledgePlatformRoutes(fastify: FastifyInstance): Promise<void> 
       schema: {
         params: tenantIdParamsSchema,
         querystring: suggestedKnowledgeQuerySchema,
-        response: { 200: successEnvelope(suggestedKnowledgeListResponseSchema) },
+        response: { 200: successEnvelope(suggestedArticleArraySchema) },
       },
     },
     async (request, reply) => {
@@ -47,10 +51,41 @@ async function knowledgePlatformRoutes(fastify: FastifyInstance): Promise<void> 
 
       const result = await service.getSuggestedForTenant(tenantId, { cursor, limit });
 
-      return sendSuccess(reply, result, {
+      return sendSuccess(reply, result.data, {
         hasMore: result.hasMore,
         cursor: result.nextCursor,
       });
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // GET /platform/tenants/:tenantId/knowledge/:articleId (ISSUE #2 fix)
+  // Direct lookup of a single platform article for a tenant (avoids O(n) pagination)
+  // -------------------------------------------------------------------------
+  fastify.get<{
+    Params: z.infer<typeof articleIdParamsSchema>;
+  }>(
+    '/platform/tenants/:tenantId/knowledge/:articleId',
+    {
+      preHandler: [serviceTokenGuard],
+      schema: {
+        params: articleIdParamsSchema,
+        response: { 200: successEnvelope(suggestedArticleResponseSchema) },
+      },
+    },
+    async (request, reply) => {
+      const { tenantId, articleId } = request.params;
+
+      const article = await service.getArticleForTenant(tenantId, articleId);
+
+      if (!article) {
+        throw new NotFoundError(
+          'ARTICLE_NOT_FOUND',
+          'Platform knowledge article not found or not eligible for this tenant',
+        );
+      }
+
+      return sendSuccess(reply, article);
     },
   );
 
@@ -78,9 +113,8 @@ async function knowledgePlatformRoutes(fastify: FastifyInstance): Promise<void> 
       try {
         await service.recordTenantResponse(tenantId, articleId, body);
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (message.includes('not found')) {
-          throw new NotFoundError('ARTICLE_NOT_FOUND', message);
+        if (err instanceof KnowledgeArticleNotFoundError) {
+          throw new NotFoundError('ARTICLE_NOT_FOUND', err.message);
         }
         throw err;
       }

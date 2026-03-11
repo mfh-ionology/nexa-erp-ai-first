@@ -5,6 +5,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { KnowledgeDistributionService } from '../services/knowledge-distribution.service.js';
+import { shouldAutoIncrementVersion } from '../routes/admin/knowledge.routes.js';
 import type { ConnectorLogger } from '../services/tenant-db-connector.js';
 
 // ---------------------------------------------------------------------------
@@ -465,6 +466,64 @@ describe('KnowledgeDistributionService', () => {
       const call = prisma.platformKnowledgeResponse.upsert.mock.calls[0][0];
       expect(call.create.articleVersion).toBe(3);
       expect(call.update.articleVersion).toBe(3);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Article Versioning — shouldAutoIncrementVersion (AC#6, Task 7.3)
+  // -------------------------------------------------------------------------
+
+  describe('Article Versioning (AC#6)', () => {
+    it('increments version when content changes on a PUBLISHED article', () => {
+      expect(shouldAutoIncrementVersion('PUBLISHED', 'old content', 'new content')).toBe(true);
+    });
+
+    it('does NOT increment version for title-only changes (content undefined)', () => {
+      expect(shouldAutoIncrementVersion('PUBLISHED', 'original content', undefined)).toBe(false);
+    });
+
+    it('does NOT increment version when content is the same value', () => {
+      expect(shouldAutoIncrementVersion('PUBLISHED', 'same content', 'same content')).toBe(false);
+    });
+
+    it('does NOT increment version for DRAFT articles even if content changes', () => {
+      expect(shouldAutoIncrementVersion('DRAFT', 'old content', 'new content')).toBe(false);
+    });
+
+    it('does NOT increment version for ARCHIVED articles even if content changes', () => {
+      expect(shouldAutoIncrementVersion('ARCHIVED', 'old content', 'new content')).toBe(false);
+    });
+
+    it('full versioning flow: v1 publish → accept → content update → v2 re-suggested', async () => {
+      // Simulate: article at v1, tenant accepted v1, then article content updated → v2
+      const articleV2 = makeArticle({ id: ARTICLE_ID_1, version: 2 });
+
+      // Step 1: Verify content change on PUBLISHED article triggers version bump
+      expect(
+        shouldAutoIncrementVersion('PUBLISHED', 'original guidance', 'improved guidance'),
+      ).toBe(true);
+
+      // Step 2: Verify the re-suggestion logic sees v2 as a new suggestion
+      prisma.tenant.findUnique.mockResolvedValue(makeTenant());
+      prisma.platformKnowledgeArticle.findMany.mockResolvedValue([articleV2]);
+      prisma.platformKnowledgeResponse.findMany.mockResolvedValue([
+        makeResponse({
+          articleId: ARTICLE_ID_1,
+          articleVersion: 1,
+          status: 'ACCEPTED',
+          tenantArticleId: 'tenant-copy-001',
+        }),
+      ]);
+
+      const result = await service.getSuggestedForTenant(TENANT_ID);
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].id).toBe(ARTICLE_ID_1);
+      expect(result.data[0].version).toBe(2);
+      expect(result.data[0].previousResponse).toEqual({
+        status: 'ACCEPTED',
+        articleVersion: 1,
+      });
     });
   });
 });

@@ -76,3 +76,40 @@ export const articleResponseSchema = z.object({
 });
 
 export const articleListResponseSchema = z.array(articleResponseSchema);
+
+// ─── Suggested Knowledge schemas (E5d-4 Task 6.1) ──────────────────────────
+
+export const platformArticleIdParamsSchema = z.object({
+  platformArticleId: z.string().uuid(),
+});
+
+export const acceptEditedBodySchema = z
+  .object({
+    title: z.string().min(1).max(500).optional(),
+    content: z.string().min(1).max(100_000).optional(),
+    category: z.enum(VALID_CATEGORIES).optional(),
+  })
+  .refine(
+    (body) => body.title !== undefined || body.content !== undefined || body.category !== undefined,
+    {
+      message:
+        'At least one of title, content, or category must be provided. Use /accept for unmodified acceptance.',
+    },
+  );
+
+export const suggestedArticleResponseSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  content: z.string(),
+  category: z.string(),
+  version: z.number(),
+  publishedAt: z.string(),
+  previousResponse: z
+    .object({
+      status: z.string(),
+      articleVersion: z.number(),
+    })
+    .nullable(),
+});
+
+export const suggestedListResponseSchema = z.array(suggestedArticleResponseSchema);

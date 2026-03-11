@@ -88,7 +88,7 @@ const communicationsModulePluginFn: FastifyPluginAsync = async (fastify) => {
   let batchStatementHandle: BatchStatementWorkerHandle | null = null;
 
   const redisUrl = process.env.REDIS_URL;
-  if (redisUrl) {
+  if (redisUrl && fastify.deadLetterService !== null) {
     try {
       const connection = parseRedisUrl(redisUrl);
 

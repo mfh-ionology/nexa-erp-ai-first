@@ -4,6 +4,7 @@ import type {
   AiQuotaCheck,
   AiUsageRecord,
   PlatformClientConfig,
+  SuggestedKnowledgeArticle,
   TenantEntitlements,
   TenantStatusResponse,
   UserQuota,
@@ -44,6 +45,16 @@ const MOCK_TENANT_STATUS: TenantStatusResponse = {
   maintenanceMode: false,
 };
 
+const MOCK_SUGGESTED_ARTICLE: SuggestedKnowledgeArticle = {
+  id: 'article-001',
+  title: 'Best Practice: Invoice Automation',
+  content: 'Detailed guidance on automating invoice processing...',
+  category: 'BEST_PRACTICE',
+  version: 1,
+  publishedAt: '2026-03-10T12:00:00.000Z',
+  previousResponse: null,
+};
+
 const MOCK_USAGE_RECORD: AiUsageRecord = {
   tenantId: TEST_TENANT_ID,
   userId: 'user-001',
@@ -74,8 +85,8 @@ function createConfig(overrides?: Partial<PlatformClientConfig>): PlatformClient
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
-function mockFetchSuccess<T>(data: T) {
-  const body = JSON.stringify({ success: true, data });
+function mockFetchSuccess<T>(data: T, meta?: Record<string, unknown>) {
+  const body = JSON.stringify({ success: true, data, ...(meta ? { meta } : {}) });
   return vi.fn().mockResolvedValue({
     ok: true,
     status: 200,
@@ -197,7 +208,11 @@ describe('PlatformClientService', () => {
       client = new PlatformClientService(createConfig());
 
       for (let i = 0; i < 3; i++) {
-        try { await client.getEntitlements(TEST_TENANT_ID); } catch { /* expected */ }
+        try {
+          await client.getEntitlements(TEST_TENANT_ID);
+        } catch {
+          /* expected */
+        }
       }
 
       // Now circuit is OPEN, no stale cache → fail-open defaults with empty modules
@@ -250,7 +265,11 @@ describe('PlatformClientService', () => {
       client = new PlatformClientService(createConfig());
 
       for (let i = 0; i < 3; i++) {
-        try { await client.getEntitlements(TEST_TENANT_ID); } catch { /* expected */ }
+        try {
+          await client.getEntitlements(TEST_TENANT_ID);
+        } catch {
+          /* expected */
+        }
       }
 
       expect(client.getCircuitBreaker().getState()).toBe('OPEN');
@@ -277,7 +296,11 @@ describe('PlatformClientService', () => {
       // Drive circuit to OPEN (first 2 calls throw, 3rd returns fallback)
       vi.stubGlobal('fetch', mockFetchNetworkError());
       for (let i = 0; i < 3; i++) {
-        try { await client.getEntitlements(TEST_TENANT_ID); } catch { /* expected */ }
+        try {
+          await client.getEntitlements(TEST_TENANT_ID);
+        } catch {
+          /* expected */
+        }
       }
       expect(client.getCircuitBreaker().getState()).toBe('OPEN');
 
@@ -339,7 +362,11 @@ describe('PlatformClientService', () => {
 
       // Drive circuit to OPEN
       for (let i = 0; i < 3; i++) {
-        try { await client.checkAiQuota(TEST_TENANT_ID, 500, 'chat'); } catch { /* expected */ }
+        try {
+          await client.checkAiQuota(TEST_TENANT_ID, 500, 'chat');
+        } catch {
+          /* expected */
+        }
       }
       expect(client.getCircuitBreaker().getState()).toBe('OPEN');
 
@@ -449,7 +476,11 @@ describe('PlatformClientService', () => {
 
       // Drive circuit to OPEN
       for (let i = 0; i < 3; i++) {
-        try { await client.checkUserQuota(TEST_TENANT_ID); } catch { /* expected */ }
+        try {
+          await client.checkUserQuota(TEST_TENANT_ID);
+        } catch {
+          /* expected */
+        }
       }
       expect(client.getCircuitBreaker().getState()).toBe('OPEN');
 
@@ -485,7 +516,11 @@ describe('PlatformClientService', () => {
 
       // Drive circuit to OPEN
       for (let i = 0; i < 3; i++) {
-        try { await client.getTenantStatus(TEST_TENANT_ID); } catch { /* expected */ }
+        try {
+          await client.getTenantStatus(TEST_TENANT_ID);
+        } catch {
+          /* expected */
+        }
       }
       expect(client.getCircuitBreaker().getState()).toBe('OPEN');
 
@@ -541,7 +576,11 @@ describe('PlatformClientService', () => {
 
       // 4xx errors are client errors — skip circuit breaker tracking
       for (let i = 0; i < 5; i++) {
-        try { await client.getEntitlements(TEST_TENANT_ID); } catch { /* expected */ }
+        try {
+          await client.getEntitlements(TEST_TENANT_ID);
+        } catch {
+          /* expected */
+        }
       }
 
       // Circuit should still be CLOSED — 4xx are not infrastructure failures
@@ -553,7 +592,11 @@ describe('PlatformClientService', () => {
       client = new PlatformClientService(createConfig());
 
       for (let i = 0; i < 3; i++) {
-        try { await client.getEntitlements(TEST_TENANT_ID); } catch { /* expected */ }
+        try {
+          await client.getEntitlements(TEST_TENANT_ID);
+        } catch {
+          /* expected */
+        }
       }
 
       expect(client.getCircuitBreaker().getState()).toBe('OPEN');
@@ -577,6 +620,147 @@ describe('PlatformClientService', () => {
           }),
         }),
       );
+    });
+  });
+
+  // ─── getSuggestedKnowledge ──────────────────────────────────────────
+
+  describe('getSuggestedKnowledge', () => {
+    it('makes correct GET call without query params', async () => {
+      // Platform API now returns array as data + pagination in meta
+      vi.stubGlobal(
+        'fetch',
+        mockFetchSuccess([MOCK_SUGGESTED_ARTICLE], { cursor: null, hasMore: false }),
+      );
+      client = new PlatformClientService(createConfig());
+
+      const result = await client.getSuggestedKnowledge(TEST_TENANT_ID);
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0]).toEqual(MOCK_SUGGESTED_ARTICLE);
+      expect(result.nextCursor).toBeNull();
+      expect(result.hasMore).toBe(false);
+      expect(fetch).toHaveBeenCalledWith(
+        'http://localhost:3001/api/v1/platform/tenants/tenant-001/knowledge/suggested',
+        expect.objectContaining({ method: 'GET' }),
+      );
+    });
+
+    it('appends cursor and limit query params when provided', async () => {
+      vi.stubGlobal(
+        'fetch',
+        mockFetchSuccess([MOCK_SUGGESTED_ARTICLE], { cursor: null, hasMore: false }),
+      );
+      client = new PlatformClientService(createConfig());
+
+      await client.getSuggestedKnowledge(TEST_TENANT_ID, { cursor: 'abc123', limit: 10 });
+
+      expect(fetch).toHaveBeenCalledWith(
+        'http://localhost:3001/api/v1/platform/tenants/tenant-001/knowledge/suggested?cursor=abc123&limit=10',
+        expect.objectContaining({ method: 'GET' }),
+      );
+    });
+
+    it('returns empty results when circuit is OPEN (fail-open)', async () => {
+      vi.stubGlobal('fetch', mockFetchNetworkError());
+      client = new PlatformClientService(createConfig());
+
+      // Drive circuit to OPEN
+      for (let i = 0; i < 3; i++) {
+        try {
+          await client.getSuggestedKnowledge(TEST_TENANT_ID);
+        } catch {
+          /* expected */
+        }
+      }
+      expect(client.getCircuitBreaker().getState()).toBe('OPEN');
+
+      const result = await client.getSuggestedKnowledge(TEST_TENANT_ID);
+      expect(result.data).toEqual([]);
+      expect(result.nextCursor).toBeNull();
+      expect(result.hasMore).toBe(false);
+    });
+  });
+
+  // ─── respondToKnowledge ─────────────────────────────────────────────
+
+  describe('respondToKnowledge', () => {
+    it('makes correct POST call for ACCEPTED response', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          status: 204,
+          text: () => Promise.resolve(''),
+        }),
+      );
+      client = new PlatformClientService(createConfig());
+
+      await client.respondToKnowledge(TEST_TENANT_ID, 'article-001', {
+        status: 'ACCEPTED',
+        tenantArticleId: 'tenant-art-001',
+      });
+
+      expect(fetch).toHaveBeenCalledWith(
+        'http://localhost:3001/api/v1/platform/tenants/tenant-001/knowledge/article-001/respond',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ status: 'ACCEPTED', tenantArticleId: 'tenant-art-001' }),
+        }),
+      );
+    });
+
+    it('makes correct POST call for REJECTED response', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          status: 204,
+          text: () => Promise.resolve(''),
+        }),
+      );
+      client = new PlatformClientService(createConfig());
+
+      await client.respondToKnowledge(TEST_TENANT_ID, 'article-001', {
+        status: 'REJECTED',
+      });
+
+      expect(fetch).toHaveBeenCalledWith(
+        'http://localhost:3001/api/v1/platform/tenants/tenant-001/knowledge/article-001/respond',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ status: 'REJECTED' }),
+        }),
+      );
+    });
+
+    it('throws when platform API returns error (no fail-open for writes)', async () => {
+      vi.stubGlobal('fetch', mockFetchFailure(500, 'Internal Server Error'));
+      client = new PlatformClientService(createConfig());
+
+      await expect(
+        client.respondToKnowledge(TEST_TENANT_ID, 'article-001', { status: 'ACCEPTED' }),
+      ).rejects.toThrow('Platform API returned 500');
+    });
+
+    it('throws when circuit is OPEN (no fail-open fallback for writes)', async () => {
+      vi.stubGlobal('fetch', mockFetchNetworkError());
+      client = new PlatformClientService(createConfig());
+
+      // Drive circuit to OPEN
+      for (let i = 0; i < 3; i++) {
+        try {
+          await client.respondToKnowledge(TEST_TENANT_ID, 'article-001', { status: 'ACCEPTED' });
+        } catch {
+          /* expected */
+        }
+      }
+      expect(client.getCircuitBreaker().getState()).toBe('OPEN');
+
+      // Should throw — no fallback for writes
+      await expect(
+        client.respondToKnowledge(TEST_TENANT_ID, 'article-001', { status: 'ACCEPTED' }),
+      ).rejects.toThrow();
     });
   });
 });

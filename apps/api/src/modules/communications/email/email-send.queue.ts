@@ -37,6 +37,10 @@ export function initEmailSendQueue(
       backoff: { type: 'custom' },
     },
   });
+  // Prevent unhandled 'error' events from crashing the process if Redis disconnects
+  queue.on('error', (err) => {
+    moduleLogger.warn(`[email-send] Queue error: ${err.message}`);
+  });
   return queue;
 }
 

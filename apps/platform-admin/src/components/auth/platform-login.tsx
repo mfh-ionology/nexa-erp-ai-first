@@ -1,7 +1,15 @@
+import { useNavigate } from '@tanstack/react-router';
 import { useState, type FormEvent } from 'react';
 
-import { usePlatformAuthStore, type PlatformUser, type PlatformRole } from '@/stores/auth-store';
+import { BASE_URL } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
+import { usePlatformAuthStore, type PlatformUser, type PlatformRole } from '@/stores/auth-store';
+
+const VALID_PLATFORM_ROLES: PlatformRole[] = [
+  'PLATFORM_ADMIN',
+  'PLATFORM_VIEWER',
+  'PLATFORM_SUPPORT',
+];
 
 interface LoginResponse {
   accessToken: string;
@@ -20,10 +28,9 @@ interface ApiEnvelope<T> {
   error?: { code: string; message: string };
 }
 
-const BASE_URL = import.meta.env.VITE_PLATFORM_API_BASE_URL ?? '/api/v1';
-
 export function PlatformLogin() {
   const login = usePlatformAuthStore((s) => s.login);
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mfaCode, setMfaCode] = useState('');
@@ -65,6 +72,10 @@ export function PlatformLogin() {
       }
 
       const { accessToken, platformUser } = json.data;
+      if (!VALID_PLATFORM_ROLES.includes(platformUser.role as PlatformRole)) {
+        setError(`Unexpected platform role: ${platformUser.role}`);
+        return;
+      }
       const user: PlatformUser = {
         id: platformUser.id,
         email: platformUser.email,
@@ -72,6 +83,7 @@ export function PlatformLogin() {
         role: platformUser.role as PlatformRole,
       };
       login(user, accessToken);
+      navigate({ to: '/' });
     } catch {
       setError('Network error. Please check your connection.');
     } finally {
@@ -113,7 +125,13 @@ export function PlatformLogin() {
                 type="email"
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (requiresMfa) {
+                    setRequiresMfa(false);
+                    setMfaCode('');
+                  }
+                }}
                 className={cn(
                   'w-full rounded-[var(--radius-input)] border border-input bg-background px-3 py-2 text-sm',
                   'focus:outline-none focus:ring-2 focus:ring-ring',
@@ -137,7 +155,13 @@ export function PlatformLogin() {
                 type="password"
                 required
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (requiresMfa) {
+                    setRequiresMfa(false);
+                    setMfaCode('');
+                  }
+                }}
                 className={cn(
                   'w-full rounded-[var(--radius-input)] border border-input bg-background px-3 py-2 text-sm',
                   'focus:outline-none focus:ring-2 focus:ring-ring',
@@ -170,6 +194,7 @@ export function PlatformLogin() {
                   )}
                   placeholder="000000"
                   inputMode="numeric"
+                  pattern="[0-9]{6}"
                   maxLength={6}
                   autoComplete="one-time-code"
                   disabled={isSubmitting}

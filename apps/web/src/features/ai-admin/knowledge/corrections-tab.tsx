@@ -598,6 +598,8 @@ export function CorrectionsTab({ onCreateArticleFromCorrection }: CorrectionsTab
   const {
     data: correctionsData,
     isLoading: isLoadingList,
+    isError: isListError,
+    refetch: refetchList,
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
@@ -631,6 +633,17 @@ export function CorrectionsTab({ onCreateArticleFromCorrection }: CorrectionsTab
         corrections: map.get(type)!,
       }));
   }, [filteredCorrections]);
+
+  if (isListError) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border bg-card p-12 text-center shadow-[0_1px_3px_rgba(0,0,0,0.06)] animate-fade-in-up">
+        <p className="text-sm text-muted-foreground mb-4">Failed to load corrections.</p>
+        <Button variant="outline" onClick={() => refetchList()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

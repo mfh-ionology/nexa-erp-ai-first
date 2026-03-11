@@ -72,9 +72,15 @@ function aggregateSkillUsage(patterns: TenantPattern[]): Record<string, number> 
   return result;
 }
 
-/** Count unique tenants in patterns */
-function countUniqueTenants(patterns: TenantPattern[]): number {
-  return new Set(patterns.map((p) => p.tenantId)).size;
+/**
+ * Count pattern records as a proxy for tenant activity.
+ * NOTE: This is an upper-bound approximation — each pattern is one tenant-date
+ * entry, so multi-period data may overcount. The API should ideally return a
+ * pre-aggregated tenantCount per industry to avoid transmitting tenantId to
+ * the frontend (privacy concern). See ISSUE #21.
+ */
+function countPatternRecords(patterns: TenantPattern[]): number {
+  return patterns.length;
 }
 
 /** Aggregate correction types from corrections */
@@ -335,7 +341,7 @@ function useIndustryPanelData(
     const queryCategories = topEntries(aggregateQueryCategories(patterns));
     const skillUsage = topEntries(aggregateSkillUsage(patterns));
     const correctionTypes = topEntries(aggregateCorrectionTypes(corrections));
-    const tenantCount = countUniqueTenants(patterns);
+    const tenantCount = countPatternRecords(patterns);
     return { queryCategories, skillUsage, correctionTypes, tenantCount };
   }, [patterns, corrections]);
 }
@@ -391,14 +397,19 @@ export function IndustryBreakdownSection() {
   const error = patternsQuery1.error ?? correctionsQuery.error;
 
   const handleToggleCompare = useCallback(() => {
-    setCompareMode((prev) => !prev);
-    if (!compareMode && !industry2) {
-      // Default second industry to something different from the first
-      const firstIndustry = industry1 || '';
-      const other = INDUSTRIES.find((ind) => ind.value !== '' && ind.value !== firstIndustry);
-      if (other) setIndustry2(other.value);
-    }
-  }, [compareMode, industry1, industry2]);
+    setCompareMode((prev) => {
+      const entering = !prev;
+      if (entering) {
+        // Default second industry to something different from the first
+        setIndustry2((currentIndustry2) => {
+          if (currentIndustry2) return currentIndustry2;
+          const other = INDUSTRIES.find((ind) => ind.value !== '' && ind.value !== industry1);
+          return other?.value ?? '';
+        });
+      }
+      return entering;
+    });
+  }, [industry1]);
 
   const industryLabel1 =
     INDUSTRIES.find((ind) => ind.value === industry1)?.label ?? 'All Industries';
@@ -503,7 +514,14 @@ export function IndustryBreakdownSection() {
       </div>
 
       {/* Content — single or comparison mode */}
-      {compareMode ? (
+      {patterns1.length === 0 && corrections1.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
+          <Building2 className="h-8 w-8" aria-hidden="true" />
+          <p className="text-sm">
+            No data for {industryLabel1} — run aggregation to collect intelligence
+          </p>
+        </div>
+      ) : compareMode ? (
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Industry 1 */}
           <div>
@@ -523,16 +541,6 @@ export function IndustryBreakdownSection() {
         </div>
       ) : (
         <IndustryPanel label={industryLabel1} data={panelData1} />
-      )}
-
-      {/* Empty state for selected industry */}
-      {patterns1.length === 0 && corrections1.length === 0 && (
-        <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
-          <Building2 className="h-8 w-8" aria-hidden="true" />
-          <p className="text-sm">
-            No data for {industryLabel1} — run aggregation to collect intelligence
-          </p>
-        </div>
       )}
     </section>
   );

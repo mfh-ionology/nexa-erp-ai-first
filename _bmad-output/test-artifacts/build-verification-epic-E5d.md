@@ -1,6 +1,6 @@
 # Build Verification Report - Epic E5d
 
-**Date**: 2026-03-04 13:05:45
+**Date**: 2026-03-11 05:25:00
 **Status**: failed
 
 ## Build
@@ -12,12 +12,12 @@
 
 | Server | URL | Status |
 |--------|-----|--------|
-| Backend | http://localhost:5100 | Not running |
+| Backend | http://localhost:5100 | Running (PID: 69717) |
 
 
 ## Server PIDs
 
-Backend PID: none
+Backend PID: 69717
 Frontend PID: skipped (not enabled)
 
 Keep servers flag: true

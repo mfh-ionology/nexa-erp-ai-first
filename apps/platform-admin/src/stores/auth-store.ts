@@ -50,7 +50,11 @@ export const usePlatformAuthStore = create<PlatformAuthState>()((set) => ({
     });
   },
 
-  setAccessToken: (token) => set({ accessToken: token, isAuthenticated: true }),
+  setAccessToken: (token) =>
+    set((state) => ({
+      accessToken: token,
+      isAuthenticated: state.user !== null,
+    })),
 
   setLoading: (loading) => set({ isLoading: loading }),
 }));

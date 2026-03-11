@@ -35,6 +35,10 @@ export function initNotificationDispatchQueue(
       backoff: { type: 'custom' },
     },
   });
+  // Prevent unhandled 'error' events from crashing the process if Redis disconnects
+  queue.on('error', (err) => {
+    console.warn(`[notification-dispatch] Queue error: ${err.message}`);
+  });
   return queue;
 }
 

@@ -1,8 +1,8 @@
 ---
 stepsCompleted: ['step-01-detect-mode', 'step-02-load-context', 'step-03-risk-and-testability', 'step-04-coverage-plan', 'step-05-generate-output']
 lastStep: 'step-05-generate-output'
-lastSaved: '2026-03-04'
-lastEpic: 'E11'
+lastSaved: '2026-03-11'
+lastEpic: 'E12'
 ---
 
 # Test Design Progress — Epic E1
@@ -696,5 +696,88 @@ lastEpic: 'E11'
 - **Output file**: `_bmad-output/test-artifacts/test-design-epic-E11.md`
 - **Validated against checklist**: All criteria passed
 
-## Completion
+## Completion (E11)
 - Workflow complete: 2026-03-04
+
+---
+
+# Test Design Progress — Epic E13b
+
+## Step 1: Mode Detection
+- **Mode**: Epic-Level (Phase 4)
+- **Reason**: User explicitly requested E13b epic-level test design; sprint-status.yaml exists
+- **Epic**: E13b — Platform Admin Portal (6 stories: E13b.1-E13b.6)
+
+## Step 2: Context Loading
+- **Config**: tea_use_playwright_utils=true, tea_browser_automation=auto, test_framework=playwright
+- **Documents loaded**:
+  - Epic E13b (6 stories), Architecture §2.31, PRD FR193-FR226, API Contracts §21 (~45 endpoints)
+  - Data Models §5 (11 tables), Business Rules §14b (21 rules), Event Catalog §19 (13 events)
+  - State Machines §20 (3 state machines), UX Design Spec (Platform Admin Portal)
+  - E3b test design (14 risks, 114 scenarios), 8 existing test files from E3b
+- **Knowledge fragments**: risk-governance.md, probability-impact.md, test-levels-framework.md, test-priorities-matrix.md
+
+## Step 3: Risk Assessment
+- **Total risks**: 12
+- **High-priority (>=6)**: 5 — R-001 (SEC: impersonation bypass, score=9), R-002 (SEC: VIEWER write exposure, score=6), R-003 (SEC: MFA bypass, score=6), R-004 (DATA: archive irreversibility, score=6), R-005 (BUS: enforcement propagation hidden, score=6)
+- **Medium (3-4)**: 5, **Low (1-2)**: 2
+
+## Step 4: Coverage Plan
+- **P0**: ~20 tests (~20-30 hours), **P1**: ~30 tests (~25-40 hours), **P2**: ~16 tests (~8-16 hours), **P3**: ~8 tests (~3-6 hours)
+- **Total**: ~74 tests, ~56-92 hours (~1.5-2.5 weeks)
+
+## Step 5: Output Generation
+- **Output file**: `_bmad-output/test-artifacts/test-design-epic-E13b.md`
+- **Validated against checklist**: All criteria passed
+
+## Completion (E13b)
+- Workflow complete: 2026-03-11
+
+---
+
+# Test Design Progress — Epic E12
+
+## Step 1: Mode Detection
+- **Mode**: Epic-Level (Phase 4)
+- **Reason**: User explicitly requested E12 epic-level test design; sprint-status.yaml exists
+- **Epic**: E12 — Document Templates & PDF (3 stories: E12.1-E12.3)
+
+## Step 2: Context Loading
+- **Config**: tea_use_playwright_utils=true, tea_browser_automation=auto, test_framework=playwright
+- **Documents loaded**:
+  - Epic E12 (3 stories: E12.1 Template Engine, E12.2 Template Management, E12.3 Default Templates)
+  - Architecture: §2.12 (Document Templates & PDF Generation — Handlebars + Puppeteer pipeline, version selection algorithm)
+  - PRD: FR79 (ad-hoc reporting), FR85 (audit log viewing); NFR2 (CRUD <500ms), NFR3 (reports <5s), NFR41 (TypeScript strict)
+  - API Contracts: §2.4 (CRUD /document-templates, POST /documents/generate, POST /documents/email, POST /documents/batch-generate)
+  - Data Models: §3.1 (DocumentTemplate: 25+ fields incl. branding toggles, margins, page config; DocumentTemplateVersion: selection criteria, email fields, priority)
+  - Business Rules: BR-COM-010 (document-to-email requires valid template, fallback to default)
+  - Project Context: §7 (Printer Management — cloud PDF generation, no physical drivers)
+  - Event Catalog: No E12-specific events; document.* events are for E13 Document Understanding
+  - State Machines: N/A for E12
+- **Knowledge fragments**: risk-governance.md, probability-impact.md, test-levels-framework.md, test-priorities-matrix.md
+- **Existing code**: Handlebars engine from E10 (email-template-engine.service.ts with 25+ tests), template-renderer.ts (25+ tests), no Puppeteer yet, v0 design reference available
+- **Existing tests**: 365 total test files; no E12-specific tests; 37 email/notification template test files from E10 provide patterns
+
+## Step 3: Risk Assessment
+- **Total risks**: 12
+- **High-priority (>=6)**: 3 — R-001 (SEC: template injection via Puppeteer, score=6), R-002 (DATA: version selection algorithm incorrect, score=6), R-003 (PERF: Puppeteer resource exhaustion, score=6)
+- **Medium (3-4)**: 5 — R-004 (DATA: formatting inconsistency), R-005 (TECH: page break handling), R-006 (BUS: default template completeness), R-007 (SEC: cross-tenant document access), R-008 (TECH: batch job partial failure)
+- **Low (1-2)**: 4 — R-009 (DATA: conditional section logic), R-010 (OPS: Chrome binary mismatch), R-011 (DATA: seed idempotency), R-012 (BUS: UK payroll compliance)
+
+## Step 4: Coverage Plan
+- **P0**: ~18 tests (~15-25 hours) — template injection prevention, version selection correctness, Puppeteer resource management, document generation, batch reliability
+- **P1**: ~26 tests (~20-35 hours) — template CRUD, version management, Handlebars helpers, conditional sections, line items, page config, preview, email integration
+- **P2**: ~14 tests (~5-10 hours) — default seeding, HTML validation, fallback, branding, management UI, companyId scoping
+- **P3**: ~6 tests (~2-4 hours) — performance benchmark, visual regression, header/footer, CSS override
+- **Total**: ~64 tests, ~42-74 hours (~1-2 weeks)
+- **Test levels**: Unit (scoring algorithm, Handlebars helpers, conditional logic), API (CRUD, generation, batch, security), E2E (template management UI)
+- **Execution**: All functional tests on every PR (<15 min); benchmarks nightly; stress tests weekly
+
+## Step 5: Output Generation
+- **Output file**: `_bmad-output/test-artifacts/test-design-epic-E12.md`
+- **Validated against checklist**: All criteria passed
+- **No CLI sessions to clean up** (no browser exploration for E12)
+- **All artifacts stored in test-artifacts/**
+
+## Completion (E12)
+- Workflow complete: 2026-03-11

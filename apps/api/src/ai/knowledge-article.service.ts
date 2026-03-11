@@ -12,14 +12,25 @@ import type { EmbeddingService } from './embedding.service.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-/** Valid knowledge article categories */
-export const VALID_CATEGORIES = [
+/** Valid knowledge article categories (tenant-originated) */
+export const TENANT_CATEGORIES = [
   'BUSINESS_PROCESS',
   'TERMINOLOGY',
   'INDUSTRY_RULES',
   'CUSTOM_FIELDS',
   'HISTORICAL_PATTERN',
 ] as const;
+
+/** Platform-originated categories (accepted via knowledge distribution — E5d-4) */
+export const PLATFORM_CATEGORIES = [
+  'BEST_PRACTICE',
+  'HELP',
+  'DEFAULT_CONFIG',
+  'SKILL_UPDATE',
+] as const;
+
+/** All valid categories — tenant + platform (used for DB storage validation) */
+export const VALID_CATEGORIES = [...TENANT_CATEGORIES, ...PLATFORM_CATEGORIES] as const;
 
 export type ArticleCategory = (typeof VALID_CATEGORIES)[number];
 
@@ -184,6 +195,93 @@ export class KnowledgeArticleService {
     );
 
     return this.toRecord(article);
+  }
+
+  // ─── Idempotency lookup ────────────────────────────────────────────────
+
+  /** Find an existing article by source + sourceRef for idempotency guards. */
+  async findBySourceRef(
+    companyId: string,
+    source: string,
+    sourceRef: string,
+  ): Promise<ArticleRecord | null> {
+    const article = await this.db.aiKnowledgeArticle.findFirst({
+      where: { companyId, source, sourceRef },
+      include: { _count: { select: { chunks: true } } },
+    });
+    return article ? this.toRecord(article) : null;
+  }
+
+  /**
+   * Idempotent create: check-then-create inside a serializable transaction to
+   * prevent duplicate articles from concurrent accept requests (E5d-4 race fix).
+   * Returns { article, created } — `created` is false if a duplicate already existed.
+   *
+   * IMPORTANT: Both the check AND the insert use the `tx` client so they share the
+   * same serializable transaction connection. Using `this.db` for the insert would
+   * bypass the transaction isolation and allow duplicate articles.
+   */
+  async createArticleIfNotExists(
+    companyId: string,
+    userId: string,
+    input: CreateArticleInput & { sourceRef: string; source: string },
+  ): Promise<{ article: ArticleRecord; created: boolean }> {
+    const source = input.source;
+    const confidenceScore = input.confidenceScore ?? DEFAULT_CONFIDENCE[source] ?? 0.5;
+    const isConfirmed = input.isConfirmed ?? source === 'ADMIN_UPLOADED';
+
+    const result = await this.db.$transaction(
+      async (tx) => {
+        // Check inside transaction to serialise concurrent requests
+        const existing = await tx.aiKnowledgeArticle.findFirst({
+          where: { companyId, source: input.source, sourceRef: input.sourceRef },
+          include: { _count: { select: { chunks: true } } },
+        });
+
+        if (existing) {
+          return { article: this.toRecord(existing), created: false };
+        }
+
+        // Insert via tx (same connection) to maintain serializable isolation
+        const article = await tx.aiKnowledgeArticle.create({
+          data: {
+            companyId,
+            title: input.title,
+            content: input.content,
+            category: input.category,
+            source,
+            sourceRef: input.sourceRef,
+            confidenceScore,
+            isConfirmed,
+            createdById: userId,
+          },
+          include: { _count: { select: { chunks: true } } },
+        });
+
+        return { article: this.toRecord(article), created: true };
+      },
+      { isolationLevel: 'Serializable' },
+    );
+
+    // Post-transaction side effects (only for newly created articles)
+    if (result.created) {
+      this.eventBus.emit('ai.knowledge.articleCreated', {
+        articleId: result.article.id,
+        companyId,
+        category: input.category,
+        source,
+        confidenceScore,
+      });
+
+      this.chunkAndEmbed(result.article.id, input.content).catch((err) =>
+        this.logger.warn(
+          { err, articleId: result.article.id },
+          'KnowledgeArticleService: chunkAndEmbed failed (idempotent create)',
+        ),
+      );
+    }
+
+    return result;
   }
 
   // ─── Chunk & Embed (AC: #2, #3) ──────────────────────────────────────────

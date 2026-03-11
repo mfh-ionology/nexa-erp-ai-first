@@ -50,11 +50,8 @@ export const suggestedArticleResponseSchema = z.object({
   previousResponse: previousResponseSchema.nullable(),
 });
 
-export const suggestedKnowledgeListResponseSchema = z.object({
-  data: z.array(suggestedArticleResponseSchema),
-  nextCursor: z.string().nullable(),
-  hasMore: z.boolean(),
-});
+/** Array of suggested articles — pagination comes from the envelope meta. */
+export const suggestedArticleArraySchema = z.array(suggestedArticleResponseSchema);
 
 // ---------------------------------------------------------------------------
 // Inferred types

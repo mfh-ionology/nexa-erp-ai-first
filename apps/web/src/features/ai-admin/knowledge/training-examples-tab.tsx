@@ -473,6 +473,8 @@ export function TrainingExamplesTab({
   const {
     data: examplesData,
     isLoading,
+    isError,
+    refetch,
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
@@ -513,6 +515,17 @@ export function TrainingExamplesTab({
     },
     [updateExample],
   );
+
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border bg-card p-12 text-center shadow-[0_1px_3px_rgba(0,0,0,0.06)] animate-fade-in-up">
+        <p className="text-sm text-muted-foreground mb-4">Failed to load training examples.</p>
+        <Button variant="outline" onClick={() => refetch()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

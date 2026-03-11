@@ -217,6 +217,18 @@ export const queryKeys = {
     byEntity: (entityType: string, entityId: string) =>
       [...queryKeys.tasks.all, 'entity', entityType, entityId] as const,
   },
+  documentTemplates: {
+    all: ['document-templates'] as const,
+    list: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.documentTemplates.all, 'list', params] as const)
+        : ([...queryKeys.documentTemplates.all, 'list'] as const),
+    listInfinite: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.documentTemplates.all, 'list', 'infinite', params] as const)
+        : ([...queryKeys.documentTemplates.all, 'list', 'infinite'] as const),
+    detail: (id: string) => [...queryKeys.documentTemplates.all, id] as const,
+  },
   email: {
     all: ['email'] as const,
     preview: (documentType: string, recordId: string, templateId?: string) =>

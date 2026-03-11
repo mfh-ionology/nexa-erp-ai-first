@@ -284,6 +284,7 @@ export function CorrectionPatternsSection({
   useEffect(() => {
     if (externalSkillFilter !== undefined) {
       setSkillFilter(externalSkillFilter);
+      setDisplayCount(ITEMS_PER_PAGE);
     }
   }, [externalSkillFilter]);
 

@@ -11,6 +11,7 @@ import { BookPlus } from 'lucide-react';
 
 import { useIntelligenceSummary } from '@/api/use-intelligence';
 import { cn } from '@/lib/utils';
+import { RequirePlatformRole } from '@/components/auth/require-platform-role';
 
 import { SummaryPanel } from './components/summary-panel';
 import { DataControls } from './components/data-controls';
@@ -265,22 +266,24 @@ export function IntelligencePage() {
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* Floating "Publish Knowledge" FAB                                   */}
+      {/* Floating "Publish Knowledge" FAB — PLATFORM_ADMIN only             */}
       {/* ----------------------------------------------------------------- */}
-      <button
-        onClick={() => openPublishPanel()}
-        className={cn(
-          'fixed bottom-6 right-6 z-30 flex items-center gap-2',
-          'rounded-[var(--radius-button)] bg-primary px-4 py-3 text-sm font-medium text-primary-foreground',
-          'shadow-lg hover:bg-[var(--primary-dark)] transition-colors',
-          'focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2',
-          'animate-fade-in-up',
-        )}
-        aria-label="Publish Knowledge"
-      >
-        <BookPlus className="h-4 w-4" aria-hidden="true" />
-        <span className="hidden sm:inline">Publish Knowledge</span>
-      </button>
+      <RequirePlatformRole roles={['PLATFORM_ADMIN']}>
+        <button
+          onClick={() => openPublishPanel()}
+          className={cn(
+            'fixed bottom-6 right-6 z-30 flex items-center gap-2',
+            'rounded-[var(--radius-button)] bg-primary px-4 py-3 text-sm font-medium text-primary-foreground',
+            'shadow-lg hover:bg-[var(--primary-dark)] transition-colors',
+            'focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2',
+            'animate-fade-in-up',
+          )}
+          aria-label="Publish Knowledge"
+        >
+          <BookPlus className="h-4 w-4" aria-hidden="true" />
+          <span className="hidden sm:inline">Publish Knowledge</span>
+        </button>
+      </RequirePlatformRole>
 
       {/* ----------------------------------------------------------------- */}
       {/* Publish Knowledge Side Panel                                       */}

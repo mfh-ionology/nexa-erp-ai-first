@@ -1,0 +1,1526 @@
+{
+  "epic_id": "E13b",
+  "epic_title": "Platform Admin Portal",
+  "generated_at": "2026-03-11T13:00:00.000Z",
+  "frontend_url": "http://localhost:5112",
+  "erp_frontend_url": "http://localhost:5110",
+  "total_journeys": 24,
+  "total_steps": 273,
+  "notes": [
+    "Platform Admin app runs on port 5112, NOT the ERP web app (port 5110)",
+    "Platform Admin uses dark sidebar theme (slate-900), NOT Concept D purple",
+    "Two roles: PLATFORM_ADMIN (full access) and PLATFORM_VIEWER (read-only)",
+    "Backend is Platform API on port 5101 (proxied via /api/v1)",
+    "Journey j20 tests the ERP web app (port 5110) for the impersonation banner"
+  ],
+  "journeys": [
+    {
+      "id": "j1-login-and-auth",
+      "name": "Login with Platform Credentials and MFA",
+      "description": "Test the platform authentication flow including email/password login, MFA challenge, and successful redirect to dashboard",
+      "priority": "critical",
+      "related_stories": ["E13b-1"],
+      "acceptance_criteria": ["E13b.1-AC4"],
+      "preconditions": "Platform API running on port 5101 with seeded PLATFORM_ADMIN user (MFA enabled)",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/login",
+          "input_data": {},
+          "expected_result": "Login page loads with email and password fields",
+          "screenshot": true,
+          "visual_check": "Login page with 'PLATFORM ADMIN' branding, email input, password input, and Submit button visible"
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.test",
+            "password": "wrong-password"
+          },
+          "expected_result": "Form fields populated"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "Error message displayed for invalid credentials",
+          "screenshot": true,
+          "visual_check": "Red error message visible below form: 'Invalid email or password'"
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "Login form",
+          "input_data": {
+            "email": "admin@nexa-platform.test",
+            "password": "correct-password"
+          },
+          "expected_result": "Form fields updated with correct credentials"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Sign In button",
+          "input_data": {},
+          "expected_result": "MFA code input field appears (202 response triggers MFA challenge)",
+          "screenshot": true,
+          "visual_check": "MFA code input field visible with instruction text, original email/password fields may be hidden or disabled"
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "MFA code input",
+          "input_data": {
+            "mfaCode": "123456"
+          },
+          "expected_result": "MFA code entered"
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Verify button",
+          "input_data": {},
+          "expected_result": "Authentication succeeds, redirect to dashboard",
+          "screenshot": true,
+          "visual_check": "Dashboard page visible with dark sidebar, 'PLATFORM ADMIN' branding, and welcome content"
+        }
+      ]
+    },
+    {
+      "id": "j2-app-shell-navigation",
+      "name": "Verify App Shell and All 9 Navigation Items",
+      "description": "Verify the platform admin app shell has dark sidebar with all 9 navigation items and 'PLATFORM ADMIN' branding",
+      "priority": "critical",
+      "related_stories": ["E13b-1"],
+      "acceptance_criteria": ["E13b.1-AC1", "E13b.1-AC2", "E13b.1-AC3"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Dashboard loads with sidebar visible",
+          "screenshot": true,
+          "visual_check": "Dark sidebar (slate-900 background) with 'PLATFORM ADMIN' branding text, purple accent on active Dashboard item, white text on dark background"
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Sidebar navigation items",
+          "input_data": {},
+          "expected_result": "All 9 nav items visible: Dashboard, Tenants, Plans, AI Usage, Billing, Support Console, Monitoring, Audit Log, Settings"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Tenants nav item",
+          "input_data": {},
+          "expected_result": "Navigates to /tenants, Tenants nav item becomes active"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Plans nav item",
+          "input_data": {},
+          "expected_result": "Navigates to /plans"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "AI Usage nav item",
+          "input_data": {},
+          "expected_result": "Navigates to /ai-usage"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Billing nav item",
+          "input_data": {},
+          "expected_result": "Navigates to /billing"
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Support Console nav item",
+          "input_data": {},
+          "expected_result": "Navigates to /support"
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Monitoring nav item",
+          "input_data": {},
+          "expected_result": "Navigates to /monitoring"
+        },
+        {
+          "step_number": 9,
+          "action": "click",
+          "target": "Audit Log nav item",
+          "input_data": {},
+          "expected_result": "Navigates to /audit-log"
+        },
+        {
+          "step_number": 10,
+          "action": "click",
+          "target": "Settings nav item",
+          "input_data": {},
+          "expected_result": "Navigates to /settings",
+          "screenshot": true,
+          "visual_check": "Settings page loaded, Settings nav item has purple active background with white text"
+        },
+        {
+          "step_number": 11,
+          "action": "click",
+          "target": "Sidebar collapse toggle button",
+          "input_data": {},
+          "expected_result": "Sidebar collapses to icon-only mode",
+          "screenshot": true,
+          "visual_check": "Sidebar collapsed showing only icons, no text labels, 'PLATFORM ADMIN' branding replaced by icon or hidden"
+        }
+      ]
+    },
+    {
+      "id": "j3-rbac-viewer-restrictions",
+      "name": "PLATFORM_VIEWER Sees Read-Only UI",
+      "description": "Verify that PLATFORM_VIEWER users cannot see or interact with write actions throughout the app",
+      "priority": "critical",
+      "related_stories": ["E13b-1", "E13b-2", "E13b-3"],
+      "acceptance_criteria": ["E13b.1-AC5", "E13b.2-AC3", "E13b.3-AC3"],
+      "preconditions": "Authenticated as PLATFORM_VIEWER user",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Dashboard loads with read-only indicator",
+          "screenshot": true,
+          "visual_check": "Dashboard shows 'Read-only mode' indicator for PLATFORM_VIEWER user"
+        },
+        {
+          "step_number": 2,
+          "action": "navigate",
+          "target": "/tenants",
+          "input_data": {},
+          "expected_result": "Tenant list loads but '+ New Tenant' button is hidden",
+          "screenshot": true,
+          "visual_check": "Tenant list table visible, no '+ New Tenant' button in the action area"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "First tenant row",
+          "input_data": {},
+          "expected_result": "Tenant detail page loads without action buttons"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Tenant detail action bar",
+          "input_data": {},
+          "expected_result": "No Suspend, Reactivate, Archive, or Impersonate buttons visible",
+          "screenshot": true,
+          "visual_check": "Tenant detail page with tabs visible but action bar has no lifecycle buttons — read-only view"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Modules & Flags tab",
+          "input_data": {},
+          "expected_result": "Module toggles are disabled/read-only",
+          "screenshot": true,
+          "visual_check": "Module override toggle switches are visible but greyed out/disabled, feature flag toggles also disabled"
+        },
+        {
+          "step_number": 6,
+          "action": "navigate",
+          "target": "/plans",
+          "input_data": {},
+          "expected_result": "Plans page loads without '+ New Plan' button",
+          "screenshot": true,
+          "visual_check": "Plan cards visible with plan details, no '+ New Plan' button, no edit icons on cards"
+        },
+        {
+          "step_number": 7,
+          "action": "navigate",
+          "target": "/billing",
+          "input_data": {},
+          "expected_result": "Billing dashboard loads without 'Change Enforcement' buttons",
+          "screenshot": true,
+          "visual_check": "Billing KPI cards and issues table visible, but 'Change Enforcement' action buttons hidden from rows"
+        },
+        {
+          "step_number": 8,
+          "action": "navigate",
+          "target": "/ai-usage",
+          "input_data": {},
+          "expected_result": "AI Usage page loads without Export CSV button",
+          "screenshot": true,
+          "visual_check": "AI usage overview with KPI cards and chart visible, no 'Export CSV' button"
+        },
+        {
+          "step_number": 9,
+          "action": "navigate",
+          "target": "/support",
+          "input_data": {},
+          "expected_result": "Support console loads, search works, but Impersonate buttons hidden",
+          "screenshot": true,
+          "visual_check": "Support console search bar visible, results (if any) show 'View' button but no 'Impersonate' button"
+        }
+      ]
+    },
+    {
+      "id": "j4-tenant-list",
+      "name": "Tenant List with Filters and Pagination",
+      "description": "Test the T1 Entity List tenant list page with columns, status badges, filters, and pagination",
+      "priority": "critical",
+      "related_stories": ["E13b-2"],
+      "acceptance_criteria": ["E13b.2-AC1"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, multiple tenants seeded with various statuses",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tenants",
+          "input_data": {},
+          "expected_result": "Tenant list page loads with table",
+          "screenshot": true,
+          "visual_check": "Page header 'Tenants' with '+ New Tenant' button, data table with columns: Name, Code, Plan, Status (colour badges), Billing Status, Last Activity, User Count"
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Status badge for ACTIVE tenant",
+          "input_data": {},
+          "expected_result": "ACTIVE badge shows green colour (green-600)"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Status badge for SUSPENDED tenant",
+          "input_data": {},
+          "expected_result": "SUSPENDED badge shows red colour (red-600)"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Status filter dropdown",
+          "input_data": {},
+          "expected_result": "Dropdown opens with TenantStatus enum values"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "ACTIVE option in status filter",
+          "input_data": {},
+          "expected_result": "Table filters to show only ACTIVE tenants",
+          "screenshot": true,
+          "visual_check": "All visible tenant rows show green ACTIVE status badges, filtered result count visible"
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "Search text input",
+          "input_data": {
+            "search": "test-tenant"
+          },
+          "expected_result": "Table filters to show tenants matching search query"
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Clear filters / reset",
+          "input_data": {},
+          "expected_result": "All filters cleared, full tenant list restored"
+        },
+        {
+          "step_number": 8,
+          "action": "verify_element",
+          "target": "Pagination controls or Load More button",
+          "input_data": {},
+          "expected_result": "Pagination visible with total count from meta.total"
+        },
+        {
+          "step_number": 9,
+          "action": "click",
+          "target": "First tenant row (displayName link)",
+          "input_data": {},
+          "expected_result": "Navigates to /tenants/{tenantId} detail page"
+        }
+      ]
+    },
+    {
+      "id": "j5-tenant-detail-overview",
+      "name": "Tenant Detail Page with 7 Tabs",
+      "description": "Test the T2 Record Detail tenant detail page with all 7 tabs and overview content",
+      "priority": "critical",
+      "related_stories": ["E13b-2"],
+      "acceptance_criteria": ["E13b.2-AC2"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, ACTIVE tenant exists",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tenants",
+          "input_data": {},
+          "expected_result": "Tenant list loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "First ACTIVE tenant row",
+          "input_data": {},
+          "expected_result": "Tenant detail page loads with breadcrumb and tabs",
+          "screenshot": true,
+          "visual_check": "Breadcrumb 'Platform Admin > Tenants > {displayName}', tenant name as title with StatusBadge, tab navigation with 7 tabs: Overview, Modules & Flags, Users, AI Usage, Billing, Diagnostics, Audit"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Overview tab content",
+          "input_data": {},
+          "expected_result": "Overview tab shows: Display Name, Code, Legal Name, Status, Plan, Region, Billing Status, Created, Last Activity, Sandbox Mode"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Action bar buttons",
+          "input_data": {},
+          "expected_result": "For ACTIVE tenant: 'Suspend' button visible, 'Impersonate' button visible",
+          "screenshot": true,
+          "visual_check": "Action bar shows 'Suspend' button (destructive style) and 'Impersonate' button (amber accent), tenant status badge shows green ACTIVE"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Users tab",
+          "input_data": {},
+          "expected_result": "Users tab content loads showing tenant user list or placeholder"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "AI Usage tab",
+          "input_data": {},
+          "expected_result": "AI Usage tab content loads with usage data or placeholder"
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Billing tab",
+          "input_data": {},
+          "expected_result": "Billing tab content loads with subscription info and enforcement controls"
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Diagnostics tab",
+          "input_data": {},
+          "expected_result": "Diagnostics tab content loads with health check info or placeholder"
+        },
+        {
+          "step_number": 9,
+          "action": "click",
+          "target": "Audit tab",
+          "input_data": {},
+          "expected_result": "Audit tab content loads with recent platform actions for this tenant",
+          "screenshot": true,
+          "visual_check": "Audit tab shows table of recent audit log entries filtered for this tenant, or 'View full audit log' link"
+        }
+      ]
+    },
+    {
+      "id": "j6-tenant-suspend",
+      "name": "Suspend an Active Tenant",
+      "description": "Test suspending an ACTIVE tenant with mandatory reason confirmation dialog",
+      "priority": "critical",
+      "related_stories": ["E13b-2"],
+      "acceptance_criteria": ["E13b.2-AC3"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, ACTIVE tenant exists",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tenants/{activeTenantId}",
+          "input_data": {},
+          "expected_result": "Tenant detail page loads for ACTIVE tenant"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Suspend button",
+          "input_data": {},
+          "expected_result": "Confirmation dialog opens with 'Suspend Tenant' title",
+          "screenshot": true,
+          "visual_check": "Modal dialog with title 'Suspend Tenant', description mentioning 30-second propagation (BR-PLT-002), reason textarea, and destructive 'Suspend Tenant' confirm button"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Suspend Tenant confirm button (in dialog)",
+          "input_data": {},
+          "expected_result": "Confirm button is disabled because reason is empty (requireReason: true)"
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "Reason textarea in dialog",
+          "input_data": {
+            "reason": "Security investigation — suspicious activity detected on tenant account"
+          },
+          "expected_result": "Reason entered, confirm button becomes enabled"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Suspend Tenant confirm button",
+          "input_data": {},
+          "expected_result": "Tenant suspended, success toast appears, status updates in-place",
+          "screenshot": true,
+          "visual_check": "Success toast 'Tenant suspended' visible, tenant status badge changed from green ACTIVE to red SUSPENDED, action bar now shows 'Reactivate' button instead of 'Suspend'"
+        }
+      ]
+    },
+    {
+      "id": "j7-tenant-reactivate",
+      "name": "Reactivate a Suspended Tenant",
+      "description": "Test reactivating a SUSPENDED tenant with confirmation dialog",
+      "priority": "critical",
+      "related_stories": ["E13b-2"],
+      "acceptance_criteria": ["E13b.2-AC4"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, SUSPENDED tenant exists (e.g. after j6)",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tenants/{suspendedTenantId}",
+          "input_data": {},
+          "expected_result": "Tenant detail loads showing SUSPENDED status",
+          "screenshot": true,
+          "visual_check": "Tenant detail with red SUSPENDED status badge, 'Reactivate' button visible, 'Archive' button in overflow menu"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Reactivate button",
+          "input_data": {},
+          "expected_result": "Confirmation dialog opens with 'Reactivate Tenant' title",
+          "screenshot": true,
+          "visual_check": "Dialog with 'Reactivate Tenant' title, description about restoring full ERP access and entitlement cache refresh, 'Reactivate' confirm button (default variant, not destructive)"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Reactivate confirm button",
+          "input_data": {},
+          "expected_result": "Tenant reactivated, success toast appears, status updates",
+          "screenshot": true,
+          "visual_check": "Success toast 'Tenant reactivated' visible, status badge changed from red SUSPENDED to green ACTIVE, action bar shows 'Suspend' button again"
+        }
+      ]
+    },
+    {
+      "id": "j8-tenant-modules-flags",
+      "name": "Toggle Module Overrides and Feature Flags",
+      "description": "Test enabling/disabling module overrides and feature flags for a tenant",
+      "priority": "high",
+      "related_stories": ["E13b-2"],
+      "acceptance_criteria": ["E13b.2-AC5"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, ACTIVE tenant with modules and feature flags",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tenants/{activeTenantId}",
+          "input_data": {},
+          "expected_result": "Tenant detail page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Modules & Flags tab",
+          "input_data": {},
+          "expected_result": "Modules & Flags tab content loads",
+          "screenshot": true,
+          "visual_check": "Two sections visible: 'Module Overrides' with a table/list of modules and toggle switches, 'Feature Flags' with a list of flags and toggle switches"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Toggle switch for a module (e.g. 'manufacturing')",
+          "input_data": {},
+          "expected_result": "Module override toggle changes state, API call fires"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_text",
+          "target": "Success toast",
+          "input_data": {},
+          "expected_result": "Toast confirms module override saved",
+          "screenshot": true,
+          "visual_check": "Success toast visible confirming module change, toggle switch reflects new state"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Toggle switch for a feature flag",
+          "input_data": {},
+          "expected_result": "Feature flag toggle changes state, API call fires"
+        },
+        {
+          "step_number": 6,
+          "action": "verify_text",
+          "target": "Success toast",
+          "input_data": {},
+          "expected_result": "Toast confirms feature flag change saved",
+          "screenshot": true,
+          "visual_check": "Success toast visible, feature flag toggle reflects new state"
+        }
+      ]
+    },
+    {
+      "id": "j9-billing-dashboard",
+      "name": "Billing Overview Dashboard with KPI Cards",
+      "description": "Test the billing dashboard page with KPI cards, enforcement distribution, and billing issues table",
+      "priority": "high",
+      "related_stories": ["E13b-3"],
+      "acceptance_criteria": ["E13b.3-AC1"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, tenants with various billing statuses seeded",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/billing",
+          "input_data": {},
+          "expected_result": "Billing dashboard loads with KPI cards and data",
+          "screenshot": true,
+          "visual_check": "Page header 'Billing', KPI cards row showing: Active Tenants (count), Current (green border), Grace Period (amber border), Overdue (red border), Blocked (dark red border) — each with count and percentage"
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Enforcement action distribution section",
+          "input_data": {},
+          "expected_result": "Enforcement distribution shows counts per action: NONE, WARNING, READ_ONLY, SUSPENDED with colour coding",
+          "screenshot": true,
+          "visual_check": "Horizontal bars or summary cards for enforcement actions: NONE (green), WARNING (amber), READ_ONLY (red), SUSPENDED (dark red)"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Billing issues table",
+          "input_data": {},
+          "expected_result": "Table of tenants with billingStatus != CURRENT, columns: Tenant Name, Plan, Billing Status, Dunning Level, Enforcement Action, Last Payment"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Tenant name link in billing issues table",
+          "input_data": {},
+          "expected_result": "Navigates to tenant detail page at /tenants/{tenantId}"
+        }
+      ]
+    },
+    {
+      "id": "j10-plans-management",
+      "name": "Create and Edit Subscription Plans",
+      "description": "Test plans list page, create plan dialog, and edit plan dialog",
+      "priority": "high",
+      "related_stories": ["E13b-3"],
+      "acceptance_criteria": ["E13b.3-AC4"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, default plans seeded",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/plans",
+          "input_data": {},
+          "expected_result": "Plans management page loads with card grid",
+          "screenshot": true,
+          "visual_check": "Page header 'Plans', '+ New Plan' button visible, card grid showing existing plans with: displayName, code (monospace), maxUsers, maxCompanies, AI token allowance, enabled modules (pill badges), active indicator"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "+ New Plan button",
+          "input_data": {},
+          "expected_result": "Create plan dialog opens",
+          "screenshot": true,
+          "visual_check": "Modal dialog with form fields: Code, Display Name, Max Users, Max Companies, Monthly AI Token Allowance, AI Hard Limit (checkbox), Enabled Modules (multi-select), API Rate Limit"
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Create plan form",
+          "input_data": {
+            "code": "test-enterprise-plus",
+            "displayName": "Enterprise Plus",
+            "maxUsers": 200,
+            "maxCompanies": 20,
+            "monthlyAiTokenAllowance": 5000000,
+            "apiRateLimit": 5000
+          },
+          "expected_result": "Form populated with plan details"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "At least one module in enabledModules multi-select (e.g. 'system', 'finance')",
+          "input_data": {},
+          "expected_result": "Modules selected"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Create / Save button in plan dialog",
+          "input_data": {},
+          "expected_result": "Plan created, success toast, dialog closes, list refreshes",
+          "screenshot": true,
+          "visual_check": "Success toast visible, plan grid now includes new 'Enterprise Plus' card with correct details"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Edit icon on an existing plan card",
+          "input_data": {},
+          "expected_result": "Edit plan dialog opens, pre-populated with current values",
+          "screenshot": true,
+          "visual_check": "Edit dialog with fields pre-populated, 'code' field disabled (immutable), isActive toggle visible"
+        },
+        {
+          "step_number": 7,
+          "action": "fill_form",
+          "target": "Edit plan form - maxUsers field",
+          "input_data": {
+            "maxUsers": 250
+          },
+          "expected_result": "Field updated"
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Save button in edit plan dialog",
+          "input_data": {},
+          "expected_result": "Plan updated, success toast, dialog closes",
+          "screenshot": true,
+          "visual_check": "Success toast, plan card reflects updated maxUsers value of 250"
+        }
+      ]
+    },
+    {
+      "id": "j11-billing-enforcement",
+      "name": "Change Billing Enforcement Action",
+      "description": "Test changing enforcement action on a tenant's billing tab with state machine validation and consequence descriptions",
+      "priority": "high",
+      "related_stories": ["E13b-3"],
+      "acceptance_criteria": ["E13b.3-AC2", "E13b.3-AC3"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, tenant with billing data exists",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tenants/{tenantId}",
+          "input_data": {},
+          "expected_result": "Tenant detail loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Billing tab",
+          "input_data": {},
+          "expected_result": "Billing tab loads with enforcement timeline and billing details",
+          "screenshot": true,
+          "visual_check": "Billing tab showing: subscription status, dunning level, grace period, enforcement escalation timeline (step indicator: NONE → WARNING → READ_ONLY → SUSPENDED) with current step highlighted, 'Change Enforcement' button, 'Change Plan' button"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Enforcement escalation timeline",
+          "input_data": {},
+          "expected_result": "4-step timeline with current enforcement level highlighted and connecting arrows"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Change Enforcement button",
+          "input_data": {},
+          "expected_result": "Confirmation dialog opens showing valid transitions only",
+          "screenshot": true,
+          "visual_check": "Dialog with: current enforcement action displayed, dropdown showing only valid target actions per state machine (e.g. from NONE: only WARNING), reason textarea (required), optional grace period days input"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Target enforcement action dropdown (select WARNING)",
+          "input_data": {},
+          "expected_result": "Consequence description updates for WARNING"
+        },
+        {
+          "step_number": 6,
+          "action": "verify_text",
+          "target": "Consequence description",
+          "input_data": {},
+          "expected_result": "Text: 'A warning banner will appear in the tenant's ERP within 30 seconds.'"
+        },
+        {
+          "step_number": 7,
+          "action": "fill_form",
+          "target": "Reason textarea",
+          "input_data": {
+            "reason": "Payment overdue by 14 days, escalating to warning"
+          },
+          "expected_result": "Reason entered, confirm button becomes enabled"
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Confirm enforcement change button",
+          "input_data": {},
+          "expected_result": "Enforcement changed, success toast with previous → new action",
+          "screenshot": true,
+          "visual_check": "Success toast showing transition (e.g. 'NONE → WARNING'), enforcement timeline updates to highlight WARNING step, billing details refresh"
+        }
+      ]
+    },
+    {
+      "id": "j12-plan-assignment",
+      "name": "Assign a New Plan to a Tenant",
+      "description": "Test plan assignment with comparison view showing old vs new limits",
+      "priority": "high",
+      "related_stories": ["E13b-3"],
+      "acceptance_criteria": ["E13b.3-AC4"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, tenant on 'core' plan, 'pro' plan exists",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tenants/{tenantId}",
+          "input_data": {},
+          "expected_result": "Tenant detail loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Billing tab",
+          "input_data": {},
+          "expected_result": "Billing tab loads"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Change Plan button",
+          "input_data": {},
+          "expected_result": "Plan assignment dialog opens",
+          "screenshot": true,
+          "visual_check": "Dialog showing current plan summary (name, key limits), dropdown of active plans, optional reason field"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Plan dropdown, select 'Pro' plan",
+          "input_data": {},
+          "expected_result": "Comparison view appears showing old vs new limits",
+          "screenshot": true,
+          "visual_check": "Side-by-side comparison: maxUsers (old vs new), maxCompanies, AI tokens, API rate limit. Increases highlighted in green, decreases in red"
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Reason field (optional)",
+          "input_data": {
+            "reason": "Customer upgraded to Pro tier"
+          },
+          "expected_result": "Reason entered"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Confirm plan change button",
+          "input_data": {},
+          "expected_result": "Plan changed, success toast",
+          "screenshot": true,
+          "visual_check": "Success toast 'Plan changed from core to pro', billing tab refreshes showing new plan details"
+        }
+      ]
+    },
+    {
+      "id": "j13-ai-usage-overview",
+      "name": "Cross-Tenant AI Usage Dashboard",
+      "description": "Test the AI Usage overview tab with KPI cards, trend chart, and top consumers",
+      "priority": "high",
+      "related_stories": ["E13b-4"],
+      "acceptance_criteria": ["E13b.4-AC1"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, AI usage data seeded for multiple tenants",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai-usage",
+          "input_data": {},
+          "expected_result": "AI Usage page loads with tabbed layout",
+          "screenshot": true,
+          "visual_check": "Tabbed page with 3 tabs: Overview, Alerts, Providers. Overview tab active by default. KPI cards visible: 'Tokens Today' (formatted number), 'Tokens This Month', 'Cost Estimate' (GBP). Purple gradient area chart showing 30-day daily usage trend"
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Top consumers table",
+          "input_data": {},
+          "expected_result": "Top 10 tenants by usage shown with tenant name, tokens used, and clickable links"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Top consumer tenant name link",
+          "input_data": {},
+          "expected_result": "Navigates to tenant detail AI Usage tab or per-tenant AI drill-down"
+        }
+      ]
+    },
+    {
+      "id": "j14-ai-alerts",
+      "name": "AI Quota Alerts and Spike Detection",
+      "description": "Test the alerts tab showing quota warnings, quota exceeded, and usage spike alerts",
+      "priority": "high",
+      "related_stories": ["E13b-4"],
+      "acceptance_criteria": ["E13b.4-AC3", "E13b.4-AC4"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, alerts seeded (quota_warning, quota_exceeded, usage_spike)",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai-usage",
+          "input_data": {},
+          "expected_result": "AI Usage page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Alerts tab",
+          "input_data": {},
+          "expected_result": "Alerts list loads with active alerts",
+          "screenshot": true,
+          "visual_check": "Alert list with type-specific styling: quota_warning (amber badge, warning icon), quota_exceeded (red badge, alert icon), usage_spike (purple badge, trending-up icon). Each shows tenant name, usage percentage, threshold, timestamp"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Alert type filter dropdown",
+          "input_data": {},
+          "expected_result": "Filter options: All, quota_warning, quota_exceeded, usage_spike"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Select 'usage_spike' filter",
+          "input_data": {},
+          "expected_result": "Only usage_spike alerts shown",
+          "screenshot": true,
+          "visual_check": "Filtered list showing only usage_spike alerts with purple badges and trending-up icons"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Acknowledge button on first alert",
+          "input_data": {},
+          "expected_result": "Alert acknowledged, removed from active list or marked as acknowledged",
+          "screenshot": true,
+          "visual_check": "Alert either removed from the list or visually marked as acknowledged, list count decrements"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Acknowledged/active toggle",
+          "input_data": {},
+          "expected_result": "Shows acknowledged alerts",
+          "screenshot": true,
+          "visual_check": "Acknowledged alerts visible, previously acknowledged alert appears in list with acknowledged status"
+        }
+      ]
+    },
+    {
+      "id": "j15-ai-csv-export",
+      "name": "Export AI Usage Data as CSV",
+      "description": "Test CSV export of per-tenant, per-day AI usage data",
+      "priority": "medium",
+      "related_stories": ["E13b-4"],
+      "acceptance_criteria": ["E13b.4-AC5"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, AI usage data exists",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai-usage",
+          "input_data": {},
+          "expected_result": "AI Usage overview tab loads"
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Export CSV button",
+          "input_data": {},
+          "expected_result": "Export CSV button visible for PLATFORM_ADMIN user"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Export CSV button",
+          "input_data": {},
+          "expected_result": "Date range selector appears or CSV download starts"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Confirm export / Download button",
+          "input_data": {},
+          "expected_result": "CSV file downloads with headers: date, tenantCode, tenantName, featureKey, totalTokens, costEstimate, isByok",
+          "screenshot": true,
+          "visual_check": "Browser download indicator shows CSV file downloading"
+        }
+      ]
+    },
+    {
+      "id": "j16-ai-provider-management",
+      "name": "Vendor AI Provider Key Management",
+      "description": "Test vendor-level AI provider listing, key update, and active/inactive toggle",
+      "priority": "high",
+      "related_stories": ["E13b-4"],
+      "acceptance_criteria": ["E13b.4-AC6"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, vendor providers seeded (anthropic, openai, google)",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ai-usage",
+          "input_data": {},
+          "expected_result": "AI Usage page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Providers tab",
+          "input_data": {},
+          "expected_result": "Provider list loads",
+          "screenshot": true,
+          "visual_check": "Table of vendors: provider name (Anthropic, OpenAI, Google), status badge (active/inactive), masked API key (****...xxxx), last used date. 'Update Key' buttons and active/inactive toggles visible"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Update Key button for Anthropic provider",
+          "input_data": {},
+          "expected_result": "Modal opens with API key input field",
+          "screenshot": true,
+          "visual_check": "Modal with single text input for new API key, confirm button"
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "API key input",
+          "input_data": {
+            "apiKey": "sk-ant-api03-test-key-12345"
+          },
+          "expected_result": "API key entered"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Confirm update key button",
+          "input_data": {},
+          "expected_result": "Key updated, success toast, modal closes",
+          "screenshot": true,
+          "visual_check": "Success toast visible, provider list refreshes showing updated masked key"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Active/inactive toggle for a provider",
+          "input_data": {},
+          "expected_result": "Provider status toggled, reflected in status badge"
+        }
+      ]
+    },
+    {
+      "id": "j17-tenant-ai-usage-byok",
+      "name": "Per-Tenant AI Usage and BYOK Key Management",
+      "description": "Test per-tenant AI usage drill-down with feature breakdown, provider split, quota bar, and BYOK management for Enterprise tenants",
+      "priority": "high",
+      "related_stories": ["E13b-4"],
+      "acceptance_criteria": ["E13b.4-AC2", "E13b.4-AC7"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, Enterprise tenant with BYOK keys and AI usage data",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tenants/{enterpriseTenantId}",
+          "input_data": {},
+          "expected_result": "Tenant detail loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "AI Usage tab",
+          "input_data": {},
+          "expected_result": "Per-tenant AI usage detail loads",
+          "screenshot": true,
+          "visual_check": "KPI cards: tokens today, tokens this month, cost estimate. Quota progress bar with soft limit (amber at 80%) and hard limit (red at 100%) markers. Usage by feature (horizontal bar or pie chart). Usage by provider (stacked bar or pie). Daily 30-day trend chart"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Quota progress bar",
+          "input_data": {},
+          "expected_result": "Progress bar showing tokensUsed / tokenAllowance percentage with soft and hard limit markers"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "BYOK vs vendor split section",
+          "input_data": {},
+          "expected_result": "Donut chart showing BYOK tokens vs vendor tokens percentage (only for Enterprise tenants)",
+          "screenshot": true,
+          "visual_check": "BYOK section visible with donut chart and BYOK key management table: provider name, key status, active/inactive toggle, 'Add BYOK Key' button"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Add BYOK Key button",
+          "input_data": {},
+          "expected_result": "Modal opens with provider selector and API key input",
+          "screenshot": true,
+          "visual_check": "Modal with provider dropdown and API key text input"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Cancel / close modal",
+          "input_data": {},
+          "expected_result": "Modal closes"
+        },
+        {
+          "step_number": 7,
+          "action": "verify_element",
+          "target": "Quota settings editor (PLATFORM_ADMIN only)",
+          "input_data": {},
+          "expected_result": "Edit controls for tokenAllowance, softLimitPct, hardLimitPct visible"
+        }
+      ]
+    },
+    {
+      "id": "j18-support-console-search",
+      "name": "Support Console Tenant Search",
+      "description": "Test support console search by name, code, email, and ID with debounced results",
+      "priority": "high",
+      "related_stories": ["E13b-5"],
+      "acceptance_criteria": ["E13b.5-AC5"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, tenants and platform users seeded",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/support",
+          "input_data": {},
+          "expected_result": "Support Console page loads",
+          "screenshot": true,
+          "visual_check": "Search bar at top with search icon, type filter dropdown (All, Domain, Name, Email, ID), empty state message: 'Search for tenants by name, code, email, or ID'. Impersonation sessions history section below"
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Search input",
+          "input_data": {
+            "q": "acme"
+          },
+          "expected_result": "Debounced search fires after 300ms, results appear"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Search results table",
+          "input_data": {},
+          "expected_result": "Results table with columns: displayName, code, status (StatusBadge), planCode, billingStatus, lastActivityAt. Row has 'View' and 'Impersonate' quick-action buttons",
+          "screenshot": true,
+          "visual_check": "Search results table showing matching tenants, 'View' and 'Impersonate' buttons per row, loading skeleton replaced by actual results"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Type filter dropdown, select 'Email'",
+          "input_data": {},
+          "expected_result": "Filter type changed to Email"
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Search input (clear and re-enter)",
+          "input_data": {
+            "q": "user@acme-corp.com"
+          },
+          "expected_result": "Search by email returns matching tenant(s)"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "View button on first result",
+          "input_data": {},
+          "expected_result": "Navigates to tenant detail page"
+        },
+        {
+          "step_number": 7,
+          "action": "navigate",
+          "target": "/support",
+          "input_data": {},
+          "expected_result": "Support Console reloads"
+        },
+        {
+          "step_number": 8,
+          "action": "verify_element",
+          "target": "Impersonation sessions history section",
+          "input_data": {},
+          "expected_result": "Recent sessions table visible with columns: admin name, tenant name, reason, started, ended/expired, status"
+        }
+      ]
+    },
+    {
+      "id": "j19-impersonation-start",
+      "name": "Start an Impersonation Session",
+      "description": "Test starting an impersonation session with mandatory reason and configurable time limit",
+      "priority": "critical",
+      "related_stories": ["E13b-5"],
+      "acceptance_criteria": ["E13b.5-AC1"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, ACTIVE tenant exists",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tenants/{activeTenantId}",
+          "input_data": {},
+          "expected_result": "Tenant detail page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Impersonate button (amber accent, UserRoundCog icon)",
+          "input_data": {},
+          "expected_result": "Impersonation dialog opens",
+          "screenshot": true,
+          "visual_check": "Modal dialog with: reason textarea (required, min 10 chars), duration selector (15/30/60/120/240/480 minutes, default 60), warning text: 'You will be redirected to the tenant's ERP. All actions will be audited.'"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Start Impersonation submit button",
+          "input_data": {},
+          "expected_result": "Submit button is disabled because reason is empty"
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "Impersonation form",
+          "input_data": {
+            "reason": "Investigating reported UI rendering issue on dashboard for customer support ticket #4521",
+            "duration": "30"
+          },
+          "expected_result": "Reason entered (>10 chars), duration set to 30 minutes, submit button enabled"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Start Impersonation submit button",
+          "input_data": {},
+          "expected_result": "Impersonation session created, browser redirects to tenant ERP URL with impersonation token",
+          "screenshot": true,
+          "visual_check": "Browser navigating to ERP app (port 5110) with impersonation_token query parameter"
+        }
+      ]
+    },
+    {
+      "id": "j20-impersonation-banner-erp",
+      "name": "Impersonation Banner in ERP Web App",
+      "description": "Test the non-dismissable amber impersonation banner in the tenant ERP, countdown timer, and End Session flow",
+      "priority": "critical",
+      "related_stories": ["E13b-5"],
+      "acceptance_criteria": ["E13b.5-AC2", "E13b.5-AC3"],
+      "preconditions": "Active impersonation session from j19, ERP app running on port 5110",
+      "frontend_url_override": "http://localhost:5110",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "http://localhost:5110/?impersonation_token={token}",
+          "input_data": {},
+          "expected_result": "ERP app loads with impersonation banner at top",
+          "screenshot": true,
+          "visual_check": "Fixed amber banner (bg-amber-500 text-black) at top of viewport with: 'IMPERSONATING: {tenantName} ({tenantCode})', admin email, 'Expires: MM:SS' countdown, 'End Session' button. Main content pushed down by banner height. Banner is NOT dismissable — no close/X button"
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Impersonation banner countdown",
+          "input_data": {},
+          "expected_result": "Countdown timer showing remaining time in MM:SS format, updating every second"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Banner non-dismissable (no close button)",
+          "input_data": {},
+          "expected_result": "No close/dismiss/X button on the banner — it is permanent"
+        },
+        {
+          "step_number": 4,
+          "action": "navigate",
+          "target": "http://localhost:5110/system",
+          "input_data": {},
+          "expected_result": "Banner persists across navigation",
+          "screenshot": true,
+          "visual_check": "Amber impersonation banner still visible at top after navigating to a different ERP page"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "End Session button on banner",
+          "input_data": {},
+          "expected_result": "Impersonation session ends, redirect to platform admin portal",
+          "screenshot": true,
+          "visual_check": "Browser redirected back to platform admin portal (port 5112), no impersonation banner visible, platform admin app shell loads normally"
+        }
+      ]
+    },
+    {
+      "id": "j21-audit-log-list-filters",
+      "name": "Audit Log List with Filters",
+      "description": "Test the platform audit log viewer with action, target type, user, and date range filters",
+      "priority": "high",
+      "related_stories": ["E13b-6"],
+      "acceptance_criteria": ["E13b.6-AC1", "E13b.6-AC2", "E13b.6-AC3"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, audit log entries exist from prior actions",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/audit-log",
+          "input_data": {},
+          "expected_result": "Audit Log page loads with filter bar and data table",
+          "screenshot": true,
+          "visual_check": "Page header 'Audit Log' with description, filter bar with: Action type dropdown, Target type dropdown, Platform user dropdown, From/To date pickers, 'Clear filters' button. Data table with columns: Timestamp (DD/MM/YYYY HH:mm:ss), Admin User, Action (badge-styled), Target Type, Target ID (truncated UUID), IP Address. 'Export CSV' button in action area. Table sorted newest first"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Action type filter dropdown",
+          "input_data": {},
+          "expected_result": "Dropdown shows known actions: tenant.create, tenant.suspend, tenant.reactivate, billing.enforcement_changed, platform.impersonation_started, etc."
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Select 'tenant.suspend' action filter",
+          "input_data": {},
+          "expected_result": "Table filters to show only tenant.suspend audit entries",
+          "screenshot": true,
+          "visual_check": "Table shows only rows where Action column displays 'tenant.suspend' badge, other actions filtered out"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Target type filter dropdown, select 'tenant'",
+          "input_data": {},
+          "expected_result": "Table filters to tenant-related actions only"
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "From date picker",
+          "input_data": {
+            "from": "2026-03-01T00:00:00Z"
+          },
+          "expected_result": "Date range filter applied"
+        },
+        {
+          "step_number": 6,
+          "action": "fill_form",
+          "target": "To date picker",
+          "input_data": {
+            "to": "2026-03-11T23:59:59Z"
+          },
+          "expected_result": "Only records within date range shown",
+          "screenshot": true,
+          "visual_check": "Table shows filtered results within the date range, all timestamps fall between March 1-11, 2026"
+        },
+        {
+          "step_number": 7,
+          "action": "click",
+          "target": "Clear filters button",
+          "input_data": {},
+          "expected_result": "All filters reset, full audit log restored"
+        },
+        {
+          "step_number": 8,
+          "action": "verify_element",
+          "target": "Load more button or infinite scroll trigger",
+          "input_data": {},
+          "expected_result": "Cursor-based pagination available for loading additional entries"
+        },
+        {
+          "step_number": 9,
+          "action": "click",
+          "target": "Load more button",
+          "input_data": {},
+          "expected_result": "Next page of audit log entries loads and appends to table"
+        }
+      ]
+    },
+    {
+      "id": "j22-audit-log-detail",
+      "name": "Audit Log Entry Detail View",
+      "description": "Test clicking an audit log entry to view full details in a side panel",
+      "priority": "high",
+      "related_stories": ["E13b-6"],
+      "acceptance_criteria": ["E13b.6-AC4"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, audit log entries exist",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/audit-log",
+          "input_data": {},
+          "expected_result": "Audit Log page loads with entries"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "First audit log row",
+          "input_data": {},
+          "expected_result": "Detail side panel (Sheet) opens with full entry details",
+          "screenshot": true,
+          "visual_check": "Side panel with sections: Admin User (displayName, email), Action (action string, target type, full target ID with copy button), Details (JSON tree/pre block with syntax highlighting showing the details JSONB field), Request Info (IP address, user agent), Timestamps (timestamp, createdAt). Close button visible"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Details JSON section",
+          "input_data": {},
+          "expected_result": "JSON details rendered in readable format with indentation"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Target ID with copy button",
+          "input_data": {},
+          "expected_result": "Full UUID displayed with a copy-to-clipboard button"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Close button on detail panel",
+          "input_data": {},
+          "expected_result": "Panel closes, returns to audit log list"
+        }
+      ]
+    },
+    {
+      "id": "j23-audit-log-export",
+      "name": "Export Audit Log as CSV",
+      "description": "Test CSV export of filtered audit log records",
+      "priority": "medium",
+      "related_stories": ["E13b-6"],
+      "acceptance_criteria": ["E13b.6-AC5"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, audit log entries exist",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/audit-log",
+          "input_data": {},
+          "expected_result": "Audit Log page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Action type filter, select 'tenant.suspend'",
+          "input_data": {},
+          "expected_result": "Table filtered to tenant.suspend entries"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Export CSV button",
+          "input_data": {},
+          "expected_result": "CSV file downloads with filtered records",
+          "screenshot": true,
+          "visual_check": "Browser download indicator shows CSV file downloading with filename 'platform-audit-log-{date}.csv'"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Downloaded CSV content",
+          "input_data": {},
+          "expected_result": "CSV contains columns: timestamp, adminEmail, adminName, action, targetType, targetId, ipAddress, userAgent, details. Only tenant.suspend rows included"
+        }
+      ]
+    },
+    {
+      "id": "j24-tenant-audit-tab",
+      "name": "Tenant Detail Audit Tab (Pre-Filtered)",
+      "description": "Test the audit tab within tenant detail that shows pre-filtered audit log for that tenant",
+      "priority": "medium",
+      "related_stories": ["E13b-6"],
+      "acceptance_criteria": ["E13b.6-AC1", "E13b.6-AC2"],
+      "preconditions": "Authenticated as PLATFORM_ADMIN, tenant with audit history exists",
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tenants/{tenantId}",
+          "input_data": {},
+          "expected_result": "Tenant detail page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Audit tab",
+          "input_data": {},
+          "expected_result": "Audit tab loads with pre-filtered audit log for this tenant",
+          "screenshot": true,
+          "visual_check": "Compact audit log table (no page header, no action bar) showing only actions targeting this tenant. Filters: action type dropdown (tenant-related actions only), date range picker. Table columns match main audit log. 'View full audit log' link at bottom"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Action type filter, select 'tenant.suspend'",
+          "input_data": {},
+          "expected_result": "Table further filters to only tenant.suspend entries for this tenant"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "First audit entry row",
+          "input_data": {},
+          "expected_result": "Detail panel opens with full audit entry details",
+          "screenshot": true,
+          "visual_check": "Same detail panel as main audit log page, showing full action details, JSON, IP, user agent"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Close detail panel",
+          "input_data": {},
+          "expected_result": "Panel closes"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "'View full audit log' link",
+          "input_data": {},
+          "expected_result": "Navigates to /audit-log?targetType=tenant&targetId={tenantId}"
+        }
+      ]
+    }
+  ]
+}

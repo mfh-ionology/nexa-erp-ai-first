@@ -67,6 +67,31 @@ export interface PlatformWebhookEvent {
   payload: Record<string, unknown>;
 }
 
+// ─── Knowledge Distribution ──────────────────────────────────────────
+
+export interface SuggestedKnowledgeArticle {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+  version: number;
+  publishedAt: string;
+  previousResponse: { status: string; articleVersion: number } | null;
+}
+
+export interface SuggestedKnowledgeResult {
+  data: SuggestedKnowledgeArticle[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface KnowledgeResponseInput {
+  status: 'ACCEPTED' | 'REJECTED';
+  tenantArticleId?: string;
+}
+
+// ─── Client Config ───────────────────────────────────────────────────
+
 export interface PlatformClientConfig {
   platformApiUrl: string;
   serviceToken: string;

@@ -7,6 +7,7 @@ import { serviceTokenGuard } from '../../core/auth/service-token.guard.js';
 import { NotFoundError } from '../../core/errors/app-error.js';
 import { successEnvelope } from '../../core/schemas/envelope.js';
 import { sendSuccess } from '../../core/utils/response.js';
+import { createQuotaAlertIfNeeded } from '../../services/quota-alert.service.js';
 import {
   tenantIdParams,
   aiCheckRequestSchema,
@@ -68,11 +69,14 @@ async function aiRoutes(fastify: FastifyInstance): Promise<void> {
 
       // ISSUE #15 FIX: When tokenAllowance is zero, treat as hard-limited
       // (a "zero tokens" plan should block AI calls, not allow unlimited)
-      const currentPct = tokenAllowance > 0 ? (tokensUsed / tokenAllowance) * 100 : (tokensUsed > 0 ? 100 : 0);
+      const currentPct =
+        tokenAllowance > 0 ? (tokensUsed / tokenAllowance) * 100 : tokensUsed > 0 ? 100 : 0;
       const projectedPct =
         tokenAllowance > 0
           ? ((tokensUsed + estimatedTokens) / tokenAllowance) * 100
-          : (estimatedTokens > 0 ? 100 : 0);
+          : estimatedTokens > 0
+            ? 100
+            : 0;
 
       const remainingTokens = Math.max(0, tokenAllowance - tokensUsed);
 
@@ -171,28 +175,43 @@ async function aiRoutes(fastify: FastifyInstance): Promise<void> {
             });
 
             const tokenAllowance = Number(updated.tokenAllowance);
-            const pct = tokenAllowance > 0
-              ? Math.round((Number(updated.tokensUsed) / tokenAllowance) * 100 * 100) / 100
-              : 0;
+            const pct =
+              tokenAllowance > 0
+                ? Math.round((Number(updated.tokensUsed) / tokenAllowance) * 100 * 100) / 100
+                : 0;
 
             // ISSUE #16 FIX: Use post-increment tokensUsed for threshold detection
             // to reduce TOCTOU race window (compute prevPct from the authoritative updated value)
             const prevTokensUsed = Number(updated.tokensUsed) - body.totalTokens;
-            const prevPct = tokenAllowance > 0
-              ? (prevTokensUsed / tokenAllowance) * 100
-              : 0;
+            const prevPct = tokenAllowance > 0 ? (prevTokensUsed / tokenAllowance) * 100 : 0;
 
             if (prevPct < tenant.aiQuota.softLimitPct && pct >= tenant.aiQuota.softLimitPct) {
               request.log.warn(
                 { tenantId, quotaPct: pct, threshold: tenant.aiQuota.softLimitPct },
                 'tenant.quota_warning: AI usage crossed soft limit',
               );
+              // Fire-and-forget: create QUOTA_WARNING alert (E13b-4 Task 2.5)
+              void createQuotaAlertIfNeeded(prisma, request.log, {
+                tenantId,
+                type: 'QUOTA_WARNING',
+                usagePct: pct,
+                threshold: tenant.aiQuota.softLimitPct,
+                periodStart: tenant.aiQuota.periodStart,
+              });
             }
             if (prevPct < tenant.aiQuota.hardLimitPct && pct >= tenant.aiQuota.hardLimitPct) {
               request.log.warn(
                 { tenantId, quotaPct: pct, threshold: tenant.aiQuota.hardLimitPct },
                 'tenant.quota_exceeded: AI usage crossed hard limit',
               );
+              // Fire-and-forget: create QUOTA_EXCEEDED alert (E13b-4 Task 2.5)
+              void createQuotaAlertIfNeeded(prisma, request.log, {
+                tenantId,
+                type: 'QUOTA_EXCEEDED',
+                usagePct: pct,
+                threshold: tenant.aiQuota.hardLimitPct,
+                periodStart: tenant.aiQuota.periodStart,
+              });
             }
 
             return pct;
@@ -215,9 +234,13 @@ async function aiRoutes(fastify: FastifyInstance): Promise<void> {
           );
           // Return current quota percentage from the existing quota record
           const currentPct = tenant.aiQuota
-            ? (Number(tenant.aiQuota.tokenAllowance) > 0
-              ? Math.round((Number(tenant.aiQuota.tokensUsed) / Number(tenant.aiQuota.tokenAllowance)) * 100 * 100) / 100
-              : 0)
+            ? Number(tenant.aiQuota.tokenAllowance) > 0
+              ? Math.round(
+                  (Number(tenant.aiQuota.tokensUsed) / Number(tenant.aiQuota.tokenAllowance)) *
+                    100 *
+                    100,
+                ) / 100
+              : 0
             : 0;
           return sendSuccess(reply, {
             recorded: true as const,
@@ -317,9 +340,8 @@ async function aiRoutes(fastify: FastifyInstance): Promise<void> {
 
       const tokensUsed = Number(quota.tokensUsed);
       const tokenAllowance = Number(quota.tokenAllowance);
-      const quotaPct = tokenAllowance > 0
-        ? Math.round((tokensUsed / tokenAllowance) * 100 * 100) / 100
-        : 0;
+      const quotaPct =
+        tokenAllowance > 0 ? Math.round((tokensUsed / tokenAllowance) * 100 * 100) / 100 : 0;
 
       const totalCost = Number(totalAgg._sum.costEstimate ?? 0);
       const totalRequests = totalAgg._count;

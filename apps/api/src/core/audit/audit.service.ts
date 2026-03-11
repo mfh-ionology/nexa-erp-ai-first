@@ -6,17 +6,23 @@
 import type { PrismaClient } from '@nexa/db';
 import type { EventBus } from '../events/event-bus.js';
 import type { BusinessEvents } from '../events/event-bus.types.js';
+import { getImpersonationContext } from '../auth/impersonation-context.js';
 import type { AuditEntry } from './audit.types.js';
 import { AUDIT_EVENT_MAPPINGS } from './audit.mappings.js';
 
 export class AuditService {
-  private logger: { error: (...args: unknown[]) => void; warn?: (...args: unknown[]) => void } | null = null;
+  private logger: {
+    error: (...args: unknown[]) => void;
+    warn?: (...args: unknown[]) => void;
+  } | null = null;
 
   /**
    * Optionally attach a logger (e.g. Fastify logger) for structured error output.
    * Falls back to console.error if no logger is set.
    */
-  setLogger(logger: { error: (...args: unknown[]) => void; warn?: (...args: unknown[]) => void } | null): void {
+  setLogger(
+    logger: { error: (...args: unknown[]) => void; warn?: (...args: unknown[]) => void } | null,
+  ): void {
     this.logger = logger;
   }
 
@@ -32,6 +38,13 @@ export class AuditService {
    */
   async log(prisma: PrismaClient, entry: AuditEntry): Promise<void> {
     try {
+      // E13b.5 (BR-PLT-015): If running within an impersonation session,
+      // merge impersonatedBy metadata into afterData for dual audit logging.
+      const impersonation = getImpersonationContext();
+      const afterData = impersonation
+        ? { ...(entry.afterData ?? {}), _impersonatedBy: impersonation }
+        : entry.afterData;
+
       await prisma.auditLog.create({
         data: {
           companyId: entry.companyId,
@@ -41,7 +54,7 @@ export class AuditService {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any -- Prisma InputJsonValue requires concrete JSON types; our Record<string, unknown> is always JSON-safe
           beforeData: (entry.beforeData as any) ?? undefined,
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
-          afterData: (entry.afterData as any) ?? undefined,
+          afterData: (afterData as any) ?? undefined,
           userId: entry.userId,
           isAiAction: entry.isAiAction,
           aiConfidence: entry.aiConfidence ?? undefined,
@@ -65,10 +78,11 @@ export class AuditService {
         warn('[AuditService] Transient DB error writing audit log (will not retry):', err);
       } else {
         // Schema/programming errors — error level, requires investigation
-        log.error(
-          '[AuditService] Failed to write audit log — possible schema or mapping error:',
-          { entityType: entry.entityType, action: entry.action, error: err },
-        );
+        log.error('[AuditService] Failed to write audit log — possible schema or mapping error:', {
+          entityType: entry.entityType,
+          action: entry.action,
+          error: err,
+        });
       }
     }
   }

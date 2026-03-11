@@ -41,6 +41,22 @@ export const queryKeys = {
         ? ([...queryKeys.intelligence.all, 'insights', 'infinite', filters] as const)
         : ([...queryKeys.intelligence.all, 'insights', 'infinite'] as const),
   },
+  aiUsage: {
+    all: ['ai-usage'] as const,
+    summary: () => [...queryKeys.aiUsage.all, 'summary'] as const,
+    tenantUsage: (tenantId: string) => [...queryKeys.aiUsage.all, 'tenant', tenantId] as const,
+    tenantUsageByFeature: (tenantId: string) =>
+      [...queryKeys.aiUsage.all, 'tenant', tenantId, 'by-feature'] as const,
+    alerts: (filters?: Record<string, unknown>) =>
+      filters
+        ? ([...queryKeys.aiUsage.all, 'alerts', filters] as const)
+        : ([...queryKeys.aiUsage.all, 'alerts'] as const),
+    providers: () => [...queryKeys.aiUsage.all, 'providers'] as const,
+    tenantQuota: (tenantId: string) =>
+      [...queryKeys.aiUsage.all, 'tenant', tenantId, 'quota'] as const,
+    tenantByok: (tenantId: string) =>
+      [...queryKeys.aiUsage.all, 'tenant', tenantId, 'byok'] as const,
+  },
   knowledge: {
     all: ['knowledge'] as const,
     list: (filters?: Record<string, unknown>) =>
@@ -52,5 +68,28 @@ export const queryKeys = {
         ? ([...queryKeys.knowledge.all, 'list', 'infinite', filters] as const)
         : ([...queryKeys.knowledge.all, 'list', 'infinite'] as const),
     detail: (id: string) => [...queryKeys.knowledge.all, 'detail', id] as const,
+  },
+  support: {
+    all: ['support'] as const,
+    search: (q: string, type?: string) =>
+      type ? (['support', 'search', q, type] as const) : (['support', 'search', q] as const),
+    sessions: (filters?: Record<string, unknown>) =>
+      filters ? (['support', 'sessions', filters] as const) : (['support', 'sessions'] as const),
+  },
+  auditLog: {
+    all: ['audit-log'] as const,
+    list: (filters?: Record<string, unknown>) =>
+      filters
+        ? ([...queryKeys.auditLog.all, 'list', filters] as const)
+        : ([...queryKeys.auditLog.all, 'list'] as const),
+    listInfinite: (filters?: Record<string, unknown>) =>
+      filters
+        ? ([...queryKeys.auditLog.all, 'list', 'infinite', filters] as const)
+        : ([...queryKeys.auditLog.all, 'list', 'infinite'] as const),
+    detail: (id: string) => [...queryKeys.auditLog.all, 'detail', id] as const,
+  },
+  platformUsers: {
+    all: ['platform-users'] as const,
+    listForFilter: () => ['platform-users', 'list-for-filter'] as const,
   },
 } as const;

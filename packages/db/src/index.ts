@@ -63,6 +63,8 @@ export type {
   EmailQueue,
   EmailSignature,
   EmailTemplate,
+  DocumentTemplate,
+  DocumentTemplateVersion,
 } from '../generated/prisma/client';
 
 // Enums
@@ -93,6 +95,7 @@ export {
   EmailRecipientType,
   EmailRecipientStatus,
   EmailQueueStatus,
+  DocumentType,
 } from '../generated/prisma/client';
 
 // Utilities

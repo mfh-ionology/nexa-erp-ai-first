@@ -90,8 +90,30 @@ function useAiVariables() {
   return useQuery({
     queryKey: [...queryKeys.aiAdmin.all, 'variables'],
     queryFn: async () => {
-      const result = await apiGet<VariableItem[]>('/ai/variables');
-      return result.data;
+      // GET /ai/variables returns grouped Record<string, VariableRegistryItem[]>
+      const result = await apiGet<
+        Record<
+          string,
+          Array<{
+            variableName: string;
+            displayName: string;
+            sourceType: string;
+          }>
+        >
+      >('/ai/variables');
+      // Flatten grouped response into flat VariableItem[]
+      const grouped = result.data;
+      const flat: VariableItem[] = [];
+      for (const items of Object.values(grouped)) {
+        for (const item of items) {
+          flat.push({
+            variableName: item.variableName,
+            displayName: item.displayName,
+            sourceType: item.sourceType,
+          });
+        }
+      }
+      return flat;
     },
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes

@@ -1,0 +1,2422 @@
+{
+  "epic_id": "E13b",
+  "epic_title": "Platform Admin Portal",
+  "generated_at": "2026-03-11T14:00:00.000Z",
+  "total_test_cases": 184,
+  "api_base_url": "http://localhost:5101",
+  "notes": {
+    "platform_vs_tenant": "E13b endpoints live on platform-api (port 5101), NOT the tenant ERP api (port 5100). Auth is completely separate.",
+    "auth_credentials": {
+      "PLATFORM_ADMIN": {
+        "email": "admin@nexa-platform.local",
+        "password": "platform-admin-dev",
+        "mfa_required": true,
+        "mfa_totp_secret": "JBSWY3DPEHPK3PXP",
+        "note": "TOTP code must be generated at runtime from the secret. Use a TOTP library (e.g. otplib) to generate valid 6-digit codes."
+      },
+      "PLATFORM_VIEWER": {
+        "email": "viewer@nexa-platform.local",
+        "password": "platform-viewer-dev",
+        "mfa_required": false,
+        "note": "This user is NOT seeded by default. Must be created via POST /admin/users in the test setup phase."
+      }
+    },
+    "seed_entity_ids": {
+      "DEV_TENANT_ID": "00000000-0000-4000-b000-000000000010",
+      "PLAN_CORE_ID": "00000000-0000-4000-b000-000000000001",
+      "PLAN_PRO_ID": "00000000-0000-4000-b000-000000000002",
+      "PLAN_ENTERPRISE_ID": "00000000-0000-4000-b000-000000000003",
+      "PLATFORM_ADMIN_ID": "00000000-0000-4000-b000-000000000020",
+      "VENDOR_PROVIDERS": ["anthropic", "openai", "google"]
+    },
+    "valid_nonexistent_uuid": "00000000-0000-4000-a000-ffffffffffff",
+    "invalid_uuid_format": "not-a-uuid"
+  },
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/admin/auth/login",
+      "description": "Authenticate platform admin and return JWT (with MFA challenge flow)",
+      "story": "E13b.1 (pre-existing E3b, used by all E13b tests)",
+      "rbac": "Public (no auth required)",
+      "test_cases": [
+        {
+          "name": "Login PLATFORM_ADMIN — happy path with MFA code",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "email": "admin@nexa-platform.local",
+              "password": "platform-admin-dev",
+              "mfaCode": "{{GENERATE_TOTP_FROM_SECRET:JBSWY3DPEHPK3PXP}}"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "expiresIn", "platformUser"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Login PLATFORM_ADMIN — MFA challenge (no code provided)",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "email": "admin@nexa-platform.local",
+              "password": "platform-admin-dev"
+            }
+          },
+          "expected": {
+            "status": 202,
+            "body_contains": ["requiresMfa"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Login — invalid credentials",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "email": "admin@nexa-platform.local",
+              "password": "wrong-password"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["INVALID_CREDENTIALS"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Login — missing email field",
+          "type": "validation_error",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "password": "platform-admin-dev"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["email"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Login — invalid MFA code",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "email": "admin@nexa-platform.local",
+              "password": "platform-admin-dev",
+              "mfaCode": "000000"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["MFA_INVALID"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/monitoring/health",
+      "description": "Platform API health check",
+      "story": "E13b.1 (pre-existing)",
+      "rbac": "Public (minimal response) / Authenticated (full response)",
+      "test_cases": [
+        {
+          "name": "Health check — unauthenticated (minimal)",
+          "type": "happy_path",
+          "request": {
+            "method": "GET",
+            "url": "/admin/monitoring/health",
+            "headers": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["status", "ok"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Health check — authenticated (full details)",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/monitoring/health",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["status", "version", "uptime", "database"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/admin/users",
+      "description": "Create platform user (needed to create PLATFORM_VIEWER for RBAC tests)",
+      "story": "Test setup (pre-existing E3b endpoint)",
+      "rbac": "PLATFORM_ADMIN only",
+      "test_cases": [
+        {
+          "name": "Create PLATFORM_VIEWER user for RBAC tests",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/users",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {
+              "email": "viewer@nexa-platform.local",
+              "password": "platform-viewer-dev",
+              "displayName": "Platform Viewer",
+              "role": "PLATFORM_VIEWER"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "email", "role"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id, email, role FROM platform_users WHERE email = 'viewer@nexa-platform.local'",
+            "expected": "Row exists with role = PLATFORM_VIEWER"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/ai/usage/summary",
+      "description": "Cross-tenant AI usage summary — tokens today, this month, cost, trend, top consumers",
+      "story": "E13b.4",
+      "rbac": "PLATFORM_VIEWER+",
+      "test_cases": [
+        {
+          "name": "AI usage summary — happy path as PLATFORM_ADMIN",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/ai/usage/summary",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["tokensToday", "tokensThisMonth", "costEstimateToday", "costEstimateThisMonth", "dailyTrend", "topConsumers"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "AI usage summary — happy path as PLATFORM_VIEWER",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/ai/usage/summary",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["tokensToday"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "AI usage summary — unauthenticated",
+          "type": "authorization",
+          "request": {
+            "method": "GET",
+            "url": "/admin/ai/usage/summary",
+            "headers": {}
+          },
+          "expected": {
+            "status": 401
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "AI usage summary — daily trend has 30 entries",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/ai/usage/summary",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data.dailyTrend.length === 30"
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/tenants/:id/ai/usage",
+      "description": "Per-tenant AI usage dashboard — tokens, cost, 30-day trend, provider breakdown, BYOK split",
+      "story": "E13b.4",
+      "rbac": "PLATFORM_VIEWER+",
+      "test_cases": [
+        {
+          "name": "Tenant AI usage — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/ai/usage",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["tokensToday", "tokensThisMonth", "costEstimate", "dailyTrend", "byProvider", "byokSplit"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Tenant AI usage — as PLATFORM_VIEWER (allowed)",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/ai/usage",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["tokensToday"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Tenant AI usage — tenant not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/00000000-0000-4000-a000-ffffffffffff/ai/usage",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["TENANT_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Tenant AI usage — invalid UUID format",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/not-a-uuid/ai/usage",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Tenant AI usage — unauthenticated",
+          "type": "authorization",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/ai/usage",
+            "headers": {}
+          },
+          "expected": {
+            "status": 401
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/tenants/:id/ai/usage/by-feature",
+      "description": "Per-tenant AI usage breakdown by feature key for current billing period",
+      "story": "E13b.4",
+      "rbac": "PLATFORM_VIEWER+",
+      "test_cases": [
+        {
+          "name": "AI usage by feature — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/ai/usage/by-feature",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["features"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "AI usage by feature — empty features list (no usage data)",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/ai/usage/by-feature",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data.features is an array (may be empty if no usage data)"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "AI usage by feature — tenant not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/00000000-0000-4000-a000-ffffffffffff/ai/usage/by-feature",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["TENANT_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "AI usage by feature — PLATFORM_VIEWER allowed",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/ai/usage/by-feature",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/ai/usage/export",
+      "description": "CSV export of per-tenant, per-day AI usage data for a date range",
+      "story": "E13b.4",
+      "rbac": "PLATFORM_ADMIN only",
+      "test_cases": [
+        {
+          "name": "AI usage export — happy path CSV",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/ai/usage/export?startDate=2026-03-01&endDate=2026-03-11",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "headers_contain": {
+              "content-type": "text/csv",
+              "content-disposition": "attachment"
+            },
+            "body_assertion": "CSV starts with header: date,tenantCode,tenantName,featureKey,totalTokens,costEstimate,isByok"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "AI usage export — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/ai/usage/export?startDate=2026-03-01&endDate=2026-03-11",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "AI usage export — missing startDate",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/ai/usage/export?endDate=2026-03-11",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "AI usage export — invalid date format",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/ai/usage/export?startDate=not-a-date&endDate=2026-03-11",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "AI usage export — startDate after endDate",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/ai/usage/export?startDate=2026-03-15&endDate=2026-03-01",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["INVALID_DATE_RANGE"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "AI usage export — date range exceeds 90 days",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/ai/usage/export?startDate=2025-01-01&endDate=2026-03-11",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["DATE_RANGE_TOO_LARGE"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/ai/alerts",
+      "description": "List active AI alerts with optional type and acknowledged filters",
+      "story": "E13b.4",
+      "rbac": "PLATFORM_VIEWER+",
+      "test_cases": [
+        {
+          "name": "List AI alerts — happy path (no filters)",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/ai/alerts",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data is an array"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List AI alerts — filter by type QUOTA_WARNING",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/ai/alerts?type=QUOTA_WARNING",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "all items in data have type === 'QUOTA_WARNING'"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List AI alerts — filter by acknowledged=false",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/ai/alerts?acknowledged=false",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "all items have acknowledged === false"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List AI alerts — invalid type filter",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/ai/alerts?type=INVALID_TYPE",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List AI alerts — PLATFORM_VIEWER allowed",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/ai/alerts",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List AI alerts — unauthenticated",
+          "type": "authorization",
+          "request": {
+            "method": "GET",
+            "url": "/admin/ai/alerts",
+            "headers": {}
+          },
+          "expected": {
+            "status": 401
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/admin/ai/alerts/:id/acknowledge",
+      "description": "Mark an AI alert as acknowledged — PLATFORM_ADMIN only",
+      "story": "E13b.4",
+      "rbac": "PLATFORM_ADMIN only",
+      "test_cases": [
+        {
+          "name": "Acknowledge alert — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "note": "Requires a real alert ID. Create one via spike-detection or insert directly.",
+          "request": {
+            "method": "POST",
+            "url": "/admin/ai/alerts/{{ALERT_ID}}/acknowledge",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "acknowledged", "acknowledgedBy", "acknowledgedAt"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT acknowledged, acknowledged_by FROM platform_ai_alerts WHERE id = '{{ALERT_ID}}'",
+            "expected": "acknowledged = true, acknowledged_by = PLATFORM_ADMIN_ID"
+          }
+        },
+        {
+          "name": "Acknowledge alert — alert not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/ai/alerts/00000000-0000-4000-a000-ffffffffffff/acknowledge",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["ALERT_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Acknowledge alert — invalid UUID",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/ai/alerts/not-a-uuid/acknowledge",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Acknowledge alert — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/admin/ai/alerts/00000000-0000-4000-a000-ffffffffffff/acknowledge",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/admin/ai/spike-detection",
+      "description": "Trigger daily spike detection — checks each tenant's usage against 3x rolling 7-day average (BR-PLT-011)",
+      "story": "E13b.4",
+      "rbac": "PLATFORM_ADMIN only",
+      "test_cases": [
+        {
+          "name": "Spike detection — happy path (no date)",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/ai/spike-detection",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["tenantsChecked", "spikesDetected", "alertsCreated"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Spike detection — with specific date",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/ai/spike-detection",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "date": "2026-03-10" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["tenantsChecked"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Spike detection — invalid date format",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/ai/spike-detection",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "date": "not-a-date" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Spike detection — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/admin/ai/spike-detection",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{VIEWER_TOKEN}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/ai/providers",
+      "description": "List vendor-level AI providers with masked key info",
+      "story": "E13b.4",
+      "rbac": "PLATFORM_VIEWER+",
+      "test_cases": [
+        {
+          "name": "List AI providers — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/ai/providers",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data is array with 3 providers: anthropic, openai, google. Each has providerId, displayName, isActive, hasApiKey, lastUsedAt."
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List AI providers — response never exposes actual API keys",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/ai/providers",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "No item contains 'encryptedKey' or 'apiKey' field — only 'hasApiKey' boolean"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List AI providers — PLATFORM_VIEWER allowed",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/ai/providers",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/admin/ai/providers/:providerId/key",
+      "description": "Update vendor-level API key — encrypts with AES-256 before storage",
+      "story": "E13b.4",
+      "rbac": "PLATFORM_ADMIN only",
+      "test_cases": [
+        {
+          "name": "Update provider key — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/admin/ai/providers/anthropic/key",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "apiKey": "sk-ant-test-key-12345" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["success", "providerId", "updatedAt"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT encrypted_key FROM vendor_provider_credentials WHERE provider_id = 'anthropic'",
+            "expected": "encrypted_key is non-empty and different from the plaintext input (encrypted)"
+          }
+        },
+        {
+          "name": "Update provider key — provider not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/admin/ai/providers/nonexistent-provider/key",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "apiKey": "sk-test-key" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["PROVIDER_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Update provider key — empty apiKey",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/admin/ai/providers/anthropic/key",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "apiKey": "" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Update provider key — missing apiKey field",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/admin/ai/providers/anthropic/key",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Update provider key — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "PUT",
+            "url": "/admin/ai/providers/anthropic/key",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{VIEWER_TOKEN}}" },
+            "body": { "apiKey": "sk-test" }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/admin/ai/providers/:providerId",
+      "description": "Toggle active/inactive status for a vendor provider",
+      "story": "E13b.4",
+      "rbac": "PLATFORM_ADMIN only",
+      "test_cases": [
+        {
+          "name": "Toggle provider — activate",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/ai/providers/anthropic",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "isActive": true }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["providerId", "isActive", "updatedAt"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT is_active FROM vendor_provider_credentials WHERE provider_id = 'anthropic'",
+            "expected": "is_active = true"
+          }
+        },
+        {
+          "name": "Toggle provider — deactivate",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/ai/providers/anthropic",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "isActive": false }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data.isActive === false"
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT is_active FROM vendor_provider_credentials WHERE provider_id = 'anthropic'",
+            "expected": "is_active = false"
+          }
+        },
+        {
+          "name": "Toggle provider — not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/ai/providers/nonexistent",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "isActive": true }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["PROVIDER_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Toggle provider — missing isActive",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/ai/providers/anthropic",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Toggle provider — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/ai/providers/anthropic",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{VIEWER_TOKEN}}" },
+            "body": { "isActive": true }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/tenants/:id/ai/byok",
+      "description": "List BYOK keys for a tenant",
+      "story": "E13b.4",
+      "rbac": "PLATFORM_VIEWER+",
+      "test_cases": [
+        {
+          "name": "List BYOK keys — happy path (empty list for dev-tenant)",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/ai/byok",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data is an array (may be empty)"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List BYOK keys — tenant not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/00000000-0000-4000-a000-ffffffffffff/ai/byok",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["TENANT_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List BYOK keys — PLATFORM_VIEWER allowed",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/ai/byok",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/admin/tenants/:id/ai/byok/:providerId",
+      "description": "Add or update BYOK key for a tenant+provider — Enterprise plan only (FR224)",
+      "story": "E13b.4",
+      "rbac": "PLATFORM_ADMIN only",
+      "test_cases": [
+        {
+          "name": "Add BYOK key — rejected for non-Enterprise tenant (dev-tenant is Pro plan)",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/ai/byok/anthropic",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "apiKey": "sk-byok-test-key" }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["BYOK_ENTERPRISE_ONLY"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Add BYOK key — tenant not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/admin/tenants/00000000-0000-4000-a000-ffffffffffff/ai/byok/anthropic",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "apiKey": "sk-test" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["TENANT_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Add BYOK key — missing apiKey",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/ai/byok/anthropic",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Add BYOK key — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "PUT",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/ai/byok/anthropic",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{VIEWER_TOKEN}}" },
+            "body": { "apiKey": "sk-test" }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Add BYOK key — invalid tenant UUID",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/admin/tenants/not-a-uuid/ai/byok/anthropic",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "apiKey": "sk-test" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/admin/tenants/:id/ai/byok/:providerId",
+      "description": "Remove a tenant's BYOK key",
+      "story": "E13b.4",
+      "rbac": "PLATFORM_ADMIN only",
+      "test_cases": [
+        {
+          "name": "Delete BYOK key — not found (no BYOK key exists)",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "DELETE",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/ai/byok/anthropic",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["BYOK_KEY_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Delete BYOK key — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "DELETE",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/ai/byok/anthropic",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/admin/tenants/:id/ai/byok/:providerId",
+      "description": "Toggle active/inactive on a tenant's BYOK key",
+      "story": "E13b.4",
+      "rbac": "PLATFORM_ADMIN only",
+      "test_cases": [
+        {
+          "name": "Toggle BYOK key — not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/ai/byok/anthropic",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "isActive": true }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["BYOK_KEY_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Toggle BYOK key — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "PATCH",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/ai/byok/anthropic",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{VIEWER_TOKEN}}" },
+            "body": { "isActive": true }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/admin/tenants/:id/impersonate",
+      "description": "Start impersonation session — requires PLATFORM_ADMIN, mandatory reason (BR-PLT-012), time-limited (BR-PLT-013)",
+      "story": "E13b.5",
+      "rbac": "PLATFORM_ADMIN only",
+      "test_cases": [
+        {
+          "name": "Start impersonation — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/impersonate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "reason": "Investigating user-reported invoice bug #4521", "durationMinutes": 30 }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["sessionId", "token", "expiresAt"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id, reason, platform_user_id, tenant_id, expires_at FROM impersonation_sessions ORDER BY created_at DESC LIMIT 1",
+            "expected": "Row exists with reason matching input, tenant_id = DEV_TENANT_ID, expires_at ~30 min from now"
+          }
+        },
+        {
+          "name": "Start impersonation — default 60 min duration",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/impersonate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "reason": "Default duration test" }
+          },
+          "expected": {
+            "status": 201,
+            "body_assertion": "expiresAt is approximately 60 minutes from now"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Start impersonation — empty reason rejected (BR-PLT-012)",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/impersonate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "reason": "" }
+          },
+          "expected": {
+            "status": 400,
+            "body_assertion": "Validation error on reason field"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Start impersonation — missing reason field",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/impersonate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": {}
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Start impersonation — duration exceeds max (480 min)",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/impersonate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "reason": "Max duration test", "durationMinutes": 999 }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Start impersonation — tenant not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/00000000-0000-4000-a000-ffffffffffff/impersonate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "reason": "Testing with nonexistent tenant" }
+          },
+          "expected": {
+            "status": 404
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Start impersonation — invalid tenant UUID",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/not-a-uuid/impersonate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" },
+            "body": { "reason": "Invalid UUID test" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Start impersonation — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/impersonate",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{VIEWER_TOKEN}}" },
+            "body": { "reason": "Viewer attempting impersonation" }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Start impersonation — unauthenticated",
+          "type": "authorization",
+          "request": {
+            "method": "POST",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/impersonate",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "reason": "Unauthenticated test" }
+          },
+          "expected": {
+            "status": 401
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/admin/impersonation-sessions/:sessionId/end",
+      "description": "End an active impersonation session",
+      "story": "E13b.5",
+      "rbac": "PLATFORM_ADMIN only",
+      "test_cases": [
+        {
+          "name": "End impersonation — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "note": "Use sessionId from the start impersonation test above",
+          "request": {
+            "method": "POST",
+            "url": "/admin/impersonation-sessions/{{SESSION_ID}}/end",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["sessionId", "endedAt", "duration"]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT ended_at FROM impersonation_sessions WHERE id = '{{SESSION_ID}}'",
+            "expected": "ended_at is NOT NULL"
+          }
+        },
+        {
+          "name": "End impersonation — session not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/impersonation-sessions/00000000-0000-4000-a000-ffffffffffff/end",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 404
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "End impersonation — invalid session UUID",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/admin/impersonation-sessions/not-a-uuid/end",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "End impersonation — PLATFORM_VIEWER denied",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/admin/impersonation-sessions/00000000-0000-4000-a000-ffffffffffff/end",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 403
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/impersonation-sessions",
+      "description": "List all impersonation sessions with pagination and filters",
+      "story": "E13b.5",
+      "rbac": "PLATFORM_VIEWER+",
+      "test_cases": [
+        {
+          "name": "List sessions — happy path (no filters)",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/impersonation-sessions",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items", "total", "hasMore"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List sessions — filter by tenantId",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/impersonation-sessions?tenantId=00000000-0000-4000-b000-000000000010",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "All items in data.items have tenant.id === DEV_TENANT_ID"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List sessions — pagination with limit",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/impersonation-sessions?limit=1",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data.items.length <= 1"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List sessions — PLATFORM_VIEWER allowed (read-only)",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/impersonation-sessions",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List sessions — invalid tenantId UUID filter",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/impersonation-sessions?tenantId=not-a-uuid",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/impersonation-sessions/:sessionId",
+      "description": "Get impersonation session detail",
+      "story": "E13b.5",
+      "rbac": "PLATFORM_VIEWER+",
+      "test_cases": [
+        {
+          "name": "Session detail — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/impersonation-sessions/{{SESSION_ID}}",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "platformUser", "tenant", "reason", "startedAt", "expiresAt", "actionsCount"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Session detail — not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/impersonation-sessions/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["SESSION_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Session detail — invalid UUID",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/impersonation-sessions/not-a-uuid",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Session detail — PLATFORM_VIEWER allowed",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/impersonation-sessions/{{SESSION_ID}}",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/impersonation-sessions/active",
+      "description": "Get caller's active impersonation session (or null)",
+      "story": "E13b.5",
+      "rbac": "PLATFORM_ADMIN only",
+      "test_cases": [
+        {
+          "name": "Active session — no active session (null response)",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/impersonation-sessions/active",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data is null when no active session exists"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Active session — returns active session when one exists",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "note": "Start an impersonation first, then call this endpoint before ending it",
+          "request": {
+            "method": "GET",
+            "url": "/admin/impersonation-sessions/active",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "platformUser", "tenant", "reason", "expiresAt"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/support/search",
+      "description": "Search tenants by domain, name, email, or ID for support purposes",
+      "story": "E13b.5",
+      "rbac": "PLATFORM_VIEWER+",
+      "test_cases": [
+        {
+          "name": "Search by name — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/support/search?q=Development&type=name",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items", "total"],
+            "body_assertion": "items contains dev-tenant with matchField='displayName'"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Search by code (domain) — exact match",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/support/search?q=dev-tenant&type=domain",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "items has exactly 1 result with code='dev-tenant'"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Search by ID — exact match",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/support/search?q=00000000-0000-4000-b000-000000000010&type=id",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "items has 1 result with id matching the query"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Search by email — cross-reference",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/support/search?q=admin@dev-tenant.com&type=email",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "Items array returned (may find dev-tenant via domain extraction)"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Search general (no type) — matches name/code/id",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/support/search?q=dev",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "items contains dev-tenant"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Search — no results",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/support/search?q=zzzznonexistentzzzz&type=name",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "items is empty array, total === 0"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Search — missing q parameter",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/support/search",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400,
+            "body_assertion": "Validation error on required 'q' field"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Search — empty q parameter",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/support/search?q=",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Search — invalid type filter",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/support/search?q=test&type=invalid",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Search — PLATFORM_VIEWER allowed",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/support/search?q=dev",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Search — unauthenticated",
+          "type": "authorization",
+          "request": {
+            "method": "GET",
+            "url": "/admin/support/search?q=dev",
+            "headers": {}
+          },
+          "expected": {
+            "status": 401
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/audit-log",
+      "description": "List platform audit log entries with filters and cursor-based pagination",
+      "story": "E13b.6",
+      "rbac": "PLATFORM_VIEWER+",
+      "test_cases": [
+        {
+          "name": "List audit log — happy path (no filters)",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data is array of audit entries, each has id, platformUser, action, targetType, targetId, ipAddress, timestamp. meta has cursor and hasMore."
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List audit log — filter by action",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log?action=auth.login",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "All items have action === 'auth.login'"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List audit log — filter by targetType",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log?targetType=tenant",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "All items have targetType === 'tenant'"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List audit log — filter by platformUserId",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log?platformUserId=00000000-0000-4000-b000-000000000020",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "All items have platformUser.id === PLATFORM_ADMIN_ID"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List audit log — filter by date range",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log?from=2026-03-01T00:00:00Z&to=2026-03-31T23:59:59Z",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "All items have timestamp within the specified date range"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List audit log — combined filters (action + date range)",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log?action=auth.login&from=2026-03-01T00:00:00Z&to=2026-03-31T23:59:59Z",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "All items match both action and date range filters"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List audit log — pagination with limit=2",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log?limit=2",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data.length <= 2, meta.cursor exists if hasMore=true"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List audit log — cursor-based pagination (page 2)",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "note": "Use cursor from the limit=2 test above",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log?limit=2&cursor={{CURSOR_FROM_PAGE_1}}",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data contains different entries than page 1"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List audit log — empty result with tight filters",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log?action=nonexistent.action.type",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data is empty array, meta.hasMore === false"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List audit log — invalid from date format",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log?from=not-a-datetime",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List audit log — invalid platformUserId format",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log?platformUserId=not-a-uuid",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List audit log — invalid targetType enum",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log?targetType=invalid_type",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List audit log — PLATFORM_VIEWER allowed",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List audit log — unauthenticated",
+          "type": "authorization",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log",
+            "headers": {}
+          },
+          "expected": {
+            "status": 401
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/audit-log/:id",
+      "description": "Get single audit log entry detail including full details JSON, userAgent, ipAddress",
+      "story": "E13b.6",
+      "rbac": "PLATFORM_VIEWER+",
+      "test_cases": [
+        {
+          "name": "Audit log detail — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "note": "Use an ID from the audit-log list test",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log/{{AUDIT_LOG_ID}}",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "platformUser", "action", "targetType", "targetId", "details", "ipAddress", "userAgent", "timestamp", "createdAt"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Audit log detail — not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["AUDIT_LOG_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Audit log detail — invalid UUID",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log/not-a-uuid",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Audit log detail — PLATFORM_VIEWER allowed",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log/{{AUDIT_LOG_ID}}",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/audit-log/export",
+      "description": "CSV export of filtered audit log entries (max 10,000 rows)",
+      "story": "E13b.6",
+      "rbac": "PLATFORM_VIEWER+",
+      "test_cases": [
+        {
+          "name": "Audit log export — happy path CSV",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log/export",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "headers_contain": {
+              "content-type": "text/csv",
+              "content-disposition": "attachment; filename="
+            },
+            "body_assertion": "CSV starts with header: timestamp,adminEmail,adminName,action,targetType,targetId,ipAddress,userAgent,details"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Audit log export — with action filter",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log/export?action=auth.login",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "headers_contain": { "content-type": "text/csv" },
+            "body_assertion": "All data rows contain 'auth.login' in the action column"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Audit log export — with date range filter",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log/export?from=2026-03-01T00:00:00Z&to=2026-03-31T23:59:59Z",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "headers_contain": { "content-type": "text/csv" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Audit log export — empty result returns headers only",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log/export?action=nonexistent.action.type",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "CSV contains only the header row"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Audit log export — invalid targetType filter",
+          "type": "validation_error",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log/export?targetType=invalid_type",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 400
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Audit log export — PLATFORM_VIEWER allowed",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log/export",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "headers_contain": { "content-type": "text/csv" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Audit log export — unauthenticated",
+          "type": "authorization",
+          "request": {
+            "method": "GET",
+            "url": "/admin/audit-log/export",
+            "headers": {}
+          },
+          "expected": {
+            "status": 401
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/tenants",
+      "description": "List all tenants (pre-existing E3b, consumed by E13b.2 and E13b.3 frontends)",
+      "story": "E13b.2/E13b.3 (pre-existing backend)",
+      "rbac": "PLATFORM_VIEWER+",
+      "test_cases": [
+        {
+          "name": "List tenants — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data is array containing dev-tenant"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List tenants — PLATFORM_VIEWER allowed",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List tenants — unauthenticated",
+          "type": "authorization",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants",
+            "headers": {}
+          },
+          "expected": {
+            "status": 401
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/tenants/:id/billing",
+      "description": "Get tenant billing detail (consumed by E13b.3 billing tab)",
+      "story": "E13b.3 (pre-existing backend)",
+      "rbac": "PLATFORM_VIEWER+",
+      "test_cases": [
+        {
+          "name": "Tenant billing — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/billing",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["tenantId", "billingStatus", "enforcementAction", "dunningLevel", "gracePeriodDays"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Tenant billing — tenant not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/00000000-0000-4000-a000-ffffffffffff/billing",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 404
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/plans",
+      "description": "List all subscription plans (consumed by E13b.3 plans page)",
+      "story": "E13b.3 (pre-existing backend)",
+      "rbac": "PLATFORM_VIEWER+",
+      "test_cases": [
+        {
+          "name": "List plans — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/plans",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data is array with 3 plans: core, pro, enterprise"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List plans — PLATFORM_VIEWER allowed",
+          "type": "authorization",
+          "role": "PLATFORM_VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/admin/plans",
+            "headers": { "Authorization": "Bearer {{VIEWER_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/tenants/:id/ai/quota",
+      "description": "Get tenant AI quota settings (consumed by E13b.4 per-tenant detail)",
+      "story": "E13b.4 (pre-existing backend)",
+      "rbac": "PLATFORM_VIEWER+",
+      "test_cases": [
+        {
+          "name": "Tenant AI quota — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/00000000-0000-4000-b000-000000000010/ai/quota",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["tenantId", "tokenAllowance", "tokensUsed", "softLimitPct", "hardLimitPct"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Tenant AI quota — tenant not found",
+          "type": "edge_case",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/tenants/00000000-0000-4000-a000-ffffffffffff/ai/quota",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 404
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/admin/users",
+      "description": "List platform users (consumed by E13b.6 audit log user filter dropdown)",
+      "story": "E13b.6 (pre-existing backend)",
+      "rbac": "PLATFORM_VIEWER+",
+      "test_cases": [
+        {
+          "name": "List platform users — happy path",
+          "type": "happy_path",
+          "role": "PLATFORM_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/admin/users",
+            "headers": { "Authorization": "Bearer {{ADMIN_TOKEN}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_assertion": "data is array containing at least the admin user"
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    }
+  ],
+  "test_execution_order": [
+    "Phase 0: Health check — verify API is running",
+    "Phase 1: Auth — login as PLATFORM_ADMIN to get {{ADMIN_TOKEN}}",
+    "Phase 2: Setup — create PLATFORM_VIEWER user via POST /admin/users, then login as viewer to get {{VIEWER_TOKEN}}",
+    "Phase 3: Read endpoints (list/detail) — tenants, plans, users, billing, AI quota",
+    "Phase 4: AI Usage reads — summary, per-tenant usage, by-feature, alerts list, providers list, BYOK list",
+    "Phase 5: AI Usage writes — spike-detection, acknowledge alert, update provider key, toggle provider",
+    "Phase 6: AI Usage BYOK writes — add BYOK (expect 403 for non-Enterprise), toggle, delete",
+    "Phase 7: AI Usage export — CSV export with various filters",
+    "Phase 8: Impersonation — start session, get active session, list sessions, session detail, end session",
+    "Phase 9: Support search — search by name, code, id, email, general",
+    "Phase 10: Audit log reads — list with filters, detail, cursor pagination",
+    "Phase 11: Audit log export — CSV export with various filters",
+    "Phase 12: RBAC enforcement — re-run all write endpoints as PLATFORM_VIEWER to confirm 403",
+    "Phase 13: Unauthenticated — spot-check endpoints without Authorization header to confirm 401"
+  ],
+  "summary": {
+    "total_endpoints": 27,
+    "new_in_E13b": 22,
+    "pre_existing_consumed_by_E13b": 5,
+    "by_story": {
+      "E13b.1_auth_setup": 3,
+      "E13b.4_ai_usage": 13,
+      "E13b.5_impersonation_support": 6,
+      "E13b.6_audit_log": 3,
+      "pre_existing_consumed": 5
+    },
+    "test_types": {
+      "happy_path": 64,
+      "validation_error": 40,
+      "edge_case": 32,
+      "authorization": 48
+    }
+  }
+}

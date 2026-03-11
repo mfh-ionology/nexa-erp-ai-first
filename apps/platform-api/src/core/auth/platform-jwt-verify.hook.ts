@@ -65,6 +65,17 @@ const platformJwtVerifyPluginFn = async (fastify: FastifyInstance): Promise<void
       if (typeof payload.sub !== 'string' || payload.sub.length === 0) {
         throw new Error('Missing or invalid sub claim');
       }
+
+      // E13b.5 Fix: Impersonation tokens have type='impersonation' instead of a
+      // role claim. When the ERP web app calls platform-api endpoints (e.g. end
+      // session), we must treat them as PLATFORM_ADMIN since only admins can start
+      // impersonation sessions in the first place.
+      if (payload.type === 'impersonation') {
+        request.platformUserId = payload.sub;
+        request.platformRole = 'PLATFORM_ADMIN';
+        return;
+      }
+
       if (typeof payload.role !== 'string' || payload.role.length === 0) {
         throw new Error('Missing or invalid role claim');
       }

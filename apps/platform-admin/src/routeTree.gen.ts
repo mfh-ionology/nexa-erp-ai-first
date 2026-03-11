@@ -12,7 +12,16 @@ import { Route as rootRouteImport } from './routes/__root';
 import { Route as LoginRouteImport } from './routes/login';
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated';
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index';
+import { Route as AuthenticatedSupportRouteImport } from './routes/_authenticated/support';
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings';
+import { Route as AuthenticatedPlansRouteImport } from './routes/_authenticated/plans';
+import { Route as AuthenticatedMonitoringRouteImport } from './routes/_authenticated/monitoring';
 import { Route as AuthenticatedIntelligenceRouteImport } from './routes/_authenticated/intelligence';
+import { Route as AuthenticatedBillingRouteImport } from './routes/_authenticated/billing';
+import { Route as AuthenticatedAuditLogRouteImport } from './routes/_authenticated/audit-log';
+import { Route as AuthenticatedAiUsageRouteImport } from './routes/_authenticated/ai-usage';
+import { Route as AuthenticatedTenantsIndexRouteImport } from './routes/_authenticated/tenants/index';
+import { Route as AuthenticatedTenantsTenantIdRouteImport } from './routes/_authenticated/tenants/$tenantId';
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -28,40 +37,145 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRoute,
 } as any);
+const AuthenticatedSupportRoute = AuthenticatedSupportRouteImport.update({
+  id: '/support',
+  path: '/support',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedPlansRoute = AuthenticatedPlansRouteImport.update({
+  id: '/plans',
+  path: '/plans',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedMonitoringRoute = AuthenticatedMonitoringRouteImport.update({
+  id: '/monitoring',
+  path: '/monitoring',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
 const AuthenticatedIntelligenceRoute = AuthenticatedIntelligenceRouteImport.update({
   id: '/intelligence',
   path: '/intelligence',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedBillingRoute = AuthenticatedBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedAuditLogRoute = AuthenticatedAuditLogRouteImport.update({
+  id: '/audit-log',
+  path: '/audit-log',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedAiUsageRoute = AuthenticatedAiUsageRouteImport.update({
+  id: '/ai-usage',
+  path: '/ai-usage',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedTenantsIndexRoute = AuthenticatedTenantsIndexRouteImport.update({
+  id: '/tenants/',
+  path: '/tenants/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedTenantsTenantIdRoute = AuthenticatedTenantsTenantIdRouteImport.update({
+  id: '/tenants/$tenantId',
+  path: '/tenants/$tenantId',
   getParentRoute: () => AuthenticatedRoute,
 } as any);
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute;
   '/login': typeof LoginRoute;
+  '/ai-usage': typeof AuthenticatedAiUsageRoute;
+  '/audit-log': typeof AuthenticatedAuditLogRoute;
+  '/billing': typeof AuthenticatedBillingRoute;
   '/intelligence': typeof AuthenticatedIntelligenceRoute;
+  '/monitoring': typeof AuthenticatedMonitoringRoute;
+  '/plans': typeof AuthenticatedPlansRoute;
+  '/settings': typeof AuthenticatedSettingsRoute;
+  '/support': typeof AuthenticatedSupportRoute;
+  '/tenants/$tenantId': typeof AuthenticatedTenantsTenantIdRoute;
+  '/tenants/': typeof AuthenticatedTenantsIndexRoute;
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute;
+  '/ai-usage': typeof AuthenticatedAiUsageRoute;
+  '/audit-log': typeof AuthenticatedAuditLogRoute;
+  '/billing': typeof AuthenticatedBillingRoute;
   '/intelligence': typeof AuthenticatedIntelligenceRoute;
+  '/monitoring': typeof AuthenticatedMonitoringRoute;
+  '/plans': typeof AuthenticatedPlansRoute;
+  '/settings': typeof AuthenticatedSettingsRoute;
+  '/support': typeof AuthenticatedSupportRoute;
   '/': typeof AuthenticatedIndexRoute;
+  '/tenants/$tenantId': typeof AuthenticatedTenantsTenantIdRoute;
+  '/tenants': typeof AuthenticatedTenantsIndexRoute;
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
   '/_authenticated': typeof AuthenticatedRouteWithChildren;
   '/login': typeof LoginRoute;
+  '/_authenticated/ai-usage': typeof AuthenticatedAiUsageRoute;
+  '/_authenticated/audit-log': typeof AuthenticatedAuditLogRoute;
+  '/_authenticated/billing': typeof AuthenticatedBillingRoute;
   '/_authenticated/intelligence': typeof AuthenticatedIntelligenceRoute;
+  '/_authenticated/monitoring': typeof AuthenticatedMonitoringRoute;
+  '/_authenticated/plans': typeof AuthenticatedPlansRoute;
+  '/_authenticated/settings': typeof AuthenticatedSettingsRoute;
+  '/_authenticated/support': typeof AuthenticatedSupportRoute;
   '/_authenticated/': typeof AuthenticatedIndexRoute;
+  '/_authenticated/tenants/$tenantId': typeof AuthenticatedTenantsTenantIdRoute;
+  '/_authenticated/tenants/': typeof AuthenticatedTenantsIndexRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: '/' | '/login' | '/intelligence';
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/ai-usage'
+    | '/audit-log'
+    | '/billing'
+    | '/intelligence'
+    | '/monitoring'
+    | '/plans'
+    | '/settings'
+    | '/support'
+    | '/tenants/$tenantId'
+    | '/tenants/';
   fileRoutesByTo: FileRoutesByTo;
-  to: '/login' | '/intelligence' | '/';
+  to:
+    | '/login'
+    | '/ai-usage'
+    | '/audit-log'
+    | '/billing'
+    | '/intelligence'
+    | '/monitoring'
+    | '/plans'
+    | '/settings'
+    | '/support'
+    | '/'
+    | '/tenants/$tenantId'
+    | '/tenants';
   id:
     | '__root__'
     | '/_authenticated'
     | '/login'
+    | '/_authenticated/ai-usage'
+    | '/_authenticated/audit-log'
+    | '/_authenticated/billing'
     | '/_authenticated/intelligence'
-    | '/_authenticated/';
+    | '/_authenticated/monitoring'
+    | '/_authenticated/plans'
+    | '/_authenticated/settings'
+    | '/_authenticated/support'
+    | '/_authenticated/'
+    | '/_authenticated/tenants/$tenantId'
+    | '/_authenticated/tenants/';
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
@@ -92,6 +206,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIndexRouteImport;
       parentRoute: typeof AuthenticatedRoute;
     };
+    '/_authenticated/support': {
+      id: '/_authenticated/support';
+      path: '/support';
+      fullPath: '/support';
+      preLoaderRoute: typeof AuthenticatedSupportRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings';
+      path: '/settings';
+      fullPath: '/settings';
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/plans': {
+      id: '/_authenticated/plans';
+      path: '/plans';
+      fullPath: '/plans';
+      preLoaderRoute: typeof AuthenticatedPlansRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/monitoring': {
+      id: '/_authenticated/monitoring';
+      path: '/monitoring';
+      fullPath: '/monitoring';
+      preLoaderRoute: typeof AuthenticatedMonitoringRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
     '/_authenticated/intelligence': {
       id: '/_authenticated/intelligence';
       path: '/intelligence';
@@ -99,17 +241,70 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIntelligenceRouteImport;
       parentRoute: typeof AuthenticatedRoute;
     };
+    '/_authenticated/billing': {
+      id: '/_authenticated/billing';
+      path: '/billing';
+      fullPath: '/billing';
+      preLoaderRoute: typeof AuthenticatedBillingRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/audit-log': {
+      id: '/_authenticated/audit-log';
+      path: '/audit-log';
+      fullPath: '/audit-log';
+      preLoaderRoute: typeof AuthenticatedAuditLogRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/ai-usage': {
+      id: '/_authenticated/ai-usage';
+      path: '/ai-usage';
+      fullPath: '/ai-usage';
+      preLoaderRoute: typeof AuthenticatedAiUsageRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/tenants/': {
+      id: '/_authenticated/tenants/';
+      path: '/tenants';
+      fullPath: '/tenants/';
+      preLoaderRoute: typeof AuthenticatedTenantsIndexRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/tenants/$tenantId': {
+      id: '/_authenticated/tenants/$tenantId';
+      path: '/tenants/$tenantId';
+      fullPath: '/tenants/$tenantId';
+      preLoaderRoute: typeof AuthenticatedTenantsTenantIdRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
   }
 }
 
 interface AuthenticatedRouteChildren {
+  AuthenticatedAiUsageRoute: typeof AuthenticatedAiUsageRoute;
+  AuthenticatedAuditLogRoute: typeof AuthenticatedAuditLogRoute;
+  AuthenticatedBillingRoute: typeof AuthenticatedBillingRoute;
   AuthenticatedIntelligenceRoute: typeof AuthenticatedIntelligenceRoute;
+  AuthenticatedMonitoringRoute: typeof AuthenticatedMonitoringRoute;
+  AuthenticatedPlansRoute: typeof AuthenticatedPlansRoute;
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute;
+  AuthenticatedSupportRoute: typeof AuthenticatedSupportRoute;
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute;
+  AuthenticatedTenantsTenantIdRoute: typeof AuthenticatedTenantsTenantIdRoute;
+  AuthenticatedTenantsIndexRoute: typeof AuthenticatedTenantsIndexRoute;
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedAiUsageRoute: AuthenticatedAiUsageRoute,
+  AuthenticatedAuditLogRoute: AuthenticatedAuditLogRoute,
+  AuthenticatedBillingRoute: AuthenticatedBillingRoute,
   AuthenticatedIntelligenceRoute: AuthenticatedIntelligenceRoute,
+  AuthenticatedMonitoringRoute: AuthenticatedMonitoringRoute,
+  AuthenticatedPlansRoute: AuthenticatedPlansRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedSupportRoute: AuthenticatedSupportRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedTenantsTenantIdRoute: AuthenticatedTenantsTenantIdRoute,
+  AuthenticatedTenantsIndexRoute: AuthenticatedTenantsIndexRoute,
 };
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

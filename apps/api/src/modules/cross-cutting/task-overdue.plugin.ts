@@ -25,6 +25,16 @@ const taskOverduePluginFn: FastifyPluginAsync = async (fastify) => {
     return;
   }
 
+  // The dead-letter plugin (our dependency) probes Redis on startup.
+  // If Redis was unreachable, deadLetterService is null — skip BullMQ init
+  // to avoid unhandled 'error' events from failed connections.
+  if (fastify.deadLetterService === null) {
+    fastify.log.warn(
+      '[TaskOverduePlugin] Redis unavailable (dead-letter probe failed) — overdue task detection disabled',
+    );
+    return;
+  }
+
   let worker: Worker<TaskOverdueCheckJobData> | null = null;
 
   try {

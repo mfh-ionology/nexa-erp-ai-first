@@ -67,10 +67,7 @@ const singleLovQuerySchema = z.object({
 
 function viewRoutes(fastify: FastifyInstance): void {
   const repo = new ViewsRepository(prisma);
-  const redis = (fastify as unknown as { redis?: Redis }).redis;
-  if (!redis) {
-    throw new Error('views plugin requires redis decorator — register redis plugin before views');
-  }
+  const redis = (fastify as unknown as { redis?: Redis | null }).redis ?? null;
   const logger = fastify.log as unknown as Logger;
   const viewsService = new ViewsService(repo, redis, logger);
   const lovService = new LovService(prisma, logger);

@@ -143,25 +143,22 @@ describe('Accessibility: Keyboard Navigation', () => {
     expect(th).toHaveAttribute('aria-sort', 'ascending');
   });
 
-  it('pagination buttons are keyboard accessible', async () => {
+  it('load more button is keyboard accessible when more data exists', async () => {
     mockApiGet.mockResolvedValue({
       data: testSkills,
-      meta: { hasMore: false },
+      meta: { hasMore: true, nextCursor: 'cursor-2' },
     });
 
     renderWithQuery(<SkillEffectivenessTable />);
 
     await screen.findByText('ar.aging_report');
 
-    const prevButton = screen.getByLabelText('Previous page');
-    const nextButton = screen.getByLabelText('Next page');
+    const loadMoreButton = screen.getByLabelText('Load more skills');
+    expect(loadMoreButton).toBeInTheDocument();
 
-    // Both should be focusable
-    expect(prevButton).not.toBeNull();
-    expect(nextButton).not.toBeNull();
-
-    // Previous should be disabled on first page
-    expect(prevButton).toBeDisabled();
+    // Should be focusable
+    loadMoreButton.focus();
+    expect(loadMoreButton).toHaveFocus();
   });
 
   it('KpiCard retry button is keyboard accessible', async () => {
@@ -262,7 +259,7 @@ describe('Accessibility: Screen Reader Announcements', () => {
     });
   });
 
-  it('page count is announced via aria-live on pagination', async () => {
+  it('skill count text is visible for screen readers', async () => {
     mockApiGet.mockResolvedValue({
       data: testSkills,
       meta: { hasMore: false },
@@ -272,9 +269,8 @@ describe('Accessibility: Screen Reader Announcements', () => {
 
     await screen.findByText('ar.aging_report');
 
-    // Page counter should have aria-live for screen reader announcements
-    const pageInfo = screen.getByText(/page 1 of/i);
-    expect(pageInfo).toHaveAttribute('aria-live', 'polite');
+    // The component shows "Showing N skills" text
+    expect(screen.getByText(/showing/i)).toBeInTheDocument();
   });
 });
 

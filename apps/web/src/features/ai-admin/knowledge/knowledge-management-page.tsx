@@ -11,7 +11,6 @@ import { useCallback, useMemo, useState, useRef } from 'react';
 import { useNavigate, useRouterState } from '@tanstack/react-router';
 import {
   BookOpen,
-  ChevronDown,
   GraduationCap,
   GitCompareArrows,
   Lightbulb,
@@ -30,12 +29,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/templates/page-header';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
-import { cn } from '@/lib/utils';
 
 import { KnowledgeStatsPanel } from './components/knowledge-stats-panel';
 import { KnowledgeArticlesTab } from './knowledge-articles-tab';
@@ -46,28 +49,13 @@ import { KnowledgeSettingsTab } from './knowledge-settings-tab';
 import { ArticleUploadDialog } from './components/article-upload-dialog';
 import { ArticleFormDialog } from './components/article-form-dialog';
 import { TrainingExampleFormDialog } from './components/training-example-form-dialog';
-import type {
-  CorrectionLog,
-  CorrectionType,
-  KnowledgeArticle,
-  KnowledgeCategory,
-  TrainingExample,
-} from '../api/types';
+import type { CorrectionLog, KnowledgeArticle, TrainingExample } from '../api/types';
 import {
   useDeleteKnowledgeArticle,
   useUpdateKnowledgeArticle,
 } from '../api/use-knowledge-articles';
+import { useCreateArticleFromCorrection } from '../api/use-corrections';
 import { useDeleteTrainingExample } from '../api/use-training-examples';
-
-// ─── Correction → Article category mapping (AC-6) ──────────────────────────
-
-const CORRECTION_TO_ARTICLE_CATEGORY: Record<CorrectionType, KnowledgeCategory> = {
-  TERMINOLOGY: 'TERMINOLOGY',
-  PROCESS: 'BUSINESS_PROCESS',
-  DATA: 'CUSTOM_FIELDS',
-  PREFERENCE: 'BUSINESS_PROCESS',
-  OTHER: 'BUSINESS_PROCESS',
-};
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
@@ -97,22 +85,6 @@ export function KnowledgeManagementPage() {
   const breakpoint = useBreakpoint();
 
   const activeTab = useMemo(() => parseTabFromHash(hash), [hash]);
-
-  // Phone accordion state — track which panels are open
-  const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>(() => ({
-    [activeTab]: true,
-  }));
-  const toggleAccordion = useCallback(
-    (key: string) => {
-      if (activeTab === 'settings' && settingsDirtyRef.current && key !== 'settings') {
-        const confirmed = window.confirm('You have unsaved settings changes. Discard them?');
-        if (!confirmed) return;
-      }
-      setOpenAccordions((prev) => ({ ...prev, [key]: !prev[key] }));
-      void navigate({ hash: key === DEFAULT_TAB ? '' : key, replace: true });
-    },
-    [navigate, activeTab],
-  );
 
   // ── Settings dirty state tracking ──
   const settingsDirtyRef = useRef(false);
@@ -145,14 +117,6 @@ export function KnowledgeManagementPage() {
   // ── Dialog state for articles tab ──
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [articleDialogOpen, setArticleDialogOpen] = useState(false);
-  const [articleDialogPrefill, setArticleDialogPrefill] = useState<
-    | {
-        title?: string;
-        content?: string;
-        category?: KnowledgeCategory;
-      }
-    | undefined
-  >(undefined);
   const [editingArticle, setEditingArticle] = useState<KnowledgeArticle | null>(null);
   const [deletingArticle, setDeletingArticle] = useState<KnowledgeArticle | null>(null);
 
@@ -165,32 +129,28 @@ export function KnowledgeManagementPage() {
   const [deletingExample, setDeletingExample] = useState<TrainingExample | null>(null);
 
   const deleteExample = useDeleteTrainingExample();
+  const createArticleFromCorrection = useCreateArticleFromCorrection();
 
   const handleUploadDocument = useCallback(() => setUploadDialogOpen(true), []);
   const handleCreateArticle = useCallback(() => {
     setEditingArticle(null);
-    setArticleDialogPrefill(undefined);
     setArticleDialogOpen(true);
   }, []);
   const handleEditArticle = useCallback((article: KnowledgeArticle) => {
     setEditingArticle(article);
-    setArticleDialogPrefill(undefined);
     setArticleDialogOpen(true);
   }, []);
   const handleDeleteArticle = useCallback((article: KnowledgeArticle) => {
     setDeletingArticle(article);
   }, []);
 
-  // ── Create article from correction (AC-6: opens pre-filled dialog) ──
-  const handleCreateArticleFromCorrection = useCallback((correction: CorrectionLog) => {
-    setEditingArticle(null);
-    setArticleDialogPrefill({
-      title: `From correction: ${correction.correctedResponse.slice(0, 80)}`,
-      content: correction.correctedResponse,
-      category: CORRECTION_TO_ARTICLE_CATEGORY[correction.correctionType],
-    });
-    setArticleDialogOpen(true);
-  }, []);
+  // ── Create article from correction (AC-6: uses dedicated endpoint) ──
+  const handleCreateArticleFromCorrection = useCallback(
+    (correction: CorrectionLog) => {
+      createArticleFromCorrection.mutate(correction.id);
+    },
+    [createArticleFromCorrection],
+  );
 
   const handleAddExample = useCallback(() => {
     setEditingExample(null);
@@ -260,73 +220,55 @@ export function KnowledgeManagementPage() {
       {/* ── Stats panel (persistent above tabs) ──── */}
       <KnowledgeStatsPanel onNavigateToPendingReviews={handleNavigateToPendingReviews} />
 
-      {/* ── Tabs / Accordion ─────────────────────── */}
+      {/* ── Tabs / Dropdown ─────────────────────── */}
       {breakpoint === 'phone' ? (
-        /* Phone: Collapsible accordion layout */
-        <div className="space-y-2" role="tablist" aria-label="Knowledge Management">
-          {TAB_CONFIG.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <Collapsible
-                key={tab.value}
-                open={openAccordions[tab.value] ?? false}
-                onOpenChange={() => toggleAccordion(tab.value)}
-              >
-                <CollapsibleTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    className={cn(
-                      'w-full justify-between text-left font-medium',
-                      openAccordions[tab.value] && 'bg-muted/50',
-                    )}
-                    role="tab"
-                    aria-selected={openAccordions[tab.value] ?? false}
-                  >
+        /* Phone: Dropdown selector layout (AC-11) */
+        <div className="space-y-4">
+          <Select value={activeTab} onValueChange={handleTabChange}>
+            <SelectTrigger className="w-full" aria-label="Knowledge Management section">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TAB_CONFIG.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <SelectItem key={tab.value} value={tab.value}>
                     <span className="flex items-center gap-1.5">
                       <Icon className="size-4" />
                       {tab.label}
                     </span>
-                    <ChevronDown
-                      className={cn(
-                        'size-4 transition-transform duration-200',
-                        openAccordions[tab.value] && 'rotate-180',
-                      )}
-                    />
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div role="tabpanel" className="px-1 pt-3 pb-4">
-                    {tab.value === 'articles' && (
-                      <KnowledgeArticlesTab
-                        onUploadDocument={handleUploadDocument}
-                        onCreateArticle={handleCreateArticle}
-                        onEditArticle={handleEditArticle}
-                        onDeleteArticle={handleDeleteArticle}
-                        filterPendingReviews={pendingReviewsFilter}
-                        onClearPendingReviewsFilter={() => setPendingReviewsFilter(false)}
-                      />
-                    )}
-                    {tab.value === 'training' && (
-                      <TrainingExamplesTab
-                        onAddExample={handleAddExample}
-                        onEditExample={handleEditExample}
-                        onDeleteExample={handleDeleteExample}
-                      />
-                    )}
-                    {tab.value === 'corrections' && (
-                      <CorrectionsTab
-                        onCreateArticleFromCorrection={handleCreateArticleFromCorrection}
-                      />
-                    )}
-                    {tab.value === 'suggested' && <SuggestedTab />}
-                    {tab.value === 'settings' && (
-                      <KnowledgeSettingsTab onDirtyChange={handleSettingsDirtyChange} />
-                    )}
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-            );
-          })}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+
+          <div role="tabpanel">
+            {activeTab === 'articles' && (
+              <KnowledgeArticlesTab
+                onUploadDocument={handleUploadDocument}
+                onCreateArticle={handleCreateArticle}
+                onEditArticle={handleEditArticle}
+                onDeleteArticle={handleDeleteArticle}
+                filterPendingReviews={pendingReviewsFilter}
+                onClearPendingReviewsFilter={() => setPendingReviewsFilter(false)}
+              />
+            )}
+            {activeTab === 'training' && (
+              <TrainingExamplesTab
+                onAddExample={handleAddExample}
+                onEditExample={handleEditExample}
+                onDeleteExample={handleDeleteExample}
+              />
+            )}
+            {activeTab === 'corrections' && (
+              <CorrectionsTab onCreateArticleFromCorrection={handleCreateArticleFromCorrection} />
+            )}
+            {activeTab === 'suggested' && <SuggestedTab />}
+            {activeTab === 'settings' && (
+              <KnowledgeSettingsTab onDirtyChange={handleSettingsDirtyChange} />
+            )}
+          </div>
         </div>
       ) : (
         /* Desktop/Tablet: Standard tabs */
@@ -386,12 +328,10 @@ export function KnowledgeManagementPage() {
           setArticleDialogOpen(open);
           if (!open) {
             setEditingArticle(null);
-            setArticleDialogPrefill(undefined);
           }
         }}
         mode={editingArticle ? 'edit' : 'create'}
         article={editingArticle}
-        prefill={articleDialogPrefill}
       />
 
       {/* ── Delete Confirmation Dialog (AC-4) ──── */}

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { AlertCircle, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react';
 
 import { useInsights, useUpdateInsightStatus } from '@/api/use-intelligence';
@@ -89,25 +89,25 @@ function ModuleBadge({ module }: { module: string }) {
 // ---------------------------------------------------------------------------
 
 function StatusDropdown({ insight, disabled }: { insight: PlatformInsight; disabled: boolean }) {
-  const updateStatus = useUpdateInsightStatus();
+  const { mutate, isPending } = useUpdateInsightStatus();
   const user = usePlatformAuthStore((s) => s.user);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       const newStatus = e.target.value as InsightStatus;
-      updateStatus.mutate({
+      mutate({
         id: insight.id,
         body: { status: newStatus, reviewedById: user?.id },
       });
     },
-    [insight.id, updateStatus, user?.id],
+    [insight.id, mutate, user?.id],
   );
 
   return (
     <select
       value={insight.status}
       onChange={handleChange}
-      disabled={disabled || updateStatus.isPending}
+      disabled={disabled || isPending}
       className={cn(
         'rounded-md border border-border bg-background px-2 py-1 text-xs font-medium',
         'focus:outline-none focus:ring-2 focus:ring-primary/50',
@@ -179,17 +179,21 @@ export function FeatureGapsSection() {
     useInsights({ insightType: 'FEATURE_GAP' });
 
   const user = usePlatformAuthStore((s) => s.user);
-  const isViewerOnly = user?.role === 'PLATFORM_VIEWER';
+  const isViewerOnly = user?.role !== 'PLATFORM_ADMIN';
 
   // Flatten paginated pages
-  const allInsights = data?.pages.flatMap((p) => p.data) ?? [];
+  const allInsights = useMemo(() => data?.pages.flatMap((p) => p.data) ?? [], [data]);
 
   // For chart: aggregate by module
-  const moduleGapCounts = allInsights.reduce<Record<string, number>>((acc, insight) => {
-    const mod = extractModule(insight);
-    acc[mod] = (acc[mod] ?? 0) + 1;
-    return acc;
-  }, {});
+  const moduleGapCounts = useMemo(
+    () =>
+      allInsights.reduce<Record<string, number>>((acc, insight) => {
+        const mod = extractModule(insight);
+        acc[mod] = (acc[mod] ?? 0) + 1;
+        return acc;
+      }, {}),
+    [allInsights],
+  );
 
   // Determine display list
   const displayInsights = isExpanded ? allInsights : allInsights.slice(0, INITIAL_DISPLAY_COUNT);

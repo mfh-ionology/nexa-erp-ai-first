@@ -22,8 +22,24 @@ const redisPlugin = fp(
       lazyConnect: true,
     });
 
-    await redis.connect();
-    fastify.log.info('Redis connected');
+    try {
+      await redis.connect();
+      fastify.log.info('Redis connected');
+    } catch (err) {
+      fastify.log.warn(
+        { error: (err as Error).message },
+        'Redis connection failed — decorating fastify.redis as null (graceful degradation)',
+      );
+      // Suppress further error events from the failed connection
+      redis.on('error', () => {});
+      try {
+        redis.disconnect();
+      } catch {
+        /* ignore */
+      }
+      fastify.decorate('redis', null);
+      return;
+    }
 
     fastify.decorate('redis', redis);
 

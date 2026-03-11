@@ -32,6 +32,10 @@ export async function initTaskOverdueQueue(
       backoff: { type: 'exponential', delay: 30_000 },
     },
   });
+  // Prevent unhandled 'error' events from crashing the process if Redis disconnects
+  queue.on('error', (err) => {
+    console.warn(`[task-overdue] Queue error: ${err.message}`);
+  });
 
   // Add repeatable cron job — daily at 08:00 UTC
   await queue.add(

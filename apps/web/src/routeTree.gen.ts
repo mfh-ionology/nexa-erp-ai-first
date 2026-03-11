@@ -32,6 +32,7 @@ import { Route as AuthenticatedSystemMyPermissionsRouteImport } from './routes/_
 import { Route as AuthenticatedSystemEmailTemplatesRouteImport } from './routes/_authenticated/system/email-templates';
 import { Route as AuthenticatedSystemCompaniesRouteImport } from './routes/_authenticated/system/companies';
 import { Route as AuthenticatedSystemAccessGroupsRouteImport } from './routes/_authenticated/system/access-groups';
+import { Route as AuthenticatedSettingsDocumentTemplatesRouteImport } from './routes/_authenticated/settings/document-templates';
 import { Route as AuthenticatedSystemUsersIndexRouteImport } from './routes/_authenticated/system/users/index';
 import { Route as AuthenticatedSystemEmailTemplatesIndexRouteImport } from './routes/_authenticated/system/email-templates/index';
 import { Route as AuthenticatedSystemAccessGroupsIndexRouteImport } from './routes/_authenticated/system/access-groups/index';
@@ -185,6 +186,12 @@ const AuthenticatedSystemAccessGroupsRoute = AuthenticatedSystemAccessGroupsRout
   path: '/system/access-groups',
   getParentRoute: () => AuthenticatedRoute,
 } as any);
+const AuthenticatedSettingsDocumentTemplatesRoute =
+  AuthenticatedSettingsDocumentTemplatesRouteImport.update({
+    id: '/settings/document-templates',
+    path: '/settings/document-templates',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any);
 const AuthenticatedSystemUsersIndexRoute = AuthenticatedSystemUsersIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -386,6 +393,7 @@ export interface FileRoutesByFullPath {
   '/403': typeof R403Route;
   '/': typeof AuthenticatedIndexRoute;
   '/login': typeof LoginRoute;
+  '/settings/document-templates': typeof AuthenticatedSettingsDocumentTemplatesRoute;
   '/system/access-groups': typeof AuthenticatedSystemAccessGroupsRouteWithChildren;
   '/system/companies': typeof AuthenticatedSystemCompaniesRoute;
   '/system/email-templates': typeof AuthenticatedSystemEmailTemplatesRouteWithChildren;
@@ -447,6 +455,7 @@ export interface FileRoutesByTo {
   '/403': typeof R403Route;
   '/login': typeof LoginRoute;
   '/': typeof AuthenticatedIndexRoute;
+  '/settings/document-templates': typeof AuthenticatedSettingsDocumentTemplatesRoute;
   '/system/companies': typeof AuthenticatedSystemCompaniesRoute;
   '/system/my-permissions': typeof AuthenticatedSystemMyPermissionsRoute;
   '/system/notification-preferences': typeof AuthenticatedSystemNotificationPreferencesRoute;
@@ -501,6 +510,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren;
   '/login': typeof LoginRoute;
   '/_authenticated/': typeof AuthenticatedIndexRoute;
+  '/_authenticated/settings/document-templates': typeof AuthenticatedSettingsDocumentTemplatesRoute;
   '/_authenticated/system/access-groups': typeof AuthenticatedSystemAccessGroupsRouteWithChildren;
   '/_authenticated/system/companies': typeof AuthenticatedSystemCompaniesRoute;
   '/_authenticated/system/email-templates': typeof AuthenticatedSystemEmailTemplatesRouteWithChildren;
@@ -564,6 +574,7 @@ export interface FileRouteTypes {
     | '/403'
     | '/'
     | '/login'
+    | '/settings/document-templates'
     | '/system/access-groups'
     | '/system/companies'
     | '/system/email-templates'
@@ -625,6 +636,7 @@ export interface FileRouteTypes {
     | '/403'
     | '/login'
     | '/'
+    | '/settings/document-templates'
     | '/system/companies'
     | '/system/my-permissions'
     | '/system/notification-preferences'
@@ -678,6 +690,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/login'
     | '/_authenticated/'
+    | '/_authenticated/settings/document-templates'
     | '/_authenticated/system/access-groups'
     | '/_authenticated/system/companies'
     | '/_authenticated/system/email-templates'
@@ -903,6 +916,13 @@ declare module '@tanstack/react-router' {
       path: '/system/access-groups';
       fullPath: '/system/access-groups';
       preLoaderRoute: typeof AuthenticatedSystemAccessGroupsRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/settings/document-templates': {
+      id: '/_authenticated/settings/document-templates';
+      path: '/settings/document-templates';
+      fullPath: '/settings/document-templates';
+      preLoaderRoute: typeof AuthenticatedSettingsDocumentTemplatesRouteImport;
       parentRoute: typeof AuthenticatedRoute;
     };
     '/_authenticated/system/users/': {
@@ -1311,6 +1331,7 @@ const AuthenticatedAiAdminSkillsRouteWithChildren =
 
 interface AuthenticatedRouteChildren {
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute;
+  AuthenticatedSettingsDocumentTemplatesRoute: typeof AuthenticatedSettingsDocumentTemplatesRoute;
   AuthenticatedSystemAccessGroupsRoute: typeof AuthenticatedSystemAccessGroupsRouteWithChildren;
   AuthenticatedSystemCompaniesRoute: typeof AuthenticatedSystemCompaniesRoute;
   AuthenticatedSystemEmailTemplatesRoute: typeof AuthenticatedSystemEmailTemplatesRouteWithChildren;
@@ -1345,6 +1366,7 @@ interface AuthenticatedRouteChildren {
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedSettingsDocumentTemplatesRoute: AuthenticatedSettingsDocumentTemplatesRoute,
   AuthenticatedSystemAccessGroupsRoute: AuthenticatedSystemAccessGroupsRouteWithChildren,
   AuthenticatedSystemCompaniesRoute: AuthenticatedSystemCompaniesRoute,
   AuthenticatedSystemEmailTemplatesRoute: AuthenticatedSystemEmailTemplatesRouteWithChildren,

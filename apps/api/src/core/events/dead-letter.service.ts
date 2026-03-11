@@ -37,17 +37,24 @@ const QUEUE_NAME = 'event-dead-letter';
 
 export class DeadLetterService {
   private readonly queue: Queue;
-  private logger: { error: (...args: unknown[]) => void; warn?: (...args: unknown[]) => void } | null =
-    null;
+  private logger: {
+    error: (...args: unknown[]) => void;
+    warn?: (...args: unknown[]) => void;
+  } | null = null;
 
   constructor(connection: ConnectionOptions) {
     this.queue = new Queue(QUEUE_NAME, {
       connection,
       defaultJobOptions: {
         removeOnComplete: false, // Keep completed (reprocessed) jobs for audit
-        removeOnFail: false,     // Keep failed jobs
-        attempts: 1,             // No BullMQ-level retry; retry handled by EventBus
+        removeOnFail: false, // Keep failed jobs
+        attempts: 1, // No BullMQ-level retry; retry handled by EventBus
       },
+    });
+    // Prevent unhandled 'error' events from crashing the process if Redis disconnects
+    this.queue.on('error', (err) => {
+      const log = this.logger ?? console;
+      log.error(`[DeadLetterService] Queue error: ${err.message}`);
     });
   }
 
@@ -81,10 +88,7 @@ export class DeadLetterService {
       return job.id ?? null;
     } catch (err) {
       const log = this.logger ?? console;
-      log.error(
-        '[DeadLetterService] Failed to add entry to DLQ — Redis may be unavailable:',
-        err,
-      );
+      log.error('[DeadLetterService] Failed to add entry to DLQ — Redis may be unavailable:', err);
       return null;
     }
   }

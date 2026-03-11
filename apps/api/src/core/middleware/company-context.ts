@@ -28,6 +28,14 @@ const companyContextPluginFn = async (fastify: FastifyInstance): Promise<void> =
       return;
     }
 
+    // E13b.5: Skip for impersonation sessions. The jwt-verify hook already set
+    // companyId (resolved from tenant's default company), userRole (SUPER_ADMIN),
+    // and impersonatedBy metadata. The platformUserId doesn't exist in the tenant's
+    // User table, so the user lookup below would fail with 401.
+    if (request.impersonatedBy) {
+      return;
+    }
+
     // Verify the user is still active (JWT may outlive user deactivation).
     // This also fetches the default companyId for the no-header fallback path.
     // Database-per-tenant: prisma is already connected to the correct tenant DB,
@@ -38,7 +46,12 @@ const companyContextPluginFn = async (fastify: FastifyInstance): Promise<void> =
     });
 
     if (!user || !user.isActive) {
-      throw new AuthError('UNAUTHORIZED', tServer('errors:UNAUTHORIZED'), 401, 'errors:UNAUTHORIZED');
+      throw new AuthError(
+        'UNAUTHORIZED',
+        tServer('errors:UNAUTHORIZED'),
+        401,
+        'errors:UNAUTHORIZED',
+      );
     }
 
     // 3.5 — Read X-Company-ID header (may be string[] if sent multiple times)
@@ -50,7 +63,12 @@ const companyContextPluginFn = async (fastify: FastifyInstance): Promise<void> =
     if (headerValue) {
       // 3.6 — Validate UUID format
       if (!UUID_RE.test(headerValue)) {
-        throw new ValidationError(tServer('validation:invalidUuid', { field: 'X-Company-ID' }), undefined, 'validation:invalidUuid', { field: 'X-Company-ID' });
+        throw new ValidationError(
+          tServer('validation:invalidUuid', { field: 'X-Company-ID' }),
+          undefined,
+          'validation:invalidUuid',
+          { field: 'X-Company-ID' },
+        );
       }
       companyId = headerValue;
     } else {
@@ -76,7 +94,12 @@ const companyContextPluginFn = async (fastify: FastifyInstance): Promise<void> =
     });
 
     if (!company || !company.isActive) {
-      throw new AuthError('COMPANY_ACCESS_DENIED', tServer('errors:COMPANY_ACCESS_DENIED'), 403, 'errors:COMPANY_ACCESS_DENIED');
+      throw new AuthError(
+        'COMPANY_ACCESS_DENIED',
+        tServer('errors:COMPANY_ACCESS_DENIED'),
+        403,
+        'errors:COMPANY_ACCESS_DENIED',
+      );
     }
 
     // 3.8 — Verify user has access to the target company
@@ -84,7 +107,12 @@ const companyContextPluginFn = async (fastify: FastifyInstance): Promise<void> =
 
     // 3.9 — If no access, deny
     if (!role) {
-      throw new AuthError('COMPANY_ACCESS_DENIED', tServer('errors:COMPANY_ACCESS_DENIED'), 403, 'errors:COMPANY_ACCESS_DENIED');
+      throw new AuthError(
+        'COMPANY_ACCESS_DENIED',
+        tServer('errors:COMPANY_ACCESS_DENIED'),
+        403,
+        'errors:COMPANY_ACCESS_DENIED',
+      );
     }
 
     // 3.6 / 3.10 — Set request context

@@ -1,0 +1,196 @@
+# Page snapshot
+
+```yaml
+- generic [active]:
+    - generic:
+        - generic:
+            - navigation:
+                - generic:
+                    - generic: 'N'
+                    - generic:
+                        - generic: PLATFORM ADMIN
+                - generic:
+                    - generic:
+                        - link:
+                            - /url: /
+                            - img
+                            - generic: Dashboard
+                        - link:
+                            - /url: /intelligence
+                            - img
+                            - generic: AI Intelligence
+                        - link:
+                            - /url: /tenants
+                            - img
+                            - generic: Tenants
+                        - link:
+                            - /url: /plans
+                            - img
+                            - generic: Plans
+                        - link:
+                            - /url: /ai-usage
+                            - img
+                            - generic: AI Usage
+                        - link:
+                            - /url: /billing
+                            - img
+                            - generic: Billing
+                        - link:
+                            - /url: /support
+                            - img
+                            - generic: Support Console
+                        - link:
+                            - /url: /monitoring
+                            - img
+                            - generic: Monitoring
+                        - link:
+                            - /url: /audit-log
+                            - img
+                            - generic: Audit Log
+                        - link:
+                            - /url: /settings
+                            - img
+                            - generic: Settings
+                - generic:
+                    - generic:
+                        - paragraph: Platform Admin
+                        - paragraph: PLATFORM_ADMIN
+                    - button:
+                        - img
+                        - generic: Sign Out
+                - generic:
+                    - button:
+                        - img
+            - main:
+                - generic:
+                    - generic:
+                        - link:
+                            - /url: /tenants
+                            - text: Platform Admin > Tenants
+                        - text: '> Development Tenant'
+                    - generic:
+                        - generic:
+                            - heading [level=1]: Development Tenant
+                            - generic: Active
+                        - generic:
+                            - button:
+                                - img
+                                - text: Impersonate
+                            - button:
+                                - img
+                                - text: Suspend
+                    - generic:
+                        - tablist:
+                            - tab [selected]:
+                                - img
+                                - text: Overview
+                            - tab:
+                                - img
+                                - text: Modules & Flags
+                            - tab:
+                                - img
+                                - text: Users
+                            - tab:
+                                - img
+                                - text: AI Usage
+                            - tab:
+                                - img
+                                - text: Billing
+                            - tab:
+                                - img
+                                - text: Diagnostics
+                            - tab:
+                                - img
+                                - text: Audit
+                        - tabpanel:
+                            - generic:
+                                - generic:
+                                    - heading [level=3]: Identity
+                                    - generic:
+                                        - generic:
+                                            - term: Display Name
+                                            - definition: Development Tenant
+                                        - generic:
+                                            - term: Code
+                                            - definition: dev-tenant
+                                        - generic:
+                                            - term: Legal Name
+                                            - definition: —
+                                - generic:
+                                    - heading [level=3]: Status & Plan
+                                    - generic:
+                                        - generic:
+                                            - term: Status
+                                            - definition:
+                                                - generic: Active
+                                        - generic:
+                                            - term: Plan
+                                            - definition: Enterprise Plus 7wo6q
+                                        - generic:
+                                            - term: Billing Status
+                                            - definition:
+                                                - generic: Grace
+                                - generic:
+                                    - heading [level=3]: Infrastructure
+                                    - generic:
+                                        - generic:
+                                            - term: Region
+                                            - definition: uk-south
+                                        - generic:
+                                            - term: Sandbox Mode
+                                            - definition: Disabled
+                                - generic:
+                                    - heading [level=3]: Timestamps
+                                    - generic:
+                                        - generic:
+                                            - term: Created
+                                            - definition: 04 Mar 2026, 04:30
+                                        - generic:
+                                            - term: Last Activity
+                                            - definition: —
+        - button [ref=e1] [cursor=pointer]:
+            - generic [ref=e2]:
+                - img [ref=e4]
+                - img [ref=e39]
+            - generic [ref=e73]: '-'
+            - generic [ref=e74]: TanStack Router
+        - region "Notifications alt+T":
+            - list:
+                - listitem:
+                    - generic:
+                        - img
+                    - generic:
+                        - generic: You already have an active impersonation session. End it before starting a new one.
+        - generic:
+            - generic:
+                - img
+            - button:
+                - img
+    - alertdialog "Impersonate Tenant" [ref=e76]:
+        - generic [ref=e77]:
+            - heading "Impersonate Tenant" [level=2] [ref=e78]
+            - paragraph [ref=e79]:
+                - text: Start an impersonation session for
+                - strong [ref=e80]: Development Tenant
+                - text: .
+        - generic [ref=e81]:
+            - img [ref=e82]
+            - generic [ref=e84]: You will be redirected to the tenant's ERP. All actions will be audited and recorded against your platform admin identity.
+        - generic [ref=e85]:
+            - generic [ref=e86]: Reason *
+            - textbox "Reason *" [ref=e87]:
+                - /placeholder: Describe why you need to impersonate this tenant (min 10 characters)...
+                - text: 'Investigating reported UI rendering issue on dashboard for customer support ticket #4521'
+        - generic [ref=e88]:
+            - generic [ref=e89]: Session Duration
+            - combobox "Session Duration" [ref=e90]:
+                - option "15 minutes"
+                - option "30 minutes" [selected]
+                - option "1 hour"
+                - option "2 hours"
+                - option "4 hours"
+                - option "8 hours"
+        - generic [ref=e91]:
+            - button "Cancel" [ref=e92]
+            - button "Start Impersonation" [ref=e93]
+```
