@@ -1,4 +1,10 @@
-import { PrismaClient, UserRole, VatType } from '../generated/prisma/client';
+import {
+  PrismaClient,
+  UserRole,
+  VatType,
+  TaskPriority,
+  TaskStatus,
+} from '../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { randomBytes, scryptSync } from 'crypto';
 import {
@@ -13,6 +19,7 @@ import { seedViewsEntityTriggers } from './seeds/entity-triggers/views.js';
 import { seedAutomationData } from './seeds/automation-seed.js';
 import { seedNotificationTemplates } from './seeds/notification-templates.seed.js';
 import { seedEmailTemplates } from './seeds/email-template-seed.js';
+import { seedKnowledgeData } from './seeds/knowledge-seed.js';
 
 // Seed uses DIRECT_URL (bypasses PgBouncer) for reliable transactional seeding.
 // Runtime client (src/client.ts) uses DATABASE_URL via PgBouncer instead.
@@ -720,6 +727,100 @@ Rules:
 }
 
 // ---------------------------------------------------------------------------
+// Task Seed Data — E11.1 Task 8
+// ---------------------------------------------------------------------------
+
+const TASK_1_ID = '00000000-0000-4000-a000-000000000101';
+const TASK_2_ID = '00000000-0000-4000-a000-000000000102';
+const TASK_3_ID = '00000000-0000-4000-a000-000000000103';
+const TASK_4_ID = '00000000-0000-4000-a000-000000000104';
+
+async function seedTasks() {
+  const tasks = [
+    {
+      id: TASK_1_ID,
+      title: 'Review Q1 invoices for overdue payments',
+      description:
+        'Check all outstanding invoices from Q1 and follow up with customers who have exceeded 60-day terms.',
+      priority: TaskPriority.HIGH,
+      status: TaskStatus.OPEN,
+      dueDate: new Date('2026-03-15'),
+      assigneeIds: [DEFAULT_USER_ID, STAFF_USER_ID],
+    },
+    {
+      id: TASK_2_ID,
+      title: 'Update supplier payment terms',
+      description: 'Negotiate new payment terms with key suppliers for the upcoming fiscal year.',
+      priority: TaskPriority.NORMAL,
+      status: TaskStatus.IN_PROGRESS,
+      dueDate: new Date('2026-03-31'),
+      assigneeIds: [MANAGER_USER_ID],
+    },
+    {
+      id: TASK_3_ID,
+      title: 'Prepare monthly VAT return',
+      description: null,
+      priority: TaskPriority.URGENT,
+      status: TaskStatus.OPEN,
+      dueDate: new Date('2026-03-07'),
+      assigneeIds: [DEFAULT_USER_ID],
+    },
+    {
+      id: TASK_4_ID,
+      title: 'Archive completed purchase orders',
+      description: 'Move all completed POs from 2025 to archive status.',
+      priority: TaskPriority.LOW,
+      status: TaskStatus.COMPLETED,
+      dueDate: null,
+      assigneeIds: [STAFF_USER_ID],
+    },
+  ];
+
+  for (const t of tasks) {
+    const { assigneeIds, ...taskData } = t;
+
+    await prisma.task.upsert({
+      where: { id: taskData.id },
+      update: {
+        title: taskData.title,
+        description: taskData.description,
+        priority: taskData.priority,
+        status: taskData.status,
+        dueDate: taskData.dueDate,
+        updatedBy: 'system-seed',
+        completedAt: taskData.status === TaskStatus.COMPLETED ? new Date() : null,
+      },
+      create: {
+        id: taskData.id,
+        companyId: DEFAULT_COMPANY_ID,
+        title: taskData.title,
+        description: taskData.description,
+        priority: taskData.priority,
+        status: taskData.status,
+        dueDate: taskData.dueDate,
+        createdById: DEFAULT_USER_ID,
+        updatedBy: 'system-seed',
+        completedAt: taskData.status === TaskStatus.COMPLETED ? new Date() : null,
+      },
+    });
+
+    // Seed assignees (idempotent — skip duplicates)
+    for (const userId of assigneeIds) {
+      const existing = await prisma.taskAssignee.findFirst({
+        where: { taskId: taskData.id, userId },
+      });
+      if (!existing) {
+        await prisma.taskAssignee.create({
+          data: { taskId: taskData.id, userId },
+        });
+      }
+    }
+  }
+
+  console.log(`Seeded ${tasks.length} sample tasks with assignees`);
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -776,6 +877,20 @@ async function main() {
     await seedEmailTemplates(prisma, DEFAULT_USER_ID);
   } catch (e) {
     console.error('Failed to seed email templates:', e);
+  }
+
+  // ── Knowledge Management Seed Data — E5d ──────────────────────────
+  try {
+    await seedKnowledgeData(prisma, DEFAULT_COMPANY_ID, DEFAULT_USER_ID);
+  } catch (e) {
+    console.error('Failed to seed knowledge data:', e);
+  }
+
+  // ── Task Seed Data — E11.1 Task 8 ────────────────────────────────
+  try {
+    await seedTasks();
+  } catch (e) {
+    console.error('Failed to seed tasks:', e);
   }
 
   console.log('Seeding complete.');

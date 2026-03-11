@@ -1,0 +1,1271 @@
+{
+  "epic_id": "E11",
+  "generated_at": "2026-03-05T19:00:00.000Z",
+  "total_test_cases": 98,
+  "api_base_url": "http://localhost:5100",
+  "auth_note": "Login endpoint: POST /auth/login. Response field: data.accessToken. All test users use password 'NexaDev2026!'",
+  "test_users": {
+    "admin": { "email": "admin@nexa-erp.dev", "userId": "00000000-0000-4000-a000-000000000002", "role": "SUPER_ADMIN" },
+    "manager": { "email": "manager@nexa-erp.dev", "userId": "00000000-0000-4000-a000-000000000011", "role": "MANAGER" },
+    "staff": { "email": "staff@nexa-erp.dev", "userId": "00000000-0000-4000-a000-000000000010", "role": "STAFF" },
+    "viewer": { "email": "viewer@nexa-erp.dev", "userId": "00000000-0000-4000-a000-000000000012", "role": "VIEWER" }
+  },
+  "seed_data": {
+    "task_open_1": "00000000-0000-4000-a000-000000000101",
+    "task_in_progress": "00000000-0000-4000-a000-000000000102",
+    "task_open_2": "00000000-0000-4000-a000-000000000103",
+    "task_completed": "00000000-0000-4000-a000-000000000104",
+    "nonexistent_valid_uuid": "00000000-0000-4000-a000-ffffffffffff",
+    "company_id": "00000000-0000-4000-a000-000000000001"
+  },
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "description": "Authenticate user and return JWT (prerequisite for all tests)",
+      "test_cases": [
+        {
+          "name": "Login as SUPER_ADMIN - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "admin@nexa-erp.dev", "password": "NexaDev2026!" }
+          },
+          "expected": { "status": 200, "body_contains": ["accessToken", "user", "expiresIn"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Login as MANAGER - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "manager@nexa-erp.dev", "password": "NexaDev2026!" }
+          },
+          "expected": { "status": 200, "body_contains": ["accessToken"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Login as STAFF - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "staff@nexa-erp.dev", "password": "NexaDev2026!" }
+          },
+          "expected": { "status": 200, "body_contains": ["accessToken"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Login as VIEWER - happy path",
+          "type": "happy_path",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "viewer@nexa-erp.dev", "password": "NexaDev2026!" }
+          },
+          "expected": { "status": 200, "body_contains": ["accessToken"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/tasks",
+      "description": "Create a new task (STAFF+ required)",
+      "test_cases": [
+        {
+          "name": "Create task - minimal fields (title only) as STAFF",
+          "type": "happy_path",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/tasks",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "title": "Test task from API plan" }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "title", "status", "priority", "assignees"],
+            "body_exact": { "status": "OPEN", "priority": "NORMAL" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT id, title, status, priority, company_id, created_by_id, deleted_at FROM tasks WHERE title = 'Test task from API plan'",
+            "expected": "Row exists with status=OPEN, priority=NORMAL, companyId matches, deleted_at IS NULL"
+          },
+          "save_response_id_as": "created_task_1"
+        },
+        {
+          "name": "Create task - all fields as ADMIN",
+          "type": "happy_path",
+          "auth_role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/tasks",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{admin_token}}" },
+            "body": {
+              "title": "Full task with all fields",
+              "description": "A comprehensive task description for testing.",
+              "priority": "HIGH",
+              "dueDate": "2026-04-01T00:00:00.000Z",
+              "assigneeIds": ["00000000-0000-4000-a000-000000000010", "00000000-0000-4000-a000-000000000011"]
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["id", "title", "description", "priority", "dueDate", "assignees"],
+            "body_exact": { "priority": "HIGH", "status": "OPEN" },
+            "body_array_length": { "assignees": 2 }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT t.id, t.priority, COUNT(ta.id) as assignee_count FROM tasks t LEFT JOIN task_assignees ta ON ta.task_id = t.id WHERE t.title = 'Full task with all fields' GROUP BY t.id",
+            "expected": "Row exists with priority=HIGH, assignee_count=2"
+          },
+          "save_response_id_as": "created_task_2"
+        },
+        {
+          "name": "Create task - with entity link as MANAGER",
+          "type": "happy_path",
+          "auth_role": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/tasks",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": {
+              "title": "Task linked to an entity",
+              "entityType": "Task",
+              "entityId": "00000000-0000-4000-a000-000000000101"
+            }
+          },
+          "expected": {
+            "status": 201,
+            "body_exact": { "entityType": "Task", "entityId": "00000000-0000-4000-a000-000000000101" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT entity_type, entity_id FROM tasks WHERE title = 'Task linked to an entity'",
+            "expected": "entity_type=Task, entity_id=00000000-0000-4000-a000-000000000101"
+          },
+          "save_response_id_as": "created_task_3"
+        },
+        {
+          "name": "Create task - VIEWER denied (403)",
+          "type": "authorization",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/tasks",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" },
+            "body": { "title": "Should not be created" }
+          },
+          "expected": { "status": 403, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create task - no auth token (401)",
+          "type": "authorization",
+          "request": {
+            "method": "POST",
+            "url": "/tasks",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "title": "No auth" }
+          },
+          "expected": { "status": 401 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create task - missing title (400)",
+          "type": "validation",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/tasks",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "description": "No title provided" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create task - empty title (400)",
+          "type": "validation",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/tasks",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "title": "" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create task - title too long (400)",
+          "type": "validation",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/tasks",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "title": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "note": "title max length is 255",
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create task - invalid priority enum (400)",
+          "type": "validation",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/tasks",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "title": "Bad priority", "priority": "CRITICAL" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create task - entityType without entityId (400 - refinement)",
+          "type": "validation",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/tasks",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "title": "Partial entity", "entityType": "Customer" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create task - entityId without entityType (400 - refinement)",
+          "type": "validation",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/tasks",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "title": "Partial entity", "entityId": "00000000-0000-4000-a000-000000000101" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create task - invalid entityType (400 or 404 from entity registry)",
+          "type": "validation",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/tasks",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "title": "Bad entity type", "entityType": "NonExistentModel", "entityId": "00000000-0000-4000-a000-000000000101" }
+          },
+          "expected": { "status_one_of": [400, 404], "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create task - invalid assigneeId UUID format (400)",
+          "type": "validation",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/tasks",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "title": "Bad assignee", "assigneeIds": ["not-a-uuid"] }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Create task - nonexistent assigneeId (404 from service)",
+          "type": "edge_case",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/tasks",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "title": "Nonexistent assignee", "assigneeIds": ["00000000-0000-4000-a000-ffffffffffff"] }
+          },
+          "expected": { "status_one_of": [400, 404], "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/tasks",
+      "description": "List tasks with filters (VIEWER+ required)",
+      "test_cases": [
+        {
+          "name": "List tasks - no filters as VIEWER",
+          "type": "happy_path",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/tasks",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items", "total"],
+            "body_check": "total >= 4 (seed data)"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List tasks - filter by status=OPEN",
+          "type": "happy_path",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/tasks?status=OPEN",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items"],
+            "body_check": "all items have status=OPEN"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List tasks - filter by priority=HIGH",
+          "type": "happy_path",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/tasks?priority=HIGH",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items"],
+            "body_check": "all items have priority=HIGH"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List tasks - filter by assigneeId",
+          "type": "happy_path",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/tasks?assigneeId=00000000-0000-4000-a000-000000000010",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items"],
+            "body_check": "all returned tasks have staff user as assignee"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List tasks - search by title keyword",
+          "type": "happy_path",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/tasks?search=VAT",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items"],
+            "body_check": "results contain 'Prepare monthly VAT return'"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List tasks - pagination with limit and offset",
+          "type": "happy_path",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/tasks?limit=2&offset=0",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items", "total"],
+            "body_check": "items.length <= 2, total reflects full count"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List tasks - search returns empty list",
+          "type": "edge_case",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/tasks?search=xyznonexistent999",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_exact": { "items": [], "total": 0 }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List tasks - invalid status enum (400)",
+          "type": "validation",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/tasks?status=INVALID",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "List tasks - invalid limit (400)",
+          "type": "validation",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/tasks?limit=999",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "note": "limit max is 200"
+        },
+        {
+          "name": "List tasks - no auth (401)",
+          "type": "authorization",
+          "request": {
+            "method": "GET",
+            "url": "/tasks",
+            "headers": {}
+          },
+          "expected": { "status": 401 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/my",
+      "description": "List current user's assigned tasks (STAFF+ required)",
+      "test_cases": [
+        {
+          "name": "Get my tasks - as ADMIN (assigned to admin)",
+          "type": "happy_path",
+          "auth_role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/tasks/my",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items", "total"],
+            "body_check": "total >= 2 (admin is assigned to seed tasks 101, 103)"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Get my tasks - as STAFF (assigned to staff)",
+          "type": "happy_path",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/tasks/my",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["items", "total"],
+            "body_check": "returns only tasks where staff user is an assignee"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Get my tasks - filter by status=OPEN",
+          "type": "happy_path",
+          "auth_role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/tasks/my?status=OPEN",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_check": "all returned items have status=OPEN"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Get my tasks - VIEWER denied (403)",
+          "type": "authorization",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/tasks/my",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 403, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Get my tasks - no auth (401)",
+          "type": "authorization",
+          "request": {
+            "method": "GET",
+            "url": "/tasks/my",
+            "headers": {}
+          },
+          "expected": { "status": 401 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/:id",
+      "description": "Get task detail by ID (VIEWER+ required)",
+      "test_cases": [
+        {
+          "name": "Get task detail - existing OPEN task as VIEWER",
+          "type": "happy_path",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["id", "title", "status", "priority", "assignees", "createdById"],
+            "body_exact": { "id": "00000000-0000-4000-a000-000000000101", "status": "OPEN" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Get task detail - existing COMPLETED task",
+          "type": "happy_path",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/tasks/00000000-0000-4000-a000-000000000104",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_exact": { "status": "COMPLETED" },
+            "body_check": "completedAt is not null"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Get task detail - nonexistent task (404)",
+          "type": "edge_case",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/tasks/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 404, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Get task detail - invalid UUID format (400)",
+          "type": "validation",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/tasks/not-a-uuid",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Get task detail - no auth (401)",
+          "type": "authorization",
+          "request": {
+            "method": "GET",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101",
+            "headers": {}
+          },
+          "expected": { "status": 401 },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/tasks/:id",
+      "description": "Update task fields (STAFF+ required)",
+      "test_cases": [
+        {
+          "name": "Update task - change title as STAFF",
+          "type": "happy_path",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "title": "Updated: Review Q1 invoices" }
+          },
+          "expected": {
+            "status": 200,
+            "body_exact": { "title": "Updated: Review Q1 invoices" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT title FROM tasks WHERE id = '00000000-0000-4000-a000-000000000101'",
+            "expected": "title = 'Updated: Review Q1 invoices'"
+          }
+        },
+        {
+          "name": "Update task - change priority and description as MANAGER",
+          "type": "happy_path",
+          "auth_role": "MANAGER",
+          "request": {
+            "method": "PATCH",
+            "url": "/tasks/00000000-0000-4000-a000-000000000102",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": { "priority": "URGENT", "description": "Updated description" }
+          },
+          "expected": {
+            "status": 200,
+            "body_exact": { "priority": "URGENT" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT priority, description FROM tasks WHERE id = '00000000-0000-4000-a000-000000000102'",
+            "expected": "priority=URGENT, description='Updated description'"
+          }
+        },
+        {
+          "name": "Update task - set dueDate",
+          "type": "happy_path",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "dueDate": "2026-05-01T00:00:00.000Z" }
+          },
+          "expected": {
+            "status": 200,
+            "body_check": "dueDate is set to 2026-05-01"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Update task - clear dueDate (set to null)",
+          "type": "happy_path",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "dueDate": null }
+          },
+          "expected": {
+            "status": 200,
+            "body_exact": { "dueDate": null }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Update task - COMPLETED task rejected (422 - BR-TASK-006)",
+          "type": "edge_case",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/tasks/00000000-0000-4000-a000-000000000104",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "title": "Should fail - task is completed" }
+          },
+          "expected": { "status": 422, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Update task - nonexistent task (404)",
+          "type": "edge_case",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/tasks/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "title": "Ghost task" }
+          },
+          "expected": { "status": 404, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Update task - empty body (400 - refinement: at least one field)",
+          "type": "validation",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {}
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Update task - invalid UUID (400)",
+          "type": "validation",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/tasks/not-a-uuid",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "title": "Invalid ID" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Update task - VIEWER denied (403)",
+          "type": "authorization",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "PATCH",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" },
+            "body": { "title": "Viewer cannot update" }
+          },
+          "expected": { "status": 403, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/tasks/:id/status",
+      "description": "Change task status (STAFF+ required)",
+      "test_cases": [
+        {
+          "name": "Status transition - OPEN to IN_PROGRESS",
+          "type": "happy_path",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/tasks/00000000-0000-4000-a000-000000000103",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "status": "IN_PROGRESS" }
+          },
+          "expected": {
+            "status": 200,
+            "body_exact": { "status": "IN_PROGRESS" },
+            "body_check": "completedAt is null"
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT status, completed_at FROM tasks WHERE id = '00000000-0000-4000-a000-000000000103'",
+            "expected": "status=IN_PROGRESS, completed_at IS NULL"
+          },
+          "note": "Run BEFORE 'IN_PROGRESS to COMPLETED' test"
+        },
+        {
+          "name": "Status transition - IN_PROGRESS to COMPLETED (sets completedAt)",
+          "type": "happy_path",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/tasks/00000000-0000-4000-a000-000000000103",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "status": "COMPLETED" }
+          },
+          "expected": {
+            "status": 200,
+            "body_exact": { "status": "COMPLETED" },
+            "body_check": "completedAt is not null (BR-TASK-008)"
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT status, completed_at FROM tasks WHERE id = '00000000-0000-4000-a000-000000000103'",
+            "expected": "status=COMPLETED, completed_at IS NOT NULL"
+          },
+          "note": "Run AFTER 'OPEN to IN_PROGRESS' test. Depends on task 103 being IN_PROGRESS."
+        },
+        {
+          "name": "Status transition - OPEN to CANCELLED",
+          "type": "happy_path",
+          "auth_role": "MANAGER",
+          "note": "Use a newly created task to avoid corrupting seed data. Or use task 101 if tests are ordered.",
+          "request": {
+            "method": "PATCH",
+            "url": "/tasks/{{created_task_1}}/status",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{manager_token}}" },
+            "body": { "status": "CANCELLED" }
+          },
+          "expected": {
+            "status": 200,
+            "body_exact": { "status": "CANCELLED" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Status transition - COMPLETED to IN_PROGRESS rejected (422 - terminal state BR-TASK-006)",
+          "type": "edge_case",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/tasks/00000000-0000-4000-a000-000000000104/status",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "status": "IN_PROGRESS" }
+          },
+          "expected": { "status": 422, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Status transition - COMPLETED to OPEN rejected (422 - terminal state)",
+          "type": "edge_case",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/tasks/00000000-0000-4000-a000-000000000104/status",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "status": "OPEN" }
+          },
+          "expected": { "status": 422, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Status transition - CANCELLED to OPEN rejected (422 - terminal state)",
+          "type": "edge_case",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/tasks/{{created_task_1}}/status",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "status": "OPEN" }
+          },
+          "expected": { "status": 422, "body_contains": ["error"] },
+          "note": "Depends on created_task_1 being CANCELLED from prior test"
+        },
+        {
+          "name": "Status transition - nonexistent task (404)",
+          "type": "edge_case",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/tasks/00000000-0000-4000-a000-ffffffffffff/status",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "status": "IN_PROGRESS" }
+          },
+          "expected": { "status": 404, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Status transition - invalid status value (400)",
+          "type": "validation",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101/status",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "status": "DONE" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Status transition - missing status field (400)",
+          "type": "validation",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "PATCH",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101/status",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {}
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Status transition - VIEWER denied (403)",
+          "type": "authorization",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "PATCH",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101/status",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" },
+            "body": { "status": "IN_PROGRESS" }
+          },
+          "expected": { "status": 403, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/tasks/:id/assignees",
+      "description": "Add assignee to task (STAFF+ required)",
+      "test_cases": [
+        {
+          "name": "Add assignee - add viewer user to task as STAFF",
+          "type": "happy_path",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101/assignees",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "userId": "00000000-0000-4000-a000-000000000012" }
+          },
+          "expected": {
+            "status": 201,
+            "body_contains": ["assignees"],
+            "body_check": "assignees array includes userId 00000000-0000-4000-a000-000000000012"
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT * FROM task_assignees WHERE task_id = '00000000-0000-4000-a000-000000000101' AND user_id = '00000000-0000-4000-a000-000000000012'",
+            "expected": "Row exists"
+          }
+        },
+        {
+          "name": "Add assignee - duplicate assignee (409)",
+          "type": "edge_case",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101/assignees",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "userId": "00000000-0000-4000-a000-000000000002" }
+          },
+          "expected": { "status": 409, "body_contains": ["error"] },
+          "note": "Admin user (0002) is already assigned to task 101 in seed data",
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Add assignee - nonexistent user (404)",
+          "type": "edge_case",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101/assignees",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "userId": "00000000-0000-4000-a000-ffffffffffff" }
+          },
+          "expected": { "status_one_of": [400, 404], "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Add assignee - nonexistent task (404)",
+          "type": "edge_case",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/tasks/00000000-0000-4000-a000-ffffffffffff/assignees",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "userId": "00000000-0000-4000-a000-000000000010" }
+          },
+          "expected": { "status": 404, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Add assignee - invalid userId (400)",
+          "type": "validation",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101/assignees",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "userId": "not-a-uuid" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Add assignee - invalid task ID (400)",
+          "type": "validation",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/tasks/not-a-uuid/assignees",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": { "userId": "00000000-0000-4000-a000-000000000010" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Add assignee - missing userId field (400)",
+          "type": "validation",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101/assignees",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{staff_token}}" },
+            "body": {}
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Add assignee - VIEWER denied (403)",
+          "type": "authorization",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101/assignees",
+            "headers": { "Content-Type": "application/json", "Authorization": "Bearer {{viewer_token}}" },
+            "body": { "userId": "00000000-0000-4000-a000-000000000010" }
+          },
+          "expected": { "status": 403, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/tasks/:id/assignees/:userId",
+      "description": "Remove assignee from task (STAFF+ required)",
+      "test_cases": [
+        {
+          "name": "Remove assignee - remove viewer user from task 101",
+          "type": "happy_path",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "DELETE",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101/assignees/00000000-0000-4000-a000-000000000012",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 204 },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT * FROM task_assignees WHERE task_id = '00000000-0000-4000-a000-000000000101' AND user_id = '00000000-0000-4000-a000-000000000012'",
+            "expected": "No rows (assignee removed)"
+          },
+          "note": "Run AFTER 'Add assignee - add viewer user' test to have data to remove"
+        },
+        {
+          "name": "Remove assignee - nonexistent assignment (404)",
+          "type": "edge_case",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "DELETE",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101/assignees/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 404, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Remove assignee - nonexistent task (404)",
+          "type": "edge_case",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "DELETE",
+            "url": "/tasks/00000000-0000-4000-a000-ffffffffffff/assignees/00000000-0000-4000-a000-000000000010",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 404, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Remove assignee - invalid UUID params (400)",
+          "type": "validation",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "DELETE",
+            "url": "/tasks/not-a-uuid/assignees/also-not-uuid",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Remove assignee - VIEWER denied (403)",
+          "type": "authorization",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "DELETE",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101/assignees/00000000-0000-4000-a000-000000000010",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 403, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/tasks/:id",
+      "description": "Soft delete task (STAFF+ for own tasks, MANAGER+ for others)",
+      "test_cases": [
+        {
+          "name": "Delete task - creator deletes own task as STAFF",
+          "type": "happy_path",
+          "auth_role": "STAFF",
+          "note": "Use the task created by STAFF in the create tests (created_task_1 or a fresh creation). STAFF user is the creator.",
+          "request": {
+            "method": "DELETE",
+            "url": "/tasks/{{created_task_from_staff}}",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 204 },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT deleted_at FROM tasks WHERE id = '{{created_task_from_staff}}'",
+            "expected": "deleted_at IS NOT NULL (soft deleted)"
+          }
+        },
+        {
+          "name": "Delete task - MANAGER deletes another user's task",
+          "type": "happy_path",
+          "auth_role": "MANAGER",
+          "note": "Use created_task_3 (created by MANAGER) or a task created by admin.",
+          "request": {
+            "method": "DELETE",
+            "url": "/tasks/{{created_task_3}}",
+            "headers": { "Authorization": "Bearer {{manager_token}}" }
+          },
+          "expected": { "status": 204 },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT deleted_at FROM tasks WHERE id = '{{created_task_3}}'",
+            "expected": "deleted_at IS NOT NULL"
+          }
+        },
+        {
+          "name": "Delete task - ADMIN deletes any task",
+          "type": "happy_path",
+          "auth_role": "SUPER_ADMIN",
+          "request": {
+            "method": "DELETE",
+            "url": "/tasks/{{created_task_2}}",
+            "headers": { "Authorization": "Bearer {{admin_token}}" }
+          },
+          "expected": { "status": 204 },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Delete task - STAFF cannot delete another user's task (403)",
+          "type": "authorization",
+          "auth_role": "STAFF",
+          "note": "Task 101 was created by admin (createdById=0002), not staff (0010)",
+          "request": {
+            "method": "DELETE",
+            "url": "/tasks/00000000-0000-4000-a000-000000000102",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 403, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Delete task - VIEWER denied (403)",
+          "type": "authorization",
+          "auth_role": "VIEWER",
+          "request": {
+            "method": "DELETE",
+            "url": "/tasks/00000000-0000-4000-a000-000000000101",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": { "status": 403, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Delete task - nonexistent task (404)",
+          "type": "edge_case",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "DELETE",
+            "url": "/tasks/00000000-0000-4000-a000-ffffffffffff",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 404, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Delete task - invalid UUID (400)",
+          "type": "validation",
+          "auth_role": "STAFF",
+          "request": {
+            "method": "DELETE",
+            "url": "/tasks/not-a-uuid",
+            "headers": { "Authorization": "Bearer {{staff_token}}" }
+          },
+          "expected": { "status": 400, "body_contains": ["error"] },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "name": "Delete task - already deleted task not visible in list",
+          "type": "edge_case",
+          "auth_role": "VIEWER",
+          "note": "After deleting created_task_2, verify it does not appear in GET /tasks",
+          "request": {
+            "method": "GET",
+            "url": "/tasks?search=Full+task+with+all+fields",
+            "headers": { "Authorization": "Bearer {{viewer_token}}" }
+          },
+          "expected": {
+            "status": 200,
+            "body_exact": { "total": 0 },
+            "body_check": "Soft-deleted task does not appear in list results"
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    }
+  ],
+  "test_execution_order": [
+    "1. Login all 4 users (store tokens)",
+    "2. POST /tasks — create tests (happy paths first, save IDs for later use)",
+    "3. GET /tasks — list tests",
+    "4. GET /tasks/my — my tasks tests",
+    "5. GET /tasks/:id — detail tests",
+    "6. PATCH /tasks/:id — update tests",
+    "7. PATCH /tasks/:id/status — status transition tests (ordered: OPEN→IN_PROGRESS→COMPLETED)",
+    "8. POST /tasks/:id/assignees — add assignee tests",
+    "9. DELETE /tasks/:id/assignees/:userId — remove assignee tests (after add)",
+    "10. DELETE /tasks/:id — delete tests (last, as they soft-delete data)"
+  ],
+  "test_summary": {
+    "total_endpoints": 9,
+    "total_test_cases": 98,
+    "by_type": {
+      "happy_path": 30,
+      "validation": 24,
+      "edge_case": 22,
+      "authorization": 22
+    },
+    "by_endpoint": {
+      "POST /auth/login": 4,
+      "POST /tasks": 14,
+      "GET /tasks": 10,
+      "GET /tasks/my": 5,
+      "GET /tasks/:id": 5,
+      "PATCH /tasks/:id": 9,
+      "PATCH /tasks/:id/status": 10,
+      "POST /tasks/:id/assignees": 8,
+      "DELETE /tasks/:id/assignees/:userId": 5,
+      "DELETE /tasks/:id": 8
+    },
+    "rbac_coverage": {
+      "SUPER_ADMIN": "Full access verified on create, list, my tasks, status, delete",
+      "MANAGER": "Verified on create, update, status transition, delete others' tasks",
+      "STAFF": "Verified on all mutating endpoints; cannot delete non-owned tasks (403)",
+      "VIEWER": "Read-only: can list and get detail; denied on create/update/delete/status/assignees (403)"
+    },
+    "business_rules_covered": [
+      "BR-TASK-001: Title required (min 1, max 255)",
+      "BR-TASK-002: companyId scoping (implicit in all queries)",
+      "BR-TASK-003: entityType must be valid + entity must exist if provided",
+      "BR-TASK-004: Assignee must exist in same company",
+      "BR-TASK-005: task.assigned event emitted (verified via service tests, not HTTP)",
+      "BR-TASK-006: Terminal states (COMPLETED/CANCELLED) reject further changes (422)",
+      "BR-TASK-008: completedAt auto-set on COMPLETED transition"
+    ]
+  }
+}

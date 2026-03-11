@@ -328,6 +328,7 @@ model CompanyProfile {
   aiCorrectionLogs       AiCorrectionLog[]
   aiLearningSignals      AiLearningSignal[]
   emailMessages          EmailMessage[]
+  tasks                  Task[]
 
   @@index([baseCurrencyCode], map: "idx_company_profiles_base_currency_code")
   @@index([countryCode], map: "idx_company_profiles_country_code")
@@ -546,6 +547,8 @@ model User {
   emailSignatures          EmailSignature[]  @relation("UserEmailSignatures")
   createdEmailTemplates    EmailTemplate[]   @relation("UserCreatedEmailTemplates")
   updatedEmailTemplates    EmailTemplate[]   @relation("UserUpdatedEmailTemplates")
+  tasksCreated             Task[]            @relation("TaskCreator")
+  taskAssignments          TaskAssignee[]
 
   @@unique([email], map: "uq_users_email")
   @@index([companyId], map: "idx_users_company_id")
@@ -2207,4 +2210,61 @@ model EmailTemplate {
   @@index([documentType, languageCode], map: "idx_email_templates_doctype_lang")
   @@index([isActive], map: "idx_email_templates_active")
   @@map("email_templates")
+}
+
+// ---------------------------------------------------------------------------
+// Task System — E11.1
+// ---------------------------------------------------------------------------
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model Task {
+  id          String       @id @default(uuid())
+  companyId   String       @map("company_id")
+  title       String       @db.VarChar(255)
+  description String?      @db.Text
+  priority    TaskPriority @default(NORMAL)
+  status      TaskStatus   @default(OPEN)
+  dueDate     DateTime?    @map("due_date")
+  entityType  String?      @map("entity_type")
+  entityId    String?      @map("entity_id")
+  createdById String       @map("created_by_id")
+  completedAt DateTime?    @map("completed_at")
+  deletedAt   DateTime?    @map("deleted_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  updatedBy   String       @map("updated_by")
+
+  company   CompanyProfile @relation(fields: [companyId], references: [id])
+  createdBy User           @relation("TaskCreator", fields: [createdById], references: [id])
+  assignees TaskAssignee[]
+
+  @@index([companyId, status], map: "idx_tasks_company_status")
+  @@index([entityType, entityId], map: "idx_tasks_entity")
+  @@index([dueDate], map: "idx_tasks_due_date")
+  @@index([companyId, deletedAt], map: "idx_tasks_company_active")
+  @@map("tasks")
+}
+
+model TaskAssignee {
+  id     String @id @default(uuid())
+  taskId String @map("task_id")
+  userId String @map("user_id")
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([taskId, userId], map: "uq_task_assignees_task_user")
+  @@map("task_assignees")
 }

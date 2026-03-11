@@ -1,84 +1,147 @@
 import { test, expect } from '@playwright/test';
 
-const SCREENSHOTS_DIR = '../../screenshots/epic-E5d/journey-1';
+const SCREENSHOTS_DIR =
+  '/Users/mfh/MFH_Docs/My_Projects/nexa-erp-ai-first/_bmad-output/test-artifacts/screenshots/epic-E5d/journey-1';
 
-test.describe('Journey 1: Knowledge Management Page Shell & Navigation', () => {
-  test.setTimeout(90_000);
+/** Track bugs found during test execution */
+const bugs: string[] = [];
 
-  test.beforeEach(async ({ page }) => {
-    // Login as admin user
-    await page.goto('/login');
-    await page.waitForLoadState('networkidle');
+/**
+ * Helper: SPA navigate without losing auth tokens (Zustand in-memory).
+ */
+async function spaNavigate(page: import('@playwright/test').Page, path: string) {
+  await page.evaluate((p) => {
+    window.history.pushState({}, '', p);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, path);
+  await page.waitForTimeout(500);
+  await page.waitForLoadState('networkidle');
+}
 
-    // Wait for React hydration to complete
-    const emailInput = page.getByLabel('Email');
-    await emailInput.waitFor({ state: 'visible', timeout: 10000 });
+/**
+ * Helper: login and navigate to Knowledge Management page.
+ * Used for initial setup and recovery after crashes.
+ */
+async function loginAndNavigateToKnowledge(page: import('@playwright/test').Page) {
+  // Full page reload to clear any crashed state
+  await page.goto('/login', { waitUntil: 'networkidle', timeout: 30000 });
+
+  const emailInput = page.getByRole('textbox', { name: 'Email' });
+  await emailInput.waitFor({ state: 'visible', timeout: 10000 });
+  await emailInput.fill('admin@nexa-erp.dev');
+
+  const passwordInput = page.locator('input[type="password"]');
+  await passwordInput.fill('NexaDev2026!');
+
+  const signInButton = page.getByRole('button', { name: /sign in/i });
+  await signInButton.waitFor({ state: 'visible' });
+  await signInButton.click();
+
+  // Wait for redirect away from login — use longer timeout for recovery scenarios
+  await page.waitForURL((url) => !url.pathname.includes('/login'), {
+    timeout: 45000,
+  });
+  await page.waitForLoadState('networkidle');
+
+  // SPA-navigate to Knowledge Management (preserves auth tokens)
+  await spaNavigate(page, '/ai/admin/knowledge');
+
+  await expect(
+    page.getByRole('heading', { name: 'Knowledge Management' }),
+  ).toBeVisible({ timeout: 15000 });
+  await page.waitForTimeout(1000);
+}
+
+/**
+ * Helper: recover from a 500 crash by doing a full page reload and re-login.
+ * Returns true if recovery succeeded, false if it failed.
+ */
+async function recoverFromCrash(page: import('@playwright/test').Page): Promise<boolean> {
+  try {
+    // Full page reload — don't rely on clicking Reload button in crashed state
+    await page.goto('/', { waitUntil: 'networkidle', timeout: 15000 });
     await page.waitForTimeout(1000);
 
-    // Click to focus, then fill
-    await emailInput.click();
-    await emailInput.fill('admin@nexa-erp.dev');
-
-    const passwordInput = page.getByLabel('Password');
-    await passwordInput.click();
-    await passwordInput.fill('NexaDev2026!');
-
-    const signInButton = page.getByRole('button', { name: /sign in/i });
-    await signInButton.waitFor({ state: 'visible' });
-    await signInButton.click();
-
-    // Wait for navigation away from /login
-    await page.waitForURL((url) => !url.pathname.includes('/login'), {
-      timeout: 30000,
-    });
-    await page.waitForLoadState('networkidle');
-  });
-
-  test('Page shell loads with tabs, stats panel, sidebar nav, and deep-linking', async ({
-    page,
-  }) => {
-    // ── Step 1: Navigate to /ai/admin/knowledge via sidebar link ─────────
-    // Use the sidebar navigation link to navigate (preserves TanStack Router state)
-    const knowledgeLink = page.locator('a[href="/ai/admin/knowledge"]').first();
-    // If the knowledge link isn't directly visible, we may need to expand the AI section first
-    const aiSectionToggle = page.getByText('AI Administration', { exact: false }).first();
-    if (await aiSectionToggle.isVisible().catch(() => false)) {
-      await aiSectionToggle.click();
-      await page.waitForTimeout(300);
+    // Check if we're on the Knowledge page already (session may still be valid)
+    const onKnowledge = page.url().includes('/ai/admin/knowledge');
+    if (onKnowledge) {
+      const heading = page.getByRole('heading', { name: 'Knowledge Management' });
+      if (await heading.isVisible().catch(() => false)) {
+        return true;
+      }
     }
 
-    // Try clicking the knowledge link; if not visible, try direct navigation
-    if (await knowledgeLink.isVisible().catch(() => false)) {
-      await knowledgeLink.click();
-    } else {
-      // Fallback: use the address bar (will work since we're authenticated)
-      await page.evaluate(() => {
-        // Use TanStack Router's navigate if available
-        const router = (window as any).__TANSTACK_ROUTER__;
-        if (router?.navigate) {
-          router.navigate({ to: '/ai/admin/knowledge' });
-        } else {
-          window.location.href = '/ai/admin/knowledge';
-        }
-      });
+    // Check if we landed on login
+    const onLogin = page.url().includes('/login');
+    if (onLogin) {
+      await loginAndNavigateToKnowledge(page);
+      return true;
     }
 
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000);
+    // We're on some other page — SPA navigate to knowledge
+    await spaNavigate(page, '/ai/admin/knowledge');
+    const heading = page.getByRole('heading', { name: 'Knowledge Management' });
+    if (await heading.isVisible().catch(() => false)) {
+      return true;
+    }
 
-    // Debug: capture what page we're on
-    const currentUrl = page.url();
-    console.log('Current URL after navigation:', currentUrl);
+    // Last resort: full re-login
+    await loginAndNavigateToKnowledge(page);
+    return true;
+  } catch (e) {
+    console.error('Crash recovery failed:', e);
+    return false;
+  }
+}
+
+/**
+ * Helper: click a tab and check if the page crashed.
+ * Returns true if tab switched successfully, false if crashed.
+ */
+async function clickTabSafe(
+  page: import('@playwright/test').Page,
+  tabName: string,
+  screenshotName: string,
+): Promise<boolean> {
+  const tab = page.getByRole('tab', { name: new RegExp(tabName, 'i') });
+  await tab.click();
+  await page.waitForTimeout(1000);
+
+  // Check if the page crashed (500 error)
+  const hasCrashed = await page
+    .locator('text=Something went wrong')
+    .isVisible()
+    .catch(() => false);
+
+  if (hasCrashed) {
     await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/debug-after-nav.png`,
+      path: `${SCREENSHOTS_DIR}/${screenshotName}-crash-500.png`,
       fullPage: true,
     });
+    const msg = `BUG: Clicking "${tabName}" tab causes 500 error (app crash).`;
+    console.error(msg);
+    bugs.push(msg);
+    return false;
+  }
 
-    // Wait for the page to fully render
-    await expect(
-      page.getByRole('heading', { name: 'Knowledge Management' }),
-    ).toBeVisible({ timeout: 15000 });
-    await page.waitForTimeout(2000);
+  // Verify tab is active
+  await expect(tab).toHaveAttribute('data-state', 'active', { timeout: 5000 });
+
+  await page.screenshot({
+    path: `${SCREENSHOTS_DIR}/${screenshotName}.png`,
+    fullPage: true,
+  });
+  return true;
+}
+
+test.describe('Journey 1: Knowledge Management Page Shell & Navigation', () => {
+  test.setTimeout(120_000);
+
+  test('Page shell loads with tabs, stats panel, sidebar nav, and tab switching', async ({
+    page,
+  }) => {
+    // ── Step 1: Login and navigate to /ai/admin/knowledge ─────────────
+    await loginAndNavigateToKnowledge(page);
 
     // Verify 5 tabs are present
     const tabNames = [
@@ -96,12 +159,11 @@ test.describe('Journey 1: Knowledge Management Page Shell & Navigation', () => {
 
     // Verify Knowledge Articles tab is active by default
     const articlesTab = page.getByRole('tab', { name: /knowledge articles/i });
-    await expect(articlesTab).toBeVisible();
     await expect(articlesTab).toHaveAttribute('data-state', 'active');
 
     // Checkpoint 1: Page Initial Load
     await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-1-knowledge-page-loaded.png`,
+      path: `${SCREENSHOTS_DIR}/step-1-page-initial-load.png`,
       fullPage: true,
     });
 
@@ -109,56 +171,125 @@ test.describe('Journey 1: Knowledge Management Page Shell & Navigation', () => {
     const knowledgeNavItem = page.locator('a[href*="/ai/admin/knowledge"]');
     await expect(knowledgeNavItem.first()).toBeVisible({ timeout: 5000 });
 
-    // ── Step 3: Verify Stats panel KPI cards ─────────────────────────────
+    // ── Step 3: Verify Stats panel KPI cards ────────────────────────────
     await expect(page.getByText('Total Articles')).toBeVisible({ timeout: 5000 });
     await expect(page.getByText('RAG Retrieval Rate')).toBeVisible({ timeout: 5000 });
     await expect(page.getByText('Correction Trend')).toBeVisible({ timeout: 5000 });
     await expect(page.getByText('Pending Reviews')).toBeVisible({ timeout: 5000 });
 
-    // Checkpoint 2: Stats Panel KPI Cards
+    // Checkpoint 2: KPI Stats Cards
     await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-3-stats-panel-kpi-cards.png`,
+      path: `${SCREENSHOTS_DIR}/step-3-kpi-stats-cards.png`,
       fullPage: true,
     });
 
-    // ── Step 4: Click Training Examples tab ───────────────────────────────
-    const trainingTab = page.getByRole('tab', { name: /training examples/i });
-    await trainingTab.click();
+    // ── Step 4: Click Training Examples tab ─────────────────────────────
+    let trainingOk = await clickTabSafe(page, 'Training Examples', 'step-4-training-tab-active');
+    if (trainingOk) {
+      await expect(page).toHaveURL(/#training/);
+    }
+
+    // If Training tab crashed, recover for next tab test
+    let canContinue = true;
+    if (!trainingOk) {
+      canContinue = await recoverFromCrash(page);
+    }
+
+    // ── Step 5: Click Corrections tab ──────────────────────────────────
+    let correctionsOk = false;
+    if (canContinue) {
+      correctionsOk = await clickTabSafe(page, 'Corrections', 'step-5-corrections-tab');
+      if (correctionsOk) {
+        await expect(page).toHaveURL(/#corrections/);
+      }
+    } else {
+      bugs.push('BUG: Skipped Corrections tab test — crash recovery failed.');
+    }
+
+    // If Corrections tab crashed, recover for next tab test
+    if (!correctionsOk && canContinue) {
+      canContinue = await recoverFromCrash(page);
+    }
+
+    // ── Step 6: Click Suggested tab ────────────────────────────────────
+    let suggestedOk = false;
+    if (canContinue) {
+      suggestedOk = await clickTabSafe(page, 'Suggested', 'step-6-suggested-tab');
+      if (suggestedOk) {
+        await expect(page).toHaveURL(/#suggested/);
+      }
+    } else {
+      bugs.push('BUG: Skipped Suggested tab test — crash recovery failed.');
+    }
+
+    if (!suggestedOk && canContinue) {
+      canContinue = await recoverFromCrash(page);
+    }
+
+    // ── Step 7: Click Settings tab ─────────────────────────────────────
+    let settingsOk = false;
+    if (canContinue) {
+      settingsOk = await clickTabSafe(page, 'Settings', 'step-7-settings-tab');
+      if (settingsOk) {
+        await expect(page).toHaveURL(/#settings/);
+      }
+    } else {
+      bugs.push('BUG: Skipped Settings tab test — crash recovery failed.');
+    }
+
+    if (!settingsOk && canContinue) {
+      canContinue = await recoverFromCrash(page);
+    }
+
+    // ── Step 8: Deep-link to Corrections tab via URL (SPA navigate) ────
+    if (!canContinue) {
+      bugs.push('BUG: Skipped deep-link test — crash recovery failed.');
+    }
+
+    if (canContinue) {
+    await spaNavigate(page, '/ai/admin/knowledge#corrections');
     await page.waitForTimeout(1000);
 
-    // Verify Training Examples tab is now active and URL hash changed
-    await expect(trainingTab).toHaveAttribute('data-state', 'active');
-    await expect(page).toHaveURL(/#training/);
+    // Check if deeplink page loaded or crashed
+    const deepLinkCrashed = await page
+      .locator('text=Something went wrong')
+      .isVisible()
+      .catch(() => false);
 
-    // ── Step 5: Click Corrections tab ────────────────────────────────────
-    const correctionsTab = page.getByRole('tab', { name: /corrections/i });
-    await correctionsTab.click();
-    await page.waitForTimeout(1000);
+    if (deepLinkCrashed) {
+      await page.screenshot({
+        path: `${SCREENSHOTS_DIR}/step-8-deeplink-corrections-crash.png`,
+        fullPage: true,
+      });
+      bugs.push('BUG: Deep-linking to #corrections causes 500 error.');
+    } else {
+      const correctionsTabDeep = page.getByRole('tab', { name: /corrections/i });
+      const isActive = await correctionsTabDeep
+        .getAttribute('data-state')
+        .catch(() => null);
 
-    // Verify Corrections tab is active and hash updated
-    await expect(correctionsTab).toHaveAttribute('data-state', 'active');
-    await expect(page).toHaveURL(/#corrections/);
+      await page.screenshot({
+        path: `${SCREENSHOTS_DIR}/step-8-deeplink-corrections.png`,
+        fullPage: true,
+      });
 
-    // Checkpoint 3: Corrections Tab Active
-    await page.screenshot({
-      path: `${SCREENSHOTS_DIR}/step-5-corrections-tab-active.png`,
-      fullPage: true,
-    });
+      if (isActive === 'active') {
+        console.log('Deep-link to #corrections works correctly.');
+      } else {
+        console.warn('Deep-link to #corrections did not activate Corrections tab.');
+      }
+    }
+    } // end if (canContinue) for step 8
 
-    // ── Step 6: Click Settings tab ───────────────────────────────────────
-    const settingsTab = page.getByRole('tab', { name: /settings/i });
-    await settingsTab.click();
-    await page.waitForTimeout(1000);
-
-    await expect(settingsTab).toHaveAttribute('data-state', 'active');
-    await expect(page).toHaveURL(/#settings/);
-
-    // ── Step 7: Click Suggested tab ──────────────────────────────────────
-    const suggestedTab = page.getByRole('tab', { name: /suggested/i });
-    await suggestedTab.click();
-    await page.waitForTimeout(1000);
-
-    await expect(suggestedTab).toHaveAttribute('data-state', 'active');
-    await expect(page).toHaveURL(/#suggested/);
+    // ── Summary ────────────────────────────────────────────────────────
+    if (bugs.length > 0) {
+      console.error(`\nBUGS FOUND (${bugs.length}):\n` + bugs.map((b) => `  - ${b}`).join('\n'));
+      // Fail the test to report bugs
+      throw new Error(
+        `${bugs.length} bug(s) found during tab navigation:\n` +
+          bugs.join('\n') +
+          '\n\nSteps 1-3 (page load, sidebar, KPI cards) passed. Tab switching had crashes.',
+      );
+    }
   });
 });

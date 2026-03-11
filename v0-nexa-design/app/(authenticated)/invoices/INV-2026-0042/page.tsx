@@ -39,6 +39,7 @@ import {
 import { AttachmentPanel } from '@/components/panels/attachment-panel';
 import { NotesPanel } from '@/components/panels/notes-panel';
 import { RecordLinksPanel } from '@/components/panels/record-links-panel';
+import { TaskPanel } from '@/components/tasks/task-panel';
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat('en-GB', {
@@ -312,6 +313,15 @@ export default function InvoiceDetailPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Task Panel */}
+      <div className="mb-6 animate-fade-in-up" style={{ animationDelay: '175ms' }}>
+        <TaskPanel
+          entityType="CustomerInvoice"
+          entityId="INV-2026-0042"
+          entityLabel="Invoice INV-2026-0042 — Acme Corp"
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

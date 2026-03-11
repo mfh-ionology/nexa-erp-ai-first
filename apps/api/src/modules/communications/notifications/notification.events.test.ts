@@ -64,6 +64,7 @@ describe('registerNotificationSubscribers', () => {
       prisma,
       'approval.requested',
       payload,
+      undefined,
     );
   });
 
@@ -169,6 +170,112 @@ describe('registerNotificationSubscribers', () => {
     expect(createNotificationsFromEvent).not.toHaveBeenCalled();
   });
 
+  // -------------------------------------------------------------------------
+  // Task event tests (E11-3 Task 7.2)
+  // -------------------------------------------------------------------------
+
+  it('should trigger notification for task.assigned event', async () => {
+    const eventBus = new EventBus();
+    const prisma = mockPrisma();
+    registerNotificationSubscribers(eventBus, prisma);
+
+    const payload = {
+      taskId: 'task-001',
+      taskTitle: 'Review document',
+      assigneeUserId: 'user-002',
+      assignedBy: 'user-001',
+      companyId: 'company-001',
+    };
+
+    eventBus.emit('task.assigned', payload);
+    await eventBus.drain();
+
+    expect(createNotificationsFromEvent).toHaveBeenCalledWith(
+      prisma,
+      'task.assigned',
+      payload,
+      undefined,
+    );
+  });
+
+  it('should trigger notification for task.status_changed with toStatus COMPLETED', async () => {
+    const eventBus = new EventBus();
+    const prisma = mockPrisma();
+    registerNotificationSubscribers(eventBus, prisma);
+
+    const payload = {
+      taskId: 'task-001',
+      taskTitle: 'Review document',
+      fromStatus: 'IN_PROGRESS',
+      toStatus: 'COMPLETED',
+      changedBy: 'user-001',
+      companyId: 'company-001',
+      completedAt: '2026-03-05T10:00:00Z',
+    };
+
+    eventBus.emit('task.status_changed', payload);
+    await eventBus.drain();
+
+    expect(createNotificationsFromEvent).toHaveBeenCalledWith(
+      prisma,
+      'task.status_changed',
+      payload,
+      undefined,
+    );
+  });
+
+  it('should pass task.status_changed with IN_PROGRESS to createNotificationsFromEvent (filtering happens in service)', async () => {
+    const eventBus = new EventBus();
+    const prisma = mockPrisma();
+    registerNotificationSubscribers(eventBus, prisma);
+
+    const payload = {
+      taskId: 'task-001',
+      taskTitle: 'Review document',
+      fromStatus: 'OPEN',
+      toStatus: 'IN_PROGRESS',
+      changedBy: 'user-001',
+      companyId: 'company-001',
+    };
+
+    eventBus.emit('task.status_changed', payload);
+    await eventBus.drain();
+
+    // The event handler calls createNotificationsFromEvent for all status changes;
+    // the filtering (only COMPLETED triggers notification) is done inside the service
+    expect(createNotificationsFromEvent).toHaveBeenCalledWith(
+      prisma,
+      'task.status_changed',
+      payload,
+      undefined,
+    );
+  });
+
+  it('should trigger notification for task.overdue event for all assignees', async () => {
+    const eventBus = new EventBus();
+    const prisma = mockPrisma();
+    registerNotificationSubscribers(eventBus, prisma);
+
+    const payload = {
+      taskId: 'task-001',
+      taskTitle: 'Review document',
+      dueDate: '2026-03-01T00:00:00Z',
+      companyId: 'company-001',
+      assigneeUserIds: ['user-002', 'user-003'],
+      createdById: 'user-001',
+    };
+
+    eventBus.emit('task.overdue', payload);
+    await eventBus.drain();
+
+    expect(createNotificationsFromEvent).toHaveBeenCalledWith(
+      prisma,
+      'task.overdue',
+      payload,
+      undefined,
+    );
+  });
+
   it('should handle events with no matching template as no-ops', async () => {
     const eventBus = new EventBus();
     const prisma = mockPrisma();
@@ -193,6 +300,7 @@ describe('registerNotificationSubscribers', () => {
       prisma,
       'dispatch.shipped',
       expect.objectContaining({ dispatchId: 'd1' }),
+      undefined,
     );
   });
 });

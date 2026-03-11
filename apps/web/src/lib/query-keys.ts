@@ -203,6 +203,20 @@ export const queryKeys = {
         : ([...queryKeys.aiAdmin.all, 'corrections', 'infinite'] as const),
     correctionStats: () => [...queryKeys.aiAdmin.all, 'corrections', 'stats'] as const,
   },
+  tasks: {
+    all: ['tasks'] as const,
+    my: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.tasks.all, 'my', params] as const)
+        : ([...queryKeys.tasks.all, 'my'] as const),
+    list: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.tasks.all, 'list', params] as const)
+        : ([...queryKeys.tasks.all, 'list'] as const),
+    detail: (id: string) => [...queryKeys.tasks.all, id] as const,
+    byEntity: (entityType: string, entityId: string) =>
+      [...queryKeys.tasks.all, 'entity', entityType, entityId] as const,
+  },
   email: {
     all: ['email'] as const,
     preview: (documentType: string, recordId: string, templateId?: string) =>

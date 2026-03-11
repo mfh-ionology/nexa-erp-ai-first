@@ -24,6 +24,7 @@ export const VALID_ENTITY_TYPES = new Set([
   'VatCode',
   'PaymentTerms',
   'EmailMessage',
+  'Task',
 ] as const);
 
 export type ValidEntityType = typeof VALID_ENTITY_TYPES extends Set<infer T> ? T : never;

@@ -11,6 +11,7 @@ import errorsEn from '../locales/en/errors.json';
 import systemEn from '../locales/en/system.json';
 import aiEn from '../locales/en/ai.json';
 import notificationsEn from '../locales/en/notifications.json';
+import tasksEn from '../locales/en/tasks.json';
 
 /**
  * Pre-configured i18next singleton with:
@@ -32,6 +33,7 @@ export const i18nReady: Promise<TFunction> = i18n.use(initReactI18next).init(
         system: systemEn,
         ai: aiEn,
         notifications: notificationsEn,
+        tasks: tasksEn,
       },
     },
     react: {

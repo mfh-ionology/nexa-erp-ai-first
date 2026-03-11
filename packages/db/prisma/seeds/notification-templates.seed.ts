@@ -189,6 +189,37 @@ const TEMPLATES: TemplateDef[] = [
     defaultPriority: 'URGENT',
     actionUrl: '/ai/admin/automations/runs',
   },
+  // Tasks (Cross-Cutting)
+  {
+    code: 'TASK_ASSIGNED',
+    name: 'Task Assigned',
+    eventName: 'task.assigned',
+    titleTemplate: 'Task assigned to you',
+    bodyTemplate: 'You have been assigned the task "{{taskTitle}}".',
+    defaultChannels: ['IN_APP', 'EMAIL'],
+    defaultPriority: 'NORMAL',
+    actionUrl: '/tasks',
+  },
+  {
+    code: 'TASK_COMPLETED',
+    name: 'Task Completed',
+    eventName: 'task.status_changed',
+    titleTemplate: 'Task completed',
+    bodyTemplate: 'The task "{{taskTitle}}" has been marked as completed.',
+    defaultChannels: ['IN_APP'],
+    defaultPriority: 'LOW',
+    actionUrl: '/tasks',
+  },
+  {
+    code: 'TASK_OVERDUE',
+    name: 'Task Overdue',
+    eventName: 'task.overdue',
+    titleTemplate: 'Task overdue',
+    bodyTemplate: 'The task "{{taskTitle}}" is overdue (due {{dueDate}}).',
+    defaultChannels: ['IN_APP', 'EMAIL'],
+    defaultPriority: 'HIGH',
+    actionUrl: '/tasks',
+  },
 ];
 
 // ---------------------------------------------------------------------------

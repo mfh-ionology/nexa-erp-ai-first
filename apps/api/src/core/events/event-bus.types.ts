@@ -826,6 +826,38 @@ export interface BusinessEvents {
     reason: string;
   };
 
+  // ── Tasks (Cross-Cutting) ──────────────────────────────
+  'task.assigned': {
+    taskId: string;
+    taskTitle: string;
+    assigneeUserId: string;
+    assignedBy: string;
+    companyId: string;
+    entityType?: string;
+    entityId?: string;
+  };
+  'task.status_changed': {
+    taskId: string;
+    taskTitle: string;
+    fromStatus: string;
+    toStatus: string;
+    changedBy: string;
+    companyId: string;
+    completedAt?: string;
+    createdById: string;
+    assigneeUserIds: string[];
+  };
+  'task.overdue': {
+    taskId: string;
+    taskTitle: string;
+    dueDate: string;
+    companyId: string;
+    assigneeUserIds: string[];
+    createdById: string;
+    entityType?: string;
+    entityId?: string;
+  };
+
   // ── Communications ──────────────────────────────────────
   'notification.sent': {
     notificationId: string;
@@ -1004,6 +1036,10 @@ export const VALID_BUSINESS_EVENT_TYPES = new Set<string>([
   'document.review.required',
   'document.approved',
   'document.rejected',
+  // Tasks
+  'task.assigned',
+  'task.status_changed',
+  'task.overdue',
   // Communications
   'notification.sent',
   'notification.bulk_read',

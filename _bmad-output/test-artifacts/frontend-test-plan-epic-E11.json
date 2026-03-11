@@ -1,0 +1,900 @@
+{
+  "epic_id": "E11",
+  "epic_title": "Cross-cutting Tasks",
+  "generated_at": "2026-03-05T14:00:00.000Z",
+  "frontend_url": "http://localhost:5110",
+  "total_journeys": 20,
+  "total_steps": 118,
+  "notes": "E11 spans three stories: E11.1 (backend, not tested here), E11.2 (Task UI — My Tasks page, Create Dialog, Detail Sheet, Task Panel, Dashboard Tasks Today card), and E11.3 (Task Notifications — backend, not tested here). All frontend tests target the tenant web app at :5110. Auth uses standard JWT (STAFF+ role required for /tasks). Design follows Concept D with purple #7c3aed primary, #f4f2ff background. Key UI components: MyTasksPage (T1 Entity List), TaskDetailSheet (480px right sheet), CreateTaskDialog (560px dialog), TaskPanel (embedded in record detail pages), TasksCard (dashboard bottom card). Status cycling: OPEN -> IN_PROGRESS -> COMPLETED. Terminal states (COMPLETED, CANCELLED) block further changes.",
+  "journeys": [
+    {
+      "id": "j1-tasks-page-loads",
+      "name": "Journey 1: My Tasks Page Shell & Navigation",
+      "description": "Verify the My Tasks page loads correctly with breadcrumb, status tabs, search, priority filter, and sidebar nav entry",
+      "priority": "critical",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC1", "E11-2:AC9"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tasks",
+          "input_data": {},
+          "expected_result": "My Tasks page loads with full T1 Entity List template",
+          "screenshot": true,
+          "visual_check": "Page shows CheckSquare icon + 'My Tasks' breadcrumb and h1 title, purple '+ Create Task' button top-right, 4 status chip tabs (All, Open, In Progress, Overdue) with counts, search input with magnifying glass icon, Priority dropdown filter, #f4f2ff background, animate-fade-in-up animations"
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Sidebar navigation - My Tasks entry",
+          "input_data": {},
+          "expected_result": "My Tasks nav item visible in sidebar with CheckSquare icon in the Main section"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Status chip tabs row",
+          "input_data": {},
+          "expected_result": "Four chip tabs visible: All (count), Open (count), In Progress (count), Overdue (count). 'All' tab active with purple bg-[#7c3aed] and white text"
+        },
+        {
+          "step_number": 4,
+          "action": "verify_element",
+          "target": "Task table with column headers",
+          "input_data": {},
+          "expected_result": "Table visible with headers: checkbox, status icon col, Task, Priority, Status, Due, Record, Assignees. Table has rounded-xl border, bg-card, custom shadow"
+        }
+      ]
+    },
+    {
+      "id": "j2-create-task-basic",
+      "name": "Journey 2: Create a New Task (Basic)",
+      "description": "Test creating a task with title, priority, and due date via the Create Task dialog",
+      "priority": "critical",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tasks",
+          "input_data": {},
+          "expected_result": "My Tasks page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "+ Create Task button (purple, top-right)",
+          "input_data": {},
+          "expected_result": "Create Task dialog opens with animate-step-in animation",
+          "screenshot": true,
+          "visual_check": "Dialog visible with 'Create Task' title (serif font), fields: Title (required, marked with red asterisk), Description (textarea), Priority (Select, default Normal), Due Date (calendar button), Assignees (UserMultiSelect), Linked Record. Two action buttons: 'Create & Add Another' (outline) and 'Create' (purple). Dialog max-w 560px"
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Create Task form",
+          "input_data": {
+            "title": "Follow up with Acme Ltd on invoice payment",
+            "priority": "HIGH",
+            "dueDate": "2026-03-10"
+          },
+          "expected_result": "Form fields populated with entered values"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Create button (purple submit)",
+          "input_data": {},
+          "expected_result": "Task created, dialog closes, success toast appears, task list refreshes",
+          "screenshot": true,
+          "visual_check": "Dialog dismissed, task list shows new task 'Follow up with Acme Ltd on invoice payment' with HIGH priority badge (red outline), due date shown as '10 Mar 2026', success toast visible"
+        }
+      ]
+    },
+    {
+      "id": "j3-create-task-validation",
+      "name": "Journey 3: Create Task Form Validation",
+      "description": "Test that title is required and the form shows validation errors",
+      "priority": "high",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tasks",
+          "input_data": {},
+          "expected_result": "My Tasks page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "+ Create Task button",
+          "input_data": {},
+          "expected_result": "Create Task dialog opens"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Create button (submit without filling title)",
+          "input_data": {},
+          "expected_result": "Validation error shown, dialog remains open",
+          "screenshot": true,
+          "visual_check": "Red error text visible below Title field indicating title is required, dialog still open, Create button not loading"
+        }
+      ]
+    },
+    {
+      "id": "j4-create-task-and-add-another",
+      "name": "Journey 4: Create Task & Add Another",
+      "description": "Test the 'Create & Add Another' flow that creates a task and keeps the dialog open with cleared fields",
+      "priority": "medium",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC3"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tasks",
+          "input_data": {},
+          "expected_result": "My Tasks page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "+ Create Task button",
+          "input_data": {},
+          "expected_result": "Create Task dialog opens"
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Create Task form",
+          "input_data": {
+            "title": "First task - review report"
+          },
+          "expected_result": "Title field populated"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Create & Add Another button (outline)",
+          "input_data": {},
+          "expected_result": "Task created, dialog stays open, fields cleared for next entry",
+          "screenshot": true,
+          "visual_check": "Dialog still open, Title field empty (cleared), Priority reset to Normal, success toast visible for first task creation"
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Create Task form",
+          "input_data": {
+            "title": "Second task - send email"
+          },
+          "expected_result": "Title field populated with second task"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Create button (purple submit)",
+          "input_data": {},
+          "expected_result": "Second task created, dialog closes",
+          "screenshot": true,
+          "visual_check": "Dialog dismissed, task list shows both 'First task - review report' and 'Second task - send email'"
+        }
+      ]
+    },
+    {
+      "id": "j5-task-detail-sheet",
+      "name": "Journey 5: Open Task Detail Sheet",
+      "description": "Test clicking a task row to open the detail sheet with full task info",
+      "priority": "critical",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tasks",
+          "input_data": {},
+          "expected_result": "My Tasks page loads with tasks visible"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "First task row in the table (non-checkbox, non-status-icon area)",
+          "input_data": {},
+          "expected_result": "Task Detail Sheet slides in from the right",
+          "screenshot": true,
+          "visual_check": "480px Sheet visible from right with: 'Task Details' header (serif font), task title (editable with pencil icon), Status section with action buttons (Start/Complete/Cancel for OPEN tasks), Description section (editable), Priority Select, Due Date with calendar picker, Assignees list with avatars and remove (X) buttons, '+ Add' assignee button, Linked Record section (if entity linked), Activity timeline showing created date, Footer with 'Delete Task' red button"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Activity timeline section in detail sheet",
+          "input_data": {},
+          "expected_result": "Timeline shows at least 'Task created' entry with date, purple dot indicators connected by vertical line"
+        }
+      ]
+    },
+    {
+      "id": "j6-status-cycling-from-table",
+      "name": "Journey 6: Status Cycling via Table Icon Click",
+      "description": "Test clicking the status icon in the table to cycle OPEN -> IN_PROGRESS -> COMPLETED",
+      "priority": "critical",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tasks",
+          "input_data": {},
+          "expected_result": "My Tasks page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Status icon (grey Circle) of an OPEN task row",
+          "input_data": {},
+          "expected_result": "Task status changes to IN_PROGRESS, icon becomes blue CircleDot",
+          "screenshot": true,
+          "visual_check": "Status icon changed from grey Circle to blue CircleDot, status label column shows 'In Progress' in blue text, toast confirming status update"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Status icon (blue CircleDot) of the same now-IN_PROGRESS task",
+          "input_data": {},
+          "expected_result": "Task status changes to COMPLETED, icon becomes green CheckCircle2",
+          "screenshot": true,
+          "visual_check": "Status icon changed to green CheckCircle2, task title shows line-through text in muted foreground, status label shows 'Completed' in green text"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Status icon (green CheckCircle2) of the now-COMPLETED task",
+          "input_data": {},
+          "expected_result": "No change — COMPLETED is a terminal state, icon is disabled (opacity-70), no further cycling"
+        }
+      ]
+    },
+    {
+      "id": "j7-status-actions-in-detail-sheet",
+      "name": "Journey 7: Status Actions in Task Detail Sheet",
+      "description": "Test status transition buttons in the detail sheet for OPEN and IN_PROGRESS tasks",
+      "priority": "high",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC2", "E11-2:AC8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tasks",
+          "input_data": {},
+          "expected_result": "My Tasks page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "An OPEN task row to open detail sheet",
+          "input_data": {},
+          "expected_result": "Detail sheet opens showing status section",
+          "screenshot": true,
+          "visual_check": "Status section shows 'Status: Open', three buttons visible: 'Start' (blue), 'Complete' (outline with green hover), 'Cancel' (outline with red hover)"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Start button (blue) in status section",
+          "input_data": {},
+          "expected_result": "Status changes to IN_PROGRESS, buttons update",
+          "screenshot": true,
+          "visual_check": "Status section now shows 'Status: In Progress', two buttons remain: 'Complete' and 'Cancel'. Start button is gone."
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Complete button in status section",
+          "input_data": {},
+          "expected_result": "Status changes to COMPLETED, buttons replaced with completion text",
+          "screenshot": true,
+          "visual_check": "Status section shows green text 'Completed on [date]' with checkmark icon, no action buttons, title shows line-through, priority and due date are read-only (no Select/Calendar pickers)"
+        }
+      ]
+    },
+    {
+      "id": "j8-inline-edit-title-description",
+      "name": "Journey 8: Inline Edit Title & Description in Detail Sheet",
+      "description": "Test inline editing of task title and description in the detail sheet",
+      "priority": "high",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tasks",
+          "input_data": {},
+          "expected_result": "My Tasks page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "An active (OPEN or IN_PROGRESS) task row",
+          "input_data": {},
+          "expected_result": "Detail sheet opens"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Pencil icon next to task title",
+          "input_data": {},
+          "expected_result": "Title becomes editable Input field, auto-focused and selected"
+        },
+        {
+          "step_number": 4,
+          "action": "fill_form",
+          "target": "Title input in detail sheet",
+          "input_data": {
+            "title": "Updated task title via inline edit"
+          },
+          "expected_result": "Title input shows new text"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Press Enter or blur the title input",
+          "input_data": {},
+          "expected_result": "Title saved, input reverts to text display",
+          "screenshot": true,
+          "visual_check": "Title displays as 'Updated task title via inline edit' in semibold text, pencil icon reappears, toast confirming update"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Pencil icon next to Description section",
+          "input_data": {},
+          "expected_result": "Description becomes editable textarea with Save/Cancel buttons"
+        },
+        {
+          "step_number": 7,
+          "action": "fill_form",
+          "target": "Description textarea",
+          "input_data": {
+            "description": "Updated description text for this task"
+          },
+          "expected_result": "Textarea shows new text"
+        },
+        {
+          "step_number": 8,
+          "action": "click",
+          "target": "Save button (purple) below description textarea",
+          "input_data": {},
+          "expected_result": "Description saved, textarea reverts to text display",
+          "screenshot": true,
+          "visual_check": "Description shows 'Updated description text for this task' as plain text, pencil icon reappears"
+        }
+      ]
+    },
+    {
+      "id": "j9-status-tabs-filtering",
+      "name": "Journey 9: Status Tab Filtering",
+      "description": "Test the status chip tabs filter tasks correctly",
+      "priority": "high",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tasks",
+          "input_data": {},
+          "expected_result": "My Tasks page loads with All tab active, showing all tasks"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Open tab chip",
+          "input_data": {},
+          "expected_result": "Table filters to show only OPEN tasks",
+          "screenshot": true,
+          "visual_check": "Open tab has purple bg, All tab is secondary/grey. Table rows only show tasks with grey Circle status icons and 'Open' status labels"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "In Progress tab chip",
+          "input_data": {},
+          "expected_result": "Table filters to show only IN_PROGRESS tasks",
+          "screenshot": true,
+          "visual_check": "In Progress tab has purple bg. Table rows show blue CircleDot icons and 'In Progress' labels"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Overdue tab chip",
+          "input_data": {},
+          "expected_result": "Table filters to show only overdue tasks (dueDate < today, status OPEN or IN_PROGRESS)",
+          "screenshot": true,
+          "visual_check": "Overdue tab has purple bg. Table rows show tasks with red due dates and TaskOverdueBadge (AlertTriangle + 'Overdue Xd' in red)"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "All tab chip",
+          "input_data": {},
+          "expected_result": "All tasks shown again, All tab active"
+        }
+      ]
+    },
+    {
+      "id": "j10-search-filter",
+      "name": "Journey 10: Search and Priority Filter",
+      "description": "Test search input and priority dropdown filtering",
+      "priority": "high",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC1"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tasks",
+          "input_data": {},
+          "expected_result": "My Tasks page loads with all tasks"
+        },
+        {
+          "step_number": 2,
+          "action": "fill_form",
+          "target": "Search input",
+          "input_data": {
+            "search": "invoice"
+          },
+          "expected_result": "Task list filters to tasks containing 'invoice' in title",
+          "screenshot": true,
+          "visual_check": "Search input shows 'invoice', task table shows only tasks with 'invoice' in their title, tab counts updated"
+        },
+        {
+          "step_number": 3,
+          "action": "fill_form",
+          "target": "Search input - clear",
+          "input_data": {
+            "search": ""
+          },
+          "expected_result": "All tasks shown again"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Priority dropdown filter",
+          "input_data": {},
+          "expected_result": "Priority dropdown opens showing: All Priorities, Urgent, High, Normal, Low"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "HIGH option in Priority dropdown",
+          "input_data": {},
+          "expected_result": "Task list filters to HIGH priority tasks only",
+          "screenshot": true,
+          "visual_check": "Priority filter shows 'High', table shows only tasks with red-outline HIGH priority badges"
+        }
+      ]
+    },
+    {
+      "id": "j11-batch-actions",
+      "name": "Journey 11: Batch Selection and Actions",
+      "description": "Test selecting multiple tasks and using batch Complete All and Cancel actions",
+      "priority": "high",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC7"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tasks",
+          "input_data": {},
+          "expected_result": "My Tasks page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Checkbox on first task row",
+          "input_data": {},
+          "expected_result": "Task selected, batch action bar appears"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Checkbox on second task row",
+          "input_data": {},
+          "expected_result": "Two tasks selected, batch bar updates count",
+          "screenshot": true,
+          "visual_check": "Batch action bar visible with purple border, shows '2 selected', four buttons: 'Complete All' (green), 'Reassign...' (outline), 'Cancel' (outline with X icon), 'Clear' (ghost). Bar has animate-slide-in animation, bg-[#f5f3ff]"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Complete All button (green) in batch bar",
+          "input_data": {},
+          "expected_result": "All selected tasks marked as COMPLETED, batch bar disappears, selection cleared",
+          "screenshot": true,
+          "visual_check": "Both tasks now show green CheckCircle2 icons, line-through titles, 'Completed' status labels, batch bar gone"
+        }
+      ]
+    },
+    {
+      "id": "j12-batch-select-all",
+      "name": "Journey 12: Batch Select All via Header Checkbox",
+      "description": "Test the select-all checkbox in the table header and Clear button",
+      "priority": "medium",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC7"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tasks",
+          "input_data": {},
+          "expected_result": "My Tasks page loads with tasks"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Header row checkbox (select all)",
+          "input_data": {},
+          "expected_result": "All visible tasks selected, batch action bar shows total count",
+          "screenshot": true,
+          "visual_check": "All row checkboxes checked with purple bg-[#7c3aed], batch bar shows 'N selected' matching visible task count"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Clear button in batch action bar",
+          "input_data": {},
+          "expected_result": "All selections cleared, batch bar disappears"
+        }
+      ]
+    },
+    {
+      "id": "j13-detail-sheet-assignees",
+      "name": "Journey 13: Manage Assignees in Detail Sheet",
+      "description": "Test adding and removing assignees in the task detail sheet",
+      "priority": "high",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tasks",
+          "input_data": {},
+          "expected_result": "My Tasks page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "An active task row to open detail sheet",
+          "input_data": {},
+          "expected_result": "Detail sheet opens"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Assignees section in detail sheet",
+          "input_data": {},
+          "expected_result": "Assignees section visible with header label, list of current assignees (avatar circles with initials in purple bg-[#ede9fe]), remove X buttons, and '+ Add' button"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "+ Add assignee button (purple text with Plus icon)",
+          "input_data": {},
+          "expected_result": "UserMultiSelect popover opens for searching and selecting users",
+          "screenshot": true,
+          "visual_check": "Popover appears below the Add button with UserMultiSelect combobox, search input visible for finding users"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "X (remove) button on an existing assignee row",
+          "input_data": {},
+          "expected_result": "Assignee removed from the list"
+        }
+      ]
+    },
+    {
+      "id": "j14-delete-task",
+      "name": "Journey 14: Delete Task from Detail Sheet",
+      "description": "Test deleting a task via the detail sheet footer with AlertDialog confirmation",
+      "priority": "high",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC2"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tasks",
+          "input_data": {},
+          "expected_result": "My Tasks page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "A task row to open detail sheet",
+          "input_data": {},
+          "expected_result": "Detail sheet opens"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Delete Task button (red text with Trash2 icon, bottom-right of sheet footer)",
+          "input_data": {},
+          "expected_result": "AlertDialog confirmation opens",
+          "screenshot": true,
+          "visual_check": "AlertDialog overlay with 'Delete Task' title, confirmation message 'Are you sure you want to delete this task?', Cancel and Delete buttons (Delete in red bg-[#ef4444])"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Delete confirmation button (red) in AlertDialog",
+          "input_data": {},
+          "expected_result": "Task deleted, sheet closes, task removed from list",
+          "screenshot": true,
+          "visual_check": "Sheet dismissed, task no longer visible in the task table, success toast 'Task deleted' visible"
+        }
+      ]
+    },
+    {
+      "id": "j15-task-panel-on-invoice",
+      "name": "Journey 15: Task Panel on Invoice Detail Page",
+      "description": "Test the embedded TaskPanel component on a record detail page (invoice)",
+      "priority": "critical",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC4", "E11-2:AC5"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices",
+          "input_data": {},
+          "expected_result": "Invoice list page loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "First invoice row to open detail page",
+          "input_data": {},
+          "expected_result": "Invoice detail page loads"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "TaskPanel card component on the detail page",
+          "input_data": {},
+          "expected_result": "TaskPanel visible with CheckSquare icon, 'Tasks (N)' header, '+ Add Task' button",
+          "screenshot": true,
+          "visual_check": "TaskPanel card with 12px radius, custom shadow, purple hover shadow. Header shows CheckSquare icon + 'Tasks (N)' count + '+ Add Task' outline button. Either shows active task items or empty state with 'No tasks for this record' message and '+ Add Task' CTA"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "+ Add Task button in TaskPanel header",
+          "input_data": {},
+          "expected_result": "CreateTaskDialog opens with entity pre-filled",
+          "screenshot": true,
+          "visual_check": "Create Task dialog open, Linked Record field shows read-only EntityLinkChip with entity type icon and invoice identifier (e.g. 'Invoice INV-2026-XXXX'), purple border chip, non-editable"
+        },
+        {
+          "step_number": 5,
+          "action": "fill_form",
+          "target": "Create Task form in panel context",
+          "input_data": {
+            "title": "Chase payment for this invoice"
+          },
+          "expected_result": "Title populated"
+        },
+        {
+          "step_number": 6,
+          "action": "click",
+          "target": "Create button",
+          "input_data": {},
+          "expected_result": "Task created with entity link, dialog closes, TaskPanel refreshes",
+          "screenshot": true,
+          "visual_check": "TaskPanel now shows the new task 'Chase payment for this invoice' as a TaskPanelItem with status icon, title, priority badge"
+        }
+      ]
+    },
+    {
+      "id": "j16-task-panel-items",
+      "name": "Journey 16: Task Panel Item Interactions",
+      "description": "Test TaskPanelItem status cycling, quick actions, and opening PanelDetailSheet",
+      "priority": "high",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC4", "E11-2:AC8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices",
+          "input_data": {},
+          "expected_result": "Invoice list loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Invoice with tasks linked to open detail page",
+          "input_data": {},
+          "expected_result": "Invoice detail page loads with TaskPanel showing active tasks"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "TaskPanelItem for an active task",
+          "input_data": {},
+          "expected_result": "Panel item shows: clickable status icon, task title, priority badge, secondary row with assignee names and due date, quick action buttons (Start/Complete)",
+          "screenshot": true,
+          "visual_check": "TaskPanelItem in rounded-lg border card with: status Circle icon (clickable), title text, priority badge inline. Secondary row with assignee names and due date. Quick action buttons: 'Start' (outline, blue hover) and 'Complete' (outline, green hover) with h-6 height, text-[10px]"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Complete quick action button on a TaskPanelItem",
+          "input_data": {},
+          "expected_result": "Task status changes to COMPLETED, item styling changes",
+          "screenshot": true,
+          "visual_check": "Task title now has line-through and muted text, status icon is green CheckCircle2, quick action buttons removed, secondary row shows 'Completed' with completion date"
+        },
+        {
+          "step_number": 5,
+          "action": "click",
+          "target": "Task item body area (non-button) of another active task",
+          "input_data": {},
+          "expected_result": "PanelDetailSheet opens from right with task details",
+          "screenshot": true,
+          "visual_check": "480px Sheet from right showing task title, status actions, description, priority, due date, assignees, linked record (entity chip), and delete button"
+        }
+      ]
+    },
+    {
+      "id": "j17-task-panel-completed-section",
+      "name": "Journey 17: Task Panel Completed/Cancelled Section Toggle",
+      "description": "Test the collapsible completed/cancelled section in TaskPanel",
+      "priority": "medium",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC4"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/ar/invoices",
+          "input_data": {},
+          "expected_result": "Invoice list loads"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Invoice with completed tasks to open detail page",
+          "input_data": {},
+          "expected_result": "Invoice detail page loads, TaskPanel visible with completed tasks section"
+        },
+        {
+          "step_number": 3,
+          "action": "verify_element",
+          "target": "Completed toggle button in TaskPanel",
+          "input_data": {},
+          "expected_result": "'Completed (N)' toggle visible with ChevronDown icon, collapsed by default"
+        },
+        {
+          "step_number": 4,
+          "action": "click",
+          "target": "Completed (N) toggle button",
+          "input_data": {},
+          "expected_result": "Completed/Cancelled tasks section expands showing completed task items",
+          "screenshot": true,
+          "visual_check": "Toggle shows ChevronUp icon, completed tasks visible below with line-through titles, green CheckCircle2 or grey XCircle icons, muted text styling"
+        }
+      ]
+    },
+    {
+      "id": "j18-dashboard-tasks-today",
+      "name": "Journey 18: Dashboard Tasks Today Card",
+      "description": "Test the Tasks Today card on the briefing dashboard shows today's and overdue tasks",
+      "priority": "critical",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC6"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Dashboard loads with bottom cards section",
+          "screenshot": true,
+          "visual_check": "Dashboard visible with bottom cards area containing TasksCard. TasksCard shows: CheckSquare icon with 'Tasks Today' header, list of tasks due today or overdue (max 4), each with clickable TaskStatusIcon, task title, TaskPriorityBadge. Or empty state: 'No tasks due today - you're all clear!' if none due"
+        },
+        {
+          "step_number": 2,
+          "action": "verify_element",
+          "target": "Tasks Today card content",
+          "input_data": {},
+          "expected_result": "Card shows tasks with interactive status icons (clickable for cycling), priority badges, and 'View all tasks' link at bottom"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "'View all tasks' link (ArrowRight icon) at bottom of TasksCard",
+          "input_data": {},
+          "expected_result": "Navigates to /tasks (My Tasks page)",
+          "screenshot": true,
+          "visual_check": "My Tasks page loaded with full task list"
+        }
+      ]
+    },
+    {
+      "id": "j19-dashboard-task-status-toggle",
+      "name": "Journey 19: Dashboard Task Status Toggle",
+      "description": "Test cycling task status directly from the Dashboard Tasks Today card",
+      "priority": "medium",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC6", "E11-2:AC8"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/",
+          "input_data": {},
+          "expected_result": "Dashboard loads with Tasks Today card showing active tasks"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "Status icon of an OPEN task in the Tasks Today card",
+          "input_data": {},
+          "expected_result": "Task status cycles to IN_PROGRESS, icon changes to blue CircleDot",
+          "screenshot": true,
+          "visual_check": "Task in Tasks Today card now shows blue CircleDot icon instead of grey Circle, status change reflected immediately"
+        }
+      ]
+    },
+    {
+      "id": "j20-responsive-mobile-layout",
+      "name": "Journey 20: Responsive Mobile Card Layout",
+      "description": "Test that phone viewport shows card layout instead of table for tasks",
+      "priority": "high",
+      "related_stories": ["E11-2"],
+      "acceptance_criteria": ["E11-2:AC9"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "navigate",
+          "target": "/tasks",
+          "input_data": {
+            "viewport": "375x812"
+          },
+          "expected_result": "My Tasks page loads in mobile viewport",
+          "screenshot": true,
+          "visual_check": "Task table hidden (sm:block), card layout visible (sm:hidden). Each task shown as a rounded-xl card with: status icon + title row, priority badge + status label + due date inline, entity link below (if linked), checkbox top-right. Cards have 12px radius, custom shadow, purple hover shadow. Header stacks vertically (flex-col)"
+        },
+        {
+          "step_number": 2,
+          "action": "click",
+          "target": "A task card in mobile layout",
+          "input_data": {},
+          "expected_result": "TaskDetailSheet opens from right",
+          "screenshot": true,
+          "visual_check": "Sheet takes full width on mobile (w-full), same content as desktop sheet: title, status actions, details, assignees, linked record"
+        },
+        {
+          "step_number": 3,
+          "action": "click",
+          "target": "Status icon on a mobile task card (stopPropagation area)",
+          "input_data": {},
+          "expected_result": "Status cycles without opening the detail sheet"
+        }
+      ]
+    }
+  ]
+}

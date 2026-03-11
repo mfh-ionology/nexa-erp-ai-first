@@ -1,6 +1,5 @@
 import type { FastifyInstance } from 'fastify';
 import type {} from '@fastify/cookie';
-import fp from 'fastify-plugin';
 
 import { getPlatformPrisma } from '../../client.js';
 import {
@@ -416,7 +415,4 @@ async function platformAuthRoutes(fastify: FastifyInstance): Promise<void> {
   });
 }
 
-export const platformAuthRoutesPlugin = fp(platformAuthRoutes, {
-  name: 'platform-auth-routes',
-  dependencies: ['platform-jwt-verify'],
-});
+export const platformAuthRoutesPlugin = platformAuthRoutes;

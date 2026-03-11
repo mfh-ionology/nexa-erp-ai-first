@@ -15,7 +15,7 @@ import { UserRole } from '@nexa/db';
  */
 export async function resolveTargetUsers(
   prisma: PrismaClient,
-  _template: NotificationTemplate,
+  template: NotificationTemplate,
   eventPayload: Record<string, unknown>,
   logger?: { warn: (...args: unknown[]) => void },
 ): Promise<string[]> {
@@ -23,6 +23,16 @@ export async function resolveTargetUsers(
 
   // Determine who triggered the event so we can exclude them
   const actorId = resolveActorId(eventPayload);
+
+  // ── Strategy 5: Task events — resolve from task-specific payload fields ─
+  // Gated to task.* events only to prevent leaking into unrelated events
+  if (template.eventName.startsWith('task.')) {
+    if (eventPayload.assigneeUserId) targetIds.add(eventPayload.assigneeUserId as string);
+    if (Array.isArray(eventPayload.assigneeUserIds)) {
+      for (const uid of eventPayload.assigneeUserIds) targetIds.add(uid as string);
+    }
+    if (eventPayload.createdById) targetIds.add(eventPayload.createdById as string);
+  }
 
   // ── Strategy 1: Direct user reference ──────────────────────────────────
   const directUserId = (eventPayload.currentAssigneeId ??
@@ -107,6 +117,7 @@ function resolveActorId(eventPayload: Record<string, unknown>): string | undefin
     eventPayload.cancelledBy ??
     eventPayload.forwardedBy ??
     eventPayload.assignedBy ??
+    eventPayload.changedBy ??
     eventPayload.revokedBy ??
     eventPayload.deletedBy) as string | undefined;
 }
@@ -133,6 +144,12 @@ async function lookupEntityCreator(
     JournalEntry: 'journalEntry',
     Payment: 'payment',
     Dispatch: 'dispatch',
+    Task: 'task',
+  };
+
+  // Models that use `createdById` instead of `createdBy`
+  const createdByFieldMap: Record<string, string> = {
+    Task: 'createdById',
   };
 
   const modelName = modelMap[entityType];
@@ -147,18 +164,19 @@ async function lookupEntityCreator(
   }
 
   try {
-    // Use dynamic model access — all business entities have `id` + `createdBy`
+    // Use dynamic model access — most entities have `createdBy`, some use `createdById`
     const model = (prisma as Record<string, any>)[modelName];
     if (!model?.findUnique) {
       return null;
     }
 
+    const createdByField = createdByFieldMap[entityType] ?? 'createdBy';
     const entity = await model.findUnique({
       where: { id: entityId },
-      select: { createdBy: true },
+      select: { [createdByField]: true },
     });
 
-    return (entity?.createdBy as string) ?? null;
+    return (entity?.[createdByField] as string) ?? null;
   } catch {
     // Entity lookup failed — log and return null (don't crash notification flow)
     const log = logger ?? console;

@@ -21,6 +21,7 @@ export const TRANSLATION_NAMESPACES: readonly CoreTranslationNamespace[] = [
   'mobile',
   'ai',
   'notifications',
+  'tasks',
 ] as const;
 
 /**

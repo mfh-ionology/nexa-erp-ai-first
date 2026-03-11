@@ -278,7 +278,7 @@ async function correctionRoutes(fastify: FastifyInstance): Promise<void> {
 
       return sendSuccess(reply, {
         total,
-        totalLast30Days,
+        last30Days: totalLast30Days,
         byType,
         bySkill,
         autoResolvedCount,

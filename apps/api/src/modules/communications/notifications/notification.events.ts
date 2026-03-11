@@ -45,6 +45,11 @@ const NOTIFICATION_TRIGGERING_EVENTS: (keyof BusinessEvents)[] = [
   'ai.automation.completed',
   'ai.automation.failed',
   'ai.automation.paused',
+
+  // Tasks (Cross-Cutting)
+  'task.assigned',
+  'task.status_changed',
+  'task.overdue',
 ];
 
 /**

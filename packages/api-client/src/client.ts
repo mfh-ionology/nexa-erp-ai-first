@@ -14,13 +14,7 @@ import {
   ValidationError,
   BusinessRuleError,
 } from './errors';
-import type {
-  ApiClientConfig,
-  ApiResponse,
-  ApiResult,
-  RequestOptions,
-  TokenPair,
-} from './types';
+import type { ApiClientConfig, ApiResponse, ApiResult, RequestOptions, TokenPair } from './types';
 import {
   createAuthEndpoints,
   type AuthEndpoints,
@@ -113,6 +107,11 @@ export class ApiClient {
       throw new UnauthorizedError();
     }
 
+    // Handle 204 No Content — return empty result without attempting JSON parse
+    if (res.status === 204) {
+      return { data: undefined as T, meta: undefined };
+    }
+
     let json: ApiResponse<T>;
     try {
       json = (await res.json()) as ApiResponse<T>;
@@ -151,10 +150,7 @@ export class ApiClient {
 
   // --- Convenience methods ---
 
-  get<T>(
-    path: string,
-    options?: Omit<RequestOptions, 'body'>,
-  ): Promise<ApiResult<T>> {
+  get<T>(path: string, options?: Omit<RequestOptions, 'body'>): Promise<ApiResult<T>> {
     return this.request<T>('GET', path, options);
   }
 
@@ -182,10 +178,7 @@ export class ApiClient {
     return this.request<T>('PUT', path, { ...options, body });
   }
 
-  delete<T = void>(
-    path: string,
-    options?: Omit<RequestOptions, 'body'>,
-  ): Promise<ApiResult<T>> {
+  delete<T = void>(path: string, options?: Omit<RequestOptions, 'body'>): Promise<ApiResult<T>> {
     return this.request<T>('DELETE', path, options);
   }
 
@@ -209,14 +202,11 @@ export class ApiClient {
       }
 
       try {
-        const res = await fetch(
-          `${this.config.baseUrl}/api/v1/auth/refresh`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken }),
-          },
-        );
+        const res = await fetch(`${this.config.baseUrl}/api/v1/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
 
         if (!res.ok) {
           this.config.onAuthFailure();

@@ -15,7 +15,8 @@ export type CoreTranslationNamespace =
   | 'system'
   | 'mobile'
   | 'ai'
-  | 'notifications';
+  | 'notifications'
+  | 'tasks';
 
 /**
  * All translation namespaces. Extensible — business module epics add

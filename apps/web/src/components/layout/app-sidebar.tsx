@@ -6,6 +6,7 @@ import {
   Bot,
   Brain,
   Briefcase,
+  CheckSquare,
   ChevronLeft,
   ChevronRight,
   Cpu,
@@ -60,6 +61,7 @@ const NAV_GROUPS: NavGroup[] = [
     titleKey: 'navigation:main',
     items: [
       { path: '/', labelKey: 'navigation:dashboard', icon: LayoutDashboard, moduleKey: null },
+      { path: '/tasks', labelKey: 'navigation:myTasks', icon: CheckSquare, moduleKey: null },
     ],
   },
   {

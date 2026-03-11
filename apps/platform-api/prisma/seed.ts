@@ -188,6 +188,10 @@ async function seedDevTenantAiQuota() {
 const DEV_ADMIN_PASSWORD_HASH =
   '$argon2id$v=19$m=65536,t=3,p=4$bmV4YS1wbGF0Zm9ybS1kZXYtc2FsdC12MQ$y2iFxa7ZBxlAoIFsZFphBCCzqsiameuNwap5hc4i65I';
 
+// Well-known TOTP secret for dev seed user — BR-PLT-018 requires MFA for PLATFORM_ADMIN.
+// Base32 of "Hello!" — standard test secret. E2E tests generate codes from this.
+const DEV_MFA_SECRET = 'JBSWY3DPEHPK3PXP';
+
 async function seedPlatformAdmin() {
   await prisma.platformUser.upsert({
     where: { email: 'admin@nexa-platform.local' },
@@ -195,7 +199,8 @@ async function seedPlatformAdmin() {
       displayName: 'Platform Admin',
       role: PlatformRole.PLATFORM_ADMIN,
       isActive: true,
-      mfaEnabled: false,
+      mfaEnabled: true,
+      mfaSecret: DEV_MFA_SECRET,
     },
     create: {
       id: PLATFORM_ADMIN_ID,
@@ -204,10 +209,11 @@ async function seedPlatformAdmin() {
       displayName: 'Platform Admin',
       role: PlatformRole.PLATFORM_ADMIN,
       isActive: true,
-      mfaEnabled: false,
+      mfaEnabled: true,
+      mfaSecret: DEV_MFA_SECRET,
     },
   });
-  console.log('Seeded platform admin (admin@nexa-platform.local)');
+  console.log('Seeded platform admin (admin@nexa-platform.local, MFA enabled)');
 }
 
 async function seedDefaultFeatureFlags() {

@@ -205,13 +205,13 @@ Update this table as epics progress.
 |------|--------|-------|--------|---------|-----------|-------|
 | E5c | A | 1 | done | 2026-03-03 | 2026-03-03 | 6 stories, 246M tokens, $176 |
 | E8 | B | 1 | done | 2026-03-03 | 2026-03-03 | 4 stories completed |
-| E13b | A | 2 | backlog | — | — | Platform DB — no schema conflict |
-| E9 | B | 2 | in-progress | 2026-03-03 | — | Post-epic phase running |
-| E5d | A | 3 | backlog | — | — | Needs E5c done |
-| E10 | B | 3 | backlog | — | — | Needs E9 done |
-| E11 | B | 4 | backlog | — | — | |
-| E12 | B | 5 | backlog | — | — | |
-| E13 | B | 5 | backlog | — | — | Needs E12 done |
+| E13b | A | 2 | backlog | — | — | Platform DB — no schema conflict; app scaffolded during E5d-6 but no BMAD stories run |
+| E9 | B | 2 | done | 2026-03-03 | 2026-03-04 | 4 stories completed, retro done |
+| E5d | A | 3 | in-progress | 2026-03-04 | — | 5/6 stories done; E5d-4 incomplete (4/9 tasks — missing tenant-side acceptance flow) |
+| E10 | B | 3 | done | 2026-03-04 | 2026-03-05 | 4 stories + retro done; 22 code review issues (5 HIGH) |
+| E11 | B | 4 | done | 2026-03-05 | 2026-03-05 | 3 stories + retro done |
+| E12 | B | 5 | backlog | — | — | Pre-epic design gate not done |
+| E13 | B | 5 | backlog | — | — | Needs E12 done; pre-epic design gate not done |
 
 ---
 

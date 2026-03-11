@@ -38,9 +38,9 @@ export function useCorrections(params: Omit<CorrectionListParams, 'cursor'> = {}
         fullParams.cursor = pageParam as string;
       }
       const path = `/ai/corrections${buildQueryString(fullParams as Record<string, unknown>)}`;
-      const result = await apiGet<CorrectionLog[]>(path);
+      const result = await apiGet<{ items: CorrectionLog[]; stats: Record<string, unknown> }>(path);
       return {
-        data: result.data,
+        data: result.data.items,
         meta: result.meta ?? { hasMore: false },
       } as CorrectionListResponse;
     },

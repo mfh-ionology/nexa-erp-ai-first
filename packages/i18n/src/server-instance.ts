@@ -13,6 +13,7 @@ import navigationEn from '../locales/en/navigation.json';
 import errorsEn from '../locales/en/errors.json';
 import systemEn from '../locales/en/system.json';
 import aiEn from '../locales/en/ai.json';
+import tasksEn from '../locales/en/tasks.json';
 
 /**
  * Server-side i18next instance with bundled English resources.
@@ -37,6 +38,7 @@ serverInstance
           errors: errorsEn,
           system: systemEn,
           ai: aiEn,
+          tasks: tasksEn,
         },
       },
     }),

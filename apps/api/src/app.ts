@@ -30,6 +30,7 @@ import { platformClientPlugin } from './core/platform/platform-client.plugin.js'
 import { platformWebhookPlugin } from './core/webhooks/platform-webhook.routes.js';
 import { crossCuttingModulePlugin } from './modules/cross-cutting/index.js';
 import { notificationDispatchPlugin } from './modules/communications/notifications/notification-dispatch.plugin.js';
+import { taskOverduePlugin } from './modules/cross-cutting/task-overdue.plugin.js';
 import { communicationsModulePlugin } from './modules/communications/index.js';
 import { aiPlugin } from './ai/index.js';
 import { createRequire } from 'node:module';
@@ -118,6 +119,9 @@ export async function buildApp(opts: { logger?: boolean | Record<string, unknown
 
   // -- Notification dispatch queue + worker (depends on dead-letter / Redis)
   await fastify.register(notificationDispatchPlugin);
+
+  // -- Task overdue detection cron (depends on dead-letter / Redis)
+  await fastify.register(taskOverduePlugin);
 
   // -- Communications module (notification event subscribers — depends on event-bus + dispatch)
   await fastify.register(communicationsModulePlugin);

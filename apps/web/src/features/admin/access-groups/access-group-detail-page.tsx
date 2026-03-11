@@ -42,6 +42,7 @@ import { useZodForm } from '@/lib/form-utils';
 import { PageHeader } from '@/components/templates/page-header';
 
 import { NotesTab } from '@/features/cross-cutting';
+import { TaskPanel } from '@/features/tasks';
 
 import { useAccessGroup } from './api/use-access-groups';
 import { useUpdateAccessGroup, useDeactivateAccessGroup } from './api/use-access-group-mutations';
@@ -295,6 +296,7 @@ export function AccessGroupDetailPage({ id }: AccessGroupDetailPageProps) {
           <TabsTrigger value="permissions">{t('accessGroups.tab.permissions')}</TabsTrigger>
           <TabsTrigger value="fieldOverrides">{t('accessGroups.tab.fieldOverrides')}</TabsTrigger>
           <TabsTrigger value="notes">{t('common:notes')}</TabsTrigger>
+          <TabsTrigger value="tasks">{t('tasks:panel.title')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="permissions" forceMount className="mt-4 data-[state=inactive]:hidden">
@@ -319,6 +321,10 @@ export function AccessGroupDetailPage({ id }: AccessGroupDetailPageProps) {
 
         <TabsContent value="notes" forceMount className="mt-4 data-[state=inactive]:hidden">
           <NotesTab entityType="AccessGroup" entityId={id} resourceCode="system.accessGroups" />
+        </TabsContent>
+
+        <TabsContent value="tasks" forceMount className="mt-4 data-[state=inactive]:hidden">
+          <TaskPanel entityType="AccessGroup" entityId={id} entityLabel={group.name} />
         </TabsContent>
       </Tabs>
 

@@ -68,6 +68,11 @@ export async function createNotificationsFromEvent(
   });
   if (!template) return;
 
+  // Task status change notifications only fire for COMPLETED transitions
+  if (eventName === 'task.status_changed' && eventPayload.toStatus !== 'COMPLETED') {
+    return;
+  }
+
   // 2. Resolve target users
   const targetUserIds = await resolveTargetUsers(prisma, template, eventPayload, logger);
   if (targetUserIds.length === 0) return;

@@ -23,6 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 import { NotesPanel } from '@/features/cross-cutting';
+import { TaskPanel } from '@/features/tasks';
 
 import { useUser } from './api/use-user-detail';
 import { AccessGroupAssignmentPanel } from './components/access-group-assignment-panel';
@@ -317,6 +318,11 @@ export function UserDetailPage({ id }: UserDetailPageProps) {
         style={{ animationDelay: '250ms' }}
       >
         <NotesPanel entityType="User" entityId={id} resourceCode="system.users" />
+      </div>
+
+      {/* ── Tasks ─────────────────────────────────────────── */}
+      <div className="animate-fade-in-up" style={{ animationDelay: '300ms' }}>
+        <TaskPanel entityType="User" entityId={id} entityLabel={fullName} />
       </div>
     </div>
   );

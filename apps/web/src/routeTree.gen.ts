@@ -13,6 +13,7 @@ import { Route as LoginRouteImport } from './routes/login';
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated';
 import { Route as R403RouteImport } from './routes/403';
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index';
+import { Route as AuthenticatedTasksIndexRouteImport } from './routes/_authenticated/tasks/index';
 import { Route as AuthenticatedSystemIndexRouteImport } from './routes/_authenticated/system/index';
 import { Route as AuthenticatedSalesIndexRouteImport } from './routes/_authenticated/sales/index';
 import { Route as AuthenticatedReportingIndexRouteImport } from './routes/_authenticated/reporting/index';
@@ -86,6 +87,11 @@ const R403Route = R403RouteImport.update({
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+const AuthenticatedTasksIndexRoute = AuthenticatedTasksIndexRouteImport.update({
+  id: '/tasks/',
+  path: '/tasks/',
   getParentRoute: () => AuthenticatedRoute,
 } as any);
 const AuthenticatedSystemIndexRoute = AuthenticatedSystemIndexRouteImport.update({
@@ -398,6 +404,7 @@ export interface FileRoutesByFullPath {
   '/reporting/': typeof AuthenticatedReportingIndexRoute;
   '/sales/': typeof AuthenticatedSalesIndexRoute;
   '/system/': typeof AuthenticatedSystemIndexRoute;
+  '/tasks/': typeof AuthenticatedTasksIndexRoute;
   '/ai/admin/agents': typeof AuthenticatedAiAdminAgentsRouteWithChildren;
   '/ai/admin/automations': typeof AuthenticatedAiAdminAutomationsRouteWithChildren;
   '/ai/admin/knowledge': typeof AuthenticatedAiAdminKnowledgeRouteWithChildren;
@@ -455,6 +462,7 @@ export interface FileRoutesByTo {
   '/reporting': typeof AuthenticatedReportingIndexRoute;
   '/sales': typeof AuthenticatedSalesIndexRoute;
   '/system': typeof AuthenticatedSystemIndexRoute;
+  '/tasks': typeof AuthenticatedTasksIndexRoute;
   '/ar/invoices/$id': typeof AuthenticatedArInvoicesIdRoute;
   '/system/access-groups/$id': typeof AuthenticatedSystemAccessGroupsIdRoute;
   '/system/access-groups/new': typeof AuthenticatedSystemAccessGroupsNewRoute;
@@ -511,6 +519,7 @@ export interface FileRoutesById {
   '/_authenticated/reporting/': typeof AuthenticatedReportingIndexRoute;
   '/_authenticated/sales/': typeof AuthenticatedSalesIndexRoute;
   '/_authenticated/system/': typeof AuthenticatedSystemIndexRoute;
+  '/_authenticated/tasks/': typeof AuthenticatedTasksIndexRoute;
   '/_authenticated/ai/admin/agents': typeof AuthenticatedAiAdminAgentsRouteWithChildren;
   '/_authenticated/ai/admin/automations': typeof AuthenticatedAiAdminAutomationsRouteWithChildren;
   '/_authenticated/ai/admin/knowledge': typeof AuthenticatedAiAdminKnowledgeRouteWithChildren;
@@ -573,6 +582,7 @@ export interface FileRouteTypes {
     | '/reporting/'
     | '/sales/'
     | '/system/'
+    | '/tasks/'
     | '/ai/admin/agents'
     | '/ai/admin/automations'
     | '/ai/admin/knowledge'
@@ -630,6 +640,7 @@ export interface FileRouteTypes {
     | '/reporting'
     | '/sales'
     | '/system'
+    | '/tasks'
     | '/ar/invoices/$id'
     | '/system/access-groups/$id'
     | '/system/access-groups/new'
@@ -685,6 +696,7 @@ export interface FileRouteTypes {
     | '/_authenticated/reporting/'
     | '/_authenticated/sales/'
     | '/_authenticated/system/'
+    | '/_authenticated/tasks/'
     | '/_authenticated/ai/admin/agents'
     | '/_authenticated/ai/admin/automations'
     | '/_authenticated/ai/admin/knowledge'
@@ -758,6 +770,13 @@ declare module '@tanstack/react-router' {
       path: '/';
       fullPath: '/';
       preLoaderRoute: typeof AuthenticatedIndexRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/tasks/': {
+      id: '/_authenticated/tasks/';
+      path: '/tasks';
+      fullPath: '/tasks/';
+      preLoaderRoute: typeof AuthenticatedTasksIndexRouteImport;
       parentRoute: typeof AuthenticatedRoute;
     };
     '/_authenticated/system/': {
@@ -1310,6 +1329,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedReportingIndexRoute: typeof AuthenticatedReportingIndexRoute;
   AuthenticatedSalesIndexRoute: typeof AuthenticatedSalesIndexRoute;
   AuthenticatedSystemIndexRoute: typeof AuthenticatedSystemIndexRoute;
+  AuthenticatedTasksIndexRoute: typeof AuthenticatedTasksIndexRoute;
   AuthenticatedAiAdminAgentsRoute: typeof AuthenticatedAiAdminAgentsRouteWithChildren;
   AuthenticatedAiAdminAutomationsRoute: typeof AuthenticatedAiAdminAutomationsRouteWithChildren;
   AuthenticatedAiAdminKnowledgeRoute: typeof AuthenticatedAiAdminKnowledgeRouteWithChildren;
@@ -1343,6 +1363,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedReportingIndexRoute: AuthenticatedReportingIndexRoute,
   AuthenticatedSalesIndexRoute: AuthenticatedSalesIndexRoute,
   AuthenticatedSystemIndexRoute: AuthenticatedSystemIndexRoute,
+  AuthenticatedTasksIndexRoute: AuthenticatedTasksIndexRoute,
   AuthenticatedAiAdminAgentsRoute: AuthenticatedAiAdminAgentsRouteWithChildren,
   AuthenticatedAiAdminAutomationsRoute: AuthenticatedAiAdminAutomationsRouteWithChildren,
   AuthenticatedAiAdminKnowledgeRoute: AuthenticatedAiAdminKnowledgeRouteWithChildren,

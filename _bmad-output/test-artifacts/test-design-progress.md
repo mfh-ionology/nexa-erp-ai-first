@@ -2,7 +2,7 @@
 stepsCompleted: ['step-01-detect-mode', 'step-02-load-context', 'step-03-risk-and-testability', 'step-04-coverage-plan', 'step-05-generate-output']
 lastStep: 'step-05-generate-output'
 lastSaved: '2026-03-04'
-lastEpic: 'E10'
+lastEpic: 'E11'
 ---
 
 # Test Design Progress — Epic E1
@@ -647,6 +647,53 @@ lastEpic: 'E10'
 
 ## Step 5: Output Generation
 - **Output file**: `_bmad-output/test-artifacts/test-design-epic-E10.md`
+- **Validated against checklist**: All criteria passed
+
+## Completion (E10)
+- Workflow complete: 2026-03-04
+
+---
+
+# Test Design Progress — Epic E11
+
+## Step 1: Mode Detection
+- **Mode**: Epic-Level (Phase 4)
+- **Reason**: User explicitly requested E11 epic-level test design; sprint-status.yaml exists
+- **Epic**: E11 — Cross-cutting Tasks (3 stories: E11.1-E11.3)
+
+## Step 2: Context Loading
+- **Config**: tea_use_playwright_utils=true, tea_browser_automation=auto, test_framework=playwright
+- **Artifacts loaded**:
+  - Epic E11 (3 stories: E11.1 Task Service Backend, E11.2 Task UI Frontend, E11.3 Task Notifications)
+  - PRD: FR181 (task creation from records), FR182 (task assignment + notifications), FR183 (centralised task list)
+  - PRD NFRs: NFR2 (CRUD <500ms p95), NFR41 (TypeScript strict)
+  - Data Models: Task, TaskAssignee (polymorphic entityType/entityId pattern from project-context.md §4)
+  - API Contracts: Task endpoints (gap identified — not yet in §2.5)
+  - Business Rules: BR-TASK-001 to BR-TASK-009 (gap identified — to be defined)
+  - Event Catalog: task.assigned, task.status_changed, task.overdue (gap identified — to be defined)
+  - State Machines: TaskStatus OPEN→IN_PROGRESS→COMPLETED/CANCELLED (gap identified — not in state-machine-reference.md)
+  - UX Design Spec: T1 Entity List (My Tasks), T2/T3 Detail (Task Panel), Dashboard (Tasks Today card)
+  - Pre-Epic Designs: Page inventory approved, v0 prompt generated, 12 new components identified
+  - Dependencies: E9 (Notifications), E3 (Event Bus), E7 (Saved Views), E8 (Record Links)
+  - v0 Reference: 5 files in v0-nexa-design/components/tasks/
+- **Knowledge fragments**: risk-governance.md, probability-impact.md, test-levels-framework.md, test-priorities-matrix.md
+- **Existing tests**: 441 total test files (231 unit, 210 E2E); no task-specific tests; 10 notification test files from E9
+
+## Step 3: Risk Assessment
+- **Total risks**: 12
+- **High-priority (>=6)**: 3 — R-001 (SEC: cross-company task leakage, score=6), R-002 (DATA: terminal state bypass, score=6), R-003 (SEC: RBAC visibility gap, score=6)
+- **Medium (3-5)**: 7 — R-004 through R-009, R-012
+- **Low (1-2)**: 2 — R-010, R-011
+
+## Step 4: Coverage Plan
+- **P0**: 10 tests (~15-25 hours) — companyId scoping, terminal states, RBAC, CRUD, events, notifications, overdue
+- **P1**: 14 tests (~15-25 hours) — multi-assignee, filtering, deletion RBAC, E2E pages, status cycling, notification dispatch
+- **P2**: 8 tests (~5-10 hours) — batch actions, responsive, entity pre-fill, i18n, visual styling
+- **P3**: 4 tests (~2-4 hours) — performance benchmark, visual fidelity, keyboard nav, multi-tab sync
+- **Total**: 36 tests, ~37-64 hours (~1-1.5 weeks)
+
+## Step 5: Output Generation
+- **Output file**: `_bmad-output/test-artifacts/test-design-epic-E11.md`
 - **Validated against checklist**: All criteria passed
 
 ## Completion

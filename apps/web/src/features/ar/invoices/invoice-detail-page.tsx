@@ -29,6 +29,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { EmailCompositionDialog, useEmailAction } from '@/features/email';
+import { TaskPanel } from '@/features/tasks';
 import {
   Table,
   TableHeader,
@@ -370,6 +371,15 @@ export function InvoiceDetailPage() {
             </Button>
           </div>
         </div>
+      </div>
+
+      {/* Tasks Panel */}
+      <div className="animate-fade-in-up" style={{ animationDelay: '300ms' }}>
+        <TaskPanel
+          entityType="CustomerInvoice"
+          entityId={mockRecordId}
+          entityLabel="INV-2026-0042"
+        />
       </div>
 
       {/* Email Composition Dialog */}

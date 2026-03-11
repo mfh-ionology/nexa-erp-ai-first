@@ -384,6 +384,61 @@ describe('createNotificationsFromEvent', () => {
     );
   });
 
+  // -------------------------------------------------------------------------
+  // Task status change filter (E11-3 Task 7.3)
+  // -------------------------------------------------------------------------
+
+  it('should skip notification for task.status_changed when toStatus is not COMPLETED', async () => {
+    const template = fakeTemplate({
+      code: 'TASK_COMPLETED',
+      eventName: 'task.status_changed',
+      defaultChannels: ['IN_APP'],
+    });
+    const prisma = mockPrisma();
+    prisma.notificationTemplate.findFirst.mockResolvedValue(template);
+
+    await createNotificationsFromEvent(prisma, 'task.status_changed', {
+      taskId: 'task-001',
+      taskTitle: 'Test task',
+      fromStatus: 'OPEN',
+      toStatus: 'IN_PROGRESS',
+      changedBy: 'user-001',
+      companyId: 'company-001',
+    });
+
+    // Early return guard — no target resolution or notification creation
+    expect(resolveTargetUsers).not.toHaveBeenCalled();
+    expect(prisma.notification.create).not.toHaveBeenCalled();
+  });
+
+  it('should create notification for task.status_changed when toStatus is COMPLETED', async () => {
+    const template = fakeTemplate({
+      code: 'TASK_COMPLETED',
+      eventName: 'task.status_changed',
+      defaultChannels: ['IN_APP'],
+    });
+    const prisma = mockPrisma();
+    prisma.notificationTemplate.findFirst.mockResolvedValue(template);
+    vi.mocked(resolveTargetUsers).mockResolvedValue([USER_ID_2]);
+
+    const created = fakeNotification({ userId: USER_ID_2, status: 'PENDING' });
+    prisma.notification.create.mockResolvedValue(created);
+
+    await createNotificationsFromEvent(prisma, 'task.status_changed', {
+      taskId: 'task-001',
+      taskTitle: 'Test task',
+      fromStatus: 'IN_PROGRESS',
+      toStatus: 'COMPLETED',
+      changedBy: 'user-001',
+      companyId: 'company-001',
+      completedAt: '2026-03-05T10:00:00Z',
+    });
+
+    // Should proceed past the guard and create notifications
+    expect(resolveTargetUsers).toHaveBeenCalled();
+    expect(prisma.notification.create).toHaveBeenCalled();
+  });
+
   it('should return early when no target users resolved', async () => {
     const template = fakeTemplate();
     const prisma = mockPrisma();
