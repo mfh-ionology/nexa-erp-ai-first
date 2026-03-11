@@ -14,6 +14,7 @@ import errorsEn from '../locales/en/errors.json';
 import systemEn from '../locales/en/system.json';
 import aiEn from '../locales/en/ai.json';
 import tasksEn from '../locales/en/tasks.json';
+import printEn from '../locales/en/print.json';
 
 /**
  * Server-side i18next instance with bundled English resources.
@@ -39,6 +40,7 @@ serverInstance
           system: systemEn,
           ai: aiEn,
           tasks: tasksEn,
+          print: printEn,
         },
       },
     }),

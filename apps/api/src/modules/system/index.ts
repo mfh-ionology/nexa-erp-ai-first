@@ -23,6 +23,9 @@
 //   POST /system/documents/generate        (single PDF generation)
 //   POST /system/documents/batch-generate  (batch PDF generation)
 //   GET  /system/documents/batch-generate/:batchJobId/status (batch status)
+//   GET|PUT /system/print-preferences        (user print preferences)
+//   GET|PUT /system/print-preferences/company-defaults (company defaults, ADMIN)
+//   DELETE  /system/print-preferences/reset  (reset user preferences)
 // ---------------------------------------------------------------------------
 
 import type { FastifyInstance } from 'fastify';
@@ -56,6 +59,9 @@ import { parseRedisUrl } from '../../core/events/redis-connection.js';
 import { SampleDataGeneratorService } from './services/sample-data-generator.service.js';
 // E12-2 Tasks 3, 4 & 5 — Document template CRUD, version management, preview routes
 import { documentTemplateRoutesPlugin } from './routes/document-template.routes.js';
+
+// E13-1 Task 3 — Print preference routes
+import { printPreferenceRoutesPlugin } from './routes/print-preference.routes.js';
 
 // ---------------------------------------------------------------------------
 // Fastify type augmentation — expose document template services (Task 8.5)
@@ -205,6 +211,9 @@ async function systemModule(fastify: FastifyInstance): Promise<void> {
 
   // Document generation routes (under /system/documents/*)
   await fastify.register(documentGenerationRoutesPlugin);
+
+  // Print preference routes (under /system/print-preferences/*)
+  await fastify.register(printPreferenceRoutesPlugin);
 }
 
 export const systemModulePlugin = systemModule;

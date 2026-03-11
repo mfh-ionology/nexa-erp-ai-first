@@ -205,13 +205,13 @@ Update this table as epics progress.
 |------|--------|-------|--------|---------|-----------|-------|
 | E5c | A | 1 | done | 2026-03-03 | 2026-03-03 | 6 stories, 246M tokens, $176 |
 | E8 | B | 1 | done | 2026-03-03 | 2026-03-03 | 4 stories completed |
-| E13b | A | 2 | in-progress | 2026-03-11 | — | Platform DB; stories 1-2 done, story 3 in CR |
+| E13b | A | 2 | done | 2026-03-11 | 2026-03-11 | 6 stories, 715M tokens, $327.53; E2E 16/24 (suspend bug J6/J7, infra J19-24) |
 | E9 | B | 2 | done | 2026-03-03 | 2026-03-04 | 4 stories completed, retro done |
 | E5d | A | 3 | done | 2026-03-04 | 2026-03-11 | 6 stories, 125M tokens, $99.77; route fix applied |
 | E10 | B | 3 | done | 2026-03-04 | 2026-03-05 | 4 stories + retro done; 22 code review issues (5 HIGH) |
 | E11 | B | 4 | done | 2026-03-05 | 2026-03-05 | 3 stories + retro done |
-| E12 | B | 5 | in-progress | 2026-03-11 | — | Launched; design gate skipped per user approval |
-| E13 | B | 5 | backlog | — | — | Needs E12 done |
+| E12 | B | 5 | done | 2026-03-11 | 2026-03-11 | 3 stories, 280M tokens, $211.72; E2E 19/19 (100%) |
+| E13 | B | 5 | done | 2026-03-11 | 2026-03-11 | 2 stories, 60.56M tokens, $50.71; E2E 7/10 (70%); ALL EPICS COMPLETE |
 
 ---
 

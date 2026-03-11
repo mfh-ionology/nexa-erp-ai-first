@@ -1,0 +1,1923 @@
+{
+  "epic_id": "E13",
+  "epic_title": "Printer Management",
+  "generated_at": "2026-03-11T20:00:00.000Z",
+  "total_test_cases": 72,
+  "api_base_url": "http://localhost:5100",
+  "test_users": {
+    "admin": {
+      "email": "admin@nexa-erp.dev",
+      "password": "NexaDev2026!",
+      "role": "SUPER_ADMIN",
+      "userId": "00000000-0000-4000-a000-000000000002",
+      "companyId": "00000000-0000-4000-a000-000000000001"
+    },
+    "manager": {
+      "email": "manager@nexa-erp.dev",
+      "password": "NexaDev2026!",
+      "role": "MANAGER",
+      "userId": "00000000-0000-4000-a000-000000000011",
+      "companyId": "00000000-0000-4000-a000-000000000001"
+    },
+    "staff": {
+      "email": "staff@nexa-erp.dev",
+      "password": "NexaDev2026!",
+      "role": "STAFF",
+      "userId": "00000000-0000-4000-a000-000000000010",
+      "companyId": "00000000-0000-4000-a000-000000000001"
+    },
+    "viewer": {
+      "email": "viewer@nexa-erp.dev",
+      "password": "NexaDev2026!",
+      "role": "VIEWER",
+      "userId": "00000000-0000-4000-a000-000000000012",
+      "companyId": "00000000-0000-4000-a000-000000000001"
+    }
+  },
+  "constants": {
+    "valid_nonexistent_uuid": "00000000-0000-4000-a000-ffffffffffff",
+    "invalid_uuid": "not-a-uuid",
+    "document_types": [
+      "SALES_INVOICE", "CREDIT_NOTE", "CASH_RECEIPT", "PROFORMA_INVOICE",
+      "CUSTOMER_STATEMENT", "SALES_ORDER", "SALES_QUOTE", "DELIVERY_NOTE",
+      "PURCHASE_ORDER", "GOODS_RECEIPT_NOTE", "SUPPLIER_REMITTANCE",
+      "PAYSLIP", "P45", "P60"
+    ],
+    "print_actions": ["AUTO_DOWNLOAD", "BROWSER_PRINT", "NONE"],
+    "sample_template_id": "dfba9023-773c-49fb-8251-367544d8bf8e"
+  },
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "description": "Authenticate user and return JWT — prerequisite for all E13 tests",
+      "test_cases": [
+        {
+          "id": "AUTH-001",
+          "name": "Login as admin — happy path",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "admin@nexa-erp.dev", "password": "NexaDev2026!" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "expiresIn", "user"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "AUTH-002",
+          "name": "Login as staff — happy path",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "staff@nexa-erp.dev", "password": "NexaDev2026!" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "user"],
+            "body_match": { "data.user.role": "STAFF" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "AUTH-003",
+          "name": "Login as viewer — happy path",
+          "type": "happy_path",
+          "role": "VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "viewer@nexa-erp.dev", "password": "NexaDev2026!" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "user"],
+            "body_match": { "data.user.role": "VIEWER" }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "AUTH-004",
+          "name": "Login as manager — happy path",
+          "type": "happy_path",
+          "role": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/auth/login",
+            "headers": { "Content-Type": "application/json" },
+            "body": { "email": "manager@nexa-erp.dev", "password": "NexaDev2026!" }
+          },
+          "expected": {
+            "status": 200,
+            "body_contains": ["accessToken", "user"],
+            "body_match": { "data.user.role": "MANAGER" }
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/system/print-preferences/company-defaults",
+      "description": "Update company-level print defaults (ADMIN+ only). Sets default print behaviour for all users in the company.",
+      "rbac_minimum_role": "ADMIN",
+      "test_cases": [
+        {
+          "id": "CPD-001",
+          "name": "Update company defaults — happy path (single document type)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences/company-defaults",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{admin_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "defaults": [
+                { "documentType": "SALES_INVOICE", "action": "AUTO_DOWNLOAD" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_length": 14,
+            "body_array_contains_item": { "documentType": "SALES_INVOICE", "action": "AUTO_DOWNLOAD" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT value FROM system_settings WHERE company_id = '00000000-0000-4000-a000-000000000001' AND key = 'print.default.SALES_INVOICE'",
+            "expected": "value = 'AUTO_DOWNLOAD'"
+          }
+        },
+        {
+          "id": "CPD-002",
+          "name": "Update company defaults — happy path (multiple document types)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences/company-defaults",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{admin_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "defaults": [
+                { "documentType": "SALES_INVOICE", "action": "AUTO_DOWNLOAD" },
+                { "documentType": "PURCHASE_ORDER", "action": "BROWSER_PRINT" },
+                { "documentType": "CREDIT_NOTE", "action": "NONE" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_length": 14,
+            "body_array_contains_items": [
+              { "documentType": "SALES_INVOICE", "action": "AUTO_DOWNLOAD" },
+              { "documentType": "PURCHASE_ORDER", "action": "BROWSER_PRINT" },
+              { "documentType": "CREDIT_NOTE", "action": "NONE" }
+            ]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT key, value FROM system_settings WHERE company_id = '00000000-0000-4000-a000-000000000001' AND key LIKE 'print.default.%' ORDER BY key",
+            "expected": "rows include SALES_INVOICE=AUTO_DOWNLOAD, PURCHASE_ORDER=BROWSER_PRINT"
+          }
+        },
+        {
+          "id": "CPD-003",
+          "name": "Update company defaults — validation error: empty defaults array",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences/company-defaults",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{admin_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "defaults": []
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "CPD-004",
+          "name": "Update company defaults — validation error: invalid documentType",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences/company-defaults",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{admin_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "defaults": [
+                { "documentType": "INVALID_TYPE", "action": "AUTO_DOWNLOAD" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "CPD-005",
+          "name": "Update company defaults — validation error: invalid action",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences/company-defaults",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{admin_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "defaults": [
+                { "documentType": "SALES_INVOICE", "action": "INVALID_ACTION" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "CPD-006",
+          "name": "Update company defaults — validation error: missing defaults field",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences/company-defaults",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{admin_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "CPD-007",
+          "name": "Update company defaults — validation error: missing action in item",
+          "type": "validation_error",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences/company-defaults",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{admin_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "defaults": [
+                { "documentType": "SALES_INVOICE" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "CPD-008",
+          "name": "Update company defaults — RBAC: STAFF denied (403)",
+          "type": "authorization",
+          "role": "STAFF",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences/company-defaults",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "defaults": [
+                { "documentType": "SALES_INVOICE", "action": "AUTO_DOWNLOAD" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "CPD-009",
+          "name": "Update company defaults — RBAC: MANAGER denied (403)",
+          "type": "authorization",
+          "role": "MANAGER",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences/company-defaults",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{manager_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "defaults": [
+                { "documentType": "SALES_INVOICE", "action": "AUTO_DOWNLOAD" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "CPD-010",
+          "name": "Update company defaults — RBAC: VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences/company-defaults",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{viewer_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "defaults": [
+                { "documentType": "SALES_INVOICE", "action": "AUTO_DOWNLOAD" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "CPD-011",
+          "name": "Update company defaults — no auth token (401)",
+          "type": "authorization",
+          "role": "none",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences/company-defaults",
+            "headers": {
+              "Content-Type": "application/json",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "defaults": [
+                { "documentType": "SALES_INVOICE", "action": "AUTO_DOWNLOAD" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "CPD-012",
+          "name": "Update company defaults — idempotent: set same value twice",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences/company-defaults",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{admin_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "defaults": [
+                { "documentType": "SALES_INVOICE", "action": "AUTO_DOWNLOAD" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_contains_item": { "documentType": "SALES_INVOICE", "action": "AUTO_DOWNLOAD" }
+          },
+          "db_verification": { "enabled": false },
+          "notes": "Run twice in sequence — second call should not error. Upsert is idempotent."
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system/print-preferences/company-defaults",
+      "description": "Get company-level print defaults for all 14 document types (STAFF+ read access)",
+      "rbac_minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "GCD-001",
+          "name": "Get company defaults — happy path (admin)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/system/print-preferences/company-defaults",
+            "headers": {
+              "Authorization": "Bearer {{admin_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_length": 14,
+            "body_array_item_shape": {
+              "documentType": "string (enum)",
+              "action": "string (AUTO_DOWNLOAD|BROWSER_PRINT|NONE)"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "GCD-002",
+          "name": "Get company defaults — happy path (staff can read)",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/system/print-preferences/company-defaults",
+            "headers": {
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_length": 14
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "GCD-003",
+          "name": "Get company defaults — happy path (manager can read)",
+          "type": "happy_path",
+          "role": "MANAGER",
+          "request": {
+            "method": "GET",
+            "url": "/system/print-preferences/company-defaults",
+            "headers": {
+              "Authorization": "Bearer {{manager_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_length": 14
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "GCD-004",
+          "name": "Get company defaults — returns all 14 document types with NONE fallback for unset types",
+          "type": "edge_case",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/system/print-preferences/company-defaults",
+            "headers": {
+              "Authorization": "Bearer {{admin_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_length": 14,
+            "body_contains": ["SALES_INVOICE", "CREDIT_NOTE", "CASH_RECEIPT", "PROFORMA_INVOICE", "CUSTOMER_STATEMENT", "SALES_ORDER", "SALES_QUOTE", "DELIVERY_NOTE", "PURCHASE_ORDER", "GOODS_RECEIPT_NOTE", "SUPPLIER_REMITTANCE", "PAYSLIP", "P45", "P60"]
+          },
+          "db_verification": { "enabled": false },
+          "notes": "All 14 document types must appear even if no company defaults are set — those return action=NONE"
+        },
+        {
+          "id": "GCD-005",
+          "name": "Get company defaults — RBAC: VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/system/print-preferences/company-defaults",
+            "headers": {
+              "Authorization": "Bearer {{viewer_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "GCD-006",
+          "name": "Get company defaults — no auth token (401)",
+          "type": "authorization",
+          "role": "none",
+          "request": {
+            "method": "GET",
+            "url": "/system/print-preferences/company-defaults",
+            "headers": {
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/system/print-preferences",
+      "description": "Update user-level print preferences for the authenticated user (STAFF+ only)",
+      "rbac_minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "UPP-001",
+          "name": "Update user preferences — happy path (single preference)",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "preferences": [
+                { "documentType": "SALES_INVOICE", "action": "AUTO_DOWNLOAD" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_length": 14,
+            "body_array_contains_item": { "documentType": "SALES_INVOICE", "action": "AUTO_DOWNLOAD", "source": "USER" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT document_type, action FROM print_preferences WHERE company_id = '00000000-0000-4000-a000-000000000001' AND user_id = '00000000-0000-4000-a000-000000000010' AND document_type = 'SALES_INVOICE'",
+            "expected": "action = 'AUTO_DOWNLOAD'"
+          }
+        },
+        {
+          "id": "UPP-002",
+          "name": "Update user preferences — happy path (multiple preferences)",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "preferences": [
+                { "documentType": "SALES_INVOICE", "action": "AUTO_DOWNLOAD" },
+                { "documentType": "PURCHASE_ORDER", "action": "BROWSER_PRINT" },
+                { "documentType": "CREDIT_NOTE", "action": "NONE" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_length": 14,
+            "body_array_contains_items": [
+              { "documentType": "SALES_INVOICE", "action": "AUTO_DOWNLOAD", "source": "USER" },
+              { "documentType": "PURCHASE_ORDER", "action": "BROWSER_PRINT", "source": "USER" }
+            ]
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT document_type, action FROM print_preferences WHERE company_id = '00000000-0000-4000-a000-000000000001' AND user_id = '00000000-0000-4000-a000-000000000010' ORDER BY document_type",
+            "expected": "PURCHASE_ORDER=BROWSER_PRINT, SALES_INVOICE=AUTO_DOWNLOAD (CREDIT_NOTE=NONE may be normalised to company default)"
+          }
+        },
+        {
+          "id": "UPP-003",
+          "name": "Update user preferences — happy path (admin can update own preferences)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{admin_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "preferences": [
+                { "documentType": "DELIVERY_NOTE", "action": "BROWSER_PRINT" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_contains_item": { "documentType": "DELIVERY_NOTE", "action": "BROWSER_PRINT", "source": "USER" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT action FROM print_preferences WHERE company_id = '00000000-0000-4000-a000-000000000001' AND user_id = '00000000-0000-4000-a000-000000000002' AND document_type = 'DELIVERY_NOTE'",
+            "expected": "action = 'BROWSER_PRINT'"
+          }
+        },
+        {
+          "id": "UPP-004",
+          "name": "Update user preferences — normalisation: preference matching company default is deleted",
+          "type": "edge_case",
+          "role": "STAFF",
+          "depends_on": "CPD-001 (company default for SALES_INVOICE = AUTO_DOWNLOAD must be set first)",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "preferences": [
+                { "documentType": "SALES_INVOICE", "action": "AUTO_DOWNLOAD" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_contains_item": { "documentType": "SALES_INVOICE", "action": "AUTO_DOWNLOAD", "source": "COMPANY_DEFAULT" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) AS cnt FROM print_preferences WHERE company_id = '00000000-0000-4000-a000-000000000001' AND user_id = '00000000-0000-4000-a000-000000000010' AND document_type = 'SALES_INVOICE'",
+            "expected": "cnt = 0 (preference was normalised back to company default, so row is deleted)"
+          },
+          "notes": "When user sets a preference equal to the company default, the service normalises by deleting the user preference row. The GET response shows source=COMPANY_DEFAULT."
+        },
+        {
+          "id": "UPP-005",
+          "name": "Update user preferences — validation error: empty preferences array",
+          "type": "validation_error",
+          "role": "STAFF",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "preferences": []
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "UPP-006",
+          "name": "Update user preferences — validation error: invalid documentType",
+          "type": "validation_error",
+          "role": "STAFF",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "preferences": [
+                { "documentType": "NOT_A_DOCUMENT_TYPE", "action": "AUTO_DOWNLOAD" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "UPP-007",
+          "name": "Update user preferences — validation error: invalid action value",
+          "type": "validation_error",
+          "role": "STAFF",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "preferences": [
+                { "documentType": "SALES_INVOICE", "action": "EMAIL" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "UPP-008",
+          "name": "Update user preferences — validation error: missing body",
+          "type": "validation_error",
+          "role": "STAFF",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {}
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "UPP-009",
+          "name": "Update user preferences — RBAC: VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{viewer_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "preferences": [
+                { "documentType": "SALES_INVOICE", "action": "AUTO_DOWNLOAD" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "UPP-010",
+          "name": "Update user preferences — no auth token (401)",
+          "type": "authorization",
+          "role": "none",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences",
+            "headers": {
+              "Content-Type": "application/json",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "preferences": [
+                { "documentType": "SALES_INVOICE", "action": "AUTO_DOWNLOAD" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "UPP-011",
+          "name": "Update user preferences — idempotent: update same preference twice",
+          "type": "edge_case",
+          "role": "STAFF",
+          "request": {
+            "method": "PUT",
+            "url": "/system/print-preferences",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "preferences": [
+                { "documentType": "P60", "action": "BROWSER_PRINT" }
+              ]
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_contains_item": { "documentType": "P60", "action": "BROWSER_PRINT", "source": "USER" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) AS cnt FROM print_preferences WHERE company_id = '00000000-0000-4000-a000-000000000001' AND user_id = '00000000-0000-4000-a000-000000000010' AND document_type = 'P60'",
+            "expected": "cnt = 1 (upsert, not duplicate)"
+          },
+          "notes": "Run this twice — second call should upsert, not create a duplicate."
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system/print-preferences",
+      "description": "Get resolved print preferences for the authenticated user across all 14 document types (STAFF+ only). Resolution: user preference -> company default -> NONE.",
+      "rbac_minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "GPP-001",
+          "name": "Get user preferences — happy path (staff)",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/system/print-preferences",
+            "headers": {
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_length": 14,
+            "body_array_item_shape": {
+              "documentType": "string (enum)",
+              "action": "string (AUTO_DOWNLOAD|BROWSER_PRINT|NONE)",
+              "source": "string (USER|COMPANY_DEFAULT|FALLBACK)"
+            }
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "GPP-002",
+          "name": "Get user preferences — happy path (admin)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "GET",
+            "url": "/system/print-preferences",
+            "headers": {
+              "Authorization": "Bearer {{admin_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_length": 14
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "GPP-003",
+          "name": "Get user preferences — happy path (manager)",
+          "type": "happy_path",
+          "role": "MANAGER",
+          "request": {
+            "method": "GET",
+            "url": "/system/print-preferences",
+            "headers": {
+              "Authorization": "Bearer {{manager_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_length": 14
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "GPP-004",
+          "name": "Get user preferences — cascade: user override takes precedence over company default",
+          "type": "edge_case",
+          "role": "STAFF",
+          "depends_on": "CPD-001 (SALES_INVOICE company default = AUTO_DOWNLOAD), UPP-001 (staff user set SALES_INVOICE = AUTO_DOWNLOAD... actually needs a different action to test override)",
+          "setup_steps": [
+            "1. Set company default: SALES_INVOICE = AUTO_DOWNLOAD (via CPD-001)",
+            "2. Set staff user preference: SALES_INVOICE = BROWSER_PRINT (via PUT /system/print-preferences)"
+          ],
+          "request": {
+            "method": "GET",
+            "url": "/system/print-preferences",
+            "headers": {
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_array_contains_item": { "documentType": "SALES_INVOICE", "action": "BROWSER_PRINT", "source": "USER" }
+          },
+          "db_verification": { "enabled": false },
+          "notes": "User preference BROWSER_PRINT overrides company default AUTO_DOWNLOAD. Source should be USER."
+        },
+        {
+          "id": "GPP-005",
+          "name": "Get user preferences — cascade: company default used when no user preference",
+          "type": "edge_case",
+          "role": "MANAGER",
+          "depends_on": "CPD-001 (SALES_INVOICE company default set). Manager has no user preference for SALES_INVOICE.",
+          "request": {
+            "method": "GET",
+            "url": "/system/print-preferences",
+            "headers": {
+              "Authorization": "Bearer {{manager_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_array_contains_item": { "documentType": "SALES_INVOICE", "action": "AUTO_DOWNLOAD", "source": "COMPANY_DEFAULT" }
+          },
+          "db_verification": { "enabled": false },
+          "notes": "Manager has no user-level preference for SALES_INVOICE, so company default (AUTO_DOWNLOAD) should be used."
+        },
+        {
+          "id": "GPP-006",
+          "name": "Get user preferences — cascade: FALLBACK to NONE when no user or company preference",
+          "type": "edge_case",
+          "role": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/system/print-preferences",
+            "headers": {
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_array_contains_item_matching": {
+              "action": "NONE",
+              "source": "FALLBACK"
+            }
+          },
+          "db_verification": { "enabled": false },
+          "notes": "For any document type with no user preference and no company default, action=NONE and source=FALLBACK."
+        },
+        {
+          "id": "GPP-007",
+          "name": "Get user preferences — all 14 document types present in response",
+          "type": "edge_case",
+          "role": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/system/print-preferences",
+            "headers": {
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_length": 14,
+            "body_contains": [
+              "SALES_INVOICE", "CREDIT_NOTE", "CASH_RECEIPT", "PROFORMA_INVOICE",
+              "CUSTOMER_STATEMENT", "SALES_ORDER", "SALES_QUOTE", "DELIVERY_NOTE",
+              "PURCHASE_ORDER", "GOODS_RECEIPT_NOTE", "SUPPLIER_REMITTANCE",
+              "PAYSLIP", "P45", "P60"
+            ]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "GPP-008",
+          "name": "Get user preferences — RBAC: VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/system/print-preferences",
+            "headers": {
+              "Authorization": "Bearer {{viewer_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "GPP-009",
+          "name": "Get user preferences — no auth token (401)",
+          "type": "authorization",
+          "role": "none",
+          "request": {
+            "method": "GET",
+            "url": "/system/print-preferences",
+            "headers": {
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/system/print-preferences/reset",
+      "description": "Reset all user-level print preferences for the authenticated user, reverting to company defaults / NONE fallback (STAFF+ only)",
+      "rbac_minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "RPP-001",
+          "name": "Reset user preferences — happy path (staff with existing preferences)",
+          "type": "happy_path",
+          "role": "STAFF",
+          "depends_on": "UPP-001 or UPP-002 (staff user must have at least one user preference set)",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/print-preferences/reset",
+            "headers": {
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_length": 14,
+            "body_no_item_with": { "source": "USER" }
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) AS cnt FROM print_preferences WHERE company_id = '00000000-0000-4000-a000-000000000001' AND user_id = '00000000-0000-4000-a000-000000000010'",
+            "expected": "cnt = 0 (all user preferences deleted)"
+          }
+        },
+        {
+          "id": "RPP-002",
+          "name": "Reset user preferences — edge case: reset when no user preferences exist (no-op, still 200)",
+          "type": "edge_case",
+          "role": "STAFF",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/print-preferences/reset",
+            "headers": {
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_length": 14
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) AS cnt FROM print_preferences WHERE company_id = '00000000-0000-4000-a000-000000000001' AND user_id = '00000000-0000-4000-a000-000000000010'",
+            "expected": "cnt = 0"
+          },
+          "notes": "Resetting when no preferences exist should be a safe no-op, returning the resolved preferences (all COMPANY_DEFAULT or FALLBACK)."
+        },
+        {
+          "id": "RPP-003",
+          "name": "Reset user preferences — happy path (admin)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/print-preferences/reset",
+            "headers": {
+              "Authorization": "Bearer {{admin_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_length": 14
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) AS cnt FROM print_preferences WHERE company_id = '00000000-0000-4000-a000-000000000001' AND user_id = '00000000-0000-4000-a000-000000000002'",
+            "expected": "cnt = 0"
+          }
+        },
+        {
+          "id": "RPP-004",
+          "name": "Reset user preferences — happy path (manager)",
+          "type": "happy_path",
+          "role": "MANAGER",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/print-preferences/reset",
+            "headers": {
+              "Authorization": "Bearer {{manager_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true,
+            "body_array_length": 14
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "RPP-005",
+          "name": "Reset user preferences — does not affect other users' preferences",
+          "type": "edge_case",
+          "role": "STAFF",
+          "depends_on": "UPP-003 (admin must have a user preference set beforehand)",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/print-preferences/reset",
+            "headers": {
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 200,
+            "body_is_array": true
+          },
+          "db_verification": {
+            "enabled": true,
+            "query": "SELECT COUNT(*) AS cnt FROM print_preferences WHERE company_id = '00000000-0000-4000-a000-000000000001' AND user_id = '00000000-0000-4000-a000-000000000002'",
+            "expected": "cnt >= 1 (admin's preferences remain untouched)"
+          },
+          "notes": "Resetting staff's preferences must not affect admin's preferences."
+        },
+        {
+          "id": "RPP-006",
+          "name": "Reset user preferences — RBAC: VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/print-preferences/reset",
+            "headers": {
+              "Authorization": "Bearer {{viewer_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "RPP-007",
+          "name": "Reset user preferences — no auth token (401)",
+          "type": "authorization",
+          "role": "none",
+          "request": {
+            "method": "DELETE",
+            "url": "/system/print-preferences/reset",
+            "headers": {
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/system/documents/generate",
+      "description": "Generate a single PDF document from a template (STAFF+ only). Returns PDF binary. Used by E13-2 print actions.",
+      "rbac_minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "DGS-001",
+          "name": "Generate single PDF — happy path (SALES_INVOICE)",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff",
+              "outputFormat": "inline"
+            }
+          },
+          "expected": {
+            "status_one_of": [200, 404],
+            "content_type_if_200": "application/pdf",
+            "headers_if_200": ["Content-Disposition", "X-Document-Type", "X-Template-Id"]
+          },
+          "db_verification": { "enabled": false },
+          "notes": "If recordId doesn't exist in the database, the data loader may return 404 (RECORD_NOT_FOUND). A real recordId from a seeded invoice would yield 200 with PDF binary. This test validates the route is reachable and correctly guarded."
+        },
+        {
+          "id": "DGS-002",
+          "name": "Generate single PDF — happy path with attachment outputFormat",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{admin_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff",
+              "outputFormat": "attachment"
+            }
+          },
+          "expected": {
+            "status_one_of": [200, 404],
+            "content_disposition_if_200": "attachment"
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DGS-003",
+          "name": "Generate single PDF — validation error: missing documentType",
+          "type": "validation_error",
+          "role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "recordId": "00000000-0000-4000-a000-ffffffffffff"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DGS-004",
+          "name": "Generate single PDF — validation error: missing recordId",
+          "type": "validation_error",
+          "role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "documentType": "SALES_INVOICE"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DGS-005",
+          "name": "Generate single PDF — validation error: invalid recordId (not UUID)",
+          "type": "validation_error",
+          "role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordId": "not-a-uuid"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DGS-006",
+          "name": "Generate single PDF — validation error: invalid documentType",
+          "type": "validation_error",
+          "role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "documentType": "RECEIPT",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DGS-007",
+          "name": "Generate single PDF — validation error: invalid outputFormat",
+          "type": "validation_error",
+          "role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff",
+              "outputFormat": "download"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DGS-008",
+          "name": "Generate single PDF — RBAC: VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{viewer_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DGS-009",
+          "name": "Generate single PDF — no auth token (401)",
+          "type": "authorization",
+          "role": "none",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": {
+              "Content-Type": "application/json",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DGS-010",
+          "name": "Generate single PDF — with optional versionContext",
+          "type": "happy_path",
+          "role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/generate",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordId": "00000000-0000-4000-a000-ffffffffffff",
+              "outputFormat": "inline",
+              "versionContext": {
+                "languageCode": "en",
+                "branchCode": null
+              }
+            }
+          },
+          "expected": {
+            "status_one_of": [200, 404],
+            "notes": "Tests that versionContext is accepted by schema without validation error"
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/system/documents/batch-generate",
+      "description": "Enqueue batch PDF generation via BullMQ (MANAGER+ only). Returns batchJobId. Used by E13-2 batch print.",
+      "rbac_minimum_role": "MANAGER",
+      "test_cases": [
+        {
+          "id": "DGB-001",
+          "name": "Batch generate — happy path",
+          "type": "happy_path",
+          "role": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{manager_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordIds": ["00000000-0000-4000-a000-ffffffffffff"]
+            }
+          },
+          "expected": {
+            "status_one_of": [202, 503],
+            "body_contains_if_202": ["batchJobId"]
+          },
+          "db_verification": { "enabled": false },
+          "notes": "Returns 202 Accepted if Redis/BullMQ is available, 503 if not. The batchJobId is a UUID for polling."
+        },
+        {
+          "id": "DGB-002",
+          "name": "Batch generate — happy path (admin)",
+          "type": "happy_path",
+          "role": "SUPER_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{admin_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "documentType": "PURCHASE_ORDER",
+              "recordIds": [
+                "00000000-0000-4000-a000-ffffffffffff"
+              ]
+            }
+          },
+          "expected": {
+            "status_one_of": [202, 503],
+            "body_contains_if_202": ["batchJobId"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DGB-003",
+          "name": "Batch generate — validation error: empty recordIds array",
+          "type": "validation_error",
+          "role": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{manager_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordIds": []
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DGB-004",
+          "name": "Batch generate — validation error: invalid UUID in recordIds",
+          "type": "validation_error",
+          "role": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{manager_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordIds": ["not-a-uuid"]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DGB-005",
+          "name": "Batch generate — validation error: invalid documentType",
+          "type": "validation_error",
+          "role": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{manager_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "documentType": "INVALID",
+              "recordIds": ["00000000-0000-4000-a000-ffffffffffff"]
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DGB-006",
+          "name": "Batch generate — validation error: missing recordIds",
+          "type": "validation_error",
+          "role": "MANAGER",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{manager_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "documentType": "SALES_INVOICE"
+            }
+          },
+          "expected": {
+            "status": 400,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DGB-007",
+          "name": "Batch generate — RBAC: STAFF denied (403)",
+          "type": "authorization",
+          "role": "STAFF",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordIds": ["00000000-0000-4000-a000-ffffffffffff"]
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DGB-008",
+          "name": "Batch generate — RBAC: VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{viewer_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordIds": ["00000000-0000-4000-a000-ffffffffffff"]
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DGB-009",
+          "name": "Batch generate — no auth token (401)",
+          "type": "authorization",
+          "role": "none",
+          "request": {
+            "method": "POST",
+            "url": "/system/documents/batch-generate",
+            "headers": {
+              "Content-Type": "application/json",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            },
+            "body": {
+              "documentType": "SALES_INVOICE",
+              "recordIds": ["00000000-0000-4000-a000-ffffffffffff"]
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/system/documents/batch-generate/:batchJobId/status",
+      "description": "Poll batch PDF generation job status (STAFF+ only). Returns progress info.",
+      "rbac_minimum_role": "STAFF",
+      "test_cases": [
+        {
+          "id": "DBS-001",
+          "name": "Batch status — not found for non-existent batchJobId",
+          "type": "edge_case",
+          "role": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/system/documents/batch-generate/00000000-0000-4000-a000-ffffffffffff/status",
+            "headers": {
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status_one_of": [404, 503],
+            "body_contains_if_404": ["BATCH_NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false },
+          "notes": "Returns 404 if batchJobId not found in queue, or 503 if Redis/BullMQ not available."
+        },
+        {
+          "id": "DBS-002",
+          "name": "Batch status — RBAC: VIEWER denied (403)",
+          "type": "authorization",
+          "role": "VIEWER",
+          "request": {
+            "method": "GET",
+            "url": "/system/documents/batch-generate/00000000-0000-4000-a000-ffffffffffff/status",
+            "headers": {
+              "Authorization": "Bearer {{viewer_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 403,
+            "body_contains": ["FORBIDDEN"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DBS-003",
+          "name": "Batch status — no auth token (401)",
+          "type": "authorization",
+          "role": "none",
+          "request": {
+            "method": "GET",
+            "url": "/system/documents/batch-generate/00000000-0000-4000-a000-ffffffffffff/status",
+            "headers": {
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 401,
+            "body_contains": ["error"]
+          },
+          "db_verification": { "enabled": false }
+        },
+        {
+          "id": "DBS-004",
+          "name": "Batch status — validation error: empty batchJobId",
+          "type": "validation_error",
+          "role": "STAFF",
+          "request": {
+            "method": "GET",
+            "url": "/system/documents/batch-generate//status",
+            "headers": {
+              "Authorization": "Bearer {{staff_token}}",
+              "X-Company-Id": "00000000-0000-4000-a000-000000000001"
+            }
+          },
+          "expected": {
+            "status": 404,
+            "body_contains": ["NOT_FOUND"]
+          },
+          "db_verification": { "enabled": false },
+          "notes": "Empty path param results in route not matching (Fastify 404)."
+        }
+      ]
+    }
+  ],
+  "test_execution_order": [
+    {
+      "phase": "0-auth",
+      "description": "Login all test users to obtain JWT tokens",
+      "test_ids": ["AUTH-001", "AUTH-002", "AUTH-003", "AUTH-004"]
+    },
+    {
+      "phase": "1-create-company-defaults",
+      "description": "Set up company-level print defaults (creates SystemSetting rows)",
+      "test_ids": ["CPD-001", "CPD-002"]
+    },
+    {
+      "phase": "2-read-company-defaults",
+      "description": "Verify company defaults were persisted correctly",
+      "test_ids": ["GCD-001", "GCD-002", "GCD-003", "GCD-004"]
+    },
+    {
+      "phase": "3-create-user-preferences",
+      "description": "Set user-level print preferences (creates PrintPreference rows)",
+      "test_ids": ["UPP-001", "UPP-002", "UPP-003"]
+    },
+    {
+      "phase": "4-read-user-preferences",
+      "description": "Verify resolved preferences with cascade logic (user > company > NONE)",
+      "test_ids": ["GPP-001", "GPP-002", "GPP-003", "GPP-004", "GPP-005", "GPP-006", "GPP-007"]
+    },
+    {
+      "phase": "5-edge-cases",
+      "description": "Test normalisation, idempotency, and cascade edge cases",
+      "test_ids": ["UPP-004", "UPP-011", "CPD-012"]
+    },
+    {
+      "phase": "6-delete-reset",
+      "description": "Reset user preferences and verify cleanup",
+      "test_ids": ["RPP-001", "RPP-002", "RPP-003", "RPP-004", "RPP-005"]
+    },
+    {
+      "phase": "7-validation-errors",
+      "description": "All validation error tests (can run in any order)",
+      "test_ids": [
+        "CPD-003", "CPD-004", "CPD-005", "CPD-006", "CPD-007",
+        "UPP-005", "UPP-006", "UPP-007", "UPP-008",
+        "DGS-003", "DGS-004", "DGS-005", "DGS-006", "DGS-007",
+        "DGB-003", "DGB-004", "DGB-005", "DGB-006"
+      ]
+    },
+    {
+      "phase": "8-rbac-authorization",
+      "description": "All RBAC/auth tests (can run in any order)",
+      "test_ids": [
+        "CPD-008", "CPD-009", "CPD-010", "CPD-011",
+        "UPP-009", "UPP-010",
+        "GPP-008", "GPP-009",
+        "GCD-005", "GCD-006",
+        "RPP-006", "RPP-007",
+        "DGS-008", "DGS-009",
+        "DGB-007", "DGB-008", "DGB-009",
+        "DBS-002", "DBS-003"
+      ]
+    },
+    {
+      "phase": "9-document-generation",
+      "description": "Document generation endpoints (E12 infrastructure consumed by E13-2)",
+      "test_ids": ["DGS-001", "DGS-002", "DGS-010", "DGB-001", "DGB-002", "DBS-001", "DBS-004"]
+    }
+  ],
+  "summary": {
+    "endpoints_covered": 8,
+    "e13_specific_endpoints": 5,
+    "e12_consumed_endpoints": 3,
+    "test_breakdown": {
+      "happy_path": 20,
+      "validation_error": 18,
+      "authorization": 22,
+      "edge_case": 8
+    },
+    "rbac_coverage": {
+      "SUPER_ADMIN": "full access to all endpoints",
+      "MANAGER": "full access to print preferences, denied on company defaults PUT, full access to batch generate",
+      "STAFF": "full access to print preferences (user-level), read access to company defaults, denied on batch generate, full access to single generate",
+      "VIEWER": "denied on all endpoints (403)",
+      "unauthenticated": "denied on all endpoints (401)"
+    },
+    "print_preference_endpoints": [
+      "PUT  /system/print-preferences/company-defaults  (ADMIN+) — 12 tests",
+      "GET  /system/print-preferences/company-defaults  (STAFF+) — 6 tests",
+      "PUT  /system/print-preferences                   (STAFF+) — 11 tests",
+      "GET  /system/print-preferences                   (STAFF+) — 9 tests",
+      "DELETE /system/print-preferences/reset            (STAFF+) — 7 tests"
+    ],
+    "document_generation_endpoints": [
+      "POST /system/documents/generate                         (STAFF+)   — 10 tests",
+      "POST /system/documents/batch-generate                   (MANAGER+) — 9 tests",
+      "GET  /system/documents/batch-generate/:id/status        (STAFF+)   — 4 tests"
+    ]
+  }
+}

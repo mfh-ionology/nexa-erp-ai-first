@@ -22,6 +22,7 @@ export const TRANSLATION_NAMESPACES: readonly CoreTranslationNamespace[] = [
   'ai',
   'notifications',
   'tasks',
+  'print',
 ] as const;
 
 /**

@@ -443,6 +443,13 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         alwaysVisible: true,
       },
       {
+        key: 'system.printPreferences',
+        labelKey: 'navigation:system.printPreferences',
+        icon: 'Printer',
+        path: '/system/print-preferences',
+        alwaysVisible: true,
+      },
+      {
         key: 'system.myPermissions',
         labelKey: 'navigation:system.myPermissions',
         icon: 'Shield',

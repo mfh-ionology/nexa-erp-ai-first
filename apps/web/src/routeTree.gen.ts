@@ -27,6 +27,7 @@ import { Route as AuthenticatedArIndexRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedApIndexRouteImport } from './routes/_authenticated/ap/index';
 import { Route as AuthenticatedSystemUsersRouteImport } from './routes/_authenticated/system/users';
 import { Route as AuthenticatedSystemResourcesRouteImport } from './routes/_authenticated/system/resources';
+import { Route as AuthenticatedSystemPrintPreferencesRouteImport } from './routes/_authenticated/system/print-preferences';
 import { Route as AuthenticatedSystemNotificationPreferencesRouteImport } from './routes/_authenticated/system/notification-preferences';
 import { Route as AuthenticatedSystemMyPermissionsRouteImport } from './routes/_authenticated/system/my-permissions';
 import { Route as AuthenticatedSystemEmailTemplatesRouteImport } from './routes/_authenticated/system/email-templates';
@@ -160,6 +161,12 @@ const AuthenticatedSystemResourcesRoute = AuthenticatedSystemResourcesRouteImpor
   path: '/system/resources',
   getParentRoute: () => AuthenticatedRoute,
 } as any);
+const AuthenticatedSystemPrintPreferencesRoute =
+  AuthenticatedSystemPrintPreferencesRouteImport.update({
+    id: '/system/print-preferences',
+    path: '/system/print-preferences',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any);
 const AuthenticatedSystemNotificationPreferencesRoute =
   AuthenticatedSystemNotificationPreferencesRouteImport.update({
     id: '/system/notification-preferences',
@@ -399,6 +406,7 @@ export interface FileRoutesByFullPath {
   '/system/email-templates': typeof AuthenticatedSystemEmailTemplatesRouteWithChildren;
   '/system/my-permissions': typeof AuthenticatedSystemMyPermissionsRoute;
   '/system/notification-preferences': typeof AuthenticatedSystemNotificationPreferencesRoute;
+  '/system/print-preferences': typeof AuthenticatedSystemPrintPreferencesRoute;
   '/system/resources': typeof AuthenticatedSystemResourcesRoute;
   '/system/users': typeof AuthenticatedSystemUsersRouteWithChildren;
   '/ap/': typeof AuthenticatedApIndexRoute;
@@ -459,6 +467,7 @@ export interface FileRoutesByTo {
   '/system/companies': typeof AuthenticatedSystemCompaniesRoute;
   '/system/my-permissions': typeof AuthenticatedSystemMyPermissionsRoute;
   '/system/notification-preferences': typeof AuthenticatedSystemNotificationPreferencesRoute;
+  '/system/print-preferences': typeof AuthenticatedSystemPrintPreferencesRoute;
   '/system/resources': typeof AuthenticatedSystemResourcesRoute;
   '/ap': typeof AuthenticatedApIndexRoute;
   '/ar': typeof AuthenticatedArIndexRoute;
@@ -516,6 +525,7 @@ export interface FileRoutesById {
   '/_authenticated/system/email-templates': typeof AuthenticatedSystemEmailTemplatesRouteWithChildren;
   '/_authenticated/system/my-permissions': typeof AuthenticatedSystemMyPermissionsRoute;
   '/_authenticated/system/notification-preferences': typeof AuthenticatedSystemNotificationPreferencesRoute;
+  '/_authenticated/system/print-preferences': typeof AuthenticatedSystemPrintPreferencesRoute;
   '/_authenticated/system/resources': typeof AuthenticatedSystemResourcesRoute;
   '/_authenticated/system/users': typeof AuthenticatedSystemUsersRouteWithChildren;
   '/_authenticated/ap/': typeof AuthenticatedApIndexRoute;
@@ -580,6 +590,7 @@ export interface FileRouteTypes {
     | '/system/email-templates'
     | '/system/my-permissions'
     | '/system/notification-preferences'
+    | '/system/print-preferences'
     | '/system/resources'
     | '/system/users'
     | '/ap/'
@@ -640,6 +651,7 @@ export interface FileRouteTypes {
     | '/system/companies'
     | '/system/my-permissions'
     | '/system/notification-preferences'
+    | '/system/print-preferences'
     | '/system/resources'
     | '/ap'
     | '/ar'
@@ -696,6 +708,7 @@ export interface FileRouteTypes {
     | '/_authenticated/system/email-templates'
     | '/_authenticated/system/my-permissions'
     | '/_authenticated/system/notification-preferences'
+    | '/_authenticated/system/print-preferences'
     | '/_authenticated/system/resources'
     | '/_authenticated/system/users'
     | '/_authenticated/ap/'
@@ -881,6 +894,13 @@ declare module '@tanstack/react-router' {
       path: '/system/resources';
       fullPath: '/system/resources';
       preLoaderRoute: typeof AuthenticatedSystemResourcesRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/system/print-preferences': {
+      id: '/_authenticated/system/print-preferences';
+      path: '/system/print-preferences';
+      fullPath: '/system/print-preferences';
+      preLoaderRoute: typeof AuthenticatedSystemPrintPreferencesRouteImport;
       parentRoute: typeof AuthenticatedRoute;
     };
     '/_authenticated/system/notification-preferences': {
@@ -1337,6 +1357,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedSystemEmailTemplatesRoute: typeof AuthenticatedSystemEmailTemplatesRouteWithChildren;
   AuthenticatedSystemMyPermissionsRoute: typeof AuthenticatedSystemMyPermissionsRoute;
   AuthenticatedSystemNotificationPreferencesRoute: typeof AuthenticatedSystemNotificationPreferencesRoute;
+  AuthenticatedSystemPrintPreferencesRoute: typeof AuthenticatedSystemPrintPreferencesRoute;
   AuthenticatedSystemResourcesRoute: typeof AuthenticatedSystemResourcesRoute;
   AuthenticatedSystemUsersRoute: typeof AuthenticatedSystemUsersRouteWithChildren;
   AuthenticatedApIndexRoute: typeof AuthenticatedApIndexRoute;
@@ -1372,6 +1393,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedSystemEmailTemplatesRoute: AuthenticatedSystemEmailTemplatesRouteWithChildren,
   AuthenticatedSystemMyPermissionsRoute: AuthenticatedSystemMyPermissionsRoute,
   AuthenticatedSystemNotificationPreferencesRoute: AuthenticatedSystemNotificationPreferencesRoute,
+  AuthenticatedSystemPrintPreferencesRoute: AuthenticatedSystemPrintPreferencesRoute,
   AuthenticatedSystemResourcesRoute: AuthenticatedSystemResourcesRoute,
   AuthenticatedSystemUsersRoute: AuthenticatedSystemUsersRouteWithChildren,
   AuthenticatedApIndexRoute: AuthenticatedApIndexRoute,

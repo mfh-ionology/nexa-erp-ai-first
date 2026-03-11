@@ -217,6 +217,13 @@ export const queryKeys = {
     byEntity: (entityType: string, entityId: string) =>
       [...queryKeys.tasks.all, 'entity', entityType, entityId] as const,
   },
+  printPreferences: {
+    all: ['print-preferences'] as const,
+    user: () => [...queryKeys.printPreferences.all, 'user'] as const,
+    companyDefaults: () => [...queryKeys.printPreferences.all, 'company-defaults'] as const,
+    batchStatus: (batchJobId: string) =>
+      [...queryKeys.printPreferences.all, 'batch-status', batchJobId] as const,
+  },
   documentTemplates: {
     all: ['document-templates'] as const,
     list: (params?: Record<string, unknown>) =>

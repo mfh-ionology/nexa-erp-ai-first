@@ -65,6 +65,7 @@ export type {
   EmailTemplate,
   DocumentTemplate,
   DocumentTemplateVersion,
+  PrintPreference,
 } from '../generated/prisma/client';
 
 // Enums
@@ -96,6 +97,7 @@ export {
   EmailRecipientStatus,
   EmailQueueStatus,
   DocumentType,
+  PrintAction,
 } from '../generated/prisma/client';
 
 // Utilities

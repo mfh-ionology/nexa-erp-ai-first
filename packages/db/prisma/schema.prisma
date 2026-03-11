@@ -330,6 +330,7 @@ model CompanyProfile {
   emailMessages          EmailMessage[]
   tasks                  Task[]
   documentTemplates      DocumentTemplate[]
+  printPreferences       PrintPreference[]
 
   @@index([baseCurrencyCode], map: "idx_company_profiles_base_currency_code")
   @@index([countryCode], map: "idx_company_profiles_country_code")
@@ -550,6 +551,7 @@ model User {
   updatedEmailTemplates    EmailTemplate[]   @relation("UserUpdatedEmailTemplates")
   tasksCreated             Task[]            @relation("TaskCreator")
   taskAssignments          TaskAssignee[]
+  printPreferences         PrintPreference[]
 
   @@unique([email], map: "uq_users_email")
   @@index([companyId], map: "idx_users_company_id")
@@ -2241,6 +2243,14 @@ enum DocumentType {
   @@map("document_type")
 }
 
+enum PrintAction {
+  AUTO_DOWNLOAD
+  BROWSER_PRINT
+  NONE
+
+  @@map("print_action")
+}
+
 // ---------------------------------------------------------------------------
 // Task System — E11.1
 // ---------------------------------------------------------------------------
@@ -2394,4 +2404,32 @@ model DocumentTemplateVersion {
   @@index([languageCode], map: "idx_doc_template_versions_language")
   @@index([branchCode], map: "idx_doc_template_versions_branch")
   @@map("document_template_versions")
+}
+
+// ---------------------------------------------------------------------------
+// Print Preferences — E13.1 (FR190, FR192)
+// ---------------------------------------------------------------------------
+// Per-user print action preferences per document type.
+// Company-level defaults use SystemSetting with key pattern print.default.{DOCUMENT_TYPE}.
+// Resolution order: user preference → company default → NONE.
+// ---------------------------------------------------------------------------
+
+model PrintPreference {
+  id           String       @id @default(uuid()) @map("id")
+  companyId    String       @map("company_id")
+  userId       String       @map("user_id")
+  documentType DocumentType @map("document_type")
+  action       PrintAction  @map("action")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  company CompanyProfile @relation(fields: [companyId], references: [id])
+  user    User           @relation(fields: [userId], references: [id])
+
+  @@unique([companyId, userId, documentType], map: "uq_print_preferences_company_user_doctype")
+  @@index([companyId, userId], map: "idx_print_preferences_company_user")
+  @@map("print_preferences")
 }
