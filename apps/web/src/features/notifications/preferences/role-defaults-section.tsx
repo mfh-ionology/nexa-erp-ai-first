@@ -203,10 +203,19 @@ export function RoleDefaultsSection() {
   const handleSave = useCallback(() => {
     const changes = getDirtyPreferences(items, localState);
     if (changes.length === 0) return;
-    updateMutation.mutate({
-      role: selectedRole,
-      preferences: changes,
-    });
+    updateMutation.mutate(
+      {
+        role: selectedRole,
+        preferences: changes,
+      },
+      {
+        onSuccess: () => {
+          // Reset initial state to match current local state so isDirty becomes false
+          // and the useEffect guard allows re-sync on next refetch
+          initialStateRef.current = { ...localState };
+        },
+      },
+    );
   }, [items, localState, selectedRole, updateMutation]);
 
   // Role change with unsaved-changes guard (Issue #10)

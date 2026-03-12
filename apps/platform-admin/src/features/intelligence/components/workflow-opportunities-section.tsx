@@ -155,6 +155,7 @@ function ActionDropdown({
 // ---------------------------------------------------------------------------
 
 function StatusBadge({ status }: { status: string }) {
+  const safeStatus = status || 'NEW';
   const colorMap: Record<string, string> = {
     NEW: 'bg-blue-100 text-blue-700',
     REVIEWED: 'bg-amber-100 text-amber-700',
@@ -166,11 +167,11 @@ function StatusBadge({ status }: { status: string }) {
     <span
       className={cn(
         'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-        colorMap[status] ?? colorMap.NEW,
+        colorMap[safeStatus] ?? colorMap.NEW,
       )}
-      aria-label={`Status: ${status.toLowerCase()}`}
+      aria-label={`Status: ${safeStatus.toLowerCase()}`}
     >
-      {status.charAt(0) + status.slice(1).toLowerCase()}
+      {safeStatus.charAt(0) + safeStatus.slice(1).toLowerCase()}
     </span>
   );
 }

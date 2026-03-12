@@ -255,7 +255,7 @@ describe('Print Preference Routes (Task 3.4)', () => {
       await route.handler(request, reply);
 
       expect(mockGetPreferences).toHaveBeenCalledWith('company-001', 'user-001');
-      expect(reply.send).toHaveBeenCalledWith(preferences);
+      expect(reply.send).toHaveBeenCalledWith({ success: true, data: preferences });
     });
 
     it('uses companyId and userId from request context', async () => {
@@ -297,7 +297,7 @@ describe('Print Preference Routes (Task 3.4)', () => {
         { documentType: 'SALES_INVOICE', action: 'AUTO_DOWNLOAD' },
       ]);
       expect(mockGetPreferences).toHaveBeenCalledWith('company-001', 'user-001');
-      expect(reply.send).toHaveBeenCalledWith(updatedPreferences);
+      expect(reply.send).toHaveBeenCalledWith({ success: true, data: updatedPreferences });
     });
 
     it('passes multiple preferences to the service', async () => {
@@ -340,7 +340,7 @@ describe('Print Preference Routes (Task 3.4)', () => {
       await route.handler(request, reply);
 
       expect(mockGetCompanyDefaults).toHaveBeenCalledWith('company-001');
-      expect(reply.send).toHaveBeenCalledWith(defaults);
+      expect(reply.send).toHaveBeenCalledWith({ success: true, data: defaults });
     });
 
     it('uses companyId from request context', async () => {
@@ -382,7 +382,7 @@ describe('Print Preference Routes (Task 3.4)', () => {
         { documentType: 'PURCHASE_ORDER', action: 'BROWSER_PRINT' },
       ]);
       expect(mockGetCompanyDefaults).toHaveBeenCalledWith('company-001');
-      expect(reply.send).toHaveBeenCalledWith(updatedDefaults);
+      expect(reply.send).toHaveBeenCalledWith({ success: true, data: updatedDefaults });
     });
   });
 
@@ -409,7 +409,7 @@ describe('Print Preference Routes (Task 3.4)', () => {
 
       expect(mockResetUserPreferences).toHaveBeenCalledWith('company-001', 'user-001');
       expect(mockGetPreferences).toHaveBeenCalledWith('company-001', 'user-001');
-      expect(reply.send).toHaveBeenCalledWith(defaults);
+      expect(reply.send).toHaveBeenCalledWith({ success: true, data: defaults });
     });
 
     it('scopes reset to current user and company', async () => {

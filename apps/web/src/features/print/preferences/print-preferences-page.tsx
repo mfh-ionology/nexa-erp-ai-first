@@ -333,7 +333,7 @@ export function PrintPreferencesPage() {
         localState={localState}
         onChange={handleChange}
         isLoading={isLoading}
-        companyDefaults={companyDefaults}
+        companyDefaults={isAdmin ? companyDefaults : undefined}
       />
 
       {/* Admin-only: Company defaults section */}

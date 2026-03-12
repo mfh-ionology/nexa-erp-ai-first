@@ -64,11 +64,30 @@ interface SortState {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Module key → display name mapping (must match MODULE_OPTIONS values) */
+const MODULE_KEY_MAP: Record<string, string> = {
+  ar: 'AR',
+  ap: 'AP',
+  crm: 'CRM',
+  hr: 'HR',
+  finance: 'Finance',
+  sales: 'Sales',
+  purchasing: 'Purchasing',
+  inventory: 'Inventory',
+  manufacturing: 'Manufacturing',
+  reporting: 'Reporting',
+  system: 'System',
+};
+
 /** Extract module name from a skill key (e.g. "ar.aging_report" → "AR") */
-function extractModuleFromSkillKey(skillKey: string): string {
+function extractModuleFromSkillKey(skillKey: string | null | undefined): string {
+  if (!skillKey) return 'Other';
   const prefix = skillKey.split('.')[0];
   if (!prefix) return 'Other';
-  return prefix.toUpperCase();
+  return (
+    MODULE_KEY_MAP[prefix.toLowerCase()] ??
+    prefix.charAt(0).toUpperCase() + prefix.slice(1).toLowerCase()
+  );
 }
 
 /** Parse decimal string to number, defaulting to 0 */
@@ -103,7 +122,7 @@ function getSuccessRateLabel(value: string): string {
 function compareRows(a: SkillEffectiveness, b: SkillEffectiveness, field: SortField): number {
   switch (field) {
     case 'skillKey':
-      return a.skillKey.localeCompare(b.skillKey);
+      return (a.skillKey ?? '').localeCompare(b.skillKey ?? '');
     case 'module':
       return extractModuleFromSkillKey(a.skillKey).localeCompare(
         extractModuleFromSkillKey(b.skillKey),

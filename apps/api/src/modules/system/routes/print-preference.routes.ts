@@ -20,6 +20,8 @@ import {
   getCompanyDefaultsResponseSchema,
 } from '../schemas/print-preference.schema.js';
 import { createRbacGuard } from '../../../core/rbac/index.js';
+import { sendSuccess } from '../../../core/utils/response.js';
+import { successEnvelope } from '../../../core/schemas/envelope.js';
 import {
   PrintPreferenceService,
   type PreferenceInput,
@@ -40,13 +42,13 @@ async function printPreferenceRoutes(fastify: FastifyInstance): Promise<void> {
     '/print-preferences',
     {
       schema: {
-        response: { 200: getPreferencesResponseSchema },
+        response: { 200: successEnvelope(getPreferencesResponseSchema) },
       },
       preHandler: createRbacGuard({ minimumRole: 'STAFF' as const }),
     },
     async (request, reply) => {
       const preferences = await service.getPreferences(request.companyId, request.userId);
-      return reply.send(preferences);
+      return sendSuccess(reply, preferences);
     },
   );
 
@@ -58,7 +60,7 @@ async function printPreferenceRoutes(fastify: FastifyInstance): Promise<void> {
     {
       schema: {
         body: updateUserPreferencesBodySchema,
-        response: { 200: getPreferencesResponseSchema },
+        response: { 200: successEnvelope(getPreferencesResponseSchema) },
       },
       preHandler: createRbacGuard({ minimumRole: 'STAFF' as const }),
     },
@@ -69,7 +71,7 @@ async function printPreferenceRoutes(fastify: FastifyInstance): Promise<void> {
         request.body.preferences as PreferenceInput[],
       );
       const updated = await service.getPreferences(request.companyId, request.userId);
-      return reply.send(updated);
+      return sendSuccess(reply, updated);
     },
   );
 
@@ -80,13 +82,13 @@ async function printPreferenceRoutes(fastify: FastifyInstance): Promise<void> {
     '/print-preferences/company-defaults',
     {
       schema: {
-        response: { 200: getCompanyDefaultsResponseSchema },
+        response: { 200: successEnvelope(getCompanyDefaultsResponseSchema) },
       },
       preHandler: createRbacGuard({ minimumRole: 'STAFF' as const }),
     },
     async (request, reply) => {
       const defaults = await service.getCompanyDefaults(request.companyId);
-      return reply.send(defaults);
+      return sendSuccess(reply, defaults);
     },
   );
 
@@ -98,7 +100,7 @@ async function printPreferenceRoutes(fastify: FastifyInstance): Promise<void> {
     {
       schema: {
         body: updateCompanyDefaultsBodySchema,
-        response: { 200: getCompanyDefaultsResponseSchema },
+        response: { 200: successEnvelope(getCompanyDefaultsResponseSchema) },
       },
       preHandler: createRbacGuard({ minimumRole: 'ADMIN' as const }),
     },
@@ -108,7 +110,7 @@ async function printPreferenceRoutes(fastify: FastifyInstance): Promise<void> {
         request.body.defaults as PreferenceInput[],
       );
       const updated = await service.getCompanyDefaults(request.companyId);
-      return reply.send(updated);
+      return sendSuccess(reply, updated);
     },
   );
 
@@ -119,14 +121,14 @@ async function printPreferenceRoutes(fastify: FastifyInstance): Promise<void> {
     '/print-preferences/reset',
     {
       schema: {
-        response: { 200: getPreferencesResponseSchema },
+        response: { 200: successEnvelope(getPreferencesResponseSchema) },
       },
       preHandler: createRbacGuard({ minimumRole: 'STAFF' as const }),
     },
     async (request, reply) => {
       await service.resetUserPreferences(request.companyId, request.userId);
       const preferences = await service.getPreferences(request.companyId, request.userId);
-      return reply.send(preferences);
+      return sendSuccess(reply, preferences);
     },
   );
 }

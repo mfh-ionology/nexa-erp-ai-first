@@ -184,7 +184,16 @@ export function NotificationPreferencesPage() {
   const handleSave = useCallback(() => {
     const changes = getDirtyPreferences(preferences, localState);
     if (changes.length === 0) return;
-    updateMutation.mutate({ preferences: changes });
+    updateMutation.mutate(
+      { preferences: changes },
+      {
+        onSuccess: () => {
+          // Reset initial state to match current local state so isDirty becomes false
+          // and the useEffect guard allows re-sync on next refetch
+          initialStateRef.current = { ...localState };
+        },
+      },
+    );
   }, [preferences, localState, updateMutation]);
 
   // Reset handler — deletes all user preferences, falling back to defaults
