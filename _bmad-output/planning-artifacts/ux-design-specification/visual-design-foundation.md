@@ -114,10 +114,10 @@ All spacing derives from an 8px base unit. Components snap to the 8px grid for v
 | XL (1536px) | 12 | 32px | auto | 1440px |
 
 **Layout Principles:**
-1. **Sidebar + Content** — Desktop uses fixed-width sidebar (256px collapsed to 64px) + fluid content area
+1. **Header + Content** — Desktop uses full-width content area with mega-menu overlay (380px slide-from-left), favourites toolbar (40px), and module context bar (32px) above the content
 2. **Card-based composition** — Content areas use card grids, not freeform layouts. Cards have consistent padding (20px), border-radius (12px / `rounded-xl`), and subtle border (`#e5e7eb`)
 3. **Density control** — Default "comfortable" density (16px gaps between elements). Power users can switch to "compact" density (8px gaps) via user preferences
-4. **Z-index layers** — Background (0) → Content (10) → Sticky headers (20) → Sidebar (30) → Dropdowns (40) → Modals (50) → Toasts (60) → Command palette (70)
+4. **Z-index layers** — Background (0) → Content (10) → Sticky headers (20) → Mega-menu overlay (30) → Dropdowns (40) → Modals (50) → Toasts (60) → Command palette (70)
 
 ## Shadow & Radius Tokens (Concept D)
 

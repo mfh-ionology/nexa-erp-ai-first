@@ -304,6 +304,31 @@
 | **Indexes** | `@@unique([userId, accessGroupId, companyId])` | |
 | **Relations** | user → User, accessGroup → AccessGroup, company → CompanyProfile | |
 
+### User (Navigation Fields)
+
+> The User model is managed by the auth/system module. The fields below were added for the navigation redesign (2026-03).
+
+| Field | Type | Notes |
+|-------|------|-------|
+| mobileNavStyle | MobileNavStyle (enum) | Default `CLASSIC_TABS`. Per-user mobile navigation preference. Values: `CLASSIC_TABS`, `MINIMAL`, `MY_SHORTCUTS` |
+| **Relations** | favouritePages → UserFavouritePage[] | |
+
+### UserFavouritePage
+| Field | Type | Notes |
+|-------|------|-------|
+| **Table** | `user_favourite_pages` | |
+| **PK** | `id` UUID | |
+| userId | UUID | FK → User.id |
+| companyId | UUID | FK → CompanyProfile.id |
+| path | String(255) | Route path (e.g. "/sales/orders") |
+| label | String(100) | Display label for the favourite |
+| iconKey | String(50) | Icon key for rendering (e.g. "ShoppingCart") |
+| displayOrder | Int | Default 0; ordering within favourites toolbar |
+| createdAt | DateTime | |
+| updatedAt | DateTime | |
+| **Indexes** | `@@unique([userId, companyId, path])`, `@@index([userId, companyId, displayOrder])` | |
+| **Relations** | user → User, company → CompanyProfile | |
+
 ### DocumentTemplate
 | Field | Type | Notes |
 |-------|------|-------|

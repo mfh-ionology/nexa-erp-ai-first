@@ -57,11 +57,20 @@
 
 ## Navigation Patterns
 
-**Global Navigation:**
-- **Sidebar** (desktop/tablet): Module icons + labels in flat grouped navigation (Main, Operations, Other, Admin), collapsed state shows icons only with tooltips. Groups are separated by uppercase group titles and optional dividers. Items are permission-filtered — only modules the user has access to appear.
-- **Bottom tabs** (phone): 5 tabs: Briefing, Modules, AI, Notifications, Profile
-- **Breadcrumbs**: Always visible below header: Module → Entity Type → Record Name
-- **Command palette** (Cmd+K): Search entities, run AI commands, navigate to any page
+> **Navigation Redesign (2026-03):** The original sidebar navigation has been replaced with a mega-menu + favourites toolbar + module context bar system. See full design spec: `docs/superpowers/specs/2026-03-13-navigation-redesign-design.md`. Feature flag: `VITE_USE_NEW_NAVIGATION`.
+
+**Global Navigation (Desktop/Tablet) — Mega-Menu System:**
+- **Mega-menu** (desktop/tablet): Triggered by hamburger button in header. 380px slide-from-left overlay with drill-down accordion. Module groups (Main, Operations, Other, Admin) expand to show page links. Permission-filtered — only modules/pages the user has `canAccess: true` appear. Closes on outside click, Escape key, or navigation.
+- **Favourites toolbar** (desktop/tablet): 40px horizontal bar below header. Displays user-pinned page shortcuts (`UserFavouritePage` model) as icon+label chips. Overflow menu (">>" chevron) when items exceed available width. Users can add/remove/reorder favourites. Company-scoped — each company has its own set of favourites.
+- **Module context bar** (desktop/tablet): 32px bar below favourites toolbar. Auto-detected from current URL path (e.g., `/sales/*` shows Sales module). Displays Pages / Settings / Reports pills for the current module. Clicking a pill reveals a dropdown of sub-pages within that category. Hidden when on dashboard or non-module pages.
+- **Command palette** (Cmd+K): Search entities, run AI commands, navigate to any page.
+
+**Mobile Navigation (Phone) — Per-User Preference:**
+- Users choose their preferred mobile nav style via `mobileNavStyle` field (stored on User model):
+  - **CLASSIC_TABS** (default): 5-tab bottom bar: Briefing, Modules, AI, Notifications, Profile
+  - **MINIMAL**: Floating action button + gesture navigation
+  - **MY_SHORTCUTS**: Bottom bar shows user's favourite pages as shortcuts
+- **Breadcrumbs**: Always visible below header on all breakpoints: Module → Entity Type → Record Name
 
 **In-Page Navigation:**
 - **Tabs** within forms: Primary, Details, History, Related — click any tab, non-linear
@@ -77,7 +86,7 @@
 ## Loading & Empty States
 
 **Loading States:**
-- **Page load**: Full skeleton matching page layout (sidebar + header + content skeletons)
+- **Page load**: Full skeleton matching page layout (header + favourites toolbar + content skeletons)
 - **Card load**: Individual card skeletons within existing layout
 - **Table load**: Row skeletons with column widths matching header
 - **AI processing**: Pulsing purple bar + "AI is preparing your invoice..." message

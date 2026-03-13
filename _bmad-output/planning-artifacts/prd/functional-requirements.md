@@ -138,6 +138,8 @@
 - FR86: Administrators can configure number series (prefix + sequential counter) per document type
 - FR87: Administrators can import data (customers, suppliers, items, opening balances) from CSV files
 - FR88: Administrators can manage backup and restore operations
+- FR227: Users can pin frequently used pages to a favourites toolbar for quick access, with per-company favourites that persist across sessions, supporting add, remove, and reorder operations
+- FR228: Users can select their preferred mobile navigation style (Classic Tabs, Minimal, or My Shortcuts) via profile settings, with the selection persisting per user
 
 ## Compliance & VAT
 

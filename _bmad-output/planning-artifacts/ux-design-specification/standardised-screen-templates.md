@@ -385,7 +385,7 @@ The overflow menu groups actions into logical sections with dividers. Only appli
 | Progress | `progress` | Upload progress, month-end checklist progress |
 | Skeleton | `skeleton` | Loading placeholders for cards, tables, forms |
 | Separator | `separator` | Section dividers within forms and panels |
-| Scroll Area | `scroll-area` | Scrollable panels, sidebar navigation |
+| Scroll Area | `scroll-area` | Scrollable panels, mega-menu navigation |
 
 ## Custom Components
 
@@ -491,8 +491,10 @@ src/
   components/
     ui/           # Shadcn base components (Button, Card, Table, etc.)
     layout/       # Shell and navigation components
-      app-layout.tsx        # AppShell (sidebar + header + content)
-      app-sidebar.tsx       # Sidebar navigation
+      app-layout.tsx        # AppShell (header + favourites toolbar + context bar + content)
+      mega-menu.tsx         # Mega-menu navigation (slide-from-left overlay)
+      favourites-toolbar.tsx # Favourites toolbar (pinned page shortcuts)
+      module-context-bar.tsx # Module context bar (auto-detected from URL)
       app-header.tsx        # Header bar
       user-menu.tsx         # User avatar dropdown
       company-switcher.tsx  # Company selector

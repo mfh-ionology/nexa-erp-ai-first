@@ -21,6 +21,8 @@
       - [DataView (List Page Registry)](./3-module-by-module-models.md#dataview-list-page-registry)
       - [DataViewField (Master Column & Filter Metadata)](./3-module-by-module-models.md#dataviewfield-master-column--filter-metadata)
       - [DateRangePreset](./3-module-by-module-models.md#daterangepreset)
+      - [User (Navigation Fields)](./3-module-by-module-models.md#user-navigation-fields)
+      - [UserFavouritePage](./3-module-by-module-models.md#userfavouritepage)
       - [UserColumnPreference](./3-module-by-module-models.md#usercolumnpreference)
       - [SavedView](./3-module-by-module-models.md#savedview)
       - [SavedViewCondition](./3-module-by-module-models.md#savedviewcondition)

@@ -53,7 +53,9 @@ Every frontend screen MUST visually match the approved Concept D prototype (`_bm
 - **Buttons**: Primary `#7c3aed` with white text, `border-radius: 8px`, hover `#5b21b6`
 - **Inputs**: `border-radius: 6px`, focus border `#7c3aed`, focus ring `#7c3aed`
 - **Badges**: Pill shape `border-radius: 99px`, semantic status colours with icon + colour + text (never colour alone)
-- **Sidebar**: White background, 256px/64px widths, active item `#7c3aed` bg + white text, hover `#f5f3ff`
+- **Mega-menu**: 380px slide-from-left overlay, white background, active item `#7c3aed` bg + white text, hover `#f5f3ff`
+- **Favourites toolbar**: 40px height, white bg, icon+label chips, overflow chevron
+- **Module context bar**: 32px height, `#f4f2ff` bg, pill-shaped category buttons
 - **Header**: 56px height, white bg, purple "N" logo mark, centered search, right-side notification + avatar
 - **Typography**: Plus Jakarta Sans for headings/navigation (`font-serif` in Tailwind), Inter for body/labels (`font-sans`), JetBrains Mono for amounts/codes (`font-mono`)
 - **Page Background**: `#f4f2ff` (not white, not grey)
