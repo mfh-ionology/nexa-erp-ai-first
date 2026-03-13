@@ -5,6 +5,8 @@
 
 import type { PrismaClient } from '@nexa/db';
 
+import { seedDefaultFavourites } from './favourite-pages-seeder.js';
+
 // ---------------------------------------------------------------------------
 // Input types
 // ---------------------------------------------------------------------------
@@ -23,7 +25,15 @@ export interface ReorderFavouritePagesInput {
 // listFavouritePages — returns all favourite pages for a user/company
 // ---------------------------------------------------------------------------
 
-export async function listFavouritePages(db: PrismaClient, userId: string, companyId: string) {
+export async function listFavouritePages(
+  db: PrismaClient,
+  userId: string,
+  companyId: string,
+  enabledModules: string[] = [],
+) {
+  // Seed defaults on first access (no-op if user already has favourites)
+  await seedDefaultFavourites(db, userId, companyId, enabledModules);
+
   return db.userFavouritePage.findMany({
     where: { userId, companyId },
     orderBy: { displayOrder: 'asc' },

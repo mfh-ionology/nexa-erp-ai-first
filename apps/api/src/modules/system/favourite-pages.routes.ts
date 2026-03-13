@@ -50,7 +50,12 @@ async function favouritePagesRoutes(fastify: FastifyInstance): Promise<void> {
       },
     },
     async (request, reply) => {
-      const pages = await listFavouritePages(prisma, request.userId, request.companyId);
+      const pages = await listFavouritePages(
+        prisma,
+        request.userId,
+        request.companyId,
+        request.enabledModules,
+      );
       return sendSuccess(reply, pages);
     },
   );
