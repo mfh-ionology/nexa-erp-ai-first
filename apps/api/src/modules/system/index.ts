@@ -26,6 +26,11 @@
 //   GET|PUT /system/print-preferences        (user print preferences)
 //   GET|PUT /system/print-preferences/company-defaults (company defaults, ADMIN)
 //   DELETE  /system/print-preferences/reset  (reset user preferences)
+//   GET    /system/favourite-pages             (list user favourite pages)
+//   POST   /system/favourite-pages             (add a favourite page pin)
+//   DELETE /system/favourite-pages/:id         (remove a favourite page pin)
+//   POST   /system/favourite-pages/unpin-by-path (remove by path)
+//   PUT    /system/favourite-pages/reorder     (reorder favourite page pins)
 // ---------------------------------------------------------------------------
 
 import type { FastifyInstance } from 'fastify';
@@ -62,6 +67,9 @@ import { documentTemplateRoutesPlugin } from './routes/document-template.routes.
 
 // E13-1 Task 3 — Print preference routes
 import { printPreferenceRoutesPlugin } from './routes/print-preference.routes.js';
+
+// Nav Redesign — Favourite pages routes
+import { favouritePagesRoutesPlugin } from './favourite-pages.routes.js';
 
 // ---------------------------------------------------------------------------
 // Fastify type augmentation — expose document template services (Task 8.5)
@@ -214,6 +222,9 @@ async function systemModule(fastify: FastifyInstance): Promise<void> {
 
   // Print preference routes (under /system/print-preferences/*)
   await fastify.register(printPreferenceRoutesPlugin);
+
+  // Favourite pages routes (under /system/favourite-pages/*)
+  await fastify.register(favouritePagesRoutesPlugin, { prefix: '/favourite-pages' });
 }
 
 export const systemModulePlugin = systemModule;
