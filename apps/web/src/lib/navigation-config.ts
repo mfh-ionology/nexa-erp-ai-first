@@ -337,7 +337,7 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
     labelKey: 'navigation:reporting',
     icon: 'BarChart3',
     pathPrefix: '/reporting',
-    displayOrder: 99,
+    displayOrder: 12,
     items: [
       {
         key: 'reporting.financialReports',
