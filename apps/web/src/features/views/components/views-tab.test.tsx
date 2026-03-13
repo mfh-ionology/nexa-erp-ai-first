@@ -38,6 +38,15 @@ vi.mock('@nexa/api-client', () => ({
       this.statusCode = statusCode;
     }
   },
+  ApiClient: class MockApiClient {
+    constructor(_config: unknown) {}
+    request = vi.fn();
+    get = vi.fn();
+    post = vi.fn();
+    patch = vi.fn();
+    put = vi.fn();
+    delete = vi.fn();
+  },
 }));
 
 // --- Mock form utilities ---

@@ -27,12 +27,23 @@ vi.mock('@/hooks/use-toast', () => ({
   toast: (...args: unknown[]) => mockToast(...args),
 }));
 
+// --- Mock i18n ---
+vi.mock('@nexa/i18n', () => ({
+  useI18n: () => ({ t: (key: string) => key }),
+}));
+
 // --- Mock query keys ---
 vi.mock('@/lib/query-keys', () => ({
   queryKeys: {
     attachments: {
       all: ['attachments'],
       list: (entityType: string, entityId: string) => ['attachments', entityType, entityId],
+      count: (entityType: string, entityId: string) => [
+        'attachments',
+        'count',
+        entityType,
+        entityId,
+      ],
     },
   },
 }));
@@ -272,7 +283,10 @@ describe('useUploadAttachment', () => {
 
     expect(result.current.progress.status).toBe('error');
     expect(result.current.progress.error).toBe('Presign failed');
-    expect(mockToast).toHaveBeenCalledWith({ title: 'Presign failed', variant: 'destructive' });
+    expect(mockToast).toHaveBeenCalledWith({
+      title: 'crossCutting.attachments.uploadFailed',
+      variant: 'destructive',
+    });
   });
 
   it('uses application/octet-stream for files without MIME type', async () => {

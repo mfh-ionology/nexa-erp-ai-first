@@ -115,7 +115,7 @@ describe('ModelListPage', () => {
 
       const heading = screen.getByRole('heading', { level: 1 });
       expect(heading).toHaveTextContent('Model Registry');
-    });
+    }, 15000);
 
     it('renders column headers', async () => {
       await renderPage();

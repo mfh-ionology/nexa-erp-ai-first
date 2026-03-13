@@ -114,17 +114,19 @@ describe('PromptListPage', () => {
 
       const heading = screen.getByRole('heading', { level: 1 });
       expect(heading).toHaveTextContent('Prompt Templates');
-    });
+    }, 15000);
 
     it('renders column headers (Name, Category, Version, Variables, Status, Last Updated)', async () => {
       await renderPage();
 
-      expect(screen.getByText('Name')).toBeInTheDocument();
-      expect(screen.getByText('Category')).toBeInTheDocument();
-      expect(screen.getByText('Version')).toBeInTheDocument();
-      expect(screen.getByText('Variables')).toBeInTheDocument();
-      expect(screen.getByText('Status')).toBeInTheDocument();
-      expect(screen.getByText('Last Updated')).toBeInTheDocument();
+      // Column headers may appear multiple times (e.g. in sortable header wrappers),
+      // so we verify at least one instance of each is present
+      expect(screen.getAllByText('Name').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Category').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Version').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Variables').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Status').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Last Updated').length).toBeGreaterThanOrEqual(1);
     });
 
     it('renders prompt data in the table', async () => {

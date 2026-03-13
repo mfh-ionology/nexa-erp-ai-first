@@ -10,6 +10,18 @@ import type { Company } from '@/lib/system-api';
 
 // --- Mocks ---
 
+const mockRouterState = {
+  location: { pathname: '/finance/journals' },
+};
+
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => vi.fn(),
+  useRouterState: (opts?: { select?: (s: typeof mockRouterState) => unknown }) => {
+    if (opts?.select) return opts.select(mockRouterState);
+    return mockRouterState;
+  },
+}));
+
 const mockCompanies: Company[] = [
   { id: 'c1', name: 'Nexa Ltd', slug: 'nexa-ltd', baseCurrencyCode: 'GBP', isDefault: true },
   { id: 'c2', name: 'Acme Corp', slug: 'acme-corp', baseCurrencyCode: 'USD', isDefault: false },

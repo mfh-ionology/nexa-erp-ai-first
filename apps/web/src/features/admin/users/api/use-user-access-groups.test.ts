@@ -60,6 +60,15 @@ const { MockApiError } = vi.hoisted(() => {
 
 vi.mock('@nexa/api-client', () => ({
   ApiError: MockApiError,
+  ApiClient: class MockApiClient {
+    constructor(_config: unknown) {}
+    request = vi.fn();
+    get = vi.fn();
+    post = vi.fn();
+    patch = vi.fn();
+    put = vi.fn();
+    delete = vi.fn();
+  },
 }));
 
 // --- Test data ---
@@ -152,7 +161,13 @@ describe('useAssignAccessGroups', () => {
       userId: 'user-1',
       companyId: 'company-1',
       accessGroups: [
-        { id: 'ag-1', code: 'FULL_ACCESS', name: 'Full Access', assignedBy: 'Admin', assignedAt: '2025-01-01T00:00:00Z' },
+        {
+          id: 'ag-1',
+          code: 'FULL_ACCESS',
+          name: 'Full Access',
+          assignedBy: 'Admin',
+          assignedAt: '2025-01-01T00:00:00Z',
+        },
       ],
     };
     mockApiPut.mockResolvedValue({ data: response });
@@ -201,6 +216,7 @@ describe('useAssignAccessGroups', () => {
     });
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['system', 'users', 'user-1'],
+      exact: true,
     });
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['system', 'users', 'infinite'],
@@ -208,7 +224,11 @@ describe('useAssignAccessGroups', () => {
   });
 
   it('422 error shows "at least one access group required" toast', async () => {
-    const error422 = new MockApiError('BUSINESS_RULE_VIOLATION', 'At least one access group is required', 422);
+    const error422 = new MockApiError(
+      'BUSINESS_RULE_VIOLATION',
+      'At least one access group is required',
+      422,
+    );
     mockApiPut.mockRejectedValue(error422);
 
     const { wrapper } = createWrapper();

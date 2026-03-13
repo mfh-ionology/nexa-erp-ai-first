@@ -8,6 +8,31 @@ afterEach(() => {
   cleanup();
 });
 
+// --- Mock @nexa/api-client ---
+// Provides a no-op ApiClient constructor so src/lib/api-client.ts can
+// initialise without a real network layer in tests. Individual test files
+// may override specific exports (e.g. ApiError) via their own vi.mock() call.
+vi.mock('@nexa/api-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@nexa/api-client')>();
+  return {
+    ...actual,
+    ApiClient: class MockApiClient {
+      auth = {};
+      system = {};
+      ai = {};
+      notifications = {};
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      constructor(_config: unknown) {}
+      request = vi.fn();
+      get = vi.fn();
+      post = vi.fn();
+      patch = vi.fn();
+      put = vi.fn();
+      delete = vi.fn();
+    },
+  };
+});
+
 // --- Mock @nexa/i18n ---
 // Returns the translation key as the value so tests can assert on keys.
 vi.mock('@nexa/i18n', () => {

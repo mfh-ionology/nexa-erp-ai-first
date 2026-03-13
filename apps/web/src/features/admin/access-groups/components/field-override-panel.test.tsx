@@ -42,6 +42,15 @@ vi.mock('sonner', () => ({
 // --- Mock @nexa/api-client ---
 vi.mock('@nexa/api-client', () => ({
   ApiError: MockApiError,
+  ApiClient: class MockApiClient {
+    constructor(_config: unknown) {}
+    request = vi.fn();
+    get = vi.fn();
+    post = vi.fn();
+    patch = vi.fn();
+    put = vi.fn();
+    delete = vi.fn();
+  },
 }));
 
 // --- Mock useResources ---
@@ -81,11 +90,7 @@ vi.mock('@/lib/query-keys', () => ({
 vi.mock('@/components/ui/select', () => {
   const React = require('react');
   return {
-    Select: (props: {
-      children: unknown;
-      value?: string;
-      onValueChange?: (v: string) => void;
-    }) =>
+    Select: (props: { children: unknown; value?: string; onValueChange?: (v: string) => void }) =>
       React.createElement(
         MockSelectCtx.Provider,
         { value: { onValueChange: props.onValueChange, value: props.value } },
@@ -230,9 +235,7 @@ describe('FieldOverridePanel', () => {
     it('shows empty state message when no resource is selected', async () => {
       await renderPanel();
 
-      expect(
-        screen.getByText('accessGroups.fieldOverrides.emptyState'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('accessGroups.fieldOverrides.emptyState')).toBeInTheDocument();
     });
 
     it('renders the resource selector combobox', async () => {
@@ -359,9 +362,7 @@ describe('FieldOverridePanel', () => {
 
       await openAndSelectResource(user, 'Balance Sheet');
 
-      expect(
-        screen.getByText('accessGroups.fieldOverrides.noOverrides'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('accessGroups.fieldOverrides.noOverrides')).toBeInTheDocument();
       expect(
         screen.getByRole('button', {
           name: /accessGroups\.fieldOverrides\.addOverride/,
@@ -459,9 +460,7 @@ describe('FieldOverridePanel', () => {
       );
 
       // New row has empty field path → required validation error
-      expect(
-        screen.getByText('accessGroups.fieldOverrides.fieldRequired'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('accessGroups.fieldOverrides.fieldRequired')).toBeInTheDocument();
     });
 
     it('duplicate field path shows duplicate validation error', async () => {
@@ -490,9 +489,7 @@ describe('FieldOverridePanel', () => {
       await user.type(inputs[1]!, 'costPrice');
 
       // Both rows get duplicate error
-      const duplicateErrors = screen.getAllByText(
-        'accessGroups.fieldOverrides.duplicateField',
-      );
+      const duplicateErrors = screen.getAllByText('accessGroups.fieldOverrides.duplicateField');
       expect(duplicateErrors.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -622,9 +619,7 @@ describe('FieldOverridePanel', () => {
       });
       await user.click(removeButton);
 
-      expect(
-        screen.getByText('accessGroups.fieldOverrides.noOverrides'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('accessGroups.fieldOverrides.noOverrides')).toBeInTheDocument();
     });
   });
 
@@ -656,9 +651,7 @@ describe('FieldOverridePanel', () => {
       );
 
       // Type a valid field path
-      const input = screen.getByPlaceholderText(
-        'accessGroups.fieldOverrides.fieldPathPlaceholder',
-      );
+      const input = screen.getByPlaceholderText('accessGroups.fieldOverrides.fieldPathPlaceholder');
       await user.type(input, 'newField');
 
       const saveButton = screen.getByRole('button', {
@@ -878,9 +871,7 @@ describe('FieldOverridePanel', () => {
       );
 
       // Empty field path → validation error → aria-invalid="true"
-      const input = screen.getByPlaceholderText(
-        'accessGroups.fieldOverrides.fieldPathPlaceholder',
-      );
+      const input = screen.getByPlaceholderText('accessGroups.fieldOverrides.fieldPathPlaceholder');
       expect(input).toHaveAttribute('aria-invalid', 'true');
     });
 

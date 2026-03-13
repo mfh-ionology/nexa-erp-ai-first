@@ -90,6 +90,8 @@ export function CopilotInput() {
         onSend={handleSend}
         disabled={isStreaming}
         placeholder={t('copilot.inputPlaceholder')}
+        inputAriaLabel={t('copilot.inputAriaLabel')}
+        sendAriaLabel={t('copilot.send')}
       />
     </div>
   );

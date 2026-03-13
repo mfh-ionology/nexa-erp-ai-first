@@ -30,7 +30,7 @@ vi.mock('@nexa/i18n', () => ({
 }));
 
 vi.mock('@tanstack/react-router', () => ({
-  useBlocker: vi.fn(),
+  useBlocker: vi.fn().mockReturnValue({ status: 'idle', reset: vi.fn(), proceed: vi.fn() }),
   Link: ({ children }: Record<string, unknown>) => children,
 }));
 

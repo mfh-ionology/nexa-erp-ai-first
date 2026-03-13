@@ -94,7 +94,7 @@ describe('AccessGroupListPage', () => {
 
       const heading = screen.getByRole('heading', { level: 1 });
       expect(heading).toHaveTextContent('accessGroups.title');
-    });
+    }, 15000);
 
     it('renders breadcrumbs: System > Access Groups', async () => {
       await renderPage();

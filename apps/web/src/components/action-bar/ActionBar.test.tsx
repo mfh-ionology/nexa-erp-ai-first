@@ -28,7 +28,12 @@ function setSuperAdmin() {
 }
 
 // Helper to set up auth store with specific module permissions
-function setPermissions(modules: Record<string, { canAccess: boolean; canNew: boolean; canView: boolean; canEdit: boolean; canDelete: boolean }>) {
+function setPermissions(
+  modules: Record<
+    string,
+    { canAccess: boolean; canNew: boolean; canView: boolean; canEdit: boolean; canDelete: boolean }
+  >,
+) {
   useAuthStore.setState({
     permissions: {
       userId: 'u1',
@@ -81,8 +86,8 @@ describe('ActionBar', () => {
   it('renders persistent tools buttons (Attachments, Links)', () => {
     render(<ActionBar {...defaultProps} attachmentCount={3} linkCount={2} />);
 
-    expect(screen.getByRole('button', { name: 'actionBar.attachments' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'actionBar.links' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'actionBar.attachments (3)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'actionBar.links (2)' })).toBeInTheDocument();
   });
 
   it('renders overflow menu trigger button', () => {
@@ -207,9 +212,9 @@ describe('ActionBar', () => {
     // Primary actions
     expect(screen.getByText('actionBar.approve')).toBeInTheDocument();
     expect(screen.getByText('actionBar.saveDraft')).toBeInTheDocument();
-    // Persistent tools
-    expect(screen.getByRole('button', { name: 'actionBar.attachments' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'actionBar.links' })).toBeInTheDocument();
+    // Persistent tools (aria-label includes count when > 0)
+    expect(screen.getByRole('button', { name: 'actionBar.attachments (1)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'actionBar.links (1)' })).toBeInTheDocument();
     // Overflow trigger
     expect(screen.getByRole('button', { name: 'actionBar.moreActions' })).toBeInTheDocument();
   });
@@ -246,7 +251,9 @@ describe('ActionBar', () => {
     render(<ActionBar {...defaultProps} onAttachmentsClick={vi.fn()} onLinksClick={vi.fn()} />);
 
     const toolbar = screen.getByRole('toolbar');
-    const buttons = Array.from(toolbar.querySelectorAll<HTMLButtonElement>('button:not([disabled])'));
+    const buttons = Array.from(
+      toolbar.querySelectorAll<HTMLButtonElement>('button:not([disabled])'),
+    );
 
     // Focus the first button and press ArrowRight
     buttons[0]!.focus();
@@ -261,9 +268,7 @@ describe('ActionBar', () => {
     const buttons = screen.getAllByRole('button');
     for (const btn of buttons) {
       // Each button should have text content or aria-label
-      const hasName =
-        btn.textContent!.trim().length > 0 ||
-        btn.getAttribute('aria-label') !== null;
+      const hasName = btn.textContent!.trim().length > 0 || btn.getAttribute('aria-label') !== null;
       expect(hasName).toBe(true);
     }
   });

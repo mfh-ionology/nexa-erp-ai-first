@@ -104,6 +104,6 @@ describe('useResetNotificationPreferences', () => {
     });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(mockToastError).toHaveBeenCalledWith('preferences.saveError');
+    expect(mockToastError).toHaveBeenCalledWith('preferences.resetError');
   });
 });

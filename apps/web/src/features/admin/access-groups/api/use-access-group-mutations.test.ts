@@ -74,6 +74,15 @@ const { MockApiError, MockValidationError } = vi.hoisted(() => {
 vi.mock('@nexa/api-client', () => ({
   ApiError: MockApiError,
   ValidationError: MockValidationError,
+  ApiClient: class MockApiClient {
+    constructor(_config: unknown) {}
+    request = vi.fn();
+    get = vi.fn();
+    post = vi.fn();
+    patch = vi.fn();
+    put = vi.fn();
+    delete = vi.fn();
+  },
 }));
 
 // --- Helper: create wrapper with QueryClient ---
@@ -198,10 +207,7 @@ describe('useSetPermissions', () => {
       await result.current.mutateAsync(permPayload);
     });
 
-    expect(mockApiPut).toHaveBeenCalledWith(
-      '/system/access-groups/ag-1/permissions',
-      permPayload,
-    );
+    expect(mockApiPut).toHaveBeenCalledWith('/system/access-groups/ag-1/permissions', permPayload);
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['system', 'access-groups', 'ag-1'],
     });
@@ -226,9 +232,7 @@ describe('useSetPermissions', () => {
     });
 
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalledWith(
-        'accessGroups.error.invalidResources',
-      );
+      expect(mockToastError).toHaveBeenCalledWith('accessGroups.error.invalidResources');
     });
   });
 });
@@ -257,7 +261,11 @@ describe('useSetFieldOverrides', () => {
     const payload = {
       fieldOverrides: [
         { resourceCode: 'finance.journals', fieldPath: 'costPrice', visibility: 'HIDDEN' as const },
-        { resourceCode: 'finance.journals', fieldPath: 'purchasePrice', visibility: 'READ_ONLY' as const },
+        {
+          resourceCode: 'finance.journals',
+          fieldPath: 'purchasePrice',
+          visibility: 'READ_ONLY' as const,
+        },
       ],
     };
 
@@ -265,10 +273,7 @@ describe('useSetFieldOverrides', () => {
       await result.current.mutateAsync(payload);
     });
 
-    expect(mockApiPut).toHaveBeenCalledWith(
-      '/system/access-groups/ag-1/field-overrides',
-      payload,
-    );
+    expect(mockApiPut).toHaveBeenCalledWith('/system/access-groups/ag-1/field-overrides', payload);
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['system', 'access-groups', 'ag-1'],
     });
@@ -293,9 +298,7 @@ describe('useSetFieldOverrides', () => {
     });
 
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalledWith(
-        'accessGroups.error.invalidResources',
-      );
+      expect(mockToastError).toHaveBeenCalledWith('accessGroups.error.invalidResources');
     });
   });
 
@@ -315,9 +318,7 @@ describe('useSetFieldOverrides', () => {
     });
 
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalledWith(
-        'accessGroups.error.fieldOverridesSaveFailed',
-      );
+      expect(mockToastError).toHaveBeenCalledWith('accessGroups.error.fieldOverridesSaveFailed');
     });
   });
 
@@ -382,9 +383,7 @@ describe('useDeactivateAccessGroup', () => {
     });
 
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalledWith(
-        'accessGroups.error.hasActiveUsers',
-      );
+      expect(mockToastError).toHaveBeenCalledWith('accessGroups.error.hasActiveUsers');
     });
   });
 });

@@ -47,6 +47,15 @@ const { MockValidationError } = vi.hoisted(() => {
 vi.mock('@nexa/api-client', () => ({
   ApiError: MockValidationError,
   ValidationError: MockValidationError,
+  ApiClient: class MockApiClient {
+    constructor(_config: unknown) {}
+    request = vi.fn();
+    get = vi.fn();
+    post = vi.fn();
+    patch = vi.fn();
+    put = vi.fn();
+    delete = vi.fn();
+  },
 }));
 
 // --- Mock useResources ---
@@ -150,12 +159,7 @@ async function renderMatrix(
   accessGroupId = 'ag-1',
 ) {
   const { PermissionMatrix } = await import('./permission-matrix');
-  return render(
-    <PermissionMatrix
-      accessGroupId={accessGroupId}
-      permissions={permissions}
-    />,
-  );
+  return render(<PermissionMatrix accessGroupId={accessGroupId} permissions={permissions} />);
 }
 
 describe('PermissionMatrix', () => {
@@ -195,11 +199,15 @@ describe('PermissionMatrix', () => {
       await renderMatrix();
 
       // Column headers appear in each module's sticky header row
-      expect(screen.getAllByText('accessGroups.permission.access').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('accessGroups.permission.access').length).toBeGreaterThanOrEqual(
+        1,
+      );
       expect(screen.getAllByText('accessGroups.permission.new').length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText('accessGroups.permission.view').length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText('accessGroups.permission.edit').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText('accessGroups.permission.delete').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('accessGroups.permission.delete').length).toBeGreaterThanOrEqual(
+        1,
+      );
     });
 
     it('renders column headers with permission labels', async () => {
