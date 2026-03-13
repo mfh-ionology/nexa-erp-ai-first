@@ -14,6 +14,11 @@ import { CopilotDrawer } from '@/components/copilot/CopilotDrawer';
 import { CopilotMinimisedPill } from '@/components/copilot/CopilotMinimisedPill';
 import { NotificationProvider } from '@/features/notifications/notification-provider';
 
+// New navigation components
+import { MegaMenu } from './mega-menu';
+import { FavouritesToolbar } from './favourites-toolbar';
+import { ModuleContextBar } from './module-context-bar';
+
 /**
  * Silent error boundary for the notification system.
  * If notifications crash, the rest of the app continues working.
@@ -47,17 +52,22 @@ import { BottomTabBar } from './bottom-tab-bar';
 
 /**
  * Top-level app shell that composes:
- *   - Skip-to-content link
- *   - `<AppSidebar>` (desktop/tablet inline, mobile off-canvas Sheet)
- *   - `<AppHeader>`
- *   - `<main>` content area with `<Outlet />` (breadcrumbs rendered by page templates)
  *
- * Responsive breakpoints (from UX Design Spec):
- *   - Desktop  (>=1024px): Full sidebar (256px), icon + label
- *   - Tablet   (768-1023px): Collapsed sidebar (64px), icon-only, hover to expand
- *   - Phone    (<768px): Hidden sidebar, bottom tab navigation + off-canvas drawer
+ * **New navigation** (VITE_USE_NEW_NAVIGATION !== 'false'):
+ *   - `<AppHeader>` with hamburger at all breakpoints
+ *   - `<FavouritesToolbar>` — pinned page chips
+ *   - `<ModuleContextBar>` — active module context with category pills
+ *   - `<MegaMenu>` — fixed-position overlay panel (opened by hamburger)
+ *   - Full-width content area (no sidebar)
+ *
+ * **Legacy navigation** (feature flag off):
+ *   - `<AppSidebar>` (desktop/tablet inline, mobile off-canvas Sheet)
+ *   - `<AppHeader>` with mobile-only hamburger
+ *   - Content area with sidebar margin compensation
  */
 export function AppLayout() {
+  const useNewNavigation = import.meta.env.VITE_USE_NEW_NAVIGATION !== 'false';
+
   const { t } = useI18n();
   const breakpoint = useBreakpoint();
   const prefersReducedMotion = usePrefersReducedMotion();
@@ -69,7 +79,7 @@ export function AppLayout() {
   const isMobile = breakpoint === 'phone';
   const isTablet = breakpoint === 'tablet';
 
-  // Hover-to-expand timer ref (200ms delay)
+  // ── Legacy sidebar hover-to-expand logic (only used when old nav active) ──
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSidebarMouseEnter = useCallback(() => {
@@ -94,25 +104,82 @@ export function AppLayout() {
     };
   }, []);
 
-  // Close mobile drawer on route change
+  // Close mobile drawer on route change (legacy sidebar)
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const prevPathRef = useRef(pathname);
 
   useEffect(() => {
     if (pathname !== prevPathRef.current) {
       prevPathRef.current = pathname;
-      if (isMobile && isOpen) {
+      if (!useNewNavigation && isMobile && isOpen) {
         toggle();
       }
       // Also clear hover expansion on navigation
-      setHoverExpanded(false);
+      if (!useNewNavigation) {
+        setHoverExpanded(false);
+      }
     }
-  }, [pathname, isMobile, isOpen, toggle, setHoverExpanded]);
+  }, [pathname, isMobile, isOpen, toggle, setHoverExpanded, useNewNavigation]);
 
   /* eslint-disable i18next/no-literal-string -- CSS class names, not user-facing text */
   const transitionClasses = prefersReducedMotion ? '' : 'transition-[width] duration-200 ease-out';
   /* eslint-enable i18next/no-literal-string */
 
+  // ────────────────────────────────────────────────────────
+  // New navigation layout (mega-menu + toolbars, no sidebar)
+  // ────────────────────────────────────────────────────────
+  if (useNewNavigation) {
+    return (
+      <div className="flex h-screen flex-col overflow-hidden">
+        {/* ── Skip link (WCAG 2.1 AA) ──────────────────────── */}
+        <a
+          href="#main-content"
+          className={cn(
+            'sr-only focus:not-sr-only',
+            'focus:fixed focus:left-4 focus:top-4 focus:z-[100]',
+            'focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:text-primary-foreground focus:shadow-lg',
+            'focus:outline-none',
+          )}
+        >
+          {t('navigation:skipToContent')}
+        </a>
+
+        {/* ── Mega-menu overlay (fixed-position, opened by hamburger) ── */}
+        <MegaMenu />
+
+        {/* ── Main content area (full-width, no sidebar margin) ── */}
+        <NotificationErrorBoundary>
+          <NotificationProvider>
+            <AppHeader />
+            <FavouritesToolbar />
+            <ModuleContextBar />
+            <div className="flex flex-1 overflow-hidden">
+              <main
+                id="main-content"
+                role="main"
+                aria-label={t('navigation:mainContent')}
+                className="flex-1 overflow-auto p-6"
+              >
+                <Outlet />
+              </main>
+              {/* Co-Pilot Drawer (desktop/tablet) */}
+              {!isMobile && <CopilotDrawer />}
+            </div>
+            {/* ── Phone bottom tab bar (<768px) ───────────────── */}
+            {isMobile && <BottomTabBar />}
+          </NotificationProvider>
+        </NotificationErrorBoundary>
+
+        {/* Mobile Co-Pilot overlay + minimised pill */}
+        {isMobile && <CopilotDrawer />}
+        {isMobile && <CopilotMinimisedPill />}
+      </div>
+    );
+  }
+
+  // ────────────────────────────────────────────────────────
+  // Legacy navigation layout (sidebar + header)
+  // ────────────────────────────────────────────────────────
   return (
     <div className="flex h-screen overflow-hidden">
       {/* ── Skip link (WCAG 2.1 AA) ──────────────────────── */}
