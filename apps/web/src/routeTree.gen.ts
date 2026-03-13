@@ -31,6 +31,7 @@ import { Route as AuthenticatedSystemPrintPreferencesRouteImport } from './route
 import { Route as AuthenticatedSystemNotificationPreferencesRouteImport } from './routes/_authenticated/system/notification-preferences';
 import { Route as AuthenticatedSystemMyPermissionsRouteImport } from './routes/_authenticated/system/my-permissions';
 import { Route as AuthenticatedSystemEmailTemplatesRouteImport } from './routes/_authenticated/system/email-templates';
+import { Route as AuthenticatedSystemDisplayPreferencesRouteImport } from './routes/_authenticated/system/display-preferences';
 import { Route as AuthenticatedSystemCompaniesRouteImport } from './routes/_authenticated/system/companies';
 import { Route as AuthenticatedSystemAccessGroupsRouteImport } from './routes/_authenticated/system/access-groups';
 import { Route as AuthenticatedSettingsDocumentTemplatesRouteImport } from './routes/_authenticated/settings/document-templates';
@@ -183,6 +184,12 @@ const AuthenticatedSystemEmailTemplatesRoute = AuthenticatedSystemEmailTemplates
   path: '/system/email-templates',
   getParentRoute: () => AuthenticatedRoute,
 } as any);
+const AuthenticatedSystemDisplayPreferencesRoute =
+  AuthenticatedSystemDisplayPreferencesRouteImport.update({
+    id: '/system/display-preferences',
+    path: '/system/display-preferences',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any);
 const AuthenticatedSystemCompaniesRoute = AuthenticatedSystemCompaniesRouteImport.update({
   id: '/system/companies',
   path: '/system/companies',
@@ -403,6 +410,7 @@ export interface FileRoutesByFullPath {
   '/settings/document-templates': typeof AuthenticatedSettingsDocumentTemplatesRoute;
   '/system/access-groups': typeof AuthenticatedSystemAccessGroupsRouteWithChildren;
   '/system/companies': typeof AuthenticatedSystemCompaniesRoute;
+  '/system/display-preferences': typeof AuthenticatedSystemDisplayPreferencesRoute;
   '/system/email-templates': typeof AuthenticatedSystemEmailTemplatesRouteWithChildren;
   '/system/my-permissions': typeof AuthenticatedSystemMyPermissionsRoute;
   '/system/notification-preferences': typeof AuthenticatedSystemNotificationPreferencesRoute;
@@ -465,6 +473,7 @@ export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute;
   '/settings/document-templates': typeof AuthenticatedSettingsDocumentTemplatesRoute;
   '/system/companies': typeof AuthenticatedSystemCompaniesRoute;
+  '/system/display-preferences': typeof AuthenticatedSystemDisplayPreferencesRoute;
   '/system/my-permissions': typeof AuthenticatedSystemMyPermissionsRoute;
   '/system/notification-preferences': typeof AuthenticatedSystemNotificationPreferencesRoute;
   '/system/print-preferences': typeof AuthenticatedSystemPrintPreferencesRoute;
@@ -522,6 +531,7 @@ export interface FileRoutesById {
   '/_authenticated/settings/document-templates': typeof AuthenticatedSettingsDocumentTemplatesRoute;
   '/_authenticated/system/access-groups': typeof AuthenticatedSystemAccessGroupsRouteWithChildren;
   '/_authenticated/system/companies': typeof AuthenticatedSystemCompaniesRoute;
+  '/_authenticated/system/display-preferences': typeof AuthenticatedSystemDisplayPreferencesRoute;
   '/_authenticated/system/email-templates': typeof AuthenticatedSystemEmailTemplatesRouteWithChildren;
   '/_authenticated/system/my-permissions': typeof AuthenticatedSystemMyPermissionsRoute;
   '/_authenticated/system/notification-preferences': typeof AuthenticatedSystemNotificationPreferencesRoute;
@@ -587,6 +597,7 @@ export interface FileRouteTypes {
     | '/settings/document-templates'
     | '/system/access-groups'
     | '/system/companies'
+    | '/system/display-preferences'
     | '/system/email-templates'
     | '/system/my-permissions'
     | '/system/notification-preferences'
@@ -649,6 +660,7 @@ export interface FileRouteTypes {
     | '/'
     | '/settings/document-templates'
     | '/system/companies'
+    | '/system/display-preferences'
     | '/system/my-permissions'
     | '/system/notification-preferences'
     | '/system/print-preferences'
@@ -705,6 +717,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/document-templates'
     | '/_authenticated/system/access-groups'
     | '/_authenticated/system/companies'
+    | '/_authenticated/system/display-preferences'
     | '/_authenticated/system/email-templates'
     | '/_authenticated/system/my-permissions'
     | '/_authenticated/system/notification-preferences'
@@ -922,6 +935,13 @@ declare module '@tanstack/react-router' {
       path: '/system/email-templates';
       fullPath: '/system/email-templates';
       preLoaderRoute: typeof AuthenticatedSystemEmailTemplatesRouteImport;
+      parentRoute: typeof AuthenticatedRoute;
+    };
+    '/_authenticated/system/display-preferences': {
+      id: '/_authenticated/system/display-preferences';
+      path: '/system/display-preferences';
+      fullPath: '/system/display-preferences';
+      preLoaderRoute: typeof AuthenticatedSystemDisplayPreferencesRouteImport;
       parentRoute: typeof AuthenticatedRoute;
     };
     '/_authenticated/system/companies': {
@@ -1354,6 +1374,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedSettingsDocumentTemplatesRoute: typeof AuthenticatedSettingsDocumentTemplatesRoute;
   AuthenticatedSystemAccessGroupsRoute: typeof AuthenticatedSystemAccessGroupsRouteWithChildren;
   AuthenticatedSystemCompaniesRoute: typeof AuthenticatedSystemCompaniesRoute;
+  AuthenticatedSystemDisplayPreferencesRoute: typeof AuthenticatedSystemDisplayPreferencesRoute;
   AuthenticatedSystemEmailTemplatesRoute: typeof AuthenticatedSystemEmailTemplatesRouteWithChildren;
   AuthenticatedSystemMyPermissionsRoute: typeof AuthenticatedSystemMyPermissionsRoute;
   AuthenticatedSystemNotificationPreferencesRoute: typeof AuthenticatedSystemNotificationPreferencesRoute;
@@ -1390,6 +1411,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedSettingsDocumentTemplatesRoute: AuthenticatedSettingsDocumentTemplatesRoute,
   AuthenticatedSystemAccessGroupsRoute: AuthenticatedSystemAccessGroupsRouteWithChildren,
   AuthenticatedSystemCompaniesRoute: AuthenticatedSystemCompaniesRoute,
+  AuthenticatedSystemDisplayPreferencesRoute: AuthenticatedSystemDisplayPreferencesRoute,
   AuthenticatedSystemEmailTemplatesRoute: AuthenticatedSystemEmailTemplatesRouteWithChildren,
   AuthenticatedSystemMyPermissionsRoute: AuthenticatedSystemMyPermissionsRoute,
   AuthenticatedSystemNotificationPreferencesRoute: AuthenticatedSystemNotificationPreferencesRoute,
