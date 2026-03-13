@@ -1,16 +1,13 @@
 import { useNavigate } from '@tanstack/react-router';
-import { ChevronRight, Star, icons, type LucideIcon } from 'lucide-react';
+import { ChevronRight, Star } from 'lucide-react';
 
 import { useI18n } from '@nexa/i18n';
 
 import { cn } from '@/lib/utils';
+import { resolveIcon } from '@/lib/icon-resolver';
 import { useFavouritePages } from '@/hooks/use-favourite-pages';
 import type { NavigationModule, NavigationItem } from '@/lib/navigation-config';
 import { useMegaMenuStore } from '@/stores/mega-menu-store';
-
-function resolveIcon(name: string): LucideIcon | undefined {
-  return icons[name as keyof typeof icons];
-}
 
 interface MegaMenuItemProps {
   module: NavigationModule;

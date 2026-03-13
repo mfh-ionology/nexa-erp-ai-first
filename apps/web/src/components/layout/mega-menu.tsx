@@ -50,26 +50,22 @@ export function MegaMenu() {
     }
   }, [isOpen]);
 
-  // Close on Escape
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        close();
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, close]);
-
-  // Focus trap
+  // Keyboard handling: Escape to close + focus trap
   useEffect(() => {
     if (!isOpen) return;
-    const panel = panelRef.current;
-    if (!panel) return;
 
-    const handleTab = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        close();
+        return;
+      }
+
       if (e.key !== 'Tab') return;
 
+      const panel = panelRef.current;
+      if (!panel) return;
+
+      // Re-query on each Tab press so accordion-expanded elements are included
       const focusableEls = panel.querySelectorAll<HTMLElement>(
         'button, input, [tabindex]:not([tabindex="-1"])',
       );
@@ -87,9 +83,9 @@ export function MegaMenu() {
       }
     };
 
-    document.addEventListener('keydown', handleTab);
-    return () => document.removeEventListener('keydown', handleTab);
-  }, [isOpen]);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, close]);
 
   return (
     <>

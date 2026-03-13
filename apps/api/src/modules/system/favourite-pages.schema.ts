@@ -22,9 +22,17 @@ export const favouritePageResponseSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const createFavouritePageBodySchema = z.object({
-  path: z.string().min(1).max(255),
+  path: z
+    .string()
+    .min(1)
+    .max(255)
+    .regex(/^\/[a-zA-Z0-9\-\/]*$/),
   label: z.string().min(1).max(100),
-  iconKey: z.string().min(1).max(50),
+  iconKey: z
+    .string()
+    .min(1)
+    .max(50)
+    .regex(/^[A-Za-z0-9]+$/),
 });
 
 export const deleteFavouritePageParamsSchema = z.object({
@@ -32,7 +40,11 @@ export const deleteFavouritePageParamsSchema = z.object({
 });
 
 export const unpinByPathBodySchema = z.object({
-  path: z.string().min(1).max(255),
+  path: z
+    .string()
+    .min(1)
+    .max(255)
+    .regex(/^\/[a-zA-Z0-9\-\/]*$/),
 });
 
 export const reorderFavouritePagesBodySchema = z.object({

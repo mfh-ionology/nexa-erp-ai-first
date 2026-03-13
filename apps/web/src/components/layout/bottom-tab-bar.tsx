@@ -15,32 +15,18 @@
 
 import { useCallback } from 'react';
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
-import {
-  Bell,
-  Home,
-  LayoutGrid,
-  MessageSquare,
-  MoreHorizontal,
-  User,
-  icons,
-  type LucideIcon,
-} from 'lucide-react';
+import { Bell, Home, LayoutGrid, MessageSquare, MoreHorizontal, User } from 'lucide-react';
+
+import { useI18n } from '@nexa/i18n';
 
 import { cn } from '@/lib/utils';
+import { resolveIcon } from '@/lib/icon-resolver';
 import { useCopilotStore } from '@/stores/copilot-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
 import { useMegaMenuStore } from '@/stores/mega-menu-store';
 import { useAuthStore } from '@/stores/auth-store';
 import type { MobileNavStyle } from '@/stores/auth-store';
 import { useFavouritePages } from '@/hooks/use-favourite-pages';
-
-import { useI18n } from '@nexa/i18n';
-
-// ── Icon resolution (same pattern as mega-menu-item.tsx) ──
-
-function resolveIcon(name: string): LucideIcon | undefined {
-  return icons[name as keyof typeof icons];
-}
 
 // ── Shared tab button styles ──
 

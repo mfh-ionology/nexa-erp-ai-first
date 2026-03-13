@@ -7,19 +7,16 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useRouterState } from '@tanstack/react-router';
-import { Plus, Star, icons, type LucideIcon } from 'lucide-react';
+import { Plus, Star } from 'lucide-react';
 
 import { useI18n } from '@nexa/i18n';
 
 import { cn } from '@/lib/utils';
+import { resolveIcon } from '@/lib/icon-resolver';
 import { useFavouritePages } from '@/hooks/use-favourite-pages';
 import { useMegaMenuStore } from '@/stores/mega-menu-store';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Skeleton } from '@/components/ui/skeleton';
-
-function resolveIcon(name: string): LucideIcon | undefined {
-  return icons[name as keyof typeof icons];
-}
 
 /** Average chip width in px — used for overflow calculation */
 const CHIP_WIDTH = 120;

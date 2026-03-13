@@ -8,11 +8,11 @@
  */
 
 import { Link, useRouterState } from '@tanstack/react-router';
-import { icons, type LucideIcon } from 'lucide-react';
 
 import { useI18n } from '@nexa/i18n';
 
 import { cn } from '@/lib/utils';
+import { resolveIcon } from '@/lib/icon-resolver';
 import { useActiveModule } from '@/hooks/use-active-module';
 import { useAuthStore } from '@/stores/auth-store';
 import {
@@ -22,10 +22,6 @@ import {
   type NavigationItem,
 } from '@/lib/navigation-config';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-
-function resolveIcon(name: string): LucideIcon | undefined {
-  return icons[name as keyof typeof icons];
-}
 
 type CategoryKey = 'page' | 'setting' | 'report';
 

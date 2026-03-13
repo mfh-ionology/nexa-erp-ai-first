@@ -31,13 +31,21 @@ export async function listFavouritePages(
   companyId: string,
   enabledModules: string[] = [],
 ) {
-  // Seed defaults on first access (no-op if user already has favourites)
-  await seedDefaultFavourites(db, userId, companyId, enabledModules);
-
-  return db.userFavouritePage.findMany({
+  const pages = await db.userFavouritePage.findMany({
     where: { userId, companyId },
     orderBy: { displayOrder: 'asc' },
   });
+
+  // Seed defaults only on first access (when user has zero favourites)
+  if (pages.length === 0) {
+    await seedDefaultFavourites(db, userId, companyId, enabledModules);
+    return db.userFavouritePage.findMany({
+      where: { userId, companyId },
+      orderBy: { displayOrder: 'asc' },
+    });
+  }
+
+  return pages;
 }
 
 // ---------------------------------------------------------------------------
@@ -50,21 +58,23 @@ export async function createFavouritePage(
   companyId: string,
   input: CreateFavouritePageInput,
 ) {
-  const maxOrder = await db.userFavouritePage.aggregate({
-    where: { userId, companyId },
-    _max: { displayOrder: true },
-  });
-  const nextOrder = (maxOrder._max.displayOrder ?? -1) + 1;
+  return db.$transaction(async (tx) => {
+    const maxOrder = await tx.userFavouritePage.aggregate({
+      where: { userId, companyId },
+      _max: { displayOrder: true },
+    });
+    const nextOrder = (maxOrder._max.displayOrder ?? -1) + 1;
 
-  return db.userFavouritePage.create({
-    data: {
-      userId,
-      companyId,
-      path: input.path,
-      label: input.label,
-      iconKey: input.iconKey,
-      displayOrder: nextOrder,
-    },
+    return tx.userFavouritePage.create({
+      data: {
+        userId,
+        companyId,
+        path: input.path,
+        label: input.label,
+        iconKey: input.iconKey,
+        displayOrder: nextOrder,
+      },
+    });
   });
 }
 
