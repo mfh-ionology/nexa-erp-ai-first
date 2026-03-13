@@ -31,19 +31,27 @@ function subscribe(callback: () => void): () => void {
  * Returns the current viewport breakpoint and keeps it in sync
  * with `window.matchMedia` listeners.
  *
- * Also auto-updates the sidebar store mode when the breakpoint changes:
+ * Legacy behaviour (feature flag off): auto-updates the sidebar store mode
+ * when the breakpoint changes:
  *   - Desktop (>=1024px): expanded sidebar
- *   - Tablet  (768–1023px): collapsed sidebar (icon-only)
+ *   - Tablet  (768-1023px): collapsed sidebar (icon-only)
  *   - Phone   (<768px): sidebar hidden (bottom tab navigation)
+ *
+ * New navigation (VITE_USE_NEW_NAVIGATION active): no sidebar sync side-effects.
+ * The hook only returns the breakpoint value.
  *
  * Respects `prefers-reduced-motion` by disabling CSS transitions when enabled.
  */
 export function useBreakpoint(): Breakpoint {
+  const useNewNavigation = import.meta.env.VITE_USE_NEW_NAVIGATION !== 'false';
   const breakpoint = useSyncExternalStore(subscribe, getBreakpoint, () => 'desktop' as Breakpoint);
   const setMode = useSidebarStore((s) => s.setMode);
 
   const syncSidebar = useCallback(
     (bp: Breakpoint) => {
+      // When new navigation is active, don't auto-sync sidebar mode
+      if (useNewNavigation) return;
+
       switch (bp) {
         case 'desktop':
           setMode('expanded');
@@ -56,7 +64,7 @@ export function useBreakpoint(): Breakpoint {
           break;
       }
     },
-    [setMode],
+    [setMode, useNewNavigation],
   );
 
   useEffect(() => {
