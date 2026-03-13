@@ -13,8 +13,18 @@ const mockRouterState = {
 
 vi.mock('@tanstack/react-router', () => ({
   Outlet: () => <div data-testid="outlet">Route content</div>,
-  Link: ({ children, to, ...props }: { children: React.ReactNode; to: string; [key: string]: unknown }) => (
-    <a href={to} {...props}>{children}</a>
+  Link: ({
+    children,
+    to,
+    ...props
+  }: {
+    children: React.ReactNode;
+    to: string;
+    [key: string]: unknown;
+  }) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
   ),
   useNavigate: () => vi.fn(),
   useRouterState: (opts?: { select?: (s: typeof mockRouterState) => unknown }) => {
@@ -34,9 +44,11 @@ vi.mock('@/hooks/use-breakpoint', () => ({
 
 // Mock system-api for CompanySwitcher
 vi.mock('@/lib/system-api', () => ({
-  fetchCompanies: vi.fn().mockResolvedValue([
-    { id: 'c1', name: 'Nexa Ltd', slug: 'nexa-ltd', baseCurrencyCode: 'GBP', isDefault: true },
-  ]),
+  fetchCompanies: vi
+    .fn()
+    .mockResolvedValue([
+      { id: 'c1', name: 'Nexa Ltd', slug: 'nexa-ltd', baseCurrencyCode: 'GBP', isDefault: true },
+    ]),
   fetchMyPermissions: vi.fn().mockResolvedValue({
     userId: 'user-1',
     companyId: 'c1',
@@ -51,6 +63,63 @@ vi.mock('@/lib/system-api', () => ({
 
 vi.mock('@/lib/auth-api', () => ({
   logout: vi.fn().mockResolvedValue(undefined),
+}));
+
+// Mock page context hook (used by AppLayout for copilot route sync)
+vi.mock('@/hooks/use-page-context', () => ({
+  usePageContext: vi.fn(),
+}));
+
+// Mock CopilotDrawer and CopilotMinimisedPill (not under test)
+vi.mock('@/components/copilot/CopilotDrawer', () => ({
+  CopilotDrawer: () => <div data-testid="copilot-drawer" />,
+}));
+vi.mock('@/components/copilot/CopilotMinimisedPill', () => ({
+  CopilotMinimisedPill: () => <div data-testid="copilot-pill" />,
+}));
+
+// Mock NotificationProvider (wraps children transparently)
+vi.mock('@/features/notifications/notification-provider', () => ({
+  NotificationProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+// Mock new navigation components
+vi.mock('./mega-menu', () => ({
+  MegaMenu: () => <div data-testid="mega-menu" />,
+}));
+vi.mock('./favourites-toolbar', () => ({
+  FavouritesToolbar: () => <div data-testid="favourites-toolbar" />,
+}));
+vi.mock('./module-context-bar', () => ({
+  ModuleContextBar: () => <div data-testid="module-context-bar" />,
+}));
+
+// Mock legacy BottomTabBar
+vi.mock('./bottom-tab-bar', () => ({
+  BottomTabBar: () => (
+    <nav aria-label="navigation:bottomTabs" data-testid="bottom-tab-bar">
+      Bottom Tabs
+    </nav>
+  ),
+}));
+
+// Mock FavouritesDropdown (used by AppHeader)
+vi.mock('@/features/views/components/favourites-dropdown', () => ({
+  FavouritesDropdown: () => <button data-testid="favourites-dropdown">Favourites</button>,
+}));
+
+// Mock favourite pages hook (used by AppHeader)
+vi.mock('@/hooks/use-favourite-pages', () => ({
+  useFavouritePages: () => ({
+    pages: [],
+    isLoading: false,
+    isPinned: () => false,
+    togglePin: vi.fn(),
+    pin: vi.fn(),
+    unpin: vi.fn(),
+    unpinByPath: vi.fn(),
+    reorder: vi.fn(),
+  }),
 }));
 
 import { AppLayout } from './app-layout';
@@ -79,6 +148,10 @@ describe('AppLayout', () => {
     vi.clearAllMocks();
     mockBreakpoint.mockReturnValue('desktop');
     mockPrefersReducedMotion.mockReturnValue(false);
+
+    // Feature flag defaults to 'true' (new navigation)
+    // import.meta.env.VITE_USE_NEW_NAVIGATION is undefined by default,
+    // and `undefined !== 'false'` evaluates to true.
 
     useAuthStore.setState({
       user: { id: 'user-1', email: 'test@nexa.io', firstName: 'Test', lastName: 'User' },
@@ -109,17 +182,44 @@ describe('AppLayout', () => {
     });
   });
 
-  it('renders sidebar, header, and main content area', () => {
+  // ── New navigation layout tests (feature flag defaults to true) ──
+
+  it('renders header, main content area, and new navigation components', () => {
     renderWithProviders(<AppLayout />);
 
-    // Sidebar (nav landmark)
-    expect(screen.getByRole('navigation', { name: 'navigation:sidebar' })).toBeInTheDocument();
     // Header (banner landmark)
     expect(screen.getByRole('banner')).toBeInTheDocument();
     // Main content (main landmark)
     expect(screen.getByRole('main')).toBeInTheDocument();
     // Outlet content
     expect(screen.getByTestId('outlet')).toBeInTheDocument();
+  });
+
+  it('renders MegaMenu component', () => {
+    renderWithProviders(<AppLayout />);
+
+    expect(screen.getByTestId('mega-menu')).toBeInTheDocument();
+  });
+
+  it('renders FavouritesToolbar component', () => {
+    renderWithProviders(<AppLayout />);
+
+    expect(screen.getByTestId('favourites-toolbar')).toBeInTheDocument();
+  });
+
+  it('renders ModuleContextBar component', () => {
+    renderWithProviders(<AppLayout />);
+
+    expect(screen.getByTestId('module-context-bar')).toBeInTheDocument();
+  });
+
+  it('does NOT render sidebar in new navigation mode', () => {
+    renderWithProviders(<AppLayout />);
+
+    // The sidebar navigation landmark should not be present
+    expect(
+      screen.queryByRole('navigation', { name: 'navigation:sidebar' }),
+    ).not.toBeInTheDocument();
   });
 
   it('main content has id="main-content" for skip link target', () => {
@@ -151,65 +251,12 @@ describe('AppLayout', () => {
     expect(skipLink.className).toContain('sr-only');
   });
 
-  it('renders breadcrumbs nav', () => {
-    renderWithProviders(<AppLayout />);
-
-    // Breadcrumbs should have a nav with aria-label
-    const breadcrumbNav = screen.getByRole('navigation', {
-      name: 'navigation:breadcrumb',
-    });
-    expect(breadcrumbNav).toBeInTheDocument();
-  });
-
-  it('breadcrumbs show current path segments', () => {
-    renderWithProviders(<AppLayout />);
-
-    const breadcrumbNav = screen.getByRole('navigation', {
-      name: 'navigation:breadcrumb',
-    });
-    const bcScope = within(breadcrumbNav);
-
-    // Router is mocked to /finance/journals
-    expect(bcScope.getByText('navigation:finance')).toBeInTheDocument();
-    expect(bcScope.getByText('navigation:finance.journals')).toBeInTheDocument();
-  });
-
-  it('last breadcrumb has aria-current="page"', () => {
-    renderWithProviders(<AppLayout />);
-
-    const breadcrumbNav = screen.getByRole('navigation', {
-      name: 'navigation:breadcrumb',
-    });
-    const bcScope = within(breadcrumbNav);
-    const lastCrumb = bcScope.getByText('navigation:finance.journals');
-    expect(lastCrumb).toHaveAttribute('aria-current', 'page');
-  });
-
-  it('sidebar collapses to icon-only width in collapsed mode', () => {
-    useSidebarStore.setState({ isCollapsed: true, mode: 'collapsed' });
-    renderWithProviders(<AppLayout />);
-
-    // The sidebar nav should have w-16 class (64px collapsed)
-    const sidebarNav = screen.getByRole('navigation', { name: 'navigation:sidebar' });
-    expect(sidebarNav.className).toContain('w-16');
-  });
-
-  it('sidebar is full width in expanded mode', () => {
-    useSidebarStore.setState({ isCollapsed: false, mode: 'expanded' });
-    renderWithProviders(<AppLayout />);
-
-    const sidebarNav = screen.getByRole('navigation', { name: 'navigation:sidebar' });
-    expect(sidebarNav.className).toContain('w-64');
-  });
-
-  it('on mobile, sidebar is hidden and bottom tab bar is shown', () => {
+  it('on mobile, bottom tab bar is shown', () => {
     mockBreakpoint.mockReturnValue('phone');
-    useSidebarStore.setState({ isOpen: false, mode: 'hidden' });
 
     renderWithProviders(<AppLayout />);
 
-    // The inline sidebar should NOT be in the DOM (mobile uses bottom tabs + drawer)
-    // The header and main are still rendered
+    // Header and main are still rendered
     expect(screen.getByRole('banner')).toBeInTheDocument();
     expect(screen.getByRole('main')).toBeInTheDocument();
 
@@ -218,23 +265,5 @@ describe('AppLayout', () => {
       name: 'navigation:bottomTabs',
     });
     expect(bottomTabNav).toBeInTheDocument();
-
-    // Breadcrumbs should NOT be shown on phone
-    expect(
-      screen.queryByRole('navigation', { name: 'navigation:breadcrumb' }),
-    ).not.toBeInTheDocument();
-  });
-
-  it('respects prefers-reduced-motion by not applying transitions', () => {
-    mockPrefersReducedMotion.mockReturnValue(true);
-    renderWithProviders(<AppLayout />);
-
-    // With reduced motion, transition classes should NOT be applied
-    // The aside element should not have transition-[width] class
-    const asideEl = screen.getByRole('navigation', { name: 'navigation:sidebar' }).closest('aside');
-    const wrapperEl = asideEl?.parentElement;
-    if (wrapperEl) {
-      expect(wrapperEl.className).not.toContain('transition-[width]');
-    }
   });
 });

@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useAuthStore } from '@/stores/auth-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
 import { useCopilotStore } from '@/stores/copilot-store';
+import { useMegaMenuStore } from '@/stores/mega-menu-store';
 
 // --- Mocks ---
 
@@ -27,9 +28,11 @@ vi.mock('@tanstack/react-router', () => ({
     </a>
   ),
   useNavigate: () => mockNavigate,
-  useRouterState: () => ({
-    location: { pathname: '/' },
-  }),
+  useRouterState: (opts?: { select?: (s: { location: { pathname: string } }) => unknown }) => {
+    const state = { location: { pathname: '/' } };
+    if (opts?.select) return opts.select(state);
+    return state;
+  },
 }));
 
 vi.mock('@/lib/auth-api', () => ({
@@ -39,6 +42,20 @@ vi.mock('@/lib/auth-api', () => ({
 vi.mock('@/features/views/components/favourites-dropdown', () => ({
   // eslint-disable-next-line @typescript-eslint/naming-convention -- React component
   FavouritesDropdown: () => <button data-testid="favourites-dropdown">Favourites</button>,
+}));
+
+// Mock favourite pages hook (used by AppHeader for pin star)
+vi.mock('@/hooks/use-favourite-pages', () => ({
+  useFavouritePages: () => ({
+    pages: [],
+    isLoading: false,
+    isPinned: () => false,
+    togglePin: vi.fn(),
+    pin: vi.fn(),
+    unpin: vi.fn(),
+    unpinByPath: vi.fn(),
+    reorder: vi.fn(),
+  }),
 }));
 
 import { AppHeader } from './app-header';
@@ -97,6 +114,11 @@ describe('AppHeader', () => {
       activeConversationId: null,
       isStreaming: false,
     });
+    useMegaMenuStore.setState({
+      isOpen: false,
+      expandedModule: null,
+      filterQuery: '',
+    });
   });
 
   it('renders header with banner role', () => {
@@ -106,58 +128,47 @@ describe('AppHeader', () => {
     expect(header).toBeInTheDocument();
   });
 
-  it('renders search placeholder input', () => {
+  it('renders search component', () => {
     renderWithProviders(<AppHeader />);
 
-    // Desktop search input (always visible on md+)
-    const searchInputs = screen.getAllByRole('textbox');
-    expect(searchInputs.length).toBeGreaterThanOrEqual(1);
-    expect(searchInputs[0]).toHaveAttribute('aria-label', 'common:searchPlaceholder');
-  });
-
-  it('renders chat button (disabled placeholder)', () => {
-    renderWithProviders(<AppHeader />);
-
-    const chatBtn = screen.getByRole('button', {
-      name: 'navigation:chatButton',
-    });
-    expect(chatBtn).toBeInTheDocument();
-    expect(chatBtn).toBeDisabled();
+    // The UnifiedSearch renders as a combobox element
+    const searchCombobox = screen.getByRole('combobox', { name: 'search.ariaLabel' });
+    expect(searchCombobox).toBeInTheDocument();
   });
 
   it('renders notifications bell', () => {
     renderWithProviders(<AppHeader />);
 
     const notifBtn = screen.getByRole('button', {
-      name: 'navigation:notifications',
+      name: 'notifications:ariaLabel',
     });
     expect(notifBtn).toBeInTheDocument();
   });
 
-  it('renders hamburger menu button for mobile', () => {
+  it('renders hamburger menu button always visible (new navigation)', () => {
     renderWithProviders(<AppHeader />);
 
     const hamburger = screen.getByRole('button', {
       name: 'navigation:toggleMenu',
     });
     expect(hamburger).toBeInTheDocument();
-    // It has md:hidden class (visible only on phone <768px)
-    expect(hamburger.className).toContain('md:hidden');
+    // With new navigation, the hamburger should NOT have lg:hidden or md:hidden class
+    // It is always visible
+    expect(hamburger.className).not.toContain('lg:hidden');
   });
 
-  it('hamburger toggles sidebar store', async () => {
-    // Hamburger is a mobile-only button — set mobile (hidden) mode
-    useSidebarStore.setState({ mode: 'hidden', isOpen: false });
+  it('hamburger toggles mega-menu store (new navigation)', async () => {
     const user = userEvent.setup();
     renderWithProviders(<AppHeader />);
 
     const hamburger = screen.getByRole('button', {
       name: 'navigation:toggleMenu',
     });
-    expect(useSidebarStore.getState().isOpen).toBe(false);
+    expect(useMegaMenuStore.getState().isOpen).toBe(false);
     await user.click(hamburger);
 
-    expect(useSidebarStore.getState().isOpen).toBe(true);
+    // With new navigation, clicking hamburger opens the mega-menu
+    expect(useMegaMenuStore.getState().isOpen).toBe(true);
   });
 
   it('renders user menu trigger with avatar', () => {
@@ -232,34 +243,5 @@ describe('AppHeader', () => {
 
     // TU = Test User
     expect(screen.getByText('TU')).toBeInTheDocument();
-  });
-
-  it('shows mobile search icon button', () => {
-    renderWithProviders(<AppHeader />);
-
-    // There's a search icon button for mobile (md:hidden)
-    const searchButtons = screen.getAllByRole('button', {
-      name: 'common:searchPlaceholder',
-    });
-    // At least one search button for mobile
-    expect(searchButtons.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('mobile search expands on icon click', async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<AppHeader />);
-
-    // Find the mobile search button (the one with md:hidden)
-    const searchButtons = screen.getAllByRole('button', {
-      name: 'common:searchPlaceholder',
-    });
-    const mobileSearchBtn = searchButtons.find((btn) => btn.className.includes('md:hidden'));
-
-    if (mobileSearchBtn) {
-      await user.click(mobileSearchBtn);
-
-      // A close button should appear
-      expect(screen.getByRole('button', { name: 'common:close' })).toBeInTheDocument();
-    }
   });
 });
