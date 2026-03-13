@@ -18,6 +18,8 @@ export interface NavigationItem {
   /** When true, the item is shown regardless of module-level filtering.
    *  Used for pages accessible to all authenticated users (e.g., My Permissions). */
   alwaysVisible?: boolean;
+  /** Categorises item for module context bar: page (default), setting, or report */
+  category?: 'page' | 'setting' | 'report';
 }
 
 export interface NavigationModule {
@@ -25,6 +27,10 @@ export interface NavigationModule {
   labelKey: string;
   icon: string;
   items: NavigationItem[];
+  /** Display order in mega-menu (lower = higher) */
+  displayOrder?: number;
+  /** URL prefix for module detection (e.g., '/finance', '/sales') */
+  pathPrefix: string;
 }
 
 export const NAVIGATION_MODULES: NavigationModule[] = [
@@ -32,6 +38,8 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
     key: 'finance',
     labelKey: 'navigation:finance',
     icon: 'Landmark',
+    pathPrefix: '/finance',
+    displayOrder: 2,
     items: [
       {
         key: 'finance.chartOfAccounts',
@@ -50,6 +58,7 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         labelKey: 'navigation:finance.periods',
         icon: 'Calendar',
         path: '/finance/periods',
+        category: 'setting',
       },
       {
         key: 'finance.bankRec',
@@ -69,6 +78,8 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
     key: 'ar',
     labelKey: 'navigation:ar',
     icon: 'Receipt',
+    pathPrefix: '/ar',
+    displayOrder: 3,
     items: [
       {
         key: 'ar.customers',
@@ -106,6 +117,8 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
     key: 'ap',
     labelKey: 'navigation:ap',
     icon: 'FileText',
+    pathPrefix: '/ap',
+    displayOrder: 4,
     items: [
       {
         key: 'ap.suppliers',
@@ -137,6 +150,8 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
     key: 'sales',
     labelKey: 'navigation:sales',
     icon: 'ShoppingCart',
+    pathPrefix: '/sales',
+    displayOrder: 5,
     items: [
       {
         key: 'sales.quotes',
@@ -162,6 +177,8 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
     key: 'purchasing',
     labelKey: 'navigation:purchasing',
     icon: 'Package',
+    pathPrefix: '/purchasing',
+    displayOrder: 6,
     items: [
       {
         key: 'purchasing.orders',
@@ -181,6 +198,8 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
     key: 'inventory',
     labelKey: 'navigation:inventory',
     icon: 'Warehouse',
+    pathPrefix: '/inventory',
+    displayOrder: 7,
     items: [
       {
         key: 'inventory.items',
@@ -212,6 +231,8 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
     key: 'crm',
     labelKey: 'navigation:crm',
     icon: 'Users',
+    pathPrefix: '/crm',
+    displayOrder: 9,
     items: [
       {
         key: 'crm.leads',
@@ -243,6 +264,8 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
     key: 'hr',
     labelKey: 'navigation:hr',
     icon: 'UserCog',
+    pathPrefix: '/hr',
+    displayOrder: 10,
     items: [
       {
         key: 'hr.employees',
@@ -280,6 +303,8 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
     key: 'manufacturing',
     labelKey: 'navigation:manufacturing',
     icon: 'Factory',
+    pathPrefix: '/manufacturing',
+    displayOrder: 11,
     items: [
       {
         key: 'manufacturing.recipes',
@@ -311,18 +336,22 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
     key: 'reporting',
     labelKey: 'navigation:reporting',
     icon: 'BarChart3',
+    pathPrefix: '/reporting',
+    displayOrder: 99,
     items: [
       {
         key: 'reporting.financialReports',
         labelKey: 'navigation:reporting.financialReports',
         icon: 'FileBarChart',
         path: '/reporting/financial-reports',
+        category: 'report',
       },
       {
         key: 'reporting.dashboards',
         labelKey: 'navigation:reporting.dashboards',
         icon: 'LayoutDashboard',
         path: '/reporting/dashboards',
+        category: 'report',
       },
     ],
   },
@@ -330,6 +359,8 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
     key: 'ai',
     labelKey: 'navigation:ai',
     icon: 'Bot',
+    pathPrefix: '/ai',
+    displayOrder: 13,
     items: [
       {
         key: 'ai.briefing',
@@ -358,6 +389,7 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         icon: 'Brain',
         path: '/ai/admin',
         resourceCode: 'system.settings.detail',
+        category: 'setting',
       },
       {
         key: 'ai.admin.models',
@@ -365,6 +397,7 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         icon: 'Cpu',
         path: '/ai/admin/models',
         resourceCode: 'system.settings.detail',
+        category: 'setting',
       },
       {
         key: 'ai.admin.prompts',
@@ -372,6 +405,7 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         icon: 'FileCode',
         path: '/ai/admin/prompts',
         resourceCode: 'system.settings.detail',
+        category: 'setting',
       },
       {
         key: 'ai.admin.agents',
@@ -379,6 +413,7 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         icon: 'Bot',
         path: '/ai/admin/agents',
         resourceCode: 'system.settings.detail',
+        category: 'setting',
       },
       {
         key: 'ai.admin.skills',
@@ -386,6 +421,7 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         icon: 'Wand2',
         path: '/ai/admin/skills',
         resourceCode: 'system.settings.detail',
+        category: 'setting',
       },
       {
         key: 'ai.admin.automations',
@@ -393,6 +429,7 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         icon: 'Workflow',
         path: '/ai/admin/automations',
         resourceCode: 'system.settings.detail',
+        category: 'setting',
       },
       {
         key: 'ai.admin.automationRuns',
@@ -400,6 +437,7 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         icon: 'History',
         path: '/ai/admin/automations/runs',
         resourceCode: 'system.settings.detail',
+        category: 'setting',
       },
     ],
   },
@@ -407,6 +445,8 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
     key: 'system',
     labelKey: 'navigation:system',
     icon: 'Settings',
+    pathPrefix: '/system',
+    displayOrder: 14,
     items: [
       {
         key: 'system.users',
@@ -427,6 +467,7 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         labelKey: 'navigation:system.settings',
         icon: 'Settings',
         path: '/system/settings',
+        category: 'setting',
       },
       {
         key: 'system.documentTemplates',
@@ -434,6 +475,7 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         icon: 'FileText',
         path: '/settings/document-templates',
         resourceCode: 'system.settings.detail',
+        category: 'setting',
       },
       {
         key: 'system.notificationPreferences',
@@ -441,6 +483,7 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         icon: 'Bell',
         path: '/system/notification-preferences',
         alwaysVisible: true,
+        category: 'setting',
       },
       {
         key: 'system.printPreferences',
@@ -448,6 +491,7 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         icon: 'Printer',
         path: '/system/print-preferences',
         alwaysVisible: true,
+        category: 'setting',
       },
       {
         key: 'system.myPermissions',
@@ -460,6 +504,17 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
     ],
   },
 ];
+
+/**
+ * Returns the items within a module that match the given category.
+ * Items without an explicit `category` default to `'page'`.
+ */
+export function getModuleItemsByCategory(
+  module: NavigationModule,
+  category: 'page' | 'setting' | 'report',
+): NavigationItem[] {
+  return module.items.filter((item) => (item.category ?? 'page') === category);
+}
 
 /**
  * Returns navigation modules filtered by the user's enabled modules and
