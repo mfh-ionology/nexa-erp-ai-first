@@ -2,11 +2,14 @@ import { create } from 'zustand';
 
 // --- Types ---
 
+export type MobileNavStyle = 'CLASSIC_TABS' | 'MINIMAL' | 'MY_SHORTCUTS';
+
 export interface User {
   id: string;
   email: string;
   firstName: string;
   lastName: string;
+  mobileNavStyle?: MobileNavStyle;
 }
 
 export interface TokenPair {
@@ -33,10 +36,7 @@ export interface ResolvedPermissions {
   isSuperAdmin: boolean;
   accessGroups: Array<{ id: string; code: string; name: string }>;
   modules: Record<string, ModulePermission>;
-  fieldOverrides: Record<
-    string,
-    Record<string, 'VISIBLE' | 'READ_ONLY' | 'HIDDEN'>
-  >;
+  fieldOverrides: Record<string, Record<string, 'VISIBLE' | 'READ_ONLY' | 'HIDDEN'>>;
   enabledModules: string[];
 }
 
