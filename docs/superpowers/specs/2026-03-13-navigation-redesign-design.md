@@ -59,26 +59,33 @@ Three horizontal layers stacked above content, replacing the sidebar:
 - **Active page indicator:** Purple text + dot on the currently active page
 - **Pin star:** Subtle star icon on the right of each sub-item; click to pin/unpin from favourites toolbar
 
-### Module List (in order)
-1. Dashboard (no sub-items, direct navigation)
-2. Finance / GL — General Ledger, Journal Entries, P&L Report, Cash Flow, Finance Settings
-3. Accounts Receivable — Invoices, Credit Notes, Customers, Payment Receipts
-4. Accounts Payable — Supplier Bills, Debit Notes, Suppliers, Payments
-5. Sales — Sales Orders, Quotes, Dispatches, Sales Settings, Sales Reports
-6. Purchasing — Purchase Orders, Goods Receipts, Purchasing Settings
-7. Inventory / WMS — Stock Levels, Warehouses, Adjustments, Transfers
+### Module List
+**Data-driven from `NAVIGATION_MODULES` in `apps/web/src/lib/navigation-config.ts`** — not hard-coded. The module order, sub-items, icons, and labels are all derived from this single source of truth at runtime. The existing `NAV_GROUPS` in `app-sidebar.tsx` is deprecated and should not be used.
+
+Display order (configurable via `displayOrder` field on each module):
+1. Dashboard (direct navigation, no sub-items)
+2. Finance / GL
+3. Accounts Receivable
+4. Accounts Payable
+5. Sales
+6. Purchasing
+7. Inventory / WMS
 8. *(divider)*
-9. CRM — Pipeline, Contacts, Activities
-10. HR / Payroll — Employees, Leave Management, Payroll
-11. Manufacturing — Work Orders, BOMs, Routing
+9. CRM
+10. HR / Payroll
+11. Manufacturing
 12. *(divider)*
-13. AI Tools — AI Briefing, AI Memory, Automations
-14. System & Admin — Users, Access Groups, System Settings
+13. AI Tools
+14. System & Admin
+
+Sub-items within each module are whatever `NAVIGATION_MODULES` defines for that module. To support the Module Context Bar's Pages/Settings/Reports categorisation, each `NavigationItem` in the config gains an optional `category` field: `'page' | 'setting' | 'report'` (defaults to `'page'`).
 
 ### Interactions
-- **Keyboard:** Arrow keys navigate tiles/sub-items, Enter selects, Escape closes panel
+- **Keyboard:** Arrow keys navigate tiles/sub-items, Enter selects, Escape closes panel, Tab moves between search input / module tiles / close button
+- **Focus trapping:** When mega-menu is open with backdrop, focus is trapped within the panel (WCAG modal overlay requirement)
+- **ARIA:** Panel has `role="dialog"`, `aria-label="Navigation menu"`. Accordion tiles use `aria-expanded`. Filter input has `aria-label="Filter modules"`
 - **Permission filtering:** Items filtered by user's `enabledModules` array (same logic as current sidebar)
-- **Search/filter:** Real-time filtering of module tiles and sub-items as user types in the filter input
+- **Search/filter:** Simple text filter over the static module/sub-item list (NOT integrated with UnifiedSearch — that remains a separate global search in the header)
 
 ## 3. Favourites Toolbar
 
@@ -94,9 +101,11 @@ Three horizontal layers stacked above content, replacing the sidebar:
 - Active (current page): `#ede9fe` background, `#7c3aed` text
 
 ### Overflow Behaviour
-- After ~6-8 visible chips (based on viewport width), remaining chips collapse into a "+N more" pill
+- Use a `ResizeObserver` on the toolbar container to measure available width (minus fixed elements: label, divider, "+ Add" button)
+- Render chips left-to-right until they would overflow; remaining chips collapse into a "+N more" pill
 - Clicking "+N more" opens a small dropdown showing the hidden chips
-- Responsive: fewer visible chips on narrower viewports
+- On viewport resize, chips shift between visible and overflow automatically
+- Long chip labels are acceptable — the overflow algorithm handles variable widths naturally
 
 ### "+ Add" Button
 - Dashed border style, muted colour
@@ -104,7 +113,8 @@ Three horizontal layers stacked above content, replacing the sidebar:
 - Positioned at the end of the chip row
 
 ### Persistence
-- Stored per-user via the existing E7 favourites/saved views API
+- **New `UserFavouritePage` model** — NOT the existing `SavedView` model (which stores filtered data views with `dataViewId`, `sortConfig`, etc.). Favourites toolbar pins are simple page bookmarks with: `userId`, `path`, `label`, `iconKey`, `displayOrder`.
+- The existing E7 `SavedView` / `FavouritesDropdown` system is a separate concept (saved data views within entity lists) and remains unchanged.
 - Synced across devices (stored in database, not localStorage)
 
 ### Empty State
@@ -112,6 +122,7 @@ Three horizontal layers stacked above content, replacing the sidebar:
 
 ### Default Favourites (new users)
 - Dashboard, Invoices, Sales Orders pre-pinned
+- **Permission-filtered:** Defaults only include pages the user has access to (via `enabledModules`). If a user lacks AR access, "Invoices" is not pre-pinned.
 
 ### Drag Reorder (nice-to-have, not MVP)
 - Chips can be dragged to reorder within the toolbar
@@ -119,8 +130,9 @@ Three horizontal layers stacked above content, replacing the sidebar:
 ## 4. Module Context Bar
 
 ### Appearance Rules
-- **Shown:** When URL matches a module prefix (`/sales/*`, `/finance/*`, `/ar/*`, `/ap/*`, `/purchasing/*`, `/inventory/*`, `/crm/*`, `/hr/*`, `/manufacturing/*`, `/reporting/*`)
-- **Hidden:** On Dashboard (`/`), Tasks (`/tasks`), Settings (`/system/*`), AI pages (`/ai/*`), and other non-module routes
+- **Shown:** When URL matches a business module prefix: `/sales/*`, `/finance/*`, `/ar/*`, `/ap/*`, `/purchasing/*`, `/inventory/*`, `/crm/*`, `/hr/*`, `/manufacturing/*`, `/reporting/*`
+- **Also shown:** For AI Tools (`/ai/*`) and System & Admin (`/system/*`) — these are modules in the mega-menu and deserve context bars too
+- **Hidden only on:** Dashboard (`/`), Tasks (`/tasks`), and any route that doesn't match a known module prefix
 
 ### Layout
 - **Height:** 32px
@@ -142,9 +154,9 @@ Three horizontal layers stacked above content, replacing the sidebar:
 - **Reports:** Module-specific report pages
 
 ### Data Source
-- Derived from the existing `NAV_GROUPS` config in `app-sidebar.tsx`
-- Each module's items are categorised by type (page vs setting vs report) based on path patterns or explicit metadata
-- No new data structures needed — extends existing navigation config
+- Derived from `NAVIGATION_MODULES` in `apps/web/src/lib/navigation-config.ts` (the same source as the mega-menu)
+- Each item's `category` field (`'page' | 'setting' | 'report'`) determines which pill it appears under
+- `NAV_GROUPS` in `app-sidebar.tsx` is deprecated — all navigation driven from `NAVIGATION_MODULES`
 
 ## 5. Mobile Navigation Preference
 
@@ -158,8 +170,9 @@ Three horizontal layers stacked above content, replacing the sidebar:
 - Default: `CLASSIC_TABS` for new users
 
 ### Option: Classic Tabs (default)
-- Fixed bottom tab bar (56px): Home, Tasks, Search, AI Chat
-- Hamburger button in header for full navigation access
+- Fixed bottom tab bar (56px): Home, Modules (opens mega-menu), AI Chat, Notifications, Profile
+- Matches the existing `BottomTabBar` pattern already in the codebase
+- Hamburger button also available in header for consistency
 - No favourites bar on mobile (redundant with fixed tabs)
 - Most familiar mobile pattern
 
@@ -191,18 +204,19 @@ Two entry points for maximum discoverability:
 
 ### Entry Point 2: Page-Level Pin
 - On any page, a "Pin to toolbar" action available via:
-  - Star icon in the page header/action bar
-  - Right-click context menu on desktop
+  - Star icon in the page header/action bar (primary method)
   - Long-press on mobile
 - Same toggle behaviour as mega-menu star
+- **Note:** Right-click context menu deferred to a later iteration (no existing context menu infrastructure in codebase). The star icon in the page header is sufficient for MVP.
 
 ## 7. Transition & Migration
 
 - **No sidebar code deleted initially** — sidebar component (`app-sidebar.tsx`) remains in codebase but is no longer rendered in the layout
-- **Feature flag:** `useNewNavigation` (default: `true`) allows rollback during testing
-- **Existing E7 favourites data:** Migrated to populate the toolbar — no data loss
-- **Default favourites:** First-time users get Dashboard, Invoices, Sales Orders pre-pinned
-- **Cleanup:** Remove sidebar code after the new navigation has been stable for one full epic cycle
+- **Feature flag:** `useNewNavigation` — stored as an environment variable (`NEXT_PUBLIC_USE_NEW_NAVIGATION=true`). Global scope (not per-user). When `false`, `AppLayout` renders the old sidebar; when `true`, renders the new mega-menu + toolbars. Default: `true`.
+- **Store migration:** `useSidebarStore` is replaced by `useMegaMenuStore` (manages `isOpen` state). The `useBreakpoint` hook no longer auto-syncs sidebar mode — it only determines mobile vs. desktop for choosing which mobile nav style to render.
+- **Hamburger button:** Visible at ALL breakpoints (currently `lg:hidden`). On desktop it opens the mega-menu; on mobile it opens the same mega-menu adapted to 300px width.
+- **Default favourites:** First-time users get Dashboard + permission-filtered defaults pre-pinned
+- **Cleanup:** Remove sidebar code (`app-sidebar.tsx`, `sidebar-item.tsx`, `sidebar-group.tsx`, `sidebar-store.ts`) and update tests (`app-sidebar.test.tsx`, `app-layout.test.tsx`, `app-header.test.tsx`) after the new navigation has been stable for one full epic cycle
 
 ## 8. BMAD Document Updates Required
 
