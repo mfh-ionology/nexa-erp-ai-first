@@ -98,6 +98,7 @@ export {
   EmailQueueStatus,
   DocumentType,
   PrintAction,
+  MobileNavStyle,
 } from '../generated/prisma/client';
 
 // Utilities

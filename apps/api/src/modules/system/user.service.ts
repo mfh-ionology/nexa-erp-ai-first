@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@nexa/db';
+import type { PrismaClient, MobileNavStyle } from '@nexa/db';
 import type { UserRole } from '@nexa/db';
 import type { RequestContext } from '../../core/types/request-context.js';
 import type { CreateUserRequest, UserListQuery } from './user.schema.js';
@@ -23,6 +23,7 @@ const userSelect = {
   locale: true,
   isActive: true,
   mfaEnabled: true,
+  mobileNavStyle: true,
   lastLoginAt: true,
   createdAt: true,
   updatedAt: true,
@@ -234,7 +235,7 @@ export async function updateUser(
   prisma: PrismaClient,
   id: string,
   companyId: string,
-  data: { firstName?: string; lastName?: string; locale?: string },
+  data: { firstName?: string; lastName?: string; locale?: string; mobileNavStyle?: MobileNavStyle },
   ctx: RequestContext,
 ) {
   const existing = await prisma.user.findUnique({
