@@ -19,6 +19,10 @@ export interface EntityMentionInputProps {
   onSend: (text: string, mentions: EntityMention[]) => void;
   disabled?: boolean;
   placeholder?: string;
+  /** Accessible label for the textarea */
+  inputAriaLabel?: string;
+  /** Accessible label for the send button */
+  sendAriaLabel?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -29,6 +33,8 @@ export function EntityMentionInput({
   onSend,
   disabled = false,
   placeholder,
+  inputAriaLabel,
+  sendAriaLabel = 'Send message',
 }: EntityMentionInputProps) {
   // -- State --
   const [inputText, setInputText] = useState('');
@@ -232,6 +238,7 @@ export function EntityMentionInput({
               ? 'Continue typing...'
               : "Ask anything... (type 'invoice', 'contact' to mention)")
           }
+          aria-label={inputAriaLabel}
           rows={1}
           className="min-h-[24px] max-h-[96px] flex-1 resize-none bg-transparent text-sm leading-relaxed text-foreground placeholder:text-muted-foreground outline-none"
         />
@@ -240,7 +247,7 @@ export function EntityMentionInput({
           onClick={handleSend}
           disabled={isEmpty || disabled}
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#7c3aed] text-white transition-colors hover:bg-[#6d28d9] disabled:opacity-40 disabled:cursor-not-allowed"
-          aria-label="Send message"
+          aria-label={sendAriaLabel}
         >
           <Send className="h-3.5 w-3.5" />
         </button>

@@ -41,6 +41,15 @@ const { MockApiError } = vi.hoisted(() => {
 
 vi.mock('@nexa/api-client', () => ({
   ApiError: MockApiError,
+  ApiClient: class MockApiClient {
+    constructor(_config: unknown) {}
+    request = vi.fn();
+    get = vi.fn();
+    post = vi.fn();
+    patch = vi.fn();
+    put = vi.fn();
+    delete = vi.fn();
+  },
 }));
 
 // --- Mock useAccessGroup query ---
@@ -67,7 +76,11 @@ vi.mock('./api/use-access-group-mutations', () => ({
 vi.mock('./components/permission-matrix', () => ({
   PermissionMatrix: (props: { accessGroupId: string }) => {
     const React = require('react');
-    return React.createElement('div', { 'data-testid': 'permission-matrix' }, `PermissionMatrix: ${props.accessGroupId}`);
+    return React.createElement(
+      'div',
+      { 'data-testid': 'permission-matrix' },
+      `PermissionMatrix: ${props.accessGroupId}`,
+    );
   },
 }));
 
@@ -75,7 +88,26 @@ vi.mock('./components/permission-matrix', () => ({
 vi.mock('./components/field-override-panel', () => ({
   FieldOverridePanel: (props: { accessGroupId: string }) => {
     const React = require('react');
-    return React.createElement('div', { 'data-testid': 'field-override-panel' }, `FieldOverridePanel: ${props.accessGroupId}`);
+    return React.createElement(
+      'div',
+      { 'data-testid': 'field-override-panel' },
+      `FieldOverridePanel: ${props.accessGroupId}`,
+    );
+  },
+}));
+
+// --- Mock cross-cutting panels (they use hooks that require QueryClient) ---
+vi.mock('@/features/cross-cutting', () => ({
+  NotesTab: () => {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'notes-tab' });
+  },
+}));
+
+vi.mock('@/features/tasks', () => ({
+  TaskPanel: () => {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'task-panel' });
   },
 }));
 
@@ -150,7 +182,9 @@ describe('AccessGroupDetailPage', () => {
       await renderPage();
 
       expect(screen.getByRole('tab', { name: 'accessGroups.tab.permissions' })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: 'accessGroups.tab.fieldOverrides' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('tab', { name: 'accessGroups.tab.fieldOverrides' }),
+      ).toBeInTheDocument();
     });
 
     it('system group shows info banner', async () => {
@@ -236,7 +270,9 @@ describe('AccessGroupDetailPage', () => {
       const moreButton = screen.getByRole('button', { name: 'actionBar.moreActions' });
       await user.click(moreButton);
 
-      const deactivateItem = screen.getByRole('menuitem', { name: /accessGroups.deactivate.confirm/i });
+      const deactivateItem = screen.getByRole('menuitem', {
+        name: /accessGroups.deactivate.confirm/i,
+      });
       expect(deactivateItem).toBeInTheDocument();
       expect(deactivateItem).not.toBeDisabled();
     });
@@ -249,7 +285,9 @@ describe('AccessGroupDetailPage', () => {
       const moreButton = screen.getByRole('button', { name: 'actionBar.moreActions' });
       await user.click(moreButton);
 
-      const deactivateItem = screen.getByRole('menuitem', { name: /accessGroups.deactivate.confirm/i });
+      const deactivateItem = screen.getByRole('menuitem', {
+        name: /accessGroups.deactivate.confirm/i,
+      });
       expect(deactivateItem).toHaveAttribute('data-disabled');
     });
 
@@ -263,7 +301,9 @@ describe('AccessGroupDetailPage', () => {
       await user.click(moreButton);
 
       // Click deactivate
-      const deactivateItem = screen.getByRole('menuitem', { name: /accessGroups.deactivate.confirm/i });
+      const deactivateItem = screen.getByRole('menuitem', {
+        name: /accessGroups.deactivate.confirm/i,
+      });
       await user.click(deactivateItem);
 
       // Dialog should appear
@@ -287,7 +327,9 @@ describe('AccessGroupDetailPage', () => {
       const moreButton = screen.getByRole('button', { name: 'actionBar.moreActions' });
       await user.click(moreButton);
 
-      const deactivateItem = screen.getByRole('menuitem', { name: /accessGroups.deactivate.confirm/i });
+      const deactivateItem = screen.getByRole('menuitem', {
+        name: /accessGroups.deactivate.confirm/i,
+      });
       await user.click(deactivateItem);
 
       // Wait for dialog
@@ -297,7 +339,9 @@ describe('AccessGroupDetailPage', () => {
 
       // Click the destructive confirm button in the dialog
       const dialog = screen.getByRole('dialog');
-      const confirmButton = within(dialog).getByRole('button', { name: /accessGroups.deactivate.confirm/i });
+      const confirmButton = within(dialog).getByRole('button', {
+        name: /accessGroups.deactivate.confirm/i,
+      });
       await user.click(confirmButton);
 
       await waitFor(() => {
@@ -321,7 +365,9 @@ describe('AccessGroupDetailPage', () => {
       const moreButton = screen.getByRole('button', { name: 'actionBar.moreActions' });
       await user.click(moreButton);
 
-      const deactivateItem = screen.getByRole('menuitem', { name: /accessGroups.deactivate.confirm/i });
+      const deactivateItem = screen.getByRole('menuitem', {
+        name: /accessGroups.deactivate.confirm/i,
+      });
       await user.click(deactivateItem);
 
       await waitFor(() => {
@@ -329,7 +375,9 @@ describe('AccessGroupDetailPage', () => {
       });
 
       const dialog = screen.getByRole('dialog');
-      const confirmButton = within(dialog).getByRole('button', { name: /accessGroups.deactivate.confirm/i });
+      const confirmButton = within(dialog).getByRole('button', {
+        name: /accessGroups.deactivate.confirm/i,
+      });
       await user.click(confirmButton);
 
       // The error toast is triggered by the mutation's onError callback

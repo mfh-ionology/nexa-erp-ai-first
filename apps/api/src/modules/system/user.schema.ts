@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { UserRole } from '@nexa/db';
+import { UserRole, MobileNavStyle } from '@nexa/db';
 
 // ---------------------------------------------------------------------------
 // Valid module identifiers (matches the 11 MVP modules from the PRD)
@@ -47,6 +47,7 @@ export const updateUserRequestSchema = z.object({
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
   locale: localeSchema.optional(),
+  mobileNavStyle: z.enum(MobileNavStyle).optional(),
 });
 
 export const updateUserRoleRequestSchema = z.object({
@@ -96,6 +97,7 @@ export const userResponseSchema = z.object({
   locale: z.string(),
   isActive: z.boolean(),
   mfaEnabled: z.boolean(),
+  mobileNavStyle: z.enum(MobileNavStyle),
   lastLoginAt: z.date().nullable(),
   companyId: z.uuid(),
   createdAt: z.date(),

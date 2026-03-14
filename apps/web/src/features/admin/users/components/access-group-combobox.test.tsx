@@ -21,6 +21,14 @@ vi.mock('@/hooks/use-breakpoint', () => ({
 const mockApiGet = vi.fn();
 vi.mock('@/lib/api-client', () => ({
   apiGet: (...args: unknown[]) => mockApiGet(...args),
+  buildQueryString: (params: Record<string, unknown>) => {
+    const entries = Object.entries(params).filter(
+      ([, v]) => v !== undefined && v !== null && v !== '',
+    );
+    if (entries.length === 0) return '';
+    const qs = new URLSearchParams(entries.map(([k, v]) => [k, String(v)])).toString();
+    return `?${qs}`;
+  },
 }));
 
 // --- Mock query keys ---
@@ -28,9 +36,11 @@ vi.mock('@/lib/query-keys', () => ({
   queryKeys: {
     system: {
       accessGroups: (params?: Record<string, unknown>) =>
+        params ? ['system', 'access-groups', params] : ['system', 'access-groups'],
+      accessGroupsInfinite: (params?: Record<string, unknown>) =>
         params
-          ? ['system', 'access-groups', params]
-          : ['system', 'access-groups'],
+          ? ['system', 'access-groups', 'infinite', params]
+          : ['system', 'access-groups', 'infinite'],
     },
   },
 }));
@@ -91,10 +101,12 @@ function createWrapper() {
 }
 
 // Dynamic import after mocks
-async function renderCombobox(props: {
-  assignedGroupIds?: string[];
-  onAdd?: (group: UserAccessGroupAssignment) => void;
-} = {}) {
+async function renderCombobox(
+  props: {
+    assignedGroupIds?: string[];
+    onAdd?: (group: UserAccessGroupAssignment) => void;
+  } = {},
+) {
   const { AccessGroupCombobox } = await import('./access-group-combobox');
   const defaultOnAdd = vi.fn();
   return {
@@ -119,10 +131,10 @@ describe('AccessGroupCombobox', () => {
   // --- Rendering tests ---
 
   describe('rendering', () => {
-    it('renders add group button', async () => {
+    it('renders add group combobox trigger', async () => {
       await renderCombobox();
 
-      const trigger = screen.getByRole('button', { name: 'users.accessGroups.addGroup' });
+      const trigger = screen.getByRole('combobox', { name: 'users.accessGroups.addGroup' });
       expect(trigger).toBeInTheDocument();
     });
 
@@ -143,7 +155,7 @@ describe('AccessGroupCombobox', () => {
       const user = userEvent.setup();
       await renderCombobox();
 
-      const trigger = screen.getByRole('button', { name: 'users.accessGroups.addGroup' });
+      const trigger = screen.getByRole('combobox', { name: 'users.accessGroups.addGroup' });
       await user.click(trigger);
 
       // All groups should be visible
@@ -156,7 +168,7 @@ describe('AccessGroupCombobox', () => {
       const user = userEvent.setup();
       await renderCombobox({ assignedGroupIds: ['ag-1'] });
 
-      const trigger = screen.getByRole('button', { name: 'users.accessGroups.addGroup' });
+      const trigger = screen.getByRole('combobox', { name: 'users.accessGroups.addGroup' });
       await user.click(trigger);
 
       // ag-1 (Full Access) should NOT be shown
@@ -170,7 +182,7 @@ describe('AccessGroupCombobox', () => {
       const user = userEvent.setup();
       await renderCombobox();
 
-      const trigger = screen.getByRole('button', { name: 'users.accessGroups.addGroup' });
+      const trigger = screen.getByRole('combobox', { name: 'users.accessGroups.addGroup' });
       await user.click(trigger);
 
       // Type in the search input
@@ -187,7 +199,7 @@ describe('AccessGroupCombobox', () => {
       const user = userEvent.setup();
       await renderCombobox();
 
-      const trigger = screen.getByRole('button', { name: 'users.accessGroups.addGroup' });
+      const trigger = screen.getByRole('combobox', { name: 'users.accessGroups.addGroup' });
       await user.click(trigger);
 
       const searchInput = screen.getByPlaceholderText('users.accessGroups.searchPlaceholder');
@@ -205,7 +217,7 @@ describe('AccessGroupCombobox', () => {
       const onAdd = vi.fn();
       await renderCombobox({ onAdd });
 
-      const trigger = screen.getByRole('button', { name: 'users.accessGroups.addGroup' });
+      const trigger = screen.getByRole('combobox', { name: 'users.accessGroups.addGroup' });
       await user.click(trigger);
 
       // Click on Sales Manager
@@ -224,7 +236,7 @@ describe('AccessGroupCombobox', () => {
       const user = userEvent.setup();
       await renderCombobox();
 
-      const trigger = screen.getByRole('button', { name: 'users.accessGroups.addGroup' });
+      const trigger = screen.getByRole('combobox', { name: 'users.accessGroups.addGroup' });
       await user.click(trigger);
 
       // Sales Manager has a description
@@ -240,7 +252,7 @@ describe('AccessGroupCombobox', () => {
       const user = userEvent.setup();
       await renderCombobox();
 
-      const trigger = screen.getByRole('button', { name: 'users.accessGroups.addGroup' });
+      const trigger = screen.getByRole('combobox', { name: 'users.accessGroups.addGroup' });
       await user.click(trigger);
 
       // Sheet dialog should be present with the title inside

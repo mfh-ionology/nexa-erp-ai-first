@@ -84,20 +84,20 @@ describe('useBreakpoint', () => {
     expect(useSidebarStore.getState().isCollapsed).toBe(false);
   });
 
-  it('sets sidebar to collapsed mode on tablet', () => {
+  it('does not sync sidebar when new navigation is active (default)', () => {
+    // VITE_USE_NEW_NAVIGATION defaults to undefined, which !== 'false' → new nav active
+    // Sidebar state should remain unchanged regardless of breakpoint
     setBreakpoint('tablet');
     renderHook(() => useBreakpoint());
 
-    expect(useSidebarStore.getState().mode).toBe('collapsed');
-    expect(useSidebarStore.getState().isCollapsed).toBe(true);
-  });
+    expect(useSidebarStore.getState().mode).toBe('expanded'); // unchanged from initial
+    expect(useSidebarStore.getState().isCollapsed).toBe(false);
 
-  it('sets sidebar to hidden mode on phone', () => {
     setBreakpoint('phone');
     renderHook(() => useBreakpoint());
 
-    expect(useSidebarStore.getState().mode).toBe('hidden');
-    expect(useSidebarStore.getState().isOpen).toBe(false);
+    expect(useSidebarStore.getState().mode).toBe('expanded'); // still unchanged
+    expect(useSidebarStore.getState().isOpen).toBe(true);
   });
 });
 

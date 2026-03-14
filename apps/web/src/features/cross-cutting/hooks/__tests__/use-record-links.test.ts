@@ -23,12 +23,23 @@ vi.mock('@/hooks/use-toast', () => ({
   toast: (...args: unknown[]) => mockToast(...args),
 }));
 
+// --- Mock i18n ---
+vi.mock('@nexa/i18n', () => ({
+  useI18n: () => ({ t: (key: string) => key }),
+}));
+
 // --- Mock query keys ---
 vi.mock('@/lib/query-keys', () => ({
   queryKeys: {
     recordLinks: {
       all: ['record-links'],
       list: (entityType: string, entityId: string) => ['record-links', entityType, entityId],
+      count: (entityType: string, entityId: string) => [
+        'record-links',
+        'count',
+        entityType,
+        entityId,
+      ],
     },
   },
 }));
@@ -198,7 +209,7 @@ describe('useCreateRecordLink', () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
 
     expect(mockToast).toHaveBeenCalledWith({
-      title: 'Failed to create link',
+      title: 'crossCutting.recordLinks.createFailed',
       variant: 'destructive',
     });
   });
@@ -252,7 +263,7 @@ describe('useDeleteRecordLink', () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
 
     expect(mockToast).toHaveBeenCalledWith({
-      title: 'Failed to delete link',
+      title: 'crossCutting.recordLinks.deleteFailed',
       variant: 'destructive',
     });
   });

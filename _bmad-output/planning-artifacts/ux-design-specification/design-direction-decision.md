@@ -87,7 +87,7 @@ The purple direction satisfies all five experience principles:
 ```
 
 - Header: 56px height, white background, purple logo mark, unified Search/AI input centered, Chat button (💬), Notifications (🔔), User avatar (👤)
-- Sidebar: 256px expanded / 64px collapsed, white background, purple active indicator
-- Content: Fluid width, `#f4f2ff` background, cards on white surface — shrinks when Co-Pilot drawer opens
+- Navigation: Mega-menu (380px overlay), favourites toolbar (40px), module context bar (32px), all with white background and purple active indicators
+- Content: Full width, `#f4f2ff` background, cards on white surface — shrinks when Co-Pilot drawer opens
 - Co-Pilot Drawer: 380px width, slides in from right, white background, collapsible
 - All corners: 8px border-radius on cards, 6px on inputs, 4px on badges

@@ -25,9 +25,9 @@ This loop applies universally: invoices, purchase orders, journal entries, leave
 | Dimension | Decision | Rationale |
 |-----------|----------|-----------|
 | **Primary platform** | Web SPA (responsive) | UK SME users on varied devices; no app store friction |
-| **Desktop** (1024px+) | Full experience: sidebar nav, split panels, AI dock | David, Priya, Fatima, Tom, Claire — primary work device |
-| **Tablet** (768–1023px) | Touch-optimised: collapsible sidebar, larger touch targets (48x48px), barcode scanning | Marcus in warehouse — needs one-handed operation |
-| **Phone** (375–767px) | Briefing-first: AI briefing as home, stacked layouts, bottom tab nav, swipe gestures | Sarah on commute — review and approve, not create |
+| **Desktop** (1024px+) | Full experience: mega-menu nav, favourites toolbar, module context bar, split panels, AI dock | David, Priya, Fatima, Tom, Claire — primary work device |
+| **Tablet** (768–1023px) | Touch-optimised: mega-menu nav, larger touch targets (48x48px), barcode scanning | Marcus in warehouse — needs one-handed operation |
+| **Phone** (375–767px) | Briefing-first: AI briefing as home, stacked layouts, per-user mobile nav preference, swipe gestures | Sarah on commute — review and approve, not create |
 | **Offline** | Not required for MVP | SaaS model, always-connected UK SME offices |
 | **Framework** | React 19 + Vite 6 + Tailwind CSS 4 + Shadcn UI | Architecture decision — component library with Radix primitives |
 | **Real-time** | Server-Sent Events (SSE) per tenant | Status changes, notifications, collaborative awareness |
@@ -50,9 +50,9 @@ The UI adapts dynamically based on the user's resolved permissions:
 
 ### Navigation Filtering
 
-The sidebar navigation is built from the **Resource table**, filtered by the current user's resolved permissions. Only resources where the user has `canAccess: true` (across any of their assigned access groups) appear in the navigation tree. Modules with zero accessible resources are hidden entirely. This means:
+The mega-menu navigation is built from the **Resource table**, filtered by the current user's resolved permissions. Only resources where the user has `canAccess: true` (across any of their assigned access groups) appear in the navigation menu. Modules with zero accessible resources are hidden entirely. The same filtering applies to the module context bar pills and favourites toolbar. This means:
 
-- Two users with different access groups see different sidebar menus
+- Two users with different access groups see different mega-menu items and module context bar entries
 - A "Sales Staff" user sees Sales Orders, Quotes, and Customers -- but not GL Journals or Payroll
 - Adding a new access group to a user immediately updates their navigation (after cache refresh, TTL 60s)
 - `SUPER_ADMIN` users see all resources regardless of access group assignment
@@ -103,7 +103,7 @@ These interactions must feel **zero-effort** — the user's cognitive load shoul
 
 5. **Cross-Module Navigation** — From an invoice, one click to the originating sales order, the customer record, the delivery note, the GL entries, or the payment. No module switching, no re-searching. The `<EventFlowTracker>` component shows the full lifecycle horizontally.
 
-6. **Saved Views** — User asks AI "show me overdue invoices over £1,000 sorted by amount" and gets a filtered, sorted list instantly. Save it as a named view. Star it as a favourite. It appears in their sidebar navigation.
+6. **Saved Views** — User asks AI "show me overdue invoices over £1,000 sorted by amount" and gets a filtered, sorted list instantly. Save it as a named view. Star it as a favourite. It appears in their favourites toolbar for quick access.
 
 ## Critical Success Moments
 

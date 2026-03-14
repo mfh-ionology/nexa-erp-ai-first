@@ -18,7 +18,7 @@ This interaction is novel in the ERP world. No competitor offers it. The closest
 - Legacy users will instinctively reach for traditional forms — the form path must always be available and clearly signposted ("Switch to manual entry" button on every AI-prepared record)
 - New users will start with AI and may never learn the form path — that's fine, the AI path is the primary path
 - The transition moment: when a legacy user first says "create an invoice for Acme" and gets a correct, pre-filled invoice back in 3 seconds — this is when the mental model shifts
-- **Workaround preservation:** Legacy users have developed muscle memory (keyboard shortcuts, favourite screens). Nexa preserves this through keyboard shortcuts (Cmd+K for AI, Cmd+N for new record, Cmd+S for save) and saved views (pinned to sidebar)
+- **Workaround preservation:** Legacy users have developed muscle memory (keyboard shortcuts, favourite screens). Nexa preserves this through keyboard shortcuts (Cmd+K for AI, Cmd+N for new record, Cmd+S for save) and saved views (pinned to favourites toolbar)
 
 ## Success Criteria
 

@@ -6,13 +6,26 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
 
 // Mock TanStack Router
+const mockRouterState = { location: { pathname: '/finance/journals' } };
+
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children, to, ...props }: { children: React.ReactNode; to: string; [key: string]: unknown }) => (
-    <a href={to} {...props}>{children}</a>
+  Link: ({
+    children,
+    to,
+    ...props
+  }: {
+    children: React.ReactNode;
+    to: string;
+    [key: string]: unknown;
+  }) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
   ),
-  useRouterState: () => ({
-    location: { pathname: '/finance/journals' },
-  }),
+  useRouterState: (opts?: { select?: (s: typeof mockRouterState) => unknown }) => {
+    if (opts?.select) return opts.select(mockRouterState);
+    return mockRouterState;
+  },
 }));
 
 // Mock company switcher (tested separately)
@@ -191,12 +204,8 @@ describe('AppSidebar', () => {
 
     render(<AppSidebar forceExpanded />);
 
-    expect(
-      screen.queryByRole('button', { name: 'navigation:collapse' }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: 'navigation:expand' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'navigation:collapse' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'navigation:expand' })).not.toBeInTheDocument();
   });
 
   it('clicking collapse toggle calls collapse action', async () => {
@@ -234,9 +243,6 @@ describe('AppSidebar', () => {
 
     render(<AppSidebar />);
 
-    expect(screen.getByTestId('company-switcher')).toHaveAttribute(
-      'data-collapsed',
-      'true',
-    );
+    expect(screen.getByTestId('company-switcher')).toHaveAttribute('data-collapsed', 'true');
   });
 });

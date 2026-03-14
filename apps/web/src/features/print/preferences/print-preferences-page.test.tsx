@@ -377,7 +377,7 @@ describe('PrintPreferencesPage', () => {
     mockIsError = true;
     await renderPage();
 
-    expect(screen.getByText('preferences.saveError')).toBeInTheDocument();
+    expect(screen.getByText('preferences.loadError')).toBeInTheDocument();
     const retryButton = screen.getByRole('button', { name: /retry/i });
     expect(retryButton).toBeInTheDocument();
 

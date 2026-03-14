@@ -11,6 +11,14 @@ import { useAccessGroups, useAccessGroup } from './use-access-groups';
 const mockApiGet = vi.fn();
 vi.mock('@/lib/api-client', () => ({
   apiGet: (...args: unknown[]) => mockApiGet(...args),
+  buildQueryString: (params: Record<string, unknown>) => {
+    const entries = Object.entries(params).filter(
+      ([, v]) => v !== undefined && v !== null && v !== '',
+    );
+    if (entries.length === 0) return '';
+    const qs = new URLSearchParams(entries.map(([k, v]) => [k, String(v)])).toString();
+    return `?${qs}`;
+  },
 }));
 
 // --- Mock query keys ---
@@ -136,9 +144,7 @@ describe('useAccessGroups', () => {
     });
 
     await waitFor(() => expect(mockApiGet).toHaveBeenCalled());
-    expect(mockApiGet).toHaveBeenCalledWith(
-      expect.stringContaining('search=sales'),
-    );
+    expect(mockApiGet).toHaveBeenCalledWith(expect.stringContaining('search=sales'));
   });
 
   it('infinite query supports cursor-based pagination', async () => {
@@ -193,9 +199,7 @@ describe('useAccessGroups', () => {
     });
 
     await waitFor(() => expect(mockApiGet).toHaveBeenCalled());
-    expect(mockApiGet).toHaveBeenCalledWith(
-      expect.stringContaining('search=sales'),
-    );
+    expect(mockApiGet).toHaveBeenCalledWith(expect.stringContaining('search=sales'));
   });
 
   it('passes cursor on subsequent pages', async () => {
@@ -218,9 +222,7 @@ describe('useAccessGroups', () => {
     result.current.fetchNextPage();
 
     await waitFor(() => expect(mockApiGet).toHaveBeenCalledTimes(2));
-    expect(mockApiGet).toHaveBeenLastCalledWith(
-      expect.stringContaining('cursor=cursor-xyz'),
-    );
+    expect(mockApiGet).toHaveBeenLastCalledWith(expect.stringContaining('cursor=cursor-xyz'));
   });
 });
 

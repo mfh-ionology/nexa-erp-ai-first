@@ -19,6 +19,15 @@ const { MockApiError } = vi.hoisted(() => {
 
 vi.mock('@nexa/api-client', () => ({
   ApiError: MockApiError,
+  ApiClient: class MockApiClient {
+    constructor(_config: unknown) {}
+    request = vi.fn();
+    get = vi.fn();
+    post = vi.fn();
+    patch = vi.fn();
+    put = vi.fn();
+    delete = vi.fn();
+  },
 }));
 
 // --- Mock TanStack Router ---

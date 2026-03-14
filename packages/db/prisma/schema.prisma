@@ -331,6 +331,7 @@ model CompanyProfile {
   tasks                  Task[]
   documentTemplates      DocumentTemplate[]
   printPreferences       PrintPreference[]
+  favouritePages         UserFavouritePage[]
 
   @@index([baseCurrencyCode], map: "idx_company_profiles_base_currency_code")
   @@index([countryCode], map: "idx_company_profiles_country_code")
@@ -437,6 +438,14 @@ enum ViewScope {
   @@map("view_scope")
 }
 
+enum MobileNavStyle {
+  CLASSIC_TABS
+  MINIMAL
+  MY_SHORTCUTS
+
+  @@map("mobile_nav_style")
+}
+
 enum FieldDataType {
   STRING
   NUMBER
@@ -521,6 +530,7 @@ model User {
   lastLoginAt    DateTime? @map("last_login_at")
   enabledModules Json      @default("[]") @map("enabled_modules")
   locale         String    @default("en") @map("locale") @db.VarChar(10)
+  mobileNavStyle MobileNavStyle @default(CLASSIC_TABS) @map("mobile_nav_style")
 
   // Audit
   createdAt DateTime @default(now()) @map("created_at")
@@ -552,6 +562,8 @@ model User {
   tasksCreated             Task[]            @relation("TaskCreator")
   taskAssignments          TaskAssignee[]
   printPreferences         PrintPreference[]
+  passwordResetTokens      PasswordResetToken[]
+  favouritePages           UserFavouritePage[]
 
   @@unique([email], map: "uq_users_email")
   @@index([companyId], map: "idx_users_company_id")
@@ -577,6 +589,21 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @map("id")
+  userId    String    @map("user_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  usedAt    DateTime? @map("used_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tokenHash], map: "uq_password_reset_tokens_token_hash")
+  @@index([userId, usedAt], map: "idx_password_reset_tokens_user_used")
+  @@map("password_reset_tokens")
+}
+
 // ---------------------------------------------------------------------------
 // Number Series — E1.5
 // ---------------------------------------------------------------------------
@@ -588,8 +615,11 @@ model NumberSeries {
   prefix     String  @map("prefix")
   nextValue  Int     @default(1) @map("next_value")
   padding    Int     @default(5) @map("padding")
-  suffix     String? @map("suffix")
-  isActive   Boolean @default(true) @map("is_active")
+  suffix         String?   @map("suffix")
+  validFrom      DateTime? @map("valid_from")
+  validTo        DateTime? @map("valid_to")
+  subRangePrefix String?   @map("sub_range_prefix")
+  isActive       Boolean   @default(true) @map("is_active")
 
   // Audit
   createdAt DateTime @default(now()) @map("created_at")
@@ -598,7 +628,9 @@ model NumberSeries {
   // Relations
   company CompanyProfile @relation(fields: [companyId], references: [id])
 
-  @@unique([companyId, entityType], map: "uq_number_series_company_entity")
+  // Uniqueness enforced by two partial indexes in raw SQL (in the migration):
+  // 1. uq_number_series_company_entity_default: (company_id, entity_type) WHERE valid_from IS NULL
+  // 2. uq_number_series_company_entity_range: (company_id, entity_type, valid_from) WHERE valid_from IS NOT NULL
   @@index([companyId], map: "idx_number_series_company_id")
   @@index([companyId, isActive], map: "idx_number_series_company_active")
   @@map("number_series")
@@ -1641,6 +1673,29 @@ model SavedViewCondition {
 
   @@index([savedViewId, conditionOrder], map: "idx_saved_view_conditions_view_order")
   @@map("saved_view_conditions")
+}
+
+// ---------------------------------------------------------------------------
+// User Favourite Pages — Navigation Shortcuts
+// ---------------------------------------------------------------------------
+
+model UserFavouritePage {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  companyId    String   @map("company_id")
+  path         String   @db.VarChar(255)
+  label        String   @db.VarChar(100)
+  iconKey      String   @map("icon_key") @db.VarChar(50)
+  displayOrder Int      @default(0) @map("display_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId, path])
+  @@index([userId, companyId, displayOrder])
+  @@map("user_favourite_pages")
 }
 
 // ---------------------------------------------------------------------------

@@ -3,7 +3,9 @@
 ## Responsive Strategy
 
 **Desktop (1024px+) — Full Experience:**
-- Sidebar navigation: 256px expanded with icons + labels, 64px collapsed with icons only
+- Mega-menu navigation: 380px slide-from-left overlay with drill-down accordion, triggered by hamburger button in header
+- Favourites toolbar: 40px horizontal bar with pinned page shortcuts (overflow chevron for excess items)
+- Module context bar: 32px bar auto-detected from URL, showing Pages/Settings/Reports pills
 - Split panels: side-by-side views for Document Viewer, related entity preview
 - Multi-column layouts: 2-3 column card grids for dashboards and briefings
 - Keyboard shortcuts fully active: Cmd+K (AI), Cmd+N (new), Cmd+S (save)
@@ -11,7 +13,8 @@
 - Density toggle: "Comfortable" (default) or "Compact" mode
 
 **Tablet (768–1023px) — Touch-Optimised:**
-- Sidebar: collapsed by default (64px icons), swipe right to expand
+- Mega-menu: same as desktop, touch-optimised with 48px minimum tap targets on menu items
+- Favourites toolbar and module context bar: same as desktop
 - Touch targets: 48x48px minimum for all interactive elements
 - Forms: single-column layout (header fields stack vertically)
 - Tables: priority columns visible, horizontal scroll for secondary columns
@@ -19,19 +22,22 @@
 - Split panels: stacked vertically (document on top, form below) rather than side-by-side
 
 **Phone (375–767px) — Briefing-First:**
-- Bottom tab navigation: 5 tabs (Briefing, Modules, AI, Notifications, Profile)
+- Mobile navigation per user preference (`mobileNavStyle` on User model):
+  - CLASSIC_TABS (default): 5-tab bottom bar (Briefing, Modules, AI, Notifications, Profile)
+  - MINIMAL: Floating action button + gesture navigation
+  - MY_SHORTCUTS: Bottom bar shows user's pinned favourite pages
 - Briefing as home screen: full-width cards, swipe to dismiss completed items
 - Forms: full-width single-column, sticky "Approve" button at bottom
 - Tables: card layout (each row becomes a card with key fields)
 - AI input: full-width text area, voice input button
 - Modals: full-screen sheets sliding up from bottom
-- No sidebar — module navigation via Modules tab or AI command
+- No mega-menu — module navigation via bottom nav, Modules tab, or AI command
 
 ## Breakpoint Behaviour Matrix
 
 | Component | Phone (375px) | Tablet (768px) | Desktop (1024px) |
 |-----------|--------------|----------------|-----------------|
-| Navigation | Bottom tabs | Collapsed sidebar | Expanded sidebar |
+| Navigation | Per-user preference (CLASSIC_TABS / MINIMAL / MY_SHORTCUTS) | Mega-menu + favourites toolbar + context bar | Mega-menu + favourites toolbar + context bar |
 | Briefing | Stacked cards, swipeable | 2-column cards | 3-column cards |
 | Entity List | Card layout per row | Table with priority columns | Full table |
 | Form | Single column, stacked | Single column, wider | Multi-column tabs |

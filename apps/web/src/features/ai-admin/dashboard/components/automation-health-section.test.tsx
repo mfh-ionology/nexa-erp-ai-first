@@ -147,7 +147,7 @@ async function renderSection() {
 describe('AutomationHealthSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.useFakeTimers();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(now);
     setupMocks();
   });

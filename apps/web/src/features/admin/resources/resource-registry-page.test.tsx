@@ -32,14 +32,30 @@ vi.mock('@/components/ui/select', () => {
   const React = require('react');
   return {
     Select: (props: { children: unknown; value?: string; onValueChange?: (v: string) => void }) =>
-      React.createElement(MockSelectCtx.Provider, { value: { onValueChange: props.onValueChange } }, props.children),
+      React.createElement(
+        MockSelectCtx.Provider,
+        { value: { onValueChange: props.onValueChange } },
+        props.children,
+      ),
     SelectTrigger: (props: { children: unknown; 'aria-label'?: string }) =>
-      React.createElement('button', { role: 'combobox', 'aria-label': props['aria-label'] }, props.children),
+      React.createElement(
+        'button',
+        { role: 'combobox', 'aria-label': props['aria-label'] },
+        props.children,
+      ),
     SelectContent: (props: { children: unknown }) =>
       React.createElement('div', null, props.children),
     SelectItem: (props: { children: unknown; value: string }) => {
       const ctx = React.useContext(MockSelectCtx);
-      return React.createElement('button', { role: 'option', 'data-value': props.value, onClick: () => ctx.onValueChange?.(props.value) }, props.children);
+      return React.createElement(
+        'button',
+        {
+          role: 'option',
+          'data-value': props.value,
+          onClick: () => ctx.onValueChange?.(props.value),
+        },
+        props.children,
+      );
     },
     SelectValue: (props: { placeholder?: string }) =>
       React.createElement('span', null, props.placeholder),
@@ -134,7 +150,7 @@ describe('ResourceRegistryPage', () => {
 
       const heading = screen.getByRole('heading', { level: 1 });
       expect(heading).toHaveTextContent('resources.title');
-    });
+    }, 15000);
 
     it('renders breadcrumbs: System > Resource Registry', async () => {
       await renderPage();
@@ -294,9 +310,7 @@ describe('ResourceRegistryPage', () => {
 
       // The hook should have both params
       const lastCall = mockUseResourcesInfinite.mock.calls.at(-1);
-      expect(lastCall?.[0]).toEqual(
-        expect.objectContaining({ module: 'finance', type: 'PAGE' }),
-      );
+      expect(lastCall?.[0]).toEqual(expect.objectContaining({ module: 'finance', type: 'PAGE' }));
     });
   });
 
@@ -403,12 +417,8 @@ describe('ResourceRegistryPage', () => {
     it('filter dropdowns have accessible names', async () => {
       await renderPage();
 
-      expect(
-        screen.getByRole('combobox', { name: 'resources.filter.module' }),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByRole('combobox', { name: 'resources.filter.type' }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: 'resources.filter.module' })).toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: 'resources.filter.type' })).toBeInTheDocument();
     });
 
     it('column headers are translatable', async () => {

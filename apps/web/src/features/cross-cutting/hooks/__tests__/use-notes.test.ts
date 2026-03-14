@@ -27,6 +27,11 @@ vi.mock('@/hooks/use-toast', () => ({
   toast: (...args: unknown[]) => mockToast(...args),
 }));
 
+// --- Mock i18n ---
+vi.mock('@nexa/i18n', () => ({
+  useI18n: () => ({ t: (key: string) => key }),
+}));
+
 // --- Mock query keys ---
 vi.mock('@/lib/query-keys', () => ({
   queryKeys: {
@@ -379,7 +384,7 @@ describe('usePinNote', () => {
     await waitFor(() => expect(result.current.pin.isError).toBe(true));
 
     expect(mockToast).toHaveBeenCalledWith({
-      title: 'Failed to update pin status',
+      title: 'crossCutting.notes.pinFailed',
       variant: 'destructive',
     });
   });

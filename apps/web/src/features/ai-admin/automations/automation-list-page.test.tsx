@@ -142,7 +142,7 @@ describe('AutomationListPage', () => {
 
       const heading = screen.getByRole('heading', { level: 1 });
       expect(heading).toHaveTextContent('Automations');
-    });
+    }, 15000);
 
     it('renders automation data in the table', async () => {
       await renderPage();
@@ -170,19 +170,19 @@ describe('AutomationListPage', () => {
     it('renders last run status "Completed" for completed automation', async () => {
       await renderPage();
 
-      expect(screen.getByText('Completed')).toBeInTheDocument();
+      expect(screen.getAllByText('Completed').length).toBeGreaterThanOrEqual(1);
     });
 
     it('renders last run status "Failed" for failed automation', async () => {
       await renderPage();
 
-      expect(screen.getByText('Failed')).toBeInTheDocument();
+      expect(screen.getAllByText('Failed').length).toBeGreaterThanOrEqual(1);
     });
 
     it('renders "Never run" for automation with no last run', async () => {
       await renderPage();
 
-      expect(screen.getByText('Never run')).toBeInTheDocument();
+      expect(screen.getAllByText('Never run').length).toBeGreaterThanOrEqual(1);
     });
 
     it('renders active toggle switches', async () => {

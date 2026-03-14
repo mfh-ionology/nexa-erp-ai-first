@@ -1,5 +1,7 @@
 /* eslint-disable i18next/no-literal-string */
 import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createElement } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import type { AiSkillListItem, SkillsGroupedResponse } from '../api/types';
@@ -142,9 +144,25 @@ function setupMockQueries(
 }
 
 // Dynamic import after mocks
+function createTestQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+}
+
 async function renderPage() {
   const { SkillPackManagerPage } = await import('./skill-pack-manager-page');
-  return render(<SkillPackManagerPage />);
+  const queryClient = createTestQueryClient();
+  return render(
+    createElement(
+      QueryClientProvider,
+      { client: queryClient },
+      createElement(SkillPackManagerPage),
+    ),
+  );
 }
 
 describe('SkillPackManagerPage', () => {

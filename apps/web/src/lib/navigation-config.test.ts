@@ -42,10 +42,14 @@ describe('NAVIGATION_MODULES', () => {
     }
   });
 
-  it('item paths start with /<module-key>/', () => {
+  it('item paths start with the module pathPrefix', () => {
+    // Known exception: system.documentTemplates lives under /settings/ not /system/
+    const KNOWN_EXCEPTIONS = new Set(['system.documentTemplates']);
+
     for (const mod of NAVIGATION_MODULES) {
       for (const item of mod.items) {
-        expect(item.path).toMatch(new RegExp(`^/${mod.key}/`));
+        if (KNOWN_EXCEPTIONS.has(item.key)) continue;
+        expect(item.path).toMatch(new RegExp(`^${mod.pathPrefix}/`));
       }
     }
   });
