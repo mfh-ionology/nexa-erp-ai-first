@@ -567,6 +567,7 @@ model User {
   printPreferences         PrintPreference[]
   passwordResetTokens      PasswordResetToken[]
   favouritePages           UserFavouritePage[]
+  aiUsage                  AiUsage[]
 
   @@unique([email], map: "uq_users_email")
   @@index([companyId], map: "idx_users_company_id")
@@ -1115,6 +1116,10 @@ model AiUsage {
   tenantId     String   @map("tenant_id")
   modelId      String   @map("model_id")
   agentId      String?  @map("agent_id")
+  userId       String?  @map("user_id")
+  moduleId     String?  @map("module_id")
+  requestType  String   @default("chat") @map("request_type") @db.VarChar(20)
+  latencyMs    Int?     @map("latency_ms")
   date         DateTime @map("date") @db.Date
   requestCount Int      @map("request_count")
   inputTokens  Int      @map("input_tokens")
@@ -1128,8 +1133,9 @@ model AiUsage {
   // Relations
   model AiModel  @relation(fields: [modelId], references: [id])
   agent AiAgent? @relation(fields: [agentId], references: [id])
+  user  User?    @relation(fields: [userId], references: [id])
 
-  @@unique([tenantId, modelId, agentId, date], map: "uq_ai_usage_tenant_model_agent_date")
+  @@unique([tenantId, modelId, agentId, userId, moduleId, requestType, date], map: "uq_ai_usage_tenant_model_agent_user_module_type_date")
   // NOTE: Partial unique index for NULL agentId added via raw SQL in migration:
   // CREATE UNIQUE INDEX "uq_ai_usage_tenant_model_date_no_agent" ON "ai_usage" ("tenant_id", "model_id", "date") WHERE "agent_id" IS NULL;
   @@map("ai_usage")
