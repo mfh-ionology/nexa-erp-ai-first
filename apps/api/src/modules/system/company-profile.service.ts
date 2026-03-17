@@ -38,7 +38,7 @@ const DEFAULT_NUMBER_SERIES: { entityType: string; prefix: string }[] = [
   { entityType: 'SALES_ORDER', prefix: 'SO-' },
   { entityType: 'SALES_QUOTE', prefix: 'SQ-' },
   { entityType: 'PURCHASE_ORDER', prefix: 'PO-' },
-  { entityType: 'JOURNAL', prefix: 'JNL-' },
+  { entityType: 'JOURNAL_ENTRY', prefix: 'JE-' },
   { entityType: 'CUSTOMER', prefix: 'CUST-' },
   { entityType: 'SUPPLIER', prefix: 'SUP-' },
   { entityType: 'EMPLOYEE', prefix: 'EMP-' },
@@ -177,6 +177,28 @@ export async function exportPermissionConfig(
       fieldOverrides: g.fieldOverrides,
     })),
   };
+}
+
+// ---------------------------------------------------------------------------
+// updateCompanyAiSettings
+// ---------------------------------------------------------------------------
+
+export async function updateCompanyAiSettings(
+  prisma: PrismaClient,
+  companyId: string,
+  key: string,
+  value: unknown,
+) {
+  const profile = await prisma.companyProfile.findUnique({ where: { id: companyId } });
+  if (!profile) throw new NotFoundError('NOT_FOUND', 'Company profile not found');
+
+  const currentSettings = (profile.settings as Record<string, unknown>) ?? {};
+  const updatedSettings = { ...currentSettings, [key]: value };
+
+  return prisma.companyProfile.update({
+    where: { id: companyId },
+    data: { settings: updatedSettings },
+  });
 }
 
 // ---------------------------------------------------------------------------

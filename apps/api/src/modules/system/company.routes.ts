@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { prisma, resolveUserRole, UserRole } from '@nexa/db';
+import { prisma, resolveUserRole } from '@nexa/db';
+import { updateCompanyAiSettings } from './company-profile.service.js';
 
 import {
   companySwitchParamsSchema,
@@ -11,7 +12,7 @@ import { tServer } from '@nexa/i18n/server';
 import { AuthError } from '../../core/errors/index.js';
 import { sendSuccess } from '../../core/utils/response.js';
 import { successEnvelope } from '../../core/schemas/envelope.js';
-import { createRbacGuard } from '../../core/rbac/index.js';
+import { createPermissionGuard } from '../../core/rbac/index.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -39,7 +40,7 @@ async function companyRoutes(fastify: FastifyInstance): Promise<void> {
       schema: {
         response: { 200: successEnvelope(companyListResponseSchema) },
       },
-      preHandler: createRbacGuard({ minimumRole: UserRole.VIEWER }),
+      preHandler: createPermissionGuard('system.companies.list', 'view'),
     },
     async (request, reply) => {
       // Find all company roles for the current user
@@ -92,7 +93,7 @@ async function companyRoutes(fastify: FastifyInstance): Promise<void> {
         params: companySwitchParamsSchema,
         response: { 200: successEnvelope(companySwitchResponseSchema) },
       },
-      preHandler: createRbacGuard({ minimumRole: UserRole.VIEWER }),
+      preHandler: createPermissionGuard('system.companies.detail', 'edit'),
     },
     async (request, reply) => {
       const { id: targetCompanyId } = request.params;
@@ -143,6 +144,19 @@ async function companyRoutes(fastify: FastifyInstance): Promise<void> {
       };
 
       return sendSuccess(reply, responseData);
+    },
+  );
+  // -------------------------------------------------------------------------
+  // PATCH /system/company/ai-settings — update a single AI settings key
+  // -------------------------------------------------------------------------
+  fastify.patch(
+    '/company/ai-settings',
+    { preHandler: [createPermissionGuard('system.settings.detail', 'edit')] },
+    async (request, reply) => {
+      const { key, value } = request.body as { key: string; value: unknown };
+      const companyId = request.companyId;
+      const result = await updateCompanyAiSettings(prisma, companyId, key, value);
+      return reply.send(successEnvelope({ settings: result.settings }));
     },
   );
 }
