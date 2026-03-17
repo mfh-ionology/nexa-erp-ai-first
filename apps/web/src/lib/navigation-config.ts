@@ -20,6 +20,8 @@ export interface NavigationItem {
   alwaysVisible?: boolean;
   /** Categorises item for module context bar: page (default), setting, or report */
   category?: 'page' | 'setting' | 'report';
+  /** When 'header', renders as a non-interactive section label in the mega-menu */
+  type?: 'item' | 'header';
 }
 
 export interface NavigationModule {
