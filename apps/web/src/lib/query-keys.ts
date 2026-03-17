@@ -202,6 +202,7 @@ export const queryKeys = {
         ? ([...queryKeys.aiAdmin.all, 'corrections', 'infinite', params] as const)
         : ([...queryKeys.aiAdmin.all, 'corrections', 'infinite'] as const),
     correctionStats: () => [...queryKeys.aiAdmin.all, 'corrections', 'stats'] as const,
+    setupStatus: () => [...queryKeys.aiAdmin.all, 'setup-status'] as const,
   },
   tasks: {
     all: ['tasks'] as const,
