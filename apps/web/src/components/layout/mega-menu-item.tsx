@@ -75,6 +75,17 @@ export function MegaMenuItem({
       {isExpanded && (
         <div className="mt-0.5 space-y-0.5">
           {module.items.map((item) => {
+            if (item.type === 'header') {
+              return (
+                <p
+                  key={item.key}
+                  className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground first:pt-0"
+                >
+                  {t(item.labelKey)}
+                </p>
+              );
+            }
+
             const ItemIcon = resolveIcon(item.icon);
             const isItemActive = activePath === item.path || activePath.startsWith(item.path + '/');
             const pinned = isPinned(item.path);
