@@ -31,11 +31,13 @@ describe('NAVIGATION_MODULES', () => {
     }
   });
 
-  it('every item has a non-empty key, labelKey, icon, and path starting with /', () => {
+  it('every item has a non-empty key and labelKey; non-header items have icon and path starting with /', () => {
     for (const mod of NAVIGATION_MODULES) {
       for (const item of mod.items) {
         expect(item.key).toBeTruthy();
         expect(item.labelKey).toBeTruthy();
+        // Section headers intentionally have empty icon and path
+        if (item.type === 'header') continue;
         expect(item.icon).toBeTruthy();
         expect(item.path).toMatch(/^\//);
       }
@@ -49,6 +51,8 @@ describe('NAVIGATION_MODULES', () => {
     for (const mod of NAVIGATION_MODULES) {
       for (const item of mod.items) {
         if (KNOWN_EXCEPTIONS.has(item.key)) continue;
+        // Section headers have empty paths — skip path prefix check
+        if (item.type === 'header') continue;
         expect(item.path).toMatch(new RegExp(`^${mod.pathPrefix}/`));
       }
     }

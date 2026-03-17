@@ -364,12 +364,14 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
     pathPrefix: '/ai',
     displayOrder: 13,
     items: [
+      // User-facing (always visible)
       {
         key: 'ai.briefing',
         labelKey: 'navigation:ai.briefing',
         icon: 'Sun',
         path: '/ai/briefing',
         alwaysVisible: true,
+        category: 'page',
       },
       {
         key: 'ai.memory',
@@ -377,6 +379,7 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         icon: 'Brain',
         path: '/ai/memory',
         alwaysVisible: true,
+        category: 'page',
       },
       {
         key: 'ai.skills',
@@ -384,6 +387,26 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         icon: 'Wand2',
         path: '/ai/skills',
         alwaysVisible: true,
+        category: 'page',
+      },
+      {
+        key: 'ai.knowledge',
+        labelKey: 'navigation:ai.knowledge',
+        icon: 'LibraryBig',
+        path: '/ai/admin/knowledge',
+        alwaysVisible: true,
+        category: 'page',
+      },
+
+      // AI Settings section header
+      {
+        key: 'ai.admin.settings',
+        labelKey: 'navigation:ai.admin.settings',
+        icon: '',
+        path: '',
+        type: 'header',
+        resourceCode: 'system.settings.detail',
+        category: 'setting',
       },
       {
         key: 'ai.admin',
@@ -422,6 +445,25 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         labelKey: 'navigation:ai.admin.skills',
         icon: 'Wand2',
         path: '/ai/admin/skills',
+        resourceCode: 'system.settings.detail',
+        category: 'setting',
+      },
+      {
+        key: 'ai.admin.analytics',
+        labelKey: 'navigation:ai.admin.analytics',
+        icon: 'BarChart3',
+        path: '/ai/admin/analytics',
+        resourceCode: 'system.settings.detail',
+        category: 'setting',
+      },
+
+      // Automations section header
+      {
+        key: 'ai.admin.automations.section',
+        labelKey: 'navigation:ai.admin.automations.section',
+        icon: '',
+        path: '',
+        type: 'header',
         resourceCode: 'system.settings.detail',
         category: 'setting',
       },
