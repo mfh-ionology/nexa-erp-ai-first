@@ -197,7 +197,8 @@ export async function updateCompanyAiSettings(
 
   return prisma.companyProfile.update({
     where: { id: companyId },
-    data: { settings: updatedSettings },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma InputJsonValue
+    data: { settings: updatedSettings as any },
   });
 }
 

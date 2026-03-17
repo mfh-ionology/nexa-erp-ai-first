@@ -156,7 +156,7 @@ async function companyRoutes(fastify: FastifyInstance): Promise<void> {
       const { key, value } = request.body as { key: string; value: unknown };
       const companyId = request.companyId;
       const result = await updateCompanyAiSettings(prisma, companyId, key, value);
-      return reply.send(successEnvelope({ settings: result.settings }));
+      return sendSuccess(reply, { settings: result.settings });
     },
   );
 }

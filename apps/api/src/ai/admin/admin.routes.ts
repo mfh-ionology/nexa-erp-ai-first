@@ -5,9 +5,9 @@
 
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { UserRole } from '@nexa/db';
+import { prisma } from '@nexa/db';
 
-import { createRbacGuard } from '../../core/rbac/index.js';
+import { createPermissionGuard } from '../../core/rbac/index.js';
 import { sendSuccess } from '../../core/utils/response.js';
 import { successEnvelope } from '../../core/schemas/envelope.js';
 import type { AdminModelService } from './admin-model.service.js';
@@ -135,7 +135,7 @@ async function adminRoutes(fastify: FastifyInstance): Promise<void> {
     }
   }
 
-  const adminGuard = createRbacGuard({ minimumRole: UserRole.ADMIN });
+  const adminGuard = createPermissionGuard('ai.admin.access', 'edit');
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Dashboard
@@ -737,6 +737,57 @@ async function adminRoutes(fastify: FastifyInstance): Promise<void> {
       );
 
       return sendSuccess(reply, { processedCompanies: 1, signalsCreated });
+    },
+  );
+
+  // -----------------------------------------------------------------------
+  // GET /setup-status — AI Setup Wizard checklist status (used by frontend wizard)
+  // -----------------------------------------------------------------------
+
+  const setupStatusSchema = z.object({
+    modelsConnected: z.boolean(),
+    agentsConfigured: z.boolean(),
+    skillsActivated: z.boolean(),
+    automationCreated: z.boolean(),
+    copilotTested: z.boolean(),
+    wizardCompleted: z.boolean(),
+    checklistDismissed: z.boolean(),
+  });
+
+  fastify.get(
+    '/setup-status',
+    {
+      schema: {
+        response: { 200: successEnvelope(setupStatusSchema) },
+      },
+      preHandler: [createPermissionGuard('system.settings.detail', 'view')],
+    },
+    async (request, reply) => {
+      const companyId = request.companyId;
+
+      const [modelCount, agentCount, skillOverrideCount, automationCount, profile] =
+        await Promise.all([
+          prisma.aiModel.count({ where: { isActive: true } }),
+          prisma.aiAgent.count({ where: { isActive: true } }),
+          prisma.aiSkillOverride.count({ where: { companyId, isActive: true } }),
+          prisma.aiAutomation.count({ where: { companyId } }),
+          prisma.companyProfile.findUnique({
+            where: { id: companyId },
+            select: { settings: true },
+          }),
+        ]);
+
+      const settings = (profile?.settings as Record<string, unknown>) ?? {};
+
+      return sendSuccess(reply, {
+        modelsConnected: modelCount > 0,
+        agentsConfigured: agentCount > 0,
+        skillsActivated: skillOverrideCount > 0,
+        automationCreated: automationCount > 0,
+        copilotTested: settings.aiCopilotTested === true,
+        wizardCompleted: settings.aiSetupWizardCompleted === true,
+        checklistDismissed: settings.aiSetupChecklistDismissed === true,
+      });
     },
   );
 }
