@@ -43,6 +43,22 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
     pathPrefix: '/finance',
     displayOrder: 2,
     items: [
+      // Dashboard
+      {
+        key: 'finance.dashboard',
+        labelKey: 'navigation:finance.dashboard',
+        icon: 'LayoutDashboard',
+        path: '/finance',
+      },
+
+      // Pages
+      {
+        key: 'finance.pages',
+        type: 'header',
+        labelKey: 'navigation:finance.pages',
+        icon: '',
+        path: '',
+      },
       {
         key: 'finance.chartOfAccounts',
         labelKey: 'navigation:finance.chartOfAccounts',
@@ -56,23 +72,141 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         path: '/finance/journals',
       },
       {
-        key: 'finance.periods',
-        labelKey: 'navigation:finance.periods',
-        icon: 'Calendar',
-        path: '/finance/periods',
-        category: 'setting',
+        key: 'finance.bankAccounts',
+        labelKey: 'navigation:finance.bankAccounts',
+        icon: 'Building2',
+        path: '/finance/bank-accounts',
       },
       {
-        key: 'finance.bankRec',
-        labelKey: 'navigation:finance.bankRec',
+        key: 'finance.bankReconciliation',
+        labelKey: 'navigation:finance.bankReconciliation',
         icon: 'ArrowLeftRight',
         path: '/finance/bank-reconciliation',
+      },
+      {
+        key: 'finance.vatReturns',
+        labelKey: 'navigation:finance.vatReturns',
+        icon: 'Receipt',
+        path: '/finance/vat-returns',
       },
       {
         key: 'finance.budgets',
         labelKey: 'navigation:finance.budgets',
         icon: 'PiggyBank',
         path: '/finance/budgets',
+      },
+      {
+        key: 'finance.templates',
+        labelKey: 'navigation:finance.templates',
+        icon: 'Copy',
+        path: '/finance/templates',
+      },
+
+      // Reports
+      {
+        key: 'finance.reports',
+        type: 'header',
+        labelKey: 'navigation:finance.reports',
+        icon: '',
+        path: '',
+        category: 'report',
+      },
+      {
+        key: 'finance.trialBalance',
+        labelKey: 'navigation:finance.trialBalance',
+        icon: 'Scale',
+        path: '/finance/reports/trial-balance',
+        category: 'report',
+      },
+      {
+        key: 'finance.profitAndLoss',
+        labelKey: 'navigation:finance.profitAndLoss',
+        icon: 'TrendingUp',
+        path: '/finance/reports/profit-and-loss',
+        category: 'report',
+      },
+      {
+        key: 'finance.balanceSheet',
+        labelKey: 'navigation:finance.balanceSheet',
+        icon: 'FileSpreadsheet',
+        path: '/finance/reports/balance-sheet',
+        category: 'report',
+      },
+      {
+        key: 'finance.transactionJournal',
+        labelKey: 'navigation:finance.transactionJournal',
+        icon: 'List',
+        path: '/finance/reports/transaction-journal',
+        category: 'report',
+      },
+      {
+        key: 'finance.budgetVariance',
+        labelKey: 'navigation:finance.budgetVariance',
+        icon: 'BarChart3',
+        path: '/finance/reports/budget-variance',
+        category: 'report',
+      },
+
+      // Settings
+      {
+        key: 'finance.settingsSection',
+        type: 'header',
+        labelKey: 'navigation:finance.settingsSection',
+        icon: '',
+        path: '',
+        category: 'setting',
+      },
+      {
+        key: 'finance.financeSettings',
+        labelKey: 'navigation:finance.financeSettings',
+        icon: 'Settings',
+        path: '/finance/settings',
+        category: 'setting',
+      },
+      {
+        key: 'finance.accountMappings',
+        labelKey: 'navigation:finance.accountMappings',
+        icon: 'GitBranch',
+        path: '/finance/account-mappings',
+        category: 'setting',
+      },
+      {
+        key: 'finance.periods',
+        labelKey: 'navigation:finance.periods',
+        icon: 'Calendar',
+        path: '/finance/periods',
+        category: 'setting',
+      },
+
+      // Maintenance
+      {
+        key: 'finance.maintenance',
+        type: 'header',
+        labelKey: 'navigation:finance.maintenance',
+        icon: '',
+        path: '',
+        category: 'setting',
+      },
+      {
+        key: 'finance.monthEnd',
+        labelKey: 'navigation:finance.monthEnd',
+        icon: 'CalendarCheck',
+        path: '/finance/month-end',
+        category: 'setting',
+      },
+      {
+        key: 'finance.yearEnd',
+        labelKey: 'navigation:finance.yearEnd',
+        icon: 'CalendarX',
+        path: '/finance/year-end',
+        category: 'setting',
+      },
+      {
+        key: 'finance.openingBalances',
+        labelKey: 'navigation:finance.openingBalances',
+        icon: 'Upload',
+        path: '/finance/opening-balances',
+        category: 'setting',
       },
     ],
   },
