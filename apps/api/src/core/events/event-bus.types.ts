@@ -39,6 +39,16 @@ export interface BusinessEvents {
     resetByUserId: string;
     companyId: string;
   };
+  'user.password.reset': {
+    userId: string;
+    companyId: string;
+    timestamp: Date;
+  };
+  'user.password.changed': {
+    userId: string;
+    companyId: string;
+    timestamp: Date;
+  };
 
   // ── System (placeholder — not yet emitted by any service) ─
   'settings.updated': {
@@ -60,11 +70,21 @@ export interface BusinessEvents {
     groupId: string;
     companyId: string;
     changedBy: string;
+    beforeData: Record<string, unknown>;
+    afterData: Record<string, unknown>;
   };
   'accessGroup.deleted': {
     groupId: string;
     companyId: string;
     deletedBy: string;
+  };
+  'accessGroup.fieldOverrides.updated': {
+    groupId: string;
+    companyId: string;
+    overrideCount: number;
+    changedBy: string;
+    beforeData: Record<string, unknown>;
+    afterData: Record<string, unknown>;
   };
   'user.accessGroups.assigned': {
     userId: string;
@@ -82,6 +102,30 @@ export interface BusinessEvents {
     companyId: string;
     importedBy: string;
     version: string;
+  };
+
+  // ── Finance / Chart of Accounts ──────────────────────────
+  'chartOfAccount.created': {
+    accountId: string;
+    companyId: string;
+    code: string;
+    name: string;
+    accountType: string;
+    createdBy: string;
+  };
+  'chartOfAccount.updated': {
+    accountId: string;
+    companyId: string;
+    code: string;
+    changedBy: string;
+    beforeData: Record<string, unknown>;
+    afterData: Record<string, unknown>;
+  };
+  'chartOfAccount.deactivated': {
+    accountId: string;
+    companyId: string;
+    code: string;
+    deactivatedBy: string;
   };
 
   // ── Finance / GL ────────────────────────────────────────
@@ -888,11 +932,14 @@ export const VALID_BUSINESS_EVENT_TYPES = new Set<string>([
   'user.mfa.setup',
   'user.mfa.enabled',
   'user.mfa.reset',
+  'user.password.reset',
+  'user.password.changed',
   'settings.updated',
   // Access Groups
   'accessGroup.created',
   'accessGroup.updated',
   'accessGroup.deleted',
+  'accessGroup.fieldOverrides.updated',
   'user.accessGroups.assigned',
   'user.accessGroups.revoked',
   'company.defaultData.imported',
