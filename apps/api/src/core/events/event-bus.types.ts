@@ -128,6 +128,22 @@ export interface BusinessEvents {
     deactivatedBy: string;
   };
 
+  // ── Finance / Financial Periods ──────────────────────────
+  'financialPeriod.yearCreated': {
+    companyId: string;
+    fiscalYear: number;
+    periodCount: number;
+    includeP13: boolean;
+    createdBy: string;
+  };
+  'financialPeriod.closed': {
+    periodId: string;
+    companyId: string;
+    fiscalYear: number;
+    periodNumber: number;
+    closedBy: string;
+  };
+
   // ── Finance / GL ────────────────────────────────────────
   'journal.posted': {
     journalEntryId: string;
@@ -943,6 +959,9 @@ export const VALID_BUSINESS_EVENT_TYPES = new Set<string>([
   'user.accessGroups.assigned',
   'user.accessGroups.revoked',
   'company.defaultData.imported',
+  // Finance / Financial Periods
+  'financialPeriod.yearCreated',
+  'financialPeriod.closed',
   // Finance / GL
   'journal.posted',
   'journal.reversed',
