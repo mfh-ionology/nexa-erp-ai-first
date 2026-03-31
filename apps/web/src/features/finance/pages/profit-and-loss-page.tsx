@@ -103,12 +103,15 @@ function SummaryLine({
 
 export function ProfitAndLossPage() {
   const [params, setParams] = useState<ReportParams>(DEFAULT_PARAMS);
-  const [submittedParams, setSubmittedParams] = useState<ReportParams | null>(null);
+  const [submittedParams, setSubmittedParams] = useState<ReportParams | null>(DEFAULT_PARAMS);
 
-  const { data, isFetching } = useProfitAndLoss(submittedParams);
+  const { data, isFetching, refetch } = useProfitAndLoss(submittedParams);
 
   const handleRunReport = () => {
-    setSubmittedParams({ ...params });
+    const newParams = { ...params };
+    setSubmittedParams(newParams);
+    // Force refetch even if params haven't changed
+    setTimeout(() => void refetch(), 50);
   };
 
   // Custom result rendering (no table — sectioned layout)

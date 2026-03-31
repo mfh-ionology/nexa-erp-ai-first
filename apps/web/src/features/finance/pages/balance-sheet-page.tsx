@@ -81,12 +81,14 @@ function TotalLine({ label, value }: { label: string; value: number }) {
 
 export function BalanceSheetPage() {
   const [params, setParams] = useState<ReportParams>(DEFAULT_PARAMS);
-  const [submittedParams, setSubmittedParams] = useState<ReportParams | null>(null);
+  const [submittedParams, setSubmittedParams] = useState<ReportParams | null>(DEFAULT_PARAMS);
 
-  const { data, isFetching } = useBalanceSheet(submittedParams);
+  const { data, isFetching, refetch } = useBalanceSheet(submittedParams);
 
   const handleRunReport = () => {
-    setSubmittedParams({ ...params });
+    const newParams = { ...params };
+    setSubmittedParams(newParams);
+    setTimeout(() => void refetch(), 50);
   };
 
   const resultContent = data ? (

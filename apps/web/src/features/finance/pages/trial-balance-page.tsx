@@ -32,12 +32,14 @@ function formatCurrency(value: number): string {
 
 export function TrialBalancePage() {
   const [params, setParams] = useState<ReportParams>(DEFAULT_PARAMS);
-  const [submittedParams, setSubmittedParams] = useState<ReportParams | null>(null);
+  const [submittedParams, setSubmittedParams] = useState<ReportParams | null>(DEFAULT_PARAMS);
 
-  const { data, isFetching } = useTrialBalance(submittedParams);
+  const { data, isFetching, refetch } = useTrialBalance(submittedParams);
 
   const handleRunReport = () => {
-    setSubmittedParams({ ...params });
+    const newParams = { ...params };
+    setSubmittedParams(newParams);
+    setTimeout(() => void refetch(), 50);
   };
 
   const columns = useMemo<ColumnDef<TrialBalanceRow>[]>(
