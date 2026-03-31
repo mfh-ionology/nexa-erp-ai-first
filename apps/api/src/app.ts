@@ -20,6 +20,7 @@ import { jwtVerifyPlugin } from './core/auth/jwt-verify.hook.js';
 import { authRoutesPlugin } from './core/auth/auth.routes.js';
 import { companyContextPlugin } from './core/middleware/company-context.js';
 import { systemModulePlugin } from './modules/system/index.js';
+import { financeModulePlugin } from './modules/finance/index.js';
 import { viewsModulePlugin } from './core/views/index.js';
 import { redisPlugin } from './core/redis/redis.plugin.js';
 import { registerPermissionCacheListeners } from './core/rbac/index.js';
@@ -169,6 +170,7 @@ export async function buildApp(opts: { logger?: boolean | Record<string, unknown
   await fastify.register(systemModulePlugin, { prefix: '/system' });
   await fastify.register(viewsModulePlugin, { prefix: '/views' });
   await fastify.register(crossCuttingModulePlugin);
+  await fastify.register(financeModulePlugin, { prefix: '/finance' });
 
   // -- Permission cache invalidation event listeners (E2b-4)
   registerPermissionCacheListeners(fastify.eventBus);
