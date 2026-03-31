@@ -50,11 +50,10 @@ export async function getDashboard(
     fiscalYear = query.fiscalYear;
   } else {
     // Look up the company's fiscal year start month from settings
-    const startMonthSetting = await (prisma as any).setting.findFirst({
+    const startMonthSetting = await (prisma as any).systemSetting.findFirst({
       where: {
         companyId,
-        category: 'FINANCE',
-        key: 'fiscalYearStartMonth',
+        key: 'general.fiscalYearStartMonth',
       },
       select: { value: true },
     });
