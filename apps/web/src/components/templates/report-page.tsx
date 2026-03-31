@@ -12,17 +12,8 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,12 +22,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Table,
-  TableCell,
-  TableFooter,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableCell, TableFooter, TableRow } from '@/components/ui/table';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { cn } from '@/lib/utils';
 
@@ -96,11 +82,7 @@ export function ReportPage<TResult>({
   // --- Default action bar: [Run Report] + [⋯ More] ---
   const defaultActionBar = (
     <div className="flex items-center gap-2">
-      <Button
-        onClick={handleRunReport}
-        disabled={isRunning}
-        size="sm"
-      >
+      <Button onClick={handleRunReport} disabled={isRunning} size="sm">
         {isRunning ? (
           <Loader2 className="size-4 animate-spin" aria-hidden="true" />
         ) : (
@@ -112,11 +94,7 @@ export function ReportPage<TResult>({
       {/* Overflow menu: Export PDF, Export Excel, Print */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t('actions')}
-          >
+          <Button variant="ghost" size="icon-sm" aria-label={t('actions')}>
             <MoreHorizontal className="size-4" />
           </Button>
         </DropdownMenuTrigger>
@@ -143,12 +121,7 @@ export function ReportPage<TResult>({
   if (isLoading) {
     return (
       <main className="flex flex-col gap-6" aria-label={title} aria-busy="true">
-        <PageHeader
-          title={title}
-          subtitle={subtitle}
-          breadcrumbs={breadcrumbs}
-          isLoading
-        />
+        <PageHeader title={title} subtitle={subtitle} breadcrumbs={breadcrumbs} isLoading />
         {/* Parameter skeleton */}
         <div className="space-y-3 rounded-lg border p-6">
           <Skeleton className="h-5 w-32" />
@@ -169,44 +142,37 @@ export function ReportPage<TResult>({
   }
 
   // --- Totals row renderer ---
+  // Uses the same grid structure as DataTable to align columns properly
   const renderTotalsRow = (
     cols: ColumnDef<TResult, unknown>[],
     totalsData: Record<string, string>,
   ) => (
-    <Table>
-      <TableFooter>
-        <TableRow className="font-semibold">
-          {cols.map((col, idx) => {
-            const accessorKey =
-              'accessorKey' in col ? (col.accessorKey as string) : null;
-            const id = ('id' in col ? col.id : null) ?? accessorKey ?? `total-${idx}`;
-            const value = accessorKey ? totalsData[accessorKey] : null;
+    <div
+      className="grid border-t-2 border-foreground/20 bg-muted/50 px-4 py-3 font-semibold"
+      style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))` }}
+    >
+      {cols.map((col, idx) => {
+        const accessorKey = 'accessorKey' in col ? (col.accessorKey as string) : null;
+        const id = ('id' in col ? col.id : null) ?? accessorKey ?? `total-${idx}`;
+        const value = accessorKey ? totalsData[accessorKey] : null;
 
-            return (
-              <TableCell key={id}>
-                {idx === 0 && !value ? t('total') : (value ?? '')}
-              </TableCell>
-            );
-          })}
-        </TableRow>
-      </TableFooter>
-    </Table>
+        return (
+          <div key={id} className="px-2 font-mono text-sm tabular-nums">
+            {idx === 0 && !value ? t('total') : (value ?? '')}
+          </div>
+        );
+      })}
+    </div>
   );
 
   // --- Phone layout ---
   if (breakpoint === 'phone') {
     return (
       <main className="flex flex-col gap-4" aria-label={title}>
-        <PageHeader
-          title={title}
-          subtitle={subtitle}
-          breadcrumbs={breadcrumbs}
-        />
+        <PageHeader title={title} subtitle={subtitle} breadcrumbs={breadcrumbs} />
 
         {/* Action bar */}
-        <div className="flex items-center justify-end">
-          {actionBarSlot ?? defaultActionBar}
-        </div>
+        <div className="flex items-center justify-end">{actionBarSlot ?? defaultActionBar}</div>
 
         {/* AI Summary — prominent at top on phone when available */}
         {hasResults && aiSummarySlot && (
@@ -249,66 +215,52 @@ export function ReportPage<TResult>({
         {/* Results as cards on phone */}
         {hasResults && resultData && resultColumns && (
           <section aria-label={t('results')}>
-            <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-              {t('results')}
-            </h2>
+            <h2 className="mb-3 text-sm font-medium text-muted-foreground">{t('results')}</h2>
             {resultData.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                {t('noResults')}
-              </p>
+              <p className="py-8 text-center text-sm text-muted-foreground">{t('noResults')}</p>
             ) : (
               <div className="space-y-3">
                 {resultData.map((row, index) => {
                   const rowRecord = row as Record<string, unknown>;
-                  const firstAccessor = resultColumns[0] && 'accessorKey' in resultColumns[0]
-                    ? (resultColumns[0].accessorKey as string)
-                    : null;
+                  const firstAccessor =
+                    resultColumns[0] && 'accessorKey' in resultColumns[0]
+                      ? (resultColumns[0].accessorKey as string)
+                      : null;
                   const cardKey = firstAccessor
                     ? String(rowRecord[firstAccessor] ?? index)
                     : String(index);
                   return (
-                  <Card key={cardKey}>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm">
-                        {resultColumns[0] &&
-                        'accessorKey' in resultColumns[0]
-                          ? String(
-                              (row as Record<string, unknown>)[
-                                resultColumns[0].accessorKey as string
-                              ] ?? '',
-                            )
-                          : `${t('row')} ${index + 1}`}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                        {resultColumns.slice(1).map((col, colIdx) => {
-                          const accessorKey =
-                            'accessorKey' in col
-                              ? (col.accessorKey as string)
-                              : null;
-                          if (!accessorKey) return null;
-                          const value = (row as Record<string, unknown>)[
-                            accessorKey
-                          ];
-                          const header =
-                            typeof col.header === 'string'
-                              ? col.header
-                              : accessorKey;
-                          return (
-                            <div key={accessorKey ?? colIdx}>
-                              <dt className="text-xs text-muted-foreground">
-                                {header}
-                              </dt>
-                              <dd className="truncate">
-                                {String(value ?? '')}
-                              </dd>
-                            </div>
-                          );
-                        })}
-                      </dl>
-                    </CardContent>
-                  </Card>
+                    <Card key={cardKey}>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">
+                          {resultColumns[0] && 'accessorKey' in resultColumns[0]
+                            ? String(
+                                (row as Record<string, unknown>)[
+                                  resultColumns[0].accessorKey as string
+                                ] ?? '',
+                              )
+                            : `${t('row')} ${index + 1}`}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                          {resultColumns.slice(1).map((col, colIdx) => {
+                            const accessorKey =
+                              'accessorKey' in col ? (col.accessorKey as string) : null;
+                            if (!accessorKey) return null;
+                            const value = (row as Record<string, unknown>)[accessorKey];
+                            const header =
+                              typeof col.header === 'string' ? col.header : accessorKey;
+                            return (
+                              <div key={accessorKey ?? colIdx}>
+                                <dt className="text-xs text-muted-foreground">{header}</dt>
+                                <dd className="truncate">{String(value ?? '')}</dd>
+                              </div>
+                            );
+                          })}
+                        </dl>
+                      </CardContent>
+                    </Card>
                   );
                 })}
 
@@ -318,10 +270,7 @@ export function ReportPage<TResult>({
                     <CardContent className="pt-4">
                       <dl className="space-y-1 text-sm">
                         {Object.entries(totals).map(([key, value]) => (
-                          <div
-                            key={key}
-                            className="flex items-center justify-between"
-                          >
+                          <div key={key} className="flex items-center justify-between">
                             <dt className="text-muted-foreground">{key}</dt>
                             <dd className="font-semibold">{value}</dd>
                           </div>
@@ -352,13 +301,8 @@ export function ReportPage<TResult>({
         />
 
         {/* Parameters — always visible on tablet */}
-        <section
-          className="rounded-lg border p-6"
-          aria-label={t('parameters')}
-        >
-          <h2 className="mb-4 text-sm font-medium text-muted-foreground">
-            {t('parameters')}
-          </h2>
+        <section className="rounded-lg border p-6" aria-label={t('parameters')}>
+          <h2 className="mb-4 text-sm font-medium text-muted-foreground">{t('parameters')}</h2>
           {parameterSlot}
         </section>
 
@@ -379,9 +323,7 @@ export function ReportPage<TResult>({
         {/* Results table with horizontal scroll */}
         {hasResults && resultData && resultColumns && (
           <section aria-label={t('results')}>
-            <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-              {t('results')}
-            </h2>
+            <h2 className="mb-3 text-sm font-medium text-muted-foreground">{t('results')}</h2>
             <div className="overflow-x-auto">
               <DataTable<TResult>
                 columns={resultColumns}
@@ -410,13 +352,8 @@ export function ReportPage<TResult>({
       />
 
       {/* Parameters — always visible on desktop */}
-      <section
-        className="rounded-lg border p-6"
-        aria-label={t('parameters')}
-      >
-        <h2 className="mb-4 text-sm font-medium text-muted-foreground">
-          {t('parameters')}
-        </h2>
+      <section className="rounded-lg border p-6" aria-label={t('parameters')}>
+        <h2 className="mb-4 text-sm font-medium text-muted-foreground">{t('parameters')}</h2>
         {parameterSlot}
       </section>
 
@@ -437,9 +374,7 @@ export function ReportPage<TResult>({
       {/* Results table */}
       {hasResults && resultData && resultColumns && (
         <section aria-label={t('results')}>
-          <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-            {t('results')}
-          </h2>
+          <h2 className="mb-3 text-sm font-medium text-muted-foreground">{t('results')}</h2>
           <DataTable<TResult>
             columns={resultColumns}
             data={resultData}
