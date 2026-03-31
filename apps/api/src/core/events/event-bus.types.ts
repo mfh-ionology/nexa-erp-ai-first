@@ -145,6 +145,13 @@ export interface BusinessEvents {
   };
 
   // ── Finance / GL ────────────────────────────────────────
+  'journal.created': {
+    journalEntryId: string;
+    entryNumber: string;
+    companyId: string;
+    source: string; // JournalSource enum value
+    createdBy: string;
+  };
   'journal.posted': {
     journalEntryId: string;
     entryNumber: string;
@@ -963,6 +970,7 @@ export const VALID_BUSINESS_EVENT_TYPES = new Set<string>([
   'financialPeriod.yearCreated',
   'financialPeriod.closed',
   // Finance / GL
+  'journal.created',
   'journal.posted',
   'journal.reversed',
   'period.locked',
