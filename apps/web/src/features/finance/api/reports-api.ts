@@ -49,10 +49,47 @@ function findSection(sections: ApiSection[], classification: string): ReportSect
 // GET /finance/reports/trial-balance
 // ---------------------------------------------------------------------------
 
+interface TbApiResponse {
+  fiscalYear: number;
+  periodFrom: number;
+  periodTo: number;
+  accounts: Array<{
+    accountCode: string;
+    accountName: string;
+    accountType: string;
+    normalBalance: string;
+    openingBalance: number;
+    totalDebit: number;
+    totalCredit: number;
+    closingBalance: number;
+  }>;
+  totals: {
+    totalDebit: number;
+    totalCredit: number;
+    isBalanced: boolean;
+  };
+}
+
 export async function getTrialBalance(params: ReportParams): Promise<TrialBalanceReport> {
   const qs = buildQueryString(params as unknown as Record<string, unknown>);
-  const result = await apiGet<TrialBalanceReport>(`/finance/reports/trial-balance${qs}`);
-  return result.data;
+  const result = await apiGet<TbApiResponse>(`/finance/reports/trial-balance${qs}`);
+  const api = result.data;
+
+  return {
+    rows: api.accounts.map((a) => ({
+      accountCode: a.accountCode,
+      accountName: a.accountName,
+      accountType: a.accountType as TrialBalanceReport['rows'][0]['accountType'],
+      debit: a.totalDebit,
+      credit: a.totalCredit,
+      balance: a.closingBalance,
+    })),
+    totals: {
+      totalDebit: api.totals.totalDebit,
+      totalCredit: api.totals.totalCredit,
+    },
+    generatedAt: new Date().toISOString(),
+  };
 }
 
 // ---------------------------------------------------------------------------
