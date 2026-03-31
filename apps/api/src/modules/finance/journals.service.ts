@@ -33,6 +33,7 @@ import type {
 import { AppError, DomainError, NotFoundError } from '../../core/errors/index.js';
 import type { EventBus } from '../../core/events/event-bus.js';
 import type { PaginationMeta } from '../../core/utils/response.js';
+import { convertLinesToBaseCurrency, getBaseCurrencyCode } from './multi-currency.service.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -506,9 +507,23 @@ export async function createJournalEntry(
     // Generate entry number via NumberSeries (AC-1, BR-FIN-012)
     const entryNumber = await nextNumber(tx, companyId, 'JOURNAL');
 
-    // Calculate totals
-    const totalDebit = data.lines.reduce((sum, l) => sum + (l.debit ?? 0), 0);
-    const totalCredit = data.lines.reduce((sum, l) => sum + (l.credit ?? 0), 0);
+    // Multi-currency conversion (E14-S20): convert foreign currency lines to base currency
+    const baseCurrencyCode = await getBaseCurrencyCode(tx, companyId);
+    const convertedLines = await convertLinesToBaseCurrency(
+      tx,
+      companyId,
+      baseCurrencyCode,
+      data.transactionDate,
+      data.lines.map((l) => ({
+        ...l,
+        debit: l.debit ?? 0,
+        credit: l.credit ?? 0,
+      })),
+    );
+
+    // Calculate totals from converted (base currency) amounts
+    const totalDebit = convertedLines.reduce((sum, l) => sum + l.debit, 0);
+    const totalCredit = convertedLines.reduce((sum, l) => sum + l.credit, 0);
 
     // Create journal entry
     const journalEntry = await tx.journalEntry.create({
@@ -529,9 +544,10 @@ export async function createJournalEntry(
       select: { id: true },
     });
 
-    // Create lines
-    for (let i = 0; i < data.lines.length; i++) {
-      const line = data.lines[i]!;
+    // Create lines (using converted base-currency amounts)
+    for (let i = 0; i < convertedLines.length; i++) {
+      const line = convertedLines[i]!;
+      const originalLine = data.lines[i]!;
       const createdLine = await tx.journalLine.create({
         data: {
           journalEntryId: journalEntry.id,
@@ -539,8 +555,8 @@ export async function createJournalEntry(
           accountCode: line.accountCode,
           companyId,
           description: line.description ?? null,
-          debit: line.debit ?? 0,
-          credit: line.credit ?? 0,
+          debit: line.debit,
+          credit: line.credit,
           vatCode: line.vatCode ?? null,
           currencyCode: line.currencyCode ?? null,
           foreignAmount: line.foreignAmount ?? null,
@@ -550,8 +566,8 @@ export async function createJournalEntry(
       });
 
       // Create line dimensions
-      if (line.dimensions && line.dimensions.length > 0) {
-        for (const dim of line.dimensions) {
+      if (originalLine.dimensions && originalLine.dimensions.length > 0) {
+        for (const dim of originalLine.dimensions) {
           await tx.journalLineDimension.create({
             data: {
               journalLineId: createdLine.id,
@@ -597,7 +613,7 @@ export async function updateJournalEntry(
     // Fetch existing entry
     const existing = await tx.journalEntry.findFirst({
       where: { id, companyId },
-      select: { id: true, status: true, source: true },
+      select: { id: true, status: true, source: true, transactionDate: true },
     });
 
     if (!existing) {
@@ -623,7 +639,19 @@ export async function updateJournalEntry(
       }
     }
 
-    // If lines are being replaced, validate accounts and rebuild
+    // If lines are being replaced, validate accounts, convert currencies, and rebuild
+    let convertedLines: Array<{
+      accountCode: string;
+      description?: string | null;
+      debit: number;
+      credit: number;
+      vatCode?: string | null;
+      currencyCode: string | null;
+      foreignAmount: number | null;
+      exchangeRate: number | null;
+      dimensions?: Array<{ dimensionValueId: string }>;
+    }> | null = null;
+
     if (data.lines) {
       const accountCodes = data.lines.map((l) => l.accountCode);
       const uniqueCodes = [...new Set(accountCodes)];
@@ -638,14 +666,30 @@ export async function updateJournalEntry(
         }
       }
 
+      // Multi-currency conversion (E14-S20)
+      const txDate = data.transactionDate ?? existing.transactionDate ?? new Date();
+      const baseCurrencyCode = await getBaseCurrencyCode(tx, companyId);
+      convertedLines = await convertLinesToBaseCurrency(
+        tx,
+        companyId,
+        baseCurrencyCode,
+        txDate instanceof Date ? txDate : new Date(txDate),
+        data.lines.map((l) => ({
+          ...l,
+          debit: l.debit ?? 0,
+          credit: l.credit ?? 0,
+        })),
+      );
+
       // Delete existing lines (cascade deletes dimensions)
       await tx.journalLine.deleteMany({
         where: { journalEntryId: id },
       });
 
-      // Create new lines
-      for (let i = 0; i < data.lines.length; i++) {
-        const line = data.lines[i]!;
+      // Create new lines with converted amounts
+      for (let i = 0; i < convertedLines.length; i++) {
+        const line = convertedLines[i]!;
+        const originalLine = data.lines[i]!;
         const createdLine = await tx.journalLine.create({
           data: {
             journalEntryId: id,
@@ -653,8 +697,8 @@ export async function updateJournalEntry(
             accountCode: line.accountCode,
             companyId,
             description: line.description ?? null,
-            debit: line.debit ?? 0,
-            credit: line.credit ?? 0,
+            debit: line.debit,
+            credit: line.credit,
             vatCode: line.vatCode ?? null,
             currencyCode: line.currencyCode ?? null,
             foreignAmount: line.foreignAmount ?? null,
@@ -663,8 +707,8 @@ export async function updateJournalEntry(
           select: { id: true },
         });
 
-        if (line.dimensions && line.dimensions.length > 0) {
-          for (const dim of line.dimensions) {
+        if (originalLine.dimensions && originalLine.dimensions.length > 0) {
+          for (const dim of originalLine.dimensions) {
             await tx.journalLineDimension.create({
               data: {
                 journalLineId: createdLine.id,
@@ -676,16 +720,16 @@ export async function updateJournalEntry(
       }
     }
 
-    // Calculate new totals if lines changed
+    // Calculate new totals if lines changed (using converted base-currency amounts)
     const updateData: Record<string, unknown> = { updatedBy: userId };
     if (data.transactionDate !== undefined) updateData.transactionDate = data.transactionDate;
     if (data.description !== undefined) updateData.description = data.description;
     if (data.reference !== undefined) updateData.reference = data.reference;
     if (data.periodId !== undefined) updateData.periodId = data.periodId;
 
-    if (data.lines) {
-      updateData.totalDebit = data.lines.reduce((sum, l) => sum + (l.debit ?? 0), 0);
-      updateData.totalCredit = data.lines.reduce((sum, l) => sum + (l.credit ?? 0), 0);
+    if (convertedLines) {
+      updateData.totalDebit = convertedLines.reduce((sum, l) => sum + l.debit, 0);
+      updateData.totalCredit = convertedLines.reduce((sum, l) => sum + l.credit, 0);
     }
 
     await tx.journalEntry.update({
@@ -1056,9 +1100,23 @@ export async function createGlPosting(
       }
     }
 
-    // BR-FIN-001: Validate balance
-    const totalDebit = input.lines.reduce((sum, l) => sum + l.debit, 0);
-    const totalCredit = input.lines.reduce((sum, l) => sum + l.credit, 0);
+    // Multi-currency conversion (E14-S20): convert foreign currency lines to base currency
+    const baseCurrencyCode = await getBaseCurrencyCode(tx, companyId);
+    const convertedLines = await convertLinesToBaseCurrency(
+      tx,
+      companyId,
+      baseCurrencyCode,
+      input.transactionDate,
+      input.lines.map((l) => ({
+        ...l,
+        debit: l.debit ?? 0,
+        credit: l.credit ?? 0,
+      })),
+    );
+
+    // BR-FIN-001: Validate balance (on base currency amounts)
+    const totalDebit = convertedLines.reduce((sum, l) => sum + l.debit, 0);
+    const totalCredit = convertedLines.reduce((sum, l) => sum + l.credit, 0);
     if (Math.abs(totalDebit - totalCredit) > 0.0001) {
       throw new DomainError(
         'ENTRY_NOT_BALANCED',
@@ -1070,13 +1128,13 @@ export async function createGlPosting(
     await validateAccountsForPosting(
       tx,
       companyId,
-      input.lines.map((l) => l.accountCode),
+      convertedLines.map((l) => l.accountCode),
       isManual,
     );
 
     // Validate dimensions
-    await validateDimensionRequirements(tx, companyId, input.lines);
-    await validateSingleSelectDimensions(tx, input.lines);
+    await validateDimensionRequirements(tx, companyId, convertedLines);
+    await validateSingleSelectDimensions(tx, convertedLines);
 
     // Generate entry number
     const entryNumber = await nextNumber(tx, companyId, 'JOURNAL');
@@ -1109,9 +1167,10 @@ export async function createGlPosting(
       select: { id: true },
     });
 
-    // Create lines
-    for (let i = 0; i < input.lines.length; i++) {
-      const line = input.lines[i]!;
+    // Create lines (using converted base-currency amounts)
+    for (let i = 0; i < convertedLines.length; i++) {
+      const line = convertedLines[i]!;
+      const originalLine = input.lines[i]!;
       const createdLine = await tx.journalLine.create({
         data: {
           journalEntryId: journalEntry.id,
@@ -1129,8 +1188,8 @@ export async function createGlPosting(
         select: { id: true },
       });
 
-      if (line.dimensions && line.dimensions.length > 0) {
-        for (const dim of line.dimensions) {
+      if (originalLine.dimensions && originalLine.dimensions.length > 0) {
+        for (const dim of originalLine.dimensions) {
           await tx.journalLineDimension.create({
             data: {
               journalLineId: createdLine.id,
@@ -1141,10 +1200,10 @@ export async function createGlPosting(
       }
     }
 
-    // If posting directly (sub-module), update balances
+    // If posting directly (sub-module), update balances (using converted amounts)
     if (!isManual) {
-      await updateAccountBalances(tx, companyId, input.lines);
-      await updateDimensionBalances(tx, companyId, period.id, input.lines);
+      await updateAccountBalances(tx, companyId, convertedLines);
+      await updateDimensionBalances(tx, companyId, period.id, convertedLines);
     }
 
     // Fetch the complete entry
