@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { ACCOUNT_TYPES, NORMAL_BALANCES } from './accounts.schema.js';
+import { JOURNAL_SOURCES } from './journals.schema.js';
 
 // ---------------------------------------------------------------------------
 // Query Schemas
@@ -111,6 +112,88 @@ export const balanceSheetResponseSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Transaction Journal — Query Schema
+// ---------------------------------------------------------------------------
+
+export const transactionJournalQuerySchema = z.object({
+  fiscalYear: z.coerce.number().int().min(2000).max(2100),
+  periodFrom: z.coerce.number().int().min(1).max(13).default(1),
+  periodTo: z.coerce.number().int().min(1).max(13).default(12),
+  accountCode: z.string().optional(),
+  source: z.enum(JOURNAL_SOURCES).optional(),
+});
+
+// ---------------------------------------------------------------------------
+// Transaction Journal — Response Schemas
+// ---------------------------------------------------------------------------
+
+const transactionJournalLineSchema = z.object({
+  lineNumber: z.number(),
+  accountCode: z.string(),
+  accountName: z.string(),
+  description: z.string().nullable(),
+  debit: z.number(),
+  credit: z.number(),
+});
+
+const transactionJournalEntrySchema = z.object({
+  id: z.string(),
+  entryNumber: z.string(),
+  transactionDate: z.string(),
+  description: z.string(),
+  reference: z.string().nullable(),
+  source: z.enum(JOURNAL_SOURCES),
+  status: z.string(),
+  totalDebit: z.number(),
+  totalCredit: z.number(),
+  lines: z.array(transactionJournalLineSchema),
+});
+
+export const transactionJournalResponseSchema = z.object({
+  fiscalYear: z.number(),
+  periodFrom: z.number(),
+  periodTo: z.number(),
+  totalEntries: z.number(),
+  entries: z.array(transactionJournalEntrySchema),
+});
+
+// ---------------------------------------------------------------------------
+// Budget Variance — Query Schema
+// ---------------------------------------------------------------------------
+
+export const budgetVarianceQuerySchema = z.object({
+  fiscalYear: z.coerce.number().int().min(2000).max(2100),
+  budgetId: z.string().uuid().optional(),
+});
+
+// ---------------------------------------------------------------------------
+// Budget Variance — Response Schemas
+// ---------------------------------------------------------------------------
+
+const budgetVarianceLineSchema = z.object({
+  accountCode: z.string(),
+  accountName: z.string(),
+  budgetAmount: z.number(),
+  actualAmount: z.number(),
+  variance: z.number(),
+  variancePercentage: z.number().nullable(),
+});
+
+const budgetVarianceSummarySchema = z.object({
+  totalBudget: z.number(),
+  totalActual: z.number(),
+  totalVariance: z.number(),
+});
+
+export const budgetVarianceResponseSchema = z.object({
+  fiscalYear: z.number(),
+  budgetId: z.string(),
+  budgetName: z.string(),
+  accounts: z.array(budgetVarianceLineSchema),
+  summary: budgetVarianceSummarySchema,
+});
+
+// ---------------------------------------------------------------------------
 // Inferred TypeScript Types
 // ---------------------------------------------------------------------------
 
@@ -124,3 +207,8 @@ export type ReportAccountLine = z.infer<typeof reportAccountLineSchema>;
 export type ReportSection = z.infer<typeof reportSectionSchema>;
 export type ProfitAndLossResponse = z.infer<typeof profitAndLossResponseSchema>;
 export type BalanceSheetResponse = z.infer<typeof balanceSheetResponseSchema>;
+
+export type TransactionJournalQuery = z.infer<typeof transactionJournalQuerySchema>;
+export type TransactionJournalResponse = z.infer<typeof transactionJournalResponseSchema>;
+export type BudgetVarianceQuery = z.infer<typeof budgetVarianceQuerySchema>;
+export type BudgetVarianceResponse = z.infer<typeof budgetVarianceResponseSchema>;

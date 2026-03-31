@@ -8,6 +8,10 @@ import type {
   ReportSection,
   ProfitAndLossResponse,
   BalanceSheetResponse,
+  TransactionJournalQuery,
+  TransactionJournalResponse,
+  BudgetVarianceQuery,
+  BudgetVarianceResponse,
 } from './reports.schema.js';
 
 // ---------------------------------------------------------------------------
@@ -485,6 +489,300 @@ export async function getBalanceSheet(
     totalLiabilities,
     totalEquity,
     isBalanced,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Transaction Journal Report
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns all posted journal entries with their lines for a given period range.
+ *
+ * - Filters by fiscal year, period range, optional accountCode, optional source
+ * - Returns entries ordered by transactionDate ascending
+ * - Each entry includes its nested journal lines
+ */
+export async function getTransactionJournal(
+  prisma: PrismaClient,
+  companyId: string,
+  query: TransactionJournalQuery,
+): Promise<TransactionJournalResponse> {
+  const { fiscalYear, periodFrom, periodTo, accountCode, source } = query;
+
+  // 1. Find periods in the requested range
+  const periods = await (prisma as any).financialPeriod.findMany({
+    where: {
+      companyId,
+      fiscalYear,
+      periodNumber: { gte: periodFrom, lte: periodTo },
+    },
+    select: { id: true },
+  });
+  const periodIds = periods.map((p: { id: string }) => p.id);
+
+  if (periodIds.length === 0) {
+    return {
+      fiscalYear,
+      periodFrom,
+      periodTo,
+      totalEntries: 0,
+      entries: [],
+    };
+  }
+
+  // 2. Build the where clause for journal entries
+  const entryWhere: Record<string, unknown> = {
+    companyId,
+    status: 'POSTED',
+    periodId: { in: periodIds },
+  };
+
+  if (source) {
+    entryWhere.source = source;
+  }
+
+  // If accountCode filter is set, only return entries that have at least one
+  // line matching that accountCode.
+  if (accountCode) {
+    entryWhere.lines = {
+      some: { accountCode },
+    };
+  }
+
+  // 3. Fetch journal entries with lines
+  const journalEntries = await (prisma as any).journalEntry.findMany({
+    where: entryWhere,
+    orderBy: { transactionDate: 'asc' },
+    include: {
+      lines: {
+        orderBy: { lineNumber: 'asc' },
+        include: {
+          account: {
+            select: { name: true },
+          },
+        },
+      },
+    },
+  });
+
+  // 4. Map to response shape
+  const entries = journalEntries.map(
+    (entry: {
+      id: string;
+      entryNumber: string;
+      transactionDate: Date;
+      description: string;
+      reference: string | null;
+      source: string;
+      status: string;
+      totalDebit: unknown;
+      totalCredit: unknown;
+      lines: Array<{
+        lineNumber: number;
+        accountCode: string;
+        description: string | null;
+        debit: unknown;
+        credit: unknown;
+        account: { name: string };
+      }>;
+    }) => ({
+      id: entry.id,
+      entryNumber: entry.entryNumber,
+      transactionDate:
+        entry.transactionDate instanceof Date
+          ? entry.transactionDate.toISOString().split('T')[0]
+          : String(entry.transactionDate),
+      description: entry.description,
+      reference: entry.reference,
+      source: entry.source,
+      status: entry.status,
+      totalDebit: roundToFourDecimals(Number(entry.totalDebit ?? 0)),
+      totalCredit: roundToFourDecimals(Number(entry.totalCredit ?? 0)),
+      lines: entry.lines.map((line) => ({
+        lineNumber: line.lineNumber,
+        accountCode: line.accountCode,
+        accountName: line.account?.name ?? line.accountCode,
+        description: line.description,
+        debit: roundToFourDecimals(Number(line.debit ?? 0)),
+        credit: roundToFourDecimals(Number(line.credit ?? 0)),
+      })),
+    }),
+  );
+
+  return {
+    fiscalYear,
+    periodFrom,
+    periodTo,
+    totalEntries: entries.length,
+    entries,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Budget Variance Report
+// ---------------------------------------------------------------------------
+
+/**
+ * Compares budget amounts to actual posted journal amounts per account.
+ *
+ * - If budgetId is provided, uses that budget; otherwise uses the latest
+ *   APPROVED budget for the fiscal year.
+ * - For each account in the budget: budgetAmount, actualAmount, variance,
+ *   variancePercentage.
+ * - Summary: total budget, total actual, total variance.
+ */
+export async function getBudgetVariance(
+  prisma: PrismaClient,
+  companyId: string,
+  query: BudgetVarianceQuery,
+): Promise<BudgetVarianceResponse> {
+  const { fiscalYear, budgetId } = query;
+
+  // 1. Find the budget
+  let budget: {
+    id: string;
+    name: string;
+    fiscalYear: number;
+    lines: Array<{
+      accountCode: string;
+      period1: unknown;
+      period2: unknown;
+      period3: unknown;
+      period4: unknown;
+      period5: unknown;
+      period6: unknown;
+      period7: unknown;
+      period8: unknown;
+      period9: unknown;
+      period10: unknown;
+      period11: unknown;
+      period12: unknown;
+      totalAmount: unknown;
+      account: { name: string };
+    }>;
+  } | null;
+
+  if (budgetId) {
+    budget = await (prisma as any).budget.findFirst({
+      where: { id: budgetId, companyId },
+      include: {
+        lines: {
+          orderBy: { accountCode: 'asc' },
+          include: {
+            account: { select: { name: true } },
+          },
+        },
+      },
+    });
+  } else {
+    // Use latest approved budget for the fiscal year
+    budget = await (prisma as any).budget.findFirst({
+      where: { companyId, fiscalYear, status: 'APPROVED' },
+      orderBy: { approvedAt: 'desc' },
+      include: {
+        lines: {
+          orderBy: { accountCode: 'asc' },
+          include: {
+            account: { select: { name: true } },
+          },
+        },
+      },
+    });
+  }
+
+  if (!budget) {
+    const errorMessage = budgetId
+      ? `Budget with id ${budgetId} not found`
+      : `No approved budget found for fiscal year ${fiscalYear}`;
+    const error = new Error(errorMessage) as Error & { statusCode?: number };
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // 2. Get all periods for the fiscal year (all 12 periods for full-year comparison)
+  const periods = await (prisma as any).financialPeriod.findMany({
+    where: {
+      companyId,
+      fiscalYear,
+      periodNumber: { gte: 1, lte: 12 },
+    },
+    select: { id: true },
+  });
+  const periodIds = periods.map((p: { id: string }) => p.id);
+
+  // 3. Aggregate posted journal lines by accountCode
+  let lineAggregations: Array<{
+    accountCode: string;
+    _sum: { debit: unknown; credit: unknown };
+  }> = [];
+
+  if (periodIds.length > 0) {
+    lineAggregations = await (prisma as any).journalLine.groupBy({
+      by: ['accountCode'],
+      where: {
+        companyId,
+        journalEntry: {
+          companyId,
+          status: 'POSTED',
+          periodId: { in: periodIds },
+        },
+      },
+      _sum: {
+        debit: true,
+        credit: true,
+      },
+    });
+  }
+
+  // Build actual amounts map. We use net amount (debit - credit) which represents
+  // the actual expenditure/activity for the account.
+  const actualMap = new Map<string, number>();
+  for (const agg of lineAggregations) {
+    const debit = Number(agg._sum.debit ?? 0);
+    const credit = Number(agg._sum.credit ?? 0);
+    // Net actual = debit - credit (positive for expense accounts, negative for revenue)
+    actualMap.set(agg.accountCode, debit - credit);
+  }
+
+  // 4. Build the variance lines from budget lines
+  let totalBudget = 0;
+  let totalActual = 0;
+
+  const accounts = budget.lines.map((line) => {
+    const budgetAmount = roundToFourDecimals(Number(line.totalAmount ?? 0));
+    const actualAmount = roundToFourDecimals(actualMap.get(line.accountCode) ?? 0);
+    const variance = roundToFourDecimals(budgetAmount - actualAmount);
+    const variancePercentage =
+      budgetAmount !== 0 ? roundToFourDecimals((variance / budgetAmount) * 100) : null;
+
+    totalBudget += budgetAmount;
+    totalActual += actualAmount;
+
+    return {
+      accountCode: line.accountCode,
+      accountName: line.account?.name ?? line.accountCode,
+      budgetAmount,
+      actualAmount,
+      variance,
+      variancePercentage,
+    };
+  });
+
+  totalBudget = roundToFourDecimals(totalBudget);
+  totalActual = roundToFourDecimals(totalActual);
+  const totalVariance = roundToFourDecimals(totalBudget - totalActual);
+
+  return {
+    fiscalYear,
+    budgetId: budget.id,
+    budgetName: budget.name,
+    accounts,
+    summary: {
+      totalBudget,
+      totalActual,
+      totalVariance,
+    },
   };
 }
 

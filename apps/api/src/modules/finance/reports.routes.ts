@@ -7,9 +7,24 @@ import {
   reportQuerySchema,
   profitAndLossResponseSchema,
   balanceSheetResponseSchema,
+  transactionJournalQuerySchema,
+  transactionJournalResponseSchema,
+  budgetVarianceQuerySchema,
+  budgetVarianceResponseSchema,
 } from './reports.schema.js';
-import type { TrialBalanceQuery, ReportQuery } from './reports.schema.js';
-import { getTrialBalance, getProfitAndLoss, getBalanceSheet } from './reports.service.js';
+import type {
+  TrialBalanceQuery,
+  ReportQuery,
+  TransactionJournalQuery,
+  BudgetVarianceQuery,
+} from './reports.schema.js';
+import {
+  getTrialBalance,
+  getProfitAndLoss,
+  getBalanceSheet,
+  getTransactionJournal,
+  getBudgetVariance,
+} from './reports.service.js';
 import { createPermissionGuard } from '../../core/rbac/index.js';
 import { sendSuccess } from '../../core/utils/response.js';
 import { successEnvelope } from '../../core/schemas/envelope.js';
@@ -22,6 +37,8 @@ import { extractRequestContext } from '../../core/types/request-context.js';
 const trialBalanceEnvelope = successEnvelope(trialBalanceResponseSchema);
 const profitAndLossEnvelope = successEnvelope(profitAndLossResponseSchema);
 const balanceSheetEnvelope = successEnvelope(balanceSheetResponseSchema);
+const transactionJournalEnvelope = successEnvelope(transactionJournalResponseSchema);
+const budgetVarianceEnvelope = successEnvelope(budgetVarianceResponseSchema);
 
 // ---------------------------------------------------------------------------
 // Finance Reports routes plugin
@@ -75,6 +92,40 @@ async function reportsRoutes(fastify: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const ctx = extractRequestContext(request);
       const result = await getBalanceSheet(prisma, ctx.companyId, request.query);
+      return sendSuccess(reply, result);
+    },
+  );
+
+  // GET /reports/transaction-journal — Transaction journal report (E14-S22)
+  fastify.get<{ Querystring: TransactionJournalQuery }>(
+    '/reports/transaction-journal',
+    {
+      schema: {
+        querystring: transactionJournalQuerySchema,
+        response: { 200: transactionJournalEnvelope },
+      },
+      preHandler: createPermissionGuard('finance.reports', 'view'),
+    },
+    async (request, reply) => {
+      const ctx = extractRequestContext(request);
+      const result = await getTransactionJournal(prisma, ctx.companyId, request.query);
+      return sendSuccess(reply, result);
+    },
+  );
+
+  // GET /reports/budget-variance — Budget variance report (E14-S22)
+  fastify.get<{ Querystring: BudgetVarianceQuery }>(
+    '/reports/budget-variance',
+    {
+      schema: {
+        querystring: budgetVarianceQuerySchema,
+        response: { 200: budgetVarianceEnvelope },
+      },
+      preHandler: createPermissionGuard('finance.reports', 'view'),
+    },
+    async (request, reply) => {
+      const ctx = extractRequestContext(request);
+      const result = await getBudgetVariance(prisma, ctx.companyId, request.query);
       return sendSuccess(reply, result);
     },
   );
