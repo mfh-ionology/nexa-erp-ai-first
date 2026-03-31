@@ -12,7 +12,7 @@ export const DEFAULT_NAMESPACE: TranslationNamespace = 'common';
 export const SUPPORTED_LOCALES: readonly SupportedLocale[] = ['en'] as const;
 
 /** Core translation namespaces shipped with the i18n package. */
-export const TRANSLATION_NAMESPACES: readonly CoreTranslationNamespace[] = [
+export const TRANSLATION_NAMESPACES: readonly (CoreTranslationNamespace | 'finance')[] = [
   'common',
   'validation',
   'navigation',
@@ -23,6 +23,7 @@ export const TRANSLATION_NAMESPACES: readonly CoreTranslationNamespace[] = [
   'notifications',
   'tasks',
   'print',
+  'finance',
 ] as const;
 
 /**
