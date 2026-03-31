@@ -10,7 +10,6 @@
  * - useAccountSearch: search accounts for the account picker
  */
 
-import { useCallback } from 'react';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
@@ -30,7 +29,6 @@ import {
   searchAccounts,
 } from '../api/journals-api';
 import type {
-  JournalListItem,
   ListJournalsParams,
   CreateJournalInput,
   UpdateJournalInput,
@@ -88,7 +86,7 @@ export function useJournal(id: string | undefined) {
 
 export function useCreateJournal() {
   const queryClient = useQueryClient();
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
 
   return useMutation({
     mutationFn: (data: CreateJournalInput) => createJournal(data),
@@ -114,7 +112,7 @@ export function useCreateJournal() {
 
 export function useUpdateJournal(id: string) {
   const queryClient = useQueryClient();
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
 
   return useMutation({
     mutationFn: (data: UpdateJournalInput) => updateJournal(id, data),
@@ -145,7 +143,7 @@ export function useUpdateJournal(id: string) {
 
 export function usePostJournal(id: string) {
   const queryClient = useQueryClient();
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
 
   return useMutation({
     mutationFn: () => postJournal(id),
@@ -174,7 +172,7 @@ export function usePostJournal(id: string) {
 
 export function useReverseJournal(id: string) {
   const queryClient = useQueryClient();
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
 
   return useMutation({
     mutationFn: () => reverseJournal(id),

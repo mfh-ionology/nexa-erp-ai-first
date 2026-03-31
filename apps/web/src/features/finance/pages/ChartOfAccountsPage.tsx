@@ -12,15 +12,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import {
-  ChevronDown,
-  Filter,
-  Landmark,
-  MoreHorizontal,
-  Plus,
-  Search,
-  Sparkles,
-} from 'lucide-react';
+import { Filter, Landmark, MoreHorizontal, Plus, Search, Sparkles } from 'lucide-react';
 
 import { useI18n } from '@nexa/i18n';
 
@@ -137,7 +129,7 @@ function filterTree(
 // ---------------------------------------------------------------------------
 
 export function ChartOfAccountsPage() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const navigate = useNavigate();
 
   const [search, setSearch] = useState('');
@@ -212,11 +204,11 @@ export function ChartOfAccountsPage() {
     <main className="flex flex-col gap-6" aria-label="Chart of Accounts">
       {/* Page header */}
       <PageHeader
-        title={t('finance.accounts.title', 'Chart of Accounts')}
-        subtitle={t('finance.accounts.subtitle', 'Manage your general ledger account structure')}
+        title={t('accounts.title', 'Chart of Accounts')}
+        subtitle={t('accounts.subtitle', 'Manage your general ledger account structure')}
         breadcrumbs={[
-          { label: t('finance.title', 'Finance'), path: '/finance' },
-          { label: t('finance.accounts.title', 'Chart of Accounts') },
+          { label: t('title', 'Finance'), path: '/finance' },
+          { label: t('accounts.title', 'Chart of Accounts') },
         ]}
         actionBarSlot={headerActions}
         isLoading={isLoading}
@@ -252,7 +244,7 @@ export function ChartOfAccountsPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('finance.accounts.searchPlaceholder', 'Search by code or name...')}
+            placeholder={t('accounts.searchPlaceholder', 'Search by code or name...')}
             className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
             aria-label={t('search', 'Search')}
           />

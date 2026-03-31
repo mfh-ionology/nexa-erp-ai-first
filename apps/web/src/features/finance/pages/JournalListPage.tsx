@@ -7,7 +7,7 @@
  * Row click navigates to journal detail/edit page.
  */
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useNavigate } from '@tanstack/react-router';
 
@@ -17,7 +17,7 @@ import { EntityListPage } from '@/components/templates/entity-list-page';
 import { useI18n, useFormatDate, useLocale } from '@nexa/i18n';
 
 import { useJournals } from '../hooks/use-journals';
-import type { JournalListItem, JournalStatus, JournalSource } from '../api/journals-types';
+import type { JournalListItem, JournalStatus } from '../api/journals-types';
 import { JOURNAL_STATUSES } from '../api/journals-types';
 
 // ---------------------------------------------------------------------------
@@ -40,7 +40,7 @@ const STATUS_STYLES: Record<JournalStatus, { className: string }> = {
 };
 
 function StatusBadge({ status }: { status: JournalStatus }) {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const style = STATUS_STYLES[status];
   return (
     <Badge variant="outline" className={style.className}>
@@ -66,7 +66,7 @@ function formatCurrency(amount: number, locale: string) {
 // ---------------------------------------------------------------------------
 
 export function JournalListPage() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const formatDate = useFormatDate();
   const locale = useLocale();
   const navigate = useNavigate();

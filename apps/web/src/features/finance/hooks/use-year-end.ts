@@ -44,7 +44,7 @@ export function useYearEndStatus(fiscalYear: number) {
 }
 
 export function useCloseYearEnd() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -54,10 +54,10 @@ export function useCloseYearEnd() {
         queryKey: queryKeys.finance.yearEndStatus(input.fiscalYear),
       });
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.all });
-      toast({ title: t('finance.yearEnd.toast.closed') });
+      toast({ title: t('yearEnd.toast.closed') });
     },
     onError: () => {
-      toast({ title: t('finance.yearEnd.toast.closeFailed'), variant: 'destructive' });
+      toast({ title: t('yearEnd.toast.closeFailed'), variant: 'destructive' });
     },
   });
 }
@@ -76,7 +76,7 @@ export function useOpeningBalances() {
 }
 
 export function useImportOpeningBalances() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -85,12 +85,12 @@ export function useImportOpeningBalances() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.openingBalances() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.all });
       toast({
-        title: t('finance.openingBalances.toast.imported', { count: data.imported }),
+        title: t('openingBalances.toast.imported', { count: data.imported }),
       });
     },
     onError: () => {
       toast({
-        title: t('finance.openingBalances.toast.importFailed'),
+        title: t('openingBalances.toast.importFailed'),
         variant: 'destructive',
       });
     },
@@ -98,7 +98,7 @@ export function useImportOpeningBalances() {
 }
 
 export function useManualOpeningBalances() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -106,11 +106,11 @@ export function useManualOpeningBalances() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.openingBalances() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.all });
-      toast({ title: t('finance.openingBalances.toast.saved') });
+      toast({ title: t('openingBalances.toast.saved') });
     },
     onError: () => {
       toast({
-        title: t('finance.openingBalances.toast.saveFailed'),
+        title: t('openingBalances.toast.saveFailed'),
         variant: 'destructive',
       });
     },

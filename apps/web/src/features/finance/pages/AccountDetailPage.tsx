@@ -9,7 +9,7 @@
  * Tabs: Details, Children, Activity
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowLeft, Pencil, Save, X } from 'lucide-react';
 
@@ -31,7 +31,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { PageHeader } from '@/components/templates/page-header';
 import { usePermission } from '@/hooks/use-permissions';
-import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
 import { useAccount, useCreateAccount, useUpdateAccount } from '../hooks/use-accounts';
@@ -84,7 +83,7 @@ export interface AccountDetailPageProps {
 }
 
 export function AccountDetailPage({ id }: AccountDetailPageProps) {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const navigate = useNavigate();
   const isNew = id === 'new';
 
@@ -294,9 +293,9 @@ export function AccountDetailPage({ id }: AccountDetailPageProps) {
             : (account?.classification?.name ?? undefined)
         }
         breadcrumbs={[
-          { label: t('finance.title', 'Finance'), path: '/finance' },
+          { label: t('title', 'Finance'), path: '/finance' },
           {
-            label: t('finance.accounts.title', 'Chart of Accounts'),
+            label: t('accounts.title', 'Chart of Accounts'),
             path: '/finance/chart-of-accounts',
           },
           { label: isNew ? 'New Account' : (account?.code ?? id) },

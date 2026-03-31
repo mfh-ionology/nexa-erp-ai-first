@@ -7,7 +7,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, DollarSign, Receipt, TrendingUp, Warehouse } from 'lucide-react';
 
 import { SettingsPage } from '@/components/templates/settings-page';
 
@@ -18,18 +17,6 @@ import {
 } from '../hooks/use-account-mappings';
 import { GlAccountPicker } from '../components/gl-account-picker';
 import type { AccountMapping, AccountListItem } from '../types';
-
-// ---------------------------------------------------------------------------
-// Category → Icon map
-// ---------------------------------------------------------------------------
-
-const CATEGORY_ICONS: Record<string, React.ReactNode> = {
-  'General Ledger': <BookOpen className="size-5" />,
-  Revenue: <TrendingUp className="size-5" />,
-  'Cost of Goods Sold': <DollarSign className="size-5" />,
-  Expenses: <Receipt className="size-5" />,
-  Inventory: <Warehouse className="size-5" />,
-};
 
 // ---------------------------------------------------------------------------
 // Mapping Row Component
@@ -147,7 +134,7 @@ export function AccountMappingsPage() {
       key: category,
       labelKey: category,
       descriptionKey: `Configure GL account mappings for ${category}`,
-      icon: CATEGORY_ICONS[category] ?? <BookOpen className="size-5" />,
+      // icon omitted — SettingsGroup.icon expects a string key, not JSX
       isCollapsible: true,
       defaultOpen: true,
       content: (

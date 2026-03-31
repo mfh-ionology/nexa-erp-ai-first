@@ -42,17 +42,17 @@ export function useFinanceSettings() {
 // ---------------------------------------------------------------------------
 
 export function useUpdateFinanceSettings() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (input: UpdateFinanceSettingsInput) => updateFinanceSettings(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.all });
-      toast({ title: t('finance.settings.toast.saved') });
+      toast({ title: t('settings.toast.saved') });
     },
     onError: () => {
-      toast({ title: t('finance.settings.toast.saveFailed'), variant: 'destructive' });
+      toast({ title: t('settings.toast.saveFailed'), variant: 'destructive' });
     },
   });
 }
@@ -62,17 +62,17 @@ export function useUpdateFinanceSettings() {
 // ---------------------------------------------------------------------------
 
 export function useResetFinanceSettings() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: () => resetFinanceSettings(),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.all });
-      toast({ title: t('finance.settings.toast.reset') });
+      toast({ title: t('settings.toast.reset') });
     },
     onError: () => {
-      toast({ title: t('finance.settings.toast.resetFailed'), variant: 'destructive' });
+      toast({ title: t('settings.toast.resetFailed'), variant: 'destructive' });
     },
   });
 }

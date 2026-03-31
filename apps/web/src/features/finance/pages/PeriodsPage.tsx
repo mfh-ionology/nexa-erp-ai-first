@@ -78,7 +78,7 @@ const STATUS_CONFIG: Record<PeriodStatus, { label: string; className: string }> 
 // ---------------------------------------------------------------------------
 
 function StatusBadge({ status }: { status: PeriodStatus }) {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const config = STATUS_CONFIG[status];
   return (
     <Badge variant="outline" className={config.className}>
@@ -111,7 +111,7 @@ function FiscalYearSection({
   closePending: boolean;
   reopenPending: boolean;
 }) {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const { summary } = group;
 
   return (
@@ -128,26 +128,26 @@ function FiscalYearSection({
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
         )}
         <span className="font-serif text-lg font-semibold text-foreground">
-          {t('finance.periods.fiscalYear', 'Fiscal Year')} {group.fiscalYear}
+          {t('periods.fiscalYear', 'Fiscal Year')} {group.fiscalYear}
         </span>
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-muted-foreground">
-            {summary.total} {t('finance.periods.periodsLabel', 'periods')}
+            {summary.total} {t('periods.periodsLabel', 'periods')}
           </span>
           <div className="flex items-center gap-1.5">
             {summary.open > 0 && (
               <span className="inline-flex items-center rounded-full bg-[#dcfce7] px-2 py-0.5 text-xs font-medium text-[#166534]">
-                {summary.open} {t('finance.periods.status.open', 'Open')}
+                {summary.open} {t('periods.status.open', 'Open')}
               </span>
             )}
             {summary.closed > 0 && (
               <span className="inline-flex items-center rounded-full bg-[#fef9c3] px-2 py-0.5 text-xs font-medium text-[#854d0e]">
-                {summary.closed} {t('finance.periods.status.closed', 'Closed')}
+                {summary.closed} {t('periods.status.closed', 'Closed')}
               </span>
             )}
             {summary.locked > 0 && (
               <span className="inline-flex items-center rounded-full bg-[#fee2e2] px-2 py-0.5 text-xs font-medium text-[#991b1b]">
-                {summary.locked} {t('finance.periods.status.locked', 'Locked')}
+                {summary.locked} {t('periods.status.locked', 'Locked')}
               </span>
             )}
           </div>
@@ -162,22 +162,22 @@ function FiscalYearSection({
               <thead>
                 <tr className="bg-[rgba(107,114,128,0.04)]">
                   <th className="px-5 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {t('finance.periods.table.period', 'Period')}
+                    {t('periods.table.period', 'Period')}
                   </th>
                   <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {t('finance.periods.table.name', 'Name')}
+                    {t('periods.table.name', 'Name')}
                   </th>
                   <th className="hidden px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground sm:table-cell">
-                    {t('finance.periods.table.startDate', 'Start Date')}
+                    {t('periods.table.startDate', 'Start Date')}
                   </th>
                   <th className="hidden px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground sm:table-cell">
-                    {t('finance.periods.table.endDate', 'End Date')}
+                    {t('periods.table.endDate', 'End Date')}
                   </th>
                   <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {t('finance.periods.table.status', 'Status')}
+                    {t('periods.table.status', 'Status')}
                   </th>
                   <th className="px-5 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {t('finance.periods.table.actions', 'Actions')}
+                    {t('periods.table.actions', 'Actions')}
                   </th>
                 </tr>
               </thead>
@@ -221,7 +221,7 @@ function PeriodRow({
   closePending: boolean;
   reopenPending: boolean;
 }) {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
 
   const formatDate = (dateStr: string) => {
     try {
@@ -265,7 +265,7 @@ function PeriodRow({
               className="h-7 gap-1 text-xs border-[#854d0e]/30 text-[#854d0e] hover:bg-[#fef9c3]/50"
             >
               <XCircle className="h-3 w-3" />
-              {t('finance.periods.actions.close', 'Close')}
+              {t('periods.actions.close', 'Close')}
             </Button>
           )}
           {period.status === 'CLOSED' && (
@@ -278,7 +278,7 @@ function PeriodRow({
                 className="h-7 gap-1 text-xs border-[#166534]/30 text-[#166534] hover:bg-[#dcfce7]/50"
               >
                 <RotateCcw className="h-3 w-3" />
-                {t('finance.periods.actions.reopen', 'Reopen')}
+                {t('periods.actions.reopen', 'Reopen')}
               </Button>
               <Button
                 size="sm"
@@ -287,13 +287,13 @@ function PeriodRow({
                 className="h-7 gap-1 text-xs border-[#991b1b]/30 text-[#991b1b] hover:bg-[#fee2e2]/50"
               >
                 <Lock className="h-3 w-3" />
-                {t('finance.periods.actions.lock', 'Lock')}
+                {t('periods.actions.lock', 'Lock')}
               </Button>
             </>
           )}
           {period.status === 'LOCKED' && (
             <span className="text-xs text-muted-foreground italic">
-              {t('finance.periods.locked', 'Permanently locked')}
+              {t('periods.locked', 'Permanently locked')}
             </span>
           )}
         </div>
@@ -313,7 +313,7 @@ function CreateYearDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const createYear = useCreateFiscalYear();
 
   const currentYear = new Date().getFullYear();
@@ -345,7 +345,7 @@ function CreateYearDialog({
       <DialogContent>
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>{t('finance.periods.createYear.title', 'Create Fiscal Year')}</DialogTitle>
+            <DialogTitle>{t('periods.createYear.title', 'Create Fiscal Year')}</DialogTitle>
             <DialogDescription>
               {t(
                 'finance.periods.createYear.description',
@@ -357,7 +357,7 @@ function CreateYearDialog({
           <div className="mt-4 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="fiscal-year">
-                {t('finance.periods.createYear.yearLabel', 'Fiscal Year')}
+                {t('periods.createYear.yearLabel', 'Fiscal Year')}
               </Label>
               <Input
                 id="fiscal-year"
@@ -398,7 +398,7 @@ function CreateYearDialog({
             >
               {createYear.isPending
                 ? t('common.creating', 'Creating...')
-                : t('finance.periods.createYear.submit', 'Create Year')}
+                : t('periods.createYear.submit', 'Create Year')}
             </Button>
           </DialogFooter>
         </form>
@@ -424,15 +424,13 @@ function LockConfirmDialog({
   onConfirm: () => void;
   isPending: boolean;
 }) {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>
-            {t('finance.periods.lockConfirm.title', 'Lock Period?')}
-          </AlertDialogTitle>
+          <AlertDialogTitle>{t('periods.lockConfirm.title', 'Lock Period?')}</AlertDialogTitle>
           <AlertDialogDescription>
             {t(
               'finance.periods.lockConfirm.description',
@@ -451,7 +449,7 @@ function LockConfirmDialog({
             <Lock className="mr-1.5 h-3.5 w-3.5" />
             {isPending
               ? t('common.locking', 'Locking...')
-              : t('finance.periods.lockConfirm.confirm', 'Lock Period')}
+              : t('periods.lockConfirm.confirm', 'Lock Period')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -464,7 +462,7 @@ function LockConfirmDialog({
 // ---------------------------------------------------------------------------
 
 export function PeriodsPage() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
 
   // State
   const [createOpen, setCreateOpen] = useState(false);
@@ -520,7 +518,7 @@ export function PeriodsPage() {
           <BreadcrumbItem>
             <BreadcrumbPage className="flex items-center gap-1.5">
               <Calendar className="h-4 w-4" />
-              {t('finance.periods.title', 'Financial Periods')}
+              {t('periods.title', 'Financial Periods')}
             </BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>
@@ -532,14 +530,14 @@ export function PeriodsPage() {
         style={{ animationDelay: '50ms' }}
       >
         <h1 className="font-serif text-3xl font-bold text-foreground">
-          {t('finance.periods.title', 'Financial Periods')}
+          {t('periods.title', 'Financial Periods')}
         </h1>
         <Button
           onClick={() => setCreateOpen(true)}
           className="bg-[#7c3aed] text-white hover:bg-[#5b21b6]"
         >
           <Plus className="h-4 w-4" />
-          {t('finance.periods.createYear.button', 'Create Year')}
+          {t('periods.createYear.button', 'Create Year')}
         </Button>
       </div>
 
@@ -586,13 +584,13 @@ export function PeriodsPage() {
 // ---------------------------------------------------------------------------
 
 function EmptyState({ onCreateYear }: { onCreateYear: () => void }) {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
 
   return (
     <div className="rounded-xl border border-border bg-card p-12 text-center shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
       <Calendar className="mx-auto mb-4 h-12 w-12 text-muted-foreground/40" />
       <h3 className="mb-2 font-serif text-lg font-semibold text-foreground">
-        {t('finance.periods.empty.title', 'No Financial Periods')}
+        {t('periods.empty.title', 'No Financial Periods')}
       </h3>
       <p className="mb-6 text-sm text-muted-foreground">
         {t(
@@ -602,7 +600,7 @@ function EmptyState({ onCreateYear }: { onCreateYear: () => void }) {
       </p>
       <Button onClick={onCreateYear} className="bg-[#7c3aed] text-white hover:bg-[#5b21b6]">
         <Plus className="h-4 w-4" />
-        {t('finance.periods.createYear.button', 'Create Year')}
+        {t('periods.createYear.button', 'Create Year')}
       </Button>
     </div>
   );

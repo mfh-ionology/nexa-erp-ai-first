@@ -46,18 +46,18 @@ export function usePeriods(params: ListPeriodsParams = {}) {
 // ---------------------------------------------------------------------------
 
 export function useCreateFiscalYear() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (input: CreateFiscalYearInput) => createFiscalYear(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.all });
-      toast({ title: t('finance.periods.toast.yearCreated', 'Fiscal year created successfully') });
+      toast({ title: t('periods.toast.yearCreated', 'Fiscal year created successfully') });
     },
     onError: () => {
       toast({
-        title: t('finance.periods.toast.yearCreateFailed', 'Failed to create fiscal year'),
+        title: t('periods.toast.yearCreateFailed', 'Failed to create fiscal year'),
         variant: 'destructive',
       });
     },
@@ -69,18 +69,18 @@ export function useCreateFiscalYear() {
 // ---------------------------------------------------------------------------
 
 export function useClosePeriod() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (id: string) => closePeriod(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.all });
-      toast({ title: t('finance.periods.toast.closed', 'Period closed') });
+      toast({ title: t('periods.toast.closed', 'Period closed') });
     },
     onError: () => {
       toast({
-        title: t('finance.periods.toast.closeFailed', 'Failed to close period'),
+        title: t('periods.toast.closeFailed', 'Failed to close period'),
         variant: 'destructive',
       });
     },
@@ -92,18 +92,18 @@ export function useClosePeriod() {
 // ---------------------------------------------------------------------------
 
 export function useReopenPeriod() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (id: string) => reopenPeriod(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.all });
-      toast({ title: t('finance.periods.toast.reopened', 'Period reopened') });
+      toast({ title: t('periods.toast.reopened', 'Period reopened') });
     },
     onError: () => {
       toast({
-        title: t('finance.periods.toast.reopenFailed', 'Failed to reopen period'),
+        title: t('periods.toast.reopenFailed', 'Failed to reopen period'),
         variant: 'destructive',
       });
     },
@@ -115,18 +115,18 @@ export function useReopenPeriod() {
 // ---------------------------------------------------------------------------
 
 export function useLockPeriod() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (id: string) => lockPeriod(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.all });
-      toast({ title: t('finance.periods.toast.locked', 'Period locked') });
+      toast({ title: t('periods.toast.locked', 'Period locked') });
     },
     onError: () => {
       toast({
-        title: t('finance.periods.toast.lockFailed', 'Failed to lock period'),
+        title: t('periods.toast.lockFailed', 'Failed to lock period'),
         variant: 'destructive',
       });
     },

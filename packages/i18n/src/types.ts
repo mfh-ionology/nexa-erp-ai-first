@@ -30,7 +30,7 @@ export type CoreTranslationNamespace =
  * Runtime namespace registration via i18next.addResourceBundle() works
  * independently of this type (it accepts plain strings).
  */
-export type TranslationNamespace = CoreTranslationNamespace;
+export type TranslationNamespace = CoreTranslationNamespace | 'finance';
 
 /** Parameters passed to `t()` for interpolation. */
 export type TranslationParams = Record<string, string | number>;

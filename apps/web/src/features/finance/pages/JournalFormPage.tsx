@@ -17,16 +17,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { z } from 'zod';
-import {
-  ArrowLeft,
-  CalendarIcon,
-  Check,
-  Loader2,
-  MoreHorizontal,
-  RotateCcw,
-  Save,
-  Send,
-} from 'lucide-react';
+import { ArrowLeft, Check, Loader2, MoreHorizontal, RotateCcw, Save, Send } from 'lucide-react';
 
 import { useI18n } from '@nexa/i18n';
 
@@ -60,7 +51,7 @@ import {
   usePostJournal,
   useReverseJournal,
 } from '../hooks/use-journals';
-import type { JournalStatus, JournalDetail } from '../api/journals-types';
+import type { JournalStatus } from '../api/journals-types';
 import { JournalLineGrid, createEmptyLine, lineRowsFromApi } from '../components/JournalLineGrid';
 import type { LineRow } from '../components/JournalLineGrid';
 
@@ -113,7 +104,7 @@ export interface JournalFormPageProps {
 // ---------------------------------------------------------------------------
 
 export function JournalFormPage({ id }: JournalFormPageProps) {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const navigate = useNavigate();
   const isNew = !id;
 
@@ -157,7 +148,7 @@ export function JournalFormPage({ id }: JournalFormPageProps) {
     },
     values: journal
       ? {
-          transactionDate: journal.transactionDate.split('T')[0],
+          transactionDate: journal.transactionDate.split('T')[0] ?? journal.transactionDate,
           description: journal.description,
           reference: journal.reference ?? '',
           periodId: journal.periodId,

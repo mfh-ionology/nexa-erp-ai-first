@@ -52,7 +52,7 @@ export function useMonthEndPeriod(periodId: string | null | undefined) {
 }
 
 export function useCloseMonthEnd() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -63,16 +63,16 @@ export function useCloseMonthEnd() {
       });
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.monthEndPeriods() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.all });
-      toast({ title: t('finance.monthEnd.toast.closed') });
+      toast({ title: t('monthEnd.toast.closed') });
     },
     onError: () => {
-      toast({ title: t('finance.monthEnd.toast.closeFailed'), variant: 'destructive' });
+      toast({ title: t('monthEnd.toast.closeFailed'), variant: 'destructive' });
     },
   });
 }
 
 export function useCompleteMonthEndStep() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -82,10 +82,10 @@ export function useCompleteMonthEndStep() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.finance.monthEndPeriod(periodId),
       });
-      toast({ title: t('finance.monthEnd.toast.stepCompleted') });
+      toast({ title: t('monthEnd.toast.stepCompleted') });
     },
     onError: () => {
-      toast({ title: t('finance.monthEnd.toast.stepFailed'), variant: 'destructive' });
+      toast({ title: t('monthEnd.toast.stepFailed'), variant: 'destructive' });
     },
   });
 }

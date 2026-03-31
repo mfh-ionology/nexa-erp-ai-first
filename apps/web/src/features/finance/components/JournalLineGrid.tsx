@@ -17,7 +17,6 @@ import { Plus, Trash2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useI18n, useLocale } from '@nexa/i18n';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Table,
   TableHeader,
@@ -117,7 +116,7 @@ function AccountPicker({
   readOnly?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const { data: accounts } = useAccountSearch(search || value, open);
@@ -317,7 +316,7 @@ function TextCell({
 // ---------------------------------------------------------------------------
 
 export function JournalLineGrid({ lines, onChange, readOnly = false }: JournalLineGridProps) {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const locale = useLocale();
 
   // --- Totals calculation ---
@@ -338,15 +337,21 @@ export function JournalLineGrid({ lines, onChange, readOnly = false }: JournalLi
   const updateLine = useCallback(
     (index: number, field: keyof JournalLineInput, value: string | number) => {
       const updated = [...lines];
-      updated[index] = { ...updated[index], [field]: value };
+      const current = updated[index];
+      if (!current) return;
+      const _key = current._key;
+
+      // Build partial update, preserving _key
+      let next: LineRow = { ...current, _key, [field]: value } as LineRow;
 
       // If user enters a debit, clear credit (and vice versa)
       if (field === 'debit' && (value as number) > 0) {
-        updated[index] = { ...updated[index], debit: value as number, credit: 0 };
+        next = { ...next, _key, debit: value as number, credit: 0 } as LineRow;
       } else if (field === 'credit' && (value as number) > 0) {
-        updated[index] = { ...updated[index], credit: value as number, debit: 0 };
+        next = { ...next, _key, credit: value as number, debit: 0 } as LineRow;
       }
 
+      updated[index] = next;
       onChange(updated);
     },
     [lines, onChange],

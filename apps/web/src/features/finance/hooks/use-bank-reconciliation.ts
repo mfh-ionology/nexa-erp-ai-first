@@ -76,7 +76,7 @@ export function useUnmatchedJournalLines(bankAccountId: string | undefined) {
  */
 export function useMatchTransaction(bankAccountId: string) {
   const queryClient = useQueryClient();
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
 
   return useMutation({
     mutationFn: ({
@@ -87,7 +87,7 @@ export function useMatchTransaction(bankAccountId: string) {
       journalLineId: string;
     }) => matchTransaction(bankAccountId, bankTransactionId, journalLineId),
     onSuccess: () => {
-      toast.success(t('finance.reconciliation.toast.matched'));
+      toast.success(t('reconciliation.toast.matched'));
       // Invalidate all reconciliation-related queries
       void queryClient.invalidateQueries({
         queryKey: queryKeys.finance.bankReconciliation(bankAccountId),
@@ -100,7 +100,7 @@ export function useMatchTransaction(bankAccountId: string) {
       });
     },
     onError: () => {
-      toast.error(t('finance.reconciliation.toast.matchFailed'));
+      toast.error(t('reconciliation.toast.matchFailed'));
     },
   });
 }
@@ -110,12 +110,12 @@ export function useMatchTransaction(bankAccountId: string) {
  */
 export function useUnmatchTransaction(bankAccountId: string) {
   const queryClient = useQueryClient();
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
 
   return useMutation({
     mutationFn: (bankTransactionId: string) => unmatchTransaction(bankTransactionId),
     onSuccess: () => {
-      toast.success(t('finance.reconciliation.toast.unmatched'));
+      toast.success(t('reconciliation.toast.unmatched'));
       void queryClient.invalidateQueries({
         queryKey: queryKeys.finance.bankReconciliation(bankAccountId),
       });

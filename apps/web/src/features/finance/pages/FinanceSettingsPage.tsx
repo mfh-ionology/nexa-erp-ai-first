@@ -129,7 +129,7 @@ function settingsEqual(a: FinanceSettings, b: FinanceSettings): boolean {
 // ---------------------------------------------------------------------------
 
 export function FinanceSettingsPage() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
 
   // API hooks
   const { settings: serverSettings, isLoading } = useFinanceSettings();

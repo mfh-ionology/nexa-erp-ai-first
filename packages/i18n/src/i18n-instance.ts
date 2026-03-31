@@ -13,6 +13,7 @@ import aiEn from '../locales/en/ai.json';
 import notificationsEn from '../locales/en/notifications.json';
 import tasksEn from '../locales/en/tasks.json';
 import printEn from '../locales/en/print.json';
+import financeEn from '../locales/en/finance.json';
 
 /**
  * Pre-configured i18next singleton with:
@@ -36,6 +37,7 @@ export const i18nReady: Promise<TFunction> = i18n.use(initReactI18next).init(
         notifications: notificationsEn,
         tasks: tasksEn,
         print: printEn,
+        finance: financeEn,
       },
     },
     react: {

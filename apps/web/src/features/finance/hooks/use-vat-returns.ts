@@ -58,23 +58,23 @@ export function useVatReturn(id: string | null | undefined) {
 }
 
 export function useCreateVatReturn() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (input: CreateVatReturnInput) => createVatReturn(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.vatReturns() });
-      toast({ title: t('finance.vatReturn.toast.created') });
+      toast({ title: t('vatReturn.toast.created') });
     },
     onError: () => {
-      toast({ title: t('finance.vatReturn.toast.createFailed'), variant: 'destructive' });
+      toast({ title: t('vatReturn.toast.createFailed'), variant: 'destructive' });
     },
   });
 }
 
 export function useCalculateVatReturn() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -82,16 +82,16 @@ export function useCalculateVatReturn() {
     onSuccess: (_data, id) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.vatReturn(id) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.vatReturns() });
-      toast({ title: t('finance.vatReturn.toast.calculated') });
+      toast({ title: t('vatReturn.toast.calculated') });
     },
     onError: () => {
-      toast({ title: t('finance.vatReturn.toast.calculateFailed'), variant: 'destructive' });
+      toast({ title: t('vatReturn.toast.calculateFailed'), variant: 'destructive' });
     },
   });
 }
 
 export function useSubmitVatReturn() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -99,10 +99,10 @@ export function useSubmitVatReturn() {
     onSuccess: (_data, id) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.vatReturn(id) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.vatReturns() });
-      toast({ title: t('finance.vatReturn.toast.submitted') });
+      toast({ title: t('vatReturn.toast.submitted') });
     },
     onError: () => {
-      toast({ title: t('finance.vatReturn.toast.submitFailed'), variant: 'destructive' });
+      toast({ title: t('vatReturn.toast.submitFailed'), variant: 'destructive' });
     },
   });
 }

@@ -39,12 +39,12 @@ export function useAccountMappings() {
  */
 export function useUpdateAccountMappings() {
   const queryClient = useQueryClient();
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
 
   return useMutation({
     mutationFn: (input: UpdateAccountMappingInput) => updateAccountMappings(input),
     onSuccess: () => {
-      toast.success(t('finance.accountMappings.toast.saved'));
+      toast.success(t('accountMappings.toast.saved'));
       void queryClient.invalidateQueries({
         queryKey: queryKeys.finance.accountMappings(),
       });
@@ -60,12 +60,12 @@ export function useUpdateAccountMappings() {
  */
 export function useResetAccountMappings() {
   const queryClient = useQueryClient();
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
 
   return useMutation({
     mutationFn: resetAccountMappings,
     onSuccess: () => {
-      toast.success(t('finance.accountMappings.toast.reset'));
+      toast.success(t('accountMappings.toast.reset'));
       void queryClient.invalidateQueries({
         queryKey: queryKeys.finance.accountMappings(),
       });

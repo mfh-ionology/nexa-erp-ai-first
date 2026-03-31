@@ -61,23 +61,23 @@ export function useBudget(id: string | null | undefined) {
 }
 
 export function useCreateBudget() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (input: CreateBudgetInput) => createBudget(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.budgets() });
-      toast({ title: t('finance.budget.toast.created') });
+      toast({ title: t('budget.toast.created') });
     },
     onError: () => {
-      toast({ title: t('finance.budget.toast.createFailed'), variant: 'destructive' });
+      toast({ title: t('budget.toast.createFailed'), variant: 'destructive' });
     },
   });
 }
 
 export function useUpdateBudget() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -86,16 +86,16 @@ export function useUpdateBudget() {
     onSuccess: (_data, { id }) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.budget(id) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.budgets() });
-      toast({ title: t('finance.budget.toast.updated') });
+      toast({ title: t('budget.toast.updated') });
     },
     onError: () => {
-      toast({ title: t('finance.budget.toast.updateFailed'), variant: 'destructive' });
+      toast({ title: t('budget.toast.updateFailed'), variant: 'destructive' });
     },
   });
 }
 
 export function useApproveBudget() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -103,26 +103,26 @@ export function useApproveBudget() {
     onSuccess: (_data, id) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.budget(id) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.budgets() });
-      toast({ title: t('finance.budget.toast.approved') });
+      toast({ title: t('budget.toast.approved') });
     },
     onError: () => {
-      toast({ title: t('finance.budget.toast.approveFailed'), variant: 'destructive' });
+      toast({ title: t('budget.toast.approveFailed'), variant: 'destructive' });
     },
   });
 }
 
 export function useCopyBudget() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (id: string) => copyBudget(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.budgets() });
-      toast({ title: t('finance.budget.toast.copied') });
+      toast({ title: t('budget.toast.copied') });
     },
     onError: () => {
-      toast({ title: t('finance.budget.toast.copyFailed'), variant: 'destructive' });
+      toast({ title: t('budget.toast.copyFailed'), variant: 'destructive' });
     },
   });
 }

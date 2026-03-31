@@ -13,7 +13,7 @@ import { EntityListPage } from '@/components/templates/entity-list-page';
 import { Badge } from '@/components/ui/badge';
 
 import { useVatReturns, useCreateVatReturn } from '../hooks/use-vat-returns';
-import type { VatReturn, VatReturnListParams, VAT_RETURN_STATUS_CONFIG } from '../types';
+import type { VatReturn, VatReturnListParams } from '../types';
 
 const STATUS_COLORS: Record<
   string,
@@ -56,8 +56,8 @@ export function VatReturnListPage() {
     const quarterEnd = new Date(quarterStart.getFullYear(), quarterStart.getMonth() + 3, 0);
     createMutation.mutate(
       {
-        periodStart: quarterStart.toISOString().split('T')[0],
-        periodEnd: quarterEnd.toISOString().split('T')[0],
+        periodStart: quarterStart.toISOString().split('T')[0]!,
+        periodEnd: quarterEnd.toISOString().split('T')[0]!,
       },
       {
         onSuccess: (data) => {

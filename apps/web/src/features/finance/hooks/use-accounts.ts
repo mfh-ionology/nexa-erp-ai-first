@@ -92,18 +92,18 @@ export function useAccount(id: string | null | undefined) {
 // ---------------------------------------------------------------------------
 
 export function useCreateAccount() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (input: CreateAccountInput) => createAccount(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.accounts.all() });
-      toast({ title: t('finance.accounts.toast.created', 'Account created') });
+      toast({ title: t('accounts.toast.created', 'Account created') });
     },
     onError: () => {
       toast({
-        title: t('finance.accounts.toast.createFailed', 'Failed to create account'),
+        title: t('accounts.toast.createFailed', 'Failed to create account'),
         variant: 'destructive',
       });
     },
@@ -115,7 +115,7 @@ export function useCreateAccount() {
 // ---------------------------------------------------------------------------
 
 export function useUpdateAccount() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -126,11 +126,11 @@ export function useUpdateAccount() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.finance.accounts.detail(variables.id),
       });
-      toast({ title: t('finance.accounts.toast.updated', 'Account updated') });
+      toast({ title: t('accounts.toast.updated', 'Account updated') });
     },
     onError: () => {
       toast({
-        title: t('finance.accounts.toast.updateFailed', 'Failed to update account'),
+        title: t('accounts.toast.updateFailed', 'Failed to update account'),
         variant: 'destructive',
       });
     },

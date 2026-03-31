@@ -61,23 +61,23 @@ export function useJournalTemplate(id: string | null | undefined) {
 }
 
 export function useCreateJournalTemplate() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (input: CreateJournalTemplateInput) => createJournalTemplate(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.journalTemplates() });
-      toast({ title: t('finance.template.toast.created') });
+      toast({ title: t('template.toast.created') });
     },
     onError: () => {
-      toast({ title: t('finance.template.toast.createFailed'), variant: 'destructive' });
+      toast({ title: t('template.toast.createFailed'), variant: 'destructive' });
     },
   });
 }
 
 export function useUpdateJournalTemplate() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -86,32 +86,32 @@ export function useUpdateJournalTemplate() {
     onSuccess: (_data, { id }) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.journalTemplate(id) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.journalTemplates() });
-      toast({ title: t('finance.template.toast.updated') });
+      toast({ title: t('template.toast.updated') });
     },
     onError: () => {
-      toast({ title: t('finance.template.toast.updateFailed'), variant: 'destructive' });
+      toast({ title: t('template.toast.updateFailed'), variant: 'destructive' });
     },
   });
 }
 
 export function useDeleteJournalTemplate() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (id: string) => deleteJournalTemplate(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.journalTemplates() });
-      toast({ title: t('finance.template.toast.deleted') });
+      toast({ title: t('template.toast.deleted') });
     },
     onError: () => {
-      toast({ title: t('finance.template.toast.deleteFailed'), variant: 'destructive' });
+      toast({ title: t('template.toast.deleteFailed'), variant: 'destructive' });
     },
   });
 }
 
 export function useExecuteJournalTemplate() {
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -119,10 +119,10 @@ export function useExecuteJournalTemplate() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.journalTemplates() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.finance.all });
-      toast({ title: t('finance.template.toast.executed') });
+      toast({ title: t('template.toast.executed') });
     },
     onError: () => {
-      toast({ title: t('finance.template.toast.executeFailed'), variant: 'destructive' });
+      toast({ title: t('template.toast.executeFailed'), variant: 'destructive' });
     },
   });
 }

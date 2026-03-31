@@ -73,12 +73,12 @@ export function useBankAccount(id: string | undefined) {
  */
 export function useCreateBankAccount() {
   const queryClient = useQueryClient();
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
 
   return useMutation({
     mutationFn: (input: CreateBankAccountInput) => createBankAccount(input),
     onSuccess: () => {
-      toast.success(t('finance.bankAccounts.toast.created'));
+      toast.success(t('bankAccounts.toast.created'));
       void queryClient.invalidateQueries({
         queryKey: queryKeys.finance.bankAccounts(),
       });
@@ -94,12 +94,12 @@ export function useCreateBankAccount() {
  */
 export function useUpdateBankAccount(id: string) {
   const queryClient = useQueryClient();
-  const { t } = useI18n();
+  const { t } = useI18n('finance');
 
   return useMutation({
     mutationFn: (input: UpdateBankAccountInput) => updateBankAccount(id, input),
     onSuccess: () => {
-      toast.success(t('finance.bankAccounts.toast.updated'));
+      toast.success(t('bankAccounts.toast.updated'));
       void queryClient.invalidateQueries({
         queryKey: queryKeys.finance.bankAccount(id),
       });
