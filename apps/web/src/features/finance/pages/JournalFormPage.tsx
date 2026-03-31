@@ -51,7 +51,9 @@ import {
   usePostJournal,
   useReverseJournal,
 } from '../hooks/use-journals';
+import { usePeriods } from '../hooks/use-periods';
 import type { JournalStatus } from '../api/journals-types';
+import type { Period } from '../api/periods-api';
 import { JournalLineGrid, createEmptyLine, lineRowsFromApi } from '../components/JournalLineGrid';
 import type { LineRow } from '../components/JournalLineGrid';
 
@@ -117,6 +119,16 @@ export function JournalFormPage({ id }: JournalFormPageProps) {
   const postMutation = usePostJournal(id ?? '');
   const reverseMutation = useReverseJournal(id ?? '');
 
+  // --- Periods data (for auto-matching from transaction date) ---
+  const { fiscalYears: periodGroups } = usePeriods();
+  const allPeriods = useMemo<Period[]>(
+    () => periodGroups.flatMap((g) => g.periods),
+    [periodGroups],
+  );
+
+  // Track the matched period name for display
+  const [matchedPeriodName, setMatchedPeriodName] = useState<string>('');
+
   // --- Dialog state ---
   const [showReverseDialog, setShowReverseDialog] = useState(false);
   const [showPostDialog, setShowPostDialog] = useState(false);
@@ -156,6 +168,40 @@ export function JournalFormPage({ id }: JournalFormPageProps) {
       : undefined,
   });
 
+  // --- Auto-match period from transaction date ---
+  const transactionDateValue = form.watch('transactionDate');
+
+  useEffect(() => {
+    if (!transactionDateValue || allPeriods.length === 0) return;
+
+    const txDate = new Date(transactionDateValue);
+    if (isNaN(txDate.getTime())) return;
+
+    const matched = allPeriods.find((p) => {
+      const start = new Date(p.startDate);
+      const end = new Date(p.endDate);
+      return txDate >= start && txDate <= end;
+    });
+
+    if (matched) {
+      form.setValue('periodId', matched.id, { shouldValidate: true });
+      setMatchedPeriodName(matched.name);
+    } else {
+      form.setValue('periodId', '', { shouldValidate: true });
+      setMatchedPeriodName('');
+    }
+  }, [transactionDateValue, allPeriods, form]);
+
+  // On initial load for existing journals, resolve the period name from the periodId
+  useEffect(() => {
+    if (journal?.periodId && allPeriods.length > 0 && !matchedPeriodName) {
+      const found = allPeriods.find((p) => p.id === journal.periodId);
+      if (found) {
+        setMatchedPeriodName(found.name);
+      }
+    }
+  }, [journal?.periodId, allPeriods, matchedPeriodName]);
+
   // --- Balance check ---
   const totals = useMemo(() => {
     let totalDebit = 0;
@@ -172,7 +218,6 @@ export function JournalFormPage({ id }: JournalFormPageProps) {
   }, [lines]);
 
   const isBalanced = totals.difference === 0 && lines.length >= 2;
-  const hasValidLines = lines.every((l) => l.accountCode && (l.debit > 0 || l.credit > 0));
 
   // --- Breadcrumbs ---
   const breadcrumbs = useMemo(
@@ -305,11 +350,7 @@ export function JournalFormPage({ id }: JournalFormPageProps) {
 
       {/* Save button (new or draft) */}
       {(isNew || isDraft) && (
-        <Button
-          onClick={form.handleSubmit(onSubmit)}
-          disabled={isSaving || !isBalanced || !hasValidLines}
-          size="sm"
-        >
+        <Button onClick={form.handleSubmit(onSubmit)} disabled={isSaving} size="sm">
           {isSaving ? <Loader2 className="animate-spin" /> : <Save className="size-4" />}
           {isNew ? t('common:create') : t('common:save')}
         </Button>
@@ -405,21 +446,20 @@ export function JournalFormPage({ id }: JournalFormPageProps) {
                 )}
               />
 
-              {/* Period */}
+              {/* Period (auto-derived from transaction date) */}
               <FormField
                 control={form.control}
                 name="periodId"
-                render={({ field }) => (
+                render={() => (
                   <FormItem>
                     <FormLabel>{t('journals.field.period')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder={t('journals.field.periodPlaceholder')}
-                        {...field}
-                        readOnly={readOnly}
-                        disabled={readOnly}
-                      />
-                    </FormControl>
+                    <div className="flex h-9 items-center rounded-md border border-input bg-muted/50 px-3 text-sm">
+                      {matchedPeriodName || (
+                        <span className="text-muted-foreground">
+                          {t('journals.field.periodPlaceholder')}
+                        </span>
+                      )}
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -485,6 +525,22 @@ export function JournalFormPage({ id }: JournalFormPageProps) {
           <JournalLineGrid lines={lines} onChange={setLines} readOnly={readOnly} />
         </CardContent>
       </Card>
+
+      {/* Bottom save/cancel buttons */}
+      {(isNew || isDraft) && (
+        <div className="flex justify-end gap-2 max-w-6xl">
+          <Button
+            variant="outline"
+            onClick={() => void navigate({ to: '/finance/journals' as string })}
+          >
+            {t('common:cancel')}
+          </Button>
+          <Button onClick={form.handleSubmit(onSubmit)} disabled={isSaving}>
+            {isSaving ? <Loader2 className="animate-spin" /> : <Save className="size-4 mr-2" />}
+            {isNew ? t('common:create') : t('common:save')}
+          </Button>
+        </div>
+      )}
 
       {/* Post confirmation dialog */}
       <Dialog open={showPostDialog} onOpenChange={setShowPostDialog}>

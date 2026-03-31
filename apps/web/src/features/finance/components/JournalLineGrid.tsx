@@ -18,6 +18,13 @@ import { useI18n, useLocale } from '@nexa/i18n';
 
 import { Button } from '@/components/ui/button';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Table,
   TableHeader,
   TableBody,
@@ -46,6 +53,8 @@ import type { AccountSearchResult } from '../api/journals-api';
 export interface LineRow extends JournalLineInput {
   /** Client-side key for React rendering */
   _key: string;
+  /** Display-only account name, populated from the account picker */
+  accountName?: string;
 }
 
 interface JournalLineGridProps {
@@ -74,6 +83,7 @@ export function createEmptyLine(): LineRow {
 export function lineRowsFromApi(
   apiLines: Array<{
     accountCode: string;
+    accountName?: string;
     description: string | null;
     debit: number;
     credit: number;
@@ -85,6 +95,7 @@ export function lineRowsFromApi(
     return {
       _key: `api-${idx}-${keyCounter}`,
       accountCode: line.accountCode,
+      accountName: line.accountName ?? '',
       description: line.description ?? '',
       debit: line.debit,
       credit: line.credit,
@@ -102,6 +113,18 @@ function formatCurrency(amount: number, locale: string) {
 }
 
 // ---------------------------------------------------------------------------
+// VAT code options (matching seed data)
+// ---------------------------------------------------------------------------
+
+const VAT_CODES = [
+  { code: 'S', label: 'S \u2014 Standard (20%)' },
+  { code: 'R', label: 'R \u2014 Reduced (5%)' },
+  { code: 'Z', label: 'Z \u2014 Zero Rate' },
+  { code: 'E', label: 'E \u2014 Exempt' },
+  { code: 'RC', label: 'RC \u2014 Reverse Charge' },
+] as const;
+
+// ---------------------------------------------------------------------------
 // AccountPicker — autocomplete search for chart of accounts
 // ---------------------------------------------------------------------------
 
@@ -112,7 +135,7 @@ function AccountPicker({
   onOpenChange,
 }: {
   value: string;
-  onChange: (code: string) => void;
+  onChange: (code: string, name: string) => void;
   readOnly?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -134,7 +157,7 @@ function AccountPicker({
 
   const handleSelect = useCallback(
     (account: AccountSearchResult) => {
-      onChange(account.code);
+      onChange(account.code, account.name);
       setOpen(false);
       onOpenChange?.(false);
     },
@@ -335,7 +358,7 @@ export function JournalLineGrid({ lines, onChange, readOnly = false }: JournalLi
 
   // --- Line manipulation ---
   const updateLine = useCallback(
-    (index: number, field: keyof JournalLineInput, value: string | number) => {
+    (index: number, field: keyof JournalLineInput | 'accountName', value: string | number) => {
       const updated = [...lines];
       const current = updated[index];
       if (!current) return;
@@ -352,6 +375,17 @@ export function JournalLineGrid({ lines, onChange, readOnly = false }: JournalLi
       }
 
       updated[index] = next;
+      onChange(updated);
+    },
+    [lines, onChange],
+  );
+
+  const updateAccountWithName = useCallback(
+    (index: number, code: string, name: string) => {
+      const updated = [...lines];
+      const current = updated[index];
+      if (!current) return;
+      updated[index] = { ...current, accountCode: code, accountName: name };
       onChange(updated);
     },
     [lines, onChange],
@@ -383,6 +417,9 @@ export function JournalLineGrid({ lines, onChange, readOnly = false }: JournalLi
               <TableHead className="h-10 w-36 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {t('journals.column.account')}
               </TableHead>
+              <TableHead className="h-10 w-48 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Account Name
+              </TableHead>
               <TableHead className="h-10 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {t('journals.column.description')}
               </TableHead>
@@ -413,9 +450,16 @@ export function JournalLineGrid({ lines, onChange, readOnly = false }: JournalLi
                 <TableCell className="px-2 py-1">
                   <AccountPicker
                     value={line.accountCode}
-                    onChange={(code) => updateLine(index, 'accountCode', code)}
+                    onChange={(code, name) => updateAccountWithName(index, code, name)}
                     readOnly={readOnly}
                   />
+                </TableCell>
+
+                {/* Account name (read-only) */}
+                <TableCell className="px-2 py-1">
+                  <span className="text-sm text-muted-foreground truncate block">
+                    {line.accountName || '\u2014'}
+                  </span>
                 </TableCell>
 
                 {/* Description */}
@@ -448,12 +492,28 @@ export function JournalLineGrid({ lines, onChange, readOnly = false }: JournalLi
 
                 {/* VAT code */}
                 <TableCell className="px-2 py-1">
-                  <TextCell
-                    value={line.vatCode ?? ''}
-                    onChange={(val) => updateLine(index, 'vatCode', val)}
-                    readOnly={readOnly}
-                    placeholder={t('journals.field.vatCodePlaceholder')}
-                  />
+                  {readOnly ? (
+                    <span className="text-sm">{line.vatCode || '\u2014'}</span>
+                  ) : (
+                    <Select
+                      value={line.vatCode ?? ''}
+                      onValueChange={(val) => updateLine(index, 'vatCode', val)}
+                    >
+                      <SelectTrigger
+                        size="sm"
+                        className="h-8 w-full border-transparent bg-transparent text-sm shadow-none hover:border-border focus:border-primary"
+                      >
+                        <SelectValue placeholder={t('journals.field.vatCodePlaceholder')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {VAT_CODES.map((vat) => (
+                          <SelectItem key={vat.code} value={vat.code}>
+                            {vat.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </TableCell>
 
                 {/* Delete row */}
