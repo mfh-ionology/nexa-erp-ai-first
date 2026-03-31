@@ -5,6 +5,7 @@ import { accountsRoutesPlugin } from './accounts.routes.js';
 import { periodsRoutesPlugin } from './periods.routes.js';
 import { accountMappingsRoutesPlugin } from './account-mappings.routes.js';
 import { journalsRoutesPlugin } from './journals.routes.js';
+import { reportsRoutesPlugin } from './reports.routes.js';
 
 async function financeModule(fastify: FastifyInstance): Promise<void> {
   await fastify.register(settingsRoutesPlugin);
@@ -12,6 +13,7 @@ async function financeModule(fastify: FastifyInstance): Promise<void> {
   await fastify.register(periodsRoutesPlugin);
   await fastify.register(accountMappingsRoutesPlugin);
   await fastify.register(journalsRoutesPlugin);
+  await fastify.register(reportsRoutesPlugin);
 }
 
 export const financeModulePlugin = financeModule;
