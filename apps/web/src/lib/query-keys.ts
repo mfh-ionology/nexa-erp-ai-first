@@ -95,6 +95,13 @@ export const queryKeys = {
     roleDefaults: (role: string) =>
       [...queryKeys.notifications.all, 'role-defaults', role] as const,
   },
+  briefing: {
+    all: ['briefing'] as const,
+    current: (forceRefresh?: boolean) =>
+      forceRefresh
+        ? ([...queryKeys.briefing.all, 'current', { forceRefresh }] as const)
+        : ([...queryKeys.briefing.all, 'current'] as const),
+  },
   aiAdmin: {
     all: ['ai-admin'] as const,
     dashboard: (params?: Record<string, unknown>) =>
@@ -203,7 +210,18 @@ export const queryKeys = {
         : ([...queryKeys.aiAdmin.all, 'corrections', 'infinite'] as const),
     correctionStats: () => [...queryKeys.aiAdmin.all, 'corrections', 'stats'] as const,
     setupStatus: () => [...queryKeys.aiAdmin.all, 'setup-status'] as const,
+    // Analytics
+    analyticsSummary: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'analytics', 'summary', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'analytics', 'summary'] as const),
+    analyticsBreakdown: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.aiAdmin.all, 'analytics', 'breakdown', params] as const)
+        : ([...queryKeys.aiAdmin.all, 'analytics', 'breakdown'] as const),
+    analyticsAlerts: () => [...queryKeys.aiAdmin.all, 'analytics', 'alerts'] as const,
   },
+  // finance keys consolidated below (after email)
   tasks: {
     all: ['tasks'] as const,
     my: (params?: Record<string, unknown>) =>
@@ -255,5 +273,117 @@ export const queryKeys = {
           : ([...queryKeys.email.all, 'template-admin', 'list', 'infinite'] as const),
       detail: (id: string) => [...queryKeys.email.all, 'template-admin', id] as const,
     },
+  },
+  finance: {
+    all: ['finance'] as const,
+    // Accounts (from E14-API)
+    accounts: {
+      all: () => [...queryKeys.finance.all, 'accounts'] as const,
+      list: (params?: Record<string, unknown>) =>
+        params
+          ? ([...queryKeys.finance.all, 'accounts', 'list', params] as const)
+          : ([...queryKeys.finance.all, 'accounts', 'list'] as const),
+      tree: (params?: Record<string, unknown>) =>
+        params
+          ? ([...queryKeys.finance.all, 'accounts', 'tree', params] as const)
+          : ([...queryKeys.finance.all, 'accounts', 'tree'] as const),
+      detail: (id: string) => [...queryKeys.finance.all, 'accounts', id] as const,
+      search: (params?: Record<string, unknown>) =>
+        params
+          ? ([...queryKeys.finance.all, 'accounts', 'search', params] as const)
+          : ([...queryKeys.finance.all, 'accounts', 'search'] as const),
+    },
+    // Settings
+    settings: () => [...queryKeys.finance.all, 'settings'] as const,
+    // Journals (E14-FE4)
+    journals: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'journals', params] as const)
+        : ([...queryKeys.finance.all, 'journals'] as const),
+    journalsInfinite: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'journals', 'infinite', params] as const)
+        : ([...queryKeys.finance.all, 'journals', 'infinite'] as const),
+    journal: (id: string) => [...queryKeys.finance.all, 'journals', id] as const,
+    // Periods
+    periods: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'periods', params] as const)
+        : ([...queryKeys.finance.all, 'periods'] as const),
+    accountMappings: () => [...queryKeys.finance.all, 'account-mappings'] as const,
+    trialBalance: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'trial-balance', params] as const)
+        : ([...queryKeys.finance.all, 'trial-balance'] as const),
+    profitAndLoss: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'profit-and-loss', params] as const)
+        : ([...queryKeys.finance.all, 'profit-and-loss'] as const),
+    balanceSheet: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'balance-sheet', params] as const)
+        : ([...queryKeys.finance.all, 'balance-sheet'] as const),
+    bankAccounts: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'bank-accounts', params] as const)
+        : ([...queryKeys.finance.all, 'bank-accounts'] as const),
+    bankAccountsInfinite: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'bank-accounts', 'infinite', params] as const)
+        : ([...queryKeys.finance.all, 'bank-accounts', 'infinite'] as const),
+    bankAccount: (id: string) => [...queryKeys.finance.all, 'bank-accounts', id] as const,
+    bankReconciliation: (id: string) =>
+      [...queryKeys.finance.all, 'bank-reconciliation', id] as const,
+    bankTransactions: (bankAccountId: string, params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'bank-transactions', bankAccountId, params] as const)
+        : ([...queryKeys.finance.all, 'bank-transactions', bankAccountId] as const),
+    unmatchedJournalLines: (bankAccountId: string, params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'unmatched-journal-lines', bankAccountId, params] as const)
+        : ([...queryKeys.finance.all, 'unmatched-journal-lines', bankAccountId] as const),
+    glAccounts: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'gl-accounts', params] as const)
+        : ([...queryKeys.finance.all, 'gl-accounts'] as const),
+    // Dashboard (FE13)
+    dashboard: () => [...queryKeys.finance.all, 'dashboard'] as const,
+    // VAT Returns (FE9)
+    vatReturns: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'vat-returns', params] as const)
+        : ([...queryKeys.finance.all, 'vat-returns'] as const),
+    vatReturn: (id: string) => [...queryKeys.finance.all, 'vat-returns', id] as const,
+    // Budgets (FE10)
+    budgets: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'budgets', params] as const)
+        : ([...queryKeys.finance.all, 'budgets'] as const),
+    budget: (id: string) => [...queryKeys.finance.all, 'budgets', id] as const,
+    // Journal Templates (FE11)
+    journalTemplates: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'journal-templates', params] as const)
+        : ([...queryKeys.finance.all, 'journal-templates'] as const),
+    journalTemplate: (id: string) => [...queryKeys.finance.all, 'journal-templates', id] as const,
+    // Additional Reports (FE12)
+    transactionJournal: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'transaction-journal', params] as const)
+        : ([...queryKeys.finance.all, 'transaction-journal'] as const),
+    budgetVariance: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'budget-variance', params] as const)
+        : ([...queryKeys.finance.all, 'budget-variance'] as const),
+    // Year-End (FE14)
+    yearEndStatus: (fiscalYear: number) =>
+      [...queryKeys.finance.all, 'year-end', fiscalYear] as const,
+    openingBalances: () => [...queryKeys.finance.all, 'opening-balances'] as const,
+    // Month-End (FE15)
+    monthEndPeriods: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'month-end', params] as const)
+        : ([...queryKeys.finance.all, 'month-end'] as const),
+    monthEndPeriod: (id: string) => [...queryKeys.finance.all, 'month-end', id] as const,
   },
 } as const;
