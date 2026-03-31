@@ -17,6 +17,7 @@ import { journalTemplatesRoutesPlugin } from './journal-templates.routes.js';
 import { openingBalancesRoutesPlugin } from './opening-balances.routes.js';
 import { exchangeRatesRoutesPlugin } from './exchange-rates.routes.js';
 import { monthEndRoutesPlugin } from './month-end.routes.js';
+import { dashboardRoutesPlugin } from './dashboard.routes.js';
 
 async function financeModule(fastify: FastifyInstance): Promise<void> {
   await fastify.register(settingsRoutesPlugin);
@@ -36,6 +37,7 @@ async function financeModule(fastify: FastifyInstance): Promise<void> {
   await fastify.register(openingBalancesRoutesPlugin);
   await fastify.register(exchangeRatesRoutesPlugin);
   await fastify.register(monthEndRoutesPlugin);
+  await fastify.register(dashboardRoutesPlugin);
 }
 
 export const financeModulePlugin = financeModule;
