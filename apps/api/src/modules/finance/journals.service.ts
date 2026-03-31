@@ -94,6 +94,7 @@ const LINE_SELECT = {
   foreignAmount: true,
   exchangeRate: true,
   dimensions: { select: LINE_DIMENSION_SELECT },
+  account: { select: { name: true } },
 } as const;
 
 const LIST_SELECT = {
@@ -146,8 +147,11 @@ function toDateString(d: Date | string): string {
 
 /** Normalise a journal line for API response */
 function normaliseLine(line: Record<string, unknown>) {
+  const account = line.account as { name: string } | null | undefined;
   return {
     ...line,
+    accountName: account?.name ?? null,
+    account: undefined, // Remove nested relation object from response
     debit: toNumber(line.debit as Prisma.Decimal),
     credit: toNumber(line.credit as Prisma.Decimal),
     foreignAmount: line.foreignAmount ? toNumber(line.foreignAmount as Prisma.Decimal) : null,
