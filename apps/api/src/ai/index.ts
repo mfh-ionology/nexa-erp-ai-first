@@ -52,6 +52,9 @@ import { SkillOverrideService } from './skill-overrides.service.js';
 import { skillOverridesRoutesPlugin } from './skill-overrides.routes.js';
 import { automationRoutesPlugin } from './automation/automation.routes.js';
 import { AutomationService } from './automation/automation.service.js';
+import { AutomationExecutor as AutomationStepExecutor } from './automation/automation-executor.js';
+import { AutomationSchedulerService } from './automation/automation-scheduler.js';
+import { AutomationEventListener } from './automation/automation-event-listener.js';
 import { PromptRenderer } from './prompt-renderer.js';
 import { AdminModelService } from './admin/admin-model.service.js';
 import { AdminPromptService } from './admin/admin-prompt.service.js';
@@ -59,6 +62,7 @@ import { AdminDashboardService } from './admin/admin-dashboard.service.js';
 import { AdminAgentService } from './admin/admin-agent.service.js';
 import { AdminSkillService } from './admin/admin-skill.service.js';
 import { AdminTriggerTestService } from './admin/admin-trigger-test.service.js';
+import { AdminAnalyticsService } from './admin/analytics.service.js';
 import { adminRoutesPlugin } from './admin/admin.routes.js';
 import { KnowledgeArticleService } from './knowledge-article.service.js';
 import { knowledgeArticleRoutesPlugin } from './knowledge-article.routes.js';
@@ -84,6 +88,12 @@ import { EmbeddingService } from './embedding.service.js';
 import { EmbeddingBackfillService } from './embedding-backfill.service.js';
 import { VectorSearchService } from './vector-search.service.js';
 import { parseRedisUrl } from '../core/events/redis-connection.js';
+import { registerSystemActionHandlers } from './action-handlers/system.handlers.js';
+import {
+  registerFinanceTools,
+  registerFinanceQueryHandlers,
+  registerFinanceActionHandlers,
+} from '../modules/finance/finance-skills.js';
 import { registerAuditMapping } from '../core/audit/audit.mappings.js';
 import type { AuditAction } from '../core/audit/audit.types.js';
 import { permissionService } from '../core/rbac/permission.service.js';
@@ -128,6 +138,7 @@ declare module 'fastify' {
     aiAdminAgentService: AdminAgentService | null;
     aiAdminSkillService: AdminSkillService | null;
     aiAdminTriggerTestService: AdminTriggerTestService | null;
+    aiAdminAnalyticsService: AdminAnalyticsService | null;
     aiKnowledgeArticleService: KnowledgeArticleService | null;
     aiKnowledgeRagService: KnowledgeRagService | null;
     aiLearningSignalsService: LearningSignalsService | null;
@@ -305,6 +316,7 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     fastify.decorate('aiAdminAgentService', null);
     fastify.decorate('aiAdminSkillService', null);
     fastify.decorate('aiAdminTriggerTestService', null);
+    fastify.decorate('aiAdminAnalyticsService', null);
     fastify.decorate('aiKnowledgeArticleService', null);
     fastify.decorate('aiKnowledgeRagService', null);
     fastify.decorate('aiLearningSignalsService', null);
@@ -389,6 +401,12 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     const guardrails = new GuardrailsService(logger);
     const actionPlanner = new ActionPlanner(guardrails, logger);
     const actionExecutor = new ActionExecutor(prisma, fastify.eventBus, logger);
+
+    // Register system module action handlers (Users, Access Groups)
+    registerSystemActionHandlers(actionExecutor, fastify.eventBus, logger);
+
+    // Register finance module action handlers (Journals, Budgets) — E14-S27
+    registerFinanceActionHandlers(actionExecutor, fastify.eventBus, logger);
 
     // Create prediction service (E5-4)
     const predictionService = new PredictionService(orchestrator, prisma, logger);
@@ -489,6 +507,10 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
       // Register E7 views module tools and query handlers (E5b-6 Task 7)
       registerViewsTools(toolRegistry);
       registerViewsQueryHandlers(queryExecutor, prisma);
+
+      // Register E14-S27 finance module tools and query handlers
+      registerFinanceTools(toolRegistry);
+      registerFinanceQueryHandlers(queryExecutor, prisma);
 
       logger.info(
         'E5b-2 services initialized (ToolRegistry, SkillRouter, QueryExecutor, DynamicContextService)',
@@ -721,14 +743,69 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
       dynamicContextService.setKnowledgeRagService(knowledgeRagService);
     }
 
+    // Create AutomationExecutor (step executor for automation runs)
+    const automationStepExecutor = new AutomationStepExecutor(
+      prisma,
+      aiGateway,
+      dynamicContextService,
+      queryExecutor!,
+      actionExecutor,
+      toolRegistry,
+      fastify.eventBus,
+      logger,
+    );
+
+    // Wire PromptRenderer into automation executor (shared with orchestrator)
+    // (Done after promptRenderer is created below — see setPromptRenderer call)
+
+    // Create AutomationSchedulerService — optional, only if Redis is available
+    let automationScheduler: AutomationSchedulerService | null = null;
+    if (redisUrl) {
+      try {
+        const automationSchedulerConn = parseRedisUrl(redisUrl);
+        automationScheduler = new AutomationSchedulerService(
+          prisma,
+          automationStepExecutor,
+          logger,
+          automationSchedulerConn,
+          fastify.eventBus,
+        );
+        await automationScheduler.start();
+        logger.info('AutomationSchedulerService initialized');
+      } catch (schedulerError) {
+        logger.warn(
+          { error: (schedulerError as Error).message },
+          'AutomationSchedulerService failed to initialize — scheduled automations will not run',
+        );
+      }
+    }
+
+    // Create AutomationEventListener — listens for business events to trigger automations
+    let automationEventListener: AutomationEventListener | null = null;
+    try {
+      automationEventListener = new AutomationEventListener(
+        prisma,
+        automationStepExecutor,
+        fastify.eventBus,
+        logger,
+      );
+      await automationEventListener.start();
+      logger.info('AutomationEventListener initialized');
+    } catch (eventListenerError) {
+      logger.warn(
+        { error: (eventListenerError as Error).message },
+        'AutomationEventListener failed to initialize — event-triggered automations will not run',
+      );
+    }
+
     // Create AutomationService (E5c-1 Task 10)
     const automationService = new AutomationService({
       db: prisma,
       eventBus: fastify.eventBus,
       logger,
-      scheduler: null, // AutomationSchedulerService created elsewhere if Redis is available
-      eventListener: null, // AutomationEventListener created elsewhere
-      executor: null, // AutomationExecutor requires full wiring — set later if available
+      scheduler: automationScheduler,
+      eventListener: automationEventListener,
+      executor: automationStepExecutor,
     });
     fastify.decorate('aiAutomationService', automationService);
 
@@ -736,8 +813,9 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     const promptRenderer = new PromptRenderer(prisma, logger);
     fastify.decorate('aiPromptRenderer', promptRenderer);
 
-    // Wire PromptRenderer into orchestrator for AiPromptVariable resolution (E5c-2 Task 8)
+    // Wire PromptRenderer into orchestrator and automation executor (E5c-2 Task 8)
     orchestrator.setPromptRenderer(promptRenderer);
+    automationStepExecutor.setPromptRenderer(promptRenderer);
 
     // Create AI admin services (E5c-3 Task 5.2)
     const adminModelService = new AdminModelService(prisma, logger);
@@ -754,6 +832,10 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     fastify.decorate('aiAdminAgentService', adminAgentService);
     fastify.decorate('aiAdminSkillService', adminSkillService);
     fastify.decorate('aiAdminTriggerTestService', adminTriggerTestService);
+
+    // Create AI admin analytics service (E10 Task 11)
+    const adminAnalyticsService = new AdminAnalyticsService();
+    fastify.decorate('aiAdminAnalyticsService', adminAnalyticsService);
 
     // Create LearningSignalsService (E5d-2 Task 6)
     const learningSignalsService = new LearningSignalsService(prisma, logger, fastify.eventBus);
@@ -807,6 +889,8 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
       await wsHandler.close();
       if (memoryPruningService) await memoryPruningService.close();
       if (briefingScheduler) await briefingScheduler.close();
+      if (automationScheduler) await automationScheduler.stop();
+      if (automationEventListener) automationEventListener.stop();
       await redis.quit();
     });
 
@@ -851,6 +935,7 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     fastify.decorate('aiAdminAgentService', null);
     fastify.decorate('aiAdminSkillService', null);
     fastify.decorate('aiAdminTriggerTestService', null);
+    fastify.decorate('aiAdminAnalyticsService', null);
     fastify.decorate('aiKnowledgeArticleService', null);
     fastify.decorate('aiKnowledgeRagService', null);
     fastify.decorate('aiLearningSignalsService', null);
