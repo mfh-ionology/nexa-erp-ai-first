@@ -33,6 +33,9 @@ const { mockPrisma, mockResolveUserRole, mockPermissionService, mockEventBus } =
     journalLine: {
       count: vi.fn(),
     },
+    financialPeriod: {
+      findMany: vi.fn(),
+    },
     $transaction: vi.fn(),
   },
   mockResolveUserRole: vi.fn(),
@@ -716,6 +719,8 @@ describe('PATCH /finance/accounts/:id', () => {
       async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => fn(mockPrisma),
     );
     mockPrisma.chartOfAccount.findFirst.mockResolvedValue(existing);
+    // Return fiscal year periods so the period-based deactivation guard runs
+    mockPrisma.financialPeriod.findMany.mockResolvedValue([{ id: 'period-1' }, { id: 'period-2' }]);
     mockPrisma.journalLine.count.mockResolvedValue(5); // has postings
 
     const res = await app.inject({
@@ -743,6 +748,8 @@ describe('PATCH /finance/accounts/:id', () => {
       async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => fn(mockPrisma),
     );
     mockPrisma.chartOfAccount.findFirst.mockResolvedValue(existing);
+    // Return fiscal year periods so the period-based deactivation guard runs
+    mockPrisma.financialPeriod.findMany.mockResolvedValue([{ id: 'period-1' }, { id: 'period-2' }]);
     mockPrisma.journalLine.count.mockResolvedValue(0); // no postings
     mockPrisma.chartOfAccount.update.mockResolvedValue(updated);
 

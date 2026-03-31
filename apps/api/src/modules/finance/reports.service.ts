@@ -422,6 +422,11 @@ export async function getBalanceSheet(
     },
   });
 
+  // Determine the expected normal balance direction for each BS section.
+  // Asset sections (FA, CA) expect DEBIT; Liability (CL, LTL) and Equity (EQ) expect CREDIT.
+  const ASSET_SECTIONS = new Set(['FA', 'CA']);
+  const CREDIT_SECTIONS = new Set(['CL', 'LTL', 'EQ']);
+
   // 4. Group accounts by classification code
   const accountsByClassification = new Map<string, ReportAccountLine[]>();
   for (const account of accounts) {
@@ -437,10 +442,21 @@ export async function getBalanceSheet(
     if (openingBalance === 0 && debits === 0 && credits === 0) continue;
 
     // Balance based on normal balance direction
-    const balance =
+    let balance =
       account.normalBalance === 'DEBIT'
         ? openingBalance + debits - credits
         : openingBalance + credits - debits;
+
+    // BUG-1 FIX: Contra-asset / contra-liability handling.
+    // If an account's normalBalance doesn't match its section's expected direction,
+    // flip the sign so it subtracts from the section total.
+    // e.g. Accumulated Depreciation (normalBalance=CREDIT) in Fixed Assets (expects DEBIT)
+    //      should appear as negative, subtracting from the section total.
+    const isContraAsset = ASSET_SECTIONS.has(classCode) && account.normalBalance === 'CREDIT';
+    const isContraLiability = CREDIT_SECTIONS.has(classCode) && account.normalBalance === 'DEBIT';
+    if (isContraAsset || isContraLiability) {
+      balance = -balance;
+    }
 
     const line: ReportAccountLine = {
       accountCode: account.code,
@@ -466,6 +482,29 @@ export async function getBalanceSheet(
     const total = roundToFourDecimals(sectionAccounts.reduce((sum, a) => sum + a.balance, 0));
     sections.push({ classification: code, name, accounts: sectionAccounts, total });
     sectionTotals.set(code, total);
+  }
+
+  // BUG-2 FIX: Calculate current-period net P&L and include in equity.
+  // The Balance Sheet equation requires Assets = Liabilities + Equity, but P&L accounts
+  // (Revenue, Expenses) are excluded from the BS. Their net effect must appear in Equity.
+  const currentPeriodPnl = await calculatePeriodNetPnl(prisma, companyId, periodIds);
+  if (Math.abs(currentPeriodPnl) >= 0.0001) {
+    // Add a synthetic line to the Equity section
+    const pnlLine: ReportAccountLine = {
+      accountCode: 'PNL',
+      accountName: 'Current Period Profit/Loss',
+      normalBalance: 'CREDIT',
+      openingBalance: 0,
+      debits: 0,
+      credits: 0,
+      balance: roundToFourDecimals(currentPeriodPnl),
+    };
+    const eqSection = sections.find((s) => s.classification === 'EQ');
+    if (eqSection) {
+      eqSection.accounts.push(pnlLine);
+      eqSection.total = roundToFourDecimals(eqSection.total + currentPeriodPnl);
+      sectionTotals.set('EQ', eqSection.total);
+    }
   }
 
   // 6. Calculate summary figures (AC-5)
@@ -789,6 +828,95 @@ export async function getBudgetVariance(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Calculate net Profit/Loss for the given periods by summing P&L account balances.
+ *
+ * Revenue accounts (CREDIT normal) produce positive balances (credits - debits).
+ * Expense accounts (DEBIT normal) produce positive balances (debits - credits).
+ * Net P&L = sum of revenue balances - sum of expense balances.
+ *
+ * A positive result means profit; negative means loss.
+ */
+async function calculatePeriodNetPnl(
+  prisma: PrismaClient,
+  companyId: string,
+  periodIds: string[],
+): Promise<number> {
+  if (periodIds.length === 0) return 0;
+
+  // Aggregate posted journal lines for P&L accounts only
+  const pnlLineAggregations: Array<{
+    accountCode: string;
+    _sum: { debit: unknown; credit: unknown };
+  }> = await (prisma as any).journalLine.groupBy({
+    by: ['accountCode'],
+    where: {
+      companyId,
+      journalEntry: {
+        companyId,
+        status: 'POSTED',
+        periodId: { in: periodIds },
+      },
+    },
+    _sum: {
+      debit: true,
+      credit: true,
+    },
+  });
+
+  const lineMap = new Map<string, { totalDebit: number; totalCredit: number }>();
+  for (const agg of pnlLineAggregations) {
+    lineMap.set(agg.accountCode, {
+      totalDebit: Number(agg._sum.debit ?? 0),
+      totalCredit: Number(agg._sum.credit ?? 0),
+    });
+  }
+
+  // Fetch P&L accounts (reportSection = PROFIT_AND_LOSS)
+  const pnlAccounts = await (prisma as any).chartOfAccount.findMany({
+    where: {
+      companyId,
+      isActive: true,
+      classification: {
+        reportSection: 'PROFIT_AND_LOSS',
+      },
+    },
+    select: {
+      code: true,
+      normalBalance: true,
+      openingBalance: true,
+    },
+  });
+
+  let netPnl = 0;
+  for (const account of pnlAccounts) {
+    const openingBalance = Number(account.openingBalance ?? 0);
+    const lineTotals = lineMap.get(account.code);
+    const debits = lineTotals?.totalDebit ?? 0;
+    const credits = lineTotals?.totalCredit ?? 0;
+
+    if (openingBalance === 0 && debits === 0 && credits === 0) continue;
+
+    // Balance in the account's natural direction
+    const balance =
+      account.normalBalance === 'DEBIT'
+        ? openingBalance + debits - credits
+        : openingBalance + credits - debits;
+
+    // Revenue (CREDIT normal) adds to profit; Expenses (DEBIT normal) subtract.
+    // Revenue balance is positive when there are credits (income earned).
+    // Expense balance is positive when there are debits (expenses incurred).
+    // Net P&L = Revenue - Expenses
+    if (account.normalBalance === 'CREDIT') {
+      netPnl += balance; // Revenue adds
+    } else {
+      netPnl -= balance; // Expenses subtract
+    }
+  }
+
+  return netPnl;
+}
 
 function roundToFourDecimals(value: number): number {
   return Math.round(value * 10000) / 10000;

@@ -616,17 +616,22 @@ describe('GET /finance/reports/balance-sheet', () => {
       { id: PERIOD_ID_2 },
     ]);
 
-    // Simulated posted journal lines
-    mockPrisma.journalLine.groupBy.mockResolvedValue([
-      // Cash increase: debit 5000
-      { accountCode: '1200', _sum: { debit: 5000, credit: 0 } },
-      // Trade debtors decrease: credit 2000
-      { accountCode: '1300', _sum: { debit: 0, credit: 2000 } },
-      // Trade creditors increase: credit 3000
-      { accountCode: '2000', _sum: { debit: 0, credit: 3000 } },
-    ]);
+    // Simulated posted journal lines (1st call: BS, 2nd call: P&L net calculation)
+    mockPrisma.journalLine.groupBy
+      .mockResolvedValueOnce([
+        // Cash increase: debit 5000
+        { accountCode: '1200', _sum: { debit: 5000, credit: 0 } },
+        // Trade debtors decrease: credit 2000
+        { accountCode: '1300', _sum: { debit: 0, credit: 2000 } },
+        // Trade creditors increase: credit 3000
+        { accountCode: '2000', _sum: { debit: 0, credit: 3000 } },
+      ])
+      .mockResolvedValueOnce([]); // P&L lines (none)
 
-    mockPrisma.chartOfAccount.findMany.mockResolvedValue(makeBsAccounts());
+    // 1st call: BS accounts, 2nd call: P&L accounts (none for BS test)
+    mockPrisma.chartOfAccount.findMany
+      .mockResolvedValueOnce(makeBsAccounts())
+      .mockResolvedValueOnce([]);
 
     const res = await app.inject({
       method: 'GET',
@@ -725,32 +730,36 @@ describe('GET /finance/reports/balance-sheet', () => {
     app = await buildTestApp();
 
     mockPrisma.financialPeriod.findMany.mockResolvedValue([{ id: PERIOD_ID_1 }]);
-    mockPrisma.journalLine.groupBy.mockResolvedValue([]);
+    // 1st call: BS lines, 2nd call: P&L lines (none)
+    mockPrisma.journalLine.groupBy.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
 
     // Deliberately unbalanced: Assets = 10000, Liabilities + Equity = 8000
-    mockPrisma.chartOfAccount.findMany.mockResolvedValue([
-      {
-        code: '1200',
-        name: 'Cash',
-        normalBalance: 'DEBIT',
-        openingBalance: 10000,
-        classification: { code: 'CA', name: 'Current Assets' },
-      },
-      {
-        code: '2000',
-        name: 'Trade Creditors',
-        normalBalance: 'CREDIT',
-        openingBalance: 3000,
-        classification: { code: 'CL', name: 'Current Liabilities' },
-      },
-      {
-        code: '3000',
-        name: 'Share Capital',
-        normalBalance: 'CREDIT',
-        openingBalance: 5000,
-        classification: { code: 'EQ', name: 'Equity' },
-      },
-    ]);
+    // 1st call: BS accounts, 2nd call: P&L accounts (none)
+    mockPrisma.chartOfAccount.findMany
+      .mockResolvedValueOnce([
+        {
+          code: '1200',
+          name: 'Cash',
+          normalBalance: 'DEBIT',
+          openingBalance: 10000,
+          classification: { code: 'CA', name: 'Current Assets' },
+        },
+        {
+          code: '2000',
+          name: 'Trade Creditors',
+          normalBalance: 'CREDIT',
+          openingBalance: 3000,
+          classification: { code: 'CL', name: 'Current Liabilities' },
+        },
+        {
+          code: '3000',
+          name: 'Share Capital',
+          normalBalance: 'CREDIT',
+          openingBalance: 5000,
+          classification: { code: 'EQ', name: 'Equity' },
+        },
+      ])
+      .mockResolvedValueOnce([]);
 
     const res = await app.inject({
       method: 'GET',
@@ -895,27 +904,33 @@ describe('GET /finance/reports/balance-sheet', () => {
 
     // Cash (DEBIT): opening 10000, debit 3000, credit 1000 => 10000 + 3000 - 1000 = 12000
     // Trade Creditors (CREDIT): opening 5000, debit 500, credit 2000 => 5000 + 2000 - 500 = 6500
-    mockPrisma.journalLine.groupBy.mockResolvedValue([
-      { accountCode: '1200', _sum: { debit: 3000, credit: 1000 } },
-      { accountCode: '2000', _sum: { debit: 500, credit: 2000 } },
-    ]);
+    // 1st call: BS lines, 2nd call: P&L lines (none)
+    mockPrisma.journalLine.groupBy
+      .mockResolvedValueOnce([
+        { accountCode: '1200', _sum: { debit: 3000, credit: 1000 } },
+        { accountCode: '2000', _sum: { debit: 500, credit: 2000 } },
+      ])
+      .mockResolvedValueOnce([]);
 
-    mockPrisma.chartOfAccount.findMany.mockResolvedValue([
-      {
-        code: '1200',
-        name: 'Cash',
-        normalBalance: 'DEBIT',
-        openingBalance: 10000,
-        classification: { code: 'CA', name: 'Current Assets' },
-      },
-      {
-        code: '2000',
-        name: 'Trade Creditors',
-        normalBalance: 'CREDIT',
-        openingBalance: 5000,
-        classification: { code: 'CL', name: 'Current Liabilities' },
-      },
-    ]);
+    // 1st call: BS accounts, 2nd call: P&L accounts (none)
+    mockPrisma.chartOfAccount.findMany
+      .mockResolvedValueOnce([
+        {
+          code: '1200',
+          name: 'Cash',
+          normalBalance: 'DEBIT',
+          openingBalance: 10000,
+          classification: { code: 'CA', name: 'Current Assets' },
+        },
+        {
+          code: '2000',
+          name: 'Trade Creditors',
+          normalBalance: 'CREDIT',
+          openingBalance: 5000,
+          classification: { code: 'CL', name: 'Current Liabilities' },
+        },
+      ])
+      .mockResolvedValueOnce([]);
 
     const res = await app.inject({
       method: 'GET',
@@ -941,26 +956,30 @@ describe('GET /finance/reports/balance-sheet', () => {
     app = await buildTestApp();
 
     mockPrisma.financialPeriod.findMany.mockResolvedValue([{ id: PERIOD_ID_1 }]);
-    mockPrisma.journalLine.groupBy.mockResolvedValue([
-      { accountCode: '1200', _sum: { debit: 1000, credit: 0 } },
-    ]);
+    // 1st call: BS lines, 2nd call: P&L lines (none)
+    mockPrisma.journalLine.groupBy
+      .mockResolvedValueOnce([{ accountCode: '1200', _sum: { debit: 1000, credit: 0 } }])
+      .mockResolvedValueOnce([]);
 
-    mockPrisma.chartOfAccount.findMany.mockResolvedValue([
-      {
-        code: '1200',
-        name: 'Cash',
-        normalBalance: 'DEBIT',
-        openingBalance: 10000,
-        classification: { code: 'CA', name: 'Current Assets' },
-      },
-      {
-        code: '1400',
-        name: 'Petty Cash',
-        normalBalance: 'DEBIT',
-        openingBalance: 0,
-        classification: { code: 'CA', name: 'Current Assets' },
-      },
-    ]);
+    // 1st call: BS accounts, 2nd call: P&L accounts (none)
+    mockPrisma.chartOfAccount.findMany
+      .mockResolvedValueOnce([
+        {
+          code: '1200',
+          name: 'Cash',
+          normalBalance: 'DEBIT',
+          openingBalance: 10000,
+          classification: { code: 'CA', name: 'Current Assets' },
+        },
+        {
+          code: '1400',
+          name: 'Petty Cash',
+          normalBalance: 'DEBIT',
+          openingBalance: 0,
+          classification: { code: 'CA', name: 'Current Assets' },
+        },
+      ])
+      .mockResolvedValueOnce([]);
 
     const res = await app.inject({
       method: 'GET',

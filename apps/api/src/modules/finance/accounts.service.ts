@@ -366,23 +366,56 @@ export async function updateAccount(
         throw new DomainError('SYSTEM_ACCOUNT_PROTECTED', 'Cannot deactivate a system account');
       }
 
+      // BUG-3 FIX: Use fiscal year periods instead of raw calendar dates.
+      // The previous approach used `new Date(currentYear, 0, 1)` which could produce
+      // incorrect UTC dates depending on server timezone, and also didn't align with
+      // fiscal year boundaries. Instead, find the current fiscal year's periods and
+      // check for posted journal lines within those periods.
       const currentYear = new Date().getFullYear();
-      const yearStart = new Date(currentYear, 0, 1);
-      const yearEnd = new Date(currentYear, 11, 31, 23, 59, 59, 999);
 
-      const postingCount = await tx.journalLine.count({
+      // Find all financial periods for the current fiscal year
+      const currentPeriods = await (tx as any).financialPeriod.findMany({
         where: {
           companyId,
-          accountCode: existing.code,
-          journalEntry: {
-            transactionDate: {
-              gte: yearStart,
-              lte: yearEnd,
-            },
-            status: 'POSTED',
-          },
+          fiscalYear: currentYear,
         },
+        select: { id: true },
       });
+
+      const periodIds = currentPeriods.map((p: { id: string }) => p.id);
+
+      // Check for posted journal lines in the current fiscal year's periods,
+      // OR fall back to date-based check if no periods exist yet
+      let postingCount = 0;
+      if (periodIds.length > 0) {
+        postingCount = await tx.journalLine.count({
+          where: {
+            companyId,
+            accountCode: existing.code,
+            journalEntry: {
+              status: 'POSTED',
+              periodId: { in: periodIds },
+            },
+          },
+        });
+      } else {
+        // Fallback: use UTC date boundaries if no fiscal periods defined
+        const yearStart = new Date(Date.UTC(currentYear, 0, 1));
+        const yearEnd = new Date(Date.UTC(currentYear, 11, 31, 23, 59, 59, 999));
+        postingCount = await tx.journalLine.count({
+          where: {
+            companyId,
+            accountCode: existing.code,
+            journalEntry: {
+              transactionDate: {
+                gte: yearStart,
+                lte: yearEnd,
+              },
+              status: 'POSTED',
+            },
+          },
+        });
+      }
 
       if (postingCount > 0) {
         throw new DomainError(

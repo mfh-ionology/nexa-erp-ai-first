@@ -202,31 +202,31 @@ export async function calculateVatReturn(prisma: PrismaClient, companyId: string
   // Build lookup: code → VatCode record
   const vatCodeMap = new Map(vatCodes.map((vc) => [vc.code, vc]));
 
-  // Output VAT types: STANDARD, REDUCED, ZERO (sales VAT)
-  // Input VAT types: same types but on purchase side
-  // The distinction is made by whether the journal line has debit (purchase/input)
-  // or credit (sales/output) for VAT postings.
-  //
-  // For MVP simplified approach:
-  // - Journal lines with vatCode set and credit > 0 → output VAT (Box 1 = credit, i.e. VAT collected on sales)
-  // - Journal lines with vatCode set and debit > 0 → input VAT (Box 4 = debit, i.e. VAT paid on purchases)
-  //
-  // Actually, we determine input vs output from the VatCode type + the account nature:
-  // - Lines where vatCode has salesAccountCode → output VAT → Box 1 (VAT amount), Box 6 (net)
-  // - Lines where vatCode has purchaseAccountCode → input VAT → Box 4 (VAT amount), Box 7 (net)
-  //
-  // Simplest MVP approach: Query posted journal lines with vatCode set.
-  // Group by the presence of the vatCode. For each line:
-  // - If vatCode matches an active code → use VAT code to determine direction.
-  //   Lines posted to a VAT code's salesAccountCode → output VAT (Box 1/6)
-  //   Lines posted to a VAT code's purchaseAccountCode → input VAT (Box 4/7)
-  // - Otherwise, look at debit/credit: credit on VAT account = output, debit = input
+  // Build sets of VAT account codes for direct-account-based detection (BUG-4 FIX).
+  // This enables VAT calculation even when journal lines don't have vatCode set.
+  const salesVatAccountCodes = new Set<string>();
+  const purchaseVatAccountCodes = new Set<string>();
+  const vatAccountToRate = new Map<string, number>();
 
-  // Query all POSTED journal lines within the period that have a vatCode
+  for (const vc of vatCodes) {
+    const rate = toNumber(vc.rate as unknown as Prisma.Decimal);
+    if (vc.salesAccountCode) {
+      salesVatAccountCodes.add(vc.salesAccountCode);
+      vatAccountToRate.set(vc.salesAccountCode, rate);
+    }
+    if (vc.purchaseAccountCode) {
+      purchaseVatAccountCodes.add(vc.purchaseAccountCode);
+      vatAccountToRate.set(vc.purchaseAccountCode, rate);
+    }
+  }
+
+  // BUG-4 FIX: Query ALL posted journal lines within the period, not just those
+  // with vatCode set. Many journal lines are created without vatCode on the lines
+  // but still post to VAT accounts (e.g., 2200 for output VAT, 1500 for input VAT).
+  // We detect VAT by checking whether the line posts to a known VAT account.
   const journalLines = await prisma.journalLine.findMany({
     where: {
       companyId,
-      vatCode: { not: null },
       journalEntry: {
         status: 'POSTED',
         transactionDate: {
@@ -236,6 +236,7 @@ export async function calculateVatReturn(prisma: PrismaClient, companyId: string
       },
     },
     select: {
+      journalEntryId: true,
       accountCode: true,
       debit: true,
       credit: true,
@@ -249,42 +250,66 @@ export async function calculateVatReturn(prisma: PrismaClient, companyId: string
   let box6 = 0; // Total sales excl VAT
   let box7 = 0; // Total purchases excl VAT
 
+  // Track which journal entries have VAT lines, so we can find their net amounts
+  const journalEntriesWithOutputVat = new Set<string>();
+  const journalEntriesWithInputVat = new Set<string>();
+
+  // First pass: identify VAT lines (posted to VAT accounts or with vatCode)
   for (const line of journalLines) {
     const lineDebit = toNumber(line.debit as unknown as Prisma.Decimal);
     const lineCredit = toNumber(line.credit as unknown as Prisma.Decimal);
-    const vc = line.vatCode ? vatCodeMap.get(line.vatCode) : null;
 
-    if (!vc) continue; // Skip lines with unknown VAT codes
+    // Check if this line posts to a known VAT account (primary detection method)
+    const isSalesVatAccount = salesVatAccountCodes.has(line.accountCode);
+    const isPurchaseVatAccount = purchaseVatAccountCodes.has(line.accountCode);
 
-    const rate = toNumber(vc.rate as unknown as Prisma.Decimal);
+    // Also check via vatCode field if set (secondary detection method)
+    if (!isSalesVatAccount && !isPurchaseVatAccount && line.vatCode) {
+      const vc = vatCodeMap.get(line.vatCode);
+      if (vc) {
+        const rate = toNumber(vc.rate as unknown as Prisma.Decimal);
+        const matchesSalesAccount = vc.salesAccountCode && line.accountCode === vc.salesAccountCode;
+        const matchesPurchaseAccount =
+          vc.purchaseAccountCode && line.accountCode === vc.purchaseAccountCode;
 
-    // Determine if this is output (sales) or input (purchases) by matching
-    // the account code to the VAT code's sales/purchase account.
-    // If the line's account matches salesAccountCode → this IS the VAT posting for sales
-    // If the line's account matches purchaseAccountCode → this IS the VAT posting for purchases
-    const isSalesVatAccount = vc.salesAccountCode && line.accountCode === vc.salesAccountCode;
-    const isPurchaseVatAccount =
-      vc.purchaseAccountCode && line.accountCode === vc.purchaseAccountCode;
+        if (matchesSalesAccount) {
+          const vatAmount = lineCredit - lineDebit;
+          box1 += vatAmount;
+          if (rate > 0) {
+            box6 += vatAmount / (rate / 100);
+          }
+          journalEntriesWithOutputVat.add(line.journalEntryId);
+        } else if (matchesPurchaseAccount) {
+          const vatAmount = lineDebit - lineCredit;
+          box4 += vatAmount;
+          if (rate > 0) {
+            box7 += vatAmount / (rate / 100);
+          }
+          journalEntriesWithInputVat.add(line.journalEntryId);
+        }
+        continue;
+      }
+    }
 
     if (isSalesVatAccount) {
-      // This line is the VAT amount on a sale (typically a credit)
+      // Output VAT: amount posted to sales VAT account (typically a credit)
       const vatAmount = lineCredit - lineDebit;
       box1 += vatAmount;
-      // Derive net from VAT: net = vatAmount / (rate/100) if rate > 0
+      const rate = vatAccountToRate.get(line.accountCode) ?? 0;
       if (rate > 0) {
         box6 += vatAmount / (rate / 100);
       }
+      journalEntriesWithOutputVat.add(line.journalEntryId);
     } else if (isPurchaseVatAccount) {
-      // This line is the VAT amount on a purchase (typically a debit)
+      // Input VAT: amount posted to purchase VAT account (typically a debit)
       const vatAmount = lineDebit - lineCredit;
       box4 += vatAmount;
-      // Derive net from VAT: net = vatAmount / (rate/100) if rate > 0
+      const rate = vatAccountToRate.get(line.accountCode) ?? 0;
       if (rate > 0) {
         box7 += vatAmount / (rate / 100);
       }
+      journalEntriesWithInputVat.add(line.journalEntryId);
     }
-    // Lines with vatCode but not posted to a VAT account are the net amount lines;
-    // they are already captured by deriving net from the VAT amount above.
   }
 
   // Box 2, 8, 9 = 0 for MVP (EU-related, post-Brexit minimal)
