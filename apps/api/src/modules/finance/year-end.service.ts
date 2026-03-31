@@ -433,8 +433,8 @@ export async function performYearEndClose(
 
   return {
     fiscalYear,
-    journalEntryId: journalResult.id as string,
-    journalEntryNumber: journalResult.entryNumber as string,
+    journalEntryId: (journalResult as Record<string, unknown>).id as string,
+    journalEntryNumber: (journalResult as Record<string, unknown>).entryNumber as string,
     p13PeriodId: p13.id,
     retainedEarningsAccountCode: retainedEarningsCode,
     netProfitLoss,

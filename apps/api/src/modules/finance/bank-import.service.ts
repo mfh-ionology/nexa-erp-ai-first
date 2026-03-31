@@ -490,18 +490,21 @@ export async function importBankStatement(
   });
 
   // Map results to response shape
-  const transactions = created.map((r) => ({
-    id: r.id,
-    externalId: r.externalId,
-    transactionDate:
+  const transactions = created.map((r) => {
+    const txDate =
       r.transactionDate instanceof Date
-        ? r.transactionDate.toISOString().split('T')[0]
-        : String(r.transactionDate),
-    description: r.description,
-    amount: typeof r.amount === 'number' ? r.amount : Number(r.amount),
-    reference: r.reference,
-    type: r.type,
-  }));
+        ? r.transactionDate.toISOString().split('T')[0]!
+        : String(r.transactionDate ?? '');
+    return {
+      id: r.id,
+      externalId: r.externalId,
+      transactionDate: txDate,
+      description: r.description,
+      amount: typeof r.amount === 'number' ? r.amount : Number(r.amount),
+      reference: r.reference,
+      type: r.type,
+    };
+  });
 
   return {
     importBatchId,

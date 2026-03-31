@@ -25,7 +25,7 @@ export interface OpenBankingConnection {
  * STUB: returns a mock connection ID.
  */
 export async function connectAccount(
-  bankAccountId: string,
+  _bankAccountId: string,
   provider: string,
 ): Promise<OpenBankingConnection> {
   // STUB: returns mock connection

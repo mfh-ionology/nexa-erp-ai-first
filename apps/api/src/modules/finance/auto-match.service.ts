@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@nexa/db';
 import { Prisma } from '@nexa/db';
-import { AppError, NotFoundError } from '../../core/errors/index.js';
+import { NotFoundError } from '../../core/errors/index.js';
 
 // ---------------------------------------------------------------------------
 // Types
