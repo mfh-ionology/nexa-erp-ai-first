@@ -2497,3 +2497,584 @@ model PrintPreference {
   @@index([companyId, userId], map: "idx_print_preferences_company_user")
   @@map("print_preferences")
 }
+
+// ---------------------------------------------------------------------------
+// Finance Module — E14 (Tier 2: First Business Module)
+// ---------------------------------------------------------------------------
+// Conventions follow E0-E13b patterns:
+//   - UUID PKs, snake_case DB mapping, companyId on every table
+//   - Monetary: Decimal @db.Decimal(19,4)
+//   - Timestamps: createdAt/updatedAt, Audit: createdBy/updatedBy
+// ---------------------------------------------------------------------------
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+
+  @@map("account_type")
+}
+
+enum NormalBalance {
+  DEBIT
+  CREDIT
+
+  @@map("normal_balance")
+}
+
+enum JournalStatus {
+  DRAFT
+  POSTED
+  REVERSED
+
+  @@map("journal_status")
+}
+
+enum JournalSource {
+  MANUAL
+  AR_INVOICE
+  AR_CREDIT_NOTE
+  AR_PAYMENT
+  AP_BILL
+  AP_CREDIT_NOTE
+  AP_PAYMENT
+  BANK_PAYMENT
+  BANK_RECEIPT
+  BANK_TRANSFER
+  STOCK_MOVEMENT
+  STOCK_REVALUATION
+  GOODS_RECEIPT
+  SHIPMENT
+  DEPRECIATION
+  PAYROLL
+  PRODUCTION
+  VAT_ADJUSTMENT
+  YEAR_END
+  OPENING_BALANCE
+
+  @@map("journal_source")
+}
+
+enum PeriodStatus {
+  OPEN
+  CLOSED
+  LOCKED
+
+  @@map("period_status")
+}
+
+enum BudgetStatus {
+  DRAFT
+  APPROVED
+  LOCKED
+  ARCHIVED
+
+  @@map("budget_status")
+}
+
+enum ReconciliationStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+
+  @@map("reconciliation_status")
+}
+
+model AccountClassification {
+  id            String      @id @default(uuid()) @map("id")
+  companyId     String      @map("company_id")
+  code          String      @map("code") @db.VarChar(10)
+  name          String      @map("name")
+  accountType   AccountType @map("account_type")
+  sortOrder     Int         @map("sort_order")
+  reportSection String      @map("report_section") @db.VarChar(20) // BALANCE_SHEET or PROFIT_AND_LOSS
+  isActive      Boolean     @default(true) @map("is_active")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  accounts ChartOfAccount[]
+
+  @@unique([companyId, code], name: "uq_account_classification_company_code")
+  @@index([companyId])
+  @@map("account_classifications")
+}
+
+model ChartOfAccount {
+  id               String       @id @default(uuid()) @map("id")
+  companyId        String       @map("company_id")
+  code             String       @map("code") @db.VarChar(20)
+  name             String       @map("name")
+  accountType      AccountType  @map("account_type")
+  normalBalance    NormalBalance @map("normal_balance")
+  parentCode       String?      @map("parent_code") @db.VarChar(20)
+  classificationId String?      @map("classification_id")
+  isPostable       Boolean      @default(true) @map("is_postable")
+  isControl        Boolean      @default(false) @map("is_control")
+  isBankAccount    Boolean      @default(false) @map("is_bank_account")
+  isSystemAccount  Boolean      @default(false) @map("is_system_account")
+  isActive         Boolean      @default(true) @map("is_active")
+  taxCode          String?      @map("tax_code") @db.VarChar(20)
+  departmentCode   String?      @map("department_code") @db.VarChar(20)
+  currencyCode     String?      @map("currency_code") @db.VarChar(3)
+  openingBalance   Decimal      @default(0) @map("opening_balance") @db.Decimal(19, 4)
+  currentBalance   Decimal      @default(0) @map("current_balance") @db.Decimal(19, 4)
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+  createdBy        String       @map("created_by")
+  updatedBy        String       @map("updated_by")
+
+  classification AccountClassification? @relation(fields: [classificationId], references: [id])
+  parent         ChartOfAccount?        @relation("AccountHierarchy", fields: [companyId, parentCode], references: [companyId, code], onDelete: NoAction, onUpdate: NoAction)
+  children       ChartOfAccount[]       @relation("AccountHierarchy")
+
+  journalLines    JournalLine[]
+  bankAccounts    BankAccount[]
+  budgetLines     BudgetLine[]
+  accountMappings AccountMapping[]
+
+  @@unique([companyId, code], name: "uq_chart_of_account_company_code")
+  @@index([companyId])
+  @@index([companyId, parentCode])
+  @@index([companyId, accountType])
+  @@map("chart_of_accounts")
+}
+
+model FinancialPeriod {
+  id           String       @id @default(uuid()) @map("id")
+  companyId    String       @map("company_id")
+  name         String       @map("name") // e.g. "January 2026", "Period 13 2025/26"
+  periodNumber Int          @map("period_number") // 1-13
+  fiscalYear   Int          @map("fiscal_year") // e.g. 2026
+  startDate    DateTime     @map("start_date") @db.Date
+  endDate      DateTime     @map("end_date") @db.Date
+  status       PeriodStatus @default(OPEN) @map("status")
+  closedAt     DateTime?    @map("closed_at")
+  closedBy     String?      @map("closed_by")
+  lockedAt     DateTime?    @map("locked_at")
+  lockedBy     String?      @map("locked_by")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  journalEntries JournalEntry[]
+
+  @@unique([companyId, fiscalYear, periodNumber], name: "uq_financial_period_company_year_number")
+  @@index([companyId])
+  @@index([companyId, startDate, endDate])
+  @@map("financial_periods")
+}
+
+model AccountMapping {
+  id             String  @id @default(uuid()) @map("id")
+  companyId      String  @map("company_id")
+  mappingType    String  @map("mapping_type") @db.VarChar(50) // AR_CONTROL, AP_CONTROL, SALES_REVENUE, etc.
+  accountCode    String  @map("account_code") @db.VarChar(20)
+  departmentCode String? @map("department_code") @db.VarChar(20)
+  description    String? @map("description")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  account ChartOfAccount @relation(fields: [companyId, accountCode], references: [companyId, code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([companyId, mappingType, departmentCode], name: "uq_account_mapping_company_type_dept")
+  @@index([companyId])
+  @@map("account_mappings")
+}
+
+model JournalEntry {
+  id              String        @id @default(uuid()) @map("id")
+  companyId       String        @map("company_id")
+  entryNumber     String        @map("entry_number") @db.VarChar(20)
+  transactionDate DateTime      @map("transaction_date") @db.Date
+  description     String        @map("description")
+  reference       String?       @map("reference")
+  source          JournalSource @map("source")
+  sourceId        String?       @map("source_id")
+  sourceReference String?       @map("source_reference")
+  isAutoGenerated Boolean       @default(false) @map("is_auto_generated")
+  status          JournalStatus @default(DRAFT) @map("status")
+  postedAt        DateTime?     @map("posted_at")
+  postedBy        String?       @map("posted_by")
+  reversalOfId    String?       @map("reversal_of_id")
+  periodId        String        @map("period_id")
+  totalDebit      Decimal       @default(0) @map("total_debit") @db.Decimal(19, 4)
+  totalCredit     Decimal       @default(0) @map("total_credit") @db.Decimal(19, 4)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  createdBy       String        @map("created_by")
+  updatedBy       String        @map("updated_by")
+
+  period     FinancialPeriod @relation(fields: [periodId], references: [id])
+  reversalOf JournalEntry?   @relation("JournalReversal", fields: [reversalOfId], references: [id])
+  reversals  JournalEntry[]  @relation("JournalReversal")
+  lines      JournalLine[]
+  template   JournalTemplate? @relation(fields: [templateId], references: [id])
+  templateId String?          @map("template_id")
+
+  @@unique([companyId, entryNumber], name: "uq_journal_entry_company_number")
+  @@index([companyId])
+  @@index([companyId, transactionDate])
+  @@index([companyId, status])
+  @@index([companyId, source])
+  @@index([sourceId])
+  @@index([reversalOfId])
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id             String   @id @default(uuid()) @map("id")
+  journalEntryId String   @map("journal_entry_id")
+  lineNumber     Int      @map("line_number")
+  accountCode    String   @map("account_code") @db.VarChar(20)
+  companyId      String   @map("company_id")
+  description    String?  @map("description")
+  debit          Decimal  @default(0) @map("debit") @db.Decimal(19, 4)
+  credit         Decimal  @default(0) @map("credit") @db.Decimal(19, 4)
+  vatCode        String?  @map("vat_code") @db.VarChar(20)
+  currencyCode   String?  @map("currency_code") @db.VarChar(3)
+  foreignAmount  Decimal? @map("foreign_amount") @db.Decimal(19, 4)
+  exchangeRate   Decimal? @map("exchange_rate") @db.Decimal(18, 8)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  journalEntry JournalEntry              @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account      ChartOfAccount            @relation(fields: [companyId, accountCode], references: [companyId, code], onDelete: NoAction, onUpdate: NoAction)
+  dimensions   JournalLineDimension[]
+
+  @@index([journalEntryId])
+  @@index([companyId, accountCode])
+  @@map("journal_lines")
+}
+
+model DimensionType {
+  id               String   @id @default(uuid()) @map("id")
+  companyId        String   @map("company_id")
+  code             String   @map("code") @db.VarChar(10)
+  name             String   @map("name")
+  description      String?  @map("description")
+  isSingleSelect   Boolean  @default(true) @map("is_single_select")
+  allowManualEntry Boolean  @default(false) @map("allow_manual_entry")
+  sortOrder        Int      @map("sort_order")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  values       DimensionValue[]
+  requirements DimensionRequirement[]
+  defaults     DimensionDefault[]
+  balances     DimensionBalance[]
+
+  @@unique([companyId, code], name: "uq_dimension_type_company_code")
+  @@index([companyId])
+  @@map("dimension_types")
+}
+
+model DimensionValue {
+  id              String   @id @default(uuid()) @map("id")
+  companyId       String   @map("company_id")
+  dimensionTypeId String   @map("dimension_type_id")
+  code            String   @map("code") @db.VarChar(20)
+  name            String   @map("name")
+  parentId        String?  @map("parent_id")
+  isActive        Boolean  @default(true) @map("is_active")
+  metadata        Json?    @map("metadata")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  dimensionType DimensionType          @relation(fields: [dimensionTypeId], references: [id])
+  parent        DimensionValue?        @relation("DimensionHierarchy", fields: [parentId], references: [id])
+  children      DimensionValue[]       @relation("DimensionHierarchy")
+  lineLinks     JournalLineDimension[]
+  defaults      DimensionDefault[]
+  balances      DimensionBalance[]
+
+  @@unique([dimensionTypeId, code, companyId], name: "uq_dimension_value_type_code_company")
+  @@index([companyId])
+  @@index([dimensionTypeId])
+  @@map("dimension_values")
+}
+
+model DimensionRequirement {
+  id              String   @id @default(uuid()) @map("id")
+  companyId       String   @map("company_id")
+  dimensionTypeId String   @map("dimension_type_id")
+  accountCodeFrom String   @map("account_code_from") @db.VarChar(20)
+  accountCodeTo   String   @map("account_code_to") @db.VarChar(20)
+  isRequired      Boolean  @default(true) @map("is_required")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  dimensionType DimensionType @relation(fields: [dimensionTypeId], references: [id])
+
+  @@index([companyId])
+  @@index([dimensionTypeId])
+  @@map("dimension_requirements")
+}
+
+model JournalLineDimension {
+  id               String @id @default(uuid()) @map("id")
+  journalLineId    String @map("journal_line_id")
+  dimensionValueId String @map("dimension_value_id")
+
+  journalLine    JournalLine    @relation(fields: [journalLineId], references: [id], onDelete: Cascade)
+  dimensionValue DimensionValue @relation(fields: [dimensionValueId], references: [id])
+
+  @@unique([journalLineId, dimensionValueId], name: "uq_journal_line_dimension")
+  @@index([journalLineId])
+  @@index([dimensionValueId])
+  @@map("journal_line_dimensions")
+}
+
+model DimensionDefault {
+  id               String   @id @default(uuid()) @map("id")
+  companyId        String   @map("company_id")
+  dimensionTypeId  String   @map("dimension_type_id")
+  dimensionValueId String   @map("dimension_value_id")
+  entityType       String   @map("entity_type") @db.VarChar(50)
+  entityId         String?  @map("entity_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  dimensionType  DimensionType  @relation(fields: [dimensionTypeId], references: [id])
+  dimensionValue DimensionValue @relation(fields: [dimensionValueId], references: [id])
+
+  @@index([companyId])
+  @@index([companyId, entityType, entityId])
+  @@map("dimension_defaults")
+}
+
+model DimensionBalance {
+  id               String   @id @default(uuid()) @map("id")
+  companyId        String   @map("company_id")
+  accountCode      String   @map("account_code") @db.VarChar(20)
+  dimensionTypeId  String   @map("dimension_type_id")
+  dimensionValueId String   @map("dimension_value_id")
+  periodId         String   @map("period_id")
+  totalDebit       Decimal  @default(0) @map("total_debit") @db.Decimal(19, 4)
+  totalCredit      Decimal  @default(0) @map("total_credit") @db.Decimal(19, 4)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  dimensionType  DimensionType  @relation(fields: [dimensionTypeId], references: [id])
+  dimensionValue DimensionValue @relation(fields: [dimensionValueId], references: [id])
+
+  @@unique([companyId, accountCode, dimensionTypeId, dimensionValueId, periodId], name: "uq_dimension_balance")
+  @@index([companyId])
+  @@index([companyId, accountCode, periodId])
+  @@map("dimension_balances")
+}
+
+model BankAccount {
+  id                   String   @id @default(uuid()) @map("id")
+  companyId            String   @map("company_id")
+  name                 String   @map("name")
+  sortCode             String?  @map("sort_code") @db.VarChar(6)
+  accountNumber        String?  @map("account_number") @db.VarChar(8)
+  iban                 String?  @map("iban") @db.VarChar(34)
+  swiftBic             String?  @map("swift_bic") @db.VarChar(11)
+  currencyCode         String   @default("GBP") @map("currency_code") @db.VarChar(3)
+  glAccountCode        String   @map("gl_account_code") @db.VarChar(20)
+  currentBalance       Decimal  @default(0) @map("current_balance") @db.Decimal(19, 4)
+  lastReconciledDate   DateTime? @map("last_reconciled_date") @db.Date
+  openBankingStatus    String   @default("DISCONNECTED") @map("open_banking_status") @db.VarChar(20)
+  openBankingProvider  String?  @map("open_banking_provider") @db.VarChar(50)
+  openBankingConnId    String?  @map("open_banking_conn_id")
+  openBankingLastSync  DateTime? @map("open_banking_last_sync")
+  isActive             Boolean  @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  createdBy            String   @map("created_by")
+  updatedBy            String   @map("updated_by")
+
+  glAccount      ChartOfAccount     @relation(fields: [companyId, glAccountCode], references: [companyId, code], onDelete: NoAction, onUpdate: NoAction)
+  transactions   BankTransaction[]
+  reconciliations BankReconciliation[]
+
+  @@unique([companyId, glAccountCode], name: "uq_bank_account_company_gl")
+  @@index([companyId])
+  @@map("bank_accounts")
+}
+
+model BankTransaction {
+  id             String   @id @default(uuid()) @map("id")
+  companyId      String   @map("company_id")
+  bankAccountId  String   @map("bank_account_id")
+  externalId     String?  @map("external_id")
+  transactionDate DateTime @map("transaction_date") @db.Date
+  description    String   @map("description")
+  amount         Decimal  @map("amount") @db.Decimal(19, 4)
+  reference      String?  @map("reference")
+  type           String?  @map("type") @db.VarChar(20) // CREDIT, DEBIT
+  importBatchId  String?  @map("import_batch_id")
+  importedAt     DateTime? @map("imported_at")
+  isMatched      Boolean  @default(false) @map("is_matched")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  bankAccount BankAccount           @relation(fields: [bankAccountId], references: [id])
+  matches     BankTransactionMatch[]
+
+  @@unique([bankAccountId, externalId], name: "uq_bank_transaction_account_external")
+  @@index([companyId])
+  @@index([bankAccountId])
+  @@index([bankAccountId, isMatched])
+  @@map("bank_transactions")
+}
+
+model BankReconciliation {
+  id              String               @id @default(uuid()) @map("id")
+  companyId       String               @map("company_id")
+  bankAccountId   String               @map("bank_account_id")
+  statementDate   DateTime             @map("statement_date") @db.Date
+  statementBalance Decimal             @map("statement_balance") @db.Decimal(19, 4)
+  glBalance       Decimal?             @map("gl_balance") @db.Decimal(19, 4)
+  difference      Decimal?             @map("difference") @db.Decimal(19, 4)
+  status          ReconciliationStatus @default(IN_PROGRESS) @map("status")
+  completedAt     DateTime?            @map("completed_at")
+  completedBy     String?              @map("completed_by")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+  createdBy       String               @map("created_by")
+
+  bankAccount BankAccount              @relation(fields: [bankAccountId], references: [id])
+  lines       BankReconciliationLine[]
+
+  @@index([companyId])
+  @@index([bankAccountId])
+  @@map("bank_reconciliations")
+}
+
+model BankReconciliationLine {
+  id               String @id @default(uuid()) @map("id")
+  reconciliationId String @map("reconciliation_id")
+  matchId          String @map("match_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  reconciliation BankReconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+
+  @@index([reconciliationId])
+  @@map("bank_reconciliation_lines")
+}
+
+model BankTransactionMatch {
+  id                String   @id @default(uuid()) @map("id")
+  companyId         String   @map("company_id")
+  bankTransactionId String   @map("bank_transaction_id")
+  journalLineId     String?  @map("journal_line_id")
+  matchType         String   @map("match_type") @db.VarChar(20) // MANUAL, AUTO, AI_SUGGESTED
+  confidence        Decimal? @map("confidence") @db.Decimal(5, 2)
+  matchedAt         DateTime @default(now()) @map("matched_at")
+  matchedBy         String?  @map("matched_by")
+
+  bankTransaction BankTransaction @relation(fields: [bankTransactionId], references: [id])
+
+  @@index([companyId])
+  @@index([bankTransactionId])
+  @@map("bank_transaction_matches")
+}
+
+model Budget {
+  id           String       @id @default(uuid()) @map("id")
+  companyId    String       @map("company_id")
+  name         String       @map("name")
+  fiscalYear   Int          @map("fiscal_year")
+  budgetType   String       @default("ANNUAL") @map("budget_type") @db.VarChar(20) // ANNUAL, REVISED
+  status       BudgetStatus @default(DRAFT) @map("status")
+  description  String?      @map("description")
+  approvedAt   DateTime?    @map("approved_at")
+  approvedBy   String?      @map("approved_by")
+  originalBudgetId String?  @map("original_budget_id")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  createdBy    String       @map("created_by")
+  updatedBy    String       @map("updated_by")
+
+  originalBudget Budget?      @relation("BudgetRevision", fields: [originalBudgetId], references: [id])
+  revisions      Budget[]     @relation("BudgetRevision")
+  lines          BudgetLine[]
+
+  @@index([companyId])
+  @@index([companyId, fiscalYear])
+  @@map("budgets")
+}
+
+model BudgetLine {
+  id          String  @id @default(uuid()) @map("id")
+  budgetId    String  @map("budget_id")
+  companyId   String  @map("company_id")
+  accountCode String  @map("account_code") @db.VarChar(20)
+  period1     Decimal @default(0) @map("period_1") @db.Decimal(19, 4)
+  period2     Decimal @default(0) @map("period_2") @db.Decimal(19, 4)
+  period3     Decimal @default(0) @map("period_3") @db.Decimal(19, 4)
+  period4     Decimal @default(0) @map("period_4") @db.Decimal(19, 4)
+  period5     Decimal @default(0) @map("period_5") @db.Decimal(19, 4)
+  period6     Decimal @default(0) @map("period_6") @db.Decimal(19, 4)
+  period7     Decimal @default(0) @map("period_7") @db.Decimal(19, 4)
+  period8     Decimal @default(0) @map("period_8") @db.Decimal(19, 4)
+  period9     Decimal @default(0) @map("period_9") @db.Decimal(19, 4)
+  period10    Decimal @default(0) @map("period_10") @db.Decimal(19, 4)
+  period11    Decimal @default(0) @map("period_11") @db.Decimal(19, 4)
+  period12    Decimal @default(0) @map("period_12") @db.Decimal(19, 4)
+  totalAmount Decimal @default(0) @map("total_amount") @db.Decimal(19, 4)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  budget  Budget         @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  account ChartOfAccount @relation(fields: [companyId, accountCode], references: [companyId, code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([budgetId, accountCode], name: "uq_budget_line_budget_account")
+  @@index([budgetId])
+  @@map("budget_lines")
+}
+
+model VatReturn {
+  id               String   @id @default(uuid()) @map("id")
+  companyId        String   @map("company_id")
+  periodStart      DateTime @map("period_start") @db.Date
+  periodEnd        DateTime @map("period_end") @db.Date
+  status           String   @default("DRAFT") @map("status") @db.VarChar(20) // DRAFT, CALCULATED, SUBMITTED, ACCEPTED, REJECTED
+  box1             Decimal  @default(0) @map("box_1") @db.Decimal(19, 4) // Output VAT on sales
+  box2             Decimal  @default(0) @map("box_2") @db.Decimal(19, 4) // VAT on EU acquisitions
+  box3             Decimal  @default(0) @map("box_3") @db.Decimal(19, 4) // Total VAT due (box1 + box2)
+  box4             Decimal  @default(0) @map("box_4") @db.Decimal(19, 4) // Input VAT on purchases
+  box5             Decimal  @default(0) @map("box_5") @db.Decimal(19, 4) // Net VAT (box3 - box4)
+  box6             Decimal  @default(0) @map("box_6") @db.Decimal(19, 4) // Total sales excl VAT
+  box7             Decimal  @default(0) @map("box_7") @db.Decimal(19, 4) // Total purchases excl VAT
+  box8             Decimal  @default(0) @map("box_8") @db.Decimal(19, 4) // EU supplies
+  box9             Decimal  @default(0) @map("box_9") @db.Decimal(19, 4) // EU acquisitions
+  calculatedAt     DateTime? @map("calculated_at")
+  submittedAt      DateTime? @map("submitted_at")
+  submittedBy      String?  @map("submitted_by")
+  hmrcSubmissionId String?  @map("hmrc_submission_id")
+  hmrcResponse     Json?    @map("hmrc_response")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  createdBy        String   @map("created_by")
+
+  @@index([companyId])
+  @@index([companyId, periodStart, periodEnd])
+  @@map("vat_returns")
+}
+
+model JournalTemplate {
+  id             String   @id @default(uuid()) @map("id")
+  companyId      String   @map("company_id")
+  name           String   @map("name")
+  description    String?  @map("description")
+  frequency      String   @map("frequency") @db.VarChar(20) // DAILY, WEEKLY, MONTHLY, QUARTERLY, YEARLY
+  isActive       Boolean  @default(true) @map("is_active")
+  templateLines  Json     @map("template_lines") // [{accountCode, debit, credit, description, vatCode}]
+  lastExecutedAt DateTime? @map("last_executed_at")
+  nextDueDate    DateTime? @map("next_due_date") @db.Date
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdBy      String   @map("created_by")
+  updatedBy      String   @map("updated_by")
+
+  journalEntries JournalEntry[]
+
+  @@index([companyId])
+  @@map("journal_templates")
+}

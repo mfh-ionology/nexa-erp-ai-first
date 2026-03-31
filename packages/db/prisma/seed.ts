@@ -21,6 +21,7 @@ import { seedNotificationTemplates } from './seeds/notification-templates.seed.j
 import { seedEmailTemplates } from './seeds/email-template-seed.js';
 import { seedKnowledgeData } from './seeds/knowledge-seed.js';
 import { seedDocumentTemplates } from './seeds/document-template-seed.js';
+import { seedFinanceData } from './seeds/finance-seed.js';
 
 // Seed uses DIRECT_URL (bypasses PgBouncer) for reliable transactional seeding.
 // Runtime client (src/client.ts) uses DATABASE_URL via PgBouncer instead.
@@ -85,10 +86,10 @@ const numberSeries = [
   { entityType: 'SALES_ORDER', prefix: 'SO-', padding: 5 },
   { entityType: 'SALES_QUOTE', prefix: 'QT-', padding: 5 },
   { entityType: 'PURCHASE_ORDER', prefix: 'PO-', padding: 5 },
-  { entityType: 'BILL', prefix: 'BIL-', padding: 5 },
-  { entityType: 'JOURNAL', prefix: 'JE-', padding: 5 },
+  { entityType: 'SUPPLIER_BILL', prefix: 'BIL-', padding: 5 },
+  { entityType: 'JOURNAL_ENTRY', prefix: 'JE-', padding: 5 },
   { entityType: 'PAYMENT', prefix: 'PAY-', padding: 5 },
-  { entityType: 'SHIPMENT', prefix: 'SHP-', padding: 5 },
+  { entityType: 'DISPATCH', prefix: 'SHP-', padding: 5 },
   { entityType: 'GOODS_RECEIPT', prefix: 'GRN-', padding: 5 },
   { entityType: 'EMPLOYEE', prefix: 'EMP-', padding: 4 },
   { entityType: 'CUSTOMER', prefix: 'CUS-', padding: 5 },
@@ -192,21 +193,29 @@ async function seedPaymentTerms() {
 
 async function seedNumberSeries() {
   for (const ns of numberSeries) {
-    await prisma.numberSeries.upsert({
+    // Upsert by hand: Prisma can't use compound unique with nullable validFrom
+    const existing = await prisma.numberSeries.findFirst({
       where: {
-        companyId_entityType: {
-          companyId: DEFAULT_COMPANY_ID,
-          entityType: ns.entityType,
-        },
-      },
-      update: { prefix: ns.prefix, padding: ns.padding },
-      create: {
         companyId: DEFAULT_COMPANY_ID,
         entityType: ns.entityType,
-        prefix: ns.prefix,
-        padding: ns.padding,
+        validFrom: null,
       },
     });
+    if (existing) {
+      await prisma.numberSeries.update({
+        where: { id: existing.id },
+        data: { prefix: ns.prefix, padding: ns.padding },
+      });
+    } else {
+      await prisma.numberSeries.create({
+        data: {
+          companyId: DEFAULT_COMPANY_ID,
+          entityType: ns.entityType,
+          prefix: ns.prefix,
+          padding: ns.padding,
+        },
+      });
+    }
   }
   console.log(`Seeded ${numberSeries.length} number series`);
 }
@@ -899,6 +908,13 @@ async function main() {
     await seedTasks();
   } catch (e) {
     console.error('Failed to seed tasks:', e);
+  }
+
+  // ── Finance Module Seed Data — E14-S2 ──────────────────────────
+  try {
+    await seedFinanceData(prisma);
+  } catch (e) {
+    console.error('Failed to seed finance data:', e);
   }
 
   console.log('Seeding complete.');
