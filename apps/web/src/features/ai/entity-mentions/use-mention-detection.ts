@@ -9,15 +9,12 @@ export interface MentionDetectionResult {
 }
 
 /**
- * Detects entity trigger words in the input text and extracts the search query.
+ * Detects entity mentions in the input text using the '//' trigger character.
  *
- * Algorithm:
- *   1. Scan backwards from the end of the input to find the last trigger word
- *   2. At each position, try 2-word combos first (e.g. "saved view"), then single
- *      words — the first match found scanning backwards wins (most recent trigger)
- *   3. Trigger words must appear at word boundaries (e.g. "invoices" does NOT match "invoice")
- *   4. Only activate when the text after the trigger word has >= 2 characters
- *      (this naturally prevents matches at the end of the text with no search query)
+ * The word before '//' determines entity type (scoped search), or if no match
+ * is found, a universal search is performed.
+ *
+ * Examples: "customer //POL" → Customer search, "find //POL" → universal search.
  *
  * This is a pure synchronous computation — no API calls, no debouncing.
  * Uses useMemo to avoid recomputation when inputs haven't changed.
@@ -32,8 +29,21 @@ export function useMentionDetection(
 }
 
 /**
- * Pure function that performs trigger detection.
+ * Pure function that performs trigger detection using the // trigger character.
  * Exported separately for direct unit testing without React hooks.
+ *
+ * Algorithm:
+ *   1. Find the last occurrence of '//' in the input text
+ *   2. Extract the search query after '//' (must be >= 2 characters)
+ *   3. Look at the word immediately before '//' to determine entity type
+ *   4. If the word matches a trigger in the map, use that trigger (scoped search)
+ *   5. If no match, return a universal search trigger
+ *
+ * Examples:
+ *   - "customer //POL"  → Customer entity search for "POL"
+ *   - "account //100"   → ChartOfAccount entity search for "100"
+ *   - "find //POL"      → Universal search for "POL"
+ *   - "hello world"     → null (no // trigger)
  */
 export function detectMention(
   triggerMap: Map<string, EntityTrigger>,
@@ -43,120 +53,54 @@ export function detectMention(
     return null;
   }
 
-  const text = inputText;
-
-  // Find word boundaries — positions where words start.
-  // We scan backwards to find the LAST (most recent) trigger.
-  const wordStarts = getWordStartPositions(text);
-
-  // Check from the end of the text backwards for trigger words.
-  // At each word boundary, try 2-word match first (longer wins), then 1-word.
-  for (let i = wordStarts.length - 1; i >= 0; i--) {
-    // Try 2-word trigger first (e.g. "saved view")
-    if (i > 0) {
-      const twoWordStart = wordStarts[i - 1]!;
-      const match = tryMatchTrigger(triggerMap, text, twoWordStart, wordStarts[i]!);
-      if (match) return match;
-    }
-
-    // Try 1-word trigger
-    const oneWordStart = wordStarts[i]!;
-    const match = tryMatchTrigger(triggerMap, text, oneWordStart, null);
-    if (match) return match;
-  }
-
-  return null;
-}
-
-/**
- * Returns the start index of each word in the text.
- */
-function getWordStartPositions(text: string): number[] {
-  const positions: number[] = [];
-  let inWord = false;
-  for (let i = 0; i < text.length; i++) {
-    const isSpace = text[i] === ' ' || text[i] === '\t' || text[i] === '\n';
-    if (!isSpace && !inWord) {
-      positions.push(i);
-      inWord = true;
-    } else if (isSpace) {
-      inWord = false;
-    }
-  }
-  return positions;
-}
-
-/**
- * Tries to match a trigger starting at `triggerStart`.
- * If `secondWordStart` is provided, tries a 2-word trigger.
- * Otherwise tries a 1-word trigger.
- *
- * Returns a detection result if:
- *   - The candidate text matches a trigger word in the map (case-insensitive)
- *   - The trigger word is at a word boundary (followed by a space or end of string)
- *   - There is a search query of >= 2 characters after the trigger
- */
-function tryMatchTrigger(
-  triggerMap: Map<string, EntityTrigger>,
-  text: string,
-  triggerStart: number,
-  secondWordStart: number | null,
-): MentionDetectionResult | null {
-  // Determine where the trigger word(s) end by finding the next space
-  // after the last word of the trigger.
-  let candidateEnd: number;
-
-  if (secondWordStart !== null) {
-    // 2-word trigger: find the end of the second word
-    candidateEnd = findWordEnd(text, secondWordStart);
-  } else {
-    // 1-word trigger: find the end of this word
-    candidateEnd = findWordEnd(text, triggerStart);
-  }
-
-  const candidateWord = text.substring(triggerStart, candidateEnd).toLowerCase();
-
-  // Check word boundary after the trigger word:
-  // Must be followed by a space (or nothing if at end — but then there's no query).
-  // If there's more text immediately after (no space), it's not a word boundary
-  // e.g. "invoices" should NOT match "invoice"
-  if (candidateEnd < text.length && text[candidateEnd] !== ' ') {
+  // Find last occurrence of '//'
+  const triggerIndex = inputText.lastIndexOf('//');
+  if (triggerIndex === -1) {
     return null;
   }
 
-  const trigger = triggerMap.get(candidateWord);
-  if (!trigger) {
-    return null;
-  }
-
-  // Extract the search query — everything after the trigger word + space
-  const queryStart = candidateEnd + 1; // +1 for the space after trigger
-  if (queryStart >= text.length) {
-    // Trigger word found but no search query text yet
-    return null;
-  }
-
-  const searchQuery = text.substring(queryStart).trimEnd();
-
-  // Only activate if the search query has >= 2 characters
+  // Extract search query after '//'
+  const searchQuery = inputText.substring(triggerIndex + 2).trimEnd();
   if (searchQuery.length < 2) {
     return null;
   }
 
-  return {
-    trigger,
-    searchQuery,
-    triggerStartIndex: triggerStart,
-  };
-}
+  // Look at the word immediately before '//'
+  const beforeTrigger = inputText.substring(0, triggerIndex).trimEnd();
+  const lastSpaceIndex = beforeTrigger.lastIndexOf(' ');
+  const contextWord =
+    lastSpaceIndex === -1
+      ? beforeTrigger.toLowerCase()
+      : beforeTrigger.substring(lastSpaceIndex + 1).toLowerCase();
 
-/**
- * Finds the end index (exclusive) of the word starting at `start`.
- */
-function findWordEnd(text: string, start: number): number {
-  let i = start;
-  while (i < text.length && text[i] !== ' ' && text[i] !== '\t' && text[i] !== '\n') {
-    i++;
+  // Try to match context word against trigger map
+  const trigger = contextWord ? triggerMap.get(contextWord) : undefined;
+
+  if (trigger) {
+    return {
+      trigger,
+      searchQuery,
+      triggerStartIndex: lastSpaceIndex === -1 ? 0 : lastSpaceIndex + 1,
+    };
   }
-  return i;
+
+  // No matching context word — universal search
+  const universalTrigger: EntityTrigger = {
+    id: '_universal',
+    moduleKey: '_all',
+    triggerWord: '//',
+    entityType: '_universal',
+    searchEndpoint: '/ai/entity-search',
+    displayField: 'name',
+    subtitleField: null,
+    scopeBy: null,
+    icon: null,
+    priority: 0,
+  };
+
+  return {
+    trigger: universalTrigger,
+    searchQuery,
+    triggerStartIndex: triggerIndex,
+  };
 }
