@@ -22,7 +22,6 @@ import { DimensionFilter } from '../components/DimensionFilter';
 import type { DimensionFilterValue } from '../components/DimensionFilter';
 import { DimensionGroupBy } from '../components/DimensionGroupBy';
 import { SimulationToggle } from '../components/SimulationToggle';
-import { ExportButtons } from '../components/ExportButtons';
 import type { ReportParams, ReportSection } from '../types';
 import type { DepartmentalPnlReport } from '../api/reports-enhanced-api';
 
@@ -254,20 +253,6 @@ export function ProfitAndLossPage() {
     }
   };
 
-  const exportParams: Record<string, string | number | boolean> = {
-    fiscalYear: params.fiscalYear,
-    periodFrom: params.periodFrom,
-    periodTo: params.periodTo,
-    ...(includeSimulations ? { includeSimulations: true } : {}),
-    ...(dimensionFilter.dimensionTypeId
-      ? { dimensionTypeId: dimensionFilter.dimensionTypeId }
-      : {}),
-    ...(dimensionFilter.dimensionValueId
-      ? { dimensionValueId: dimensionFilter.dimensionValueId }
-      : {}),
-    ...(groupByDimensionTypeId ? { groupByDimensionTypeId } : {}),
-  };
-
   // Standard P&L result content
   const standardResultContent = standardData ? (
     <div className="space-y-4">
@@ -326,21 +311,6 @@ export function ProfitAndLossPage() {
     </div>
   );
 
-  const actionBarSlot = (
-    <div className="flex items-center gap-2">
-      <ExportButtons
-        exportPath={
-          isGrouped
-            ? '/finance/reports/departmental-pnl/export'
-            : '/finance/reports/profit-and-loss/export'
-        }
-        params={exportParams}
-        disabled={!hasData}
-        variant="icon"
-      />
-    </div>
-  );
-
   return (
     <ReportPage
       title="Profit and Loss"
@@ -358,7 +328,6 @@ export function ProfitAndLossPage() {
       hasResults={hasData}
       onRunReport={handleRunReport}
       isRunning={isFetching}
-      actionBarSlot={actionBarSlot}
     >
       {/* Loading skeleton */}
       {isFetching && !hasData && (
