@@ -51,7 +51,19 @@ export async function createReconciliation(
 // Returns matched transactions, unmatched bank transactions, unmatched journal lines
 // ---------------------------------------------------------------------------
 
-interface ReconciliationDetail {
+interface ReconciliationApiResponse {
+  id: string;
+  bankAccountId: string;
+  statementDate: string;
+  statementBalance: number;
+  glBalance: number | null;
+  difference: number | null;
+  status: string;
+  matchedTransactions: BankTransaction[];
+  unmatchedTransactions: BankTransaction[];
+}
+
+export interface ReconciliationDetail {
   id: string;
   bankAccountId: string;
   statementDate: string;
@@ -68,10 +80,24 @@ export async function getReconciliationDetail(
   bankAccountId: string,
   reconciliationId: string,
 ): Promise<ReconciliationDetail> {
-  const result = await apiGet<ReconciliationDetail>(
+  const result = await apiGet<ReconciliationApiResponse>(
     `/finance/bank-accounts/${bankAccountId}/reconciliations/${reconciliationId}`,
   );
-  return result.data;
+  const api = result.data;
+
+  // Transform API shape to frontend shape
+  return {
+    id: api.id,
+    bankAccountId: api.bankAccountId,
+    statementDate: api.statementDate,
+    statementBalance: api.statementBalance,
+    glBalance: api.glBalance,
+    difference: api.difference,
+    status: api.status,
+    matchedTransactions: api.matchedTransactions ?? [],
+    unmatchedBankTransactions: api.unmatchedTransactions ?? [],
+    unmatchedJournalLines: [], // Journal lines not returned by this endpoint — TODO: add backend endpoint
+  };
 }
 
 // ---------------------------------------------------------------------------
