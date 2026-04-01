@@ -237,6 +237,71 @@ export const FINANCE_TOOLS: ToolDefinition[] = [
       },
     },
   },
+
+  // 7. run_report — query tool (navigation, no DB)
+  {
+    name: 'finance_run_report',
+    description:
+      'Open a financial report page with specified parameters. Use this when the user asks to run, view, or show a financial report such as P&L, Balance Sheet, Trial Balance, etc.',
+    moduleKey: 'finance',
+    type: 'query' as const,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        reportType: {
+          type: 'string',
+          enum: [
+            'profit-and-loss',
+            'balance-sheet',
+            'trial-balance',
+            'gl-detail',
+            'general-ledger',
+            'budget-variance',
+            'departmental-pnl',
+            'transaction-journal',
+          ],
+          description: 'The type of financial report to run',
+        },
+        fiscalYear: { type: 'number', description: 'Fiscal year (e.g. 2025)' },
+        periodFrom: { type: 'number', description: 'Start period (1-13), defaults to 1' },
+        periodTo: { type: 'number', description: 'End period (1-13), defaults to 12' },
+        dimensionTypeId: { type: 'string', description: 'Dimension type UUID for filtering' },
+        dimensionValueId: { type: 'string', description: 'Dimension value UUID for filtering' },
+        includeSimulations: { type: 'boolean', description: 'Include simulation entries' },
+      },
+      required: ['reportType', 'fiscalYear'],
+    },
+  },
+
+  // 8. list_dimensions — query tool
+  {
+    name: 'finance_list_dimensions',
+    description:
+      'List available dimension types and their values. Use when the user asks about dimensions, departments, cost centres, or wants to filter reports by dimension.',
+    moduleKey: 'finance',
+    type: 'query' as const,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dimensionTypeId: {
+          type: 'string',
+          description: 'If provided, returns values for this dimension type only',
+        },
+      },
+    },
+  },
+
+  // 9. list_fiscal_years — query tool
+  {
+    name: 'finance_list_fiscal_years',
+    description: 'List available fiscal years configured in the system.',
+    moduleKey: 'finance',
+    type: 'query' as const,
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -333,6 +398,92 @@ function createGetDashboardHandler(db: PrismaClient): QueryToolHandler {
       data: result,
       rowCount: 1,
     };
+  };
+}
+
+function createRunReportHandler(): QueryToolHandler {
+  return async ({ input }) => {
+    const reportType = input.reportType as string;
+    const fiscalYear = input.fiscalYear as number;
+    const periodFrom = (input.periodFrom as number) ?? 1;
+    const periodTo = (input.periodTo as number) ?? 12;
+
+    const params = new URLSearchParams();
+    params.set('fiscalYear', String(fiscalYear));
+    params.set('periodFrom', String(periodFrom));
+    params.set('periodTo', String(periodTo));
+    if (input.dimensionTypeId) params.set('dimensionTypeId', input.dimensionTypeId as string);
+    if (input.dimensionValueId) params.set('dimensionValueId', input.dimensionValueId as string);
+    if (input.includeSimulations) params.set('includeSimulations', 'true');
+    params.set('autoRun', 'true');
+
+    const route = `/finance/reports/${reportType}?${params.toString()}`;
+
+    return {
+      data: {
+        _navigateTo: route,
+        description: `${reportType.replace(/-/g, ' ')} report for FY ${fiscalYear} (periods ${periodFrom}-${periodTo})`,
+      },
+      rowCount: 1,
+    };
+  };
+}
+
+function createListDimensionsHandler(db: PrismaClient): QueryToolHandler {
+  return async ({ companyId, input }) => {
+    const dimensionTypeId = input.dimensionTypeId as string | undefined;
+
+    if (dimensionTypeId) {
+      const values = await db.dimensionValue.findMany({
+        where: { companyId, dimensionTypeId, isActive: true },
+        select: { id: true, code: true, name: true },
+        orderBy: { code: 'asc' },
+      });
+      return { data: { values }, rowCount: values.length };
+    }
+
+    const types = await db.dimensionType.findMany({
+      where: { companyId, isActive: true },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        values: {
+          where: { isActive: true },
+          select: { id: true, code: true, name: true },
+          orderBy: { code: 'asc' },
+        },
+      },
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    return { data: { dimensionTypes: types }, rowCount: types.length };
+  };
+}
+
+function createListFiscalYearsHandler(db: PrismaClient): QueryToolHandler {
+  return async ({ companyId }) => {
+    // Fiscal years are derived from financial periods (no standalone FiscalYear model)
+    const periods = await db.financialPeriod.findMany({
+      where: { companyId },
+      select: { fiscalYear: true, status: true },
+      orderBy: { fiscalYear: 'desc' },
+    });
+
+    // Group by fiscal year — a year is "closed" only if ALL its periods are CLOSED
+    const yearMap = new Map<number, { year: number; isClosed: boolean }>();
+    for (const p of periods) {
+      const existing = yearMap.get(p.fiscalYear);
+      if (!existing) {
+        yearMap.set(p.fiscalYear, { year: p.fiscalYear, isClosed: p.status === 'CLOSED' });
+      } else if (p.status !== 'CLOSED') {
+        existing.isClosed = false;
+      }
+    }
+
+    const fiscalYears = Array.from(yearMap.values()).sort((a, b) => b.year - a.year);
+
+    return { data: { fiscalYears }, rowCount: fiscalYears.length };
   };
 }
 
@@ -447,6 +598,9 @@ export function registerFinanceQueryHandlers(queryExecutor: QueryExecutor, db: P
   queryExecutor.registerHandler('finance_get_trial_balance', createGetTrialBalanceHandler(db));
   queryExecutor.registerHandler('finance_search_accounts', createSearchAccountsHandler(db));
   queryExecutor.registerHandler('finance_get_dashboard', createGetDashboardHandler(db));
+  queryExecutor.registerHandler('finance_run_report', createRunReportHandler());
+  queryExecutor.registerHandler('finance_list_dimensions', createListDimensionsHandler(db));
+  queryExecutor.registerHandler('finance_list_fiscal_years', createListFiscalYearsHandler(db));
 }
 
 /**
