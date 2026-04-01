@@ -39,13 +39,17 @@ interface UseEntitySearchParams {
 export function useEntitySearch(params: UseEntitySearchParams) {
   const debouncedQ = useDebouncedValue(params.q, 300);
 
+  // When type is '_universal' (no context word matched a known entity),
+  // omit the type filter so the backend searches across all entity types.
+  const searchType = params.type === '_universal' ? undefined : params.type;
+
   const enabled = !!params.type && debouncedQ.length >= 2;
 
   const { data: results = [], isLoading } = useQuery({
     queryKey: queryKeys.ai.entitySearch(params.type, debouncedQ, params.scopeBy, params.scopeValue),
     queryFn: () =>
       searchEntities({
-        type: params.type!,
+        type: searchType ?? undefined,
         q: debouncedQ,
         scopeBy: params.scopeBy,
         scopeValue: params.scopeValue,

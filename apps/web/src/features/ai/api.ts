@@ -84,7 +84,7 @@ export async function getEntityTriggers(): Promise<EntityTrigger[]> {
 }
 
 export async function searchEntities(params: {
-  type: string;
+  type?: string;
   q: string;
   scopeBy?: string;
   scopeValue?: string;
