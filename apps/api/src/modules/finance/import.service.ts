@@ -50,7 +50,7 @@ export async function processBatch<T>(
     for (let j = 0; j < batch.length; j++) {
       const rowIndex = i + j + 2; // +2 for 1-indexed + header row
       try {
-        await processor(prisma, companyId, batch[j], rowIndex);
+        await processor(prisma, companyId, batch[j]!, rowIndex);
         result.imported++;
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);

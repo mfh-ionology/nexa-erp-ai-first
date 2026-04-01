@@ -12,7 +12,7 @@ export const createDimensionValueSchema = z.object({
     .regex(/^[A-Z0-9_-]+$/, 'Code must be uppercase alphanumeric with underscores/hyphens'),
   name: z.string().min(1, 'Name is required').max(200),
   parentId: z.uuid().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const updateDimensionValueSchema = z
@@ -20,7 +20,7 @@ export const updateDimensionValueSchema = z
     name: z.string().min(1).max(200).optional(),
     parentId: z.uuid().nullable().optional(),
     isActive: z.boolean().optional(),
-    metadata: z.record(z.unknown()).nullable().optional(),
+    metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   })
   .refine((data) => Object.values(data).some((v) => v !== undefined), {
     message: 'At least one field must be provided for update',
@@ -61,7 +61,7 @@ export const dimensionValueItemSchema = z.object({
   name: z.string(),
   parentId: z.uuid().nullable(),
   isActive: z.boolean(),
-  metadata: z.record(z.unknown()).nullable(),
+  metadata: z.record(z.string(), z.unknown()).nullable(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });

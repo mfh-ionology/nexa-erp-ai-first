@@ -236,9 +236,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/connect', () => {
         authorization: `Bearer ${testJwt}`,
         'content-type': 'application/json',
       },
-      payload: {
-        provider: 'truelayer',
-      },
+      payload: { provider: 'truelayer' },
     });
 
     expect(res.statusCode).toBe(200);
@@ -273,9 +271,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/connect', () => {
         authorization: `Bearer ${testJwt}`,
         'content-type': 'application/json',
       },
-      payload: {
-        provider: 'plaid',
-      },
+      payload: { provider: 'plaid' },
     });
 
     expect(mockPrisma.bankAccount.update).toHaveBeenCalledWith({
@@ -291,7 +287,6 @@ describe('POST /finance/bank-accounts/:id/open-banking/connect', () => {
 
   it('returns 404 for non-existent bank account', async () => {
     app = await buildTestApp();
-
     mockPrisma.bankAccount.findFirst.mockResolvedValue(null);
 
     const res = await app.inject({
@@ -301,9 +296,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/connect', () => {
         authorization: `Bearer ${testJwt}`,
         'content-type': 'application/json',
       },
-      payload: {
-        provider: 'truelayer',
-      },
+      payload: { provider: 'truelayer' },
     });
 
     expect(res.statusCode).toBe(404);
@@ -325,9 +318,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/connect', () => {
         authorization: `Bearer ${testJwt}`,
         'content-type': 'application/json',
       },
-      payload: {
-        provider: 'truelayer',
-      },
+      payload: { provider: 'truelayer' },
     });
 
     expect(res.statusCode).toBe(409);
@@ -361,9 +352,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/connect', () => {
         authorization: `Bearer ${testJwt}`,
         'content-type': 'application/json',
       },
-      payload: {
-        provider: 'truelayer',
-      },
+      payload: { provider: 'truelayer' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -376,9 +365,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/connect', () => {
       method: 'POST',
       url: `/finance/bank-accounts/${TEST_BANK_ACCOUNT_ID}/open-banking/connect`,
       headers: { 'content-type': 'application/json' },
-      payload: {
-        provider: 'truelayer',
-      },
+      payload: { provider: 'truelayer' },
     });
 
     expect(res.statusCode).toBe(401);
@@ -404,9 +391,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/connect', () => {
         authorization: `Bearer ${viewerJwt}`,
         'content-type': 'application/json',
       },
-      payload: {
-        provider: 'truelayer',
-      },
+      payload: { provider: 'truelayer' },
     });
 
     expect(res.statusCode).toBe(403);
@@ -436,9 +421,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/connect', () => {
         authorization: `Bearer ${testJwt}`,
         'content-type': 'application/json',
       },
-      payload: {
-        provider: 'test',
-      },
+      payload: { provider: 'test' },
     });
 
     expect(mockPrisma.bankAccount.findFirst).toHaveBeenCalledWith({
@@ -450,6 +433,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/connect', () => {
 
 // ---------------------------------------------------------------------------
 // POST /finance/bank-accounts/:id/open-banking/sync — AC-2
+// No request body — do NOT set content-type: application/json
 // ---------------------------------------------------------------------------
 
 describe('POST /finance/bank-accounts/:id/open-banking/sync', () => {
@@ -462,16 +446,13 @@ describe('POST /finance/bank-accounts/:id/open-banking/sync', () => {
       openBankingConnId: 'OB-truelayer-123',
     });
 
-    // Stub returns empty array (no new transactions for MVP)
     mockSyncTransactions.mockResolvedValue([]);
     mockPrisma.bankAccount.update.mockResolvedValue({});
 
     const res = await app.inject({
       method: 'POST',
       url: `/finance/bank-accounts/${TEST_BANK_ACCOUNT_ID}/open-banking/sync`,
-      headers: {
-        authorization: `Bearer ${testJwt}`,
-      },
+      headers: { authorization: `Bearer ${testJwt}` },
     });
 
     expect(res.statusCode).toBe(200);
@@ -498,9 +479,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/sync', () => {
     await app.inject({
       method: 'POST',
       url: `/finance/bank-accounts/${TEST_BANK_ACCOUNT_ID}/open-banking/sync`,
-      headers: {
-        authorization: `Bearer ${testJwt}`,
-      },
+      headers: { authorization: `Bearer ${testJwt}` },
     });
 
     expect(mockPrisma.bankAccount.update).toHaveBeenCalledWith(
@@ -523,7 +502,6 @@ describe('POST /finance/bank-accounts/:id/open-banking/sync', () => {
       openBankingConnId: 'OB-truelayer-123',
     });
 
-    // Simulate provider returning transactions
     mockSyncTransactions.mockResolvedValue([
       {
         externalId: 'OB-TXN-001',
@@ -543,7 +521,6 @@ describe('POST /finance/bank-accounts/:id/open-banking/sync', () => {
     // One transaction already exists (duplicate)
     mockPrisma.bankTransaction.findMany.mockResolvedValue([{ externalId: 'OB-TXN-001' }]);
 
-    // Transaction mock
     mockPrisma.$transaction.mockImplementation(
       async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => fn(mockPrisma),
     );
@@ -553,9 +530,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/sync', () => {
     const res = await app.inject({
       method: 'POST',
       url: `/finance/bank-accounts/${TEST_BANK_ACCOUNT_ID}/open-banking/sync`,
-      headers: {
-        authorization: `Bearer ${testJwt}`,
-      },
+      headers: { authorization: `Bearer ${testJwt}` },
     });
 
     expect(res.statusCode).toBe(200);
@@ -582,15 +557,12 @@ describe('POST /finance/bank-accounts/:id/open-banking/sync', () => {
 
   it('returns 404 for non-existent bank account', async () => {
     app = await buildTestApp();
-
     mockPrisma.bankAccount.findFirst.mockResolvedValue(null);
 
     const res = await app.inject({
       method: 'POST',
       url: `/finance/bank-accounts/${TEST_BANK_ACCOUNT_ID}/open-banking/sync`,
-      headers: {
-        authorization: `Bearer ${testJwt}`,
-      },
+      headers: { authorization: `Bearer ${testJwt}` },
     });
 
     expect(res.statusCode).toBe(404);
@@ -608,9 +580,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/sync', () => {
     const res = await app.inject({
       method: 'POST',
       url: `/finance/bank-accounts/${TEST_BANK_ACCOUNT_ID}/open-banking/sync`,
-      headers: {
-        authorization: `Bearer ${testJwt}`,
-      },
+      headers: { authorization: `Bearer ${testJwt}` },
     });
 
     expect(res.statusCode).toBe(409);
@@ -645,9 +615,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/sync', () => {
     const res = await app.inject({
       method: 'POST',
       url: `/finance/bank-accounts/${TEST_BANK_ACCOUNT_ID}/open-banking/sync`,
-      headers: {
-        authorization: `Bearer ${viewerJwt}`,
-      },
+      headers: { authorization: `Bearer ${viewerJwt}` },
     });
 
     expect(res.statusCode).toBe(403);
@@ -668,9 +636,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/sync', () => {
     await app.inject({
       method: 'POST',
       url: `/finance/bank-accounts/${TEST_BANK_ACCOUNT_ID}/open-banking/sync`,
-      headers: {
-        authorization: `Bearer ${testJwt}`,
-      },
+      headers: { authorization: `Bearer ${testJwt}` },
     });
 
     expect(mockPrisma.bankAccount.findFirst).toHaveBeenCalledWith({
@@ -682,6 +648,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/sync', () => {
 
 // ---------------------------------------------------------------------------
 // POST /finance/bank-accounts/:id/open-banking/disconnect — AC-3
+// No request body — do NOT set content-type: application/json
 // ---------------------------------------------------------------------------
 
 describe('POST /finance/bank-accounts/:id/open-banking/disconnect', () => {
@@ -700,9 +667,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/disconnect', () => {
     const res = await app.inject({
       method: 'POST',
       url: `/finance/bank-accounts/${TEST_BANK_ACCOUNT_ID}/open-banking/disconnect`,
-      headers: {
-        authorization: `Bearer ${testJwt}`,
-      },
+      headers: { authorization: `Bearer ${testJwt}` },
     });
 
     expect(res.statusCode).toBe(200);
@@ -726,9 +691,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/disconnect', () => {
     await app.inject({
       method: 'POST',
       url: `/finance/bank-accounts/${TEST_BANK_ACCOUNT_ID}/open-banking/disconnect`,
-      headers: {
-        authorization: `Bearer ${testJwt}`,
-      },
+      headers: { authorization: `Bearer ${testJwt}` },
     });
 
     expect(mockPrisma.bankAccount.update).toHaveBeenCalledWith({
@@ -758,9 +721,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/disconnect', () => {
     await app.inject({
       method: 'POST',
       url: `/finance/bank-accounts/${TEST_BANK_ACCOUNT_ID}/open-banking/disconnect`,
-      headers: {
-        authorization: `Bearer ${testJwt}`,
-      },
+      headers: { authorization: `Bearer ${testJwt}` },
     });
 
     expect(mockDisconnectAccount).toHaveBeenCalledWith('OB-truelayer-999');
@@ -768,15 +729,12 @@ describe('POST /finance/bank-accounts/:id/open-banking/disconnect', () => {
 
   it('returns 404 for non-existent bank account', async () => {
     app = await buildTestApp();
-
     mockPrisma.bankAccount.findFirst.mockResolvedValue(null);
 
     const res = await app.inject({
       method: 'POST',
       url: `/finance/bank-accounts/${TEST_BANK_ACCOUNT_ID}/open-banking/disconnect`,
-      headers: {
-        authorization: `Bearer ${testJwt}`,
-      },
+      headers: { authorization: `Bearer ${testJwt}` },
     });
 
     expect(res.statusCode).toBe(404);
@@ -794,9 +752,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/disconnect', () => {
     const res = await app.inject({
       method: 'POST',
       url: `/finance/bank-accounts/${TEST_BANK_ACCOUNT_ID}/open-banking/disconnect`,
-      headers: {
-        authorization: `Bearer ${testJwt}`,
-      },
+      headers: { authorization: `Bearer ${testJwt}` },
     });
 
     expect(res.statusCode).toBe(409);
@@ -831,9 +787,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/disconnect', () => {
     const res = await app.inject({
       method: 'POST',
       url: `/finance/bank-accounts/${TEST_BANK_ACCOUNT_ID}/open-banking/disconnect`,
-      headers: {
-        authorization: `Bearer ${viewerJwt}`,
-      },
+      headers: { authorization: `Bearer ${viewerJwt}` },
     });
 
     expect(res.statusCode).toBe(403);
@@ -845,9 +799,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/disconnect', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/finance/bank-accounts/not-a-uuid/open-banking/disconnect',
-      headers: {
-        authorization: `Bearer ${testJwt}`,
-      },
+      headers: { authorization: `Bearer ${testJwt}` },
     });
 
     expect(res.statusCode).toBe(400);
@@ -868,9 +820,7 @@ describe('POST /finance/bank-accounts/:id/open-banking/disconnect', () => {
     await app.inject({
       method: 'POST',
       url: `/finance/bank-accounts/${TEST_BANK_ACCOUNT_ID}/open-banking/disconnect`,
-      headers: {
-        authorization: `Bearer ${testJwt}`,
-      },
+      headers: { authorization: `Bearer ${testJwt}` },
     });
 
     expect(mockPrisma.bankAccount.findFirst).toHaveBeenCalledWith({

@@ -1,5 +1,4 @@
 import type { PrismaClient } from '@nexa/db';
-import { Prisma } from '@nexa/db';
 import type {
   CreateBudgetVersionInput,
   UpdateBudgetVersionInput,
@@ -7,25 +6,6 @@ import type {
 } from './budget-versions.schema.js';
 import { NotFoundError } from '../../core/errors/index.js';
 import type { PaginationMeta } from '../../core/utils/response.js';
-
-// ---------------------------------------------------------------------------
-// Period field names — used for iteration when copying budget lines
-// ---------------------------------------------------------------------------
-
-const PERIOD_FIELDS = [
-  'period1',
-  'period2',
-  'period3',
-  'period4',
-  'period5',
-  'period6',
-  'period7',
-  'period8',
-  'period9',
-  'period10',
-  'period11',
-  'period12',
-] as const;
 
 // ---------------------------------------------------------------------------
 // Prisma select shapes
@@ -59,16 +39,6 @@ const DETAIL_SELECT = {
     select: { id: true, versionName: true, versionNumber: true },
   },
 } as const;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Convert Prisma Decimal fields to numbers for JSON serialisation */
-function toNumber(val: Prisma.Decimal | number | null | undefined): number {
-  if (val === null || val === undefined) return 0;
-  return typeof val === 'number' ? val : Number(val);
-}
 
 // ---------------------------------------------------------------------------
 // listBudgetVersions
@@ -289,7 +259,7 @@ export async function updateBudgetVersion(
   companyId: string,
   id: string,
   data: UpdateBudgetVersionInput,
-  userId: string,
+  _userId: string,
 ) {
   const existing = await prisma.budgetVersion.findFirst({
     where: { id, companyId },

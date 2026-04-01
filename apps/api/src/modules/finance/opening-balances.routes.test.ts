@@ -30,6 +30,7 @@ const { mockPrisma, mockResolveUserRole, mockPermissionService, mockEventBus, mo
       dimensionRequirement: { findMany: vi.fn() },
       dimensionValue: { findMany: vi.fn() },
       dimensionBalance: { upsert: vi.fn() },
+      accountMandatoryDimension: { findMany: vi.fn() },
       $transaction: vi.fn(),
     },
     mockResolveUserRole: vi.fn(),
@@ -264,6 +265,7 @@ function setupSuccessfulImportMocks(options?: {
 
   // Dimension requirements (none)
   mockPrisma.dimensionRequirement.findMany.mockResolvedValue([]);
+  mockPrisma.accountMandatoryDimension.findMany.mockResolvedValue([]);
 
   // Account balance update (called by updateAccountBalances inside createGlPosting)
   mockPrisma.chartOfAccount.update.mockResolvedValue({});

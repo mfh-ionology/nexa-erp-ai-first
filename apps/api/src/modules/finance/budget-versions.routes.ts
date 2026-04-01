@@ -8,7 +8,6 @@ import {
   listBudgetVersionsQuerySchema,
   budgetVersionParamsSchema,
   budgetVersionDetailSchema,
-  budgetVersionListItemSchema,
 } from './budget-versions.schema.js';
 import type { ListBudgetVersionsQuery } from './budget-versions.schema.js';
 import {

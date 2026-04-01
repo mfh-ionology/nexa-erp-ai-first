@@ -323,6 +323,103 @@ async function validateDimensionRequirements(
 }
 
 /**
+ * Enforce AccountMandatoryDimension rules on posting.
+ * For each line, look up the account's mandatory dimension types
+ * (from the account_mandatory_dimensions junction table).
+ * If a mandatory type has no matching dimension on the line, throw an error.
+ */
+async function validateAccountMandatoryDimensions(
+  tx: Parameters<Parameters<PrismaClient['$transaction']>[0]>[0],
+  companyId: string,
+  lines: Array<{
+    accountCode: string;
+    dimensions?: Array<{ dimensionValueId: string }>;
+  }>,
+) {
+  // Collect unique account codes
+  const uniqueAccountCodes = [...new Set(lines.map((l) => l.accountCode))];
+
+  // Look up ChartOfAccount IDs for the codes
+  const accounts = await tx.chartOfAccount.findMany({
+    where: { companyId, code: { in: uniqueAccountCodes } },
+    select: { id: true, code: true },
+  });
+  const accountIdsByCode = new Map(accounts.map((a) => [a.code, a.id]));
+  const accountIds = accounts.map((a) => a.id);
+
+  if (accountIds.length === 0) return;
+
+  // Get all mandatory dimensions for these accounts
+  const mandatoryDims = await tx.accountMandatoryDimension.findMany({
+    where: {
+      companyId,
+      chartOfAccountId: { in: accountIds },
+    },
+    select: {
+      chartOfAccountId: true,
+      dimensionTypeId: true,
+      dimensionType: { select: { code: true, name: true } },
+    },
+  });
+
+  if (mandatoryDims.length === 0) return;
+
+  // Build a map: chartOfAccountId → mandatory dimension types
+  const mandatoryByAccountId = new Map<
+    string,
+    Array<{ dimensionTypeId: string; name: string; code: string }>
+  >();
+  for (const md of mandatoryDims) {
+    if (!mandatoryByAccountId.has(md.chartOfAccountId)) {
+      mandatoryByAccountId.set(md.chartOfAccountId, []);
+    }
+    mandatoryByAccountId.get(md.chartOfAccountId)!.push({
+      dimensionTypeId: md.dimensionTypeId,
+      name: md.dimensionType.name,
+      code: md.dimensionType.code,
+    });
+  }
+
+  // Get dimension value → type mappings for all dimension values in lines
+  const allDimValueIds = lines
+    .flatMap((l) => (l.dimensions ?? []).map((d) => d.dimensionValueId))
+    .filter(Boolean);
+
+  const dimValues =
+    allDimValueIds.length > 0
+      ? await tx.dimensionValue.findMany({
+          where: { id: { in: [...new Set(allDimValueIds)] } },
+          select: { id: true, dimensionTypeId: true },
+        })
+      : [];
+
+  const dimValueTypeMap = new Map(dimValues.map((v) => [v.id, v.dimensionTypeId]));
+
+  // Validate each line
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    const accountId = accountIdsByCode.get(line.accountCode);
+    if (!accountId) continue;
+
+    const required = mandatoryByAccountId.get(accountId);
+    if (!required || required.length === 0) continue;
+
+    const lineDimTypeIds = new Set(
+      (line.dimensions ?? []).map((d) => dimValueTypeMap.get(d.dimensionValueId)).filter(Boolean),
+    );
+
+    for (const req of required) {
+      if (!lineDimTypeIds.has(req.dimensionTypeId)) {
+        throw new DomainError(
+          'MANDATORY_DIMENSION_MISSING',
+          `Line ${i + 1}: Dimension type "${req.name}" (${req.code}) is mandatory for account ${line.accountCode}`,
+        );
+      }
+    }
+  }
+}
+
+/**
  * Validate single-select constraint (BR-FIN-DIM-001).
  * For each line, check that at most one dimension value per type is assigned.
  */
@@ -827,8 +924,11 @@ export async function postJournalEntry(
       isManual,
     );
 
-    // AC-12: Enforce DimensionRequirement rules
+    // AC-12: Enforce DimensionRequirement rules (range-based)
     await validateDimensionRequirements(tx, companyId, lines);
+
+    // Enforce per-account mandatory dimension rules
+    await validateAccountMandatoryDimensions(tx, companyId, lines);
 
     // BR-FIN-DIM-001: Single-select dimension constraint
     await validateSingleSelectDimensions(tx, lines);
@@ -1136,8 +1236,9 @@ export async function createGlPosting(
       isManual,
     );
 
-    // Validate dimensions
+    // Validate dimensions (range-based + per-account mandatory)
     await validateDimensionRequirements(tx, companyId, convertedLines);
+    await validateAccountMandatoryDimensions(tx, companyId, convertedLines);
     await validateSingleSelectDimensions(tx, convertedLines);
 
     // Generate entry number

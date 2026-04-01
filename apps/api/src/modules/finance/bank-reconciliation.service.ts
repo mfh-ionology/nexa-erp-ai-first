@@ -405,7 +405,7 @@ export async function unmatchTransaction(
   prisma: PrismaClient,
   companyId: string,
   bankTransactionId: string,
-  userId: string,
+  _userId: string,
 ) {
   return prisma.$transaction(async (tx) => {
     // Validate bank transaction exists and belongs to company

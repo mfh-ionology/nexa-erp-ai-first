@@ -89,13 +89,7 @@ vi.mock('@nexa/db', () => ({
 vi.mock('../../core/rbac/permission.service.js', () => ({
   permissionService: mockPermissionService,
   PermissionService: vi.fn(),
-  ACTION_FLAG_MAP: {
-    new: 'canNew',
-    view: 'canView',
-    edit: 'canEdit',
-    delete: 'canDelete',
-    create: 'canNew',
-  },
+  ACTION_FLAG_MAP: { new: 'canNew', view: 'canView', edit: 'canEdit', delete: 'canDelete' },
 }));
 
 // ---------------------------------------------------------------------------
@@ -719,7 +713,7 @@ describe('POST /finance/exchange-rates/import', () => {
     expect(mockPrisma.exchangeRate.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          uq_exchange_rates_company_currency_date: expect.objectContaining({
+          companyId_currencyCode_rateDate: expect.objectContaining({
             companyId: TEST_COMPANY_ID,
             currencyCode: 'USD',
           }),

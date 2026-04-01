@@ -12,8 +12,8 @@ export const MATCH_TYPES = ['MANUAL', 'AUTO', 'AI_SUGGESTED'] as const;
 // ---------------------------------------------------------------------------
 
 export const createReconciliationSchema = z.object({
-  statementDate: z.coerce.date({ required_error: 'Statement date is required' }),
-  statementBalance: z.number({ required_error: 'Statement balance is required' }),
+  statementDate: z.coerce.date({ error: 'Statement date is required' }),
+  statementBalance: z.number({ error: 'Statement balance is required' }),
 });
 
 export const createMatchSchema = z.object({

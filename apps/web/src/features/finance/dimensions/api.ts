@@ -24,7 +24,7 @@ import { toast } from 'sonner';
 import { ApiError } from '@nexa/api-client';
 import { useI18n } from '@nexa/i18n';
 
-import { apiGet, apiPost, apiPatch, apiDelete, buildQueryString } from '@/lib/api-client';
+import { apiGet, apiPost, apiPatch, apiPut, apiDelete, buildQueryString } from '@/lib/api-client';
 import { queryKeys } from '@/lib/query-keys';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -115,6 +115,13 @@ export interface UpdateDimensionRequirementInput {
   accountCodeTo?: string;
   isRequired?: boolean;
   isActive?: boolean;
+}
+
+export interface MandatoryDimensionItem {
+  id: string;
+  dimensionTypeId: string;
+  dimensionType?: { id: string; code: string; name: string };
+  createdAt: string;
 }
 
 export type DimensionDefaultEntityType = 'ACCOUNT' | 'CUSTOMER' | 'SUPPLIER' | 'ITEM' | 'COMPANY';
@@ -521,6 +528,116 @@ export function useDeleteDimensionDefault() {
     },
     onError: () => {
       toast.error(t('dimensions.toast.defaultDeleteFailed'));
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// API client functions — Account Mandatory Dimensions
+// ---------------------------------------------------------------------------
+
+export async function listMandatoryDimensions(
+  accountId: string,
+): Promise<MandatoryDimensionItem[]> {
+  const result = await apiGet<MandatoryDimensionItem[]>(
+    `/finance/accounts/${encodeURIComponent(accountId)}/mandatory-dimensions`,
+  );
+  return result.data;
+}
+
+export async function setMandatoryDimensions(
+  accountId: string,
+  dimensionTypeIds: string[],
+): Promise<MandatoryDimensionItem[]> {
+  const result = await apiPut<MandatoryDimensionItem[]>(
+    `/finance/accounts/${encodeURIComponent(accountId)}/mandatory-dimensions`,
+    { dimensionTypeIds },
+  );
+  return result.data;
+}
+
+export async function bulkAssignMandatoryDimensions(input: {
+  dimensionTypeIds: string[];
+  accountIds?: string[];
+  accountRange?: { from: string; to: string };
+}): Promise<{ accountsAffected: number; dimensionTypesApplied: number }> {
+  const result = await apiPost<{ accountsAffected: number; dimensionTypesApplied: number }>(
+    '/finance/mandatory-dimensions/bulk-assign',
+    input,
+  );
+  return result.data;
+}
+
+// ---------------------------------------------------------------------------
+// TanStack Query Hooks — Account Mandatory Dimensions
+// ---------------------------------------------------------------------------
+
+export function useMandatoryDimensions(accountId: string | undefined) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+  return useQuery({
+    queryKey: queryKeys.finance.accountMandatoryDimensions(accountId ?? ''),
+    queryFn: () => listMandatoryDimensions(accountId!),
+    enabled: isAuthenticated && !!accountId,
+  });
+}
+
+export function useSetMandatoryDimensions() {
+  const queryClient = useQueryClient();
+  const { t } = useI18n('finance');
+
+  return useMutation({
+    mutationFn: ({
+      accountId,
+      dimensionTypeIds,
+    }: {
+      accountId: string;
+      dimensionTypeIds: string[];
+    }) => setMandatoryDimensions(accountId, dimensionTypeIds),
+    onSuccess: (_data, variables) => {
+      toast.success(t('mandatoryDimensions.toast.updated'));
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.finance.accountMandatoryDimensions(variables.accountId),
+      });
+    },
+    onError: (error: Error) => {
+      if (error instanceof ApiError && error.statusCode === 400) {
+        toast.error(error.message);
+      } else {
+        toast.error('Failed to update mandatory dimensions');
+      }
+    },
+  });
+}
+
+export function useBulkAssignMandatoryDimensions() {
+  const queryClient = useQueryClient();
+  const { t } = useI18n('finance');
+
+  return useMutation({
+    mutationFn: (input: {
+      dimensionTypeIds: string[];
+      accountIds?: string[];
+      accountRange?: { from: string; to: string };
+    }) => bulkAssignMandatoryDimensions(input),
+    onSuccess: () => {
+      toast.success(t('mandatoryDimensions.toast.bulkAssigned'));
+      // Invalidate all account mandatory dimensions queries
+      void queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey as readonly unknown[];
+          return (
+            key.length >= 3 && key[1] === 'finance' && key[2] === 'account-mandatory-dimensions'
+          );
+        },
+      });
+    },
+    onError: (error: Error) => {
+      if (error instanceof ApiError && error.statusCode === 400) {
+        toast.error(error.message);
+      } else {
+        toast.error('Failed to bulk assign mandatory dimensions');
+      }
     },
   });
 }

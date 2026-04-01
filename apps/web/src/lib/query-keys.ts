@@ -411,6 +411,9 @@ export const queryKeys = {
         : ([...queryKeys.finance.all, 'dimension-values', typeId] as const),
     // Dimension Requirements
     dimensionRequirements: () => [...queryKeys.finance.all, 'dimension-requirements'] as const,
+    // Account Mandatory Dimensions
+    accountMandatoryDimensions: (accountId: string) =>
+      [...queryKeys.finance.all, 'account-mandatory-dimensions', accountId] as const,
     // Dimension Defaults
     dimensionDefaults: (params?: Record<string, unknown>) =>
       params

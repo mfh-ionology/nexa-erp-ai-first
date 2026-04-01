@@ -11,6 +11,7 @@ import type { EventBus } from '../../core/events/event-bus.js';
 import type { PaginationMeta } from '../../core/utils/response.js';
 import { createJournalEntry } from './journals.service.js';
 import type { CreateJournalInput } from './journals.schema.js';
+import { getMandatoryDimensionsForAccounts } from './account-mandatory-dimensions.service.js';
 
 // ---------------------------------------------------------------------------
 // Prisma select shapes
@@ -169,6 +170,79 @@ async function validateAccountCodes(
 }
 
 // ---------------------------------------------------------------------------
+// Mandatory dimension validation for simulation lines
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate that simulation lines include all mandatory dimension types
+ * for their respective accounts. SimulationLine stores dimensions as JSON
+ * (array of { dimensionValueId: string }).
+ */
+async function validateSimulationMandatoryDimensions(
+  tx: Parameters<Parameters<PrismaClient['$transaction']>[0]>[0],
+  companyId: string,
+  lines: Array<{ accountCode: string; dimensionValues?: unknown }>,
+) {
+  const uniqueCodes = [...new Set(lines.map((l) => l.accountCode))];
+  const accounts = await tx.chartOfAccount.findMany({
+    where: { companyId, code: { in: uniqueCodes } },
+    select: { id: true, code: true },
+  });
+  const accountIdByCode = new Map(accounts.map((a) => [a.code, a.id]));
+  const accountIds = accounts.map((a) => a.id);
+
+  if (accountIds.length === 0) return;
+
+  const mandatoryMap = await getMandatoryDimensionsForAccounts(tx, companyId, accountIds);
+
+  // If no mandatory dimensions configured, skip
+  if (mandatoryMap.size === 0) return;
+
+  // Collect all dimension value IDs from lines to look up their types
+  const allDimValueIds: string[] = [];
+  for (const line of lines) {
+    const dims = line.dimensionValues as Array<{ dimensionValueId: string }> | null;
+    if (dims && Array.isArray(dims)) {
+      for (const d of dims) {
+        if (d.dimensionValueId) allDimValueIds.push(d.dimensionValueId);
+      }
+    }
+  }
+
+  const dimValues =
+    allDimValueIds.length > 0
+      ? await tx.dimensionValue.findMany({
+          where: { id: { in: [...new Set(allDimValueIds)] } },
+          select: { id: true, dimensionTypeId: true },
+        })
+      : [];
+  const dimValueTypeMap = new Map(dimValues.map((v) => [v.id, v.dimensionTypeId]));
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    const accountId = accountIdByCode.get(line.accountCode);
+    if (!accountId) continue;
+
+    const required = mandatoryMap.get(accountId);
+    if (!required || required.length === 0) continue;
+
+    const dims = line.dimensionValues as Array<{ dimensionValueId: string }> | null;
+    const lineDimTypeIds = new Set(
+      (dims ?? []).map((d) => dimValueTypeMap.get(d.dimensionValueId)).filter(Boolean),
+    );
+
+    for (const req of required) {
+      if (!lineDimTypeIds.has(req.dimensionTypeId)) {
+        throw new DomainError(
+          'MANDATORY_DIMENSION_MISSING',
+          `Line ${i + 1}: Dimension type "${req.dimensionTypeName}" (${req.dimensionTypeCode}) is mandatory for account ${line.accountCode}`,
+        );
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // CRUD operations
 // ---------------------------------------------------------------------------
 
@@ -234,6 +308,9 @@ export async function createSimulation(
       companyId,
       data.lines.map((l) => l.accountCode),
     );
+
+    // Validate mandatory dimensions on save
+    await validateSimulationMandatoryDimensions(tx, companyId, data.lines);
 
     // Generate entry number
     const entryNumber = await nextNumber(tx, companyId, 'SIMULATION');
@@ -333,6 +410,9 @@ export async function updateSimulation(
         companyId,
         data.lines.map((l) => l.accountCode),
       );
+
+      // Validate mandatory dimensions on save
+      await validateSimulationMandatoryDimensions(tx, companyId, data.lines);
     }
 
     // Update header

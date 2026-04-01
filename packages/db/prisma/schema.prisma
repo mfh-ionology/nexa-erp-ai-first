@@ -2629,11 +2629,12 @@ model ChartOfAccount {
   parent         ChartOfAccount?        @relation("AccountHierarchy", fields: [companyId, parentCode], references: [companyId, code], onDelete: NoAction, onUpdate: NoAction)
   children       ChartOfAccount[]       @relation("AccountHierarchy")
 
-  journalLines    JournalLine[]
-  bankAccounts    BankAccount[]
-  budgetLines     BudgetLine[]
-  accountMappings AccountMapping[]
-  simulationLines SimulationLine[]
+  journalLines         JournalLine[]
+  bankAccounts         BankAccount[]
+  budgetLines          BudgetLine[]
+  accountMappings      AccountMapping[]
+  simulationLines      SimulationLine[]
+  mandatoryDimensions  AccountMandatoryDimension[]
 
   @@unique([companyId, code], name: "uq_chart_of_account_company_code")
   @@index([companyId])
@@ -2768,6 +2769,7 @@ model DimensionType {
   defaults             DimensionDefault[]
   balances             DimensionBalance[]
   budgetLineDimensions BudgetLineDimension[]
+  mandatoryForAccounts AccountMandatoryDimension[]
 
   @@unique([companyId, code], name: "uq_dimension_type_company_code")
   @@index([companyId])
@@ -2848,6 +2850,22 @@ model DimensionDefault {
   @@index([companyId])
   @@index([companyId, entityType, entityId])
   @@map("dimension_defaults")
+}
+
+model AccountMandatoryDimension {
+  id               String   @id @default(uuid()) @map("id")
+  companyId        String   @map("company_id")
+  chartOfAccountId String   @map("chart_of_account_id")
+  dimensionTypeId  String   @map("dimension_type_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  account       ChartOfAccount @relation(fields: [chartOfAccountId], references: [id], onDelete: Cascade)
+  dimensionType DimensionType  @relation(fields: [dimensionTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([chartOfAccountId, dimensionTypeId], name: "uq_account_mandatory_dimension")
+  @@index([companyId])
+  @@index([chartOfAccountId])
+  @@map("account_mandatory_dimensions")
 }
 
 model DimensionBalance {

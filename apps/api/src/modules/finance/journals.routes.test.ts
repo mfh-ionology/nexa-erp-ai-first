@@ -53,6 +53,9 @@ const { mockPrisma, mockResolveUserRole, mockPermissionService, mockEventBus, mo
       dimensionBalance: {
         upsert: vi.fn(),
       },
+      accountMandatoryDimension: {
+        findMany: vi.fn(),
+      },
       $transaction: vi.fn(),
     },
     mockResolveUserRole: vi.fn(),
@@ -191,6 +194,8 @@ function setupMocks() {
   // Default: no dimension requirements
   mockPrisma.dimensionRequirement.findMany.mockResolvedValue([]);
   mockPrisma.dimensionValue.findMany.mockResolvedValue([]);
+  // Default: no per-account mandatory dimensions
+  mockPrisma.accountMandatoryDimension.findMany.mockResolvedValue([]);
 
   // Configure permission service: full access for ADMIN
   mockPermissionService.getEffectivePermissions.mockImplementation(

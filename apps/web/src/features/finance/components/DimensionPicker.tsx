@@ -1,11 +1,10 @@
 /* eslint-disable i18next/no-literal-string */
 /**
- * DimensionPicker — Compact popover for selecting dimension values on a journal line.
+ * DimensionPicker — Grid-style dimension selector for journal/simulation lines.
  *
- * Shows a trigger button with selected dimension badges. When clicked, opens a
- * popover with one section per active dimension type. Each section shows either
- * a single-select dropdown or multi-select checkboxes depending on the type's
- * `singleSelect` flag.
+ * Shows one row per active dimension type. When an account is selected,
+ * fetches that account's mandatory dimensions and highlights them in red.
+ * Each type shows a single-select dropdown (journal lines always use single-select).
  */
 
 import { useCallback, useMemo } from 'react';
@@ -13,7 +12,6 @@ import { Tags, X } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -25,7 +23,9 @@ import {
 } from '@/components/ui/select';
 
 import { useDimensionTypes, useDimensionValues } from '../dimensions/api';
+import { useMandatoryDimensions } from '../dimensions/api';
 import type { DimensionType, DimensionValue } from '../dimensions/api';
+import { cn } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -45,98 +45,74 @@ interface DimensionPickerProps {
   dimensions: LineDimension[];
   onChange: (dimensions: LineDimension[]) => void;
   readOnly?: boolean;
+  /** The chart-of-account ID for the selected account on this line. Used to fetch mandatory dimensions. */
+  accountId?: string | null;
 }
 
 // ---------------------------------------------------------------------------
-// Internal: Per-type value selector
+// Internal: Per-type value selector row
 // ---------------------------------------------------------------------------
 
-function DimensionTypeSection({
+function DimensionTypeRow({
   dimType,
   selected,
   onSelect,
   onDeselect,
+  isMandatory,
 }: {
   dimType: DimensionType;
   selected: LineDimension[];
   onSelect: (value: DimensionValue) => void;
   onDeselect: (dimensionValueId: string) => void;
+  isMandatory: boolean;
 }) {
   const { data: values } = useDimensionValues(dimType.id);
   const activeValues = useMemo(() => (values ?? []).filter((v) => v.isActive), [values]);
 
-  const selectedIds = useMemo(() => new Set(selected.map((d) => d.dimensionValueId)), [selected]);
+  const currentValue = selected[0]?.dimensionValueId ?? '';
 
   if (activeValues.length === 0) return null;
 
-  // Single-select: use a Select dropdown
-  if (dimType.singleSelect) {
-    const currentValue = selected[0]?.dimensionValueId ?? '';
-
-    return (
-      <div className="space-y-1.5">
-        <Label className="text-xs font-medium text-muted-foreground">{dimType.name}</Label>
-        <Select
-          value={currentValue}
-          onValueChange={(valId) => {
-            if (valId === '__clear__') {
-              // Deselect current
-              if (currentValue) onDeselect(currentValue);
-              return;
-            }
-            const found = activeValues.find((v) => v.id === valId);
-            if (found) onSelect(found);
-          }}
-        >
-          <SelectTrigger size="sm" className="h-8 text-sm">
-            <SelectValue placeholder="Select..." />
-          </SelectTrigger>
-          <SelectContent>
-            {currentValue && (
-              <SelectItem value="__clear__" className="text-muted-foreground italic">
-                Clear selection
-              </SelectItem>
-            )}
-            {activeValues.map((v) => (
-              <SelectItem key={v.id} value={v.id}>
-                <span className="font-mono text-xs">{v.code}</span>{' '}
-                <span className="text-muted-foreground">{v.name}</span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-    );
-  }
-
-  // Multi-select: use checkboxes
   return (
-    <div className="space-y-1.5">
-      <Label className="text-xs font-medium text-muted-foreground">{dimType.name}</Label>
-      <div className="max-h-36 space-y-1 overflow-y-auto">
-        {activeValues.map((v) => {
-          const isChecked = selectedIds.has(v.id);
-          return (
-            <label
-              key={v.id}
-              className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-accent"
-            >
-              <Checkbox
-                checked={isChecked}
-                onCheckedChange={(checked) => {
-                  if (checked) {
-                    onSelect(v);
-                  } else {
-                    onDeselect(v.id);
-                  }
-                }}
-              />
-              <span className="font-mono text-xs">{v.code}</span>
-              <span className="truncate text-muted-foreground">{v.name}</span>
-            </label>
-          );
-        })}
-      </div>
+    <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+      <Label
+        className={cn(
+          'text-xs font-medium truncate',
+          isMandatory ? 'text-red-600 font-semibold' : 'text-muted-foreground',
+        )}
+        title={isMandatory ? `${dimType.name} (required)` : dimType.name}
+      >
+        {dimType.name}
+        {isMandatory && <span className="text-red-500 ml-0.5">*</span>}
+      </Label>
+      <Select
+        value={currentValue}
+        onValueChange={(valId) => {
+          if (valId === '__clear__') {
+            if (currentValue) onDeselect(currentValue);
+            return;
+          }
+          const found = activeValues.find((v) => v.id === valId);
+          if (found) onSelect(found);
+        }}
+      >
+        <SelectTrigger size="sm" className="h-7 text-xs">
+          <SelectValue placeholder={isMandatory ? 'Required...' : 'Select...'} />
+        </SelectTrigger>
+        <SelectContent>
+          {currentValue && (
+            <SelectItem value="__clear__" className="text-muted-foreground italic text-xs">
+              Clear
+            </SelectItem>
+          )}
+          {activeValues.map((v) => (
+            <SelectItem key={v.id} value={v.id}>
+              <span className="font-mono text-xs">{v.code}</span>{' '}
+              <span className="text-muted-foreground text-xs">{v.name}</span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
@@ -145,14 +121,36 @@ function DimensionTypeSection({
 // DimensionPicker
 // ---------------------------------------------------------------------------
 
-export function DimensionPicker({ dimensions, onChange, readOnly }: DimensionPickerProps) {
+export function DimensionPicker({
+  dimensions,
+  onChange,
+  readOnly,
+  accountId,
+}: DimensionPickerProps) {
   const { data: dimensionTypes } = useDimensionTypes({ isActive: true });
+  const { data: mandatoryDims } = useMandatoryDimensions(accountId ?? undefined);
 
   const activeTypes = useMemo(
     () =>
       (dimensionTypes ?? []).filter((dt) => dt.isActive).sort((a, b) => a.sortOrder - b.sortOrder),
     [dimensionTypes],
   );
+
+  // Set of dimension type IDs that are mandatory for this account
+  const mandatoryTypeIds = useMemo(() => {
+    if (!mandatoryDims) return new Set<string>();
+    return new Set(mandatoryDims.map((md) => md.dimensionTypeId));
+  }, [mandatoryDims]);
+
+  // Sort: mandatory types first, then by sort order
+  const sortedTypes = useMemo(() => {
+    return [...activeTypes].sort((a, b) => {
+      const aMandatory = mandatoryTypeIds.has(a.id) ? 0 : 1;
+      const bMandatory = mandatoryTypeIds.has(b.id) ? 0 : 1;
+      if (aMandatory !== bMandatory) return aMandatory - bMandatory;
+      return a.sortOrder - b.sortOrder;
+    });
+  }, [activeTypes, mandatoryTypeIds]);
 
   // Group current dimensions by type id
   const dimsByType = useMemo(() => {
@@ -167,16 +165,8 @@ export function DimensionPicker({ dimensions, onChange, readOnly }: DimensionPic
 
   const handleSelect = useCallback(
     (dimType: DimensionType, value: DimensionValue) => {
-      let updated: LineDimension[];
-
-      if (dimType.singleSelect) {
-        // Replace any existing for this type
-        updated = dimensions.filter((d) => d.dimensionTypeId !== dimType.id);
-      } else {
-        // Add (but don't duplicate)
-        if (dimensions.some((d) => d.dimensionValueId === value.id)) return;
-        updated = [...dimensions];
-      }
+      // Always single-select for journal lines: replace any existing for this type
+      const updated = dimensions.filter((d) => d.dimensionTypeId !== dimType.id);
 
       updated.push({
         dimensionValueId: value.id,
@@ -185,7 +175,7 @@ export function DimensionPicker({ dimensions, onChange, readOnly }: DimensionPic
         dimensionTypeCode: dimType.code,
         dimensionTypeName: dimType.name,
         dimensionTypeId: dimType.id,
-        singleSelect: dimType.singleSelect,
+        singleSelect: true,
       });
 
       onChange(updated);
@@ -228,7 +218,12 @@ export function DimensionPicker({ dimensions, onChange, readOnly }: DimensionPic
           className="flex h-8 w-full items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 text-left text-sm hover:border-border focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         >
           {dimensions.length === 0 ? (
-            <Tags className="size-3.5 text-muted-foreground" />
+            <Tags
+              className={cn(
+                'size-3.5',
+                mandatoryTypeIds.size > 0 ? 'text-red-500' : 'text-muted-foreground',
+              )}
+            />
           ) : (
             <div className="flex flex-wrap gap-0.5 overflow-hidden">
               {dimensions.map((d) => (
@@ -244,7 +239,7 @@ export function DimensionPicker({ dimensions, onChange, readOnly }: DimensionPic
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-72 p-3" align="start">
+      <PopoverContent className="w-80 p-3" align="start">
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">Dimensions</span>
@@ -286,16 +281,25 @@ export function DimensionPicker({ dimensions, onChange, readOnly }: DimensionPic
             </div>
           )}
 
-          {/* Per-type sections */}
-          {activeTypes.map((dt) => (
-            <DimensionTypeSection
-              key={dt.id}
-              dimType={dt}
-              selected={dimsByType.get(dt.id) ?? []}
-              onSelect={(value) => handleSelect(dt, value)}
-              onDeselect={handleDeselect}
-            />
-          ))}
+          {/* Dimension type grid — one row per type */}
+          <div className="space-y-2">
+            {sortedTypes.map((dt) => (
+              <DimensionTypeRow
+                key={dt.id}
+                dimType={dt}
+                selected={dimsByType.get(dt.id) ?? []}
+                onSelect={(value) => handleSelect(dt, value)}
+                onDeselect={handleDeselect}
+                isMandatory={mandatoryTypeIds.has(dt.id)}
+              />
+            ))}
+          </div>
+
+          {mandatoryTypeIds.size > 0 && (
+            <p className="text-[10px] text-red-500 mt-1">
+              * Required dimension types must have a value before saving
+            </p>
+          )}
         </div>
       </PopoverContent>
     </Popover>

@@ -7,20 +7,12 @@ import {
   journalImportRowSchema,
   budgetImportRowSchema,
   exchangeRateImportRowSchema,
-  importResultSchema,
 } from './import.schema.js';
 import type { ImportResult } from './import.schema.js';
 import { parseCsv, processBatch, readUploadedFile } from './import.service.js';
 import { createPermissionGuard } from '../../core/rbac/index.js';
 import { sendSuccess } from '../../core/utils/response.js';
-import { successEnvelope } from '../../core/schemas/envelope.js';
 import { extractRequestContext } from '../../core/types/request-context.js';
-
-// ---------------------------------------------------------------------------
-// Response envelope
-// ---------------------------------------------------------------------------
-
-const _importResultEnvelope = successEnvelope(importResultSchema);
 
 // ---------------------------------------------------------------------------
 // Import routes plugin
@@ -39,7 +31,7 @@ async function importRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post(
     '/accounts/import',
     {
-      preHandler: createPermissionGuard('finance.accounts', 'create'),
+      preHandler: createPermissionGuard('finance.accounts', 'new'),
     },
     async (request, reply) => {
       const ctx = extractRequestContext(request);
@@ -116,7 +108,7 @@ async function importRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post(
     '/journals/import',
     {
-      preHandler: createPermissionGuard('finance.journals', 'create'),
+      preHandler: createPermissionGuard('finance.journals', 'new'),
     },
     async (request, reply) => {
       const ctx = extractRequestContext(request);
@@ -161,7 +153,9 @@ async function importRoutes(fastify: FastifyInstance): Promise<void> {
       // Create one journal entry per group
       for (const [, groupRows] of groups) {
         try {
-          const firstLine = groupRows[0].data;
+          const firstRow = groupRows[0];
+          if (!firstRow) continue;
+          const firstLine = firstRow.data;
 
           // Find the financial period for the transaction date
           const period = await prisma.financialPeriod.findFirst({
@@ -243,7 +237,7 @@ async function importRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post(
     '/budgets/import',
     {
-      preHandler: createPermissionGuard('finance.budgets', 'create'),
+      preHandler: createPermissionGuard('finance.budgets', 'new'),
     },
     async (request, reply) => {
       const ctx = extractRequestContext(request);
@@ -264,12 +258,10 @@ async function importRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       if (!budgetId) {
-        return reply
-          .status(400)
-          .send({
-            success: false,
-            error: { code: 'MISSING_BUDGET_ID', message: 'budgetId field is required' },
-          });
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'MISSING_BUDGET_ID', message: 'budgetId field is required' },
+        });
       }
 
       // Validate budget exists and belongs to company
@@ -389,7 +381,7 @@ async function importRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post(
     '/exchange-rates/import',
     {
-      preHandler: createPermissionGuard('finance.exchangeRates', 'create'),
+      preHandler: createPermissionGuard('finance.exchangeRates', 'new'),
     },
     async (request, reply) => {
       const ctx = extractRequestContext(request);
@@ -432,7 +424,7 @@ async function importRoutes(fastify: FastifyInstance): Promise<void> {
 
           await db.exchangeRate.upsert({
             where: {
-              uq_exchange_rates_company_currency_date: {
+              companyId_currencyCode_rateDate: {
                 companyId,
                 currencyCode: rowData.currencyCode,
                 rateDate: new Date(rowData.rateDate),

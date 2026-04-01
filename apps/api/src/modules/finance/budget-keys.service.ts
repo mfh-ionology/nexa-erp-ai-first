@@ -179,7 +179,7 @@ export async function updateBudgetKey(
   companyId: string,
   id: string,
   data: UpdateBudgetKeyInput,
-  userId: string,
+  _userId: string,
 ) {
   const existing = await prisma.budgetKey.findFirst({
     where: { id, companyId },
@@ -206,7 +206,7 @@ export async function updateBudgetKey(
     // Validate sum = 100
     let sum = 0;
     for (const f of PCT_FIELDS) {
-      sum += (data as Record<string, number>)[f];
+      sum += (data as Record<string, number | undefined>)[f] ?? 0;
     }
     if (Math.abs(sum - 100) >= 0.01) {
       throw new AppError('PCT_SUM_INVALID', 'Percentages must sum to 100', 400);
@@ -286,7 +286,7 @@ export async function applyBudgetKey(
   let runningTotal = 0;
 
   for (let i = 0; i < 11; i++) {
-    const amount = Math.round(((annualAmount * pctValues[i]) / 100) * 100) / 100;
+    const amount = Math.round(((annualAmount * (pctValues[i] ?? 0)) / 100) * 100) / 100;
     periods.push(amount);
     runningTotal += amount;
   }

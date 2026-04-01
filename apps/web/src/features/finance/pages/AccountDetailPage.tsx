@@ -9,7 +9,7 @@
  * Tabs: Details, Children, Activity
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowLeft, Pencil, Save, X } from 'lucide-react';
 
@@ -18,6 +18,7 @@ import { useI18n } from '@nexa/i18n';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -34,6 +35,11 @@ import { usePermission } from '@/hooks/use-permissions';
 import { cn } from '@/lib/utils';
 
 import { useAccount, useCreateAccount, useUpdateAccount } from '../hooks/use-accounts';
+import {
+  useDimensionTypes,
+  useMandatoryDimensions,
+  useSetMandatoryDimensions,
+} from '../dimensions/api';
 import type { AccountType, NormalBalance, CreateAccountInput, UpdateAccountInput } from '../types';
 import { ACCOUNT_TYPES, NORMAL_BALANCES } from '../types';
 
@@ -622,6 +628,11 @@ export function AccountDetailPage({ id }: AccountDetailPageProps) {
         </CardContent>
       </Card>
 
+      {/* Mandatory Dimensions card (view mode only, non-new) */}
+      {!isNew && account && (
+        <MandatoryDimensionsCard accountId={account.id} canEdit={perms.canEdit} />
+      )}
+
       {/* Balances card (view mode only) */}
       {!isNew && account && !isEditing && (
         <Card className="rounded-xl border border-border shadow-[0_1px_3px_rgba(0,0,0,0.06)] animate-fade-in-up delay-3">
@@ -720,6 +731,104 @@ export function AccountDetailPage({ id }: AccountDetailPageProps) {
         </div>
       )}
     </main>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// MandatoryDimensionsCard — manage which dimension types are mandatory for this account
+// ---------------------------------------------------------------------------
+
+function MandatoryDimensionsCard({ accountId, canEdit }: { accountId: string; canEdit: boolean }) {
+  const { t } = useI18n('finance');
+  const { data: dimensionTypes } = useDimensionTypes({ isActive: true });
+  const { data: mandatoryDims, isLoading } = useMandatoryDimensions(accountId);
+  const setMandatoryMutation = useSetMandatoryDimensions();
+
+  const activeTypes = useMemo(
+    () =>
+      (dimensionTypes ?? []).filter((dt) => dt.isActive).sort((a, b) => a.sortOrder - b.sortOrder),
+    [dimensionTypes],
+  );
+
+  const mandatoryTypeIds = useMemo(
+    () => new Set((mandatoryDims ?? []).map((md) => md.dimensionTypeId)),
+    [mandatoryDims],
+  );
+
+  const handleToggle = useCallback(
+    (dimensionTypeId: string, checked: boolean) => {
+      const current = new Set(mandatoryTypeIds);
+      if (checked) {
+        current.add(dimensionTypeId);
+      } else {
+        current.delete(dimensionTypeId);
+      }
+      setMandatoryMutation.mutate({
+        accountId,
+        dimensionTypeIds: Array.from(current),
+      });
+    },
+    [accountId, mandatoryTypeIds, setMandatoryMutation],
+  );
+
+  if (activeTypes.length === 0) return null;
+
+  return (
+    <Card className="rounded-xl border border-border shadow-[0_1px_3px_rgba(0,0,0,0.06)] animate-fade-in-up delay-3">
+      <CardHeader className="border-b border-border/50 pb-3">
+        <CardTitle className="text-base font-semibold">
+          {t('mandatoryDimensions.title', 'Mandatory Dimensions')}
+        </CardTitle>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          {t(
+            'mandatoryDimensions.description',
+            'Select which dimension types must be tagged when posting to this account',
+          )}
+        </p>
+      </CardHeader>
+      <CardContent className="pt-4">
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-6 w-48" />
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {activeTypes.map((dt) => {
+              const isChecked = mandatoryTypeIds.has(dt.id);
+              return (
+                <label
+                  key={dt.id}
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                    canEdit ? 'cursor-pointer hover:bg-[#f5f3ff]' : 'cursor-default',
+                    isChecked && 'bg-purple-50/50',
+                  )}
+                >
+                  <Checkbox
+                    checked={isChecked}
+                    onCheckedChange={(checked) => handleToggle(dt.id, !!checked)}
+                    disabled={!canEdit || setMandatoryMutation.isPending}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium">{dt.name}</span>
+                    <span className="ml-2 text-xs text-muted-foreground font-mono">{dt.code}</span>
+                  </div>
+                  {isChecked && (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] bg-red-50 text-red-600 border-red-200"
+                    >
+                      Required
+                    </Badge>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

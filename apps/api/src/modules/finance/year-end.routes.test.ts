@@ -500,6 +500,9 @@ function setupSuccessfulYearEndMocks() {
       dimensionValue: {
         findMany: vi.fn().mockResolvedValue([]),
       },
+      accountMandatoryDimension: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
       numberSeries: {
         findFirst: vi
           .fn()
@@ -787,6 +790,9 @@ describe('POST /finance/year-end/close', () => {
           findMany: vi.fn().mockResolvedValue([]),
         },
         dimensionValue: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        accountMandatoryDimension: {
           findMany: vi.fn().mockResolvedValue([]),
         },
         numberSeries: {

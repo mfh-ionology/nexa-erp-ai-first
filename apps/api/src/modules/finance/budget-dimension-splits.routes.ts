@@ -21,7 +21,6 @@ import {
 } from './budget-dimension-splits.service.js';
 import { createPermissionGuard } from '../../core/rbac/index.js';
 import { sendSuccess } from '../../core/utils/response.js';
-import { successEnvelope } from '../../core/schemas/envelope.js';
 import { extractRequestContext } from '../../core/types/request-context.js';
 import { AppError, DomainError } from '../../core/errors/index.js';
 
