@@ -4,7 +4,7 @@ import { SettingCategory, SettingValueType } from '@nexa/db';
 import type { FinanceSettings, UpdateFinanceSettingsInput } from './settings.schema.js';
 
 // ---------------------------------------------------------------------------
-// Default values for all 8 finance settings tabs
+// Default values for all 12 finance settings tabs
 // ---------------------------------------------------------------------------
 
 export const FINANCE_DEFAULTS: FinanceSettings = {
@@ -31,11 +31,23 @@ export const FINANCE_DEFAULTS: FinanceSettings = {
     enableCostCentres: false,
     enableProjects: false,
   },
+  dimensions: {
+    enableDimensions: false,
+    requireDimensionsOnManualJournals: false,
+    defaultDimensionBehavior: 'NONE',
+    maxDimensionTypes: 10,
+  },
   dataEntry: {
     requireDescription: false,
     autoPopulateVat: true,
     defaultSource: 'MANUAL',
     warnUnbalanced: true,
+  },
+  approvals: {
+    journalApprovalEnabled: false,
+    journalApprovalThreshold: 10000,
+    budgetApprovalRequired: true,
+    yearEndApprovalRequired: true,
   },
   reconciliation: {
     autoMatchEnabled: true,
@@ -46,6 +58,19 @@ export const FINANCE_DEFAULTS: FinanceSettings = {
     multiCurrencyEnabled: false,
     autoFetchRates: false,
     rateSource: 'BOE',
+  },
+  numberSeries: {
+    journalPrefix: 'JNL',
+    journalPadding: 5,
+    simulationPrefix: 'SIM',
+    simulationPadding: 5,
+    budgetPrefix: 'BDG',
+    budgetPadding: 5,
+  },
+  rounding: {
+    currencyRoundingMethod: 'HALF_UP',
+    displayDecimals: 2,
+    internalDecimals: 4,
   },
   reporting: {
     defaultReportFormat: 'PDF',
@@ -63,9 +88,13 @@ const TAB_NAMES = [
   'vat',
   'subSystems',
   'tags',
+  'dimensions',
   'dataEntry',
+  'approvals',
   'reconciliation',
   'multiCurrency',
+  'numberSeries',
+  'rounding',
   'reporting',
 ] as const;
 

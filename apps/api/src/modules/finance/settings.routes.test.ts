@@ -204,14 +204,18 @@ describe('GET /finance/settings', () => {
     expect(body.success).toBe(true);
     expect(body.data).toBeDefined();
 
-    // Verify all 8 tabs are present
+    // Verify all 12 tabs are present
     expect(body.data.general).toBeDefined();
     expect(body.data.vat).toBeDefined();
     expect(body.data.subSystems).toBeDefined();
     expect(body.data.tags).toBeDefined();
+    expect(body.data.dimensions).toBeDefined();
     expect(body.data.dataEntry).toBeDefined();
+    expect(body.data.approvals).toBeDefined();
     expect(body.data.reconciliation).toBeDefined();
     expect(body.data.multiCurrency).toBeDefined();
+    expect(body.data.numberSeries).toBeDefined();
+    expect(body.data.rounding).toBeDefined();
     expect(body.data.reporting).toBeDefined();
 
     // Verify default values
@@ -479,6 +483,410 @@ describe('PUT /finance/settings', () => {
 });
 
 // ---------------------------------------------------------------------------
+// PUT /finance/settings — Dimensions tab
+// ---------------------------------------------------------------------------
+
+describe('PUT /finance/settings — dimensions tab', () => {
+  it('saves and loads dimension settings', async () => {
+    app = await buildTestApp();
+
+    mockPrisma.$transaction.mockImplementation(
+      async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => {
+        return fn(mockPrisma);
+      },
+    );
+    mockPrisma.systemSetting.upsert.mockResolvedValue({});
+
+    mockPrisma.systemSetting.findMany.mockResolvedValue([
+      { key: 'dimensions.enableDimensions', value: 'true', valueType: 'BOOLEAN' },
+      {
+        key: 'dimensions.requireDimensionsOnManualJournals',
+        value: 'true',
+        valueType: 'BOOLEAN',
+      },
+      { key: 'dimensions.defaultDimensionBehavior', value: 'SUGGEST', valueType: 'STRING' },
+      { key: 'dimensions.maxDimensionTypes', value: '5', valueType: 'NUMBER' },
+    ]);
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/finance/settings',
+      headers: {
+        authorization: `Bearer ${testJwt}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        dimensions: {
+          enableDimensions: true,
+          requireDimensionsOnManualJournals: true,
+          defaultDimensionBehavior: 'SUGGEST',
+          maxDimensionTypes: 5,
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.dimensions.enableDimensions).toBe(true);
+    expect(body.data.dimensions.requireDimensionsOnManualJournals).toBe(true);
+    expect(body.data.dimensions.defaultDimensionBehavior).toBe('SUGGEST');
+    expect(body.data.dimensions.maxDimensionTypes).toBe(5);
+  });
+
+  it('rejects invalid defaultDimensionBehavior enum', async () => {
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/finance/settings',
+      headers: {
+        authorization: `Bearer ${testJwt}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        dimensions: {
+          defaultDimensionBehavior: 'INVALID',
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects maxDimensionTypes outside 1-20 range', async () => {
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/finance/settings',
+      headers: {
+        authorization: `Bearer ${testJwt}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        dimensions: {
+          maxDimensionTypes: 25,
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PUT /finance/settings — Approvals tab
+// ---------------------------------------------------------------------------
+
+describe('PUT /finance/settings — approvals tab', () => {
+  it('saves and loads approval settings', async () => {
+    app = await buildTestApp();
+
+    mockPrisma.$transaction.mockImplementation(
+      async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => {
+        return fn(mockPrisma);
+      },
+    );
+    mockPrisma.systemSetting.upsert.mockResolvedValue({});
+
+    mockPrisma.systemSetting.findMany.mockResolvedValue([
+      { key: 'approvals.journalApprovalEnabled', value: 'true', valueType: 'BOOLEAN' },
+      { key: 'approvals.journalApprovalThreshold', value: '50000', valueType: 'NUMBER' },
+      { key: 'approvals.budgetApprovalRequired', value: 'false', valueType: 'BOOLEAN' },
+      { key: 'approvals.yearEndApprovalRequired', value: 'true', valueType: 'BOOLEAN' },
+    ]);
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/finance/settings',
+      headers: {
+        authorization: `Bearer ${testJwt}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        approvals: {
+          journalApprovalEnabled: true,
+          journalApprovalThreshold: 50000,
+          budgetApprovalRequired: false,
+          yearEndApprovalRequired: true,
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.approvals.journalApprovalEnabled).toBe(true);
+    expect(body.data.approvals.journalApprovalThreshold).toBe(50000);
+    expect(body.data.approvals.budgetApprovalRequired).toBe(false);
+    expect(body.data.approvals.yearEndApprovalRequired).toBe(true);
+  });
+
+  it('rejects negative journalApprovalThreshold', async () => {
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/finance/settings',
+      headers: {
+        authorization: `Bearer ${testJwt}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        approvals: {
+          journalApprovalThreshold: -100,
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PUT /finance/settings — Number Series tab
+// ---------------------------------------------------------------------------
+
+describe('PUT /finance/settings — numberSeries tab', () => {
+  it('saves and loads number series settings', async () => {
+    app = await buildTestApp();
+
+    mockPrisma.$transaction.mockImplementation(
+      async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => {
+        return fn(mockPrisma);
+      },
+    );
+    mockPrisma.systemSetting.upsert.mockResolvedValue({});
+
+    mockPrisma.systemSetting.findMany.mockResolvedValue([
+      { key: 'numberSeries.journalPrefix', value: 'GL', valueType: 'STRING' },
+      { key: 'numberSeries.journalPadding', value: '6', valueType: 'NUMBER' },
+      { key: 'numberSeries.simulationPrefix', value: 'WIF', valueType: 'STRING' },
+      { key: 'numberSeries.simulationPadding', value: '4', valueType: 'NUMBER' },
+      { key: 'numberSeries.budgetPrefix', value: 'BUD', valueType: 'STRING' },
+      { key: 'numberSeries.budgetPadding', value: '7', valueType: 'NUMBER' },
+    ]);
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/finance/settings',
+      headers: {
+        authorization: `Bearer ${testJwt}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        numberSeries: {
+          journalPrefix: 'GL',
+          journalPadding: 6,
+          simulationPrefix: 'WIF',
+          simulationPadding: 4,
+          budgetPrefix: 'BUD',
+          budgetPadding: 7,
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.numberSeries.journalPrefix).toBe('GL');
+    expect(body.data.numberSeries.journalPadding).toBe(6);
+    expect(body.data.numberSeries.simulationPrefix).toBe('WIF');
+    expect(body.data.numberSeries.simulationPadding).toBe(4);
+    expect(body.data.numberSeries.budgetPrefix).toBe('BUD');
+    expect(body.data.numberSeries.budgetPadding).toBe(7);
+  });
+
+  it('rejects journalPadding outside 4-10 range', async () => {
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/finance/settings',
+      headers: {
+        authorization: `Bearer ${testJwt}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        numberSeries: {
+          journalPadding: 2,
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects prefix exceeding max length', async () => {
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/finance/settings',
+      headers: {
+        authorization: `Bearer ${testJwt}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        numberSeries: {
+          journalPrefix: 'TOOLONGPREFIX',
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PUT /finance/settings — Rounding tab
+// ---------------------------------------------------------------------------
+
+describe('PUT /finance/settings — rounding tab', () => {
+  it('saves and loads rounding settings', async () => {
+    app = await buildTestApp();
+
+    mockPrisma.$transaction.mockImplementation(
+      async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => {
+        return fn(mockPrisma);
+      },
+    );
+    mockPrisma.systemSetting.upsert.mockResolvedValue({});
+
+    mockPrisma.systemSetting.findMany.mockResolvedValue([
+      { key: 'rounding.currencyRoundingMethod', value: 'HALF_EVEN', valueType: 'STRING' },
+      { key: 'rounding.displayDecimals', value: '3', valueType: 'NUMBER' },
+      { key: 'rounding.internalDecimals', value: '4', valueType: 'NUMBER' },
+    ]);
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/finance/settings',
+      headers: {
+        authorization: `Bearer ${testJwt}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        rounding: {
+          currencyRoundingMethod: 'HALF_EVEN',
+          displayDecimals: 3,
+          internalDecimals: 4,
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.rounding.currencyRoundingMethod).toBe('HALF_EVEN');
+    expect(body.data.rounding.displayDecimals).toBe(3);
+    expect(body.data.rounding.internalDecimals).toBe(4);
+  });
+
+  it('rejects invalid currencyRoundingMethod enum', async () => {
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/finance/settings',
+      headers: {
+        authorization: `Bearer ${testJwt}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        rounding: {
+          currencyRoundingMethod: 'ROUND_RANDOM',
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects displayDecimals outside 0-4 range', async () => {
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/finance/settings',
+      headers: {
+        authorization: `Bearer ${testJwt}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        rounding: {
+          displayDecimals: 5,
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects internalDecimals below minimum of 2', async () => {
+    app = await buildTestApp();
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/finance/settings',
+      headers: {
+        authorization: `Bearer ${testJwt}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        rounding: {
+          internalDecimals: 1,
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /finance/settings — defaults for new tabs
+// ---------------------------------------------------------------------------
+
+describe('GET /finance/settings — new tab defaults', () => {
+  it('returns correct defaults for all 4 new tabs when no settings exist', async () => {
+    app = await buildTestApp();
+    mockPrisma.systemSetting.findMany.mockResolvedValue([]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/finance/settings',
+      headers: { authorization: `Bearer ${testJwt}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+
+    // Dimensions defaults
+    expect(body.data.dimensions.enableDimensions).toBe(false);
+    expect(body.data.dimensions.requireDimensionsOnManualJournals).toBe(false);
+    expect(body.data.dimensions.defaultDimensionBehavior).toBe('NONE');
+    expect(body.data.dimensions.maxDimensionTypes).toBe(10);
+
+    // Approvals defaults
+    expect(body.data.approvals.journalApprovalEnabled).toBe(false);
+    expect(body.data.approvals.journalApprovalThreshold).toBe(10000);
+    expect(body.data.approvals.budgetApprovalRequired).toBe(true);
+    expect(body.data.approvals.yearEndApprovalRequired).toBe(true);
+
+    // Number Series defaults
+    expect(body.data.numberSeries.journalPrefix).toBe('JNL');
+    expect(body.data.numberSeries.journalPadding).toBe(5);
+    expect(body.data.numberSeries.simulationPrefix).toBe('SIM');
+    expect(body.data.numberSeries.simulationPadding).toBe(5);
+    expect(body.data.numberSeries.budgetPrefix).toBe('BDG');
+    expect(body.data.numberSeries.budgetPadding).toBe(5);
+
+    // Rounding defaults
+    expect(body.data.rounding.currencyRoundingMethod).toBe('HALF_UP');
+    expect(body.data.rounding.displayDecimals).toBe(2);
+    expect(body.data.rounding.internalDecimals).toBe(4);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // POST /finance/settings/reset — AC-3
 // ---------------------------------------------------------------------------
 
@@ -502,7 +910,7 @@ describe('POST /finance/settings/reset', () => {
       where: { companyId: TEST_COMPANY_ID, category: 'FINANCE' },
     });
 
-    // Verify response contains all default values
+    // Verify response contains all default values (original 8 tabs)
     expect(body.data.general.fiscalYearStartMonth).toBe(
       FINANCE_DEFAULTS.general.fiscalYearStartMonth,
     );
@@ -518,6 +926,26 @@ describe('POST /finance/settings/reset', () => {
     expect(body.data.reporting.defaultReportFormat).toBe(
       FINANCE_DEFAULTS.reporting.defaultReportFormat,
     );
+
+    // Verify response contains defaults for 4 new tabs
+    expect(body.data.dimensions.enableDimensions).toBe(
+      FINANCE_DEFAULTS.dimensions.enableDimensions,
+    );
+    expect(body.data.dimensions.maxDimensionTypes).toBe(
+      FINANCE_DEFAULTS.dimensions.maxDimensionTypes,
+    );
+    expect(body.data.approvals.journalApprovalEnabled).toBe(
+      FINANCE_DEFAULTS.approvals.journalApprovalEnabled,
+    );
+    expect(body.data.approvals.journalApprovalThreshold).toBe(
+      FINANCE_DEFAULTS.approvals.journalApprovalThreshold,
+    );
+    expect(body.data.numberSeries.journalPrefix).toBe(FINANCE_DEFAULTS.numberSeries.journalPrefix);
+    expect(body.data.numberSeries.budgetPadding).toBe(FINANCE_DEFAULTS.numberSeries.budgetPadding);
+    expect(body.data.rounding.currencyRoundingMethod).toBe(
+      FINANCE_DEFAULTS.rounding.currencyRoundingMethod,
+    );
+    expect(body.data.rounding.displayDecimals).toBe(FINANCE_DEFAULTS.rounding.displayDecimals);
   });
 
   it('returns 401 without auth token', async () => {

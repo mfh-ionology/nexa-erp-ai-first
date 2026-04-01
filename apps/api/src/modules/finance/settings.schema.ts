@@ -31,11 +31,33 @@ export const tagsSettingsSchema = z.object({
   enableProjects: z.boolean().default(false),
 });
 
+// ---------------------------------------------------------------------------
+// Dimensions Settings Tab
+// ---------------------------------------------------------------------------
+
+export const dimensionsSettingsSchema = z.object({
+  enableDimensions: z.boolean().default(false),
+  requireDimensionsOnManualJournals: z.boolean().default(false),
+  defaultDimensionBehavior: z.enum(['NONE', 'SUGGEST', 'REQUIRE']).default('NONE'),
+  maxDimensionTypes: z.number().int().min(1).max(20).default(10),
+});
+
 export const dataEntrySettingsSchema = z.object({
   requireDescription: z.boolean().default(false),
   autoPopulateVat: z.boolean().default(true),
   defaultSource: z.enum(['MANUAL', 'IMPORT', 'API']).default('MANUAL'),
   warnUnbalanced: z.boolean().default(true),
+});
+
+// ---------------------------------------------------------------------------
+// Approvals Settings Tab
+// ---------------------------------------------------------------------------
+
+export const approvalsSettingsSchema = z.object({
+  journalApprovalEnabled: z.boolean().default(false),
+  journalApprovalThreshold: z.number().min(0).default(10000),
+  budgetApprovalRequired: z.boolean().default(true),
+  yearEndApprovalRequired: z.boolean().default(true),
 });
 
 export const reconciliationSettingsSchema = z.object({
@@ -50,6 +72,29 @@ export const multiCurrencySettingsSchema = z.object({
   rateSource: z.enum(['BOE', 'ECB', 'MANUAL']).default('BOE'),
 });
 
+// ---------------------------------------------------------------------------
+// Number Series Settings Tab
+// ---------------------------------------------------------------------------
+
+export const numberSeriesSettingsSchema = z.object({
+  journalPrefix: z.string().max(10).default('JNL'),
+  journalPadding: z.number().int().min(4).max(10).default(5),
+  simulationPrefix: z.string().max(10).default('SIM'),
+  simulationPadding: z.number().int().min(4).max(10).default(5),
+  budgetPrefix: z.string().max(10).default('BDG'),
+  budgetPadding: z.number().int().min(4).max(10).default(5),
+});
+
+// ---------------------------------------------------------------------------
+// Rounding Settings Tab
+// ---------------------------------------------------------------------------
+
+export const roundingSettingsSchema = z.object({
+  currencyRoundingMethod: z.enum(['HALF_UP', 'HALF_EVEN', 'CEILING', 'FLOOR']).default('HALF_UP'),
+  displayDecimals: z.number().int().min(0).max(4).default(2),
+  internalDecimals: z.number().int().min(2).max(4).default(4),
+});
+
 export const reportingSettingsSchema = z.object({
   defaultReportFormat: z.enum(['PDF', 'EXCEL', 'CSV']).default('PDF'),
   includeZeroBalances: z.boolean().default(false),
@@ -57,7 +102,7 @@ export const reportingSettingsSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// Combined Settings Schema — all 8 tabs grouped
+// Combined Settings Schema — all 12 tabs grouped
 // ---------------------------------------------------------------------------
 
 export const financeSettingsSchema = z.object({
@@ -65,9 +110,13 @@ export const financeSettingsSchema = z.object({
   vat: vatSettingsSchema,
   subSystems: subSystemsSettingsSchema,
   tags: tagsSettingsSchema,
+  dimensions: dimensionsSettingsSchema,
   dataEntry: dataEntrySettingsSchema,
+  approvals: approvalsSettingsSchema,
   reconciliation: reconciliationSettingsSchema,
   multiCurrency: multiCurrencySettingsSchema,
+  numberSeries: numberSeriesSettingsSchema,
+  rounding: roundingSettingsSchema,
   reporting: reportingSettingsSchema,
 });
 
@@ -81,9 +130,13 @@ export const updateFinanceSettingsSchema = z.object({
   vat: vatSettingsSchema.partial().optional(),
   subSystems: subSystemsSettingsSchema.partial().optional(),
   tags: tagsSettingsSchema.partial().optional(),
+  dimensions: dimensionsSettingsSchema.partial().optional(),
   dataEntry: dataEntrySettingsSchema.partial().optional(),
+  approvals: approvalsSettingsSchema.partial().optional(),
   reconciliation: reconciliationSettingsSchema.partial().optional(),
   multiCurrency: multiCurrencySettingsSchema.partial().optional(),
+  numberSeries: numberSeriesSettingsSchema.partial().optional(),
+  rounding: roundingSettingsSchema.partial().optional(),
   reporting: reportingSettingsSchema.partial().optional(),
 });
 
@@ -103,7 +156,11 @@ export type GeneralSettings = z.infer<typeof generalSettingsSchema>;
 export type VatSettings = z.infer<typeof vatSettingsSchema>;
 export type SubSystemsSettings = z.infer<typeof subSystemsSettingsSchema>;
 export type TagsSettings = z.infer<typeof tagsSettingsSchema>;
+export type DimensionsSettings = z.infer<typeof dimensionsSettingsSchema>;
 export type DataEntrySettings = z.infer<typeof dataEntrySettingsSchema>;
+export type ApprovalsSettings = z.infer<typeof approvalsSettingsSchema>;
 export type ReconciliationSettings = z.infer<typeof reconciliationSettingsSchema>;
 export type MultiCurrencySettings = z.infer<typeof multiCurrencySettingsSchema>;
+export type NumberSeriesSettings = z.infer<typeof numberSeriesSettingsSchema>;
+export type RoundingSettings = z.infer<typeof roundingSettingsSchema>;
 export type ReportingSettings = z.infer<typeof reportingSettingsSchema>;
