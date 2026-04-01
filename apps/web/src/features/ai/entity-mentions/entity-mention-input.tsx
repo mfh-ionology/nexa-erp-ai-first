@@ -101,10 +101,11 @@ export function EntityMentionInput({
       };
       setMentions((prev) => (prev.some((m) => m.id === mention.id) ? prev : [...prev, mention]));
 
-      // Replace trigger word + search text in inputText with empty string
+      // Replace trigger word + search text with {id : displayName} so the AI model sees the reference inline
       if (detected) {
         const before = inputText.slice(0, detected.triggerStartIndex).trimEnd();
-        setInputText(before ? `${before} ` : '');
+        const replacement = `{${result.id} : ${result.displayName}}`;
+        setInputText(before ? `${before} ${replacement} ` : `${replacement} `);
       }
 
       setDismissed(true);
