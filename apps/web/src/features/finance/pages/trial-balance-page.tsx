@@ -223,11 +223,31 @@ export function TrialBalancePage() {
       {
         accessorKey: 'accountCode',
         header: 'Account Code',
-        cell: ({ getValue }) => <span className="font-mono text-xs">{getValue<string>()}</span>,
+        cell: ({ row, getValue }) => {
+          const isTotals = row.original.accountName === '** TOTAL **';
+          return (
+            <span className={`font-mono text-xs ${isTotals ? 'font-bold' : ''}`}>
+              {getValue<string>()}
+            </span>
+          );
+        },
       },
       {
         accessorKey: 'accountName',
         header: 'Account Name',
+        cell: ({ getValue }) => {
+          const val = getValue<string>();
+          const isTotals = val === '** TOTAL **';
+          return (
+            <span
+              className={
+                isTotals ? 'font-bold text-base border-t-2 border-foreground/30 pt-2 block' : ''
+              }
+            >
+              {isTotals ? 'TOTAL' : val}
+            </span>
+          );
+        },
       },
       {
         accessorKey: 'accountType',
@@ -239,11 +259,14 @@ export function TrialBalancePage() {
       {
         accessorKey: 'debit',
         header: 'Debit',
-        cell: ({ getValue }) => {
+        cell: ({ row, getValue }) => {
           const val = getValue<number>();
+          const isTotals = row.original.accountName === '** TOTAL **';
           return (
-            <span className="font-mono text-sm tabular-nums">
-              {val > 0 ? formatCurrency(val) : '\u2014'}
+            <span
+              className={`font-mono text-sm tabular-nums ${isTotals ? 'font-bold text-base border-t-2 border-foreground/30 pt-2 block' : ''}`}
+            >
+              {val > 0 ? formatCurrency(val) : isTotals ? '\u2014' : '\u2014'}
             </span>
           );
         },
@@ -251,11 +274,14 @@ export function TrialBalancePage() {
       {
         accessorKey: 'credit',
         header: 'Credit',
-        cell: ({ getValue }) => {
+        cell: ({ row, getValue }) => {
           const val = getValue<number>();
+          const isTotals = row.original.accountName === '** TOTAL **';
           return (
-            <span className="font-mono text-sm tabular-nums">
-              {val > 0 ? formatCurrency(val) : '\u2014'}
+            <span
+              className={`font-mono text-sm tabular-nums ${isTotals ? 'font-bold text-base border-t-2 border-foreground/30 pt-2 block' : ''}`}
+            >
+              {val > 0 ? formatCurrency(val) : isTotals ? '\u2014' : '\u2014'}
             </span>
           );
         },
@@ -263,8 +289,15 @@ export function TrialBalancePage() {
       {
         accessorKey: 'balance',
         header: 'Balance',
-        cell: ({ getValue }) => {
+        cell: ({ row, getValue }) => {
           const val = getValue<number>();
+          const isTotals = row.original.accountName === '** TOTAL **';
+          if (isTotals)
+            return (
+              <span className="font-bold text-base border-t-2 border-foreground/30 pt-2 block">
+                &nbsp;
+              </span>
+            );
           return (
             <span className="font-mono text-sm font-medium tabular-nums">
               {formatCurrency(val)}
@@ -276,16 +309,22 @@ export function TrialBalancePage() {
     [],
   );
 
-  const totals = standardData?.totals
-    ? {
+  // Append totals as the last row in the data array for proper column alignment
+  const rowsWithTotals = useMemo(() => {
+    if (!standardData) return [];
+    const rows = [...standardData.rows];
+    if (standardData.totals) {
+      rows.push({
         accountCode: '',
-        accountName: 'Total',
-        accountType: '',
-        debit: formatCurrency(standardData.totals.totalDebit),
-        credit: formatCurrency(standardData.totals.totalCredit),
-        balance: '',
-      }
-    : undefined;
+        accountName: '** TOTAL **',
+        accountType: '' as TrialBalanceRow['accountType'],
+        debit: standardData.totals.totalDebit,
+        credit: standardData.totals.totalCredit,
+        balance: 0,
+      });
+    }
+    return rows;
+  }, [standardData]);
 
   const parameterSlot = (
     <div className="space-y-4">
@@ -343,10 +382,9 @@ export function TrialBalancePage() {
       parameterSlot={parameterSlot}
       hasResults={!!standardData}
       resultColumns={columns}
-      resultData={standardData?.rows ?? []}
+      resultData={rowsWithTotals}
       onRunReport={handleRunReport}
       isRunning={isFetching}
-      totals={totals}
     />
   );
 }
