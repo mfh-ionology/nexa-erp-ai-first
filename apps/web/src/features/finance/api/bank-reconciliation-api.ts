@@ -1,12 +1,13 @@
 /**
  * Bank Reconciliation API client functions.
  *
- * Endpoints:
- *   GET  /finance/bank-accounts/:id/reconciliation  — get reconciliation summary
- *   GET  /finance/bank-accounts/:id/transactions     — list bank transactions
- *   GET  /finance/bank-accounts/:id/unmatched-lines  — list unmatched journal lines
- *   POST /finance/bank-accounts/:id/match            — match a bank transaction to a journal line
- *   POST /finance/bank-transactions/:id/unmatch      — unmatch a bank transaction
+ * Actual backend endpoints:
+ *   POST /finance/bank-accounts/:bankAccountId/reconciliations          — create session
+ *   GET  /finance/bank-accounts/:bankAccountId/reconciliations          — list sessions
+ *   GET  /finance/bank-accounts/:bankAccountId/reconciliations/:id      — detail (matched+unmatched)
+ *   POST /finance/bank-accounts/:bankAccountId/reconciliations/:id/complete — complete
+ *   POST /finance/bank-accounts/:id/match                              — match bank tx to journal line
+ *   POST /finance/bank-transactions/:id/unmatch                        — unmatch
  */
 
 import { apiGet, apiPost, buildQueryString } from '@/lib/api-client';
@@ -20,55 +21,111 @@ import type {
 } from '../types';
 
 // ---------------------------------------------------------------------------
-// GET /finance/bank-accounts/:id/reconciliation
+// GET /finance/bank-accounts/:bankAccountId/reconciliations — list sessions
 // ---------------------------------------------------------------------------
 
-export async function getReconciliationSummary(
-  bankAccountId: string,
-): Promise<ReconciliationSummary> {
-  const result = await apiGet<ReconciliationSummary>(
-    `/finance/bank-accounts/${bankAccountId}/reconciliation`,
+export async function listReconciliations(bankAccountId: string): Promise<ReconciliationSummary[]> {
+  const result = await apiGet<ReconciliationSummary[]>(
+    `/finance/bank-accounts/${bankAccountId}/reconciliations`,
   );
   return result.data;
 }
 
 // ---------------------------------------------------------------------------
-// GET /finance/bank-accounts/:id/transactions
+// POST /finance/bank-accounts/:bankAccountId/reconciliations — create session
 // ---------------------------------------------------------------------------
 
-export async function listBankTransactions(
+export async function createReconciliation(
   bankAccountId: string,
-  params: { status?: string; cursor?: string; limit?: number } = {},
-): Promise<{ data: BankTransaction[]; meta: { cursor?: string; hasMore: boolean } }> {
-  const qs = buildQueryString(params as Record<string, unknown>);
-  const result = await apiGet<BankTransaction[]>(
-    `/finance/bank-accounts/${bankAccountId}/transactions${qs}`,
+  input: { statementDate: string; statementBalance: number },
+): Promise<ReconciliationSummary> {
+  const result = await apiPost<ReconciliationSummary>(
+    `/finance/bank-accounts/${bankAccountId}/reconciliations`,
+    input,
   );
-  return {
-    data: result.data,
-    meta: (result.meta as { cursor?: string; hasMore: boolean }) ?? {
-      hasMore: false,
-    },
-  };
+  return result.data;
 }
 
 // ---------------------------------------------------------------------------
-// GET /finance/bank-accounts/:id/unmatched-lines
+// GET /finance/bank-accounts/:bankAccountId/reconciliations/:id — detail
+// Returns matched transactions, unmatched bank transactions, unmatched journal lines
 // ---------------------------------------------------------------------------
+
+interface ReconciliationDetail {
+  id: string;
+  bankAccountId: string;
+  statementDate: string;
+  statementBalance: number;
+  glBalance: number | null;
+  difference: number | null;
+  status: string;
+  matchedTransactions: BankTransaction[];
+  unmatchedBankTransactions: BankTransaction[];
+  unmatchedJournalLines: JournalLineForMatching[];
+}
+
+export async function getReconciliationDetail(
+  bankAccountId: string,
+  reconciliationId: string,
+): Promise<ReconciliationDetail> {
+  const result = await apiGet<ReconciliationDetail>(
+    `/finance/bank-accounts/${bankAccountId}/reconciliations/${reconciliationId}`,
+  );
+  return result.data;
+}
+
+// ---------------------------------------------------------------------------
+// For the workspace page — get or create an active reconciliation
+// ---------------------------------------------------------------------------
+
+export async function getOrCreateReconciliation(
+  bankAccountId: string,
+): Promise<ReconciliationSummary> {
+  // First check for existing IN_PROGRESS reconciliation
+  const existing = await listReconciliations(bankAccountId);
+  const active = existing.find((r) => r.status === 'IN_PROGRESS');
+  if (active) return active;
+
+  // Create a new one with today's date and 0 balance (user can update)
+  const today = new Date().toISOString().split('T')[0]!;
+  return createReconciliation(bankAccountId, {
+    statementDate: today,
+    statementBalance: 0,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Compatibility shims for existing hooks
+// ---------------------------------------------------------------------------
+
+export async function getReconciliationSummary(
+  bankAccountId: string,
+): Promise<ReconciliationSummary> {
+  return getOrCreateReconciliation(bankAccountId);
+}
+
+export async function listBankTransactions(
+  bankAccountId: string,
+  _params: { status?: string; cursor?: string; limit?: number } = {},
+): Promise<{ data: BankTransaction[]; meta: { cursor?: string; hasMore: boolean } }> {
+  // Get the active reconciliation detail which includes bank transactions
+  const recon = await getOrCreateReconciliation(bankAccountId);
+  const detail = await getReconciliationDetail(bankAccountId, recon.id);
+  return {
+    data: [...detail.unmatchedBankTransactions, ...detail.matchedTransactions],
+    meta: { hasMore: false },
+  };
+}
 
 export async function listUnmatchedJournalLines(
   bankAccountId: string,
-  params: { cursor?: string; limit?: number } = {},
+  _params: { cursor?: string; limit?: number } = {},
 ): Promise<{ data: JournalLineForMatching[]; meta: { cursor?: string; hasMore: boolean } }> {
-  const qs = buildQueryString(params as Record<string, unknown>);
-  const result = await apiGet<JournalLineForMatching[]>(
-    `/finance/bank-accounts/${bankAccountId}/unmatched-lines${qs}`,
-  );
+  const recon = await getOrCreateReconciliation(bankAccountId);
+  const detail = await getReconciliationDetail(bankAccountId, recon.id);
   return {
-    data: result.data,
-    meta: (result.meta as { cursor?: string; hasMore: boolean }) ?? {
-      hasMore: false,
-    },
+    data: detail.unmatchedJournalLines,
+    meta: { hasMore: false },
   };
 }
 
