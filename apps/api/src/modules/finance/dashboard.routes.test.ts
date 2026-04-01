@@ -20,7 +20,7 @@ const { mockPrisma, mockResolveUserRole, mockPermissionService, mockEventBus } =
     user: { findUnique: vi.fn() },
     userCompanyRole: { findUnique: vi.fn(), findFirst: vi.fn() },
     companyProfile: { findUnique: vi.fn() },
-    setting: { findFirst: vi.fn() },
+    systemSetting: { findFirst: vi.fn() },
     bankAccount: { findMany: vi.fn() },
     financialPeriod: { findMany: vi.fn() },
     journalEntry: { count: vi.fn() },
@@ -173,11 +173,11 @@ function setupDefaultDashboardMocks(
 ) {
   // Setting: fiscal year start month
   if (opts.fiscalYearStartMonth !== undefined) {
-    mockPrisma.setting.findFirst.mockResolvedValue(
+    mockPrisma.systemSetting.findFirst.mockResolvedValue(
       opts.fiscalYearStartMonth !== null ? { value: String(opts.fiscalYearStartMonth) } : null,
     );
   } else {
-    mockPrisma.setting.findFirst.mockResolvedValue(null);
+    mockPrisma.systemSetting.findFirst.mockResolvedValue(null);
   }
 
   // Bank accounts
