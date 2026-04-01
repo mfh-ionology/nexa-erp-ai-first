@@ -11,12 +11,21 @@ import {
   transactionJournalResponseSchema,
   budgetVarianceQuerySchema,
   budgetVarianceResponseSchema,
+  glDetailQuerySchema,
+  glDetailResponseSchema,
+  generalLedgerQuerySchema,
+  generalLedgerResponseSchema,
+  departmentalPnlQuerySchema,
+  departmentalPnlResponseSchema,
 } from './reports.schema.js';
 import type {
   TrialBalanceQuery,
   ReportQuery,
   TransactionJournalQuery,
   BudgetVarianceQuery,
+  GLDetailQuery,
+  GeneralLedgerQuery,
+  DepartmentalPnlQuery,
 } from './reports.schema.js';
 import {
   getTrialBalance,
@@ -24,6 +33,9 @@ import {
   getBalanceSheet,
   getTransactionJournal,
   getBudgetVariance,
+  getGLDetail,
+  getGeneralLedger,
+  getDepartmentalPnl,
 } from './reports.service.js';
 import { createPermissionGuard } from '../../core/rbac/index.js';
 import { sendSuccess } from '../../core/utils/response.js';
@@ -39,6 +51,9 @@ const profitAndLossEnvelope = successEnvelope(profitAndLossResponseSchema);
 const balanceSheetEnvelope = successEnvelope(balanceSheetResponseSchema);
 const transactionJournalEnvelope = successEnvelope(transactionJournalResponseSchema);
 const budgetVarianceEnvelope = successEnvelope(budgetVarianceResponseSchema);
+const glDetailEnvelope = successEnvelope(glDetailResponseSchema);
+const generalLedgerEnvelope = successEnvelope(generalLedgerResponseSchema);
+const departmentalPnlEnvelope = successEnvelope(departmentalPnlResponseSchema);
 
 // ---------------------------------------------------------------------------
 // Finance Reports routes plugin
@@ -126,6 +141,57 @@ async function reportsRoutes(fastify: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const ctx = extractRequestContext(request);
       const result = await getBudgetVariance(prisma, ctx.companyId, request.query);
+      return sendSuccess(reply, result);
+    },
+  );
+
+  // GET /reports/gl-detail — GL Detail / Account Activity report (F5-6.1)
+  fastify.get<{ Querystring: GLDetailQuery }>(
+    '/reports/gl-detail',
+    {
+      schema: {
+        querystring: glDetailQuerySchema,
+        response: { 200: glDetailEnvelope },
+      },
+      preHandler: createPermissionGuard('finance.reports', 'view'),
+    },
+    async (request, reply) => {
+      const ctx = extractRequestContext(request);
+      const result = await getGLDetail(prisma, ctx.companyId, request.query);
+      return sendSuccess(reply, result);
+    },
+  );
+
+  // GET /reports/general-ledger — General Ledger report (F5-6.2)
+  fastify.get<{ Querystring: GeneralLedgerQuery }>(
+    '/reports/general-ledger',
+    {
+      schema: {
+        querystring: generalLedgerQuerySchema,
+        response: { 200: generalLedgerEnvelope },
+      },
+      preHandler: createPermissionGuard('finance.reports', 'view'),
+    },
+    async (request, reply) => {
+      const ctx = extractRequestContext(request);
+      const result = await getGeneralLedger(prisma, ctx.companyId, request.query);
+      return sendSuccess(reply, result);
+    },
+  );
+
+  // GET /reports/departmental-pnl — Departmental P&L report (F5-2.6)
+  fastify.get<{ Querystring: DepartmentalPnlQuery }>(
+    '/reports/departmental-pnl',
+    {
+      schema: {
+        querystring: departmentalPnlQuerySchema,
+        response: { 200: departmentalPnlEnvelope },
+      },
+      preHandler: createPermissionGuard('finance.reports', 'view'),
+    },
+    async (request, reply) => {
+      const ctx = extractRequestContext(request);
+      const result = await getDepartmentalPnl(prisma, ctx.companyId, request.query);
       return sendSuccess(reply, result);
     },
   );

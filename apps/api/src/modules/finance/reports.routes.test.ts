@@ -29,6 +29,9 @@ const { mockPrisma, mockResolveUserRole, mockPermissionService, mockEventBus } =
     chartOfAccount: {
       findMany: vi.fn(),
     },
+    simulationLine: {
+      groupBy: vi.fn(),
+    },
     $transaction: vi.fn(),
   },
   mockResolveUserRole: vi.fn(),
@@ -607,5 +610,122 @@ describe('GET /finance/reports/trial-balance', () => {
     expect(cashAccount.totalCredit).toBe(250.25);
     // closingBalance = 10000 + 1500.5 - 250.25 = 11250.25
     expect(cashAccount.closingBalance).toBe(11250.25);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /finance/reports/trial-balance — dimension filtering
+// ---------------------------------------------------------------------------
+
+describe('GET /finance/reports/trial-balance -- dimension filtering', () => {
+  it('passes dimensionValueId through to journalLine.groupBy where clause', async () => {
+    app = await buildTestApp();
+
+    const dimValueId = 'dddd0000-0000-4000-a000-000000000010';
+
+    mockPrisma.financialPeriod.findMany.mockResolvedValue([{ id: PERIOD_ID_1 }]);
+    mockPrisma.journalLine.groupBy.mockResolvedValue([]);
+    mockPrisma.chartOfAccount.findMany.mockResolvedValue([]);
+
+    await app.inject({
+      method: 'GET',
+      url: `/finance/reports/trial-balance?fiscalYear=2026&dimensionValueId=${dimValueId}`,
+      headers: { authorization: `Bearer ${testJwt}` },
+    });
+
+    expect(mockPrisma.journalLine.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          dimensions: { some: { dimensionValueId: dimValueId } },
+        }),
+      }),
+    );
+  });
+
+  it('returns filtered results when dimensionValueId is provided', async () => {
+    app = await buildTestApp();
+
+    const dimValueId = 'dddd0000-0000-4000-a000-000000000010';
+
+    mockPrisma.financialPeriod.findMany.mockResolvedValue([{ id: PERIOD_ID_1 }]);
+
+    // Only return filtered lines
+    mockPrisma.journalLine.groupBy.mockResolvedValue([
+      { accountCode: '1000', _sum: { debit: 300, credit: 0 } },
+    ]);
+
+    mockPrisma.chartOfAccount.findMany.mockResolvedValue(makeSampleAccounts());
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/finance/reports/trial-balance?fiscalYear=2026&dimensionValueId=${dimValueId}`,
+      headers: { authorization: `Bearer ${testJwt}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    // Should still produce valid results with filtered data
+    const cashAccount = body.data.accounts.find(
+      (a: { accountCode: string }) => a.accountCode === '1000',
+    );
+    expect(cashAccount).toBeDefined();
+    expect(cashAccount.totalDebit).toBe(300);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /finance/reports/trial-balance — simulation inclusion
+// ---------------------------------------------------------------------------
+
+describe('GET /finance/reports/trial-balance -- simulation inclusion', () => {
+  it('merges simulation line aggregations when includeSimulations=true', async () => {
+    app = await buildTestApp();
+
+    mockPrisma.financialPeriod.findMany.mockResolvedValue([{ id: PERIOD_ID_1 }]);
+
+    // Journal lines: Cash has 500 debit
+    mockPrisma.journalLine.groupBy.mockResolvedValue([
+      { accountCode: '1000', _sum: { debit: 500, credit: 0 } },
+    ]);
+
+    // Simulation lines: Cash has additional 200 debit
+    mockPrisma.simulationLine.groupBy.mockResolvedValue([
+      { accountCode: '1000', _sum: { debit: 200, credit: 0 } },
+    ]);
+
+    mockPrisma.chartOfAccount.findMany.mockResolvedValue([
+      {
+        code: '1000',
+        name: 'Cash',
+        accountType: 'ASSET',
+        normalBalance: 'DEBIT',
+        openingBalance: 5000,
+      },
+    ]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/finance/reports/trial-balance?fiscalYear=2026&includeSimulations=true',
+      headers: { authorization: `Bearer ${testJwt}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    const cashAccount = body.data.accounts[0];
+    // 500 (journal) + 200 (simulation) = 700
+    expect(cashAccount.totalDebit).toBe(700);
+    // closingBalance = 5000 + 700 - 0 = 5700
+    expect(cashAccount.closingBalance).toBe(5700);
+
+    // Verify simulationLine.groupBy was called
+    expect(mockPrisma.simulationLine.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          simulation: expect.objectContaining({
+            status: 'ACTIVE',
+          }),
+        }),
+      }),
+    );
   });
 });

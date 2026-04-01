@@ -34,6 +34,10 @@ const { mockPrisma, mockResolveUserRole, mockPermissionService, mockEventBus } =
     },
     budget: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
+    },
+    simulationLine: {
+      groupBy: vi.fn(),
     },
     $transaction: vi.fn(),
   },
@@ -858,5 +862,153 @@ describe('GET /finance/reports/budget-variance', () => {
     expect(line.budgetAmount).toBe(1500.75);
     expect(line.actualAmount).toBe(750.25);
     expect(line.variance).toBe(750.5);
+  });
+});
+
+// ===========================================================================
+// Dimension filtering on Transaction Journal
+// ===========================================================================
+
+describe('GET /finance/reports/transaction-journal -- dimension filtering', () => {
+  it('filters entries by dimensionValueId', async () => {
+    app = await buildTestApp();
+
+    const dimValueId = 'dddd0000-0000-4000-a000-000000000010';
+
+    mockPrisma.financialPeriod.findMany.mockResolvedValue([{ id: PERIOD_ID_1 }]);
+    mockPrisma.journalEntry.findMany.mockResolvedValue([]);
+
+    await app.inject({
+      method: 'GET',
+      url: `/finance/reports/transaction-journal?fiscalYear=2026&dimensionValueId=${dimValueId}`,
+      headers: { authorization: `Bearer ${testJwt}` },
+    });
+
+    expect(mockPrisma.journalEntry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          lines: {
+            some: {
+              dimensions: { some: { dimensionValueId: dimValueId } },
+            },
+          },
+        }),
+      }),
+    );
+  });
+
+  it('combines accountCode and dimensionValueId filters', async () => {
+    app = await buildTestApp();
+
+    const dimValueId = 'dddd0000-0000-4000-a000-000000000010';
+
+    mockPrisma.financialPeriod.findMany.mockResolvedValue([{ id: PERIOD_ID_1 }]);
+    mockPrisma.journalEntry.findMany.mockResolvedValue([]);
+
+    await app.inject({
+      method: 'GET',
+      url: `/finance/reports/transaction-journal?fiscalYear=2026&accountCode=5000&dimensionValueId=${dimValueId}`,
+      headers: { authorization: `Bearer ${testJwt}` },
+    });
+
+    expect(mockPrisma.journalEntry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          lines: {
+            some: {
+              accountCode: '5000',
+              dimensions: { some: { dimensionValueId: dimValueId } },
+            },
+          },
+        }),
+      }),
+    );
+  });
+});
+
+// ===========================================================================
+// Budget version filtering on Budget Variance
+// ===========================================================================
+
+describe('GET /finance/reports/budget-variance -- budget version filtering', () => {
+  it('accepts budgetVersionId and aggregates budgets in that version', async () => {
+    app = await buildTestApp();
+
+    const budgetVersionId = 'cccc0000-0000-4000-a000-000000000001';
+
+    // Return two budgets in the version
+    mockPrisma.budget.findMany.mockResolvedValue([
+      {
+        id: 'b1',
+        name: 'Budget V1 - Dept A',
+        fiscalYear: 2026,
+        lines: [
+          {
+            accountCode: '5000',
+            totalAmount: 600,
+            account: { name: 'Office Expenses' },
+          },
+        ],
+      },
+      {
+        id: 'b2',
+        name: 'Budget V1 - Dept B',
+        fiscalYear: 2026,
+        lines: [
+          {
+            accountCode: '5000',
+            totalAmount: 400,
+            account: { name: 'Office Expenses' },
+          },
+        ],
+      },
+    ]);
+
+    mockPrisma.financialPeriod.findMany.mockResolvedValue([{ id: PERIOD_ID_1 }]);
+    mockPrisma.journalLine.groupBy.mockResolvedValue([
+      { accountCode: '5000', _sum: { debit: 800, credit: 0 } },
+    ]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/finance/reports/budget-variance?fiscalYear=2026&budgetVersionId=${budgetVersionId}`,
+      headers: { authorization: `Bearer ${testJwt}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    // Budget amounts aggregated: 600 + 400 = 1000
+    const expenses = body.data.accounts.find(
+      (a: { accountCode: string }) => a.accountCode === '5000',
+    );
+    expect(expenses).toBeDefined();
+    expect(expenses.budgetAmount).toBe(1000);
+    expect(expenses.actualAmount).toBe(800);
+    expect(expenses.variance).toBe(200);
+
+    // Verify budget.findMany was called with the budgetVersionId
+    expect(mockPrisma.budget.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          budgetVersionId,
+        }),
+      }),
+    );
+  });
+
+  it('returns 404 when no budgets found for budgetVersionId', async () => {
+    app = await buildTestApp();
+
+    const budgetVersionId = 'cccc0000-0000-4000-a000-000000000001';
+
+    mockPrisma.budget.findMany.mockResolvedValue([]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/finance/reports/budget-variance?fiscalYear=2026&budgetVersionId=${budgetVersionId}`,
+      headers: { authorization: `Bearer ${testJwt}` },
+    });
+
+    expect(res.statusCode).not.toBe(200);
   });
 });

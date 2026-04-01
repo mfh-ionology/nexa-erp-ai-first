@@ -197,7 +197,7 @@ export async function listSimulations(
   return {
     data,
     meta: {
-      cursor: data.length > 0 ? (data[data.length - 1] as { id: string }).id : undefined,
+      cursor: data.length > 0 ? (data[data.length - 1] as unknown as { id: string }).id : undefined,
       hasMore,
     },
   };
@@ -457,14 +457,22 @@ export async function convertSimulation(
   };
 
   // Create journal entry (this generates its own entry number, validates period/accounts)
-  const journalResult = await createJournalEntry(prisma, eventBus, companyId, journalInput, userId);
+  const journalResult = (await createJournalEntry(
+    prisma,
+    eventBus,
+    companyId,
+    journalInput,
+    userId,
+  )) as unknown as Record<string, unknown>;
+
+  const journalId = journalResult.id as string;
 
   // Mark simulation as TRANSFERRED
   await prisma.simulation.update({
     where: { id },
     data: {
       status: 'TRANSFERRED',
-      transferredToId: journalResult.id as string,
+      transferredToId: journalId,
       updatedBy: userId,
     },
   });
@@ -472,7 +480,7 @@ export async function convertSimulation(
   // Emit event
   eventBus.emit('simulation.converted', {
     simulationId: id,
-    journalEntryId: journalResult.id,
+    journalEntryId: journalId,
     companyId,
     convertedBy: userId,
   });

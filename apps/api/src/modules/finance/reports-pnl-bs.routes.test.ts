@@ -29,6 +29,9 @@ const { mockPrisma, mockResolveUserRole, mockPermissionService, mockEventBus } =
     chartOfAccount: {
       findMany: vi.fn(),
     },
+    simulationLine: {
+      groupBy: vi.fn(),
+    },
     systemSetting: { findMany: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -995,5 +998,62 @@ describe('GET /finance/reports/balance-sheet', () => {
     // Only Cash should appear; Petty Cash has zero opening and no activity
     expect(caSection.accounts).toHaveLength(1);
     expect(caSection.accounts[0].accountCode).toBe('1200');
+  });
+});
+
+// ===========================================================================
+// Dimension filtering on P&L and BS
+// ===========================================================================
+
+describe('GET /finance/reports/profit-and-loss -- dimension filtering', () => {
+  it('passes dimensionValueId through to journalLine.groupBy', async () => {
+    app = await buildTestApp();
+
+    const dimValueId = 'dddd0000-0000-4000-a000-000000000010';
+
+    mockPrisma.financialPeriod.findMany.mockResolvedValue([{ id: PERIOD_ID_1 }]);
+    mockPrisma.journalLine.groupBy.mockResolvedValue([]);
+    mockPrisma.chartOfAccount.findMany.mockResolvedValue([]);
+
+    await app.inject({
+      method: 'GET',
+      url: `/finance/reports/profit-and-loss?fiscalYear=2026&dimensionValueId=${dimValueId}`,
+      headers: { authorization: `Bearer ${testJwt}` },
+    });
+
+    expect(mockPrisma.journalLine.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          dimensions: { some: { dimensionValueId: dimValueId } },
+        }),
+      }),
+    );
+  });
+});
+
+describe('GET /finance/reports/balance-sheet -- dimension filtering', () => {
+  it('passes dimensionValueId through to journalLine.groupBy', async () => {
+    app = await buildTestApp();
+
+    const dimValueId = 'dddd0000-0000-4000-a000-000000000010';
+
+    mockPrisma.financialPeriod.findMany.mockResolvedValue([{ id: PERIOD_ID_1 }]);
+    mockPrisma.journalLine.groupBy.mockResolvedValue([]);
+    mockPrisma.chartOfAccount.findMany.mockResolvedValue([]);
+
+    await app.inject({
+      method: 'GET',
+      url: `/finance/reports/balance-sheet?fiscalYear=2026&dimensionValueId=${dimValueId}`,
+      headers: { authorization: `Bearer ${testJwt}` },
+    });
+
+    // The first groupBy call is for BS aggregation, and should have the dimension filter
+    expect(mockPrisma.journalLine.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          dimensions: { some: { dimensionValueId: dimValueId } },
+        }),
+      }),
+    );
   });
 });

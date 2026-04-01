@@ -12,7 +12,203 @@ import type {
   TransactionJournalResponse,
   BudgetVarianceQuery,
   BudgetVarianceResponse,
+  GLDetailQuery,
+  GLDetailResponse,
+  GeneralLedgerQuery,
+  GeneralLedgerResponse,
+  DepartmentalPnlQuery,
+  DepartmentalPnlResponse,
 } from './reports.schema.js';
+
+// ---------------------------------------------------------------------------
+// Shared Helpers — Dimension Filtering + Simulation Aggregation
+// ---------------------------------------------------------------------------
+
+/**
+ * Aggregates journal lines by accountCode, optionally filtered by a dimension value.
+ *
+ * When dimensionValueId is provided, only lines linked to that dimension value
+ * via JournalLineDimension are included.
+ *
+ * Falls back to the standard groupBy when no dimension filter is present.
+ */
+async function getDimensionFilteredAggregations(
+  prisma: PrismaClient,
+  companyId: string,
+  periodIds: string[],
+  dimensionValueId?: string,
+): Promise<Map<string, { totalDebit: number; totalCredit: number }>> {
+  const lineMap = new Map<string, { totalDebit: number; totalCredit: number }>();
+
+  if (periodIds.length === 0) return lineMap;
+
+  const where: Record<string, unknown> = {
+    companyId,
+    journalEntry: {
+      companyId,
+      status: 'POSTED',
+      periodId: { in: periodIds },
+    },
+  };
+
+  if (dimensionValueId) {
+    where.dimensions = { some: { dimensionValueId } };
+  }
+
+  const lineAggregations: Array<{
+    accountCode: string;
+    _sum: { debit: unknown; credit: unknown };
+  }> = await (prisma as any).journalLine.groupBy({
+    by: ['accountCode'],
+    where,
+    _sum: { debit: true, credit: true },
+  });
+
+  for (const agg of lineAggregations) {
+    lineMap.set(agg.accountCode, {
+      totalDebit: Number(agg._sum.debit ?? 0),
+      totalCredit: Number(agg._sum.credit ?? 0),
+    });
+  }
+
+  return lineMap;
+}
+
+/**
+ * Aggregates simulation lines by accountCode for ACTIVE simulations in the given periods.
+ * Used when includeSimulations=true on reports.
+ */
+async function getSimulationLineAggregations(
+  prisma: PrismaClient,
+  companyId: string,
+  periodIds: string[],
+  _dimensionValueId?: string,
+): Promise<Map<string, { totalDebit: number; totalCredit: number }>> {
+  const lineMap = new Map<string, { totalDebit: number; totalCredit: number }>();
+
+  if (periodIds.length === 0) return lineMap;
+
+  const simLineAgg: Array<{
+    accountCode: string;
+    _sum: { debit: unknown; credit: unknown };
+  }> = await (prisma as any).simulationLine.groupBy({
+    by: ['accountCode'],
+    where: {
+      companyId,
+      simulation: {
+        companyId,
+        status: 'ACTIVE',
+        periodId: { in: periodIds },
+      },
+    },
+    _sum: { debit: true, credit: true },
+  });
+
+  for (const agg of simLineAgg) {
+    lineMap.set(agg.accountCode, {
+      totalDebit: Number(agg._sum.debit ?? 0),
+      totalCredit: Number(agg._sum.credit ?? 0),
+    });
+  }
+
+  return lineMap;
+}
+
+/**
+ * Fetches individual simulation lines for a single account (used by GL Detail).
+ */
+async function getSimulationLinesForAccount(
+  prisma: PrismaClient,
+  companyId: string,
+  periodIds: string[],
+  accountCode: string,
+  _dimensionValueId?: string,
+): Promise<GLDetailResponse['entries']> {
+  if (periodIds.length === 0) return [];
+
+  const simLines = await (prisma as any).simulationLine.findMany({
+    where: {
+      companyId,
+      accountCode,
+      simulation: {
+        companyId,
+        status: 'ACTIVE',
+        periodId: { in: periodIds },
+      },
+    },
+    include: {
+      simulation: {
+        select: {
+          id: true,
+          entryNumber: true,
+          transactionDate: true,
+          description: true,
+          reference: true,
+        },
+      },
+    },
+    orderBy: { simulation: { transactionDate: 'asc' } },
+  });
+
+  return simLines.map(
+    (line: {
+      simulation: {
+        id: string;
+        entryNumber: string;
+        transactionDate: Date | string;
+        description: string;
+        reference: string | null;
+      };
+      debit: unknown;
+      credit: unknown;
+      dimensionValues: unknown;
+    }) => {
+      const txDate =
+        line.simulation.transactionDate instanceof Date
+          ? line.simulation.transactionDate.toISOString().split('T')[0]
+          : String(line.simulation.transactionDate);
+
+      // Parse dimension values from JSON
+      const dimVals = Array.isArray(line.dimensionValues) ? line.dimensionValues : [];
+
+      return {
+        journalEntryId: line.simulation.id,
+        entryNumber: line.simulation.entryNumber,
+        transactionDate: txDate,
+        description: line.simulation.description,
+        reference: line.simulation.reference,
+        source: 'SIMULATION',
+        debit: roundToFourDecimals(Number(line.debit ?? 0)),
+        credit: roundToFourDecimals(Number(line.credit ?? 0)),
+        runningBalance: 0, // Will be recomputed by caller
+        isSimulation: true,
+        dimensions: dimVals.map(
+          (dv: { dimensionTypeName?: string; dimensionValueName?: string }) => ({
+            dimensionTypeName: dv.dimensionTypeName ?? '',
+            dimensionValueName: dv.dimensionValueName ?? '',
+          }),
+        ),
+      };
+    },
+  );
+}
+
+/**
+ * Merges simulation line aggregations into the journal line aggregation map.
+ * Adds simulation amounts on top of existing journal amounts for each account.
+ */
+function mergeSimulationAggregations(
+  journalMap: Map<string, { totalDebit: number; totalCredit: number }>,
+  simulationMap: Map<string, { totalDebit: number; totalCredit: number }>,
+): void {
+  for (const [accountCode, simTotals] of simulationMap) {
+    const existing = journalMap.get(accountCode) ?? { totalDebit: 0, totalCredit: 0 };
+    journalMap.set(accountCode, {
+      totalDebit: existing.totalDebit + simTotals.totalDebit,
+      totalCredit: existing.totalCredit + simTotals.totalCredit,
+    });
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Trial Balance Report — AC-1 through AC-6
@@ -26,6 +222,8 @@ import type {
  * - Includes openingBalance from ChartOfAccount (AC-5)
  * - Computes closingBalance respecting normal balance direction (AC-3)
  * - Verifies total debits == total credits (AC-6)
+ * - Optionally filters by dimension value
+ * - Optionally includes simulation lines from ACTIVE simulations
  */
 export async function getTrialBalance(
   prisma: PrismaClient,
@@ -47,37 +245,23 @@ export async function getTrialBalance(
   const periodIds = periods.map((p: { id: string }) => p.id);
 
   // 2. Aggregate posted journal lines grouped by accountCode
-  //    Only include POSTED entries (AC-4)
-  let lineAggregations: Array<{
-    accountCode: string;
-    _sum: { debit: unknown; credit: unknown };
-  }> = [];
+  //    Optionally filtered by dimension value
+  const lineMap = await getDimensionFilteredAggregations(
+    prisma,
+    companyId,
+    periodIds,
+    query.dimensionValueId,
+  );
 
-  if (periodIds.length > 0) {
-    lineAggregations = await (prisma as any).journalLine.groupBy({
-      by: ['accountCode'],
-      where: {
-        companyId,
-        journalEntry: {
-          companyId,
-          status: 'POSTED',
-          periodId: { in: periodIds },
-        },
-      },
-      _sum: {
-        debit: true,
-        credit: true,
-      },
-    });
-  }
-
-  // Build a lookup map: accountCode -> { totalDebit, totalCredit }
-  const lineMap = new Map<string, { totalDebit: number; totalCredit: number }>();
-  for (const agg of lineAggregations) {
-    lineMap.set(agg.accountCode, {
-      totalDebit: Number(agg._sum.debit ?? 0),
-      totalCredit: Number(agg._sum.credit ?? 0),
-    });
+  // 2b. Optionally merge simulation data
+  if (query.includeSimulations) {
+    const simMap = await getSimulationLineAggregations(
+      prisma,
+      companyId,
+      periodIds,
+      query.dimensionValueId,
+    );
+    mergeSimulationAggregations(lineMap, simMap);
   }
 
   // 3. Fetch all active accounts for the company
@@ -175,6 +359,8 @@ const PNL_CLASSIFICATIONS = [
  * - Groups by accountCode, joins with ChartOfAccount + classification
  * - Groups accounts by classification, calculates section totals
  * - Computes: grossProfit, operatingProfit, profitBeforeTax, netProfit (AC-4)
+ * - Optionally filters by dimension value
+ * - Optionally includes simulation lines from ACTIVE simulations
  */
 export async function getProfitAndLoss(
   prisma: PrismaClient,
@@ -195,35 +381,22 @@ export async function getProfitAndLoss(
   const periodIds = periods.map((p: { id: string }) => p.id);
 
   // 2. Aggregate posted journal lines grouped by accountCode
-  let lineAggregations: Array<{
-    accountCode: string;
-    _sum: { debit: unknown; credit: unknown };
-  }> = [];
+  const lineMap = await getDimensionFilteredAggregations(
+    prisma,
+    companyId,
+    periodIds,
+    query.dimensionValueId,
+  );
 
-  if (periodIds.length > 0) {
-    lineAggregations = await (prisma as any).journalLine.groupBy({
-      by: ['accountCode'],
-      where: {
-        companyId,
-        journalEntry: {
-          companyId,
-          status: 'POSTED',
-          periodId: { in: periodIds },
-        },
-      },
-      _sum: {
-        debit: true,
-        credit: true,
-      },
-    });
-  }
-
-  const lineMap = new Map<string, { totalDebit: number; totalCredit: number }>();
-  for (const agg of lineAggregations) {
-    lineMap.set(agg.accountCode, {
-      totalDebit: Number(agg._sum.debit ?? 0),
-      totalCredit: Number(agg._sum.credit ?? 0),
-    });
+  // 2b. Optionally merge simulation data
+  if (query.includeSimulations) {
+    const simMap = await getSimulationLineAggregations(
+      prisma,
+      companyId,
+      periodIds,
+      query.dimensionValueId,
+    );
+    mergeSimulationAggregations(lineMap, simMap);
   }
 
   // 3. Fetch P&L accounts (those with a classification whose reportSection is PROFIT_AND_LOSS)
@@ -347,6 +520,8 @@ const BS_CLASSIFICATIONS = [
  * - Groups by accountCode, joins with ChartOfAccount + classification
  * - Groups accounts by classification, calculates section totals
  * - Verifies: Total Assets == Total Liabilities + Equity (AC-5)
+ * - Optionally filters by dimension value
+ * - Optionally includes simulation lines from ACTIVE simulations
  */
 export async function getBalanceSheet(
   prisma: PrismaClient,
@@ -367,35 +542,22 @@ export async function getBalanceSheet(
   const periodIds = periods.map((p: { id: string }) => p.id);
 
   // 2. Aggregate posted journal lines grouped by accountCode
-  let lineAggregations: Array<{
-    accountCode: string;
-    _sum: { debit: unknown; credit: unknown };
-  }> = [];
+  const lineMap = await getDimensionFilteredAggregations(
+    prisma,
+    companyId,
+    periodIds,
+    query.dimensionValueId,
+  );
 
-  if (periodIds.length > 0) {
-    lineAggregations = await (prisma as any).journalLine.groupBy({
-      by: ['accountCode'],
-      where: {
-        companyId,
-        journalEntry: {
-          companyId,
-          status: 'POSTED',
-          periodId: { in: periodIds },
-        },
-      },
-      _sum: {
-        debit: true,
-        credit: true,
-      },
-    });
-  }
-
-  const lineMap = new Map<string, { totalDebit: number; totalCredit: number }>();
-  for (const agg of lineAggregations) {
-    lineMap.set(agg.accountCode, {
-      totalDebit: Number(agg._sum.debit ?? 0),
-      totalCredit: Number(agg._sum.credit ?? 0),
-    });
+  // 2b. Optionally merge simulation data
+  if (query.includeSimulations) {
+    const simMap = await getSimulationLineAggregations(
+      prisma,
+      companyId,
+      periodIds,
+      query.dimensionValueId,
+    );
+    mergeSimulationAggregations(lineMap, simMap);
   }
 
   // 3. Fetch Balance Sheet accounts (reportSection = BALANCE_SHEET)
@@ -487,7 +649,13 @@ export async function getBalanceSheet(
   // BUG-2 FIX: Calculate current-period net P&L and include in equity.
   // The Balance Sheet equation requires Assets = Liabilities + Equity, but P&L accounts
   // (Revenue, Expenses) are excluded from the BS. Their net effect must appear in Equity.
-  const currentPeriodPnl = await calculatePeriodNetPnl(prisma, companyId, periodIds);
+  const currentPeriodPnl = await calculatePeriodNetPnl(
+    prisma,
+    companyId,
+    periodIds,
+    query.dimensionValueId,
+    query.includeSimulations,
+  );
   if (Math.abs(currentPeriodPnl) >= 0.0001) {
     // Add a synthetic line to the Equity section
     const pnlLine: ReportAccountLine = {
@@ -539,6 +707,7 @@ export async function getBalanceSheet(
  * Returns all posted journal entries with their lines for a given period range.
  *
  * - Filters by fiscal year, period range, optional accountCode, optional source
+ * - Optionally filters by dimension value
  * - Returns entries ordered by transactionDate ascending
  * - Each entry includes its nested journal lines
  */
@@ -581,12 +750,16 @@ export async function getTransactionJournal(
     entryWhere.source = source;
   }
 
-  // If accountCode filter is set, only return entries that have at least one
-  // line matching that accountCode.
-  if (accountCode) {
-    entryWhere.lines = {
-      some: { accountCode },
-    };
+  // Build the lines.some filter combining accountCode + dimensionValueId
+  if (accountCode || query.dimensionValueId) {
+    const someConditions: Record<string, unknown> = {};
+    if (accountCode) {
+      someConditions.accountCode = accountCode;
+    }
+    if (query.dimensionValueId) {
+      someConditions.dimensions = { some: { dimensionValueId: query.dimensionValueId } };
+    }
+    entryWhere.lines = { some: someConditions };
   }
 
   // 3. Fetch journal entries with lines
@@ -599,6 +772,16 @@ export async function getTransactionJournal(
         include: {
           account: {
             select: { name: true },
+          },
+          dimensions: {
+            include: {
+              dimensionValue: {
+                select: {
+                  name: true,
+                  dimensionType: { select: { name: true } },
+                },
+              },
+            },
           },
         },
       },
@@ -667,6 +850,9 @@ export async function getTransactionJournal(
  *
  * - If budgetId is provided, uses that budget; otherwise uses the latest
  *   APPROVED budget for the fiscal year.
+ * - Optionally selects budgets by budgetVersionId
+ * - Optionally filters actuals by dimension value
+ * - Optionally includes simulation data in actuals
  * - For each account in the budget: budgetAmount, actualAmount, variance,
  *   variancePercentage.
  * - Summary: total budget, total actual, total variance.
@@ -714,6 +900,62 @@ export async function getBudgetVariance(
         },
       },
     });
+  } else if (query.budgetVersionId) {
+    // Find all budgets in this version for the fiscal year and aggregate
+    const budgets = await (prisma as any).budget.findMany({
+      where: { companyId, fiscalYear, budgetVersionId: query.budgetVersionId },
+      include: {
+        lines: {
+          orderBy: { accountCode: 'asc' },
+          include: {
+            account: { select: { name: true } },
+          },
+        },
+      },
+    });
+    if (budgets.length > 0) {
+      // Aggregate lines across all budgets in the version
+      const aggregatedLines = new Map<string, { totalAmount: number; accountName: string }>();
+      for (const b of budgets) {
+        for (const line of b.lines) {
+          const existing = aggregatedLines.get(line.accountCode);
+          const lineTotal = Number(line.totalAmount ?? 0);
+          if (existing) {
+            existing.totalAmount += lineTotal;
+          } else {
+            aggregatedLines.set(line.accountCode, {
+              totalAmount: lineTotal,
+              accountName: line.account?.name ?? line.accountCode,
+            });
+          }
+        }
+      }
+      // Use the first budget's metadata
+      budget = {
+        id: budgets[0].id,
+        name: budgets[0].name,
+        fiscalYear: budgets[0].fiscalYear,
+        lines: Array.from(aggregatedLines.entries()).map(([accountCode, data]) => ({
+          accountCode,
+          period1: 0,
+          period2: 0,
+          period3: 0,
+          period4: 0,
+          period5: 0,
+          period6: 0,
+          period7: 0,
+          period8: 0,
+          period9: 0,
+          period10: 0,
+          period11: 0,
+          period12: 0,
+          totalAmount: data.totalAmount,
+          account: { name: data.accountName },
+        })),
+      };
+    } else {
+      budget = null;
+    }
   } else {
     // Use latest approved budget for the fiscal year
     budget = await (prisma as any).budget.findFirst({
@@ -733,7 +975,9 @@ export async function getBudgetVariance(
   if (!budget) {
     const errorMessage = budgetId
       ? `Budget with id ${budgetId} not found`
-      : `No approved budget found for fiscal year ${fiscalYear}`;
+      : query.budgetVersionId
+        ? `No budgets found for version ${query.budgetVersionId} in fiscal year ${fiscalYear}`
+        : `No approved budget found for fiscal year ${fiscalYear}`;
     const error = new Error(errorMessage) as Error & { statusCode?: number };
     error.statusCode = 404;
     throw error;
@@ -751,44 +995,37 @@ export async function getBudgetVariance(
   const periodIds = periods.map((p: { id: string }) => p.id);
 
   // 3. Aggregate posted journal lines by accountCode
-  let lineAggregations: Array<{
-    accountCode: string;
-    _sum: { debit: unknown; credit: unknown };
-  }> = [];
+  //    Optionally filtered by dimension value
+  const actualMap = new Map<string, number>();
 
-  if (periodIds.length > 0) {
-    lineAggregations = await (prisma as any).journalLine.groupBy({
-      by: ['accountCode'],
-      where: {
-        companyId,
-        journalEntry: {
-          companyId,
-          status: 'POSTED',
-          periodId: { in: periodIds },
-        },
-      },
-      _sum: {
-        debit: true,
-        credit: true,
-      },
-    });
+  const lineMap = await getDimensionFilteredAggregations(
+    prisma,
+    companyId,
+    periodIds,
+    query.dimensionValueId,
+  );
+
+  // Optionally merge simulation data
+  if (query.includeSimulations) {
+    const simMap = await getSimulationLineAggregations(
+      prisma,
+      companyId,
+      periodIds,
+      query.dimensionValueId,
+    );
+    mergeSimulationAggregations(lineMap, simMap);
   }
 
-  // Build actual amounts map. We use net amount (debit - credit) which represents
-  // the actual expenditure/activity for the account.
-  const actualMap = new Map<string, number>();
-  for (const agg of lineAggregations) {
-    const debit = Number(agg._sum.debit ?? 0);
-    const credit = Number(agg._sum.credit ?? 0);
+  for (const [accountCode, totals] of lineMap) {
     // Net actual = debit - credit (positive for expense accounts, negative for revenue)
-    actualMap.set(agg.accountCode, debit - credit);
+    actualMap.set(accountCode, totals.totalDebit - totals.totalCredit);
   }
 
   // 4. Build the variance lines from budget lines
   let totalBudget = 0;
   let totalActual = 0;
 
-  const accounts = budget.lines.map((line) => {
+  const budgetAccounts = budget.lines.map((line) => {
     const budgetAmount = roundToFourDecimals(Number(line.totalAmount ?? 0));
     const actualAmount = roundToFourDecimals(actualMap.get(line.accountCode) ?? 0);
     const variance = roundToFourDecimals(budgetAmount - actualAmount);
@@ -816,12 +1053,618 @@ export async function getBudgetVariance(
     fiscalYear,
     budgetId: budget.id,
     budgetName: budget.name,
-    accounts,
+    accounts: budgetAccounts,
     summary: {
       totalBudget,
       totalActual,
       totalVariance,
     },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// GL Detail / Account Activity Report
+// ---------------------------------------------------------------------------
+
+/**
+ * GL Detail / Account Activity -- all postings for a single account with running balance.
+ *
+ * - Fetches individual JournalLine records (not aggregated) for the given account
+ * - Includes dimension info per line (for drill-down context)
+ * - Optionally filters by dimension value
+ * - Optionally includes SimulationLine entries (marked isSimulation=true)
+ * - Computes running balance per entry starting from the account's opening balance
+ */
+export async function getGLDetail(
+  prisma: PrismaClient,
+  companyId: string,
+  query: GLDetailQuery,
+): Promise<GLDetailResponse> {
+  const { fiscalYear, periodFrom, periodTo, accountCode, dimensionValueId, includeSimulations } =
+    query;
+
+  // 1. Fetch the account
+  const account = await (prisma as any).chartOfAccount.findFirst({
+    where: { companyId, code: accountCode, isActive: true },
+    select: { code: true, name: true, normalBalance: true, openingBalance: true },
+  });
+
+  if (!account) {
+    const error = new Error(`Account ${accountCode} not found`) as Error & { statusCode?: number };
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // 2. Find periods in range
+  const periods = await (prisma as any).financialPeriod.findMany({
+    where: { companyId, fiscalYear, periodNumber: { gte: periodFrom, lte: periodTo } },
+    select: { id: true },
+  });
+  const periodIds = periods.map((p: { id: string }) => p.id);
+
+  if (periodIds.length === 0) {
+    const openingBalance = roundToFourDecimals(Number(account.openingBalance ?? 0));
+    return {
+      fiscalYear,
+      periodFrom,
+      periodTo,
+      accountCode,
+      accountName: account.name,
+      openingBalance,
+      entries: [],
+      closingBalance: openingBalance,
+      totalDebit: 0,
+      totalCredit: 0,
+    };
+  }
+
+  // 3. Build where clause for journal lines
+  const lineWhere: Record<string, unknown> = {
+    companyId,
+    accountCode,
+    journalEntry: { companyId, status: 'POSTED', periodId: { in: periodIds } },
+  };
+
+  // Dimension filter: join through JournalLineDimension
+  if (dimensionValueId) {
+    lineWhere.dimensions = { some: { dimensionValueId } };
+  }
+
+  // 4. Fetch journal lines with entry info and dimensions
+  const journalLines = await (prisma as any).journalLine.findMany({
+    where: lineWhere,
+    orderBy: [{ journalEntry: { transactionDate: 'asc' } }, { lineNumber: 'asc' }],
+    include: {
+      journalEntry: {
+        select: {
+          id: true,
+          entryNumber: true,
+          transactionDate: true,
+          description: true,
+          reference: true,
+          source: true,
+        },
+      },
+      dimensions: {
+        include: {
+          dimensionValue: {
+            select: {
+              name: true,
+              dimensionType: { select: { name: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // 5. Build entries from journal lines
+  type RawLine = {
+    journalEntry: {
+      id: string;
+      entryNumber: string;
+      transactionDate: Date | string;
+      description: string;
+      reference: string | null;
+      source: string;
+    };
+    debit: unknown;
+    credit: unknown;
+    dimensions: Array<{
+      dimensionValue: {
+        name: string;
+        dimensionType: { name: string };
+      };
+    }>;
+  };
+
+  const openingBalance = roundToFourDecimals(Number(account.openingBalance ?? 0));
+  let runningBalance = openingBalance;
+  let totalDebit = 0;
+  let totalCredit = 0;
+
+  const entries: GLDetailResponse['entries'] = [];
+
+  for (const line of journalLines as RawLine[]) {
+    const debit = roundToFourDecimals(Number(line.debit ?? 0));
+    const credit = roundToFourDecimals(Number(line.credit ?? 0));
+
+    // Running balance respects normal balance direction
+    if (account.normalBalance === 'DEBIT') {
+      runningBalance = roundToFourDecimals(runningBalance + debit - credit);
+    } else {
+      runningBalance = roundToFourDecimals(runningBalance + credit - debit);
+    }
+
+    totalDebit += debit;
+    totalCredit += credit;
+
+    const txDate =
+      line.journalEntry.transactionDate instanceof Date
+        ? (line.journalEntry.transactionDate.toISOString().split('T')[0] ?? '')
+        : String(line.journalEntry.transactionDate);
+
+    entries.push({
+      journalEntryId: line.journalEntry.id,
+      entryNumber: line.journalEntry.entryNumber,
+      transactionDate: txDate,
+      description: line.journalEntry.description,
+      reference: line.journalEntry.reference,
+      source: line.journalEntry.source,
+      debit,
+      credit,
+      runningBalance,
+      isSimulation: false,
+      dimensions: line.dimensions.map((d) => ({
+        dimensionTypeName: d.dimensionValue.dimensionType.name,
+        dimensionValueName: d.dimensionValue.name,
+      })),
+    });
+  }
+
+  // 6. Optionally include simulation lines
+  if (includeSimulations) {
+    const simLines = await getSimulationLinesForAccount(
+      prisma,
+      companyId,
+      periodIds,
+      accountCode,
+      dimensionValueId,
+    );
+    // Merge sim lines into entries by date, then re-compute running balance
+    for (const simLine of simLines) {
+      entries.push(simLine);
+    }
+    // Sort all entries by date, then re-compute running balance from scratch
+    entries.sort((a, b) => a.transactionDate.localeCompare(b.transactionDate));
+    runningBalance = openingBalance;
+    totalDebit = 0;
+    totalCredit = 0;
+    for (const entry of entries) {
+      if (account.normalBalance === 'DEBIT') {
+        runningBalance = roundToFourDecimals(runningBalance + entry.debit - entry.credit);
+      } else {
+        runningBalance = roundToFourDecimals(runningBalance + entry.credit - entry.debit);
+      }
+      entry.runningBalance = runningBalance;
+      totalDebit += entry.debit;
+      totalCredit += entry.credit;
+    }
+  }
+
+  totalDebit = roundToFourDecimals(totalDebit);
+  totalCredit = roundToFourDecimals(totalCredit);
+
+  return {
+    fiscalYear,
+    periodFrom,
+    periodTo,
+    accountCode,
+    accountName: account.name,
+    openingBalance,
+    entries,
+    closingBalance: runningBalance,
+    totalDebit,
+    totalCredit,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// General Ledger Report
+// ---------------------------------------------------------------------------
+
+/**
+ * General Ledger -- all postings for all accounts (or a range) with running balances.
+ *
+ * - For each account with activity in the period: lists all postings with running balance
+ * - Optionally filters by account code range (from/to)
+ * - Optionally filters by dimension value
+ * - Optionally includes simulation lines
+ */
+export async function getGeneralLedger(
+  prisma: PrismaClient,
+  companyId: string,
+  query: GeneralLedgerQuery,
+): Promise<GeneralLedgerResponse> {
+  const { fiscalYear, periodFrom, periodTo, accountCodeFrom, accountCodeTo, dimensionValueId } =
+    query;
+
+  // 1. Find periods
+  const periods = await (prisma as any).financialPeriod.findMany({
+    where: { companyId, fiscalYear, periodNumber: { gte: periodFrom, lte: periodTo } },
+    select: { id: true },
+  });
+  const periodIds = periods.map((p: { id: string }) => p.id);
+
+  // 2. Fetch accounts in range
+  const accountWhere: Record<string, unknown> = { companyId, isActive: true };
+  if (accountCodeFrom || accountCodeTo) {
+    accountWhere.code = {};
+    if (accountCodeFrom) (accountWhere.code as Record<string, unknown>).gte = accountCodeFrom;
+    if (accountCodeTo) (accountWhere.code as Record<string, unknown>).lte = accountCodeTo;
+  }
+
+  const allAccounts = await (prisma as any).chartOfAccount.findMany({
+    where: accountWhere,
+    orderBy: { code: 'asc' },
+    select: {
+      code: true,
+      name: true,
+      accountType: true,
+      normalBalance: true,
+      openingBalance: true,
+    },
+  });
+
+  if (periodIds.length === 0 || allAccounts.length === 0) {
+    return {
+      fiscalYear,
+      periodFrom,
+      periodTo,
+      accounts: [],
+      grandTotals: { totalDebit: 0, totalCredit: 0 },
+    };
+  }
+
+  // 3. For each account, fetch individual journal lines
+  let grandTotalDebit = 0;
+  let grandTotalCredit = 0;
+  const accountResults: GeneralLedgerResponse['accounts'] = [];
+
+  for (const acct of allAccounts) {
+    const lineWhere: Record<string, unknown> = {
+      companyId,
+      accountCode: acct.code,
+      journalEntry: { companyId, status: 'POSTED', periodId: { in: periodIds } },
+    };
+    if (dimensionValueId) {
+      lineWhere.dimensions = { some: { dimensionValueId } };
+    }
+
+    const lines = await (prisma as any).journalLine.findMany({
+      where: lineWhere,
+      orderBy: [{ journalEntry: { transactionDate: 'asc' } }, { lineNumber: 'asc' }],
+      include: {
+        journalEntry: {
+          select: { entryNumber: true, transactionDate: true, description: true },
+        },
+      },
+    });
+
+    // Skip accounts with no activity and no opening balance
+    const openingBal = Number(acct.openingBalance ?? 0);
+    if (lines.length === 0 && openingBal === 0) continue;
+
+    let runningBalance = roundToFourDecimals(openingBal);
+    let acctTotalDebit = 0;
+    let acctTotalCredit = 0;
+
+    const acctEntries: GeneralLedgerResponse['accounts'][0]['entries'] = [];
+    for (const line of lines) {
+      const debit = roundToFourDecimals(Number(line.debit ?? 0));
+      const credit = roundToFourDecimals(Number(line.credit ?? 0));
+
+      if (acct.normalBalance === 'DEBIT') {
+        runningBalance = roundToFourDecimals(runningBalance + debit - credit);
+      } else {
+        runningBalance = roundToFourDecimals(runningBalance + credit - debit);
+      }
+
+      acctTotalDebit += debit;
+      acctTotalCredit += credit;
+
+      const txDate =
+        line.journalEntry.transactionDate instanceof Date
+          ? line.journalEntry.transactionDate.toISOString().split('T')[0]
+          : String(line.journalEntry.transactionDate);
+
+      acctEntries.push({
+        entryNumber: line.journalEntry.entryNumber,
+        transactionDate: txDate,
+        description: line.journalEntry.description,
+        debit,
+        credit,
+        runningBalance,
+      });
+    }
+
+    acctTotalDebit = roundToFourDecimals(acctTotalDebit);
+    acctTotalCredit = roundToFourDecimals(acctTotalCredit);
+    grandTotalDebit += acctTotalDebit;
+    grandTotalCredit += acctTotalCredit;
+
+    accountResults.push({
+      accountCode: acct.code,
+      accountName: acct.name,
+      accountType: acct.accountType,
+      openingBalance: roundToFourDecimals(openingBal),
+      entries: acctEntries,
+      closingBalance: runningBalance,
+      totalDebit: acctTotalDebit,
+      totalCredit: acctTotalCredit,
+    });
+  }
+
+  return {
+    fiscalYear,
+    periodFrom,
+    periodTo,
+    accounts: accountResults,
+    grandTotals: {
+      totalDebit: roundToFourDecimals(grandTotalDebit),
+      totalCredit: roundToFourDecimals(grandTotalCredit),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Departmental P&L Report
+// ---------------------------------------------------------------------------
+
+/**
+ * Departmental P&L -- P&L report pivoted by dimension.
+ *
+ * Each column represents a dimension value (e.g., "Sales Dept", "Marketing Dept").
+ * Final column represents "Unallocated" lines (no dimension value for the given type).
+ */
+export async function getDepartmentalPnl(
+  prisma: PrismaClient,
+  companyId: string,
+  query: DepartmentalPnlQuery,
+): Promise<DepartmentalPnlResponse> {
+  const { fiscalYear, periodFrom, periodTo, dimensionTypeId } = query;
+
+  // 1. Fetch dimension type
+  const dimType = await (prisma as any).dimensionType.findFirst({
+    where: { id: dimensionTypeId, companyId },
+    select: { id: true, name: true },
+  });
+  if (!dimType) {
+    const error = new Error('Dimension type not found') as Error & { statusCode?: number };
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // 2. Fetch active dimension values for this type (these are our columns)
+  const dimValues = await (prisma as any).dimensionValue.findMany({
+    where: { dimensionTypeId, companyId, isActive: true },
+    orderBy: { code: 'asc' },
+    select: { id: true, code: true, name: true },
+  });
+
+  const columns: DepartmentalPnlResponse['columns'] = dimValues.map(
+    (dv: { id: string; code: string; name: string }) => ({
+      dimensionValueId: dv.id,
+      dimensionValueName: dv.name,
+      dimensionValueCode: dv.code,
+    }),
+  );
+
+  // Add "Unallocated" as the last column
+  columns.push({
+    dimensionValueId: '__UNALLOCATED__',
+    dimensionValueName: 'Unallocated',
+    dimensionValueCode: 'UNALLOC',
+  });
+
+  const columnCount = columns.length;
+  const dimValueIdToIndex = new Map<string, number>();
+  dimValues.forEach((dv: { id: string }, idx: number) => {
+    dimValueIdToIndex.set(dv.id, idx);
+  });
+  const unallocatedIndex = columnCount - 1;
+
+  // 3. Find periods
+  const periods = await (prisma as any).financialPeriod.findMany({
+    where: { companyId, fiscalYear, periodNumber: { gte: periodFrom, lte: periodTo } },
+    select: { id: true },
+  });
+  const periodIds = periods.map((p: { id: string }) => p.id);
+
+  // 4. Fetch P&L accounts
+  const pnlAccounts = await (prisma as any).chartOfAccount.findMany({
+    where: {
+      companyId,
+      isActive: true,
+      classification: { reportSection: 'PROFIT_AND_LOSS' },
+    },
+    orderBy: { code: 'asc' },
+    select: {
+      code: true,
+      name: true,
+      normalBalance: true,
+      classification: { select: { code: true, name: true } },
+    },
+  });
+
+  // 5. Query DimensionBalance for pre-aggregated data
+  const dimBalances =
+    periodIds.length > 0
+      ? await (prisma as any).dimensionBalance.findMany({
+          where: {
+            companyId,
+            dimensionTypeId,
+            periodId: { in: periodIds },
+          },
+          select: {
+            accountCode: true,
+            dimensionValueId: true,
+            totalDebit: true,
+            totalCredit: true,
+          },
+        })
+      : [];
+
+  // Build a nested map: accountCode -> dimensionValueId -> { totalDebit, totalCredit }
+  const dimBalanceMap = new Map<string, Map<string, { totalDebit: number; totalCredit: number }>>();
+  for (const db of dimBalances) {
+    const acctMap = dimBalanceMap.get(db.accountCode) ?? new Map();
+    const existing = acctMap.get(db.dimensionValueId) ?? { totalDebit: 0, totalCredit: 0 };
+    existing.totalDebit += Number(db.totalDebit ?? 0);
+    existing.totalCredit += Number(db.totalCredit ?? 0);
+    acctMap.set(db.dimensionValueId, existing);
+    dimBalanceMap.set(db.accountCode, acctMap);
+  }
+
+  // 6. Also compute total per account (from journal lines) to determine unallocated
+  let totalLineAgg: Array<{ accountCode: string; _sum: { debit: unknown; credit: unknown } }> = [];
+  if (periodIds.length > 0) {
+    totalLineAgg = await (prisma as any).journalLine.groupBy({
+      by: ['accountCode'],
+      where: {
+        companyId,
+        journalEntry: { companyId, status: 'POSTED', periodId: { in: periodIds } },
+      },
+      _sum: { debit: true, credit: true },
+    });
+  }
+  const totalLineMap = new Map<string, { totalDebit: number; totalCredit: number }>();
+  for (const agg of totalLineAgg) {
+    totalLineMap.set(agg.accountCode, {
+      totalDebit: Number(agg._sum.debit ?? 0),
+      totalCredit: Number(agg._sum.credit ?? 0),
+    });
+  }
+
+  // 7. Build sections
+  const accountsByClassification = new Map<
+    string,
+    Array<{ code: string; name: string; normalBalance: string; values: number[]; total: number }>
+  >();
+
+  for (const acct of pnlAccounts) {
+    const classCode = acct.classification?.code;
+    if (!classCode) continue;
+
+    const acctDimMap = dimBalanceMap.get(acct.code);
+    const totalLine = totalLineMap.get(acct.code);
+    const totalDebit = totalLine?.totalDebit ?? 0;
+    const totalCredit = totalLine?.totalCredit ?? 0;
+
+    if (totalDebit === 0 && totalCredit === 0) continue;
+
+    // Compute balance per dimension value
+    const values = new Array<number>(columnCount).fill(0);
+    let allocatedDebit = 0;
+    let allocatedCredit = 0;
+
+    if (acctDimMap) {
+      for (const [dvId, totals] of acctDimMap.entries()) {
+        const colIdx = dimValueIdToIndex.get(dvId);
+        if (colIdx !== undefined) {
+          const balance =
+            acct.normalBalance === 'DEBIT'
+              ? totals.totalDebit - totals.totalCredit
+              : totals.totalCredit - totals.totalDebit;
+          values[colIdx] = roundToFourDecimals(balance);
+          allocatedDebit += totals.totalDebit;
+          allocatedCredit += totals.totalCredit;
+        }
+      }
+    }
+
+    // Unallocated = total - allocated
+    const unallocatedDebit = totalDebit - allocatedDebit;
+    const unallocatedCredit = totalCredit - allocatedCredit;
+    const unallocatedBalance =
+      acct.normalBalance === 'DEBIT'
+        ? unallocatedDebit - unallocatedCredit
+        : unallocatedCredit - unallocatedDebit;
+    values[unallocatedIndex] = roundToFourDecimals(unallocatedBalance);
+
+    const accountTotal = roundToFourDecimals(values.reduce((s, v) => s + v, 0));
+
+    const existing = accountsByClassification.get(classCode) ?? [];
+    existing.push({
+      code: acct.code,
+      name: acct.name,
+      normalBalance: acct.normalBalance,
+      values,
+      total: accountTotal,
+    });
+    accountsByClassification.set(classCode, existing);
+  }
+
+  // Build sections in P&L order
+  const sections: DepartmentalPnlResponse['sections'] = [];
+  const sectionTotalsPerColumn = new Map<string, number[]>();
+
+  for (const { code, name } of PNL_CLASSIFICATIONS) {
+    const sectionAccounts = accountsByClassification.get(code) ?? [];
+    const sectionTotals = new Array<number>(columnCount).fill(0);
+    for (const acct of sectionAccounts) {
+      for (let i = 0; i < columnCount; i++) {
+        sectionTotals[i] = (sectionTotals[i] ?? 0) + (acct.values[i] ?? 0);
+      }
+    }
+    const roundedTotals = sectionTotals.map(roundToFourDecimals);
+    const grandTotal = roundToFourDecimals(roundedTotals.reduce((s, v) => s + v, 0));
+
+    sections.push({
+      classification: code,
+      name,
+      accounts: sectionAccounts.map((a) => ({
+        accountCode: a.code,
+        accountName: a.name,
+        values: a.values,
+        total: a.total,
+      })),
+      totals: roundedTotals,
+      grandTotal,
+    });
+    sectionTotalsPerColumn.set(code, roundedTotals);
+  }
+
+  // 8. Calculate net profit per column
+  const netProfitPerColumn = new Array<number>(columnCount).fill(0);
+  const rev = sectionTotalsPerColumn.get('REV') ?? new Array<number>(columnCount).fill(0);
+  const cogs = sectionTotalsPerColumn.get('COGS') ?? new Array<number>(columnCount).fill(0);
+  const opex = sectionTotalsPerColumn.get('OPEX') ?? new Array<number>(columnCount).fill(0);
+  const oi = sectionTotalsPerColumn.get('OI') ?? new Array<number>(columnCount).fill(0);
+  const fin = sectionTotalsPerColumn.get('FIN') ?? new Array<number>(columnCount).fill(0);
+  const tax = sectionTotalsPerColumn.get('TAX') ?? new Array<number>(columnCount).fill(0);
+
+  for (let i = 0; i < columnCount; i++) {
+    netProfitPerColumn[i] = roundToFourDecimals(
+      (rev[i] ?? 0) -
+        (cogs[i] ?? 0) -
+        (opex[i] ?? 0) +
+        (oi[i] ?? 0) -
+        (fin[i] ?? 0) -
+        (tax[i] ?? 0),
+    );
+  }
+
+  const totalNetProfit = roundToFourDecimals(netProfitPerColumn.reduce((s, v) => s + v, 0));
+
+  return {
+    fiscalYear,
+    periodFrom,
+    periodTo,
+    dimensionTypeName: dimType.name,
+    columns,
+    sections,
+    summary: { netProfitPerColumn, totalNetProfit },
   };
 }
 
@@ -837,40 +1680,35 @@ export async function getBudgetVariance(
  * Net P&L = sum of revenue balances - sum of expense balances.
  *
  * A positive result means profit; negative means loss.
+ *
+ * Optionally filters by dimension value and includes simulation data.
  */
 async function calculatePeriodNetPnl(
   prisma: PrismaClient,
   companyId: string,
   periodIds: string[],
+  dimensionValueId?: string,
+  includeSimulations?: boolean,
 ): Promise<number> {
   if (periodIds.length === 0) return 0;
 
-  // Aggregate posted journal lines for P&L accounts only
-  const pnlLineAggregations: Array<{
-    accountCode: string;
-    _sum: { debit: unknown; credit: unknown };
-  }> = await (prisma as any).journalLine.groupBy({
-    by: ['accountCode'],
-    where: {
-      companyId,
-      journalEntry: {
-        companyId,
-        status: 'POSTED',
-        periodId: { in: periodIds },
-      },
-    },
-    _sum: {
-      debit: true,
-      credit: true,
-    },
-  });
+  // Use the shared helper for dimension-filtered aggregation
+  const lineMap = await getDimensionFilteredAggregations(
+    prisma,
+    companyId,
+    periodIds,
+    dimensionValueId,
+  );
 
-  const lineMap = new Map<string, { totalDebit: number; totalCredit: number }>();
-  for (const agg of pnlLineAggregations) {
-    lineMap.set(agg.accountCode, {
-      totalDebit: Number(agg._sum.debit ?? 0),
-      totalCredit: Number(agg._sum.credit ?? 0),
-    });
+  // Optionally merge simulation data
+  if (includeSimulations) {
+    const simMap = await getSimulationLineAggregations(
+      prisma,
+      companyId,
+      periodIds,
+      dimensionValueId,
+    );
+    mergeSimulationAggregations(lineMap, simMap);
   }
 
   // Fetch P&L accounts (reportSection = PROFIT_AND_LOSS)
@@ -905,9 +1743,6 @@ async function calculatePeriodNetPnl(
         : openingBalance + credits - debits;
 
     // Revenue (CREDIT normal) adds to profit; Expenses (DEBIT normal) subtract.
-    // Revenue balance is positive when there are credits (income earned).
-    // Expense balance is positive when there are debits (expenses incurred).
-    // Net P&L = Revenue - Expenses
     if (account.normalBalance === 'CREDIT') {
       netPnl += balance; // Revenue adds
     } else {

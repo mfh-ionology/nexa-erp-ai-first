@@ -11,6 +11,9 @@ export const trialBalanceQuerySchema = z.object({
   fiscalYear: z.coerce.number().int().min(2000).max(2100),
   periodFrom: z.coerce.number().int().min(1).max(13).default(1),
   periodTo: z.coerce.number().int().min(1).max(13).default(12),
+  dimensionTypeId: z.string().uuid().optional(),
+  dimensionValueId: z.string().uuid().optional(),
+  includeSimulations: z.coerce.boolean().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -50,6 +53,9 @@ export const reportQuerySchema = z.object({
   fiscalYear: z.coerce.number().int().min(2000).max(2100),
   periodFrom: z.coerce.number().int().min(1).max(13).default(1),
   periodTo: z.coerce.number().int().min(1).max(13).default(12),
+  dimensionTypeId: z.string().uuid().optional(),
+  dimensionValueId: z.string().uuid().optional(),
+  includeSimulations: z.coerce.boolean().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -121,6 +127,9 @@ export const transactionJournalQuerySchema = z.object({
   periodTo: z.coerce.number().int().min(1).max(13).default(12),
   accountCode: z.string().optional(),
   source: z.enum(JOURNAL_SOURCES).optional(),
+  dimensionTypeId: z.string().uuid().optional(),
+  dimensionValueId: z.string().uuid().optional(),
+  includeSimulations: z.coerce.boolean().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -164,6 +173,10 @@ export const transactionJournalResponseSchema = z.object({
 export const budgetVarianceQuerySchema = z.object({
   fiscalYear: z.coerce.number().int().min(2000).max(2100),
   budgetId: z.string().uuid().optional(),
+  budgetVersionId: z.string().uuid().optional(),
+  dimensionTypeId: z.string().uuid().optional(),
+  dimensionValueId: z.string().uuid().optional(),
+  includeSimulations: z.coerce.boolean().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -194,6 +207,155 @@ export const budgetVarianceResponseSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// GL Detail / Account Activity -- Query Schema
+// ---------------------------------------------------------------------------
+
+export const glDetailQuerySchema = z.object({
+  fiscalYear: z.coerce.number().int().min(2000).max(2100),
+  periodFrom: z.coerce.number().int().min(1).max(13).default(1),
+  periodTo: z.coerce.number().int().min(1).max(13).default(12),
+  accountCode: z.string().min(1).max(20),
+  dimensionTypeId: z.string().uuid().optional(),
+  dimensionValueId: z.string().uuid().optional(),
+  includeSimulations: z.coerce.boolean().optional(),
+});
+
+// ---------------------------------------------------------------------------
+// GL Detail / Account Activity -- Response Schemas
+// ---------------------------------------------------------------------------
+
+const glDetailDimensionSchema = z.object({
+  dimensionTypeName: z.string(),
+  dimensionValueName: z.string(),
+});
+
+const glDetailEntrySchema = z.object({
+  journalEntryId: z.string(),
+  entryNumber: z.string(),
+  transactionDate: z.string(),
+  description: z.string(),
+  reference: z.string().nullable(),
+  source: z.string(),
+  debit: z.number(),
+  credit: z.number(),
+  runningBalance: z.number(),
+  isSimulation: z.boolean(),
+  dimensions: z.array(glDetailDimensionSchema),
+});
+
+export const glDetailResponseSchema = z.object({
+  fiscalYear: z.number(),
+  periodFrom: z.number(),
+  periodTo: z.number(),
+  accountCode: z.string(),
+  accountName: z.string(),
+  openingBalance: z.number(),
+  entries: z.array(glDetailEntrySchema),
+  closingBalance: z.number(),
+  totalDebit: z.number(),
+  totalCredit: z.number(),
+});
+
+// ---------------------------------------------------------------------------
+// General Ledger -- Query Schema
+// ---------------------------------------------------------------------------
+
+export const generalLedgerQuerySchema = z.object({
+  fiscalYear: z.coerce.number().int().min(2000).max(2100),
+  periodFrom: z.coerce.number().int().min(1).max(13).default(1),
+  periodTo: z.coerce.number().int().min(1).max(13).default(12),
+  accountCodeFrom: z.string().max(20).optional(),
+  accountCodeTo: z.string().max(20).optional(),
+  dimensionTypeId: z.string().uuid().optional(),
+  dimensionValueId: z.string().uuid().optional(),
+  includeSimulations: z.coerce.boolean().optional(),
+});
+
+// ---------------------------------------------------------------------------
+// General Ledger -- Response Schemas
+// ---------------------------------------------------------------------------
+
+const generalLedgerEntrySchema = z.object({
+  entryNumber: z.string(),
+  transactionDate: z.string(),
+  description: z.string(),
+  debit: z.number(),
+  credit: z.number(),
+  runningBalance: z.number(),
+});
+
+const generalLedgerAccountSchema = z.object({
+  accountCode: z.string(),
+  accountName: z.string(),
+  accountType: z.string(),
+  openingBalance: z.number(),
+  entries: z.array(generalLedgerEntrySchema),
+  closingBalance: z.number(),
+  totalDebit: z.number(),
+  totalCredit: z.number(),
+});
+
+export const generalLedgerResponseSchema = z.object({
+  fiscalYear: z.number(),
+  periodFrom: z.number(),
+  periodTo: z.number(),
+  accounts: z.array(generalLedgerAccountSchema),
+  grandTotals: z.object({
+    totalDebit: z.number(),
+    totalCredit: z.number(),
+  }),
+});
+
+// ---------------------------------------------------------------------------
+// Departmental P&L -- Query Schema
+// ---------------------------------------------------------------------------
+
+export const departmentalPnlQuerySchema = z.object({
+  fiscalYear: z.coerce.number().int().min(2000).max(2100),
+  periodFrom: z.coerce.number().int().min(1).max(13).default(1),
+  periodTo: z.coerce.number().int().min(1).max(13).default(12),
+  dimensionTypeId: z.string().uuid(),
+});
+
+// ---------------------------------------------------------------------------
+// Departmental P&L -- Response Schemas
+// ---------------------------------------------------------------------------
+
+const departmentalPnlColumnSchema = z.object({
+  dimensionValueId: z.string(),
+  dimensionValueName: z.string(),
+  dimensionValueCode: z.string(),
+});
+
+const departmentalPnlAccountSchema = z.object({
+  accountCode: z.string(),
+  accountName: z.string(),
+  values: z.array(z.number()),
+  total: z.number(),
+});
+
+const departmentalPnlSectionSchema = z.object({
+  classification: z.string(),
+  name: z.string(),
+  accounts: z.array(departmentalPnlAccountSchema),
+  totals: z.array(z.number()),
+  grandTotal: z.number(),
+});
+
+export const departmentalPnlResponseSchema = z.object({
+  fiscalYear: z.number(),
+  periodFrom: z.number(),
+  periodTo: z.number(),
+  dimensionTypeName: z.string(),
+  columns: z.array(departmentalPnlColumnSchema),
+  sections: z.array(departmentalPnlSectionSchema),
+  summary: z.object({
+    netProfitPerColumn: z.array(z.number()),
+    totalNetProfit: z.number(),
+  }),
+});
+
+// ---------------------------------------------------------------------------
 // Inferred TypeScript Types
 // ---------------------------------------------------------------------------
 
@@ -212,3 +374,10 @@ export type TransactionJournalQuery = z.infer<typeof transactionJournalQuerySche
 export type TransactionJournalResponse = z.infer<typeof transactionJournalResponseSchema>;
 export type BudgetVarianceQuery = z.infer<typeof budgetVarianceQuerySchema>;
 export type BudgetVarianceResponse = z.infer<typeof budgetVarianceResponseSchema>;
+
+export type GLDetailQuery = z.infer<typeof glDetailQuerySchema>;
+export type GLDetailResponse = z.infer<typeof glDetailResponseSchema>;
+export type GeneralLedgerQuery = z.infer<typeof generalLedgerQuerySchema>;
+export type GeneralLedgerResponse = z.infer<typeof generalLedgerResponseSchema>;
+export type DepartmentalPnlQuery = z.infer<typeof departmentalPnlQuerySchema>;
+export type DepartmentalPnlResponse = z.infer<typeof departmentalPnlResponseSchema>;
