@@ -9,7 +9,7 @@
  * switches to a pivoted departmental P&L view with columns per dimension value.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -238,6 +238,53 @@ export function ProfitAndLossPage() {
         }
       : null,
   );
+
+  // Auto-run support: when navigated from copilot with autoRun=true
+  const autoRunTriggered = useRef(false);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('autoRun') === 'true' && !autoRunTriggered.current) {
+      autoRunTriggered.current = true;
+
+      const urlFiscalYear = urlParams.get('fiscalYear')
+        ? Number(urlParams.get('fiscalYear'))
+        : undefined;
+      const urlPeriodFrom = urlParams.get('periodFrom')
+        ? Number(urlParams.get('periodFrom'))
+        : undefined;
+      const urlPeriodTo = urlParams.get('periodTo') ? Number(urlParams.get('periodTo')) : undefined;
+      const urlDimensionTypeId = urlParams.get('dimensionTypeId') || undefined;
+      const urlDimensionValueId = urlParams.get('dimensionValueId') || undefined;
+      const urlIncludeSimulations = urlParams.get('includeSimulations') === 'true';
+      const urlGroupByDimensionTypeId = urlParams.get('groupByDimensionTypeId') || undefined;
+
+      if (urlFiscalYear) {
+        const newParams: ReportParams = {
+          fiscalYear: urlFiscalYear,
+          periodFrom: urlPeriodFrom ?? 1,
+          periodTo: urlPeriodTo ?? 12,
+          ...(urlDimensionTypeId ? { dimensionTypeId: urlDimensionTypeId } : {}),
+          ...(urlDimensionValueId ? { dimensionValueId: urlDimensionValueId } : {}),
+          ...(urlIncludeSimulations ? { includeSimulations: true } : {}),
+        };
+        // Set both form params and submitted params to trigger the query
+        setParams(newParams);
+        setSubmittedParams(newParams);
+        if (urlIncludeSimulations) {
+          setIncludeSimulations(true);
+        }
+        if (urlGroupByDimensionTypeId) {
+          setGroupByDimensionTypeId(urlGroupByDimensionTypeId);
+          setSubmittedGroupBy(urlGroupByDimensionTypeId);
+        } else {
+          // Standard (non-grouped) view — trigger refetch after state update
+          setTimeout(() => void refetchStandard(), 100);
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isGrouped = submittedGroupBy !== null;
   const isFetching = isGrouped ? groupedFetching : standardFetching;
