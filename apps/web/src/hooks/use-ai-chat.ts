@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { useRouter } from '@tanstack/react-router';
 
 import { useAuthStore } from '@/stores/auth-store';
 import { useCopilotStore, type ChatMessage, type ConnectionStatus } from '@/stores/copilot-store';
@@ -18,7 +19,14 @@ export interface AiChatClientMessage {
 }
 
 export interface AiChatServerMessage {
-  type: 'stream_chunk' | 'stream_end' | 'text' | 'action_proposal' | 'record_created' | 'error';
+  type:
+    | 'stream_chunk'
+    | 'stream_end'
+    | 'text'
+    | 'action_proposal'
+    | 'record_created'
+    | 'error'
+    | 'navigate';
   messageId?: string;
   sessionId?: string;
   content?: string;
@@ -26,6 +34,8 @@ export interface AiChatServerMessage {
   recordLinks?: ChatMessage['recordLinks'];
   dataCards?: ChatMessage['dataCards'];
   error?: string;
+  /** Route path for navigate messages (e.g. '/finance/reports/profit-and-loss?fiscalYear=2025&autoRun=true') */
+  route?: string;
 }
 
 // ── Configuration ────────────────────────────────────────────────────────────
@@ -66,6 +76,7 @@ export function useAiChat(): UseAiChatReturn {
   const connectionStatus = useCopilotStore((s) => s.connectionStatus);
   const setConnectionStatus = useCopilotStore((s) => s.setConnectionStatus);
   const activeConversationId = useCopilotStore((s) => s.activeConversationId);
+  const router = useRouter();
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttemptRef = useRef(0);
@@ -73,74 +84,86 @@ export function useAiChat(): UseAiChatReturn {
   const unmountedRef = useRef(false);
 
   // ── Incoming message handler ────────────────────────────────────────────
-  const handleServerMessage = useCallback((data: AiChatServerMessage) => {
-    const store = useCopilotStore.getState();
+  const handleServerMessage = useCallback(
+    (data: AiChatServerMessage) => {
+      const store = useCopilotStore.getState();
 
-    switch (data.type) {
-      case 'stream_chunk': {
-        if (data.messageId && data.content) {
-          store.appendStreamChunk(data.messageId, data.content);
+      switch (data.type) {
+        case 'stream_chunk': {
+          if (data.messageId && data.content) {
+            store.appendStreamChunk(data.messageId, data.content);
+          }
+          break;
         }
-        break;
-      }
-      case 'stream_end': {
-        if (data.messageId) {
-          store.completeStreamingMessage(data.messageId);
+        case 'stream_end': {
+          if (data.messageId) {
+            store.completeStreamingMessage(data.messageId);
+            store.setStreaming(false);
+          }
+          break;
+        }
+        case 'text': {
+          const msg: ChatMessage = {
+            id: data.messageId ?? crypto.randomUUID(),
+            sessionId: data.sessionId ?? store.activeConversationId ?? '',
+            role: 'assistant',
+            content: data.content ?? '',
+            timestamp: new Date().toISOString(),
+            recordLinks: data.recordLinks,
+            dataCards: data.dataCards,
+          };
+          store.addMessage(msg);
+          break;
+        }
+        case 'action_proposal': {
+          const msg: ChatMessage = {
+            id: data.messageId ?? crypto.randomUUID(),
+            sessionId: data.sessionId ?? store.activeConversationId ?? '',
+            role: 'assistant',
+            content: data.content ?? '',
+            timestamp: new Date().toISOString(),
+            actionProposal: data.actionProposal,
+          };
+          store.addMessage(msg);
+          break;
+        }
+        case 'record_created': {
+          const msg: ChatMessage = {
+            id: data.messageId ?? crypto.randomUUID(),
+            sessionId: data.sessionId ?? store.activeConversationId ?? '',
+            role: 'assistant',
+            content: data.content ?? '',
+            timestamp: new Date().toISOString(),
+            recordLinks: data.recordLinks,
+          };
+          store.addMessage(msg);
+          break;
+        }
+        case 'error': {
+          const msg: ChatMessage = {
+            id: data.messageId ?? crypto.randomUUID(),
+            sessionId: data.sessionId ?? store.activeConversationId ?? '',
+            role: 'assistant',
+            content: data.error ?? data.content ?? '',
+            timestamp: new Date().toISOString(),
+          };
+          store.addMessage(msg);
           store.setStreaming(false);
+          break;
         }
-        break;
+        case 'navigate': {
+          if (data.route) {
+            // Navigate after a short delay to ensure React render cycle completes
+            setTimeout(() => {
+              void router.navigate({ to: data.route! });
+            }, 100);
+          }
+          break;
+        }
       }
-      case 'text': {
-        const msg: ChatMessage = {
-          id: data.messageId ?? crypto.randomUUID(),
-          sessionId: data.sessionId ?? store.activeConversationId ?? '',
-          role: 'assistant',
-          content: data.content ?? '',
-          timestamp: new Date().toISOString(),
-          recordLinks: data.recordLinks,
-          dataCards: data.dataCards,
-        };
-        store.addMessage(msg);
-        break;
-      }
-      case 'action_proposal': {
-        const msg: ChatMessage = {
-          id: data.messageId ?? crypto.randomUUID(),
-          sessionId: data.sessionId ?? store.activeConversationId ?? '',
-          role: 'assistant',
-          content: data.content ?? '',
-          timestamp: new Date().toISOString(),
-          actionProposal: data.actionProposal,
-        };
-        store.addMessage(msg);
-        break;
-      }
-      case 'record_created': {
-        const msg: ChatMessage = {
-          id: data.messageId ?? crypto.randomUUID(),
-          sessionId: data.sessionId ?? store.activeConversationId ?? '',
-          role: 'assistant',
-          content: data.content ?? '',
-          timestamp: new Date().toISOString(),
-          recordLinks: data.recordLinks,
-        };
-        store.addMessage(msg);
-        break;
-      }
-      case 'error': {
-        const msg: ChatMessage = {
-          id: data.messageId ?? crypto.randomUUID(),
-          sessionId: data.sessionId ?? store.activeConversationId ?? '',
-          role: 'assistant',
-          content: data.error ?? data.content ?? '',
-          timestamp: new Date().toISOString(),
-        };
-        store.addMessage(msg);
-        store.setStreaming(false);
-        break;
-      }
-    }
-  }, []);
+    },
+    [router],
+  );
 
   // ── Connect / reconnect logic ───────────────────────────────────────────
   const connect = useCallback(() => {
