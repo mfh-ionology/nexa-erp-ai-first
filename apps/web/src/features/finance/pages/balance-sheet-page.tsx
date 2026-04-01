@@ -6,7 +6,7 @@
  * (Assets, Liabilities, Equity) with totals.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -94,6 +94,52 @@ export function BalanceSheetPage() {
   const [includeSimulations, setIncludeSimulations] = useState(false);
 
   const { data, isFetching, refetch } = useBalanceSheet(submittedParams);
+
+  // Auto-run support: when navigated from copilot with autoRun=true
+  const autoRunTriggered = useRef(false);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('autoRun') === 'true' && !autoRunTriggered.current) {
+      autoRunTriggered.current = true;
+
+      const urlFiscalYear = urlParams.get('fiscalYear')
+        ? Number(urlParams.get('fiscalYear'))
+        : undefined;
+      const urlPeriodFrom = urlParams.get('periodFrom')
+        ? Number(urlParams.get('periodFrom'))
+        : undefined;
+      const urlPeriodTo = urlParams.get('periodTo') ? Number(urlParams.get('periodTo')) : undefined;
+      const urlDimensionTypeId = urlParams.get('dimensionTypeId') || undefined;
+      const urlDimensionValueId = urlParams.get('dimensionValueId') || undefined;
+      const urlIncludeSimulations = urlParams.get('includeSimulations') === 'true';
+
+      if (urlFiscalYear) {
+        const newParams: ReportParams = {
+          fiscalYear: urlFiscalYear,
+          periodFrom: urlPeriodFrom ?? 1,
+          periodTo: urlPeriodTo ?? 12,
+          ...(urlDimensionTypeId ? { dimensionTypeId: urlDimensionTypeId } : {}),
+          ...(urlDimensionValueId ? { dimensionValueId: urlDimensionValueId } : {}),
+          ...(urlIncludeSimulations ? { includeSimulations: true } : {}),
+        };
+        setParams({
+          fiscalYear: urlFiscalYear,
+          periodFrom: urlPeriodFrom ?? 1,
+          periodTo: urlPeriodTo ?? 12,
+        });
+        if (urlDimensionTypeId) {
+          setDimensionFilter({
+            dimensionTypeId: urlDimensionTypeId,
+            dimensionValueId: urlDimensionValueId ?? null,
+          });
+        }
+        if (urlIncludeSimulations) setIncludeSimulations(true);
+        setSubmittedParams(newParams);
+        setTimeout(() => void refetch(), 50);
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRunReport = () => {
     const newParams: ReportParams = {

@@ -5,7 +5,7 @@
  * Uses T8 (ReportPage) template. Detailed posting log with date range filter.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 
 import { ReportPage } from '@/components/templates/report-page';
@@ -50,6 +50,40 @@ export function TransactionJournalPage() {
   const [includeSimulations, setIncludeSimulations] = useState(false);
 
   const { rows, totals, isFetching } = useTransactionJournal(submittedParams);
+
+  // Auto-run support: when navigated from copilot with autoRun=true
+  const autoRunTriggered = useRef(false);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('autoRun') === 'true' && !autoRunTriggered.current) {
+      autoRunTriggered.current = true;
+
+      const urlDateFrom = urlParams.get('dateFrom') || undefined;
+      const urlDateTo = urlParams.get('dateTo') || undefined;
+      const urlDimensionTypeId = urlParams.get('dimensionTypeId') || undefined;
+      const urlDimensionValueId = urlParams.get('dimensionValueId') || undefined;
+      const urlIncludeSimulations = urlParams.get('includeSimulations') === 'true';
+
+      const effectiveDateFrom = urlDateFrom ?? dateFrom;
+      const effectiveDateTo = urlDateTo ?? dateTo;
+
+      if (urlDateFrom) setDateFrom(urlDateFrom);
+      if (urlDateTo) setDateTo(urlDateTo);
+      if (urlDimensionTypeId) {
+        setDimensionFilter({
+          dimensionTypeId: urlDimensionTypeId,
+          dimensionValueId: urlDimensionValueId ?? null,
+        });
+      }
+      if (urlIncludeSimulations) setIncludeSimulations(true);
+
+      setSubmittedParams({
+        dateFrom: effectiveDateFrom,
+        dateTo: effectiveDateTo,
+      });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRunReport = () => {
     setSubmittedParams({ dateFrom, dateTo });

@@ -6,7 +6,7 @@
  * Uses T8 (ReportPage) template with custom table rendering.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { Card, CardContent } from '@/components/ui/card';
@@ -89,6 +89,43 @@ export function DepartmentalPnlPage() {
   const dimensionTypes = Array.isArray(types) ? types : [];
 
   const { data, isFetching } = useDepartmentalPnl(submittedParams);
+
+  // Auto-run support: when navigated from copilot with autoRun=true
+  const autoRunTriggered = useRef(false);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('autoRun') === 'true' && !autoRunTriggered.current) {
+      autoRunTriggered.current = true;
+
+      const urlFiscalYear = urlParams.get('fiscalYear')
+        ? Number(urlParams.get('fiscalYear'))
+        : undefined;
+      const urlPeriodFrom = urlParams.get('periodFrom')
+        ? Number(urlParams.get('periodFrom'))
+        : undefined;
+      const urlPeriodTo = urlParams.get('periodTo') ? Number(urlParams.get('periodTo')) : undefined;
+      const urlDimensionTypeId = urlParams.get('dimensionTypeId') || undefined;
+      const urlIncludeSimulations = urlParams.get('includeSimulations') === 'true';
+
+      if (urlFiscalYear && urlDimensionTypeId) {
+        setParams({
+          fiscalYear: urlFiscalYear,
+          periodFrom: urlPeriodFrom ?? 1,
+          periodTo: urlPeriodTo ?? 12,
+        });
+        setDimensionTypeId(urlDimensionTypeId);
+        if (urlIncludeSimulations) setIncludeSimulations(true);
+        setSubmittedParams({
+          fiscalYear: urlFiscalYear,
+          periodFrom: urlPeriodFrom ?? 1,
+          periodTo: urlPeriodTo ?? 12,
+          dimensionTypeId: urlDimensionTypeId,
+          ...(urlIncludeSimulations ? { includeSimulations: true } : {}),
+        });
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRunReport = () => {
     if (!dimensionTypeId) return;

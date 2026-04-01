@@ -7,7 +7,7 @@
  * Uses T8 (ReportPage) template with custom result content.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -158,6 +158,49 @@ export function GeneralLedgerPage() {
   const [submittedParams, setSubmittedParams] = useState<GeneralLedgerParams | null>(null);
 
   const { data, isFetching } = useGeneralLedger(submittedParams);
+
+  // Auto-run support: when navigated from copilot with autoRun=true
+  const autoRunTriggered = useRef(false);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('autoRun') === 'true' && !autoRunTriggered.current) {
+      autoRunTriggered.current = true;
+
+      const urlDateFrom = urlParams.get('dateFrom') || undefined;
+      const urlDateTo = urlParams.get('dateTo') || undefined;
+      const urlAccountCodeFrom = urlParams.get('accountCodeFrom') || undefined;
+      const urlAccountCodeTo = urlParams.get('accountCodeTo') || undefined;
+      const urlDimensionTypeId = urlParams.get('dimensionTypeId') || undefined;
+      const urlDimensionValueId = urlParams.get('dimensionValueId') || undefined;
+      const urlIncludeSimulations = urlParams.get('includeSimulations') === 'true';
+
+      const effectiveDateFrom = urlDateFrom ?? dateFrom;
+      const effectiveDateTo = urlDateTo ?? dateTo;
+
+      if (urlDateFrom) setDateFrom(urlDateFrom);
+      if (urlDateTo) setDateTo(urlDateTo);
+      if (urlAccountCodeFrom) setAccountCodeFrom(urlAccountCodeFrom);
+      if (urlAccountCodeTo) setAccountCodeTo(urlAccountCodeTo);
+      if (urlDimensionTypeId) {
+        setDimensionFilter({
+          dimensionTypeId: urlDimensionTypeId,
+          dimensionValueId: urlDimensionValueId ?? null,
+        });
+      }
+      if (urlIncludeSimulations) setIncludeSimulations(true);
+
+      setSubmittedParams({
+        dateFrom: effectiveDateFrom,
+        dateTo: effectiveDateTo,
+        ...(urlAccountCodeFrom ? { accountCodeFrom: urlAccountCodeFrom } : {}),
+        ...(urlAccountCodeTo ? { accountCodeTo: urlAccountCodeTo } : {}),
+        ...(urlDimensionTypeId ? { dimensionTypeId: urlDimensionTypeId } : {}),
+        ...(urlDimensionValueId ? { dimensionValueId: urlDimensionValueId } : {}),
+        ...(urlIncludeSimulations ? { includeSimulations: true } : {}),
+      });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRunReport = () => {
     setSubmittedParams({

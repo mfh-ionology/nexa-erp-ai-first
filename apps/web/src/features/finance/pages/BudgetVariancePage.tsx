@@ -8,7 +8,7 @@
  * adds columns per dimension value showing the variance breakdown.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 
@@ -252,6 +252,49 @@ export function BudgetVariancePage() {
 
   // Submitted grouping state (only changes on "Run Report")
   const [submittedGroupBy, setSubmittedGroupBy] = useState<string | null>(null);
+
+  // Auto-run support: when navigated from copilot with autoRun=true
+  const autoRunTriggered = useRef(false);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('autoRun') === 'true' && !autoRunTriggered.current) {
+      autoRunTriggered.current = true;
+
+      const urlBudgetId = urlParams.get('budgetId') || undefined;
+      const urlPeriodFrom = urlParams.get('periodFrom')
+        ? Number(urlParams.get('periodFrom'))
+        : undefined;
+      const urlPeriodTo = urlParams.get('periodTo') ? Number(urlParams.get('periodTo')) : undefined;
+      const urlDimensionTypeId = urlParams.get('dimensionTypeId') || undefined;
+      const urlDimensionValueId = urlParams.get('dimensionValueId') || undefined;
+      const urlIncludeSimulations = urlParams.get('includeSimulations') === 'true';
+      const urlBudgetVersionId = urlParams.get('budgetVersionId') || undefined;
+
+      if (urlBudgetId) {
+        setBudgetId(urlBudgetId);
+        if (urlPeriodFrom) setPeriodFrom(urlPeriodFrom);
+        if (urlPeriodTo) setPeriodTo(urlPeriodTo);
+        if (urlDimensionTypeId) {
+          setDimensionFilter({
+            dimensionTypeId: urlDimensionTypeId,
+            dimensionValueId: urlDimensionValueId ?? null,
+          });
+        }
+        if (urlIncludeSimulations) setIncludeSimulations(true);
+        if (urlBudgetVersionId) setBudgetVersionId(urlBudgetVersionId);
+        setSubmittedParams({
+          budgetId: urlBudgetId,
+          periodFrom: urlPeriodFrom ?? 1,
+          periodTo: urlPeriodTo ?? 12,
+          ...(urlDimensionTypeId ? { dimensionTypeId: urlDimensionTypeId } : {}),
+          ...(urlDimensionValueId ? { dimensionValueId: urlDimensionValueId } : {}),
+          ...(urlIncludeSimulations ? { includeSimulations: true } : {}),
+          ...(urlBudgetVersionId ? { budgetVersionId: urlBudgetVersionId } : {}),
+        });
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Standard query — only active when not grouped
   const {
