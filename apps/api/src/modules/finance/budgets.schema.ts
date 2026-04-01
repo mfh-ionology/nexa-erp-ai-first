@@ -39,6 +39,7 @@ export const createBudgetSchema = z.object({
   fiscalYear: z.number().int().min(2000).max(2100),
   budgetType: z.enum(BUDGET_TYPES).default('ANNUAL'),
   description: z.string().max(1000).optional(),
+  budgetVersionId: z.string().uuid().optional(),
   lines: z.array(budgetLineInputSchema).min(1, 'At least one budget line is required'),
 });
 
@@ -80,6 +81,7 @@ export const listBudgetsQuerySchema = z.object({
   status: z.enum(BUDGET_STATUSES).optional(),
   fiscalYear: z.coerce.number().int().optional(),
   budgetType: z.enum(BUDGET_TYPES).optional(),
+  budgetVersionId: z.string().uuid().optional(),
   cursor: z.uuid().optional(),
   limit: z.coerce.number().int().min(1).max(500).default(50),
 });
@@ -123,6 +125,7 @@ export const budgetListItemSchema = z.object({
   approvedAt: z.date().nullable(),
   approvedBy: z.string().nullable(),
   originalBudgetId: z.string().nullable(),
+  budgetVersionId: z.string().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
   createdBy: z.string(),

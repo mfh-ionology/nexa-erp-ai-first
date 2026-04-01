@@ -62,6 +62,7 @@ const LIST_SELECT = {
   approvedAt: true,
   approvedBy: true,
   originalBudgetId: true,
+  budgetVersionId: true,
   createdAt: true,
   updatedAt: true,
   createdBy: true,
@@ -79,6 +80,7 @@ const DETAIL_SELECT = {
   approvedAt: true,
   approvedBy: true,
   originalBudgetId: true,
+  budgetVersionId: true,
   createdAt: true,
   updatedAt: true,
   createdBy: true,
@@ -140,12 +142,13 @@ export async function listBudgets(
   companyId: string,
   query: ListBudgetsQuery,
 ) {
-  const { cursor, limit, status, fiscalYear, budgetType } = query;
+  const { cursor, limit, status, fiscalYear, budgetType, budgetVersionId } = query;
 
   const where: Record<string, unknown> = { companyId };
   if (status !== undefined) where.status = status;
   if (fiscalYear !== undefined) where.fiscalYear = fiscalYear;
   if (budgetType !== undefined) where.budgetType = budgetType;
+  if (budgetVersionId !== undefined) where.budgetVersionId = budgetVersionId;
 
   const [items, total] = await Promise.all([
     prisma.budget.findMany({
@@ -229,6 +232,7 @@ export async function createBudget(
       fiscalYear: data.fiscalYear,
       budgetType: data.budgetType,
       description: data.description ?? null,
+      budgetVersionId: data.budgetVersionId ?? null,
       createdBy: userId,
       updatedBy: userId,
       lines: {
@@ -403,6 +407,7 @@ export async function copyBudget(
   companyId: string,
   id: string,
   userId: string,
+  targetVersionId?: string,
 ) {
   const original = await prisma.budget.findFirst({
     where: { id, companyId },
@@ -424,6 +429,7 @@ export async function copyBudget(
       budgetType: 'REVISED',
       description: original.description,
       originalBudgetId: original.id,
+      budgetVersionId: targetVersionId ?? null,
       createdBy: userId,
       updatedBy: userId,
       lines: {
