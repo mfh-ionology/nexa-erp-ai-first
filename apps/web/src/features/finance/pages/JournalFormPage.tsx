@@ -237,10 +237,14 @@ export function JournalFormPage({ id }: JournalFormPageProps) {
   const prepareLines = useCallback(() => {
     return lines
       .filter((l) => l.accountCode && (l.debit > 0 || l.credit > 0))
-      .map(({ _key, ...rest }) => ({
+      .map(({ _key, accountName, lineDimensions, ...rest }) => ({
         ...rest,
         description: rest.description || undefined,
         vatCode: rest.vatCode || undefined,
+        dimensions:
+          lineDimensions && lineDimensions.length > 0
+            ? lineDimensions.map((d) => ({ dimensionValueId: d.dimensionValueId }))
+            : undefined,
       }));
   }, [lines]);
 

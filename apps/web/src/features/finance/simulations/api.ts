@@ -38,6 +38,15 @@ export interface SimulationLine {
   debit: number;
   credit: number;
   vatCode: string | null;
+  /** Dimension values stored as JSON on simulation lines */
+  dimensionValues?: Array<{
+    dimensionValueId: string;
+    dimensionValueCode?: string;
+    dimensionValueName?: string;
+    dimensionTypeCode?: string;
+    dimensionTypeName?: string;
+    dimensionTypeId?: string;
+  }>;
 }
 
 export interface SimulationListItem {
@@ -67,6 +76,7 @@ export interface SimulationLineInput {
   debit: number;
   credit: number;
   vatCode?: string;
+  dimensions?: Array<{ dimensionValueId: string }>;
 }
 
 export interface CreateSimulationInput {

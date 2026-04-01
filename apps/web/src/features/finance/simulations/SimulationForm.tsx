@@ -138,18 +138,32 @@ export function SimulationForm({ simulationId }: SimulationFormProps) {
   // Sync lines from API data on load
   useEffect(() => {
     if (simulation?.lines && simulation.lines.length > 0) {
-      setLines(
-        lineRowsFromApi(
-          simulation.lines.map((l) => ({
-            accountCode: l.accountCode,
-            accountName: l.accountName,
-            description: l.description,
-            debit: l.debit,
-            credit: l.credit,
-            vatCode: l.vatCode,
-          })),
-        ),
+      const rows = lineRowsFromApi(
+        simulation.lines.map((l) => ({
+          accountCode: l.accountCode,
+          accountName: l.accountName,
+          description: l.description,
+          debit: l.debit,
+          credit: l.credit,
+          vatCode: l.vatCode,
+        })),
       );
+      // Map dimensionValues from simulation JSON to lineDimensions
+      for (let i = 0; i < rows.length; i++) {
+        const simLine = simulation.lines[i];
+        const row = rows[i];
+        if (row && simLine?.dimensionValues && simLine.dimensionValues.length > 0) {
+          row.lineDimensions = simLine.dimensionValues.map((dv) => ({
+            dimensionValueId: dv.dimensionValueId,
+            dimensionValueCode: dv.dimensionValueCode,
+            dimensionValueName: dv.dimensionValueName,
+            dimensionTypeCode: dv.dimensionTypeCode,
+            dimensionTypeName: dv.dimensionTypeName,
+            dimensionTypeId: dv.dimensionTypeId,
+          }));
+        }
+      }
+      setLines(rows);
     }
   }, [simulation?.lines]);
 
@@ -246,12 +260,16 @@ export function SimulationForm({ simulationId }: SimulationFormProps) {
   const prepareLines = useCallback(() => {
     return lines
       .filter((l) => l.accountCode && (l.debit > 0 || l.credit > 0))
-      .map(({ _key, ...rest }) => ({
+      .map(({ _key, accountName, lineDimensions, ...rest }) => ({
         accountCode: rest.accountCode,
         description: rest.description || undefined,
         debit: rest.debit,
         credit: rest.credit,
         vatCode: rest.vatCode || undefined,
+        dimensions:
+          lineDimensions && lineDimensions.length > 0
+            ? lineDimensions.map((d) => ({ dimensionValueId: d.dimensionValueId }))
+            : undefined,
       }));
   }, [lines]);
 

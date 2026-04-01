@@ -44,7 +44,10 @@ import {
 
 import { useAccountSearch } from '../hooks/use-journals';
 import type { JournalLineInput } from '../api/journals-types';
+import type { JournalLineDimension } from '../api/journals-types';
 import type { AccountSearchResult } from '../api/journals-api';
+import { DimensionPicker } from './DimensionPicker';
+import type { LineDimension } from './DimensionPicker';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,6 +58,8 @@ export interface LineRow extends JournalLineInput {
   _key: string;
   /** Display-only account name, populated from the account picker */
   accountName?: string;
+  /** Selected dimension values with display metadata */
+  lineDimensions?: LineDimension[];
 }
 
 interface JournalLineGridProps {
@@ -77,6 +82,7 @@ export function createEmptyLine(): LineRow {
     debit: 0,
     credit: 0,
     vatCode: '',
+    lineDimensions: [],
   };
 }
 
@@ -88,10 +94,20 @@ export function lineRowsFromApi(
     debit: number;
     credit: number;
     vatCode: string | null;
+    dimensions?: JournalLineDimension[];
   }>,
 ): LineRow[] {
   return apiLines.map((line, idx) => {
     keyCounter += 1;
+    const lineDimensions: LineDimension[] = (line.dimensions ?? []).map((d) => ({
+      dimensionValueId: d.dimensionValueId,
+      dimensionValueCode: d.dimensionValue?.code,
+      dimensionValueName: d.dimensionValue?.name,
+      dimensionTypeCode: d.dimensionValue?.dimensionType?.code,
+      dimensionTypeName: d.dimensionValue?.dimensionType?.name,
+      dimensionTypeId: d.dimensionValue?.dimensionType?.id,
+      singleSelect: undefined,
+    }));
     return {
       _key: `api-${idx}-${keyCounter}`,
       accountCode: line.accountCode,
@@ -100,6 +116,7 @@ export function lineRowsFromApi(
       debit: line.debit,
       credit: line.credit,
       vatCode: line.vatCode ?? '',
+      lineDimensions,
     };
   });
 }
@@ -391,6 +408,17 @@ export function JournalLineGrid({ lines, onChange, readOnly = false }: JournalLi
     [lines, onChange],
   );
 
+  const updateLineDimensions = useCallback(
+    (index: number, dims: LineDimension[]) => {
+      const updated = [...lines];
+      const current = updated[index];
+      if (!current) return;
+      updated[index] = { ...current, lineDimensions: dims };
+      onChange(updated);
+    },
+    [lines, onChange],
+  );
+
   const addLine = useCallback(() => {
     onChange([...lines, createEmptyLine()]);
   }, [lines, onChange]);
@@ -431,6 +459,9 @@ export function JournalLineGrid({ lines, onChange, readOnly = false }: JournalLi
               </TableHead>
               <TableHead className="h-10 w-24 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {t('journals.column.vatCode')}
+              </TableHead>
+              <TableHead className="h-10 w-40 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Dimensions
               </TableHead>
               {!readOnly && <TableHead className="h-10 w-10 px-2" />}
             </TableRow>
@@ -514,6 +545,15 @@ export function JournalLineGrid({ lines, onChange, readOnly = false }: JournalLi
                       </SelectContent>
                     </Select>
                   )}
+                </TableCell>
+
+                {/* Dimensions */}
+                <TableCell className="px-2 py-1">
+                  <DimensionPicker
+                    dimensions={line.lineDimensions ?? []}
+                    onChange={(dims) => updateLineDimensions(index, dims)}
+                    readOnly={readOnly}
+                  />
                 </TableCell>
 
                 {/* Delete row */}
