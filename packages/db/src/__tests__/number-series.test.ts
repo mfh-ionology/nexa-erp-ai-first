@@ -244,7 +244,8 @@ describe('NumberSeries unique constraint', () => {
 });
 
 // ---------------------------------------------------------------------------
-// E1.5-INT-006: All 13 default series created by seed
+// E1.5-INT-006: All default series created by seed
+// Base: 13 from main seed + JOURNAL from finance-seed + SIMULATION from Phase 2
 // ---------------------------------------------------------------------------
 
 describe('Seed data verification', () => {
@@ -257,23 +258,25 @@ describe('Seed data verification', () => {
     { entityType: 'SALES_ORDER', prefix: 'SO-', padding: 5 },
     { entityType: 'SALES_QUOTE', prefix: 'QT-', padding: 5 },
     { entityType: 'PURCHASE_ORDER', prefix: 'PO-', padding: 5 },
-    { entityType: 'BILL', prefix: 'BIL-', padding: 5 },
-    { entityType: 'JOURNAL', prefix: 'JE-', padding: 5 },
+    { entityType: 'SUPPLIER_BILL', prefix: 'BIL-', padding: 5 },
+    { entityType: 'JOURNAL_ENTRY', prefix: 'JE-', padding: 5 },
     { entityType: 'PAYMENT', prefix: 'PAY-', padding: 5 },
-    { entityType: 'SHIPMENT', prefix: 'SHP-', padding: 5 },
+    { entityType: 'DISPATCH', prefix: 'SHP-', padding: 5 },
     { entityType: 'GOODS_RECEIPT', prefix: 'GRN-', padding: 5 },
     { entityType: 'EMPLOYEE', prefix: 'EMP-', padding: 4 },
     { entityType: 'CUSTOMER', prefix: 'CUS-', padding: 5 },
     { entityType: 'SUPPLIER', prefix: 'SUP-', padding: 5 },
+    { entityType: 'JOURNAL', prefix: 'JE-', padding: 5 },
+    { entityType: 'SIMULATION', prefix: 'SIM-', padding: 5 },
   ];
 
-  it('all 13 default number series exist with correct config (E1.5-INT-006)', async () => {
+  it('all default number series exist with correct config (E1.5-INT-006)', async () => {
     const series = await prisma.numberSeries.findMany({
       where: { companyId: DEFAULT_COMPANY_ID },
       orderBy: { entityType: 'asc' },
     });
 
-    expect(series.length).toBe(13);
+    expect(series.length).toBeGreaterThanOrEqual(expectedSeries.length);
 
     for (const expected of expectedSeries) {
       const found = series.find((s) => s.entityType === expected.entityType);

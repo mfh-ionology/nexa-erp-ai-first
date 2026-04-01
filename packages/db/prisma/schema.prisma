@@ -2633,6 +2633,7 @@ model ChartOfAccount {
   bankAccounts    BankAccount[]
   budgetLines     BudgetLine[]
   accountMappings AccountMapping[]
+  simulationLines SimulationLine[]
 
   @@unique([companyId, code], name: "uq_chart_of_account_company_code")
   @@index([companyId])
@@ -2658,6 +2659,7 @@ model FinancialPeriod {
   updatedAt    DateTime     @updatedAt @map("updated_at")
 
   journalEntries JournalEntry[]
+  simulations    Simulation[]
 
   @@unique([companyId, fiscalYear, periodNumber], name: "uq_financial_period_company_year_number")
   @@index([companyId])
@@ -2709,8 +2711,9 @@ model JournalEntry {
   reversalOf JournalEntry?   @relation("JournalReversal", fields: [reversalOfId], references: [id])
   reversals  JournalEntry[]  @relation("JournalReversal")
   lines      JournalLine[]
-  template   JournalTemplate? @relation(fields: [templateId], references: [id])
-  templateId String?          @map("template_id")
+  template         JournalTemplate? @relation(fields: [templateId], references: [id])
+  templateId       String?          @map("template_id")
+  simulationSource Simulation[]     @relation("SimulationTransfer")
 
   @@unique([companyId, entryNumber], name: "uq_journal_entry_company_number")
   @@index([companyId])
@@ -2760,10 +2763,11 @@ model DimensionType {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  values       DimensionValue[]
-  requirements DimensionRequirement[]
-  defaults     DimensionDefault[]
-  balances     DimensionBalance[]
+  values               DimensionValue[]
+  requirements         DimensionRequirement[]
+  defaults             DimensionDefault[]
+  balances             DimensionBalance[]
+  budgetLineDimensions BudgetLineDimension[]
 
   @@unique([companyId, code], name: "uq_dimension_type_company_code")
   @@index([companyId])
@@ -2782,12 +2786,13 @@ model DimensionValue {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  dimensionType DimensionType          @relation(fields: [dimensionTypeId], references: [id])
-  parent        DimensionValue?        @relation("DimensionHierarchy", fields: [parentId], references: [id])
-  children      DimensionValue[]       @relation("DimensionHierarchy")
-  lineLinks     JournalLineDimension[]
-  defaults      DimensionDefault[]
-  balances      DimensionBalance[]
+  dimensionType        DimensionType          @relation(fields: [dimensionTypeId], references: [id])
+  parent               DimensionValue?        @relation("DimensionHierarchy", fields: [parentId], references: [id])
+  children             DimensionValue[]       @relation("DimensionHierarchy")
+  lineLinks            JournalLineDimension[]
+  defaults             DimensionDefault[]
+  balances             DimensionBalance[]
+  budgetLineDimensions BudgetLineDimension[]
 
   @@unique([dimensionTypeId, code, companyId], name: "uq_dimension_value_type_code_company")
   @@index([companyId])
@@ -2986,13 +2991,15 @@ model Budget {
   approvedAt   DateTime?    @map("approved_at")
   approvedBy   String?      @map("approved_by")
   originalBudgetId String?  @map("original_budget_id")
+  budgetVersionId  String?  @map("budget_version_id")
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
   createdBy    String       @map("created_by")
   updatedBy    String       @map("updated_by")
 
-  originalBudget Budget?      @relation("BudgetRevision", fields: [originalBudgetId], references: [id])
-  revisions      Budget[]     @relation("BudgetRevision")
+  originalBudget Budget?        @relation("BudgetRevision", fields: [originalBudgetId], references: [id])
+  revisions      Budget[]       @relation("BudgetRevision")
+  budgetVersion  BudgetVersion? @relation(fields: [budgetVersionId], references: [id])
   lines          BudgetLine[]
 
   @@index([companyId])
@@ -3021,8 +3028,9 @@ model BudgetLine {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  budget  Budget         @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  account ChartOfAccount @relation(fields: [companyId, accountCode], references: [companyId, code], onDelete: NoAction, onUpdate: NoAction)
+  budget          Budget                @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  account         ChartOfAccount        @relation(fields: [companyId, accountCode], references: [companyId, code], onDelete: NoAction, onUpdate: NoAction)
+  dimensionSplits BudgetLineDimension[]
 
   @@unique([budgetId, accountCode], name: "uq_budget_line_budget_account")
   @@index([budgetId])
@@ -3077,4 +3085,148 @@ model JournalTemplate {
 
   @@index([companyId])
   @@map("journal_templates")
+}
+
+// ---------------------------------------------------------------------------
+// Finance Module Phase 2 — Simulations + Budget Redesign
+// ---------------------------------------------------------------------------
+// Conventions follow E0-E14 patterns:
+//   - UUID PKs, snake_case DB mapping, companyId on every table
+//   - Monetary: Decimal @db.Decimal(19,4)
+//   - Timestamps: createdAt/updatedAt, Audit: createdBy/updatedBy
+// ---------------------------------------------------------------------------
+
+enum SimulationStatus {
+  ACTIVE
+  TRANSFERRED
+  INVALID
+
+  @@map("simulation_status")
+}
+
+model Simulation {
+  id              String           @id @default(uuid()) @map("id")
+  companyId       String           @map("company_id")
+  entryNumber     String           @map("entry_number") @db.VarChar(20)
+  transactionDate DateTime         @map("transaction_date") @db.Date
+  description     String           @map("description")
+  reference       String?          @map("reference")
+  status          SimulationStatus @default(ACTIVE) @map("status")
+  periodId        String           @map("period_id")
+  totalDebit      Decimal          @default(0) @map("total_debit") @db.Decimal(19, 4)
+  totalCredit     Decimal          @default(0) @map("total_credit") @db.Decimal(19, 4)
+  transferredToId String?          @map("transferred_to_id")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  createdBy       String           @map("created_by")
+  updatedBy       String           @map("updated_by")
+
+  period        FinancialPeriod @relation(fields: [periodId], references: [id])
+  transferredTo JournalEntry?   @relation("SimulationTransfer", fields: [transferredToId], references: [id])
+  lines         SimulationLine[]
+
+  @@unique([companyId, entryNumber], name: "uq_simulation_company_number")
+  @@index([companyId])
+  @@index([companyId, status])
+  @@map("simulations")
+}
+
+model SimulationLine {
+  id              String   @id @default(uuid()) @map("id")
+  simulationId    String   @map("simulation_id")
+  lineNumber      Int      @map("line_number")
+  accountCode     String   @map("account_code") @db.VarChar(20)
+  companyId       String   @map("company_id")
+  description     String?  @map("description")
+  debit           Decimal  @default(0) @map("debit") @db.Decimal(19, 4)
+  credit          Decimal  @default(0) @map("credit") @db.Decimal(19, 4)
+  vatCode         String?  @map("vat_code") @db.VarChar(20)
+  dimensionValues Json?    @map("dimension_values")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  simulation Simulation     @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+  account    ChartOfAccount @relation(fields: [companyId, accountCode], references: [companyId, code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([simulationId])
+  @@index([companyId, accountCode])
+  @@map("simulation_lines")
+}
+
+model BudgetVersion {
+  id                  String   @id @default(uuid()) @map("id")
+  companyId           String   @map("company_id")
+  fiscalYear          Int      @map("fiscal_year")
+  versionNumber       Int      @map("version_number")
+  versionName         String   @map("version_name") @db.VarChar(100)
+  copiedFromVersionId String?  @map("copied_from_version_id")
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  createdBy           String   @map("created_by")
+
+  copiedFromVersion BudgetVersion?  @relation("VersionCopy", fields: [copiedFromVersionId], references: [id])
+  copiedToVersions  BudgetVersion[] @relation("VersionCopy")
+  budgets           Budget[]
+
+  @@unique([companyId, fiscalYear, versionNumber], name: "uq_budget_version_company_year_number")
+  @@index([companyId])
+  @@index([companyId, fiscalYear])
+  @@map("budget_versions")
+}
+
+model BudgetKey {
+  id        String   @id @default(uuid()) @map("id")
+  companyId String   @map("company_id")
+  name      String   @map("name") @db.VarChar(100)
+  pct1      Decimal  @map("pct_1") @db.Decimal(7, 4)
+  pct2      Decimal  @map("pct_2") @db.Decimal(7, 4)
+  pct3      Decimal  @map("pct_3") @db.Decimal(7, 4)
+  pct4      Decimal  @map("pct_4") @db.Decimal(7, 4)
+  pct5      Decimal  @map("pct_5") @db.Decimal(7, 4)
+  pct6      Decimal  @map("pct_6") @db.Decimal(7, 4)
+  pct7      Decimal  @map("pct_7") @db.Decimal(7, 4)
+  pct8      Decimal  @map("pct_8") @db.Decimal(7, 4)
+  pct9      Decimal  @map("pct_9") @db.Decimal(7, 4)
+  pct10     Decimal  @map("pct_10") @db.Decimal(7, 4)
+  pct11     Decimal  @map("pct_11") @db.Decimal(7, 4)
+  pct12     Decimal  @map("pct_12") @db.Decimal(7, 4)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdBy String   @map("created_by")
+
+  @@unique([companyId, name], name: "uq_budget_key_company_name")
+  @@index([companyId])
+  @@map("budget_keys")
+}
+
+model BudgetLineDimension {
+  id               String   @id @default(uuid()) @map("id")
+  budgetLineId     String   @map("budget_line_id")
+  dimensionTypeId  String   @map("dimension_type_id")
+  dimensionValueId String   @map("dimension_value_id")
+  period1          Decimal  @default(0) @map("period_1") @db.Decimal(19, 4)
+  period2          Decimal  @default(0) @map("period_2") @db.Decimal(19, 4)
+  period3          Decimal  @default(0) @map("period_3") @db.Decimal(19, 4)
+  period4          Decimal  @default(0) @map("period_4") @db.Decimal(19, 4)
+  period5          Decimal  @default(0) @map("period_5") @db.Decimal(19, 4)
+  period6          Decimal  @default(0) @map("period_6") @db.Decimal(19, 4)
+  period7          Decimal  @default(0) @map("period_7") @db.Decimal(19, 4)
+  period8          Decimal  @default(0) @map("period_8") @db.Decimal(19, 4)
+  period9          Decimal  @default(0) @map("period_9") @db.Decimal(19, 4)
+  period10         Decimal  @default(0) @map("period_10") @db.Decimal(19, 4)
+  period11         Decimal  @default(0) @map("period_11") @db.Decimal(19, 4)
+  period12         Decimal  @default(0) @map("period_12") @db.Decimal(19, 4)
+  totalAmount      Decimal  @default(0) @map("total_amount") @db.Decimal(19, 4)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  budgetLine     BudgetLine     @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
+  dimensionType  DimensionType  @relation(fields: [dimensionTypeId], references: [id])
+  dimensionValue DimensionValue @relation(fields: [dimensionValueId], references: [id])
+
+  @@unique([budgetLineId, dimensionTypeId, dimensionValueId], name: "uq_budget_line_dimension")
+  @@index([budgetLineId])
+  @@map("budget_line_dimensions")
 }

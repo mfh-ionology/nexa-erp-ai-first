@@ -6,8 +6,9 @@
 //   1. 11 Account Classifications (FRS 102)
 //   2. ~65 Chart of Account records (FRS 102 hierarchy)
 //   3. 27 Account Mapping records
-//   4. NumberSeries JOURNAL (JE-00001)
+//   4. NumberSeries JOURNAL (JE-00001) + SIMULATION (SIM-00001)
 //   5. 3 DimensionType records (DEPT, CC, PROJ)
+//   6. 3 Budget Keys (Even Split, Seasonal, Q1 Heavy)
 //
 // All upserts are idempotent — safe to re-run.
 // ---------------------------------------------------------------------------
@@ -726,6 +727,58 @@ const DIMENSION_TYPES = [
 ];
 
 // ---------------------------------------------------------------------------
+// Default Budget Keys (allocation patterns)
+// ---------------------------------------------------------------------------
+
+const BUDGET_KEYS = [
+  {
+    name: 'Even Split',
+    pct1: 8.3333,
+    pct2: 8.3333,
+    pct3: 8.3333,
+    pct4: 8.3333,
+    pct5: 8.3333,
+    pct6: 8.3333,
+    pct7: 8.3333,
+    pct8: 8.3333,
+    pct9: 8.3333,
+    pct10: 8.3333,
+    pct11: 8.3333,
+    pct12: 8.3337, // last period absorbs rounding: 8.3333 * 11 + 8.3337 = 100.0000
+  },
+  {
+    name: 'Seasonal (Retail)',
+    pct1: 5.0, // Jan
+    pct2: 5.0, // Feb
+    pct3: 7.0, // Mar
+    pct4: 8.0, // Apr
+    pct5: 8.0, // May
+    pct6: 8.0, // Jun
+    pct7: 7.0, // Jul
+    pct8: 7.0, // Aug
+    pct9: 8.0, // Sep
+    pct10: 7.0, // Oct
+    pct11: 15.0, // Nov
+    pct12: 15.0, // Dec -- total = 100.0000
+  },
+  {
+    name: 'Q1 Heavy',
+    pct1: 15.0,
+    pct2: 15.0,
+    pct3: 15.0,
+    pct4: 6.1111,
+    pct5: 6.1111,
+    pct6: 6.1111,
+    pct7: 6.1111,
+    pct8: 6.1111,
+    pct9: 6.1111,
+    pct10: 6.1111,
+    pct11: 6.1111,
+    pct12: 6.1112, // last period absorbs rounding -- total = 100.0000
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Main seed function
 // ---------------------------------------------------------------------------
 
@@ -849,6 +902,33 @@ export async function seedFinanceData(prisma: PrismaClient): Promise<void> {
   }
   console.log('    NumberSeries JOURNAL seeded');
 
+  // 4b. Number Series for SIMULATION
+  const existingSimSeries = await prisma.numberSeries.findFirst({
+    where: {
+      companyId: DEFAULT_COMPANY_ID,
+      entityType: 'SIMULATION',
+      validFrom: null,
+    },
+  });
+  if (existingSimSeries) {
+    await prisma.numberSeries.update({
+      where: { id: existingSimSeries.id },
+      data: { prefix: 'SIM-', padding: 5 },
+    });
+  } else {
+    await prisma.numberSeries.create({
+      data: {
+        companyId: DEFAULT_COMPANY_ID,
+        entityType: 'SIMULATION',
+        prefix: 'SIM-',
+        nextValue: 1,
+        padding: 5,
+        isActive: true,
+      },
+    });
+  }
+  console.log('    NumberSeries SIMULATION seeded');
+
   // 5. Dimension Types (3 records)
   for (const dt of DIMENSION_TYPES) {
     await prisma.dimensionType.upsert({
@@ -872,6 +952,46 @@ export async function seedFinanceData(prisma: PrismaClient): Promise<void> {
     });
   }
   console.log(`    ${DIMENSION_TYPES.length} Dimension Types seeded`);
+
+  // 6. Budget Keys (3 default allocation patterns)
+  for (const bk of BUDGET_KEYS) {
+    await prisma.budgetKey.upsert({
+      where: { uq_budget_key_company_name: { companyId: DEFAULT_COMPANY_ID, name: bk.name } },
+      update: {
+        pct1: bk.pct1,
+        pct2: bk.pct2,
+        pct3: bk.pct3,
+        pct4: bk.pct4,
+        pct5: bk.pct5,
+        pct6: bk.pct6,
+        pct7: bk.pct7,
+        pct8: bk.pct8,
+        pct9: bk.pct9,
+        pct10: bk.pct10,
+        pct11: bk.pct11,
+        pct12: bk.pct12,
+      },
+      create: {
+        companyId: DEFAULT_COMPANY_ID,
+        name: bk.name,
+        pct1: bk.pct1,
+        pct2: bk.pct2,
+        pct3: bk.pct3,
+        pct4: bk.pct4,
+        pct5: bk.pct5,
+        pct6: bk.pct6,
+        pct7: bk.pct7,
+        pct8: bk.pct8,
+        pct9: bk.pct9,
+        pct10: bk.pct10,
+        pct11: bk.pct11,
+        pct12: bk.pct12,
+        isActive: true,
+        createdBy: DEFAULT_USER_ID,
+      },
+    });
+  }
+  console.log(`    ${BUDGET_KEYS.length} Budget Keys seeded`);
 
   console.log('  Finance module data seeded successfully.');
 }

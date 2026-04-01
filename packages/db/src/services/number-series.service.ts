@@ -42,6 +42,15 @@ export class NumberSeriesInactiveError extends NumberSeriesError {
  * acquires an implicit row-level lock in PostgreSQL, ensuring concurrent
  * callers receive unique, gap-free numbers.
  *
+ * When `transactionDate` is provided, selects the most specific date-range
+ * sub-range whose `valid_from`/`valid_to` window covers the date. If no
+ * date-specific range matches, falls back to the default series (null dates).
+ * When `transactionDate` is omitted, the default (null dates) series is used
+ * directly — preserving full backward compatibility.
+ *
+ * If a matching series has `sub_range_prefix` set, that prefix replaces the
+ * main `prefix` in the formatted output.
+ *
  * **CRITICAL**: This function does NOT create its own transaction. The caller
  * MUST pass an interactive transaction client (`tx`) so that number allocation
  * is part of the same transaction that creates the document. If the document
@@ -53,31 +62,81 @@ export class NumberSeriesInactiveError extends NumberSeriesError {
  *
  * @param tx - Prisma interactive transaction client (from prisma.$transaction)
  * @param companyId - The company UUID
- * @param entityType - e.g. 'INVOICE', 'PURCHASE_ORDER', 'JOURNAL'
- * @returns Formatted number string, e.g. "INV-00001"
+ * @param entityType - e.g. 'INVOICE', 'PURCHASE_ORDER', 'JOURNAL_ENTRY'
+ * @param transactionDate - Optional date to select a date-range sub-range
+ * @returns Formatted number string, e.g. "INV-00001" or "INV-2026-00001"
  */
 export async function nextNumber(
   tx: TransactionClient,
   companyId: string,
   entityType: string,
+  transactionDate?: Date,
 ): Promise<string> {
-  const result = await (tx as PrismaClient).$queryRaw<
-    Array<{
-      prefix: string;
-      allocated: bigint;
-      padding: number;
-      suffix: string | null;
-    }>
-  >(
-    Prisma.sql`
-      UPDATE number_series
-      SET next_value = next_value + 1, updated_at = NOW()
-      WHERE company_id = ${companyId}
-        AND entity_type = ${entityType}
-        AND is_active = true
-      RETURNING prefix, next_value - 1 AS allocated, padding, suffix
-    `,
-  );
+  // ---------------------------------------------------------------------------
+  // Step 1: Atomically update the best-matching series via CTE.
+  //
+  // The CTE selects the single best row (most specific date range first, then
+  // the default null-dates fallback), and the UPDATE targets only that row by id.
+  // This preserves the atomic row-level lock for gap-free numbering.
+  // ---------------------------------------------------------------------------
+
+  type ResultRow = {
+    prefix: string;
+    allocated: bigint;
+    padding: number;
+    suffix: string | null;
+    sub_range_prefix: string | null;
+  };
+
+  let result: ResultRow[];
+
+  if (transactionDate) {
+    // Date-aware path: find the best matching series for the given date.
+    // Preference order: specific date range (valid_from IS NOT NULL) > default (valid_from IS NULL).
+    result = await (tx as PrismaClient).$queryRaw<ResultRow[]>(
+      Prisma.sql`
+        WITH best_series AS (
+          SELECT id
+          FROM number_series
+          WHERE company_id = ${companyId}
+            AND entity_type = ${entityType}
+            AND is_active = true
+            AND (valid_from IS NULL OR valid_from <= ${transactionDate})
+            AND (valid_to IS NULL OR valid_to >= ${transactionDate})
+          ORDER BY valid_from DESC NULLS LAST
+          LIMIT 1
+        )
+        UPDATE number_series ns
+        SET next_value = ns.next_value + 1, updated_at = NOW()
+        FROM best_series bs
+        WHERE ns.id = bs.id
+        RETURNING ns.prefix, ns.next_value - 1 AS allocated, ns.padding, ns.suffix, ns.sub_range_prefix
+      `,
+    );
+  } else {
+    // Legacy path (no transactionDate): pick any active series for this entity type.
+    // For backward compatibility, this matches the original behaviour — when there
+    // is only one series per entity type (the normal case), it works identically.
+    // When sub-ranges exist, it prefers the default (null valid_from) series.
+    result = await (tx as PrismaClient).$queryRaw<ResultRow[]>(
+      Prisma.sql`
+        WITH best_series AS (
+          SELECT id
+          FROM number_series
+          WHERE company_id = ${companyId}
+            AND entity_type = ${entityType}
+            AND is_active = true
+          ORDER BY valid_from ASC NULLS FIRST
+          LIMIT 1
+        )
+        UPDATE number_series ns
+        SET next_value = ns.next_value + 1, updated_at = NOW()
+        FROM best_series bs
+        WHERE ns.id = bs.id
+        RETURNING ns.prefix, ns.next_value - 1 AS allocated, ns.padding, ns.suffix, ns.sub_range_prefix
+      `,
+    );
+  }
 
   const row = result[0];
   if (!row) {
@@ -98,6 +157,6 @@ export async function nextNumber(
     throw new NumberSeriesNotFoundError(companyId, entityType);
   }
 
-  const { prefix, allocated, padding, suffix } = row;
-  return `${prefix}${Number(allocated).toString().padStart(padding, '0')}${suffix ?? ''}`;
+  const effectivePrefix = row.sub_range_prefix ?? row.prefix;
+  return `${effectivePrefix}${Number(row.allocated).toString().padStart(row.padding, '0')}${row.suffix ?? ''}`;
 }
