@@ -1,9 +1,7 @@
-import { createFileRoute } from '@tanstack/react-router';
-
-import { createModuleBeforeLoad } from '@/lib/route-guards';
-import { DepartmentalPnlPage } from '@/features/finance/pages/DepartmentalPnlPage';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/_authenticated/finance/reports/departmental-pnl')({
-  beforeLoad: createModuleBeforeLoad('finance'),
-  component: DepartmentalPnlPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/finance/reports/profit-and-loss' });
+  },
 });

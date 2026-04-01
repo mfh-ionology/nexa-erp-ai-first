@@ -172,13 +172,7 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         path: '/finance/reports/general-ledger',
         category: 'report',
       },
-      {
-        key: 'finance.departmentalPnl',
-        labelKey: 'navigation:finance.departmentalPnl',
-        icon: 'Columns3',
-        path: '/finance/reports/departmental-pnl',
-        category: 'report',
-      },
+      // Departmental P&L merged into Profit & Loss page (Group by Dimension)
 
       // Settings
       {

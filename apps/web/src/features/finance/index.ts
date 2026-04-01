@@ -47,7 +47,7 @@ export { BudgetVariancePage } from './pages/BudgetVariancePage';
 // Enhanced Reports (Wave 10)
 export { GlDetailPage } from './pages/GlDetailPage';
 export { GeneralLedgerPage } from './pages/GeneralLedgerPage';
-export { DepartmentalPnlPage } from './pages/DepartmentalPnlPage';
+// DepartmentalPnlPage merged into ProfitAndLossPage (Group by Dimension dropdown)
 
 // Import
 export { FinanceImportPage } from './pages/FinanceImportPage';
