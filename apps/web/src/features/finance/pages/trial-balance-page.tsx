@@ -23,7 +23,6 @@ import { DimensionFilter } from '../components/DimensionFilter';
 import type { DimensionFilterValue } from '../components/DimensionFilter';
 import { DimensionGroupBy } from '../components/DimensionGroupBy';
 import { SimulationToggle } from '../components/SimulationToggle';
-import { ExportButtons } from '../components/ExportButtons';
 import type { ReportParams, TrialBalanceRow } from '../types';
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -219,20 +218,6 @@ export function TrialBalancePage() {
     }
   };
 
-  const exportParams: Record<string, string | number | boolean> = {
-    fiscalYear: params.fiscalYear,
-    periodFrom: params.periodFrom,
-    periodTo: params.periodTo,
-    ...(includeSimulations ? { includeSimulations: true } : {}),
-    ...(dimensionFilter.dimensionTypeId
-      ? { dimensionTypeId: dimensionFilter.dimensionTypeId }
-      : {}),
-    ...(dimensionFilter.dimensionValueId
-      ? { dimensionValueId: dimensionFilter.dimensionValueId }
-      : {}),
-    ...(groupByDimensionTypeId ? { groupByDimensionTypeId } : {}),
-  };
-
   const columns = useMemo<ColumnDef<TrialBalanceRow>[]>(
     () => [
       {
@@ -315,17 +300,6 @@ export function TrialBalancePage() {
     </div>
   );
 
-  const actionBarSlot = (
-    <div className="flex items-center gap-2">
-      <ExportButtons
-        exportPath="/finance/reports/trial-balance/export"
-        params={exportParams}
-        disabled={!hasData}
-        variant="icon"
-      />
-    </div>
-  );
-
   // Grouped view uses custom rendering; standard view uses ReportPage table
   if (isGrouped) {
     return (
@@ -345,7 +319,6 @@ export function TrialBalancePage() {
         hasResults={hasData}
         onRunReport={handleRunReport}
         isRunning={isFetching}
-        actionBarSlot={actionBarSlot}
       >
         {isFetching && !groupedData && (
           <div className="space-y-4">
@@ -374,7 +347,6 @@ export function TrialBalancePage() {
       onRunReport={handleRunReport}
       isRunning={isFetching}
       totals={totals}
-      actionBarSlot={actionBarSlot}
     />
   );
 }
