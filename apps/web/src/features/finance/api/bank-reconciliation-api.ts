@@ -61,6 +61,7 @@ interface ReconciliationApiResponse {
   status: string;
   matchedTransactions: BankTransaction[];
   unmatchedTransactions: BankTransaction[];
+  unmatchedJournalLines: JournalLineForMatching[];
 }
 
 export interface ReconciliationDetail {
@@ -96,7 +97,7 @@ export async function getReconciliationDetail(
     status: api.status,
     matchedTransactions: api.matchedTransactions ?? [],
     unmatchedBankTransactions: api.unmatchedTransactions ?? [],
-    unmatchedJournalLines: [], // Journal lines not returned by this endpoint — TODO: add backend endpoint
+    unmatchedJournalLines: api.unmatchedJournalLines ?? [],
   };
 }
 

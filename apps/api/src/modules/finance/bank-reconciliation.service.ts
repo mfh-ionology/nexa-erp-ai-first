@@ -227,6 +227,65 @@ export async function getReconciliationById(
     amount: toNumber(t.amount as unknown as Prisma.Decimal),
   }));
 
+  // Get the bank account's GL account code for journal line matching
+  const bankAccount = await prisma.bankAccount.findFirst({
+    where: { id: bankAccountId, companyId },
+    select: { glAccountCode: true },
+  });
+
+  // Get unmatched journal lines for the bank's GL account
+  // These are POSTED journal lines on the bank GL account that haven't been matched
+  let unmatchedJournalLines: Array<Record<string, unknown>> = [];
+  if (bankAccount?.glAccountCode) {
+    // Get all matched journal line IDs to exclude them
+    const matchedLineIds = await prisma.bankTransactionMatch.findMany({
+      where: { companyId },
+      select: { journalLineId: true },
+    });
+    const excludeIds = matchedLineIds
+      .map((m) => m.journalLineId)
+      .filter((id): id is string => id !== null);
+
+    const journalLines = await prisma.journalLine.findMany({
+      where: {
+        companyId,
+        accountCode: bankAccount.glAccountCode,
+        journalEntry: { status: 'POSTED' },
+        ...(excludeIds.length > 0 ? { id: { notIn: excludeIds } } : {}),
+      },
+      select: {
+        id: true,
+        lineNumber: true,
+        accountCode: true,
+        description: true,
+        debit: true,
+        credit: true,
+        journalEntry: {
+          select: {
+            id: true,
+            entryNumber: true,
+            transactionDate: true,
+            description: true,
+          },
+        },
+      },
+      orderBy: { journalEntry: { transactionDate: 'desc' } },
+    });
+
+    unmatchedJournalLines = journalLines.map((jl) => ({
+      id: jl.id,
+      lineNumber: jl.lineNumber,
+      accountCode: jl.accountCode,
+      description: jl.description ?? jl.journalEntry.description,
+      debit: toNumber(jl.debit as unknown as Prisma.Decimal),
+      credit: toNumber(jl.credit as unknown as Prisma.Decimal),
+      transactionDate: jl.journalEntry.transactionDate,
+      journalEntryId: jl.journalEntry.id,
+      journalEntryNumber: jl.journalEntry.entryNumber,
+      journalDescription: jl.journalEntry.description,
+    }));
+  }
+
   const { lines: _lines, ...reconData } = reconciliation;
   const normalised = normaliseReconciliation(reconData as unknown as Record<string, unknown>);
 
@@ -234,6 +293,7 @@ export async function getReconciliationById(
     ...normalised,
     matchedTransactions,
     unmatchedTransactions: normalisedUnmatched,
+    unmatchedJournalLines,
   };
 }
 
