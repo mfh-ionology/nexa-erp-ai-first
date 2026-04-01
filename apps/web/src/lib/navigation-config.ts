@@ -158,6 +158,27 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         path: '/finance/reports/budget-variance',
         category: 'report',
       },
+      {
+        key: 'finance.glDetail',
+        labelKey: 'navigation:finance.glDetail',
+        icon: 'FileSearch',
+        path: '/finance/reports/gl-detail',
+        category: 'report',
+      },
+      {
+        key: 'finance.generalLedger',
+        labelKey: 'navigation:finance.generalLedger',
+        icon: 'BookOpenCheck',
+        path: '/finance/reports/general-ledger',
+        category: 'report',
+      },
+      {
+        key: 'finance.departmentalPnl',
+        labelKey: 'navigation:finance.departmentalPnl',
+        icon: 'Columns3',
+        path: '/finance/reports/departmental-pnl',
+        category: 'report',
+      },
 
       // Settings
       {
@@ -218,6 +239,13 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         labelKey: 'navigation:finance.openingBalances',
         icon: 'Upload',
         path: '/finance/opening-balances',
+        category: 'setting',
+      },
+      {
+        key: 'finance.import',
+        labelKey: 'navigation:finance.import',
+        icon: 'FileInput',
+        path: '/finance/import',
         category: 'setting',
       },
     ],

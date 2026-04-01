@@ -44,6 +44,14 @@ export { JournalTemplateListPage } from './pages/JournalTemplateListPage';
 export { TransactionJournalPage } from './pages/TransactionJournalPage';
 export { BudgetVariancePage } from './pages/BudgetVariancePage';
 
+// Enhanced Reports (Wave 10)
+export { GlDetailPage } from './pages/GlDetailPage';
+export { GeneralLedgerPage } from './pages/GeneralLedgerPage';
+export { DepartmentalPnlPage } from './pages/DepartmentalPnlPage';
+
+// Import
+export { FinanceImportPage } from './pages/FinanceImportPage';
+
 // FE13: Finance Dashboard
 export { FinanceDashboardPage } from './pages/FinanceDashboardPage';
 
@@ -86,6 +94,8 @@ export {
 } from './hooks/use-journal-templates';
 
 export { useTransactionJournal, useBudgetVarianceReport } from './hooks/use-additional-reports';
+
+export { useGlDetail, useGeneralLedger, useDepartmentalPnl } from './hooks/use-enhanced-reports';
 
 export { useFinanceDashboard } from './hooks/use-finance-dashboard';
 

@@ -375,6 +375,19 @@ export const queryKeys = {
       params
         ? ([...queryKeys.finance.all, 'budget-variance', params] as const)
         : ([...queryKeys.finance.all, 'budget-variance'] as const),
+    // Enhanced Reports (Wave 10)
+    glDetail: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'gl-detail', params] as const)
+        : ([...queryKeys.finance.all, 'gl-detail'] as const),
+    generalLedger: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'general-ledger', params] as const)
+        : ([...queryKeys.finance.all, 'general-ledger'] as const),
+    departmentalPnl: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'departmental-pnl', params] as const)
+        : ([...queryKeys.finance.all, 'departmental-pnl'] as const),
     // Year-End (FE14)
     yearEndStatus: (fiscalYear: number) =>
       [...queryKeys.finance.all, 'year-end', fiscalYear] as const,
