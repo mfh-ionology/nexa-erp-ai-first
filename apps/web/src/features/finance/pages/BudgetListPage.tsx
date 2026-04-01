@@ -13,6 +13,7 @@ import { EntityListPage } from '@/components/templates/entity-list-page';
 import { Badge } from '@/components/ui/badge';
 
 import { useBudgets, useCreateBudget } from '../hooks/use-budgets';
+import { ExportButtons } from '../components/ExportButtons';
 import type { Budget, BudgetListParams } from '../types';
 
 const STATUS_COLORS: Record<
@@ -87,6 +88,12 @@ export function BudgetListPage() {
     [],
   );
 
+  const filterSlot = (
+    <div className="flex items-center justify-end">
+      <ExportButtons exportPath="/finance/budgets/export" variant="icon" label="Export budgets" />
+    </div>
+  );
+
   return (
     <EntityListPage<Budget>
       title="Budgets"
@@ -103,6 +110,7 @@ export function BudgetListPage() {
       searchValue={search}
       onSearchChange={setSearch}
       searchPlaceholder="Search budgets..."
+      filterSlot={filterSlot}
     />
   );
 }

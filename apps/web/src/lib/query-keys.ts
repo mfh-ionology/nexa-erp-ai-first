@@ -385,5 +385,40 @@ export const queryKeys = {
         ? ([...queryKeys.finance.all, 'month-end', params] as const)
         : ([...queryKeys.finance.all, 'month-end'] as const),
     monthEndPeriod: (id: string) => [...queryKeys.finance.all, 'month-end', id] as const,
+    // Dimension Types (Wave 9)
+    dimensionTypes: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'dimension-types', params] as const)
+        : ([...queryKeys.finance.all, 'dimension-types'] as const),
+    dimensionType: (id: string) => [...queryKeys.finance.all, 'dimension-types', id] as const,
+    // Dimension Values
+    dimensionValues: (typeId: string, params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'dimension-values', typeId, params] as const)
+        : ([...queryKeys.finance.all, 'dimension-values', typeId] as const),
+    // Dimension Requirements
+    dimensionRequirements: () => [...queryKeys.finance.all, 'dimension-requirements'] as const,
+    // Dimension Defaults
+    dimensionDefaults: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'dimension-defaults', params] as const)
+        : ([...queryKeys.finance.all, 'dimension-defaults'] as const),
+    // Simulations (Wave 9)
+    simulations: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'simulations', params] as const)
+        : ([...queryKeys.finance.all, 'simulations'] as const),
+    simulationsInfinite: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'simulations', 'infinite', params] as const)
+        : ([...queryKeys.finance.all, 'simulations', 'infinite'] as const),
+    simulation: (id: string) => [...queryKeys.finance.all, 'simulations', id] as const,
+    // Budget Versions (Wave 9)
+    budgetVersions: (fiscalYear?: number) =>
+      fiscalYear
+        ? ([...queryKeys.finance.all, 'budget-versions', fiscalYear] as const)
+        : ([...queryKeys.finance.all, 'budget-versions'] as const),
+    // Budget Keys (Wave 9)
+    budgetKeys: () => [...queryKeys.finance.all, 'budget-keys'] as const,
   },
 } as const;

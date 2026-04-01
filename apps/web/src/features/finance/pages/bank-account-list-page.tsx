@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { EntityListPage } from '@/components/templates/entity-list-page';
 
 import { useBankAccounts } from '../hooks/use-bank-accounts';
+import { ExportButtons } from '../components/ExportButtons';
 import type { BankAccount } from '../types';
 
 function formatCurrency(value: number): string {
@@ -110,6 +111,16 @@ export function BankAccountListPage() {
     [],
   );
 
+  const filterSlot = (
+    <div className="flex items-center justify-end">
+      <ExportButtons
+        exportPath="/finance/bank-accounts/export"
+        variant="icon"
+        label="Export bank accounts"
+      />
+    </div>
+  );
+
   return (
     <EntityListPage<BankAccount>
       title="Bank Accounts"
@@ -122,6 +133,7 @@ export function BankAccountListPage() {
       searchValue={search}
       onSearchChange={setSearch}
       searchPlaceholder="Search bank accounts..."
+      filterSlot={filterSlot}
       hasMore={hasNextPage ?? false}
       onLoadMore={() => void fetchNextPage()}
       isLoadingMore={isFetchingNextPage}

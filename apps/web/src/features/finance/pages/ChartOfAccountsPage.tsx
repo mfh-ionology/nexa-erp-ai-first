@@ -14,6 +14,8 @@ import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Filter, Landmark, MoreHorizontal, Plus, Search, Sparkles } from 'lucide-react';
 
+import { ExportButtons } from '../components/ExportButtons';
+
 import { useI18n } from '@nexa/i18n';
 
 import { Badge } from '@/components/ui/badge';
@@ -182,6 +184,19 @@ export function ChartOfAccountsPage() {
           {t('new', 'New')}
         </Button>
       )}
+      <ExportButtons
+        exportPath="/finance/accounts/export"
+        params={{
+          ...(typeFilter !== 'all' ? { accountType: typeFilter } : {}),
+          ...(activeFilter === 'active'
+            ? { isActive: true }
+            : activeFilter === 'inactive'
+              ? { isActive: false }
+              : {}),
+        }}
+        variant="icon"
+        label="Export accounts"
+      />
       <Button variant="ghost" size="icon-sm" aria-label="AI">
         <Sparkles className="size-4" />
       </Button>
@@ -192,7 +207,6 @@ export function ChartOfAccountsPage() {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem>Export Chart of Accounts</DropdownMenuItem>
           <DropdownMenuItem>Import Accounts</DropdownMenuItem>
           <DropdownMenuItem>Print</DropdownMenuItem>
         </DropdownMenuContent>

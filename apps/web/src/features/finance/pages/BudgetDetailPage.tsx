@@ -21,10 +21,13 @@ import {
   TableRow,
   TableFooter,
 } from '@/components/ui/table';
-import { CheckCircle, Copy, Loader2 } from 'lucide-react';
+import { CheckCircle, Copy, Loader2, SplitSquareVertical } from 'lucide-react';
 
 import { useBudget, useUpdateBudget, useApproveBudget, useCopyBudget } from '../hooks/use-budgets';
 import type { BudgetLine, BudgetPeriodAmount } from '../types';
+import { BudgetVersionSelector } from '../budgets/BudgetVersionSelector';
+import { BudgetKeyApplyPopover } from '../budgets/BudgetKeyApplyPopover';
+import { DimensionSplitModal } from '../budgets/DimensionSplitModal';
 
 const PERIOD_LABELS = [
   'Jan',
@@ -62,6 +65,10 @@ export function BudgetDetailPage({ id }: BudgetDetailPageProps) {
   const approveMutation = useApproveBudget();
   const copyMutation = useCopyBudget();
   const [editedCells, setEditedCells] = useState<Record<string, string>>({});
+  const [budgetVersionId, setBudgetVersionId] = useState('');
+  const [splitModalOpen, setSplitModalOpen] = useState(false);
+  const [splitLineId, setSplitLineId] = useState('');
+  const [splitParentAmounts, setSplitParentAmounts] = useState<number[]>([]);
 
   const isDraft = budget?.status === 'DRAFT';
 
@@ -108,6 +115,31 @@ export function BudgetDetailPage({ id }: BudgetDetailPageProps) {
       },
     });
   }, [copyMutation, id, navigate]);
+
+  const handleBudgetKeyApply = useCallback((lineAccountId: string, amounts: number[]) => {
+    const updates: Record<string, string> = {};
+    amounts.forEach((amount, idx) => {
+      updates[`${lineAccountId}-${idx + 1}`] = String(amount);
+    });
+    setEditedCells((prev) => ({ ...prev, ...updates }));
+  }, []);
+
+  const handleOpenSplit = useCallback(
+    (line: BudgetLine) => {
+      const amounts = PERIOD_LABELS.map((_, idx) => {
+        const period = idx + 1;
+        const editKey = `${line.accountId}-${period}`;
+        const edited = editedCells[editKey];
+        return edited !== undefined
+          ? Number(edited)
+          : Number(line.periods.find((p) => p.period === period)?.amount ?? 0);
+      });
+      setSplitLineId(line.id);
+      setSplitParentAmounts(amounts);
+      setSplitModalOpen(true);
+    },
+    [editedCells],
+  );
 
   const hasEdits = Object.keys(editedCells).length > 0;
 
@@ -159,104 +191,153 @@ export function BudgetDetailPage({ id }: BudgetDetailPageProps) {
   const grandTotal = periodTotals.reduce((sum, t) => sum + t, 0);
 
   const gridContent = budget ? (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="sticky left-0 z-10 bg-background min-w-[200px]">
-              Account
-            </TableHead>
-            {PERIOD_LABELS.map((label) => (
-              <TableHead key={label} className="text-right min-w-[100px]">
-                {label}
-              </TableHead>
-            ))}
-            <TableHead className="text-right min-w-[120px] font-bold">Total</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {budget.lines.map((line: BudgetLine) => {
-            let lineTotal = 0;
-            return (
-              <TableRow key={line.id}>
-                <TableCell className="sticky left-0 z-10 bg-background">
-                  <div>
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {line.accountCode}
-                    </span>
-                    <span className="ml-2 text-sm">{line.accountName}</span>
-                  </div>
-                </TableCell>
-                {PERIOD_LABELS.map((_, idx) => {
-                  const period = idx + 1;
-                  const periodData = line.periods.find((p) => p.period === period);
-                  const editKey = `${line.accountId}-${period}`;
-                  const currentValue = editedCells[editKey] ?? periodData?.amount ?? '0';
-                  const numValue = Number(currentValue);
-                  if (!Number.isNaN(numValue)) lineTotal += numValue;
+    <div className="space-y-4">
+      {/* Budget Version Selector */}
+      <div className="flex items-center gap-4">
+        <BudgetVersionSelector
+          fiscalYear={budget.fiscalYear}
+          value={budgetVersionId}
+          onChange={setBudgetVersionId}
+          disabled={!isDraft}
+        />
+      </div>
 
-                  return (
-                    <TableCell key={period} className="p-1 text-right">
-                      {isDraft ? (
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={currentValue}
-                          onChange={(e) => handleCellChange(line.accountId, period, e.target.value)}
-                          className="h-8 text-right font-mono text-sm tabular-nums"
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="sticky left-0 z-10 bg-background min-w-[200px]">
+                Account
+              </TableHead>
+              {PERIOD_LABELS.map((label) => (
+                <TableHead key={label} className="text-right min-w-[100px]">
+                  {label}
+                </TableHead>
+              ))}
+              <TableHead className="text-right min-w-[120px] font-bold">Total</TableHead>
+              {isDraft && <TableHead className="min-w-[80px]">Actions</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {budget.lines.map((line: BudgetLine) => {
+              let lineTotal = 0;
+              return (
+                <TableRow key={line.id}>
+                  <TableCell className="sticky left-0 z-10 bg-background">
+                    <div>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {line.accountCode}
+                      </span>
+                      <span className="ml-2 text-sm">{line.accountName}</span>
+                    </div>
+                  </TableCell>
+                  {PERIOD_LABELS.map((_, idx) => {
+                    const period = idx + 1;
+                    const periodData = line.periods.find((p) => p.period === period);
+                    const editKey = `${line.accountId}-${period}`;
+                    const currentValue = editedCells[editKey] ?? periodData?.amount ?? '0';
+                    const numValue = Number(currentValue);
+                    if (!Number.isNaN(numValue)) lineTotal += numValue;
+
+                    return (
+                      <TableCell key={period} className="p-1 text-right">
+                        {isDraft ? (
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={currentValue}
+                            onChange={(e) =>
+                              handleCellChange(line.accountId, period, e.target.value)
+                            }
+                            className="h-8 text-right font-mono text-sm tabular-nums"
+                          />
+                        ) : (
+                          <span className="font-mono text-sm tabular-nums">
+                            {formatCurrency(currentValue)}
+                          </span>
+                        )}
+                      </TableCell>
+                    );
+                  })}
+                  <TableCell className="text-right font-mono text-sm font-bold tabular-nums">
+                    {formatCurrency(lineTotal)}
+                  </TableCell>
+                  {isDraft && (
+                    <TableCell className="px-1">
+                      <div className="flex items-center gap-0.5">
+                        <BudgetKeyApplyPopover
+                          onApply={(amounts) => handleBudgetKeyApply(line.accountId, amounts)}
                         />
-                      ) : (
-                        <span className="font-mono text-sm tabular-nums">
-                          {formatCurrency(currentValue)}
-                        </span>
-                      )}
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-muted-foreground hover:text-[#7c3aed]"
+                          onClick={() => handleOpenSplit(line)}
+                          aria-label="Split by dimension"
+                        >
+                          <SplitSquareVertical className="size-3.5" />
+                        </Button>
+                      </div>
                     </TableCell>
-                  );
-                })}
-                <TableCell className="text-right font-mono text-sm font-bold tabular-nums">
-                  {formatCurrency(lineTotal)}
+                  )}
+                </TableRow>
+              );
+            })}
+          </TableBody>
+          <TableFooter>
+            <TableRow>
+              <TableCell className="sticky left-0 z-10 bg-muted font-bold">Total</TableCell>
+              {periodTotals.map((total, idx) => (
+                <TableCell
+                  key={idx}
+                  className="text-right font-mono text-sm font-bold tabular-nums"
+                >
+                  {formatCurrency(total)}
                 </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-        <TableFooter>
-          <TableRow>
-            <TableCell className="sticky left-0 z-10 bg-muted font-bold">Total</TableCell>
-            {periodTotals.map((total, idx) => (
-              <TableCell key={idx} className="text-right font-mono text-sm font-bold tabular-nums">
-                {formatCurrency(total)}
+              ))}
+              <TableCell className="text-right font-mono text-sm font-bold tabular-nums">
+                {formatCurrency(grandTotal)}
               </TableCell>
-            ))}
-            <TableCell className="text-right font-mono text-sm font-bold tabular-nums">
-              {formatCurrency(grandTotal)}
-            </TableCell>
-          </TableRow>
-        </TableFooter>
-      </Table>
+              {isDraft && <TableCell />}
+            </TableRow>
+          </TableFooter>
+        </Table>
+      </div>
     </div>
   ) : null;
 
   return (
-    <RecordDetailPage
-      title={budget?.name ?? 'Budget'}
-      subtitle={budget ? `FY ${budget.fiscalYear}` : undefined}
-      breadcrumbs={[
-        { label: 'Finance', path: '/finance' },
-        { label: 'Budgets', path: '/finance/budgets' },
-        { label: budget?.name ?? 'Detail' },
-      ]}
-      entityType="budget"
-      status={budget?.status}
-      isLoading={isLoading}
-      actionBarSlot={actionBar}
-      tabs={[
-        {
-          key: 'grid',
-          labelKey: 'Period Grid',
-          content: gridContent,
-        },
-      ]}
-    />
+    <>
+      <RecordDetailPage
+        title={budget?.name ?? 'Budget'}
+        subtitle={budget ? `FY ${budget.fiscalYear}` : undefined}
+        breadcrumbs={[
+          { label: 'Finance', path: '/finance' },
+          { label: 'Budgets', path: '/finance/budgets' },
+          { label: budget?.name ?? 'Detail' },
+        ]}
+        entityType="budget"
+        status={budget?.status}
+        isLoading={isLoading}
+        actionBarSlot={actionBar}
+        tabs={[
+          {
+            key: 'grid',
+            labelKey: 'Period Grid',
+            content: gridContent,
+          },
+        ]}
+      />
+
+      {budget && (
+        <DimensionSplitModal
+          open={splitModalOpen}
+          onOpenChange={setSplitModalOpen}
+          budgetId={budget.id}
+          lineId={splitLineId}
+          parentAmounts={splitParentAmounts}
+        />
+      )}
+    </>
   );
 }

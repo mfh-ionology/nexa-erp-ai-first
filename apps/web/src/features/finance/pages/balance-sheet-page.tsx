@@ -15,6 +15,10 @@ import { ReportPage } from '@/components/templates/report-page';
 
 import { useBalanceSheet } from '../hooks/use-financial-reports';
 import { ReportParameterForm } from '../components/report-parameter-form';
+import { DimensionFilter } from '../components/DimensionFilter';
+import type { DimensionFilterValue } from '../components/DimensionFilter';
+import { SimulationToggle } from '../components/SimulationToggle';
+import { ExportButtons } from '../components/ExportButtons';
 import type { ReportParams, ReportSection } from '../types';
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -82,6 +86,11 @@ function TotalLine({ label, value }: { label: string; value: number }) {
 export function BalanceSheetPage() {
   const [params, setParams] = useState<ReportParams>(DEFAULT_PARAMS);
   const [submittedParams, setSubmittedParams] = useState<ReportParams | null>(DEFAULT_PARAMS);
+  const [dimensionFilter, setDimensionFilter] = useState<DimensionFilterValue>({
+    dimensionTypeId: null,
+    dimensionValueId: null,
+  });
+  const [includeSimulations, setIncludeSimulations] = useState(false);
 
   const { data, isFetching, refetch } = useBalanceSheet(submittedParams);
 
@@ -89,6 +98,19 @@ export function BalanceSheetPage() {
     const newParams = { ...params };
     setSubmittedParams(newParams);
     setTimeout(() => void refetch(), 50);
+  };
+
+  const exportParams: Record<string, string | number | boolean> = {
+    fiscalYear: params.fiscalYear,
+    periodFrom: params.periodFrom,
+    periodTo: params.periodTo,
+    ...(includeSimulations ? { includeSimulations: true } : {}),
+    ...(dimensionFilter.dimensionTypeId
+      ? { dimensionTypeId: dimensionFilter.dimensionTypeId }
+      : {}),
+    ...(dimensionFilter.dimensionValueId
+      ? { dimensionValueId: dimensionFilter.dimensionValueId }
+      : {}),
   };
 
   const resultContent = data ? (
@@ -150,6 +172,27 @@ export function BalanceSheetPage() {
     </div>
   ) : null;
 
+  const parameterSlot = (
+    <div className="space-y-4">
+      <ReportParameterForm params={params} onChange={setParams} />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 items-end">
+        <DimensionFilter value={dimensionFilter} onChange={setDimensionFilter} />
+        <SimulationToggle checked={includeSimulations} onChange={setIncludeSimulations} />
+      </div>
+    </div>
+  );
+
+  const actionBarSlot = (
+    <div className="flex items-center gap-2">
+      <ExportButtons
+        exportPath="/finance/reports/balance-sheet/export"
+        params={exportParams}
+        disabled={!data}
+        variant="icon"
+      />
+    </div>
+  );
+
   return (
     <ReportPage
       title="Balance Sheet"
@@ -159,10 +202,11 @@ export function BalanceSheetPage() {
         { label: 'Reports', path: '/finance/reports/trial-balance' },
         { label: 'Balance Sheet' },
       ]}
-      parameterSlot={<ReportParameterForm params={params} onChange={setParams} />}
+      parameterSlot={parameterSlot}
       hasResults={!!data}
       onRunReport={handleRunReport}
       isRunning={isFetching}
+      actionBarSlot={actionBarSlot}
     >
       {isFetching && !data && (
         <div className="space-y-4">

@@ -20,6 +20,11 @@ import {
 
 import { useBudgets } from '../hooks/use-budgets';
 import { useBudgetVarianceReport } from '../hooks/use-additional-reports';
+import { DimensionFilter } from '../components/DimensionFilter';
+import type { DimensionFilterValue } from '../components/DimensionFilter';
+import { SimulationToggle } from '../components/SimulationToggle';
+import { BudgetVersionFilter } from '../components/BudgetVersionFilter';
+import { ExportButtons } from '../components/ExportButtons';
 import type { BudgetVarianceRow, BudgetVarianceParams } from '../types';
 
 function formatCurrency(value: string): string {
@@ -54,12 +59,32 @@ export function BudgetVariancePage() {
   const [periodFrom, setPeriodFrom] = useState(1);
   const [periodTo, setPeriodTo] = useState(12);
   const [submittedParams, setSubmittedParams] = useState<BudgetVarianceParams | null>(null);
+  const [dimensionFilter, setDimensionFilter] = useState<DimensionFilterValue>({
+    dimensionTypeId: null,
+    dimensionValueId: null,
+  });
+  const [includeSimulations, setIncludeSimulations] = useState(false);
+  const [budgetVersionId, setBudgetVersionId] = useState<string | null>(null);
 
   const { rows, totals, isFetching } = useBudgetVarianceReport(submittedParams);
 
   const handleRunReport = () => {
     if (!budgetId) return;
     setSubmittedParams({ budgetId, periodFrom, periodTo });
+  };
+
+  const exportParams: Record<string, string | number | boolean> = {
+    ...(budgetId ? { budgetId } : {}),
+    periodFrom,
+    periodTo,
+    ...(includeSimulations ? { includeSimulations: true } : {}),
+    ...(budgetVersionId ? { budgetVersionId } : {}),
+    ...(dimensionFilter.dimensionTypeId
+      ? { dimensionTypeId: dimensionFilter.dimensionTypeId }
+      : {}),
+    ...(dimensionFilter.dimensionValueId
+      ? { dimensionValueId: dimensionFilter.dimensionValueId }
+      : {}),
   };
 
   const columns = useMemo<ColumnDef<BudgetVarianceRow>[]>(
@@ -126,52 +151,70 @@ export function BudgetVariancePage() {
   );
 
   const parameterSlot = (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <div className="space-y-2">
-        <Label>Budget</Label>
-        <Select value={budgetId} onValueChange={setBudgetId}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select a budget..." />
-          </SelectTrigger>
-          <SelectContent>
-            {budgets.map((b) => (
-              <SelectItem key={b.id} value={b.id}>
-                {b.name} (FY {b.fiscalYear})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="space-y-2">
+          <Label>Budget</Label>
+          <Select value={budgetId} onValueChange={setBudgetId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select a budget..." />
+            </SelectTrigger>
+            <SelectContent>
+              {budgets.map((b) => (
+                <SelectItem key={b.id} value={b.id}>
+                  {b.name} (FY {b.fiscalYear})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Period From</Label>
+          <Select value={String(periodFrom)} onValueChange={(v) => setPeriodFrom(Number(v))}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PERIODS.map((p) => (
+                <SelectItem key={p} value={String(p)}>
+                  {p} - {PERIOD_NAMES[p - 1]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Period To</Label>
+          <Select value={String(periodTo)} onValueChange={(v) => setPeriodTo(Number(v))}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PERIODS.map((p) => (
+                <SelectItem key={p} value={String(p)}>
+                  {p} - {PERIOD_NAMES[p - 1]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
-      <div className="space-y-2">
-        <Label>Period From</Label>
-        <Select value={String(periodFrom)} onValueChange={(v) => setPeriodFrom(Number(v))}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {PERIODS.map((p) => (
-              <SelectItem key={p} value={String(p)}>
-                {p} - {PERIOD_NAMES[p - 1]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 items-end">
+        <BudgetVersionFilter value={budgetVersionId} onChange={setBudgetVersionId} />
+        <DimensionFilter value={dimensionFilter} onChange={setDimensionFilter} />
+        <SimulationToggle checked={includeSimulations} onChange={setIncludeSimulations} />
       </div>
-      <div className="space-y-2">
-        <Label>Period To</Label>
-        <Select value={String(periodTo)} onValueChange={(v) => setPeriodTo(Number(v))}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {PERIODS.map((p) => (
-              <SelectItem key={p} value={String(p)}>
-                {p} - {PERIOD_NAMES[p - 1]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+    </div>
+  );
+
+  const actionBarSlot = (
+    <div className="flex items-center gap-2">
+      <ExportButtons
+        exportPath="/finance/reports/budget-variance/export"
+        params={exportParams}
+        disabled={rows.length === 0}
+        variant="icon"
+      />
     </div>
   );
 
@@ -191,6 +234,7 @@ export function BudgetVariancePage() {
       onRunReport={handleRunReport}
       isRunning={isFetching}
       totals={totals ?? undefined}
+      actionBarSlot={actionBarSlot}
     />
   );
 }

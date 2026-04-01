@@ -17,6 +17,7 @@ import { EntityListPage } from '@/components/templates/entity-list-page';
 import { useI18n, useFormatDate, useLocale } from '@nexa/i18n';
 
 import { useJournals } from '../hooks/use-journals';
+import { ExportButtons } from '../components/ExportButtons';
 import type { JournalListItem, JournalStatus } from '../api/journals-types';
 import { JOURNAL_STATUSES } from '../api/journals-types';
 
@@ -173,32 +174,42 @@ export function JournalListPage() {
     [t],
   );
 
-  // --- Filter slot: status tabs ---
+  // --- Filter slot: status tabs + export ---
   const filterSlot = (
-    <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1">
-      <button
-        onClick={() => setStatusFilter(undefined)}
-        className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-          !statusFilter
-            ? 'bg-[#7c3aed] text-white shadow-sm'
-            : 'text-muted-foreground hover:bg-[#f5f3ff] hover:text-foreground'
-        }`}
-      >
-        {t('journals.filter.all')}
-      </button>
-      {JOURNAL_STATUSES.map((status) => (
+    <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1">
         <button
-          key={status}
-          onClick={() => setStatusFilter(status)}
+          onClick={() => setStatusFilter(undefined)}
           className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-            statusFilter === status
+            !statusFilter
               ? 'bg-[#7c3aed] text-white shadow-sm'
               : 'text-muted-foreground hover:bg-[#f5f3ff] hover:text-foreground'
           }`}
         >
-          {t(`journals.status.${status.toLowerCase()}`)}
+          {t('journals.filter.all')}
         </button>
-      ))}
+        {JOURNAL_STATUSES.map((status) => (
+          <button
+            key={status}
+            onClick={() => setStatusFilter(status)}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              statusFilter === status
+                ? 'bg-[#7c3aed] text-white shadow-sm'
+                : 'text-muted-foreground hover:bg-[#f5f3ff] hover:text-foreground'
+            }`}
+          >
+            {t(`journals.status.${status.toLowerCase()}`)}
+          </button>
+        ))}
+      </div>
+      <ExportButtons
+        exportPath="/finance/journals/export"
+        params={{
+          ...(statusFilter ? { status: statusFilter } : {}),
+        }}
+        variant="icon"
+        label="Export journals"
+      />
     </div>
   );
 

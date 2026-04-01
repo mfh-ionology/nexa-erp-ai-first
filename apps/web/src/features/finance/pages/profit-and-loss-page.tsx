@@ -14,6 +14,10 @@ import { ReportPage } from '@/components/templates/report-page';
 
 import { useProfitAndLoss } from '../hooks/use-financial-reports';
 import { ReportParameterForm } from '../components/report-parameter-form';
+import { DimensionFilter } from '../components/DimensionFilter';
+import type { DimensionFilterValue } from '../components/DimensionFilter';
+import { SimulationToggle } from '../components/SimulationToggle';
+import { ExportButtons } from '../components/ExportButtons';
 import type { ReportParams, ReportSection } from '../types';
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -104,6 +108,11 @@ function SummaryLine({
 export function ProfitAndLossPage() {
   const [params, setParams] = useState<ReportParams>(DEFAULT_PARAMS);
   const [submittedParams, setSubmittedParams] = useState<ReportParams | null>(DEFAULT_PARAMS);
+  const [dimensionFilter, setDimensionFilter] = useState<DimensionFilterValue>({
+    dimensionTypeId: null,
+    dimensionValueId: null,
+  });
+  const [includeSimulations, setIncludeSimulations] = useState(false);
 
   const { data, isFetching, refetch } = useProfitAndLoss(submittedParams);
 
@@ -112,6 +121,19 @@ export function ProfitAndLossPage() {
     setSubmittedParams(newParams);
     // Force refetch even if params haven't changed
     setTimeout(() => void refetch(), 50);
+  };
+
+  const exportParams: Record<string, string | number | boolean> = {
+    fiscalYear: params.fiscalYear,
+    periodFrom: params.periodFrom,
+    periodTo: params.periodTo,
+    ...(includeSimulations ? { includeSimulations: true } : {}),
+    ...(dimensionFilter.dimensionTypeId
+      ? { dimensionTypeId: dimensionFilter.dimensionTypeId }
+      : {}),
+    ...(dimensionFilter.dimensionValueId
+      ? { dimensionValueId: dimensionFilter.dimensionValueId }
+      : {}),
   };
 
   // Custom result rendering (no table — sectioned layout)
@@ -159,6 +181,27 @@ export function ProfitAndLossPage() {
     </div>
   ) : null;
 
+  const parameterSlot = (
+    <div className="space-y-4">
+      <ReportParameterForm params={params} onChange={setParams} />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 items-end">
+        <DimensionFilter value={dimensionFilter} onChange={setDimensionFilter} />
+        <SimulationToggle checked={includeSimulations} onChange={setIncludeSimulations} />
+      </div>
+    </div>
+  );
+
+  const actionBarSlot = (
+    <div className="flex items-center gap-2">
+      <ExportButtons
+        exportPath="/finance/reports/profit-and-loss/export"
+        params={exportParams}
+        disabled={!data}
+        variant="icon"
+      />
+    </div>
+  );
+
   return (
     <ReportPage
       title="Profit and Loss"
@@ -168,10 +211,11 @@ export function ProfitAndLossPage() {
         { label: 'Reports', path: '/finance/reports/trial-balance' },
         { label: 'Profit & Loss' },
       ]}
-      parameterSlot={<ReportParameterForm params={params} onChange={setParams} />}
+      parameterSlot={parameterSlot}
       hasResults={!!data}
       onRunReport={handleRunReport}
       isRunning={isFetching}
+      actionBarSlot={actionBarSlot}
     >
       {/* Custom sectioned content instead of table */}
       {isFetching && !data && (

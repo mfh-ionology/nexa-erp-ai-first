@@ -96,6 +96,18 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         path: '/finance/budgets',
       },
       {
+        key: 'finance.simulations',
+        labelKey: 'navigation:finance.simulations',
+        icon: 'FlaskConical',
+        path: '/finance/simulations',
+      },
+      {
+        key: 'finance.dimensions',
+        labelKey: 'navigation:finance.dimensions',
+        icon: 'Tags',
+        path: '/finance/dimensions',
+      },
+      {
         key: 'finance.templates',
         labelKey: 'navigation:finance.templates',
         icon: 'Copy',

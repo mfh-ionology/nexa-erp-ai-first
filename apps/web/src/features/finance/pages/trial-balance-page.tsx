@@ -12,6 +12,10 @@ import { ReportPage } from '@/components/templates/report-page';
 
 import { useTrialBalance } from '../hooks/use-financial-reports';
 import { ReportParameterForm } from '../components/report-parameter-form';
+import { DimensionFilter } from '../components/DimensionFilter';
+import type { DimensionFilterValue } from '../components/DimensionFilter';
+import { SimulationToggle } from '../components/SimulationToggle';
+import { ExportButtons } from '../components/ExportButtons';
 import type { ReportParams, TrialBalanceRow } from '../types';
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -33,6 +37,11 @@ function formatCurrency(value: number): string {
 export function TrialBalancePage() {
   const [params, setParams] = useState<ReportParams>(DEFAULT_PARAMS);
   const [submittedParams, setSubmittedParams] = useState<ReportParams | null>(DEFAULT_PARAMS);
+  const [dimensionFilter, setDimensionFilter] = useState<DimensionFilterValue>({
+    dimensionTypeId: null,
+    dimensionValueId: null,
+  });
+  const [includeSimulations, setIncludeSimulations] = useState(false);
 
   const { data, isFetching, refetch } = useTrialBalance(submittedParams);
 
@@ -40,6 +49,19 @@ export function TrialBalancePage() {
     const newParams = { ...params };
     setSubmittedParams(newParams);
     setTimeout(() => void refetch(), 50);
+  };
+
+  const exportParams: Record<string, string | number | boolean> = {
+    fiscalYear: params.fiscalYear,
+    periodFrom: params.periodFrom,
+    periodTo: params.periodTo,
+    ...(includeSimulations ? { includeSimulations: true } : {}),
+    ...(dimensionFilter.dimensionTypeId
+      ? { dimensionTypeId: dimensionFilter.dimensionTypeId }
+      : {}),
+    ...(dimensionFilter.dimensionValueId
+      ? { dimensionValueId: dimensionFilter.dimensionValueId }
+      : {}),
   };
 
   const columns = useMemo<ColumnDef<TrialBalanceRow>[]>(
@@ -111,6 +133,27 @@ export function TrialBalancePage() {
       }
     : undefined;
 
+  const parameterSlot = (
+    <div className="space-y-4">
+      <ReportParameterForm params={params} onChange={setParams} />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 items-end">
+        <DimensionFilter value={dimensionFilter} onChange={setDimensionFilter} />
+        <SimulationToggle checked={includeSimulations} onChange={setIncludeSimulations} />
+      </div>
+    </div>
+  );
+
+  const actionBarSlot = (
+    <div className="flex items-center gap-2">
+      <ExportButtons
+        exportPath="/finance/reports/trial-balance/export"
+        params={exportParams}
+        disabled={!data}
+        variant="icon"
+      />
+    </div>
+  );
+
   return (
     <ReportPage<TrialBalanceRow>
       title="Trial Balance"
@@ -120,13 +163,14 @@ export function TrialBalancePage() {
         { label: 'Reports', path: '/finance/reports/trial-balance' },
         { label: 'Trial Balance' },
       ]}
-      parameterSlot={<ReportParameterForm params={params} onChange={setParams} />}
+      parameterSlot={parameterSlot}
       hasResults={!!data}
       resultColumns={columns}
       resultData={data?.rows ?? []}
       onRunReport={handleRunReport}
       isRunning={isFetching}
       totals={totals}
+      actionBarSlot={actionBarSlot}
     />
   );
 }
