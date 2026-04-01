@@ -29,6 +29,8 @@ import { dimensionRequirementsRoutesPlugin } from './dimension-requirements.rout
 import { dimensionDefaultsRoutesPlugin } from './dimension-defaults.routes.js';
 import { simulationsRoutesPlugin } from './simulations.routes.js';
 import { importRoutesPlugin } from './import.routes.js';
+import { exportRoutesPlugin } from './export.routes.js';
+import { listExportRoutesPlugin } from './list-export.routes.js';
 
 async function financeModule(fastify: FastifyInstance): Promise<void> {
   await fastify.register(settingsRoutesPlugin);
@@ -63,6 +65,10 @@ async function financeModule(fastify: FastifyInstance): Promise<void> {
 
   // Simulations (Phase 2 Wave 3)
   await fastify.register(simulationsRoutesPlugin);
+
+  // CSV/Excel Exports (Phase 2 Wave 6)
+  await fastify.register(exportRoutesPlugin);
+  await fastify.register(listExportRoutesPlugin);
 
   // CSV Imports (Phase 2 Wave 7)
   await fastify.register(importRoutesPlugin);
