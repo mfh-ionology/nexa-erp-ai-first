@@ -622,6 +622,7 @@ export class AiOrchestrator {
       let completionTokens = 0;
       let finishReason = 'stop';
       let lastToolCall: AiStreamChunk['toolCall'] = undefined;
+      let pendingNavigation: string | undefined;
 
       for await (const chunk of this.aiGateway.stream(gatewayRequest)) {
         // Map LLMStreamChunk to AiStreamChunk and yield
@@ -642,6 +643,14 @@ export class AiOrchestrator {
           completionTokens = chunk.usage.completionTokens ?? completionTokens;
         } else if (chunk.type === 'done') {
           finishReason = chunk.finishReason ?? 'stop';
+        }
+      }
+
+      // Detect _navigateTo in last tool call input (query tools embed navigation hints)
+      if (lastToolCall?.input && typeof lastToolCall.input === 'object') {
+        const input = lastToolCall.input as Record<string, unknown>;
+        if (typeof input._navigateTo === 'string') {
+          pendingNavigation = input._navigateTo;
         }
       }
 
@@ -710,6 +719,14 @@ export class AiOrchestrator {
           };
         }
         // If blocked, don't emit — the conversational content already streamed
+      }
+
+      // 8b. Emit navigate chunk if a query tool returned _navigateTo
+      if (pendingNavigation) {
+        yield {
+          type: 'navigate' as const,
+          route: pendingNavigation,
+        };
       }
 
       // 9. Citation tracking for streamed response (E5b-3 Task 3.2)
