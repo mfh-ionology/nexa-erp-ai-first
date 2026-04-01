@@ -244,11 +244,19 @@ export function ProfitAndLossPage() {
   const hasData = isGrouped ? !!groupedData : !!standardData;
 
   const handleRunReport = () => {
-    const newParams = { ...params };
+    const newParams: ReportParams = {
+      ...params,
+      ...(dimensionFilter.dimensionTypeId
+        ? { dimensionTypeId: dimensionFilter.dimensionTypeId }
+        : {}),
+      ...(dimensionFilter.dimensionValueId
+        ? { dimensionValueId: dimensionFilter.dimensionValueId }
+        : {}),
+      ...(includeSimulations ? { includeSimulations: true } : {}),
+    };
     setSubmittedParams(newParams);
     setSubmittedGroupBy(groupByDimensionTypeId);
     if (groupByDimensionTypeId === null) {
-      // Force refetch for standard P&L even if params haven't changed
       setTimeout(() => void refetchStandard(), 50);
     }
   };

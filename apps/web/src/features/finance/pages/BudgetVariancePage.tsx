@@ -279,7 +279,19 @@ export function BudgetVariancePage() {
 
   const handleRunReport = () => {
     if (!budgetId) return;
-    setSubmittedParams({ budgetId, periodFrom, periodTo });
+    setSubmittedParams({
+      budgetId,
+      periodFrom,
+      periodTo,
+      ...(dimensionFilter.dimensionTypeId
+        ? { dimensionTypeId: dimensionFilter.dimensionTypeId }
+        : {}),
+      ...(dimensionFilter.dimensionValueId
+        ? { dimensionValueId: dimensionFilter.dimensionValueId }
+        : {}),
+      ...(includeSimulations ? { includeSimulations: true } : {}),
+      ...(budgetVersionId ? { budgetVersionId } : {}),
+    });
     setSubmittedGroupBy(groupByDimensionTypeId);
   };
 

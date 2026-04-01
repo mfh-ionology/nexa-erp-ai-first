@@ -202,7 +202,16 @@ export function TrialBalancePage() {
   const hasData = isGrouped ? !!groupedData : !!standardData;
 
   const handleRunReport = () => {
-    const newParams = { ...params };
+    const newParams: ReportParams = {
+      ...params,
+      ...(dimensionFilter.dimensionTypeId
+        ? { dimensionTypeId: dimensionFilter.dimensionTypeId }
+        : {}),
+      ...(dimensionFilter.dimensionValueId
+        ? { dimensionValueId: dimensionFilter.dimensionValueId }
+        : {}),
+      ...(includeSimulations ? { includeSimulations: true } : {}),
+    };
     setSubmittedParams(newParams);
     setSubmittedGroupBy(groupByDimensionTypeId);
     if (groupByDimensionTypeId === null) {

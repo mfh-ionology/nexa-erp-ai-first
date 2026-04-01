@@ -275,6 +275,10 @@ export interface ReportParams {
   periodTo: number;
   includeZeroBalances?: boolean;
   comparePriorYear?: boolean;
+  dimensionTypeId?: string;
+  dimensionValueId?: string;
+  includeSimulations?: boolean;
+  budgetVersionId?: string;
 }
 
 export interface TrialBalanceRow {
