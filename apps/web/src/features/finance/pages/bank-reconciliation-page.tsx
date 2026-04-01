@@ -1,49 +1,33 @@
 /* eslint-disable i18next/no-literal-string */
 /**
- * FE8: Bank Reconciliation Workspace — /finance/bank-reconciliation/$id
+ * Bank Reconciliation Workspace — /finance/bank-reconciliation/$id
  *
- * Split-pane layout: bank transactions on left, journal lines on right.
- * Click-to-select on each side, then click "Match" to pair them.
- * Shows reconciliation summary header with balance differences.
+ * Shows reconciliation session: bank transactions on left, journal lines on right.
+ * Click to select, then Match. Shows balance summary.
  */
 
 import { useMemo, useState } from 'react';
-import { ArrowLeftRight, Check, Link2Off, Loader2 } from 'lucide-react';
+import { ArrowLeftRight, Check, Loader2, Plus } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/templates/page-header';
-import { cn } from '@/lib/utils';
 
 import {
-  useReconciliationSummary,
-  useBankTransactions,
-  useUnmatchedJournalLines,
+  useReconciliationList,
+  useReconciliationDetail,
+  useCreateReconciliation,
   useMatchTransaction,
   useUnmatchTransaction,
 } from '../hooks/use-bank-reconciliation';
-import type { BankTransaction, JournalLineForMatching } from '../types';
-
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
 
 interface BankReconciliationPageProps {
   bankAccountId: string;
 }
-
-// ---------------------------------------------------------------------------
-// Format helpers
-// ---------------------------------------------------------------------------
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('en-GB', {
@@ -53,386 +37,269 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Summary Card
-// ---------------------------------------------------------------------------
-
-function ReconciliationSummaryCard({
-  statementBalance,
-  bookBalance,
-  unmatchedBankCount,
-  unmatchedJournalCount,
-  difference,
-}: {
-  statementBalance: number;
-  bookBalance: number;
-  unmatchedBankCount: number;
-  unmatchedJournalCount: number;
-  difference: number;
-}) {
-  const isBalanced = Math.abs(difference) < 0.01;
-
-  return (
-    <div className="grid gap-4 sm:grid-cols-5">
-      <Card>
-        <CardContent className="pt-4">
-          <p className="text-xs text-muted-foreground">Statement Balance</p>
-          <p className="font-mono text-lg font-bold tabular-nums">
-            {formatCurrency(statementBalance)}
-          </p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardContent className="pt-4">
-          <p className="text-xs text-muted-foreground">Book Balance</p>
-          <p className="font-mono text-lg font-bold tabular-nums">{formatCurrency(bookBalance)}</p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardContent className="pt-4">
-          <p className="text-xs text-muted-foreground">Unmatched Bank</p>
-          <p className="text-lg font-bold">{unmatchedBankCount}</p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardContent className="pt-4">
-          <p className="text-xs text-muted-foreground">Unmatched Journal</p>
-          <p className="text-lg font-bold">{unmatchedJournalCount}</p>
-        </CardContent>
-      </Card>
-      <Card
-        className={
-          isBalanced
-            ? 'border-green-500/30 bg-green-50 dark:bg-green-950/20'
-            : 'border-destructive/30 bg-destructive/5'
-        }
-      >
-        <CardContent className="pt-4">
-          <p className="text-xs text-muted-foreground">Difference</p>
-          <p
-            className={cn(
-              'font-mono text-lg font-bold tabular-nums',
-              isBalanced ? 'text-green-700 dark:text-green-400' : 'text-destructive',
-            )}
-          >
-            {formatCurrency(difference)}
-          </p>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Transaction Row
-// ---------------------------------------------------------------------------
-
-function TransactionRow({
-  transaction,
-  isSelected,
-  onSelect,
-  onUnmatch,
-  isUnmatching,
-}: {
-  transaction: BankTransaction;
-  isSelected: boolean;
-  onSelect: () => void;
-  onUnmatch?: () => void;
-  isUnmatching?: boolean;
-}) {
-  const isMatched = transaction.status === 'MATCHED';
-
-  return (
-    <div
-      className={cn(
-        'flex items-center gap-3 rounded-lg border px-3 py-2 transition-colors cursor-pointer',
-        isSelected && 'ring-2 ring-primary bg-primary/5',
-        isMatched && 'opacity-60 bg-muted/30',
-        !isMatched && !isSelected && 'hover:bg-muted/50',
-      )}
-      onClick={isMatched ? undefined : onSelect}
-      onKeyDown={(e) => {
-        if ((e.key === 'Enter' || e.key === ' ') && !isMatched) {
-          e.preventDefault();
-          onSelect();
-        }
-      }}
-      tabIndex={isMatched ? -1 : 0}
-      role="option"
-      aria-selected={isSelected}
-    >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">{formatDate(transaction.date)}</span>
-          <Badge
-            variant={transaction.type === 'CREDIT' ? 'default' : 'secondary'}
-            className="text-[10px]"
-          >
-            {transaction.type}
-          </Badge>
-          {isMatched && (
-            <Badge variant="outline" className="text-[10px]">
-              <Check className="mr-1 size-3" />
-              Matched
-            </Badge>
-          )}
-        </div>
-        <p className="truncate text-sm font-medium">{transaction.description}</p>
-        {transaction.reference && (
-          <p className="truncate text-xs text-muted-foreground">Ref: {transaction.reference}</p>
-        )}
-      </div>
-      <div className="text-right shrink-0">
-        <p
-          className={cn(
-            'font-mono text-sm font-semibold tabular-nums',
-            transaction.type === 'CREDIT'
-              ? 'text-green-700 dark:text-green-400'
-              : 'text-destructive',
-          )}
-        >
-          {transaction.type === 'CREDIT' ? '+' : '-'}
-          {formatCurrency(Math.abs(transaction.amount))}
-        </p>
-      </div>
-      {isMatched && onUnmatch && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            onUnmatch();
-          }}
-          disabled={isUnmatching}
-          title="Unmatch"
-        >
-          <Link2Off className="size-3.5" />
-        </Button>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Journal Line Row
-// ---------------------------------------------------------------------------
-
-function JournalLineRow({
-  line,
-  isSelected,
-  onSelect,
-}: {
-  line: JournalLineForMatching;
-  isSelected: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <div
-      className={cn(
-        'flex items-center gap-3 rounded-lg border px-3 py-2 transition-colors cursor-pointer',
-        isSelected && 'ring-2 ring-primary bg-primary/5',
-        'hover:bg-muted/50',
-      )}
-      onClick={onSelect}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onSelect();
-        }
-      }}
-      tabIndex={0}
-      role="option"
-      aria-selected={isSelected}
-    >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">{formatDate(line.date)}</span>
-          <span className="font-mono text-xs text-muted-foreground">{line.journalNumber}</span>
-        </div>
-        <p className="truncate text-sm font-medium">{line.description}</p>
-        <p className="truncate text-xs text-muted-foreground">
-          {line.accountCode} — {line.accountName}
-          {line.reference ? ` | Ref: ${line.reference}` : ''}
-        </p>
-      </div>
-      <div className="text-right shrink-0">
-        {line.debit > 0 && (
-          <p className="font-mono text-sm tabular-nums">Dr {formatCurrency(line.debit)}</p>
-        )}
-        {line.credit > 0 && (
-          <p className="font-mono text-sm tabular-nums">Cr {formatCurrency(line.credit)}</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Main Page Component
-// ---------------------------------------------------------------------------
-
 export function BankReconciliationPage({ bankAccountId }: BankReconciliationPageProps) {
-  const [txFilter, setTxFilter] = useState<string>('UNMATCHED');
-  const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
-  const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
-
-  // --- Queries ---
-  const { data: summary, isLoading: summaryLoading } = useReconciliationSummary(bankAccountId);
-  const { data: transactions, isLoading: txLoading } = useBankTransactions(bankAccountId, {
-    status: txFilter,
-  });
-  const { data: journalLines, isLoading: linesLoading } = useUnmatchedJournalLines(bankAccountId);
-
-  // --- Mutations ---
+  // Fetch reconciliation sessions for this bank account
+  const { data: sessions, isLoading: sessionsLoading } = useReconciliationList(bankAccountId);
+  const createRecon = useCreateReconciliation(bankAccountId);
   const matchMutation = useMatchTransaction(bankAccountId);
   const unmatchMutation = useUnmatchTransaction(bankAccountId);
 
-  // --- Filtered transactions ---
-  const filteredTransactions = useMemo(() => {
-    return transactions ?? [];
-  }, [transactions]);
+  // Find active (IN_PROGRESS) session
+  const activeSession = useMemo(
+    () => sessions?.find((s) => s.status === 'IN_PROGRESS'),
+    [sessions],
+  );
 
-  const filteredLines = useMemo(() => {
-    return journalLines ?? [];
-  }, [journalLines]);
+  // Fetch detail for active session
+  const { data: detail, isLoading: detailLoading } = useReconciliationDetail(
+    bankAccountId,
+    activeSession?.id,
+  );
 
-  // --- Match handler ---
+  // Selection state
+  const [selectedBankTxId, setSelectedBankTxId] = useState<string | null>(null);
+  const [selectedJournalLineId, setSelectedJournalLineId] = useState<string | null>(null);
+
+  // Create session form
+  const [statementBalance, setStatementBalance] = useState('');
+  const today = new Date().toISOString().split('T')[0]!;
+
+  const handleCreateSession = () => {
+    createRecon.mutate({
+      statementDate: today,
+      statementBalance: parseFloat(statementBalance) || 0,
+    });
+  };
+
   const handleMatch = () => {
-    if (!selectedTxId || !selectedLineId) return;
+    if (!selectedBankTxId || !selectedJournalLineId) return;
     matchMutation.mutate(
-      { bankTransactionId: selectedTxId, journalLineId: selectedLineId },
+      { bankTransactionId: selectedBankTxId, journalLineId: selectedJournalLineId },
       {
         onSuccess: () => {
-          setSelectedTxId(null);
-          setSelectedLineId(null);
+          setSelectedBankTxId(null);
+          setSelectedJournalLineId(null);
         },
       },
     );
   };
 
-  // --- Unmatch handler ---
-  const handleUnmatch = (bankTransactionId: string) => {
-    unmatchMutation.mutate(bankTransactionId);
-  };
+  const breadcrumbs = [
+    { label: 'Finance', path: '/finance' },
+    { label: 'Bank Reconciliation', path: '/finance/bank-reconciliation' },
+    { label: 'Workspace' },
+  ];
 
-  const isLoading = summaryLoading || txLoading || linesLoading;
-
-  if (isLoading) {
+  // Loading
+  if (sessionsLoading) {
     return (
-      <main className="flex flex-col gap-6" aria-label="Bank Reconciliation" aria-busy="true">
-        <PageHeader
-          title="Bank Reconciliation"
-          breadcrumbs={[
-            { label: 'Finance', path: '/finance' },
-            { label: 'Bank Accounts', path: '/finance/bank-accounts' },
-            { label: 'Reconciliation' },
-          ]}
-          isLoading
-        />
-        <div className="grid gap-4 sm:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-20 w-full" />
-          ))}
-        </div>
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Skeleton className="h-96 w-full" />
-          <Skeleton className="h-96 w-full" />
-        </div>
-      </main>
+      <div className="space-y-6">
+        <PageHeader title="Bank Reconciliation" breadcrumbs={breadcrumbs} isLoading />
+        <Skeleton className="h-64 w-full" />
+      </div>
     );
   }
 
-  const canMatch = selectedTxId !== null && selectedLineId !== null;
+  // No active session — show create form
+  if (!activeSession) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Bank Reconciliation" breadcrumbs={breadcrumbs} />
+        <Card className="max-w-lg mx-auto">
+          <CardHeader>
+            <CardTitle>Start Reconciliation</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Statement Balance (£)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="Enter bank statement closing balance"
+                value={statementBalance}
+                onChange={(e) => setStatementBalance(e.target.value)}
+              />
+            </div>
+            <Button
+              onClick={handleCreateSession}
+              disabled={createRecon.isPending}
+              className="w-full"
+            >
+              {createRecon.isPending ? (
+                <Loader2 className="animate-spin mr-2 size-4" />
+              ) : (
+                <Plus className="mr-2 size-4" />
+              )}
+              Start Reconciliation
+            </Button>
 
-  return (
-    <main className="flex flex-col gap-6" aria-label="Bank Reconciliation">
-      <PageHeader
-        title="Bank Reconciliation"
-        subtitle={summary?.bankAccountName}
-        breadcrumbs={[
-          { label: 'Finance', path: '/finance' },
-          { label: 'Bank Accounts', path: '/finance/bank-accounts' },
-          { label: summary?.bankAccountName ?? 'Reconciliation' },
-        ]}
-      />
+            {sessions && sessions.length > 0 && (
+              <div className="pt-4 border-t">
+                <p className="text-sm text-muted-foreground mb-2">Previous sessions:</p>
+                {sessions.map((s) => (
+                  <div key={s.id} className="flex justify-between text-sm py-1">
+                    <span>{s.statementDate?.toString().slice(0, 10)}</span>
+                    <Badge variant="outline">{s.status}</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
-      {/* Summary cards */}
-      {summary && (
-        <ReconciliationSummaryCard
-          statementBalance={summary.statementBalance}
-          bookBalance={summary.bookBalance}
-          unmatchedBankCount={summary.unmatchedBankCount}
-          unmatchedJournalCount={summary.unmatchedJournalCount}
-          difference={summary.difference}
-        />
-      )}
-
-      {/* Match action bar */}
-      <div className="flex items-center justify-center gap-4 rounded-lg border bg-muted/30 p-3">
-        <div className="text-sm text-muted-foreground">
-          {selectedTxId ? '1 bank transaction selected' : 'Select a bank transaction'}
-        </div>
-        <Button onClick={handleMatch} disabled={!canMatch || matchMutation.isPending} size="sm">
-          {matchMutation.isPending ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <ArrowLeftRight className="size-4" />
-          )}
-          Match Selected
-        </Button>
-        <div className="text-sm text-muted-foreground">
-          {selectedLineId ? '1 journal line selected' : 'Select a journal line'}
+  // Active session — show workspace
+  if (detailLoading || !detail) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Bank Reconciliation" breadcrumbs={breadcrumbs} />
+        <div className="grid grid-cols-2 gap-4">
+          <Skeleton className="h-96" />
+          <Skeleton className="h-96" />
         </div>
       </div>
+    );
+  }
+
+  const unmatchedBank = detail.unmatchedBankTransactions ?? [];
+  const matchedBank = detail.matchedTransactions ?? [];
+  const unmatchedJournal = detail.unmatchedJournalLines ?? [];
+
+  return (
+    <div className="space-y-4">
+      <PageHeader title="Bank Reconciliation" breadcrumbs={breadcrumbs} />
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-xs text-muted-foreground">Statement Balance</p>
+            <p className="text-lg font-semibold font-mono">
+              {formatCurrency(detail.statementBalance ?? 0)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-xs text-muted-foreground">GL Balance</p>
+            <p className="text-lg font-semibold font-mono">
+              {formatCurrency(detail.glBalance ?? 0)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-xs text-muted-foreground">Unmatched Bank</p>
+            <p className="text-lg font-semibold">{unmatchedBank.length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-xs text-muted-foreground">Difference</p>
+            <p
+              className={`text-lg font-semibold font-mono ${(detail.difference ?? 0) !== 0 ? 'text-destructive' : 'text-green-600'}`}
+            >
+              {formatCurrency(detail.difference ?? 0)}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Match action bar */}
+      {(selectedBankTxId || selectedJournalLineId) && (
+        <div className="flex items-center justify-center gap-4 py-3 px-4 rounded-lg bg-primary/5 border border-primary/20">
+          <span className="text-sm">
+            {selectedBankTxId ? '1 bank transaction' : 'Select bank transaction'}
+          </span>
+          <ArrowLeftRight className="size-4 text-muted-foreground" />
+          <span className="text-sm">
+            {selectedJournalLineId ? '1 journal line' : 'Select journal line'}
+          </span>
+          <Button
+            size="sm"
+            onClick={handleMatch}
+            disabled={!selectedBankTxId || !selectedJournalLineId || matchMutation.isPending}
+          >
+            {matchMutation.isPending ? (
+              <Loader2 className="animate-spin size-4" />
+            ) : (
+              <Check className="size-4 mr-1" />
+            )}
+            Match
+          </Button>
+        </div>
+      )}
 
       {/* Split pane */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Left: Bank Transactions */}
         <Card>
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold">Bank Transactions</CardTitle>
-              <Select value={txFilter} onValueChange={setTxFilter}>
-                <SelectTrigger className="w-[140px]" size="sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="UNMATCHED">Unmatched</SelectItem>
-                  <SelectItem value="MATCHED">Matched</SelectItem>
-                  <SelectItem value="">All</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <CardTitle className="text-sm">
+              Bank Transactions ({unmatchedBank.length} unmatched)
+            </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <div
-              className="space-y-2 max-h-[600px] overflow-y-auto"
-              role="listbox"
-              aria-label="Bank transactions"
-            >
-              {filteredTransactions.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  No transactions found
+          <CardContent className="p-0">
+            <div className="max-h-[500px] overflow-y-auto">
+              {unmatchedBank.length === 0 && matchedBank.length === 0 ? (
+                <p className="p-6 text-center text-sm text-muted-foreground">
+                  No bank transactions imported
                 </p>
               ) : (
-                filteredTransactions.map((tx) => (
-                  <TransactionRow
-                    key={tx.id}
-                    transaction={tx}
-                    isSelected={selectedTxId === tx.id}
-                    onSelect={() => setSelectedTxId(selectedTxId === tx.id ? null : tx.id)}
-                    onUnmatch={tx.status === 'MATCHED' ? () => handleUnmatch(tx.id) : undefined}
-                    isUnmatching={unmatchMutation.isPending}
-                  />
-                ))
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 sticky top-0">
+                    <tr>
+                      <th className="text-left p-2">Date</th>
+                      <th className="text-left p-2">Description</th>
+                      <th className="text-right p-2">Amount</th>
+                      <th className="text-center p-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {unmatchedBank.map((tx) => (
+                      <tr
+                        key={tx.id}
+                        className={`border-t cursor-pointer hover:bg-primary/5 ${selectedBankTxId === tx.id ? 'bg-primary/10 ring-1 ring-primary/30' : ''}`}
+                        onClick={() =>
+                          setSelectedBankTxId(selectedBankTxId === tx.id ? null : tx.id)
+                        }
+                      >
+                        <td className="p-2 font-mono text-xs">
+                          {String(tx.transactionDate).slice(0, 10)}
+                        </td>
+                        <td className="p-2">{tx.description}</td>
+                        <td
+                          className={`p-2 text-right font-mono tabular-nums ${tx.amount < 0 ? 'text-destructive' : 'text-green-600'}`}
+                        >
+                          {formatCurrency(tx.amount)}
+                        </td>
+                        <td className="p-2 text-center">
+                          <Badge variant="outline" className="text-xs">
+                            Unmatched
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                    {matchedBank.map((tx) => (
+                      <tr key={tx.id} className="border-t opacity-50">
+                        <td className="p-2 font-mono text-xs">
+                          {String(tx.transactionDate).slice(0, 10)}
+                        </td>
+                        <td className="p-2">{tx.description}</td>
+                        <td className="p-2 text-right font-mono tabular-nums">
+                          {formatCurrency(tx.amount)}
+                        </td>
+                        <td className="p-2 text-center">
+                          <Badge variant="secondary" className="text-xs">
+                            Matched
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </div>
           </CardContent>
@@ -441,32 +308,56 @@ export function BankReconciliationPage({ bankAccountId }: BankReconciliationPage
         {/* Right: Journal Lines */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold">Unmatched Journal Lines</CardTitle>
+            <CardTitle className="text-sm">
+              Journal Lines ({unmatchedJournal.length} unmatched)
+            </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <div
-              className="space-y-2 max-h-[600px] overflow-y-auto"
-              role="listbox"
-              aria-label="Journal lines"
-            >
-              {filteredLines.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">
+          <CardContent className="p-0">
+            <div className="max-h-[500px] overflow-y-auto">
+              {unmatchedJournal.length === 0 ? (
+                <p className="p-6 text-center text-sm text-muted-foreground">
                   No unmatched journal lines
                 </p>
               ) : (
-                filteredLines.map((line) => (
-                  <JournalLineRow
-                    key={line.id}
-                    line={line}
-                    isSelected={selectedLineId === line.id}
-                    onSelect={() => setSelectedLineId(selectedLineId === line.id ? null : line.id)}
-                  />
-                ))
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 sticky top-0">
+                    <tr>
+                      <th className="text-left p-2">Date</th>
+                      <th className="text-left p-2">Description</th>
+                      <th className="text-right p-2">Debit</th>
+                      <th className="text-right p-2">Credit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {unmatchedJournal.map((line) => (
+                      <tr
+                        key={line.id}
+                        className={`border-t cursor-pointer hover:bg-primary/5 ${selectedJournalLineId === line.id ? 'bg-primary/10 ring-1 ring-primary/30' : ''}`}
+                        onClick={() =>
+                          setSelectedJournalLineId(
+                            selectedJournalLineId === line.id ? null : line.id,
+                          )
+                        }
+                      >
+                        <td className="p-2 font-mono text-xs">
+                          {String(line.transactionDate ?? '').slice(0, 10)}
+                        </td>
+                        <td className="p-2">{line.description ?? line.journalDescription ?? ''}</td>
+                        <td className="p-2 text-right font-mono tabular-nums">
+                          {line.debit > 0 ? formatCurrency(line.debit) : '\u2014'}
+                        </td>
+                        <td className="p-2 text-right font-mono tabular-nums">
+                          {line.credit > 0 ? formatCurrency(line.credit) : '\u2014'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </div>
           </CardContent>
         </Card>
       </div>
-    </main>
+    </div>
   );
 }

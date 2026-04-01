@@ -1,11 +1,8 @@
 /**
  * TanStack Query hooks for Bank Reconciliation (FE8).
  *
- * - useReconciliationSummary: header summary (balances, counts)
- * - useBankTransactions: list bank transactions (unmatched)
- * - useUnmatchedJournalLines: list unmatched journal lines
- * - useMatchTransaction: match mutation
- * - useUnmatchTransaction: unmatch mutation
+ * Simplified: one query for reconciliation list, one for detail.
+ * No auto-create — page controls the flow.
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -17,57 +14,61 @@ import { queryKeys } from '@/lib/query-keys';
 import { useAuthStore } from '@/stores/auth-store';
 
 import {
-  getReconciliationSummary,
-  listBankTransactions,
-  listUnmatchedJournalLines,
+  listReconciliations,
+  getReconciliationDetail,
+  createReconciliation,
   matchTransaction,
   unmatchTransaction,
 } from '../api/bank-reconciliation-api';
 
 /**
- * Reconciliation summary for a bank account.
+ * List all reconciliation sessions for a bank account.
  */
-export function useReconciliationSummary(bankAccountId: string | undefined) {
+export function useReconciliationList(bankAccountId: string | undefined) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   return useQuery({
     queryKey: queryKeys.finance.bankReconciliation(bankAccountId ?? ''),
-    queryFn: () => getReconciliationSummary(bankAccountId!),
+    queryFn: () => listReconciliations(bankAccountId!),
     enabled: isAuthenticated && !!bankAccountId,
   });
 }
 
 /**
- * Bank transactions for a given account (for reconciliation).
+ * Get detail for a specific reconciliation session (matched + unmatched).
  */
-export function useBankTransactions(
+export function useReconciliationDetail(
   bankAccountId: string | undefined,
-  params: { status?: string } = {},
+  reconciliationId: string | undefined,
 ) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   return useQuery({
-    queryKey: queryKeys.finance.bankTransactions(
-      bankAccountId ?? '',
-      params as Record<string, unknown>,
-    ),
-    queryFn: () => listBankTransactions(bankAccountId!, params),
-    enabled: isAuthenticated && !!bankAccountId,
-    select: (result) => result.data,
+    queryKey: [...queryKeys.finance.bankReconciliation(bankAccountId ?? ''), reconciliationId],
+    queryFn: () => getReconciliationDetail(bankAccountId!, reconciliationId!),
+    enabled: isAuthenticated && !!bankAccountId && !!reconciliationId,
   });
 }
 
 /**
- * Unmatched journal lines for a given bank account.
+ * Create a new reconciliation session.
  */
-export function useUnmatchedJournalLines(bankAccountId: string | undefined) {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+export function useCreateReconciliation(bankAccountId: string) {
+  const queryClient = useQueryClient();
+  const { t } = useI18n('finance');
 
-  return useQuery({
-    queryKey: queryKeys.finance.unmatchedJournalLines(bankAccountId ?? ''),
-    queryFn: () => listUnmatchedJournalLines(bankAccountId!),
-    enabled: isAuthenticated && !!bankAccountId,
-    select: (result) => result.data,
+  return useMutation({
+    mutationFn: (input: { statementDate: string; statementBalance: number }) =>
+      createReconciliation(bankAccountId, input),
+    onSuccess: () => {
+      toast.success('Reconciliation session created');
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.finance.bankReconciliation(bankAccountId),
+      });
+    },
+    onError: () => {
+      toast.error(t('reconciliation.toast.matchFailed'));
+    },
   });
 }
 
@@ -88,15 +89,8 @@ export function useMatchTransaction(bankAccountId: string) {
     }) => matchTransaction(bankAccountId, bankTransactionId, journalLineId),
     onSuccess: () => {
       toast.success(t('reconciliation.toast.matched'));
-      // Invalidate all reconciliation-related queries
       void queryClient.invalidateQueries({
         queryKey: queryKeys.finance.bankReconciliation(bankAccountId),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.finance.bankTransactions(bankAccountId),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.finance.unmatchedJournalLines(bankAccountId),
       });
     },
     onError: () => {
@@ -119,15 +113,14 @@ export function useUnmatchTransaction(bankAccountId: string) {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.finance.bankReconciliation(bankAccountId),
       });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.finance.bankTransactions(bankAccountId),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.finance.unmatchedJournalLines(bankAccountId),
-      });
     },
     onError: () => {
-      toast.error(t('errors:unexpected'));
+      toast.error(t('reconciliation.toast.matchFailed'));
     },
   });
 }
+
+// Legacy exports for backward compat
+export const useReconciliationSummary = useReconciliationList;
+export const useBankTransactions = useReconciliationList;
+export const useUnmatchedJournalLines = useReconciliationList;
