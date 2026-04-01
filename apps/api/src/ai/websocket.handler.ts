@@ -75,11 +75,19 @@ type AiChatMessage = z.infer<typeof chatMessageSchema>;
 // ─── Server → Client message types (AC #2) ──────────────────────────────────
 
 export interface AiChatServerMessage {
-  type: 'text' | 'action_proposal' | 'record_created' | 'error' | 'stream_chunk' | 'stream_end';
+  type:
+    | 'text'
+    | 'action_proposal'
+    | 'record_created'
+    | 'error'
+    | 'stream_chunk'
+    | 'stream_end'
+    | 'navigate';
   sessionId: string;
   messageId: string;
   content?: string;
   messageKey?: string; // i18n translation key for content (used on text messages)
+  route?: string; // present when type === 'navigate'
   action?: {
     id: string;
     type: string;
@@ -722,6 +730,17 @@ export class AiWebSocketHandler {
             : undefined,
         };
         socket.emit('chat:response', proposalMsg);
+        break;
+      }
+
+      case 'navigate': {
+        const navigateMsg: AiChatServerMessage = {
+          type: 'navigate',
+          sessionId,
+          messageId,
+          route: chunk.route,
+        };
+        socket.emit('chat:response', navigateMsg);
         break;
       }
 

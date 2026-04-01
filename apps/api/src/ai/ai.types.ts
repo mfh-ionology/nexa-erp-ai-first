@@ -153,7 +153,7 @@ export interface AiStructuredOutput {
 // ─── Streaming Types ─────────────────────────────────────────────────────────
 
 export interface AiStreamChunk {
-  type: 'content_delta' | 'tool_use_delta' | 'done' | 'error' | 'action_proposal';
+  type: 'content_delta' | 'tool_use_delta' | 'done' | 'error' | 'action_proposal' | 'navigate';
   content?: string;
   toolCall?: { id: string; name: string; input: Record<string, unknown> };
   usage?: { inputTokens: number; outputTokens: number; latencyMs: number };
@@ -162,6 +162,7 @@ export interface AiStreamChunk {
   action?: ActionProposal; // present when type === 'action_proposal'
   guardrailDecision?: GuardrailDecision; // present when type === 'action_proposal'
   requiresApproval?: boolean; // present when type === 'action_proposal'
+  route?: string; // present when type === 'navigate'
 }
 
 // ─── Prompt Parameter Types ──────────────────────────────────────────────────
