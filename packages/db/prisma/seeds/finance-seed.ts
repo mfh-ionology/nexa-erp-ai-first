@@ -993,5 +993,78 @@ export async function seedFinanceData(prisma: PrismaClient): Promise<void> {
   }
   console.log(`    ${BUDGET_KEYS.length} Budget Keys seeded`);
 
+  // ---------------------------------------------------------------------------
+  // 7. Bank Reconciliation Rules (5 default rules)
+  // ---------------------------------------------------------------------------
+
+  const RECON_RULES = [
+    {
+      name: 'Rent Payment',
+      matchType: 'STARTS_WITH',
+      matchPattern: 'DIRECT DEBIT - LANDLORD',
+      targetAccountCode: '6000',
+      description: 'Rent Payment',
+    },
+    {
+      name: 'Payroll',
+      matchType: 'EXACT',
+      matchPattern: 'BACS PAYMENT - PAYROLL',
+      targetAccountCode: '7000',
+      description: 'Salary Payment',
+    },
+    {
+      name: 'Bank Charges',
+      matchType: 'EXACT',
+      matchPattern: 'BANK SERVICE CHARGE',
+      targetAccountCode: '7600',
+      description: null,
+    },
+    {
+      name: 'Interest Received',
+      matchType: 'EXACT',
+      matchPattern: 'INTEREST RECEIVED',
+      targetAccountCode: '8100',
+      description: null,
+    },
+    {
+      name: 'Annual Bank Fee',
+      matchType: 'EXACT',
+      matchPattern: 'ANNUAL ACCOUNT FEE',
+      targetAccountCode: '7600',
+      description: 'Annual Bank Fee',
+    },
+  ];
+
+  for (const rule of RECON_RULES) {
+    await prisma.bankReconciliationRule.upsert({
+      where: {
+        id: `recon-rule-${rule.name.toLowerCase().replace(/\s+/g, '-')}`
+          .padEnd(36, '0')
+          .slice(0, 36),
+      },
+      update: {
+        name: rule.name,
+        matchType: rule.matchType,
+        matchPattern: rule.matchPattern,
+        targetAccountCode: rule.targetAccountCode,
+        description: rule.description,
+      },
+      create: {
+        id: `recon-rule-${rule.name.toLowerCase().replace(/\s+/g, '-')}`
+          .padEnd(36, '0')
+          .slice(0, 36),
+        companyId: DEFAULT_COMPANY_ID,
+        name: rule.name,
+        matchType: rule.matchType,
+        matchPattern: rule.matchPattern,
+        targetAccountCode: rule.targetAccountCode,
+        description: rule.description,
+        isActive: true,
+        createdBy: DEFAULT_USER_ID,
+      },
+    });
+  }
+  console.log(`    ${RECON_RULES.length} Bank Reconciliation Rules seeded`);
+
   console.log('  Finance module data seeded successfully.');
 }

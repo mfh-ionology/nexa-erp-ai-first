@@ -104,6 +104,7 @@ export const queryKeys = {
   },
   aiAdmin: {
     all: ['ai-admin'] as const,
+    providers: () => [...queryKeys.aiAdmin.all, 'providers'] as const,
     dashboard: (params?: Record<string, unknown>) =>
       params
         ? ([...queryKeys.aiAdmin.all, 'dashboard', params] as const)
@@ -436,5 +437,11 @@ export const queryKeys = {
         : ([...queryKeys.finance.all, 'budget-versions'] as const),
     // Budget Keys (Wave 9)
     budgetKeys: () => [...queryKeys.finance.all, 'budget-keys'] as const,
+    // Bank Reconciliation Rules
+    bankReconRules: (params?: Record<string, unknown>) =>
+      params
+        ? ([...queryKeys.finance.all, 'bank-recon-rules', params] as const)
+        : ([...queryKeys.finance.all, 'bank-recon-rules'] as const),
+    bankReconRule: (id: string) => [...queryKeys.finance.all, 'bank-recon-rules', id] as const,
   },
 } as const;

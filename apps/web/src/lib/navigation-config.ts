@@ -204,6 +204,13 @@ export const NAVIGATION_MODULES: NavigationModule[] = [
         path: '/finance/periods',
         category: 'setting',
       },
+      {
+        key: 'finance.bankReconRules',
+        labelKey: 'navigation:finance.bankReconRules',
+        icon: 'Wand2',
+        path: '/finance/bank-recon-rules',
+        category: 'setting',
+      },
 
       // Maintenance
       {

@@ -4,10 +4,11 @@
  *
  * Shows reconciliation session: bank transactions on left, journal lines on right.
  * Click to select, then Match. Shows balance summary.
+ * Rule suggestions shown for unmatched bank transactions.
  */
 
 import { useMemo, useState } from 'react';
-import { ArrowLeftRight, Check, Loader2, Plus } from 'lucide-react';
+import { ArrowLeftRight, Check, Loader2, Plus, Wand2 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,8 +23,12 @@ import {
   useReconciliationDetail,
   useCreateReconciliation,
   useMatchTransaction,
-  useUnmatchTransaction,
+  // useUnmatchTransaction is available but not used in current workspace view
 } from '../hooks/use-bank-reconciliation';
+
+import { useApplyRules, useCreateJournalFromRule } from '../hooks/use-bank-recon-rules';
+
+import type { RuleSuggestion } from '../api/bank-recon-rules-api';
 
 interface BankReconciliationPageProps {
   bankAccountId: string;
@@ -42,7 +47,21 @@ export function BankReconciliationPage({ bankAccountId }: BankReconciliationPage
   const { data: sessions, isLoading: sessionsLoading } = useReconciliationList(bankAccountId);
   const createRecon = useCreateReconciliation(bankAccountId);
   const matchMutation = useMatchTransaction(bankAccountId);
-  const unmatchMutation = useUnmatchTransaction(bankAccountId);
+
+  // Rule suggestions
+  const { data: suggestions } = useApplyRules(bankAccountId);
+  const createJournalFromRule = useCreateJournalFromRule(bankAccountId);
+
+  // Build a map of bankTransactionId -> suggestion
+  const suggestionMap = useMemo(() => {
+    const map = new Map<string, RuleSuggestion>();
+    if (suggestions) {
+      for (const s of suggestions) {
+        map.set(s.bankTransactionId, s);
+      }
+    }
+    return map;
+  }, [suggestions]);
 
   // Find active (IN_PROGRESS) session
   const activeSession = useMemo(
@@ -82,6 +101,15 @@ export function BankReconciliationPage({ bankAccountId }: BankReconciliationPage
         },
       },
     );
+  };
+
+  const handleCreateJournalFromRule = (suggestion: RuleSuggestion) => {
+    createJournalFromRule.mutate({
+      bankTransactionId: suggestion.bankTransactionId,
+      ruleId: suggestion.ruleId,
+      accountCode: suggestion.suggestedAccountCode,
+      description: suggestion.suggestedDescription ?? undefined,
+    });
   };
 
   const breadcrumbs = [
@@ -167,9 +195,23 @@ export function BankReconciliationPage({ bankAccountId }: BankReconciliationPage
   const matchedBank = detail.matchedTransactions ?? [];
   const unmatchedJournal = detail.unmatchedJournalLines ?? [];
 
+  // Count how many unmatched transactions have rule suggestions
+  const suggestCount = unmatchedBank.filter((tx) => suggestionMap.has(tx.id)).length;
+
   return (
     <div className="space-y-4">
       <PageHeader title="Bank Reconciliation" breadcrumbs={breadcrumbs} />
+
+      {/* Rule suggestion banner */}
+      {suggestCount > 0 && (
+        <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+          <Wand2 className="size-5 text-primary" />
+          <p className="text-sm font-medium">
+            {suggestCount} transaction{suggestCount !== 1 ? 's' : ''} can be auto-journaled from
+            rules
+          </p>
+        </div>
+      )}
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -258,30 +300,62 @@ export function BankReconciliationPage({ bankAccountId }: BankReconciliationPage
                     </tr>
                   </thead>
                   <tbody>
-                    {unmatchedBank.map((tx) => (
-                      <tr
-                        key={tx.id}
-                        className={`border-t cursor-pointer hover:bg-primary/5 ${selectedBankTxId === tx.id ? 'bg-primary/10 ring-1 ring-primary/30' : ''}`}
-                        onClick={() =>
-                          setSelectedBankTxId(selectedBankTxId === tx.id ? null : tx.id)
-                        }
-                      >
-                        <td className="p-2 font-mono text-xs">
-                          {String(tx.transactionDate).slice(0, 10)}
-                        </td>
-                        <td className="p-2">{tx.description}</td>
-                        <td
-                          className={`p-2 text-right font-mono tabular-nums ${tx.amount < 0 ? 'text-destructive' : 'text-green-600'}`}
+                    {unmatchedBank.map((tx) => {
+                      const suggestion = suggestionMap.get(tx.id);
+                      return (
+                        <tr
+                          key={tx.id}
+                          className={`border-t cursor-pointer hover:bg-primary/5 ${selectedBankTxId === tx.id ? 'bg-primary/10 ring-1 ring-primary/30' : ''}`}
+                          onClick={() =>
+                            setSelectedBankTxId(selectedBankTxId === tx.id ? null : tx.id)
+                          }
                         >
-                          {formatCurrency(tx.amount)}
-                        </td>
-                        <td className="p-2 text-center">
-                          <Badge variant="outline" className="text-xs">
-                            Unmatched
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
+                          <td className="p-2 font-mono text-xs">
+                            {String(tx.transactionDate).slice(0, 10)}
+                          </td>
+                          <td className="p-2">
+                            <div>{tx.description}</div>
+                            {suggestion && (
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-xs text-muted-foreground">
+                                  Rule: {suggestion.suggestedAccountCode}
+                                  {suggestion.suggestedDescription
+                                    ? ` — ${suggestion.suggestedDescription}`
+                                    : ''}
+                                </span>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCreateJournalFromRule(suggestion);
+                                  }}
+                                  disabled={createJournalFromRule.isPending}
+                                >
+                                  {createJournalFromRule.isPending ? (
+                                    <Loader2 className="size-3 animate-spin" />
+                                  ) : (
+                                    <Wand2 className="size-3 mr-1" />
+                                  )}
+                                  Create Journal
+                                </Button>
+                              </div>
+                            )}
+                          </td>
+                          <td
+                            className={`p-2 text-right font-mono tabular-nums ${tx.amount < 0 ? 'text-destructive' : 'text-green-600'}`}
+                          >
+                            {formatCurrency(tx.amount)}
+                          </td>
+                          <td className="p-2 text-center">
+                            <Badge variant="outline" className="text-xs">
+                              Unmatched
+                            </Badge>
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {matchedBank.map((tx) => (
                       <tr key={tx.id} className="border-t opacity-50">
                         <td className="p-2 font-mono text-xs">

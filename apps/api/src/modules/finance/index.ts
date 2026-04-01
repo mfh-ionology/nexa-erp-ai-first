@@ -11,6 +11,7 @@ import { bankImportRoutesPlugin } from './bank-import.routes.js';
 import { openBankingRoutesPlugin } from './open-banking.routes.js';
 import { bankReconciliationRoutesPlugin } from './bank-reconciliation.routes.js';
 import { autoMatchRoutesPlugin } from './auto-match.routes.js';
+import { bankReconRulesRoutesPlugin } from './bank-recon-rules.routes.js';
 import { vatReturnsRoutesPlugin } from './vat-returns.routes.js';
 import { hmrcMtdRoutesPlugin } from './hmrc-mtd.routes.js';
 import { budgetVersionsRoutesPlugin } from './budget-versions.routes.js';
@@ -46,6 +47,7 @@ async function financeModule(fastify: FastifyInstance): Promise<void> {
   await fastify.register(openBankingRoutesPlugin);
   await fastify.register(bankReconciliationRoutesPlugin);
   await fastify.register(autoMatchRoutesPlugin);
+  await fastify.register(bankReconRulesRoutesPlugin);
   await fastify.register(vatReturnsRoutesPlugin);
   await fastify.register(hmrcMtdRoutesPlugin);
   await fastify.register(budgetVersionsRoutesPlugin);
