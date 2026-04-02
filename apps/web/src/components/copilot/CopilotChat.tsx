@@ -20,6 +20,7 @@ import { EntityChip } from '@/features/ai/entity-mentions/entity-chip';
 
 import { useI18n } from '@nexa/i18n';
 
+import { useAiChat } from '@/hooks/use-ai-chat';
 import { DataCard } from './DataCard';
 
 // ── Entity route map ─────────────────────────────────────────────────────────
@@ -96,15 +97,31 @@ function ActionButton({
 
 // ── Action proposal card (BR-COM-013) ────────────────────────────────────────
 
-function ActionProposalCard({ proposal }: { proposal: ActionProposal }) {
+function ActionProposalCard({
+  proposal,
+  onApprove,
+  onReject,
+}: {
+  proposal: ActionProposal;
+  onApprove?: (actionId: string) => void;
+  onReject?: (actionId: string) => void;
+}) {
   const { t } = useI18n();
 
   const handleApprove = () => {
-    toast.info(t('copilot.actionProposal.notConnected'));
+    if (onApprove && proposal.id) {
+      onApprove(proposal.id);
+    } else {
+      toast.info(t('copilot.actionProposal.notConnected'));
+    }
   };
 
   const handleReject = () => {
-    toast.info(t('copilot.actionProposal.notConnected'));
+    if (onReject && proposal.id) {
+      onReject(proposal.id);
+    } else {
+      toast.info(t('copilot.actionProposal.notConnected'));
+    }
   };
 
   return (
@@ -124,13 +141,36 @@ function ActionProposalCard({ proposal }: { proposal: ActionProposal }) {
         </p>
         {Object.keys(proposal.previewData).length > 0 && (
           <div className="rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
-            {Object.entries(proposal.previewData)
-              .slice(0, 3)
-              .map(([key, value]) => (
-                <div key={key}>
-                  <span className="font-medium">{key}:</span> {String(value)}
-                </div>
-              ))}
+            {Object.entries(proposal.previewData).map(([key, value]) => (
+              <div key={key}>
+                {Array.isArray(value) ? (
+                  <>
+                    <span className="font-medium">{key}:</span>
+                    {value.map((item, i) => (
+                      <div key={i} className="ml-2 border-l border-border pl-2 mt-1">
+                        {typeof item === 'object' && item !== null
+                          ? Object.entries(item)
+                              .filter(([, v]) => v !== 0 && v !== undefined && v !== null)
+                              .map(([k, v]) => (
+                                <div key={k}>
+                                  <span className="font-medium">{k}:</span> {String(v)}
+                                </div>
+                              ))
+                          : String(item)}
+                      </div>
+                    ))}
+                  </>
+                ) : typeof value === 'object' && value !== null ? (
+                  <>
+                    <span className="font-medium">{key}:</span> {JSON.stringify(value)}
+                  </>
+                ) : (
+                  <>
+                    <span className="font-medium">{key}:</span> {String(value)}
+                  </>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </CardContent>
@@ -152,10 +192,14 @@ function MessageBubble({
   message,
   userInitials,
   onActionClick,
+  onActionApprove,
+  onActionReject,
 }: {
   message: ChatMessage;
   userInitials: string;
   onActionClick: (action: ChatMessageAction) => void;
+  onActionApprove?: (actionId: string) => void;
+  onActionReject?: (actionId: string) => void;
 }) {
   const { t } = useI18n();
   const isUser = message.role === 'user';
@@ -228,7 +272,13 @@ function MessageBubble({
         )}
 
         {/* Action proposal (BR-COM-013) */}
-        {message.actionProposal && <ActionProposalCard proposal={message.actionProposal} />}
+        {message.actionProposal && (
+          <ActionProposalCard
+            proposal={message.actionProposal}
+            onApprove={onActionApprove}
+            onReject={onActionReject}
+          />
+        )}
 
         {/* Data cards (Task 6.5) */}
         {message.dataCards && message.dataCards.length > 0 && (
@@ -277,6 +327,7 @@ export function CopilotChat() {
   const navigate = useNavigate();
   const messages = useCopilotStore((s) => s.messages);
   const user = useAuthStore((s) => s.user);
+  const { confirmAction, rejectAction } = useAiChat();
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -339,6 +390,8 @@ export function CopilotChat() {
             message={message}
             userInitials={userInitials}
             onActionClick={handleActionClick}
+            onActionApprove={confirmAction}
+            onActionReject={rejectAction}
           />
         ))}
         <div ref={bottomRef} aria-hidden="true" />
