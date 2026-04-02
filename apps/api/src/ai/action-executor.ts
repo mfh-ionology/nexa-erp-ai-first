@@ -1,11 +1,7 @@
 import type { Logger } from 'pino';
 import type { PrismaClient } from '@nexa/db';
 import type { EventBus } from '../core/events/event-bus.js';
-import type {
-  ActionExecutionResult,
-  ActionProposal,
-  IActionExecutor,
-} from './ai.types.js';
+import type { ActionExecutionResult, ActionProposal, IActionExecutor } from './ai.types.js';
 
 // ─── Action Handler Type ────────────────────────────────────────────────────
 
@@ -30,8 +26,8 @@ function deriveAuditAction(actionType: string): string {
   if (upper.startsWith('DELETE_')) return 'DELETE';
   if (upper.startsWith('POST_')) return 'POST';
   if (upper.startsWith('APPROVE_')) return 'APPROVE';
-  if (upper.startsWith('VOID_')) return 'UPDATE';     // VOID is a status change — maps to UPDATE
-  if (upper.startsWith('REVERSE_')) return 'UPDATE';   // REVERSE is a status change — maps to UPDATE
+  if (upper.startsWith('VOID_')) return 'UPDATE'; // VOID is a status change — maps to UPDATE
+  if (upper.startsWith('REVERSE_')) return 'UPDATE'; // REVERSE is a status change — maps to UPDATE
   if (upper.startsWith('RUN_')) return 'CREATE';
   if (upper.startsWith('DISPOSE_')) return 'DELETE';
   if (upper.startsWith('SEND_')) return 'CREATE';
@@ -44,8 +40,8 @@ function deriveAuditAction(actionType: string): string {
  * Executes confirmed action proposals through the standard service layer.
  * Uses a registry pattern — business modules register their handlers at startup.
  *
- * For E5-3 (MVP), NO handlers are registered. All action types return
- * ACTION_TYPE_NOT_IMPLEMENTED until business modules (Finance, AR, AP) are built.
+ * System module handlers (Users, Access Groups) are registered at startup.
+ * Business module handlers (Finance, AR, AP) will be registered as those epics are built.
  */
 export class ActionExecutor implements IActionExecutor {
   private handlers = new Map<string, ActionHandler>();
@@ -112,9 +108,9 @@ export class ActionExecutor implements IActionExecutor {
     }
 
     try {
-      const result = await this.db.$transaction(async (tx) => {
-        return handler(tx as unknown as PrismaClient, companyId, userId, proposal.previewData);
-      });
+      // Execute handler with the prisma client directly (not in interactive transaction)
+      // — Prisma driver adapters (PrismaPg) don't support interactive $transaction
+      const result = await handler(this.db, companyId, userId, proposal.previewData);
 
       // Emit ai.action.executed event on success
       this.eventBus.emit('ai.action.executed', {
