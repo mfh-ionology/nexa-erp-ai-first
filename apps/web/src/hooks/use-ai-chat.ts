@@ -271,9 +271,6 @@ export function useAiChat(): UseAiChatReturn {
 
       socket.on('chat:response', (data: AiChatServerMessage) => {
         if (unmountedRef.current) return;
-        if (data.type === 'action_proposal') {
-          console.log('[ai-chat] RAW action_proposal:', JSON.stringify(data).substring(0, 500));
-        }
         handleServerMessage(data);
       });
 
