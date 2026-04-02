@@ -1062,13 +1062,14 @@ export class AiWebSocketHandler {
    */
   private resolveRecordRoute(entityType: string, entityId: string): string | undefined {
     // Map action entity types to page registry routes
+    // Use list pages where detail pages don't exist yet
     const routeMap: Record<string, string> = {
-      JournalEntry: `/finance/journals/${entityId}`,
-      CreateJournal: `/finance/journals/${entityId}`,
-      Budget: `/finance/budgets/${entityId}`,
-      CreateBudget: `/finance/budgets/${entityId}`,
-      User: `/system/users`,
-      AccessGroup: `/system/access-groups`,
+      JournalEntry: '/finance/journals',
+      CreateJournal: '/finance/journals',
+      Budget: '/finance/budgets',
+      CreateBudget: '/finance/budgets',
+      User: '/system/users',
+      AccessGroup: '/system/access-groups',
     };
     return routeMap[entityType];
   }
