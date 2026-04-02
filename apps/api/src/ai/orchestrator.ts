@@ -14,6 +14,7 @@ import type { DynamicContextService } from './dynamic-context.service.js';
 import type { PatternDetectionService } from './pattern-detection.service.js';
 import type { MemoryParserService } from './memory-parser.service.js';
 import type { MemoryCitationService } from './memory-citation.service.js';
+import type { QueryExecutor } from './query-executor.js';
 import type {
   PreCompactionService,
   AiMessage as PreCompactionMessage,
@@ -65,6 +66,9 @@ export class AiOrchestrator {
   /** PromptRenderer for resolving AiPromptVariable-based variables in prompts (nullable for graceful degradation, E5c-2 Task 8) */
   private promptRenderer: PromptRenderer | null = null;
 
+  /** QueryExecutor for executing READ tool calls in the streaming tool loop (nullable for graceful degradation) */
+  private queryExecutor: QueryExecutor | null = null;
+
   constructor(
     private aiGateway: AiGateway,
     private promptManager: PromptManager,
@@ -113,6 +117,11 @@ export class AiOrchestrator {
   /** Set the PromptRenderer instance for AiPromptVariable resolution (called during plugin initialization, E5c-2 Task 8) */
   setPromptRenderer(renderer: PromptRenderer): void {
     this.promptRenderer = renderer;
+  }
+
+  /** Set the QueryExecutor instance (called during plugin initialization) */
+  setQueryExecutor(executor: QueryExecutor): void {
+    this.queryExecutor = executor;
   }
 
   /**
@@ -622,6 +631,7 @@ export class AiOrchestrator {
       let completionTokens = 0;
       let finishReason = 'stop';
       let lastToolCall: AiStreamChunk['toolCall'] = undefined;
+      let accumulatedToolInput = '';
       let pendingNavigation: string | undefined;
 
       for await (const chunk of this.aiGateway.stream(gatewayRequest)) {
@@ -630,9 +640,28 @@ export class AiOrchestrator {
           accumulatedContent += chunk.content ?? '';
           yield { type: 'content_delta', content: chunk.content };
         } else if (chunk.type === 'tool_use_delta') {
-          // Accumulate tool call for ActionPlanner processing after stream ends
+          // Merge tool call deltas: id/name arrive first, input fragments follow
           if (chunk.toolCall) {
-            lastToolCall = chunk.toolCall as AiStreamChunk['toolCall'];
+            if (!lastToolCall) {
+              // Seed from first delta — id/name come in first, input accumulates later
+              lastToolCall = {
+                id: chunk.toolCall.id ?? '',
+                name: chunk.toolCall.name ?? '',
+                input: {},
+              } as AiStreamChunk['toolCall'];
+              accumulatedToolInput = '';
+            } else {
+              if (chunk.toolCall.id) lastToolCall.id = chunk.toolCall.id;
+              if (chunk.toolCall.name) lastToolCall.name = chunk.toolCall.name;
+            }
+            // Accumulate incremental JSON input fragments
+            if (chunk.toolCall.input !== undefined) {
+              if (typeof chunk.toolCall.input === 'string') {
+                accumulatedToolInput += chunk.toolCall.input;
+              } else {
+                accumulatedToolInput = JSON.stringify(chunk.toolCall.input);
+              }
+            }
           }
           yield {
             type: 'tool_use_delta',
@@ -644,6 +673,26 @@ export class AiOrchestrator {
         } else if (chunk.type === 'done') {
           finishReason = chunk.finishReason ?? 'stop';
         }
+      }
+
+      // Parse accumulated tool call input from streaming JSON fragments
+      if (lastToolCall && accumulatedToolInput) {
+        try {
+          lastToolCall.input = JSON.parse(accumulatedToolInput);
+        } catch {
+          // If JSON parsing fails, keep as string — tool execution will handle it
+          this.logger.warn(
+            { toolName: lastToolCall.name, inputLength: accumulatedToolInput.length },
+            'Failed to parse accumulated tool call input JSON',
+          );
+        }
+      }
+
+      // Task 6 — tool execution loop will use this.queryExecutor here
+      // (field set via setQueryExecutor; used below once Task 6 is wired)
+      if (lastToolCall && this.queryExecutor) {
+        // Placeholder: Task 6 will execute the tool call via queryExecutor
+        // and loop back to the AI with tool results
       }
 
       // Detect _navigateTo in last tool call input (query tools embed navigation hints)

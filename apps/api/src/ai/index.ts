@@ -96,6 +96,7 @@ import {
   registerFinanceQueryHandlers,
   registerFinanceActionHandlers,
 } from '../modules/finance/finance-skills.js';
+import { registerMcpTools, registerMcpQueryHandlers } from './mcp/index.js';
 import { registerAuditMapping } from '../core/audit/audit.mappings.js';
 import type { AuditAction } from '../core/audit/audit.types.js';
 import { permissionService } from '../core/rbac/permission.service.js';
@@ -548,6 +549,10 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
       registerFinanceTools(toolRegistry);
       registerFinanceQueryHandlers(queryExecutor, prisma);
 
+      // Register MCP tools (navigate_to_page, etc.)
+      registerMcpTools(toolRegistry);
+      registerMcpQueryHandlers(queryExecutor);
+
       logger.info(
         'E5b-2 services initialized (ToolRegistry, SkillRouter, QueryExecutor, DynamicContextService)',
       );
@@ -724,6 +729,11 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
 
     // Wire ActionPlanner into orchestrator for guardrail evaluation
     orchestrator.setActionPlanner(actionPlanner);
+
+    // Wire QueryExecutor for tool execution loop in streaming
+    if (queryExecutor) {
+      orchestrator.setQueryExecutor(queryExecutor);
+    }
 
     // Wire MemoryInjectionService into orchestrator for user context assembly (E5b-1)
     orchestrator.setMemoryInjection(memoryInjectionService);
