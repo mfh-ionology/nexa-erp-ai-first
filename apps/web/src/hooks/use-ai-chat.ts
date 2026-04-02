@@ -161,13 +161,25 @@ export function useAiChat(): UseAiChatReturn {
           break;
         }
         case 'record_created': {
+          // Server sends 'record' field with entityType/entityId/displayRef
+          const record = (data as any).record;
           const msg: ChatMessage = {
             id: data.messageId ?? crypto.randomUUID(),
             sessionId: data.sessionId ?? store.activeConversationId ?? '',
             role: 'assistant',
-            content: data.content ?? '',
+            content: record?.displayRef
+              ? `Created: ${record.displayRef}`
+              : data.content || 'Record created successfully.',
             timestamp: new Date().toISOString(),
-            recordLinks: data.recordLinks,
+            recordLinks: record
+              ? [
+                  {
+                    entityType: record.entityType,
+                    entityId: record.entityId,
+                    displayRef: record.displayRef,
+                  },
+                ]
+              : data.recordLinks,
           };
           store.addMessage(msg);
           break;
@@ -259,6 +271,9 @@ export function useAiChat(): UseAiChatReturn {
 
       socket.on('chat:response', (data: AiChatServerMessage) => {
         if (unmountedRef.current) return;
+        if (data.type === 'action_proposal') {
+          console.log('[ai-chat] RAW action_proposal:', JSON.stringify(data).substring(0, 500));
+        }
         handleServerMessage(data);
       });
 

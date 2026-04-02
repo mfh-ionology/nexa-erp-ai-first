@@ -898,6 +898,18 @@ export class AiWebSocketHandler {
         };
         socket.emit('chat:response', successMsg);
 
+        // Auto-navigate to the created record's detail page
+        const detailRoute = this.resolveRecordRoute(result.entityType!, result.entityId!);
+        if (detailRoute) {
+          const navigateMsg: AiChatServerMessage = {
+            type: 'navigate',
+            sessionId: msg.sessionId,
+            messageId: randomUUID(),
+            route: detailRoute,
+          };
+          socket.emit('chat:response', navigateMsg);
+        }
+
         // Persist confirmation in conversation history (best-effort)
         await this.persistActionMessage(
           msg.sessionId,
@@ -1042,6 +1054,23 @@ export class AiWebSocketHandler {
       },
       'Action proposal rejected by user',
     );
+  }
+
+  /**
+   * Resolve a frontend detail page route for a created record.
+   * Returns undefined if no route mapping exists for the entity type.
+   */
+  private resolveRecordRoute(entityType: string, entityId: string): string | undefined {
+    // Map action entity types to page registry routes
+    const routeMap: Record<string, string> = {
+      JournalEntry: `/finance/journals/${entityId}`,
+      CreateJournal: `/finance/journals/${entityId}`,
+      Budget: `/finance/budgets/${entityId}`,
+      CreateBudget: `/finance/budgets/${entityId}`,
+      User: `/system/users`,
+      AccessGroup: `/system/access-groups`,
+    };
+    return routeMap[entityType];
   }
 
   /**
