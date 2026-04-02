@@ -28,7 +28,7 @@ export const FINANCE_TOOLS: ToolDefinition[] = [
   {
     name: 'finance_create_journal',
     description:
-      'Create a new journal entry with debit/credit lines. Requires a period ID, description, and at least two balanced lines.',
+      'Create a new journal entry with debit/credit lines. The period is auto-resolved from the transaction date if not provided. Requires a description, transaction date, and at least two balanced lines.',
     moduleKey: 'finance',
     type: 'action',
     inputSchema: {
@@ -45,7 +45,8 @@ export const FINANCE_TOOLS: ToolDefinition[] = [
         },
         periodId: {
           type: 'string',
-          description: 'UUID of the financial period for this entry',
+          description:
+            'UUID of the financial period. Optional — if not provided, auto-resolved from the transaction date.',
         },
         reference: {
           type: 'string',
@@ -80,7 +81,7 @@ export const FINANCE_TOOLS: ToolDefinition[] = [
           },
         },
       },
-      required: ['description', 'transactionDate', 'periodId', 'lines'],
+      required: ['description', 'transactionDate', 'lines'],
     },
   },
 
@@ -494,16 +495,38 @@ function createListFiscalYearsHandler(db: PrismaClient): QueryToolHandler {
 function createJournalActionHandler(eventBus: EventBus): ActionHandler {
   return async (db, companyId, userId, data) => {
     const lines = (data.lines as Array<Record<string, unknown>>) ?? [];
+    const transactionDate = new Date(data.transactionDate as string);
+
+    // Auto-resolve periodId from transaction date if not provided
+    let periodId = data.periodId as string | undefined;
+    if (!periodId) {
+      const period = await db.financialPeriod.findFirst({
+        where: {
+          companyId,
+          startDate: { lte: transactionDate },
+          endDate: { gte: transactionDate },
+          status: 'OPEN',
+        },
+        select: { id: true },
+        orderBy: { startDate: 'desc' },
+      });
+      if (!period) {
+        throw new Error(
+          `No open financial period found for date ${transactionDate.toISOString().slice(0, 10)}`,
+        );
+      }
+      periodId = period.id;
+    }
 
     const entry = (await createJournalEntry(
       db,
       eventBus,
       companyId,
       {
-        transactionDate: new Date(data.transactionDate as string),
+        transactionDate,
         description: data.description as string,
         reference: data.reference as string | undefined,
-        periodId: data.periodId as string,
+        periodId,
         lines: lines.map((line) => ({
           accountCode: line.accountCode as string,
           debit: (line.debit as number) ?? 0,

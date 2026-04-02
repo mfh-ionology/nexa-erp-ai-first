@@ -734,18 +734,28 @@ export class AiOrchestrator {
         }
       }
 
-      // ── Tool Execution Loop ──────────────────────────────────────────────
-      // When the LLM requests a query tool call (finishReason === 'tool_use'),
-      // execute it and feed the result back for a final text response.
-      // Action tools (finance_create_journal, etc.) skip this and go through
-      // the action_proposal flow below.
-      if (
+      // ── Multi-Turn Tool Execution Loop ──────────────────────────────────
+      // When the LLM requests tool calls (finishReason === 'tool_use'),
+      // execute query tools and feed results back. Loop until the LLM stops
+      // requesting tools or an action tool is encountered (goes to action_proposal).
+      // Max 5 iterations to prevent infinite loops.
+      let toolLoopMessages = [...gatewayRequest.messages];
+      const MAX_TOOL_LOOPS = 5;
+      let toolLoopCount = 0;
+
+      while (
         finishReason === 'tool_use' &&
         lastToolCall?.id &&
         lastToolCall?.name &&
         this.queryExecutor &&
-        this.queryExecutor.hasHandler(lastToolCall.name)
+        toolLoopCount < MAX_TOOL_LOOPS
       ) {
+        toolLoopCount++;
+        const isQueryTool = this.queryExecutor.hasHandler(lastToolCall.name);
+
+        // Action tools break out of the loop — handled by action_proposal below
+        if (!isQueryTool) break;
+
         const toolInput =
           typeof lastToolCall.input === 'object' && lastToolCall.input !== null
             ? (lastToolCall.input as Record<string, unknown>)
@@ -756,6 +766,7 @@ export class AiOrchestrator {
             toolName: lastToolCall.name,
             toolId: lastToolCall.id,
             inputKeys: Object.keys(toolInput),
+            loopIteration: toolLoopCount,
           },
           'Executing tool call from LLM',
         );
@@ -777,15 +788,14 @@ export class AiOrchestrator {
           }
         }
 
-        // Build tool result content for the second LLM call
+        // Build tool result content for the follow-up LLM call
         const toolResultContent = toolResult.success
           ? JSON.stringify(toolResult.data)
           : JSON.stringify({ error: toolResult.error?.message ?? 'Tool execution failed' });
 
-        // Build messages for the follow-up LLM call:
-        // [original messages..., assistant(tool_use), user(tool_result)]
-        const followUpMessages: Message[] = [
-          ...gatewayRequest.messages,
+        // Append assistant(tool_use) + user(tool_result) to conversation
+        toolLoopMessages = [
+          ...toolLoopMessages,
           {
             role: 'assistant' as const,
             content: [
@@ -812,15 +822,41 @@ export class AiOrchestrator {
 
         const followUpRequest: AiGatewayRequest = {
           ...gatewayRequest,
-          messages: followUpMessages,
+          messages: toolLoopMessages,
           stream: true,
         };
 
-        // Stream the second LLM response (final text answer)
+        // Reset accumulators for next iteration
+        lastToolCall = undefined;
+        accumulatedToolInput = '';
+
+        // Stream the follow-up LLM response
         for await (const chunk of this.aiGateway.stream(followUpRequest)) {
           if (chunk.type === 'content_delta') {
             accumulatedContent += chunk.content ?? '';
             yield { type: 'content_delta', content: chunk.content };
+          } else if (chunk.type === 'tool_use_delta') {
+            // Accumulate tool call deltas for potential next iteration
+            if (chunk.toolCall) {
+              if (!lastToolCall) {
+                lastToolCall = {
+                  id: chunk.toolCall.id ?? '',
+                  name: chunk.toolCall.name ?? '',
+                  input: (chunk.toolCall.input as Record<string, unknown>) ?? {},
+                };
+                accumulatedToolInput = '';
+              } else {
+                if (chunk.toolCall.id) lastToolCall.id = chunk.toolCall.id;
+                if (chunk.toolCall.name) lastToolCall.name = chunk.toolCall.name;
+              }
+              if (chunk.toolCall.input !== undefined) {
+                if (typeof chunk.toolCall.input === 'string') {
+                  accumulatedToolInput += chunk.toolCall.input;
+                } else {
+                  accumulatedToolInput = JSON.stringify(chunk.toolCall.input);
+                }
+              }
+            }
           } else if (chunk.type === 'usage' && chunk.usage) {
             promptTokens += chunk.usage.promptTokens ?? 0;
             completionTokens += chunk.usage.completionTokens ?? 0;
@@ -829,7 +865,26 @@ export class AiOrchestrator {
           }
         }
 
-        // Clear lastToolCall so we don't re-process it as an action proposal below
+        // Parse accumulated tool input for next iteration
+        if (lastToolCall && accumulatedToolInput) {
+          try {
+            lastToolCall.input = JSON.parse(accumulatedToolInput);
+          } catch {
+            this.logger.warn(
+              { toolName: lastToolCall.name, inputLength: accumulatedToolInput.length },
+              'Failed to parse tool call input in loop iteration',
+            );
+          }
+        }
+      }
+
+      // If loop exhausted without action tool, clear lastToolCall
+      if (toolLoopCount >= MAX_TOOL_LOOPS) {
+        this.logger.warn({ toolLoopCount }, 'Tool execution loop hit max iterations');
+        lastToolCall = undefined;
+      }
+      // If the last tool call was a query tool that was executed, clear it
+      if (finishReason !== 'tool_use' && toolLoopCount > 0) {
         lastToolCall = undefined;
       }
 
