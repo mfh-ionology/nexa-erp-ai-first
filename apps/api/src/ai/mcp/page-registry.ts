@@ -353,6 +353,314 @@ export const PAGE_REGISTRY: PageEntry[] = [
     supportsAutoRun: false,
   },
 
+  // ── Finance Pages (new additions) ────────────────────────────────────────
+
+  {
+    key: 'finance/account-mappings',
+    route: '/finance/account-mappings',
+    description: 'Account Type Mappings.',
+    module: 'finance',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/bank-accounts',
+    route: '/finance/bank-accounts',
+    description: 'Bank Account List.',
+    module: 'finance',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/bank-accounts/detail',
+    route: '/finance/bank-accounts/$id',
+    description: 'Bank Account Details.',
+    module: 'finance',
+    params: [
+      {
+        name: 'id',
+        type: 'string',
+        required: true,
+        description: 'Bank account UUID',
+      },
+    ],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/bank-accounts/new',
+    route: '/finance/bank-accounts/new',
+    description: 'Create Bank Account.',
+    module: 'finance',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/bank-recon-rules',
+    route: '/finance/bank-recon-rules',
+    description: 'Bank Reconciliation Rules.',
+    module: 'finance',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/bank-reconciliation/detail',
+    route: '/finance/bank-reconciliation/$id',
+    description: 'Bank Reconciliation Session Details.',
+    module: 'finance',
+    params: [
+      {
+        name: 'id',
+        type: 'string',
+        required: true,
+        description: 'Bank reconciliation session UUID',
+      },
+    ],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/budgets/detail',
+    route: '/finance/budgets/$id',
+    description: 'Budget Details.',
+    module: 'finance',
+    params: [
+      {
+        name: 'id',
+        type: 'string',
+        required: true,
+        description: 'Budget UUID',
+      },
+    ],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/chart-of-accounts/detail',
+    route: '/finance/chart-of-accounts/$id',
+    description: 'Account Details.',
+    module: 'finance',
+    params: [
+      {
+        name: 'id',
+        type: 'string',
+        required: true,
+        description: 'Account UUID',
+      },
+    ],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/dimensions/values',
+    route: '/finance/dimensions/$typeId/values',
+    description: 'Dimension Values.',
+    module: 'finance',
+    params: [
+      {
+        name: 'typeId',
+        type: 'string',
+        required: true,
+        description: 'Dimension type UUID',
+      },
+    ],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/dimensions/bulk-assign',
+    route: '/finance/dimensions/bulk-assign',
+    description: 'Bulk Assign Dimensions.',
+    module: 'finance',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/dimensions/defaults',
+    route: '/finance/dimensions/defaults',
+    description: 'Dimension Defaults.',
+    module: 'finance',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/dimensions/requirements',
+    route: '/finance/dimensions/requirements',
+    description: 'Dimension Requirements.',
+    module: 'finance',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/import',
+    route: '/finance/import',
+    description: 'Finance Data Import.',
+    module: 'finance',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/journals/detail',
+    route: '/finance/journals/$id',
+    description: 'Journal Entry Details.',
+    module: 'finance',
+    params: [
+      {
+        name: 'id',
+        type: 'string',
+        required: true,
+        description: 'Journal entry UUID',
+      },
+    ],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/journals/new',
+    route: '/finance/journals/new',
+    description: 'Create Journal Entry.',
+    module: 'finance',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/month-end',
+    route: '/finance/month-end',
+    description: 'Month End Close List.',
+    module: 'finance',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/month-end/detail',
+    route: '/finance/month-end/$periodId',
+    description: 'Month End Close.',
+    module: 'finance',
+    params: [
+      {
+        name: 'periodId',
+        type: 'string',
+        required: true,
+        description: 'Period UUID',
+      },
+    ],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/opening-balances',
+    route: '/finance/opening-balances',
+    description: 'Opening Balance Entry.',
+    module: 'finance',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/periods',
+    route: '/finance/periods',
+    description: 'Fiscal Period Management.',
+    module: 'finance',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/settings',
+    route: '/finance/settings',
+    description: 'Finance Module Settings.',
+    module: 'finance',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/simulations',
+    route: '/finance/simulations',
+    description: 'Simulation List.',
+    module: 'finance',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/simulations/detail',
+    route: '/finance/simulations/$id',
+    description: 'Simulation Details.',
+    module: 'finance',
+    params: [
+      {
+        name: 'id',
+        type: 'string',
+        required: true,
+        description: 'Simulation UUID',
+      },
+    ],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/simulations/new',
+    route: '/finance/simulations/new',
+    description: 'Create Simulation.',
+    module: 'finance',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/templates',
+    route: '/finance/templates',
+    description: 'Journal Template List.',
+    module: 'finance',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/vat-returns',
+    route: '/finance/vat-returns',
+    description: 'VAT Return List.',
+    module: 'finance',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/vat-returns/detail',
+    route: '/finance/vat-returns/$id',
+    description: 'VAT Return Details.',
+    module: 'finance',
+    params: [
+      {
+        name: 'id',
+        type: 'string',
+        required: true,
+        description: 'VAT return UUID',
+      },
+    ],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'finance/year-end',
+    route: '/finance/year-end',
+    description: 'Year End Wizard.',
+    module: 'finance',
+    params: [],
+    supportsAutoRun: false,
+  },
+
   // ── System Pages (no autoRun, no params) ─────────────────────────────────
 
   {
@@ -391,7 +699,61 @@ export const PAGE_REGISTRY: PageEntry[] = [
     supportsAutoRun: false,
   },
 
-  // ── AI Admin Pages (no autoRun, no params) ───────────────────────────────
+  // ── System Pages (new additions) ─────────────────────────────────────────
+
+  {
+    key: 'system/dashboard',
+    route: '/system',
+    description: 'System Dashboard.',
+    module: 'system',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'system/email-templates',
+    route: '/system/email-templates',
+    description: 'Email Template List.',
+    module: 'system',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'system/email-templates/detail',
+    route: '/system/email-templates/$id',
+    description: 'Email Template Details.',
+    module: 'system',
+    params: [
+      {
+        name: 'id',
+        type: 'string',
+        required: true,
+        description: 'Email template UUID',
+      },
+    ],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'system/email-templates/new',
+    route: '/system/email-templates/new',
+    description: 'Create Email Template.',
+    module: 'system',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'system/resources',
+    route: '/system/resources',
+    description: 'Resource Registry.',
+    module: 'system',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  // ── AI Admin Pages (no autoRun) ───────────────────────────────────────────
 
   {
     key: 'ai/providers',
@@ -410,6 +772,349 @@ export const PAGE_REGISTRY: PageEntry[] = [
     params: [],
     supportsAutoRun: false,
   },
+
+  // ── AI Admin Pages (new additions) ────────────────────────────────────────
+
+  {
+    key: 'ai/admin',
+    route: '/ai/admin',
+    description: 'AI Configuration Dashboard.',
+    module: 'ai',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ai/agents',
+    route: '/ai/admin/agents',
+    description: 'AI Agent List.',
+    module: 'ai',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ai/agents/detail',
+    route: '/ai/admin/agents/$id',
+    description: 'Agent Details.',
+    module: 'ai',
+    params: [
+      {
+        name: 'id',
+        type: 'string',
+        required: true,
+        description: 'Agent UUID',
+      },
+    ],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ai/agents/new',
+    route: '/ai/admin/agents/new',
+    description: 'Create Agent.',
+    module: 'ai',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ai/analytics',
+    route: '/ai/admin/analytics',
+    description: 'AI Analytics.',
+    module: 'ai',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ai/automations',
+    route: '/ai/admin/automations',
+    description: 'Automation List.',
+    module: 'ai',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ai/automations/detail',
+    route: '/ai/admin/automations/$automationId',
+    description: 'Automation Details.',
+    module: 'ai',
+    params: [
+      {
+        name: 'automationId',
+        type: 'string',
+        required: true,
+        description: 'Automation UUID',
+      },
+    ],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ai/automations/new',
+    route: '/ai/admin/automations/new',
+    description: 'Create Automation.',
+    module: 'ai',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ai/automations/runs',
+    route: '/ai/admin/automations/runs',
+    description: 'Automation Run History.',
+    module: 'ai',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ai/automations/runs/detail',
+    route: '/ai/admin/automations/runs/$runId',
+    description: 'Automation Run Details.',
+    module: 'ai',
+    params: [
+      {
+        name: 'runId',
+        type: 'string',
+        required: true,
+        description: 'Automation run UUID',
+      },
+    ],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ai/knowledge',
+    route: '/ai/admin/knowledge',
+    description: 'Knowledge Base Management.',
+    module: 'ai',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ai/models',
+    route: '/ai/admin/models',
+    description: 'LLM Model List.',
+    module: 'ai',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ai/models/detail',
+    route: '/ai/admin/models/$id',
+    description: 'Model Details.',
+    module: 'ai',
+    params: [
+      {
+        name: 'id',
+        type: 'string',
+        required: true,
+        description: 'Model UUID',
+      },
+    ],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ai/models/new',
+    route: '/ai/admin/models/new',
+    description: 'Create Model.',
+    module: 'ai',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ai/prompts',
+    route: '/ai/admin/prompts',
+    description: 'Prompt Template List.',
+    module: 'ai',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ai/prompts/detail',
+    route: '/ai/admin/prompts/$id',
+    description: 'Prompt Editor.',
+    module: 'ai',
+    params: [
+      {
+        name: 'id',
+        type: 'string',
+        required: true,
+        description: 'Prompt template UUID',
+      },
+    ],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ai/prompts/new',
+    route: '/ai/admin/prompts/new',
+    description: 'Create Prompt Template.',
+    module: 'ai',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ai/skills/detail',
+    route: '/ai/admin/skills/$id',
+    description: 'Skill Details.',
+    module: 'ai',
+    params: [
+      {
+        name: 'id',
+        type: 'string',
+        required: true,
+        description: 'Skill UUID',
+      },
+    ],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ai/memory',
+    route: '/ai/memory',
+    description: 'AI Memory Management.',
+    module: 'ai',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  // ── AR Pages ─────────────────────────────────────────────────────────────
+
+  {
+    key: 'ar/dashboard',
+    route: '/ar',
+    description: 'Accounts Receivable Dashboard.',
+    module: 'ar',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ar/invoices',
+    route: '/ar/invoices',
+    description: 'Invoice List.',
+    module: 'ar',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'ar/invoices/detail',
+    route: '/ar/invoices/$id',
+    description: 'Invoice Details.',
+    module: 'ar',
+    params: [
+      {
+        name: 'id',
+        type: 'string',
+        required: true,
+        description: 'Invoice UUID',
+      },
+    ],
+    supportsAutoRun: false,
+  },
+
+  // ── Module Hub Pages ──────────────────────────────────────────────────────
+
+  {
+    key: 'ap/dashboard',
+    route: '/ap',
+    description: 'Accounts Payable Dashboard.',
+    module: 'ap',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'crm/dashboard',
+    route: '/crm',
+    description: 'CRM Dashboard.',
+    module: 'crm',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'hr/dashboard',
+    route: '/hr',
+    description: 'HR & Payroll Dashboard.',
+    module: 'hr',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'inventory/dashboard',
+    route: '/inventory',
+    description: 'Inventory Dashboard.',
+    module: 'inventory',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'manufacturing/dashboard',
+    route: '/manufacturing',
+    description: 'Manufacturing Dashboard.',
+    module: 'manufacturing',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'purchasing/dashboard',
+    route: '/purchasing',
+    description: 'Purchasing Dashboard.',
+    module: 'purchasing',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'reporting/dashboard',
+    route: '/reporting',
+    description: 'Reporting Dashboard.',
+    module: 'reporting',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'sales/dashboard',
+    route: '/sales',
+    description: 'Sales Dashboard.',
+    module: 'sales',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'settings/document-templates',
+    route: '/settings/document-templates',
+    description: 'Document Templates.',
+    module: 'system',
+    params: [],
+    supportsAutoRun: false,
+  },
+
+  {
+    key: 'tasks/my-tasks',
+    route: '/tasks',
+    description: 'My Tasks.',
+    module: 'system',
+    params: [],
+    supportsAutoRun: false,
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -423,25 +1128,43 @@ export function getPage(key: string): PageEntry | undefined {
 }
 
 /**
- * Build a frontend URL for a page, substituting known params as query
- * string values. Appends `autoRun=true` for pages that support it.
+ * Build a frontend URL for a page, substituting path parameters ($paramName)
+ * inline and remaining params as query string values.
+ * Appends `autoRun=true` for pages that support it.
  */
 export function buildPageRoute(page: PageEntry, params: Record<string, unknown>): string {
-  const qs = new URLSearchParams();
+  // Substitute path parameters ($id, $typeId, etc.)
+  let route = page.route;
+  for (const paramDef of page.params) {
+    const value = params[paramDef.name];
+    if (value !== undefined && value !== null) {
+      const placeholder = `$${paramDef.name}`;
+      if (route.includes(placeholder)) {
+        route = route.replace(placeholder, String(value));
+      }
+    }
+  }
 
-  for (const param of page.params) {
-    const value = params[param.name];
-    if (value !== undefined && value !== null && value !== '') {
-      qs.set(param.name, String(value));
+  // Build query parameters for params not already substituted into the path
+  const searchParams = new URLSearchParams();
+  for (const paramDef of page.params) {
+    const value = params[paramDef.name];
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== '' &&
+      !page.route.includes(`$${paramDef.name}`)
+    ) {
+      searchParams.set(paramDef.name, String(value));
     }
   }
 
   if (page.supportsAutoRun) {
-    qs.set('autoRun', 'true');
+    searchParams.set('autoRun', 'true');
   }
 
-  const queryString = qs.toString();
-  return queryString ? `${page.route}?${queryString}` : page.route;
+  const qs = searchParams.toString();
+  return qs ? `${route}?${qs}` : route;
 }
 
 /**
