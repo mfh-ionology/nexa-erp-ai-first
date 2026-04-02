@@ -12,6 +12,7 @@ import { useI18n } from '@nexa/i18n';
 
 import { CopilotDrawer } from '@/components/copilot/CopilotDrawer';
 import { CopilotMinimisedPill } from '@/components/copilot/CopilotMinimisedPill';
+import { useAiChat } from '@/hooks/use-ai-chat';
 import { NotificationProvider } from '@/features/notifications/notification-provider';
 
 // New navigation components
@@ -75,6 +76,9 @@ export function AppLayout() {
 
   // Keep copilot store context in sync with current route
   usePageContext();
+
+  // Connect AI chat socket at app level (not inside drawer) so it's ready before user opens copilot
+  useAiChat();
 
   const isMobile = breakpoint === 'phone';
   const isTablet = breakpoint === 'tablet';

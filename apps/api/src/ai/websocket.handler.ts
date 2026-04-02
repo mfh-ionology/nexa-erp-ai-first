@@ -31,6 +31,8 @@ const chatMessageSchema = z.object({
   currentPage: z.string().max(500).optional(),
   currentEntityType: z.string().max(100).optional(),
   currentEntityId: z.string().max(100).optional(),
+  // Client-generated message ID for streaming placeholder matching
+  placeholderMessageId: z.string().uuid().optional(),
   // Structured entity references from inline entity mentions (E5b-7)
   entityMentions: z
     .array(
@@ -584,7 +586,9 @@ export class AiWebSocketHandler {
     }
     controllers.add(abortController);
 
-    const messageId = randomUUID();
+    // Use client's placeholder message ID if provided, so streaming chunks
+    // update the correct message in the frontend store
+    const messageId = msg.placeholderMessageId ?? randomUUID();
 
     try {
       // 7.3: Build AI request with page context passed through AiRequestContext
@@ -605,7 +609,9 @@ export class AiWebSocketHandler {
         entityMentions: msg.entityMentions,
       };
 
-      // Stream response chunks from orchestrator
+      // Stream response chunks from orchestrator, accumulate for post-processing
+      let accumulatedContent = '';
+
       for await (const chunk of orchestrator.processStream(aiRequest)) {
         // Check if request was aborted (client disconnect)
         if (abortController.signal.aborted) {
@@ -614,6 +620,34 @@ export class AiWebSocketHandler {
             'Streaming aborted due to client disconnect — message persistence handled by orchestrator',
           );
           break;
+        }
+
+        // Accumulate content for structured response extraction
+        if (chunk.type === 'content_delta' && chunk.content) {
+          accumulatedContent += chunk.content;
+        }
+
+        // On stream end: check if accumulated content is structured JSON
+        // If so, replace the streamed raw JSON with just the answer text
+        if (chunk.type === 'done' && accumulatedContent) {
+          try {
+            const parsed = JSON.parse(accumulatedContent.trim());
+            if (parsed && typeof parsed === 'object' && typeof parsed.answer === 'string') {
+              // Send a replacement text message with the extracted answer
+              const textMsg: AiChatServerMessage = {
+                type: 'text',
+                sessionId,
+                messageId,
+                content: parsed.answer,
+              };
+              socket.emit('chat:response', textMsg);
+              // Still forward the done/stream_end chunk for cleanup
+              this.forwardChunk(socket, sessionId, messageId, chunk);
+              continue;
+            }
+          } catch {
+            // Not JSON — forward normally
+          }
         }
 
         this.forwardChunk(socket, sessionId, messageId, chunk);

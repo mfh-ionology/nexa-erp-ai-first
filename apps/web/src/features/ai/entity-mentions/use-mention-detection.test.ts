@@ -97,9 +97,11 @@ describe('detectMention with // trigger', () => {
     expect(result).toBeNull();
   });
 
-  it('returns null for empty trigger map', () => {
+  it('falls back to universal search with empty trigger map', () => {
     const result = detectMention(new Map(), 'customer //POL');
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result!.trigger.entityType).toBe('_universal');
+    expect(result!.searchQuery).toBe('POL');
   });
 
   it('detects // with context word "dimension"', () => {

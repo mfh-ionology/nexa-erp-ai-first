@@ -24,6 +24,16 @@ export default defineConfig({
   server: {
     port: 5110,
     proxy: {
+      // Socket.io paths — NO rewrite (server expects /api/v1/... as engine.io path)
+      '/api/v1/ai/chat/': {
+        target: 'http://localhost:5100',
+        ws: true,
+      },
+      '/api/v1/notifications/ws/': {
+        target: 'http://localhost:5100',
+        ws: true,
+      },
+      // Regular HTTP API (including non-WS notification routes) — rewrite /api/v1 prefix to /
       '/api/v1': {
         target: 'http://localhost:5100',
         changeOrigin: true,

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unnecessary-condition */
 import { useState } from 'react';
 import { useRouterState } from '@tanstack/react-router';
-import { Menu, MessageSquare, Search, Star, X } from 'lucide-react';
+import { Menu, MessageSquare, Search, Sparkles, Star, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { NexaLogo } from '@/components/ui/nexa-logo';
@@ -167,27 +167,25 @@ export function AppHeader() {
           </span>
 
           {/* Co-Pilot chat toggle */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleCopilotDrawer}
-                className="relative"
-                aria-label={
-                  isDrawerOpen ? t('navigation:closeCopilot') : t('navigation:openCopilot')
-                }
-              >
-                <MessageSquare className="h-4 w-4" />
-                {isStreaming && (
-                  <span className="absolute right-1.5 top-1.5 size-2 animate-pulse rounded-full bg-primary" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {isDrawerOpen ? t('navigation:closeCopilot') : t('navigation:openCopilot')}
-            </TooltipContent>
-          </Tooltip>
+          <Button
+            variant={isDrawerOpen ? 'default' : 'outline'}
+            size="sm"
+            onClick={toggleCopilotDrawer}
+            className={cn(
+              'relative gap-1.5 rounded-lg text-xs font-medium transition-colors',
+              isDrawerOpen
+                ? 'bg-[#7c3aed] text-white hover:bg-[#5b21b6]'
+                : 'border-[#7c3aed]/30 text-[#7c3aed] hover:bg-[#f5f3ff] hover:border-[#7c3aed]/50',
+            )}
+            aria-label={isDrawerOpen ? t('navigation:closeCopilot') : t('navigation:openCopilot')}
+          >
+            <Sparkles className="size-3.5" />
+            {/* eslint-disable-next-line i18next/no-literal-string */}
+            <span className="hidden sm:inline">Co-Pilot</span>
+            {isStreaming && (
+              <span className="absolute -right-0.5 -top-0.5 size-2.5 animate-pulse rounded-full bg-green-400 ring-2 ring-white" />
+            )}
+          </Button>
 
           {/* Notification bell with dropdown */}
           <NotificationDropdown />

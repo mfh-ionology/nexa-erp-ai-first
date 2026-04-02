@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 // fp import removed — not needed since aiPlugin is NOT wrapped with fp()
 import type { Logger } from 'pino';
@@ -13,8 +14,9 @@ import {
   FallbackHandlerImpl,
   AnthropicAdapter,
   OpenAIAdapter,
+  DeepSeekAdapter,
 } from '@nexa/ai-gateway';
-import type { ByokCredentialSource } from '@nexa/ai-gateway';
+import type { ByokCredentialSource, ByokCredential } from '@nexa/ai-gateway';
 
 import { PromptManager } from './prompt-manager.js';
 import { ResponseParser } from './response-parser.js';
@@ -143,6 +145,7 @@ declare module 'fastify' {
     aiKnowledgeRagService: KnowledgeRagService | null;
     aiLearningSignalsService: LearningSignalsService | null;
     aiDb: typeof import('@nexa/db').prisma;
+    aiEncryptionKey: string;
     aiCorrectionCaptureService: CorrectionCaptureService | null;
     aiCorrectionPatternService: CorrectionPatternService | null;
     aiTrainingExampleService: TrainingExampleService | null;
@@ -278,7 +281,11 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
   const platformApiUrl = process.env.PLATFORM_API_URL ?? 'http://localhost:5101/api/v1';
   const serviceToken = process.env.PLATFORM_SERVICE_TOKEN;
   const redisUrl = process.env.REDIS_URL;
-  const aiEncryptionKey = process.env.AI_ENCRYPTION_KEY ?? '';
+  const aiEncryptionKeyRaw = process.env.AI_ENCRYPTION_KEY ?? '';
+  // Derive a proper 32-byte hex key for AES-256-GCM encryption
+  const aiEncryptionKey = aiEncryptionKeyRaw
+    ? createHash('sha256').update(aiEncryptionKeyRaw).digest('hex')
+    : '';
 
   if (!serviceToken) {
     fastify.log.warn('PLATFORM_SERVICE_TOKEN not set — AI module disabled (graceful degradation)');
@@ -325,6 +332,7 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     fastify.decorate('aiCorrectionPatternService', null);
     fastify.decorate('aiTrainingExampleService', null);
     fastify.decorate('aiTrainingExampleInjectionService', null);
+    fastify.decorate('aiEncryptionKey', aiEncryptionKey);
     // Still register routes — they will return 503 when orchestrator/service is null
     // Use registerAiRoutes wrapper to preserve /ai prefix (see comment at line 226)
     await fastify.register(registerAiRoutes);
@@ -348,10 +356,38 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     const providerRegistry = new ProviderRegistry();
     providerRegistry.register(new AnthropicAdapter());
     providerRegistry.register(new OpenAIAdapter());
+    providerRegistry.register(new DeepSeekAdapter());
 
     // ISSUE #1 FIX: Construct CredentialResolver with correct arguments
-    const byokSource = new PlatformByokSource(platformApiUrl, serviceToken, logger);
-    const credentialResolver = new CredentialResolver(byokSource, aiEncryptionKey);
+    // Composite source: check tenant SystemSetting first, then Platform BYOK
+    const platformByokSource = new PlatformByokSource(platformApiUrl, serviceToken, logger);
+    const compositeByokSource: ByokCredentialSource = {
+      async getCredential(tenantId: string, providerId: string): Promise<ByokCredential | null> {
+        // 1. Check tenant SystemSetting for provider API key
+        try {
+          const setting = await prisma.systemSetting.findFirst({
+            where: { key: `ai_provider_key_${providerId}` },
+          });
+          if (setting?.value) {
+            return {
+              id: setting.id,
+              tenantId,
+              providerId,
+              encryptedKey: setting.value,
+              isActive: true,
+            };
+          }
+        } catch (err) {
+          logger.warn(
+            { providerId, error: (err as Error).message },
+            'Failed to read provider key from SystemSetting, falling back to platform BYOK',
+          );
+        }
+        // 2. Fall back to Platform BYOK
+        return platformByokSource.getCredential(tenantId, providerId);
+      },
+    };
+    const credentialResolver = new CredentialResolver(compositeByokSource, aiEncryptionKey);
 
     const quotaClient = new QuotaClientImpl({
       platformApiUrl,
@@ -857,6 +893,7 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     fastify.decorate('aiCorrectionPatternService', correctionPatternService);
     fastify.decorate('aiTrainingExampleService', trainingExampleService);
     fastify.decorate('aiTrainingExampleInjectionService', trainingExampleInjectionService);
+    fastify.decorate('aiEncryptionKey', aiEncryptionKey);
 
     // Wire TrainingExampleInjectionService into DynamicContextService (E5d-2 Task 5.4)
     if (dynamicContextService) {
@@ -944,6 +981,7 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     fastify.decorate('aiCorrectionPatternService', null);
     fastify.decorate('aiTrainingExampleService', null);
     fastify.decorate('aiTrainingExampleInjectionService', null);
+    fastify.decorate('aiEncryptionKey', aiEncryptionKey);
     // Still register routes — they will return 503 when orchestrator/service is null
     // Use registerAiRoutes wrapper to preserve /ai prefix (see comment at line 226)
     await fastify.register(registerAiRoutes);

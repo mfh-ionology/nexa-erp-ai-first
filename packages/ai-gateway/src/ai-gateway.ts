@@ -21,11 +21,7 @@ import type {
 // quota checking, usage recording, and fallback handling (Tasks 7–9).
 
 export interface QuotaClient {
-  check(
-    tenantId: string,
-    estimatedTokens: number,
-    featureKey: string,
-  ): Promise<QuotaCheckResult>;
+  check(tenantId: string, estimatedTokens: number, featureKey: string): Promise<QuotaCheckResult>;
 }
 
 export interface UsageRecorder {
@@ -133,25 +129,30 @@ export class AiGateway {
 
     // 4. Estimate tokens
     const provider = this.providerRegistry.get(model.provider);
-    const estimatedTokens = await provider.estimateTokens(
-      request.messages,
-      request.tools,
-    );
+    const estimatedTokens = await provider.estimateTokens(request.messages, request.tools);
 
-    // 5. Pre-flight quota check
-    const quotaResult = await this.quotaClient.check(
-      request.tenantId,
-      estimatedTokens,
-      request.featureKey,
-    );
-
-    // 6. If blocked → throw
-    if (!quotaResult.allowed) {
-      this.logger.warn(
-        { requestId, tenantId: request.tenantId, quotaPct: quotaResult.quotaPct },
-        'AI Gateway: quota exceeded, blocking request',
+    // 5. Pre-flight quota check (fail-open: allow request if quota service is unavailable)
+    try {
+      const quotaResult = await this.quotaClient.check(
+        request.tenantId,
+        estimatedTokens,
+        request.featureKey,
       );
-      throw new AiQuotaExceededError(quotaResult.quotaPct, quotaResult.remainingTokens);
+
+      // 6. If blocked → throw
+      if (!quotaResult.allowed) {
+        this.logger.warn(
+          { requestId, tenantId: request.tenantId, quotaPct: quotaResult.quotaPct },
+          'AI Gateway: quota exceeded, blocking request',
+        );
+        throw new AiQuotaExceededError(quotaResult.quotaPct, quotaResult.remainingTokens);
+      }
+    } catch (err) {
+      if (err instanceof AiQuotaExceededError) throw err;
+      this.logger.warn(
+        { requestId, error: (err as Error).message },
+        'AI Gateway: quota check failed, allowing request (fail-open)',
+      );
     }
 
     // 8. Build LLMRequest
@@ -187,10 +188,7 @@ export class AiGateway {
       isByok = fallbackResult.isByok;
     } else {
       // 7. Resolve credentials only when no fallback handler
-      const credentials = await this.credentialResolver.resolve(
-        request.tenantId,
-        model.provider,
-      );
+      const credentials = await this.credentialResolver.resolve(request.tenantId, model.provider);
       llmResponse = await provider.complete(llmRequest, credentials.apiKey);
       isByok = credentials.isByok;
     }
@@ -249,9 +247,10 @@ export class AiGateway {
       isByok,
       quotaPct: quotaResult.quotaPct,
       // ISSUE #32 FIX: Merge both warnings if present, prefer quota warning
-      warning: quotaResult.warning && llmResponse.warning
-        ? `${quotaResult.warning}; ${llmResponse.warning}`
-        : quotaResult.warning ?? llmResponse.warning,
+      warning:
+        quotaResult.warning && llmResponse.warning
+          ? `${quotaResult.warning}; ${llmResponse.warning}`
+          : (quotaResult.warning ?? llmResponse.warning),
     };
   }
 
@@ -285,24 +284,29 @@ export class AiGateway {
 
     // Estimate tokens
     const provider = this.providerRegistry.get(model.provider);
-    const estimatedTokens = await provider.estimateTokens(
-      request.messages,
-      request.tools,
-    );
+    const estimatedTokens = await provider.estimateTokens(request.messages, request.tools);
 
-    // Pre-flight quota check
-    const quotaResult = await this.quotaClient.check(
-      request.tenantId,
-      estimatedTokens,
-      request.featureKey,
-    );
-
-    if (!quotaResult.allowed) {
-      this.logger.warn(
-        { requestId, tenantId: request.tenantId, quotaPct: quotaResult.quotaPct },
-        'AI Gateway: quota exceeded, blocking streaming request',
+    // Pre-flight quota check (fail-open: allow request if quota service is unavailable)
+    try {
+      const quotaResult = await this.quotaClient.check(
+        request.tenantId,
+        estimatedTokens,
+        request.featureKey,
       );
-      throw new AiQuotaExceededError(quotaResult.quotaPct, quotaResult.remainingTokens);
+
+      if (!quotaResult.allowed) {
+        this.logger.warn(
+          { requestId, tenantId: request.tenantId, quotaPct: quotaResult.quotaPct },
+          'AI Gateway: quota exceeded, blocking streaming request',
+        );
+        throw new AiQuotaExceededError(quotaResult.quotaPct, quotaResult.remainingTokens);
+      }
+    } catch (err) {
+      if (err instanceof AiQuotaExceededError) throw err;
+      this.logger.warn(
+        { requestId, error: (err as Error).message },
+        'AI Gateway: quota check failed, allowing request (fail-open)',
+      );
     }
 
     // Build LLMRequest
@@ -337,7 +341,13 @@ export class AiGateway {
       streamSource = provider.stream(llmRequest, primaryCredentials.apiKey);
     } catch (err) {
       // Synchronous error from stream setup — attempt fallback
-      const fallbackResult = this.attemptStreamFallback(err, model, llmRequest, request.tenantId, requestId);
+      const fallbackResult = this.attemptStreamFallback(
+        err,
+        model,
+        llmRequest,
+        request.tenantId,
+        requestId,
+      );
       if (fallbackResult) {
         const resolved = await fallbackResult;
         streamSource = resolved.stream;
@@ -358,7 +368,13 @@ export class AiGateway {
     try {
       firstChunk = await iterator.next();
     } catch (err) {
-      const fallbackResult = this.attemptStreamFallback(err, model, llmRequest, request.tenantId, requestId);
+      const fallbackResult = this.attemptStreamFallback(
+        err,
+        model,
+        llmRequest,
+        request.tenantId,
+        requestId,
+      );
       if (fallbackResult) {
         const resolved = await fallbackResult;
         streamSource = resolved.stream;
@@ -447,7 +463,12 @@ export class AiGateway {
     llmRequest: LLMRequest,
     tenantId: string,
     requestId: string,
-  ): Promise<{ stream: AsyncIterable<LLMStreamChunk>; provider: string; model: string; isByok: boolean }> | null {
+  ): Promise<{
+    stream: AsyncIterable<LLMStreamChunk>;
+    provider: string;
+    model: string;
+    isByok: boolean;
+  }> | null {
     if (!(err instanceof ProviderError) || !isFallbackTrigger(err)) {
       return null;
     }
@@ -469,7 +490,10 @@ export class AiGateway {
       try {
         const fallbackModel = this.modelRegistry.resolveByName(primaryModel.fallbackModelName!);
         const fallbackProvider = this.providerRegistry.get(fallbackModel.provider);
-        const fallbackCredentials = await this.credentialResolver.resolve(tenantId, fallbackModel.provider);
+        const fallbackCredentials = await this.credentialResolver.resolve(
+          tenantId,
+          fallbackModel.provider,
+        );
 
         const fallbackRequest: LLMRequest = { ...llmRequest, model: fallbackModel.modelId };
         const stream = fallbackProvider.stream(fallbackRequest, fallbackCredentials.apiKey);

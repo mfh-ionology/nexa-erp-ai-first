@@ -1,11 +1,6 @@
 // ─── Core Gateway ───────────────────────────────────────────────────────────
 export { AiGateway, createAiGateway } from './ai-gateway.js';
-export type {
-  AiGatewayConfig,
-  QuotaClient,
-  UsageRecorder,
-  FallbackHandler,
-} from './ai-gateway.js';
+export type { AiGatewayConfig, QuotaClient, UsageRecorder, FallbackHandler } from './ai-gateway.js';
 
 // ─── Model Registry ─────────────────────────────────────────────────────────
 export { ModelRegistry } from './model-registry.js';
@@ -52,10 +47,12 @@ export { ProviderRegistry } from './providers/provider-registry.js';
 // ─── Provider Adapters ─────────────────────────────────────────────────────
 export { AnthropicAdapter } from './providers/adapters/anthropic.adapter.js';
 export { OpenAIAdapter } from './providers/adapters/openai.adapter.js';
+export { DeepSeekAdapter } from './providers/adapters/deepseek.adapter.js';
 
 // ─── Credential Resolution ──────────────────────────────────────────────────
 export { CredentialResolver } from './credentials/credential-resolver.js';
-export type { ByokCredentialSource } from './credentials/credential-resolver.js';
+export type { ByokCredentialSource, ByokCredential } from './credentials/credential-resolver.js';
+export { encrypt as encryptApiKey, decrypt as decryptApiKey } from './credentials/encryption.js';
 
 // ─── Quota Client ──────────────────────────────────────────────────────────
 export { QuotaClient as QuotaClientImpl, QuotaCheckError } from './quota/quota-client.js';

@@ -49,7 +49,7 @@ export function detectMention(
   triggerMap: Map<string, EntityTrigger>,
   inputText: string,
 ): MentionDetectionResult | null {
-  if (!inputText || triggerMap.size === 0) {
+  if (!inputText) {
     return null;
   }
 

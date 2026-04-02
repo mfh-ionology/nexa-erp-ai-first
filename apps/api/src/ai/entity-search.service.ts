@@ -12,7 +12,7 @@ import { NotFoundError } from '../core/errors/not-found-error.js';
 // ─── Types ────────────────────────────────────────────────────────────────
 
 export interface EntitySearchParams {
-  type: string;
+  type?: string;
   q: string;
   companyId: string;
   userId: string;
@@ -61,6 +61,16 @@ const ALLOWED_FIELDS: Record<string, ReadonlySet<string>> = {
     'isDefault',
     'dataViewId',
   ]),
+  ChartOfAccount: new Set([
+    'code',
+    'name',
+    'classification',
+    'isActive',
+    'parentCode',
+    'description',
+  ]),
+  DimensionValue: new Set(['code', 'name', 'isActive', 'dimensionTypeId']),
+  DimensionType: new Set(['code', 'name', 'isActive', 'description']),
 };
 
 function isAllowedField(entityType: string, fieldName: string): boolean {
@@ -87,6 +97,11 @@ export class EntitySearchService {
   }
 
   async search(params: EntitySearchParams): Promise<EntitySearchResult[]> {
+    // Universal search: when no type specified, search across all triggers
+    if (!params.type) {
+      return this.universalSearch(params);
+    }
+
     // 1. Look up the active entity trigger by entityType (cached — ISSUE #1 fix)
     const trigger = await this.resolveTrigger(params.type);
 
@@ -184,13 +199,35 @@ export class EntitySearchService {
     return results;
   }
 
+  // ─── Universal search (searches across all entity triggers) ─────────────
+
+  private async universalSearch(params: EntitySearchParams): Promise<EntitySearchResult[]> {
+    const cache = await this.ensureTriggerCache();
+    const allResults: EntitySearchResult[] = [];
+
+    // Search across all registered entity types, collect results
+    for (const [entityType] of cache.byEntityType) {
+      try {
+        const results = await this.search({
+          ...params,
+          type: entityType,
+        });
+        allResults.push(...results);
+      } catch {
+        // Skip entity types that fail (e.g., missing allowed fields)
+      }
+    }
+
+    // Return top 8 results sorted by displayName
+    return allResults.sort((a, b) => a.displayName.localeCompare(b.displayName)).slice(0, 8);
+  }
+
   // ─── Trigger cache helpers (ISSUE #1 fix) ──────────────────────────────
 
-  private async resolveTrigger(entityType: string): Promise<EntityTriggerRecord | undefined> {
+  private async ensureTriggerCache(): Promise<TriggerCache> {
     const now = Date.now();
-
     if (this.triggerCache && now - this.triggerCache.fetchedAt < TRIGGER_CACHE_TTL_MS) {
-      return this.triggerCache.byEntityType.get(entityType);
+      return this.triggerCache;
     }
 
     const triggers = await this.entityTriggerService.listTriggers({ isActive: true });
@@ -202,7 +239,12 @@ export class EntitySearchService {
     }
 
     this.triggerCache = { byEntityType, fetchedAt: now };
-    return byEntityType.get(entityType);
+    return this.triggerCache;
+  }
+
+  private async resolveTrigger(entityType: string): Promise<EntityTriggerRecord | undefined> {
+    const cache = await this.ensureTriggerCache();
+    return cache.byEntityType.get(entityType);
   }
 }
 
@@ -229,6 +271,8 @@ type SearchHandler = (
 const ENTITY_SEARCH_HANDLERS: Record<string, SearchHandler> = {
   DataView: searchDataViews,
   SavedView: searchSavedViews,
+  ChartOfAccount: searchChartOfAccounts,
+  DimensionValue: searchDimensionValues,
 };
 
 // ---------------------------------------------------------------------------
@@ -307,5 +351,64 @@ async function searchSavedViews(
       ? (((row as Record<string, unknown>)[params.subtitleField] as string | null) ?? null)
       : null,
     entityType: 'SavedView',
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// ChartOfAccount search handler
+// ---------------------------------------------------------------------------
+
+async function searchChartOfAccounts(
+  db: PrismaClient,
+  params: SearchHandlerParams,
+): Promise<EntitySearchResult[]> {
+  const rows = await db.chartOfAccount.findMany({
+    where: {
+      companyId: params.companyId,
+      isActive: true,
+      OR: [
+        { name: { contains: params.q, mode: 'insensitive' } },
+        { code: { contains: params.q, mode: 'insensitive' } },
+      ],
+    },
+    take: MAX_RESULTS,
+    orderBy: { code: 'asc' },
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    displayName: row.name,
+    subtitle: row.code,
+    entityType: 'ChartOfAccount',
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// DimensionValue search handler
+// ---------------------------------------------------------------------------
+
+async function searchDimensionValues(
+  db: PrismaClient,
+  params: SearchHandlerParams,
+): Promise<EntitySearchResult[]> {
+  const rows = await db.dimensionValue.findMany({
+    where: {
+      companyId: params.companyId,
+      isActive: true,
+      OR: [
+        { name: { contains: params.q, mode: 'insensitive' } },
+        { code: { contains: params.q, mode: 'insensitive' } },
+      ],
+    },
+    include: { dimensionType: { select: { name: true } } },
+    take: MAX_RESULTS,
+    orderBy: { name: 'asc' },
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    displayName: row.name,
+    subtitle: `${row.dimensionType.name} — ${row.code}`,
+    entityType: 'DimensionValue',
   }));
 }

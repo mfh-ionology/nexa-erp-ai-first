@@ -212,6 +212,7 @@ const NAV_SECTIONS: NavSection[] = [
             labelKey: 'navigation:communications.notificationPreferences',
           },
           { path: '/system/email-templates', labelKey: 'navigation:communications.emailTemplates' },
+          { path: '/ai/admin/providers', labelKey: 'navigation:ai.admin.providers' },
           { path: '/ai/admin/models', labelKey: 'navigation:ai.admin.models' },
           { path: '/ai/admin/prompts', labelKey: 'navigation:ai.admin.prompts' },
           { path: '/ai/admin/agents', labelKey: 'navigation:ai.admin.agents' },

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { io, type Socket } from 'socket.io-client';
 import { useRouter } from '@tanstack/react-router';
 
 import { useAuthStore } from '@/stores/auth-store';
@@ -41,14 +42,10 @@ export interface AiChatServerMessage {
 // ── Configuration ────────────────────────────────────────────────────────────
 
 const MAX_RECONNECT_ATTEMPTS = 3;
-const BACKOFF_BASE_MS = 1_000;
-const BACKOFF_MAX_MS = 30_000;
 
-function getWsUrl(): string {
-  const base =
-    import.meta.env.VITE_API_WS_URL ??
-    `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
-  return `${base}/api/v1/ai/chat`;
+function getSocketUrl(): string {
+  if (import.meta.env.VITE_API_WS_URL) return import.meta.env.VITE_API_WS_URL as string;
+  return window.location.origin;
 }
 
 // ── Hook return type ─────────────────────────────────────────────────────────
@@ -64,24 +61,27 @@ export interface UseAiChatReturn {
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 /**
- * Manages WebSocket lifecycle for the AI chat:
- *  - Connects to `wss://{host}/api/v1/ai/chat?token={jwt}` on mount
- *  - Reconnects with exponential backoff (1s, 2s, 4s, max 30s) on disconnect
- *  - Graceful degradation: after MAX_RECONNECT_ATTEMPTS, sets status to 'error'
+ * Manages Socket.io lifecycle for the AI chat:
+ *  - Connects to the /ai/chat namespace via Socket.io client
+ *  - Auth: passes JWT token + companyId in handshake auth
+ *  - Reconnects automatically (Socket.io built-in with max attempts)
  *  - Dispatches incoming server messages to the copilot store
  *  - Cleans up on unmount
  */
 export function useAiChat(): UseAiChatReturn {
   const accessToken = useAuthStore((s) => s.accessToken);
+  const activeCompanyId = useAuthStore((s) => s.activeCompanyId);
+  const permissions = useAuthStore((s) => s.permissions);
   const connectionStatus = useCopilotStore((s) => s.connectionStatus);
   const setConnectionStatus = useCopilotStore((s) => s.setConnectionStatus);
   const activeConversationId = useCopilotStore((s) => s.activeConversationId);
   const router = useRouter();
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectAttemptRef = useRef(0);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const socketRef = useRef<Socket | null>(null);
   const unmountedRef = useRef(false);
+
+  // Resolve company ID: activeCompanyId (set after permissions load) or from permissions directly
+  const companyId = activeCompanyId ?? permissions?.companyId ?? null;
 
   // ── Incoming message handler ────────────────────────────────────────────
   const handleServerMessage = useCallback(
@@ -103,16 +103,25 @@ export function useAiChat(): UseAiChatReturn {
           break;
         }
         case 'text': {
-          const msg: ChatMessage = {
-            id: data.messageId ?? crypto.randomUUID(),
-            sessionId: data.sessionId ?? store.activeConversationId ?? '',
-            role: 'assistant',
-            content: data.content ?? '',
-            timestamp: new Date().toISOString(),
-            recordLinks: data.recordLinks,
-            dataCards: data.dataCards,
-          };
-          store.addMessage(msg);
+          // If messageId matches an existing streaming message, update its content
+          // (used when server extracts answer from structured JSON response)
+          const existing = data.messageId
+            ? store.messages.find((m) => m.id === data.messageId)
+            : undefined;
+          if (existing) {
+            store.updateStreamingMessage(data.messageId!, data.content ?? '');
+          } else {
+            const msg: ChatMessage = {
+              id: data.messageId ?? crypto.randomUUID(),
+              sessionId: data.sessionId ?? store.activeConversationId ?? '',
+              role: 'assistant',
+              content: data.content ?? '',
+              timestamp: new Date().toISOString(),
+              recordLinks: data.recordLinks,
+              dataCards: data.dataCards,
+            };
+            store.addMessage(msg);
+          }
           break;
         }
         case 'action_proposal': {
@@ -153,7 +162,6 @@ export function useAiChat(): UseAiChatReturn {
         }
         case 'navigate': {
           if (data.route) {
-            // Navigate after a short delay to ensure React render cycle completes
             setTimeout(() => {
               void router.navigate({ to: data.route! });
             }, 100);
@@ -166,93 +174,114 @@ export function useAiChat(): UseAiChatReturn {
   );
 
   // ── Connect / reconnect logic ───────────────────────────────────────────
-  const connect = useCallback(() => {
-    if (unmountedRef.current || !accessToken) return;
-
-    // Close existing connection if any
-    if (wsRef.current) {
-      wsRef.current.onclose = null;
-      wsRef.current.close();
-    }
-
-    setConnectionStatus('connecting');
-
-    const url = getWsUrl();
-    const ws = new WebSocket(url);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      if (unmountedRef.current) return;
-      reconnectAttemptRef.current = 0;
-      // Authenticate via first message instead of URL query parameter
-      // to avoid token exposure in server logs and browser history.
-      ws.send(JSON.stringify({ type: 'auth', token: accessToken }));
-      setConnectionStatus('connected');
-    };
-
-    ws.onmessage = (event) => {
-      if (unmountedRef.current) return;
-      try {
-        const data = JSON.parse(event.data as string) as AiChatServerMessage;
-        handleServerMessage(data);
-      } catch {
-        // Ignore unparseable messages
-      }
-    };
-
-    ws.onerror = () => {
-      // Error is followed by onclose, so reconnection is handled there
-    };
-
-    ws.onclose = () => {
-      if (unmountedRef.current) return;
-
-      const attempt = reconnectAttemptRef.current;
-      if (attempt >= MAX_RECONNECT_ATTEMPTS) {
-        setConnectionStatus('error');
-        return;
-      }
-
-      setConnectionStatus('disconnected');
-      reconnectAttemptRef.current = attempt + 1;
-
-      const backoffMs = Math.min(BACKOFF_BASE_MS * Math.pow(2, attempt), BACKOFF_MAX_MS);
-
-      reconnectTimerRef.current = setTimeout(() => {
-        connect();
-      }, backoffMs);
-    };
-  }, [accessToken, setConnectionStatus, handleServerMessage]);
-
-  // ── Lifecycle ───────────────────────────────────────────────────────────
+  // Subscribe to auth store changes and connect when both token + companyId are available.
+  // This handles the timing issue where permissions load AFTER the initial render.
   useEffect(() => {
     unmountedRef.current = false;
+    console.log('[ai-chat] useEffect mounted');
 
-    if (accessToken) {
-      connect();
+    function tryConnect() {
+      const {
+        accessToken: token,
+        activeCompanyId: cid,
+        permissions: perms,
+      } = useAuthStore.getState();
+      // Resolve company ID from multiple sources: store state, permissions, or JWT payload
+      let resolvedCompanyId = cid ?? perms?.companyId;
+      if (!resolvedCompanyId && token) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]!));
+          resolvedCompanyId = payload.tenantId ?? payload.companyId;
+        } catch {
+          /* ignore malformed token */
+        }
+      }
+      console.log('[ai-chat] tryConnect:', { hasToken: !!token, resolved: resolvedCompanyId });
+
+      if (!token || !resolvedCompanyId) return;
+      if (socketRef.current?.connected) return;
+
+      // Disconnect stale socket if any
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+
+      if (import.meta.env.DEV) {
+        console.log('[ai-chat] Connecting to', getSocketUrl(), 'company:', resolvedCompanyId);
+      }
+      setConnectionStatus('connecting');
+
+      const socket = io(`${getSocketUrl()}/ai/chat`, {
+        path: '/api/v1/ai/chat',
+        auth: {
+          token,
+          companyId: resolvedCompanyId,
+        },
+        transports: ['websocket', 'polling'],
+        reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 30000,
+        timeout: 10000,
+      });
+
+      socketRef.current = socket;
+
+      socket.on('connect', () => {
+        if (unmountedRef.current) return;
+        if (import.meta.env.DEV) console.log('[ai-chat] Connected!');
+        setConnectionStatus('connected');
+      });
+
+      socket.on('chat:response', (data: AiChatServerMessage) => {
+        if (unmountedRef.current) return;
+        handleServerMessage(data);
+      });
+
+      socket.on('connect_error', (err) => {
+        if (unmountedRef.current) return;
+        console.warn('[ai-chat] Socket.io connect error:', err.message);
+        setConnectionStatus('disconnected');
+      });
+
+      socket.on('disconnect', (reason) => {
+        if (unmountedRef.current) return;
+        if (reason === 'io server disconnect') {
+          setConnectionStatus('error');
+        } else {
+          setConnectionStatus('disconnected');
+        }
+      });
+
+      socket.io.on('reconnect_failed', () => {
+        if (unmountedRef.current) return;
+        setConnectionStatus('error');
+      });
     }
+
+    // Try immediately (may succeed if permissions already loaded)
+    tryConnect();
+
+    // Subscribe to auth store — re-try when token/permissions change
+    const unsubscribe = useAuthStore.subscribe(tryConnect);
 
     return () => {
       unmountedRef.current = true;
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-        reconnectTimerRef.current = null;
-      }
-      if (wsRef.current) {
-        wsRef.current.onclose = null;
-        wsRef.current.close();
-        wsRef.current = null;
+      unsubscribe();
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
       }
       setConnectionStatus('disconnected');
     };
-  }, [accessToken, connect, setConnectionStatus]);
+  }, [setConnectionStatus, handleServerMessage]);
 
   // ── Public API ──────────────────────────────────────────────────────────
 
   const sendMessage = useCallback(
     (content: string, mentions?: EntityMention[]) => {
-      const ws = wsRef.current;
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      const socket = socketRef.current;
+      if (!socket?.connected) return;
 
       const sessionId = activeConversationId ?? '';
 
@@ -279,37 +308,37 @@ export function useAiChat(): UseAiChatReturn {
             ? mentions.map((m) => ({ type: m.type, id: m.id, name: m.name }))
             : undefined,
       };
-      ws.send(JSON.stringify(msg));
+      socket.emit('chat:message', msg);
     },
     [activeConversationId],
   );
 
   const confirmAction = useCallback(
     (actionId: string) => {
-      const ws = wsRef.current;
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      const socket = socketRef.current;
+      if (!socket?.connected) return;
 
       const msg: AiChatClientMessage = {
         type: 'action_confirm',
         sessionId: activeConversationId ?? '',
         actionId,
       };
-      ws.send(JSON.stringify(msg));
+      socket.emit('chat:message', msg);
     },
     [activeConversationId],
   );
 
   const rejectAction = useCallback(
     (actionId: string) => {
-      const ws = wsRef.current;
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      const socket = socketRef.current;
+      if (!socket?.connected) return;
 
       const msg: AiChatClientMessage = {
         type: 'action_reject',
         sessionId: activeConversationId ?? '',
         actionId,
       };
-      ws.send(JSON.stringify(msg));
+      socket.emit('chat:message', msg);
     },
     [activeConversationId],
   );

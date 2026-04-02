@@ -63,7 +63,7 @@ import {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const PROVIDERS = ['anthropic', 'openai', 'google'] as const;
+const PROVIDERS = ['anthropic', 'openai', 'deepseek', 'google'] as const;
 
 const ROUTING_TAG_OPTIONS = [
   'reasoning',

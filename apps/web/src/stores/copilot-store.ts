@@ -234,21 +234,5 @@ export const useCopilotStore = create<CopilotState>()((set, get) => ({
     if (!state.isDrawerOpen) {
       set({ isDrawerOpen: true });
     }
-
-    // MVP placeholder: shows a static AI response so the user gets feedback.
-    // TODO(E7): Remove this placeholder once useAiChat hook is wired into
-    // the component tree. The hook's sendMessage() creates its own streaming
-    // placeholder, so keeping both would produce duplicate assistant messages.
-    setTimeout(() => {
-      const placeholderMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        sessionId,
-        role: 'assistant',
-        content:
-          'I received your message. AI responses will be connected when the AI backend is integrated.',
-        timestamp: new Date().toISOString(),
-      };
-      get().addMessage(placeholderMessage);
-    }, 500);
   },
 }));

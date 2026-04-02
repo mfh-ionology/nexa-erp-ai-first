@@ -21,6 +21,7 @@ const VENDOR_KEY_ENV_MAP: Record<string, string> = {
   anthropic: 'ANTHROPIC_API_KEY',
   openai: 'OPENAI_API_KEY',
   google: 'GOOGLE_API_KEY',
+  deepseek: 'DEEPSEEK_API_KEY',
 };
 
 /**

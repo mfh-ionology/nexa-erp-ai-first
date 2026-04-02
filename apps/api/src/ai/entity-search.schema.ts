@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 export const entitySearchQuerySchema = z
   .object({
-    type: z.string().min(1).max(255),
+    type: z.string().min(1).max(255).optional(),
     q: z.string().min(2).max(100),
     scopeBy: z.string().max(255).optional(),
     scopeValue: z.string().uuid().optional(),

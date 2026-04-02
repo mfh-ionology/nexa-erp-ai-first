@@ -6,6 +6,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '@nexa/db';
+import { encryptApiKey } from '@nexa/ai-gateway';
 
 import { createPermissionGuard } from '../../core/rbac/index.js';
 import { sendSuccess } from '../../core/utils/response.js';
@@ -16,6 +17,7 @@ import type { AdminDashboardService } from './admin-dashboard.service.js';
 import type { AdminAgentService } from './admin-agent.service.js';
 import type { AdminSkillService } from './admin-skill.service.js';
 import type { AdminTriggerTestService } from './admin-trigger-test.service.js';
+import type { AdminAnalyticsService } from './analytics.service.js';
 import type { LearningSignalsService } from '../learning-signals.service.js';
 import {
   modelIdParamsSchema,
@@ -130,6 +132,16 @@ async function adminRoutes(fastify: FastifyInstance): Promise<void> {
   ): asserts svc is AdminTriggerTestService {
     if (!svc) {
       throw Object.assign(new Error('AI admin trigger test service is not available'), {
+        statusCode: 503,
+      });
+    }
+  }
+
+  function assertAnalyticsService(
+    svc: AdminAnalyticsService | null | undefined,
+  ): asserts svc is AdminAnalyticsService {
+    if (!svc) {
+      throw Object.assign(new Error('AI admin analytics service is not available'), {
         statusCode: 503,
       });
     }
@@ -788,6 +800,205 @@ async function adminRoutes(fastify: FastifyInstance): Promise<void> {
         wizardCompleted: settings.aiSetupWizardCompleted === true,
         checklistDismissed: settings.aiSetupChecklistDismissed === true,
       });
+    },
+  );
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Analytics endpoints (E10 Task 11)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ─── GET /analytics/summary — Usage summary with trends ───────────────
+  fastify.get(
+    '/analytics/summary',
+    {
+      preHandler: [createPermissionGuard('system.settings.detail', 'view')],
+    },
+    async (request, reply) => {
+      assertAnalyticsService(fastify.aiAdminAnalyticsService);
+
+      const { startDate, endDate } = request.query as {
+        startDate: string;
+        endDate: string;
+      };
+      const result = await fastify.aiAdminAnalyticsService.getSummary(
+        request.companyId,
+        new Date(startDate),
+        new Date(endDate),
+      );
+      return sendSuccess(reply, result);
+    },
+  );
+
+  // ─── GET /analytics/breakdown — Grouped usage breakdown ───────────────
+  fastify.get(
+    '/analytics/breakdown',
+    {
+      preHandler: [createPermissionGuard('system.settings.detail', 'view')],
+    },
+    async (request, reply) => {
+      assertAnalyticsService(fastify.aiAdminAnalyticsService);
+
+      const { startDate, endDate, groupBy } = request.query as {
+        startDate: string;
+        endDate: string;
+        groupBy: string;
+      };
+      const result = await fastify.aiAdminAnalyticsService.getBreakdown(
+        request.companyId,
+        new Date(startDate),
+        new Date(endDate),
+        groupBy as 'model' | 'agent' | 'module' | 'user' | 'day',
+      );
+      return sendSuccess(reply, result);
+    },
+  );
+
+  // ─── GET /analytics/alerts — Budget thresholds & anomalies ────────────
+  fastify.get(
+    '/analytics/alerts',
+    {
+      preHandler: [createPermissionGuard('system.settings.detail', 'view')],
+    },
+    async (request, reply) => {
+      assertAnalyticsService(fastify.aiAdminAnalyticsService);
+
+      const result = await fastify.aiAdminAnalyticsService.getAlerts(request.companyId);
+      return sendSuccess(reply, result);
+    },
+  );
+
+  // ─── GET /analytics/export — CSV data export ──────────────────────────
+  fastify.get(
+    '/analytics/export',
+    {
+      preHandler: [createPermissionGuard('system.settings.detail', 'view')],
+    },
+    async (request, reply) => {
+      assertAnalyticsService(fastify.aiAdminAnalyticsService);
+
+      const { startDate, endDate } = request.query as {
+        startDate: string;
+        endDate: string;
+      };
+      const csv = await fastify.aiAdminAnalyticsService.exportCsv(
+        request.companyId,
+        new Date(startDate),
+        new Date(endDate),
+      );
+      return reply
+        .header('Content-Type', 'text/csv')
+        .header(
+          'Content-Disposition',
+          `attachment; filename="nexa-ai-usage-${startDate}-to-${endDate}.csv"`,
+        )
+        .send(csv);
+    },
+  );
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Provider API Key Management
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  const KNOWN_PROVIDERS = [
+    { id: 'anthropic', name: 'Anthropic', description: 'Claude models (Opus, Sonnet, Haiku)' },
+    { id: 'openai', name: 'OpenAI', description: 'GPT-4o and GPT-4o Mini models' },
+    { id: 'deepseek', name: 'DeepSeek', description: 'DeepSeek Chat (V3) and Reasoner (R1)' },
+    { id: 'google', name: 'Google', description: 'Gemini models' },
+  ];
+
+  /** GET /ai/admin/providers — list providers with key status */
+  fastify.get('/providers', { preHandler: [adminGuard] }, async (request, reply) => {
+    const providers = await Promise.all(
+      KNOWN_PROVIDERS.map(async (provider) => {
+        const setting = await prisma.systemSetting.findFirst({
+          where: {
+            companyId: request.companyId,
+            key: `ai_provider_key_${provider.id}`,
+          },
+        });
+        const hasKey = !!setting?.value;
+        return {
+          ...provider,
+          hasKey,
+          maskedKey: hasKey ? '****' + (setting!.value.slice(-4) || '****') : null,
+          updatedAt: setting?.updatedAt ?? null,
+        };
+      }),
+    );
+    return sendSuccess(reply, providers);
+  });
+
+  const providerKeyBodySchema = z.object({
+    apiKey: z.string().min(1, 'API key is required'),
+  });
+
+  /** PUT /ai/admin/providers/:providerId/key — store encrypted API key */
+  fastify.put<{ Params: { providerId: string }; Body: { apiKey: string } }>(
+    '/providers/:providerId/key',
+    { preHandler: [adminGuard] },
+    async (request, reply) => {
+      const { providerId } = request.params;
+      const body = providerKeyBodySchema.parse(request.body);
+
+      // Validate known provider
+      if (!KNOWN_PROVIDERS.some((p) => p.id === providerId)) {
+        return reply.status(400).send({
+          success: false,
+          error: { message: `Unknown provider: ${providerId}` },
+        });
+      }
+
+      // Encrypt the API key using the derived hex key from aiEncryptionKey
+      const masterKeyHex = fastify.aiEncryptionKey;
+      if (!masterKeyHex || masterKeyHex.length !== 64) {
+        return reply.status(500).send({
+          success: false,
+          error: { message: 'AI encryption key is not configured' },
+        });
+      }
+
+      const encryptedKey = encryptApiKey(body.apiKey, masterKeyHex);
+
+      // Upsert into SystemSetting
+      const settingKey = `ai_provider_key_${providerId}`;
+      const existing = await prisma.systemSetting.findFirst({
+        where: { companyId: request.companyId, key: settingKey },
+      });
+
+      if (existing) {
+        await prisma.systemSetting.update({
+          where: { id: existing.id },
+          data: { value: encryptedKey },
+        });
+      } else {
+        await prisma.systemSetting.create({
+          data: {
+            companyId: request.companyId,
+            key: settingKey,
+            value: encryptedKey,
+            valueType: 'STRING',
+            category: 'GENERAL',
+          },
+        });
+      }
+
+      return sendSuccess(reply, { providerId, status: 'configured' });
+    },
+  );
+
+  /** DELETE /ai/admin/providers/:providerId/key — remove API key */
+  fastify.delete<{ Params: { providerId: string } }>(
+    '/providers/:providerId/key',
+    { preHandler: [adminGuard] },
+    async (request, reply) => {
+      const { providerId } = request.params;
+      const settingKey = `ai_provider_key_${providerId}`;
+
+      await prisma.systemSetting.deleteMany({
+        where: { companyId: request.companyId, key: settingKey },
+      });
+
+      return sendSuccess(reply, { providerId, status: 'removed' });
     },
   );
 }
