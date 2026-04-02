@@ -125,13 +125,24 @@ export function useAiChat(): UseAiChatReturn {
           break;
         }
         case 'action_proposal': {
+          // Server sends 'action' field; map to 'actionProposal' for ChatMessage
+          const proposal = (data as any).action ?? data.actionProposal;
           const msg: ChatMessage = {
             id: data.messageId ?? crypto.randomUUID(),
             sessionId: data.sessionId ?? store.activeConversationId ?? '',
             role: 'assistant',
             content: data.content ?? '',
             timestamp: new Date().toISOString(),
-            actionProposal: data.actionProposal,
+            actionProposal: proposal
+              ? {
+                  id: proposal.id,
+                  type: proposal.type,
+                  description: proposal.description,
+                  entityType: proposal.entityType,
+                  previewData: proposal.previewData,
+                  confidence: proposal.confidence,
+                }
+              : undefined,
           };
           store.addMessage(msg);
           break;
