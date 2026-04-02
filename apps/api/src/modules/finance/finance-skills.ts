@@ -636,7 +636,9 @@ export function registerFinanceActionHandlers(
   logger: Logger,
 ): void {
   actionExecutor.registerHandler('CREATE_JOURNAL', createJournalActionHandler(eventBus));
+  actionExecutor.registerHandler('FINANCE_CREATE_JOURNAL', createJournalActionHandler(eventBus));
   actionExecutor.registerHandler('CREATE_BUDGET', createBudgetActionHandler);
+  actionExecutor.registerHandler('FINANCE_CREATE_BUDGET', createBudgetActionHandler);
 
   logger.info({ handlerCount: 2, module: 'finance' }, 'Finance module action handlers registered');
 }
