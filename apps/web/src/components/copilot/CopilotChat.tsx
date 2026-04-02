@@ -20,7 +20,6 @@ import { EntityChip } from '@/features/ai/entity-mentions/entity-chip';
 
 import { useI18n } from '@nexa/i18n';
 
-import { useAiChat } from '@/hooks/use-ai-chat';
 import { DataCard } from './DataCard';
 
 // ── Entity route map ─────────────────────────────────────────────────────────
@@ -322,12 +321,17 @@ function EmptyState() {
  * inline action buttons, record link chips, data cards, and action proposal
  * cards (BR-COM-013). Auto-scrolls to the latest message.
  */
-export function CopilotChat() {
+export function CopilotChat({
+  confirmAction,
+  rejectAction,
+}: {
+  confirmAction: (actionId: string) => void;
+  rejectAction: (actionId: string) => void;
+}) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const messages = useCopilotStore((s) => s.messages);
   const user = useAuthStore((s) => s.user);
-  const { confirmAction, rejectAction } = useAiChat();
 
   const bottomRef = useRef<HTMLDivElement>(null);
 

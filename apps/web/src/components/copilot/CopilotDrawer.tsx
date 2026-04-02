@@ -8,6 +8,8 @@ import { useCopilotStore } from '@/stores/copilot-store';
 
 import { useI18n } from '@nexa/i18n';
 
+import { useAiChat } from '@/hooks/use-ai-chat';
+
 import { ChatHistory } from './ChatHistory';
 import { CopilotChat } from './CopilotChat';
 import { CopilotInput } from './CopilotInput';
@@ -41,6 +43,9 @@ export function CopilotDrawer() {
   const closeDrawer = useCopilotStore((s) => s.closeDrawer);
   const setMinimised = useCopilotStore((s) => s.setMinimised);
 
+  // Single shared useAiChat instance — passed to children to avoid multiple socket connections
+  const { sendMessage, confirmAction, rejectAction, isConnected } = useAiChat();
+
   const drawerRef = useRef<HTMLDivElement>(null);
 
   // Close drawer on Escape key — but only if no other overlay (popover,
@@ -49,11 +54,7 @@ export function CopilotDrawer() {
   // so we check both to avoid closing the drawer as a side effect.
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (
-        e.key === 'Escape' &&
-        isDrawerOpen &&
-        !e.defaultPrevented
-      ) {
+      if (e.key === 'Escape' && isDrawerOpen && !e.defaultPrevented) {
         // Also skip if focus is inside a Radix popover / command palette
         const active = document.activeElement;
         if (active?.closest('[data-radix-popper-content-wrapper]')) return;
@@ -106,20 +107,20 @@ export function CopilotDrawer() {
     return () => document.removeEventListener('keydown', handleTabTrap);
   }, [isMobile, isDrawerOpen]);
 
-  // Shared drawer content sections
+  // Shared drawer content sections — all children share the single useAiChat instance
   const drawerContent = (
     <>
       {/* Chat History */}
       <ChatHistory />
 
       {/* Conversation area */}
-      <CopilotChat />
+      <CopilotChat confirmAction={confirmAction} rejectAction={rejectAction} />
 
       {/* Quick Prompts */}
       <QuickPrompts />
 
       {/* Input */}
-      <CopilotInput />
+      <CopilotInput sendMessage={sendMessage} isConnected={isConnected} />
     </>
   );
 
@@ -130,11 +131,7 @@ export function CopilotDrawer() {
     return (
       <>
         {/* Semi-transparent backdrop (spec Task 3.5: bg-black/50) */}
-        <div
-          className="fixed inset-0 z-40 bg-black/50"
-          onClick={closeDrawer}
-          aria-hidden="true"
-        />
+        <div className="fixed inset-0 z-40 bg-black/50" onClick={closeDrawer} aria-hidden="true" />
 
         {/* Full-screen drawer panel */}
         <div
@@ -151,9 +148,7 @@ export function CopilotDrawer() {
           <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
             <div className="flex items-center gap-2">
               <Sparkles className="size-4 text-primary" />
-              <span className="text-sm font-semibold">
-                {t('copilot.title')}
-              </span>
+              <span className="text-sm font-semibold">{t('copilot.title')}</span>
             </div>
             <div className="flex items-center gap-1">
               <Button
@@ -209,9 +204,7 @@ export function CopilotDrawer() {
           <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
             <div className="flex items-center gap-2">
               <Sparkles className="size-4 text-primary" />
-              <span className="text-sm font-semibold">
-                {t('copilot.title')}
-              </span>
+              <span className="text-sm font-semibold">{t('copilot.title')}</span>
             </div>
             <Button
               variant="ghost"

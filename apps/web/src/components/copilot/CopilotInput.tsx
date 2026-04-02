@@ -3,7 +3,6 @@ import { Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { useCopilotStore } from '@/stores/copilot-store';
-import { useAiChat } from '@/hooks/use-ai-chat';
 import { EntityMentionInput } from '@/features/ai/entity-mentions/entity-mention-input';
 import type { EntityMention } from '@/features/ai/entity-mentions/types';
 
@@ -22,11 +21,19 @@ import { useI18n } from '@nexa/i18n';
  * sent over the wire via useAiChat.sendMessage. Otherwise falls back to the
  * store-level placeholder. (ISSUE #6 fix)
  */
-export function CopilotInput() {
+export function CopilotInput({
+  sendMessage,
+  isConnected,
+}: {
+  sendMessage: (
+    content: string,
+    mentions?: import('@/features/ai/entity-mentions/types').EntityMention[],
+  ) => void;
+  isConnected: boolean;
+}) {
   const { t } = useI18n();
   const submitUserMessage = useCopilotStore((s) => s.submitUserMessage);
   const isStreaming = useCopilotStore((s) => s.isStreaming);
-  const { sendMessage, isConnected } = useAiChat();
 
   const [isDragOver, setIsDragOver] = useState(false);
 

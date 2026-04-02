@@ -16,6 +16,17 @@ vi.mock('sonner', () => ({
 
 import { toast } from 'sonner';
 
+// Mock useAiChat to prevent WebSocket creation in tests
+vi.mock('@/hooks/use-ai-chat', () => ({
+  useAiChat: () => ({
+    sendMessage: vi.fn(),
+    confirmAction: vi.fn(),
+    rejectAction: vi.fn(),
+    connectionStatus: 'disconnected' as const,
+    isConnected: false,
+  }),
+}));
+
 import { CopilotInput } from './CopilotInput';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -59,7 +70,7 @@ describe('CopilotInput', () => {
   });
 
   it('renders textarea with correct placeholder', () => {
-    renderWithProviders(<CopilotInput />);
+    renderWithProviders(<CopilotInput sendMessage={vi.fn()} isConnected={true} />);
 
     const textarea = screen.getByRole('textbox', {
       name: 'copilot.inputAriaLabel',
@@ -69,7 +80,7 @@ describe('CopilotInput', () => {
 
   it('Enter key submits message (calls addMessage)', async () => {
     const user = userEvent.setup();
-    renderWithProviders(<CopilotInput />);
+    renderWithProviders(<CopilotInput sendMessage={vi.fn()} isConnected={true} />);
 
     const textarea = screen.getByRole('textbox', {
       name: 'copilot.inputAriaLabel',
@@ -93,7 +104,7 @@ describe('CopilotInput', () => {
 
   it('Shift+Enter does not submit (inserts new line)', async () => {
     const user = userEvent.setup();
-    renderWithProviders(<CopilotInput />);
+    renderWithProviders(<CopilotInput sendMessage={vi.fn()} isConnected={true} />);
 
     const textarea = screen.getByRole('textbox', {
       name: 'copilot.inputAriaLabel',
@@ -108,7 +119,7 @@ describe('CopilotInput', () => {
   });
 
   it('submit button disabled when input is empty', () => {
-    renderWithProviders(<CopilotInput />);
+    renderWithProviders(<CopilotInput sendMessage={vi.fn()} isConnected={true} />);
 
     const sendBtn = screen.getByRole('button', { name: 'copilot.send' });
     expect(sendBtn).toBeDisabled();
@@ -116,7 +127,7 @@ describe('CopilotInput', () => {
 
   it('submit button disabled when isStreaming', () => {
     useCopilotStore.setState({ isStreaming: true });
-    renderWithProviders(<CopilotInput />);
+    renderWithProviders(<CopilotInput sendMessage={vi.fn()} isConnected={true} />);
 
     const sendBtn = screen.getByRole('button', { name: 'copilot.send' });
     expect(sendBtn).toBeDisabled();
@@ -125,7 +136,7 @@ describe('CopilotInput', () => {
   it('submit button enabled when input has text and not streaming', async () => {
     const user = userEvent.setup();
     useCopilotStore.setState({ isStreaming: false });
-    renderWithProviders(<CopilotInput />);
+    renderWithProviders(<CopilotInput sendMessage={vi.fn()} isConnected={true} />);
 
     const textarea = screen.getByRole('textbox', {
       name: 'copilot.inputAriaLabel',
@@ -137,7 +148,7 @@ describe('CopilotInput', () => {
   });
 
   it('file drag shows drop zone overlay', () => {
-    renderWithProviders(<CopilotInput />);
+    renderWithProviders(<CopilotInput sendMessage={vi.fn()} isConnected={true} />);
 
     // The drop zone is the outermost div wrapping the textarea
     const textarea = screen.getByRole('textbox', {
@@ -151,7 +162,7 @@ describe('CopilotInput', () => {
   });
 
   it('file drop shows toast message', () => {
-    renderWithProviders(<CopilotInput />);
+    renderWithProviders(<CopilotInput sendMessage={vi.fn()} isConnected={true} />);
 
     const textarea = screen.getByRole('textbox', {
       name: 'copilot.inputAriaLabel',
@@ -168,7 +179,7 @@ describe('CopilotInput', () => {
   it('clicking submit button sends message', async () => {
     const user = userEvent.setup();
 
-    renderWithProviders(<CopilotInput />);
+    renderWithProviders(<CopilotInput sendMessage={vi.fn()} isConnected={true} />);
 
     const textarea = screen.getByRole('textbox', {
       name: 'copilot.inputAriaLabel',

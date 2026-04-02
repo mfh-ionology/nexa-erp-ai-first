@@ -17,8 +17,23 @@ const mockNavigate = vi.fn();
 
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
-  Link: ({ to, children, ...props }: { to: string; children: React.ReactNode; [k: string]: unknown }) => (
-    <a href={to} onClick={(e: React.MouseEvent) => { e.preventDefault(); mockNavigate({ to }); }} {...props}>
+  Link: ({
+    to,
+    children,
+    ...props
+  }: {
+    to: string;
+    children: React.ReactNode;
+    [k: string]: unknown;
+  }) => (
+    <a
+      href={to}
+      onClick={(e: React.MouseEvent) => {
+        e.preventDefault();
+        mockNavigate({ to });
+      }}
+      {...props}
+    >
       {children}
     </a>
   ),
@@ -33,7 +48,18 @@ vi.mock('sonner', () => ({
   },
 }));
 
-import { toast } from 'sonner';
+// Mock useAiChat to prevent WebSocket creation in tests
+const mockConfirmAction = vi.fn();
+const mockRejectAction = vi.fn();
+vi.mock('@/hooks/use-ai-chat', () => ({
+  useAiChat: () => ({
+    sendMessage: vi.fn(),
+    confirmAction: mockConfirmAction,
+    rejectAction: mockRejectAction,
+    connectionStatus: 'disconnected' as const,
+    isConnected: false,
+  }),
+}));
 
 import { CopilotChat } from './CopilotChat';
 
@@ -87,7 +113,7 @@ describe('CopilotChat', () => {
       useCopilotStore.setState({
         messages: [makeMessage({ role: 'user', content: 'My question' })],
       });
-      render(<CopilotChat />);
+      render(<CopilotChat confirmAction={vi.fn()} rejectAction={vi.fn()} />);
 
       const messageText = screen.getByText('My question');
       // The bubble parent should have bg-primary class
@@ -104,7 +130,7 @@ describe('CopilotChat', () => {
           }),
         ],
       });
-      render(<CopilotChat />);
+      render(<CopilotChat confirmAction={vi.fn()} rejectAction={vi.fn()} />);
 
       const messageText = screen.getByText('AI reply');
       const bubble = messageText.closest('[class*="bg-muted"]');
@@ -121,7 +147,7 @@ describe('CopilotChat', () => {
           }),
         ],
       });
-      render(<CopilotChat />);
+      render(<CopilotChat confirmAction={vi.fn()} rejectAction={vi.fn()} />);
 
       // Streaming indicator has sr-only text for accessibility
       expect(screen.getByText('copilot.streaming')).toBeInTheDocument();
@@ -129,7 +155,7 @@ describe('CopilotChat', () => {
 
     it('empty state shows welcome message', () => {
       useCopilotStore.setState({ messages: [] });
-      render(<CopilotChat />);
+      render(<CopilotChat confirmAction={vi.fn()} rejectAction={vi.fn()} />);
 
       expect(screen.getByText('copilot.emptyState')).toBeInTheDocument();
     });
@@ -153,14 +179,10 @@ describe('CopilotChat', () => {
           }),
         ],
       });
-      render(<CopilotChat />);
+      render(<CopilotChat confirmAction={vi.fn()} rejectAction={vi.fn()} />);
 
-      expect(
-        screen.getByText('copilot.actionProposal.title'),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByText('Create Invoice for Acme Ltd'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('copilot.actionProposal.title')).toBeInTheDocument();
+      expect(screen.getByText('Create Invoice for Acme Ltd')).toBeInTheDocument();
     });
 
     it('approve and reject buttons are present', () => {
@@ -180,17 +202,13 @@ describe('CopilotChat', () => {
           }),
         ],
       });
-      render(<CopilotChat />);
+      render(<CopilotChat confirmAction={vi.fn()} rejectAction={vi.fn()} />);
 
-      expect(
-        screen.getByText('copilot.actionProposal.approve'),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByText('copilot.actionProposal.reject'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('copilot.actionProposal.approve')).toBeInTheDocument();
+      expect(screen.getByText('copilot.actionProposal.reject')).toBeInTheDocument();
     });
 
-    it('clicking approve button shows placeholder toast (MVP)', async () => {
+    it('clicking approve button calls confirmAction with proposal id', async () => {
       const user = userEvent.setup();
       useCopilotStore.setState({
         messages: [
@@ -208,17 +226,15 @@ describe('CopilotChat', () => {
           }),
         ],
       });
-      render(<CopilotChat />);
+      render(<CopilotChat confirmAction={vi.fn()} rejectAction={vi.fn()} />);
 
       const approveBtn = screen.getByText('copilot.actionProposal.approve');
       await user.click(approveBtn);
 
-      expect(toast.info).toHaveBeenCalledWith(
-        'copilot.actionProposal.notConnected',
-      );
+      expect(mockConfirmAction).toHaveBeenCalledWith('ap-1');
     });
 
-    it('clicking reject button shows placeholder toast (MVP)', async () => {
+    it('clicking reject button calls rejectAction with proposal id', async () => {
       const user = userEvent.setup();
       useCopilotStore.setState({
         messages: [
@@ -236,14 +252,12 @@ describe('CopilotChat', () => {
           }),
         ],
       });
-      render(<CopilotChat />);
+      render(<CopilotChat confirmAction={vi.fn()} rejectAction={vi.fn()} />);
 
       const rejectBtn = screen.getByText('copilot.actionProposal.reject');
       await user.click(rejectBtn);
 
-      expect(toast.info).toHaveBeenCalledWith(
-        'copilot.actionProposal.notConnected',
-      );
+      expect(mockRejectAction).toHaveBeenCalledWith('ap-1');
     });
   });
 
@@ -264,7 +278,7 @@ describe('CopilotChat', () => {
           }),
         ],
       });
-      render(<CopilotChat />);
+      render(<CopilotChat confirmAction={vi.fn()} rejectAction={vi.fn()} />);
 
       expect(screen.getByText('INV-000042')).toBeInTheDocument();
     });
@@ -286,7 +300,7 @@ describe('CopilotChat', () => {
           }),
         ],
       });
-      render(<CopilotChat />);
+      render(<CopilotChat confirmAction={vi.fn()} rejectAction={vi.fn()} />);
 
       const chip = screen.getByText('INV-000042');
       await user.click(chip);
@@ -302,7 +316,7 @@ describe('CopilotChat', () => {
       useCopilotStore.setState({
         messages: [makeMessage()],
       });
-      render(<CopilotChat />);
+      render(<CopilotChat confirmAction={vi.fn()} rejectAction={vi.fn()} />);
 
       const container = screen.getByText('Hello').closest('[aria-live]');
       expect(container).toHaveAttribute('aria-live', 'polite');
