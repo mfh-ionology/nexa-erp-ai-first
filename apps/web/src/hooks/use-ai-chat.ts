@@ -31,11 +31,21 @@ export interface AiChatServerMessage {
   messageId?: string;
   sessionId?: string;
   content?: string;
+  /** Server sends 'action' for action_proposal messages (matches server AiChatServerMessage) */
+  action?: {
+    id: string;
+    type: string;
+    description: string;
+    entityType: string;
+    previewData: Record<string, unknown>;
+    confidence: number;
+  };
+  /** @deprecated Use 'action' — kept for backwards compat */
   actionProposal?: ChatMessage['actionProposal'];
   recordLinks?: ChatMessage['recordLinks'];
   dataCards?: ChatMessage['dataCards'];
   error?: string;
-  /** Route path for navigate messages (e.g. '/finance/reports/profit-and-loss?fiscalYear=2025&autoRun=true') */
+  /** Route path for navigate messages */
   route?: string;
 }
 
@@ -126,12 +136,15 @@ export function useAiChat(): UseAiChatReturn {
         }
         case 'action_proposal': {
           // Server sends 'action' field; map to 'actionProposal' for ChatMessage
-          const proposal = (data as any).action ?? data.actionProposal;
+          const proposal = data.action ?? data.actionProposal;
+          if (import.meta.env.DEV) {
+            console.log('[ai-chat] action_proposal:', proposal);
+          }
           const msg: ChatMessage = {
             id: data.messageId ?? crypto.randomUUID(),
             sessionId: data.sessionId ?? store.activeConversationId ?? '',
             role: 'assistant',
-            content: data.content ?? '',
+            content: proposal?.description ?? data.content ?? 'Action proposed',
             timestamp: new Date().toISOString(),
             actionProposal: proposal
               ? {
