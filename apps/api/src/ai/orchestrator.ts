@@ -21,6 +21,7 @@ import type { PatternDetectionService } from './pattern-detection.service.js';
 import type { MemoryParserService } from './memory-parser.service.js';
 import type { MemoryCitationService } from './memory-citation.service.js';
 import type { QueryExecutor } from './query-executor.js';
+import type { ToolRegistry } from '@nexa/ai-tools';
 import type {
   PreCompactionService,
   AiMessage as PreCompactionMessage,
@@ -76,6 +77,9 @@ export class AiOrchestrator {
   /** QueryExecutor for executing READ tool calls in the streaming tool loop (nullable for graceful degradation) */
   private queryExecutor: QueryExecutor | null = null;
 
+  /** ToolRegistry for resolving all available tools as gateway Tool[] (nullable for graceful degradation) */
+  private toolRegistry: ToolRegistry | null = null;
+
   constructor(
     private aiGateway: AiGateway,
     private promptManager: PromptManager,
@@ -129,6 +133,24 @@ export class AiOrchestrator {
   /** Set the QueryExecutor instance (called during plugin initialization) */
   setQueryExecutor(executor: QueryExecutor): void {
     this.queryExecutor = executor;
+  }
+
+  /** Set the ToolRegistry instance for resolving all available tools (called during plugin initialization) */
+  setToolRegistry(registry: ToolRegistry): void {
+    this.toolRegistry = registry;
+  }
+
+  /**
+   * Get all registered tools as AI Gateway Tool[] for inclusion in LLM requests.
+   * Always includes MCP global tools + module-specific tools.
+   */
+  private getAllGatewayTools(): Tool[] {
+    if (!this.toolRegistry) return [];
+    return this.toolRegistry.getDefinitions().map((t) => ({
+      name: t.name,
+      description: t.description,
+      inputSchema: t.inputSchema as unknown as Record<string, unknown>,
+    }));
   }
 
   /**
@@ -289,9 +311,14 @@ export class AiOrchestrator {
         conversationHistory,
       );
 
-      // Override tools with dynamic skill-specific tools when available
+      // Set tools: prefer dynamic skill-specific tools, fall back to all registered tools
       if (dynamicTools && dynamicTools.length > 0) {
         gatewayRequest.tools = dynamicTools;
+      } else {
+        const allTools = this.getAllGatewayTools();
+        if (allTools.length > 0) {
+          gatewayRequest.tools = allTools;
+        }
       }
 
       // 6. Call AI Gateway
@@ -632,9 +659,15 @@ export class AiOrchestrator {
       );
       gatewayRequest.stream = true;
 
-      // Override tools with dynamic skill-specific tools when available
+      // Set tools: prefer dynamic skill-specific tools, fall back to all registered tools
       if (dynamicStreamTools && dynamicStreamTools.length > 0) {
         gatewayRequest.tools = dynamicStreamTools;
+      } else {
+        // No skill activated — use all registered tools (MCP + finance + views)
+        const allTools = this.getAllGatewayTools();
+        if (allTools.length > 0) {
+          gatewayRequest.tools = allTools;
+        }
       }
 
       // 6. Stream from AI Gateway, accumulating content and tool calls for persistence

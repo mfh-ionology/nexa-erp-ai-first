@@ -734,6 +734,10 @@ const aiPluginFn = async (fastify: FastifyInstance): Promise<void> => {
     if (queryExecutor) {
       orchestrator.setQueryExecutor(queryExecutor);
     }
+    // Wire ToolRegistry so orchestrator always has tools available for the LLM
+    if (toolRegistry) {
+      orchestrator.setToolRegistry(toolRegistry);
+    }
 
     // Wire MemoryInjectionService into orchestrator for user context assembly (E5b-1)
     orchestrator.setMemoryInjection(memoryInjectionService);
