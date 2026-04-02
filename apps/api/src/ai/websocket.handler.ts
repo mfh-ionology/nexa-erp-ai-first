@@ -601,6 +601,7 @@ export class AiWebSocketHandler {
           userId: authData.userId,
           companyId: authData.companyId,
           tenantId: authData.tenantId,
+          userRole: authData.userRole,
           currentPage: msg.currentPage,
           currentEntityType: msg.currentEntityType,
           currentEntityId: msg.currentEntityId,

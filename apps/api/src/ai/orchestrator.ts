@@ -3,7 +3,13 @@ import type { PrismaClient } from '@nexa/db';
 import type { Logger } from 'pino';
 import type Redis from 'ioredis';
 import type { AiGateway } from '@nexa/ai-gateway';
-import type { AiGatewayRequest, Message, Tool } from '@nexa/ai-gateway';
+import type {
+  AiGatewayRequest,
+  Message,
+  Tool,
+  ToolUseBlock,
+  ToolResultBlock,
+} from '@nexa/ai-gateway';
 import { AiQuotaExceededError, ProviderUnavailableError, ProviderError } from '@nexa/ai-gateway';
 import type { EventBus } from '../core/events/event-bus.js';
 import type { PromptManager } from './prompt-manager.js';
@@ -31,6 +37,7 @@ import type {
   EntityMentionRef,
 } from './ai.types.js';
 import { AiAgentNotFoundError } from './ai.errors.js';
+import { buildPageListContext } from './mcp/page-registry.js';
 
 /** Default number of conversation history messages to load */
 const DEFAULT_HISTORY_LIMIT = 50;
@@ -260,6 +267,9 @@ export class AiOrchestrator {
       // 3d. Entity mention processing (E5b-7 Task 10.1)
       // Append structured entity references to the user prompt so the AI sees exact IDs
       resolved.userPrompt = this.formatEntityMentions(resolved.userPrompt, request.entityMentions);
+
+      // 3e. Inject available pages context so the LLM knows what it can navigate to
+      resolved.systemPrompt += '\n\n' + buildPageListContext();
 
       // 4. Load conversation history (verify tenant + user ownership)
       const conversationHistory = request.conversationId
@@ -600,6 +610,9 @@ export class AiOrchestrator {
       // Append structured entity references to the user prompt so the AI sees exact IDs
       resolved.userPrompt = this.formatEntityMentions(resolved.userPrompt, request.entityMentions);
 
+      // 3e. Inject available pages context so the LLM knows what it can navigate to
+      resolved.systemPrompt += '\n\n' + buildPageListContext();
+
       // 4. Load conversation history (verify tenant + user ownership)
       const conversationHistory = request.conversationId
         ? await this.loadConversationHistory(
@@ -688,19 +701,100 @@ export class AiOrchestrator {
         }
       }
 
-      // Task 6 — tool execution loop will use this.queryExecutor here
-      // (field set via setQueryExecutor; used below once Task 6 is wired)
-      if (lastToolCall && this.queryExecutor) {
-        // Placeholder: Task 6 will execute the tool call via queryExecutor
-        // and loop back to the AI with tool results
-      }
+      // ── Tool Execution Loop ──────────────────────────────────────────────
+      // When the LLM requests a tool call (finishReason === 'tool_use'),
+      // execute it and feed the result back for a final text response.
+      if (
+        finishReason === 'tool_use' &&
+        lastToolCall?.id &&
+        lastToolCall?.name &&
+        this.queryExecutor
+      ) {
+        const toolInput =
+          typeof lastToolCall.input === 'object' && lastToolCall.input !== null
+            ? (lastToolCall.input as Record<string, unknown>)
+            : {};
 
-      // Detect _navigateTo in last tool call input (query tools embed navigation hints)
-      if (lastToolCall?.input && typeof lastToolCall.input === 'object') {
-        const input = lastToolCall.input as Record<string, unknown>;
-        if (typeof input._navigateTo === 'string') {
-          pendingNavigation = input._navigateTo;
+        this.logger.info(
+          {
+            toolName: lastToolCall.name,
+            toolId: lastToolCall.id,
+            inputKeys: Object.keys(toolInput),
+          },
+          'Executing tool call from LLM',
+        );
+
+        // Execute the tool via QueryExecutor
+        const toolResult = await this.queryExecutor.execute({
+          toolName: lastToolCall.name,
+          companyId: request.context.companyId,
+          userId: request.context.userId,
+          userRole: request.context.userRole ?? 'VIEWER',
+          input: toolInput,
+        });
+
+        // Check for navigation intent in tool result
+        if (toolResult.success && toolResult.data && typeof toolResult.data === 'object') {
+          const resultData = toolResult.data as Record<string, unknown>;
+          if (typeof resultData._navigateTo === 'string') {
+            pendingNavigation = resultData._navigateTo;
+          }
         }
+
+        // Build tool result content for the second LLM call
+        const toolResultContent = toolResult.success
+          ? JSON.stringify(toolResult.data)
+          : JSON.stringify({ error: toolResult.error?.message ?? 'Tool execution failed' });
+
+        // Build messages for the follow-up LLM call:
+        // [original messages..., assistant(tool_use), user(tool_result)]
+        const followUpMessages: Message[] = [
+          ...gatewayRequest.messages,
+          {
+            role: 'assistant' as const,
+            content: [
+              {
+                type: 'tool_use' as const,
+                id: lastToolCall.id,
+                name: lastToolCall.name,
+                input: toolInput,
+              } satisfies ToolUseBlock,
+            ],
+          },
+          {
+            role: 'user' as const,
+            content: [
+              {
+                type: 'tool_result' as const,
+                toolUseId: lastToolCall.id,
+                content: toolResultContent,
+                isError: !toolResult.success,
+              } satisfies ToolResultBlock,
+            ],
+          },
+        ];
+
+        const followUpRequest: AiGatewayRequest = {
+          ...gatewayRequest,
+          messages: followUpMessages,
+          stream: true,
+        };
+
+        // Stream the second LLM response (final text answer)
+        for await (const chunk of this.aiGateway.stream(followUpRequest)) {
+          if (chunk.type === 'content_delta') {
+            accumulatedContent += chunk.content ?? '';
+            yield { type: 'content_delta', content: chunk.content };
+          } else if (chunk.type === 'usage' && chunk.usage) {
+            promptTokens += chunk.usage.promptTokens ?? 0;
+            completionTokens += chunk.usage.completionTokens ?? 0;
+          } else if (chunk.type === 'done') {
+            finishReason = chunk.finishReason ?? 'stop';
+          }
+        }
+
+        // Clear lastToolCall so we don't re-process it as an action proposal below
+        lastToolCall = undefined;
       }
 
       // Yield done with accumulated usage (stream_end)
