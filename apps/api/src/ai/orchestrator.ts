@@ -702,13 +702,16 @@ export class AiOrchestrator {
       }
 
       // ── Tool Execution Loop ──────────────────────────────────────────────
-      // When the LLM requests a tool call (finishReason === 'tool_use'),
+      // When the LLM requests a query tool call (finishReason === 'tool_use'),
       // execute it and feed the result back for a final text response.
+      // Action tools (finance_create_journal, etc.) skip this and go through
+      // the action_proposal flow below.
       if (
         finishReason === 'tool_use' &&
         lastToolCall?.id &&
         lastToolCall?.name &&
-        this.queryExecutor
+        this.queryExecutor &&
+        this.queryExecutor.hasHandler(lastToolCall.name)
       ) {
         const toolInput =
           typeof lastToolCall.input === 'object' && lastToolCall.input !== null
