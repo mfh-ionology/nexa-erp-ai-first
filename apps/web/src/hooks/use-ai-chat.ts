@@ -98,6 +98,11 @@ export function useAiChat(): UseAiChatReturn {
     (data: AiChatServerMessage) => {
       const store = useCopilotStore.getState();
 
+      // Sync activeConversationId from server (auto-created sessions)
+      if (data.sessionId && !store.activeConversationId) {
+        store.setActiveConversation(data.sessionId);
+      }
+
       switch (data.type) {
         case 'stream_chunk': {
           if (data.messageId && data.content) {
@@ -137,11 +142,13 @@ export function useAiChat(): UseAiChatReturn {
         case 'action_proposal': {
           // Server sends 'action' field; map to 'actionProposal' for ChatMessage
           const proposal = data.action ?? data.actionProposal;
-          if (import.meta.env.DEV) {
-            console.log('[ai-chat] action_proposal:', proposal);
-          }
+          // Use a fresh ID if the server reused the streaming message's messageId
+          const proposalId =
+            data.messageId && store.messages.some((m) => m.id === data.messageId)
+              ? crypto.randomUUID()
+              : (data.messageId ?? crypto.randomUUID());
           const msg: ChatMessage = {
-            id: data.messageId ?? crypto.randomUUID(),
+            id: proposalId,
             sessionId: data.sessionId ?? store.activeConversationId ?? '',
             role: 'assistant',
             content: proposal?.description ?? data.content ?? 'Action proposed',
@@ -185,11 +192,16 @@ export function useAiChat(): UseAiChatReturn {
           break;
         }
         case 'error': {
+          // data.error is an object {code, message, messageKey} — extract the string message
+          const errorContent =
+            typeof data.error === 'string'
+              ? data.error
+              : ((data.error as any)?.message ?? data.content ?? 'An error occurred');
           const msg: ChatMessage = {
             id: data.messageId ?? crypto.randomUUID(),
             sessionId: data.sessionId ?? store.activeConversationId ?? '',
             role: 'assistant',
-            content: data.error ?? data.content ?? '',
+            content: errorContent,
             timestamp: new Date().toISOString(),
           };
           store.addMessage(msg);
@@ -199,6 +211,7 @@ export function useAiChat(): UseAiChatReturn {
         case 'navigate': {
           if (data.route) {
             setTimeout(() => {
+              if (unmountedRef.current) return;
               void router.navigate({ to: data.route! });
             }, 100);
           }
