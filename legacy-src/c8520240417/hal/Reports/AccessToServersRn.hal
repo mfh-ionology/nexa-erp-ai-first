@@ -1,0 +1,179 @@
+external function Boolean FindTheUser(var record UserVc);
+
+global
+function string 255 SatServerURL(row SatServersBlock SSrw,var string key)
+begin
+  string 255 res;
+  //record CloudSettingsBlock CSb;
+  //BlockLoad(CSb);
+
+  if (SSrw.SSLPort>0) then begin
+    res = SSrw.HostName & ":" & SSrw.SSLPort;
+  end;
+
+  SatServerURL = res;
+end;
+
+// ## check all companies
+function Boolean UserIsOpen(string usercode)
+begin
+  Boolean res;
+  record UserVc USr;
+
+  USr.Code = usercode;
+
+  if (FindTheUser(USr)) then begin
+    if (USr.Closed==0) then begin
+      res = true;
+    end;
+  end;
+
+  UserIsOpen = res;
+end;
+
+global
+procedure GetListOfActiveUsers(string usercode,var array string actusers,var array string actnames)
+begin
+  record UserVc USr;
+  record GlobalUserVc GUSr;
+  vector string 255 vusers;
+  LongInt i,rwcnt,oldcomp;
+  record CompaniesBlock Compb;
+  row CompaniesBlock Compbrw;
+
+  ClearArray(actusers);
+  ClearArray(actnames);
+
+  GUSr.Code = usercode;
+  while (LoopMain(GUSr,0,true)) begin
+    if (usercode<>"" and GUSr.Code<>usercode) then begin
+      goto LGetListOfActiveUsers_AfterGlobal;
+    end;
+    if (GUSr.Closed==0) then begin
+      vusers[GUSr.Code] = GUSr.Name;
+    end;
+  end;
+
+LGetListOfActiveUsers_AfterGlobal:;
+  oldcomp = CurrentCompany;
+  BlockLoad(Compb);
+  rwcnt = MatRowCnt(Compb);
+  for (i = 0; i<rwcnt; i = i + 1) begin
+    MatRowGet(Compb,i,Compbrw);
+    if (Compbrw.ActiveStatus==kCompanyActive) then begin
+      SetServerCompany(i + 1);
+
+      ResetLoop(USr);
+      USr.Code = usercode;
+      while (LoopMain(USr,0,true)) begin
+        if (usercode<>"" and USr.Code<>usercode) then begin
+          goto LGetListOfActiveUsers_AfterLocal;
+        end;
+        if (USr.Closed==0) then begin
+          if (vusers[USr.Code]=="") then begin
+            GUSr.Code = USr.Code;
+            if (ReadFirstMain(GUSr,1,true)==false) then begin
+              vusers[USr.Code] = USr.Name;
+            end;
+          end;
+        end;
+      end;
+    end;
+LGetListOfActiveUsers_AfterLocal:;
+  end;
+
+  ResetCompany(oldcomp);
+
+  GetVectorTags(vusers,actusers);
+  for (i = 0; i<actusers.length; i = i + 1) begin
+    actnames[i] = vusers[actusers[i]];
+  end;
+
+  return;
+end;
+
+global
+procedure AccessToServersRn(record RcVc RepSpec)
+begin
+  record SatServersBlock SSb;
+  row SatServersBlock SSrw;
+  Integer i,j,rwcnt;
+  string 255 url,key;
+  LongInt stat;
+  array string 255 actusers,actnames;
+  Boolean firstuser;
+
+  StartReportJob(USetStr(31230)); //
+  EndHeader;
+
+  StartFormat(15);
+  OutString(0,0,USetStr(31231),false);
+  OutString(160,0,USetStr(31232),false);
+  OutString(200,0,USetStr(31233),false);
+  OutString(380,0,USetStr(31234),false);
+  EndFormat;
+
+  Gray_Divider(0,1);
+
+  if (RepSpec.flags[0]==1 and UserIsOpen(RepSpec.f1)) then begin
+    StartFormat(15);
+    OutString(0,0,"User is open on mother system",false);
+    EndFormat;
+    StartFormat(15);
+    OutString(0,0,"report does nothing with this specification",false);
+    EndFormat;
+    goto LAccessToServersRn_Out;
+  end;
+
+  BlockLoad(SSb);
+  rwcnt = MatRowCnt(SSb);
+  for (i = 0; i<rwcnt; i = i + 1) begin
+    MatRowGet(SSb,i,SSrw);
+    StartFormat(15);
+    OutString(0,0,SSrw.Name,false);
+    url = SatServerURL(SSrw,key);
+    if (url<>"") then begin
+    
+      if (SSrw.CloudKey<>"") then begin
+        stat = CallService2(url,SSrw.CloudKey).GetListOfActiveUsers(RepSpec.f1,actusers,actnames);
+      end else begin
+        stat = CallService(url).GetListOfActiveUsers(RepSpec.f1,actusers,actnames);
+      end;
+      
+      if (stat<>kCallServiceOK) then begin
+        OutString(160,0,"Connection failed",false);
+        goto LAccessToServersRn_NextServer;
+      end;
+
+      if (actusers.length==0 and RepSpec.f1<>"") then begin
+        OutString(160,0,RepSpec.f1,false);
+        OutString(200,0,"",false); // local db name
+        OutString(380,0,"no",false);
+        goto LAccessToServersRn_NextServer;
+      end;
+
+      firstuser = true;
+      for (j = 0; j<actusers.length; j = j + 1) begin
+        if (RepSpec.flags[0]==0 or UserIsOpen(actusers[j])==false) then begin
+          if (firstuser==false) then begin
+            EndFormat;
+            StartFormat(15);
+          end;
+          firstuser = false;
+
+          OutString(160,0,actusers[j],false);
+          OutString(200,0,actnames[j],false);
+          OutString(380,0,"yes",false);
+        end;
+      end;
+    end else begin
+      OutString(160,0,"Server not configured properly",false);
+    end;
+LAccessToServersRn_NextServer:;
+    EndFormat;
+  end;
+
+LAccessToServersRn_Out:;
+  EndJob;
+end;
+

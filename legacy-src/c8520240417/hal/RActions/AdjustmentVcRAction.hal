@@ -1,0 +1,50 @@
+external function Boolean IsLastDayOfMonth(date);
+
+global
+function LongInt AdjustmentVcRecordCheck(record AdjustmentVc Adjustmentr,record AdjustmentVc Adjustment2r,LongInt stat,LongInt check)
+begin
+  LongInt res;
+  
+  res = 0;
+  if (blank(Adjustmentr.Code)) then begin
+    RecordCheckError(1058,"",-1,"Code");      
+    res = -1;
+    goto LAdjustmentVcRecordCheck;
+  end;
+  if (blankdate(Adjustmentr.StartDate)) then begin
+    RecordCheckError(1058,"",-1,"StartDate");
+    res = -1;
+    goto LAdjustmentVcRecordCheck;
+  end;
+  if (blankdate(Adjustmentr.EndDate)) then begin
+    RecordCheckError(1058,"",-1,"EndDate");
+    res = -1;
+    goto LAdjustmentVcRecordCheck;
+  end;
+  if (nonblankdate(Adjustmentr.EndDate)) then begin
+    if (Adjustmentr.StartDate>Adjustmentr.EndDate) then begin
+      RecordCheckError(20851,"",-1,"EndDate");
+      res = -1;
+      goto LAdjustmentVcRecordCheck;
+    end;
+  end;
+  if (GetDay(Adjustmentr.StartDate)!=1) then begin
+    RecordCheckError(1163,"",-1,"StartDate");
+    res = -1;
+    goto LAdjustmentVcRecordCheck;
+  end;
+  if (IsLastDayOfMonth(Adjustmentr.EndDate)==false)  then begin
+    RecordCheckError(1163,"",-1,"EndDate");
+    res = -1;
+    goto LAdjustmentVcRecordCheck;
+  end;
+  if (GetMonth(Adjustmentr.StartDate))!=(GetMonth(Adjustmentr.EndDate)) then begin
+     RecordCheckError(42791,"",-1,"EndDate");
+    res = -1;
+    goto LAdjustmentVcRecordCheck;
+  end;
+
+LAdjustmentVcRecordCheck:;  
+  AdjustmentVcRecordCheck = res;
+  return;
+end;

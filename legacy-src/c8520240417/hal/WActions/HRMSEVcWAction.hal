@@ -1,0 +1,205 @@
+external function string 255 GetJobDescFromTitle(string);
+
+
+function Boolean HRMSEDClassEmployeeEFAfter(Integer wn,Boolean changedf)
+begin
+  Boolean res,found,testf;
+  record HRMSEVc HRMSEr;
+  record HRMCOChangeVc HRMCOChanger;
+  record HRMCOVc HRMCOr;
+  record CUVc CUr;
+  string 255 tstr;
+
+  res = true;
+  testf = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,HRMSEr);
+    CUr.Code = HRMSEr.Employee;
+    ReadFirstMain(CUr,1,true);
+    HRMSEr.Name = CUr.Name;
+    found = true;
+    HRMCOChanger.Employee = HRMSEr.Employee;
+    while (LoopKey("Employee",HRMCOChanger,1,found)) begin
+      if (HRMCOChanger.Employee!=HRMSEr.Employee) then begin found = false; end;
+      if (found) then begin
+        if (nonblank(HRMCOChanger.JobTitle)) then begin
+          testf = false;
+          tstr = HRMCOChanger.JobTitle;
+        end;
+      end;
+    end;
+    if (testf) then begin
+      HRMCOr.Employee = HRMSEr.Employee;
+      ReadFirstKey("Employee",HRMCOr,1,true);
+      if (nonblank(HRMCOr.JobTitle)) then begin
+        tstr = HRMCOr.JobTitle;
+      end else begin
+        tstr = CUr.JobDesc;
+      end;
+      HRMSEr.TerminatedFlag = HRMCOr.TerminatedFlag;
+    end;
+    HRMSEr.JobTitle = tstr;
+    HRMSEr.JobTitleDesc = GetJobDescFromTitle(HRMSEr.JobTitle);
+    PutWindowRecord(wn,HRMSEr);
+  end;
+  HRMSEDClassEmployeeEFAfter = res;
+  return;
+end;
+
+function Boolean HRMSEDClassJobTitleEFAfter(Integer wn,Boolean changedf)
+begin
+  Boolean res,foundf,testf;
+  record JobTitleVc JobTitler;
+  record HRMSEVc HRMSEr;
+
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,HRMSEr);
+    HRMSEr.JobTitleDesc = GetJobDescFromTitle(HRMSEr.JobTitle);
+    PutWindowRecord(wn,HRMSEr);
+  end;
+  HRMSEDClassJobTitleEFAfter = res;
+  return;
+end;
+
+function Boolean HRMSEDClassSuperiorEFAfter(Integer wn,Boolean changedf)
+begin
+  Boolean res;
+  record HRMSEVc HRMSEr;
+  record UserVc Userr;
+
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,HRMSEr);
+    Userr.Code = HRMSEr.Superior;
+    ReadFIrstMain(Userr,1,true);
+    HRMSEr.SuperiorName = Userr.Name;
+    PutWindowRecord(wn,HRMSEr);
+  end;
+  HRMSEDClassSuperiorEFAfter = res;
+  return;
+end;
+
+function Boolean HRMSEDClassSkillEFAfter(Integer wn,Integer rownr,Boolean changedf)
+begin
+  Boolean res;
+  record HRMSEVc HRMSEr;
+  row HRMSEVc HRMSErw;
+  record HRMSkillVc HRMSr;
+
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,HRMSEr);
+    MatRowGet(HRMSEr,rownr,HRMSErw);
+    HRMSr.Code = HRMSErw.Skill;
+    ReadFIrstMain(HRMSr,1,true);
+    HRMSErw.SkillComment = HRMSr.Name;
+    MatRowPut(HRMSEr,rownr,HRMSErw);
+    PutWindowRecord(wn,HRMSEr);
+  end;
+  HRMSEDClassSkillEFAfter = res;
+  return;
+end;
+
+function Boolean HRMSEDClassRatingEFAfter(Integer wn,Integer rownr,Boolean changedf)
+begin
+  Boolean res;
+  record HRMSEVc HRMSEr;
+  row HRMSEVc HRMSErw;
+  record HRMRatingVc HRMRr;
+
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,HRMSEr);
+    MatRowGet(HRMSEr,rownr,HRMSErw);
+    HRMRr.Code = HRMSErw.Rating;
+    ReadFIrstMain(HRMRr,1,true);
+    HRMSErw.RatingComment = HRMRr.Name;
+    MatRowPut(HRMSEr,rownr,HRMSErw);
+    PutWindowRecord(wn,HRMSEr);
+  end;
+  HRMSEDClassRatingEFAfter = res;
+  return;
+end;
+
+
+global
+function Boolean HRMSEDClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
+begin
+  Boolean res;
+
+  switch (fieldname) begin
+    case "Employee": res = HRMSEDClassEmployeeEFAfter(wn,changed!=0);
+    case "JobTitle": res = HRMSEDClassJobTitleEFAfter(wn,changed!=0);
+    case "Superior": res = HRMSEDClassSuperiorEFAfter(wn,changed!=0);
+    case "Skill": res = HRMSEDClassSkillEFAfter(wn,rownr,changed!=0);
+    case "Rating": res = HRMSEDClassRatingEFAfter(wn,rownr,changed!=0);
+  end;
+  HRMSEDClassAfterEditField = res;
+  return;
+end;
+
+global
+function Boolean HRMSEDClassActiveEditField(Integer wn,string fieldname,Integer fn,Integer wnst,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record HRMSEVc HRMSEr;
+  
+  res = true;
+  switch (wnst) begin
+    case Rs_update:
+      GetPrevWindowRecord(wn,HRMSEr);
+      if (HRMSEr.OKFlag!=0) then begin
+        res = false;
+      end;
+  end;
+  HRMSEDClassActiveEditField = res;
+  return;
+end;
+
+global
+function Boolean HRMSEDClassOKFlagButtonAction(Integer wn,Integer value)
+begin
+  Boolean res;
+  record HRMSEVc HRMSEr;
+  Integer err;
+ 
+  res = true;
+  switch (WindowState(wn)) begin
+    case Rs_normal:
+      GetWindowRecord(wn,HRMSEr);
+      if (HRMSEr.OKFlag!=0) then begin
+        res = UserCanAction("UnOKAll",false);
+      end;
+    case Rs_update:
+      GetPrevWindowRecord(wn,HRMSEr);
+      if (HRMSEr.OKFlag!=0) then begin
+        res = false;
+      end;
+  end;  
+  HRMSEDClassOKFlagButtonAction = res;
+  return;
+end;
+
+global
+function Boolean HRMSELClassOnOpenWindow(Integer wn)
+begin
+  SetWindowSubset(wn,"0");
+
+  HRMSELClassOnOpenWindow = false;
+end;
+
+global
+procedure ToggleTerminated()
+begin
+  Integer wn;
+
+  wn = CurWindow;
+  if (wn>0) then begin
+    if (GetWindowSubset(wn)=="0") then begin
+      SetWindowSubset(wn,"1");
+    end else begin
+      SetWindowSubset(wn,"0");
+    end;
+  end;
+end;

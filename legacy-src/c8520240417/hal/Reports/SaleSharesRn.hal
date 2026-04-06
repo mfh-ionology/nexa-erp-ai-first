@@ -1,0 +1,52 @@
+external function val GetOfficialShareValue(Date);
+
+global
+procedure SaleSharesRn(Record RcVc RepSpec)
+begin
+  Integer oldcomp;
+  record SharesSellVc SSr;
+  row SharesSellVc SSrw;
+  Boolean foundf;
+  Integer i,rwcnt;
+
+
+  oldcomp = CurrentCompany;
+  if (SetCompany(1,false)) then begin end;
+  StartReportJob(USetStr(40706));
+  EndHeader;
+  SetRepCol(2,70);
+  SetRepCol(3,220);
+  SetRepCol(4,400);
+  StartFormat(15);
+  OutString(0,0,USetStr(14713),false);
+  OutString(2,0,USetStr(14714),false);
+  OutString(3,0,USetStr(14715),false);
+  OutString(4,0,USetStr(14703),true);
+  OutString(1,0,USetStr(14702),true);
+  EndFormat;
+  Gray_Divider(0,1);
+  foundf = true;
+  while (LoopMain(SSr,1,foundf)) begin
+    rwcnt = MatRowCnt(SSr);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(SSr,i,SSrw);
+      if (SSrw.SellAgreement==1) then begin
+        if (SSrw.SellForPrice==0) then begin
+          SSrw.SellForPrice = GetOfficialShareValue(CurrentDate);
+        end;
+      end;
+      if (SSrw.SellAgreement==0) then begin
+        StartFormat(15);
+        OutString(0,"DblSharesSellVc",SSr.UserCode,false);
+        OutString(2,0,SSr.Name,false);
+        OutString(3,0,SSrw.Comment,false);
+        OutString(4,0,ValToString(SSrw.Qty,M40Val,"","",0),true);
+        OutString(1,0,SSrw.SellForPrice,true);
+        EndFormat;
+      end;
+    end;
+  end;
+  EndJob;
+  ResetCompany(oldcomp);
+  return;
+end;

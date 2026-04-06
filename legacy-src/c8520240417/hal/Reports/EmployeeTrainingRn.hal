@@ -1,0 +1,220 @@
+external procedure HT2Per(Date, Date , var string);
+external function Boolean FindStringInString(string,string);
+
+procedure PrintTrainingPlanParticipantName(string code,boolean trainerf)
+begin
+  record CUVc CUr;
+
+  CUr.Code = code;
+  ReadFirstMain(CUr,1,true);
+  StartFormat(15);
+  if (trainerf) then begin
+     OutString(0,0,USetStr(43102),false);
+  end else begin
+    OutString(0,0,USetStr(43103),false);
+  end;
+  OutString(2,0,code,false);
+  OutString(3,0,CUr.Name,false);
+  EndFormat;
+      
+  return;
+end;
+
+global
+procedure SortArrayByTrainingStart(var array record TrainingPlanVc aTrainingPlanr)
+begin
+  Integer i;
+  Boolean swapped;
+  string 255 taBranch,taInvoices;
+  record TrainingPlanVc TrainingPlanr,TrainingPlan2r,tTrainingPlanr;
+
+  swapped = true;
+   while (swapped) begin
+    swapped = false;
+    for (i=0;i<aTrainingPlanr.length-1;i=i+1) begin
+      TrainingPlanr = aTrainingPlanr[i];
+      TrainingPlan2r = aTrainingPlanr[i+1];
+      if (TrainingPlanr.TrainingDate==TrainingPlan2r.TrainingDate) then begin
+        if (TrainingPlanr.TrainingStart>TrainingPlan2r.TrainingStart) then begin
+            tTrainingPlanr = aTrainingPlanr[i];
+            aTrainingPlanr[i] = aTrainingPlanr[i+1];
+            aTrainingPlanr[i+1] = tTrainingPlanr; 
+            swapped = true;
+        end;
+      end;
+    end;
+  end;
+  return;
+end;
+
+procedure AddToArr(record TrainingPlanVc TrainingPlanr,var array record TrainingPlanVc aTrainingPlanr)
+begin
+  aTrainingPlanr[aTrainingPlanr.length] = TrainingPlanr;
+  return;
+end;
+
+global
+procedure EmployeeTrainingRn(var record RcVc RepSpec)
+begin
+  string 255 tstr,shadower;
+  LongInt pos;
+  Integer rw,keys,i;
+  record TrainingPlanVc TrainingPlanr;
+  record HRMRatingVc HRMRatingr;
+  Boolean testf,foundf;
+  array record TrainingPlanVc aTrainingPlanr;
+
+  StartReportJob(USetStr(43095));
+  rw = 1;
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  if (nonblank(RepSpec.f1)) then begin
+    tstr = USetStr(17901) & ": " & RepSpec.f1;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f2)) then begin
+    tstr = USetStr(43096) & ": " & RepSpec.f2;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f3)) then begin
+    tstr = USetStr(43097) & ": " & RepSpec.f3;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f4)) then begin
+    tstr = USetStr(43102) & ": " & RepSpec.f4;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f5)) then begin
+    tstr = USetStr(43103) & ": " & RepSpec.f5;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  EndHeader;
+
+  SetRepCol(2,70);
+  SetRepCol(3,100);
+  SetRepCol(4,200);
+  SetRepCol(5,250);
+  SetRepCol(6,320);
+  SetRepCol(7,380);
+  SetRepCol(1,450);
+
+  StartFormat(15);
+  OutString(0,0,USetStr(43098),false);
+  OutString(2,0,USetStr(43096),false);   
+  OutString(3,0,USetStr(43106),false);   
+  OutString(5,0,USetStr(43097),false);
+  OutString(6,0,USetStr(43100),false);
+  OutString(7,0,USetStr(43101),false);
+  OutString(1,0,USetStr(43104),true);
+  EndFormat;
+  Black_Divider(0,1);
+
+  foundf = true;
+  TrainingPlanr.TrainingDate = RepSpec.sStartDate;
+  while (LoopKey("TrainingDate",TrainingPlanr,1,foundf)) begin
+    if (DateInRange(TrainingPlanr.TrainingDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin foundf = false; end;
+    if (foundf) then begin
+      testf = foundf;
+      if (nonblank(RepSpec.f1)) then begin
+        if (TrainingPlanr.Employee!=RepSpec.f1) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f2)) then begin
+        if (TrainingPlanr.Topic!=RepSpec.f2) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f3)) then begin
+        if (TrainingPlanr.Status!=RepSpec.f3) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f4)) then begin
+        if (TrainingPlanr.Trainer!=RepSpec.f4) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f5)) then begin 
+        if (FindStringInString(RepSpec.f5,",")) then begin
+          while (GetNextSubString(RepSpec.f5,pos,",",shadower)) begin
+            testf = false; 
+            if (TrainingPlanr.Shadower==shadower) then begin
+              testf = true; 
+              goto LSkip;
+            end;
+            if (TrainingPlanr.Shadower2==shadower) then begin
+              testf = true; 
+              goto LSkip;
+            end;
+            if (TrainingPlanr.Shadower3==shadower) then begin
+              testf = true; 
+              goto LSkip;
+            end;
+          end;
+   LSkip:;
+        end else begin
+          testf = false; 
+          shadower = RepSpec.f5;
+          if (TrainingPlanr.Shadower==shadower) then begin
+            testf = true; 
+          end;
+          if (!testf) then begin
+            if (TrainingPlanr.Shadower2==shadower) then begin
+              testf = true; 
+            end;
+          end;
+          if (!testf) then begin
+            if (TrainingPlanr.Shadower3==shadower) then begin
+              testf = true; 
+            end;
+          end;
+        end; 
+      end;
+      if (testf) then begin
+        AddToArr(TrainingPlanr,aTrainingPlanr);    
+      end;
+    end;
+  end;
+  switch (RepSpec.flags[1]) begin
+    case 0: SortRecordArray(aTrainingPlanr,"TrainingDate"); ;
+            SortArrayByTrainingStart(aTrainingPlanr);
+    case 1: SortRecordArray(aTrainingPlanr,"Topic"); ;
+    case 2: SortRecordArray(aTrainingPlanr,"Status"); ;
+  end;
+ 
+  for (i=0;i<aTrainingPlanr.length;i=i+1) begin
+    TrainingPlanr = aTrainingPlanr[i];
+    StartFormat(15);
+    OutString(0,"DblTrainingPlanVc",TrainingPlanr.SerNr,false);
+    OutString(2,0,TrainingPlanr.Topic,false);      
+    OutString(3,0,TrainingPlanr.Description,false);
+    HRMRatingr.Code = TrainingPlanr.Status;
+    ReadFirstMain(HRMRatingr,1,true);
+    OutString(5,0,HRMRatingr.Name,false);
+    OutDate  (6,0,TrainingPlanr.TrainingDate,false);
+    OutString(7,0,TrainingPlanr.TrainingStart,false);
+    OutString(1,0,TrainingPlanr.TrainingEnd,true);
+    EndFormat;
+    StartFormat(15);
+    EndFormat;
+    StartFormat(15);
+    OutString(0,0,USetStr(43099),false);
+    OutString(2,0,TrainingPlanr.Employee,false); 
+    OutString(3,0,TrainingPlanr.Name,false);
+    EndFormat;
+    PrintTrainingPlanParticipantName(TrainingPlanr.Trainer,true);
+    PrintTrainingPlanParticipantName(TrainingPlanr.Shadower,false);
+    PrintTrainingPlanParticipantName(TrainingPlanr.Shadower2,false);
+    PrintTrainingPlanParticipantName(TrainingPlanr.Shadower3,false);
+    StartFormat(15);
+    EndFormat;
+    StartFormat(15);
+    OutString(0,0,USetStr(43105),false);
+    OutString(2,0,TrainingPlanr.Comment,false);
+    EndFormat;
+    StartFormat(15);
+    EndFormat;
+    Black_Divider(0,1);
+  end;
+  EndJob;
+  return;
+end;

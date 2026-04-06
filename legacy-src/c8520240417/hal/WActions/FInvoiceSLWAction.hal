@@ -1,0 +1,66 @@
+remote procedure GetAPIXCredentials(record FInvoiceSLBlock,Integer,var LongInt,var string);
+remote procedure RegisterAPIXCredentials(record FInvoiceSLBlock,Integer,var LongInt,var string);
+
+global
+procedure GetAPIXCredentialsDsm()
+begin
+  Integer wn;
+  record FInvoiceSLBlock FInvoiceSLb;
+  record EInvoiceBlock EIb;
+  LongInt err;
+  string 255 errmsg;
+
+  BlockLoad(EIb);
+  if (HasLocalization("NOR")) then begin
+    if (EIb.EInvProvider!=0) then begin
+      goto LGetAPIXCredentialsDsm;
+    end;
+  end;
+ 
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,FInvoiceSLb);
+
+  GetAPIXCredentials(FInvoiceSLb,EIb.TestFlag,err,errmsg);
+  if (err!=-1 or nonblank(errmsg)) then begin
+    MessageBox(err,errmsg);
+  end;
+
+  PutWindowRecord(wn,FInvoiceSLb);
+  SetWindowState(wn,Rs_normal);
+
+LGetAPIXCredentialsDsm:;
+  return;
+end;
+
+global
+procedure RegisterAPIXCredentialsDsm()
+begin
+  Integer wn;
+  record FInvoiceSLBlock FInvoiceSLb;
+  record EInvoiceBlock EIb;
+  LongInt err;
+  string 255 errmsg;
+
+  BlockLoad(EIb);
+  if (HasLocalization("NOR")) then begin
+    if (EIb.EInvProvider!=0) then begin
+      goto LRegisterAPIXCredentialsDsm;
+    end;
+  end;
+ 
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,FInvoiceSLb);
+
+  RegisterAPIXCredentials(FInvoiceSLb,EIb.TestFlag,err,errmsg);
+  if (err!=-1 or nonblank(errmsg)) then begin
+    MessageBox(err,errmsg);
+  end;
+
+  PutWindowRecord(wn,FInvoiceSLb);
+  SetWindowState(wn,Rs_normal);
+
+LRegisterAPIXCredentialsDsm:;
+  return;
+end;

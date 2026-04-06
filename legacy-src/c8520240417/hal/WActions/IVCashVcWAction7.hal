@@ -1,0 +1,532 @@
+remote updating function LongInt ProceedNPTSButtonDefineRemote(var record RcVc,var string);
+remote procedure IVCashSumup(var record IVCashVc,Boolean);
+external function Boolean GetPMRow(string,var row PMBlock);
+external procedure IVCashDClass_RefreshStringList(Integer,record IVCashVc);
+external procedure ReverseTransaction(string);
+external updating function Boolean CCPayIVDWithCardData(Integer,string);
+external function Boolean UsePostOKButton();
+external procedure RestAccDClass_RefreshStringList(Integer,record RestAccVc);
+remote procedure RestAccSumup(var record RestAccVc,string);
+
+updating procedure CheckIVForCC(integer wn)
+begin
+  record IVVc IVr;
+  row IVVc IVrw;
+  val CcSumVal;
+  integer i,rwcnt;
+  
+  if (WindowState(wn)!=Rs_normal) then begin
+    if (WindowDoOK(wn,0)==false) then begin goto LCheckIVForCC; end;
+  end;
+  GetWindowRecord(wn,IVr);
+  rwcnt = MatRowCnt(IVr);
+  for (i = rwcnt-1 ; i>=0; i=i-1) begin
+    MatRowGet(IVr,i,IVrw);
+    if (IVrw.stp==kInvoiceRowTypeCreditCardPayment) then begin
+      if (nonblank(IVrw.Sum)) then begin
+        CcSumVal = IVrw.Sum;
+      end;  
+      i = 0;               
+    end;
+  end;
+  
+  if (CcSumVal!=0) then begin 
+    CCPayIVDWithCardData(wn,"");
+  end else begin
+    if (IVr.RetnValue>=0) then begin 
+      IVr.OKFlag = 1;
+      PutWindowRecord(wn,IVr);
+      WindowDoOK(wn,0);    
+    end;
+  end;
+LCheckIVForCC:;    
+end;
+
+global
+updating procedure OpenStdCCWindow(integer wn)
+begin
+
+  if (UsePostOKButton==false or IsStandardProduct==false) then begin 
+    goto LOpenCCWindow;
+  end;
+  if (wn>0) then begin
+    switch (GetWindowClass(wn)) begin
+      case "IVDClass": CheckIVForCC(wn);
+    end;  
+  end;
+LOpenCCWindow:;
+end;
+
+function integer FindIVRowToPay(record IVVc IVr)
+begin
+  integer rwcnt,i,res;
+  row IVVc IVrw;
+  
+  res = -1;
+  rwcnt = MatRowCnt(IVr);
+  for (i = 0; i<rwcnt; i = i + 1) begin
+    MatRowGet(IVr,i,IVrw);
+    if (IVrw.stp==kInvoiceRowTypeCreditCardPayment) then begin
+      res = i;
+      i = rwcnt;
+    end;
+  end;
+  FindIVRowToPay = res;
+end;  
+  
+global
+function integer FindCreditCardRowToPay(integer wn)
+begin
+  integer res;
+  record IVVc IVr;
+  
+  res = -1;
+  if (wn>0) then begin
+    switch (GetWindowClass(wn)) begin
+      case "IVDClass":  GetWindowRecord(wn,IVr); res = FindIVRowToPay(IVr);
+    end;  
+  end;
+  FindCreditCardRowToPay = res;
+end;
+
+global procedure YesCCPayTouchScreenConfirmSignatureTClass()
+begin
+  Integer wn;
+  wn = CurWindow;
+  CloseWindow(wn);
+end;
+
+global procedure NoCCPayTouchScreenConfirmSignatureTClass()
+begin
+  Integer wn;
+  record RcVc RepSpec;
+  wn = CurWindow;
+  GetWindowRecord(wn,RepSpec);
+  ReverseTransaction(RepSpec.AccStr);
+  CloseWindow(wn);
+end;
+
+global
+procedure IVCashDClassTouchScreenCreateGC(Integer wn,string paymode,string label)
+begin
+  Integer nwn;
+  record IVCashVc IVCashr;
+  record GCVc GCr;
+  Boolean testf;
+  
+  GetWindowRecord(wn,IVCashr);
+  testf = true;
+  if (IVCashr.OKFlag!=0) then begin testf = false; end;
+  if (IVCashr.Invalid!=0) then begin testf = false; end;
+  if (testf) then begin
+    RecordNew(GCr);
+    GCr.SerNr = NextSerNr("GCVc",GCr.TransDate,-1,true,"");
+    nwn = OpenWindow("NPTSGCDClass",0,wn,"","",GCr);
+    PutWindowString(nwn,"PayMode",paymode);
+    WindowFieldGoto(nwn,GCr,-1,"Amount",true);
+  end;
+  return;
+end;
+
+global
+updating procedure ProceedNPTSGCDClass()
+begin
+  Integer wn,mwn;
+  record IVCashVc IVCashr;
+  row IVCashVc IVCashrw;
+  record RestAccVc RestAccr;
+  row RestAccVc RestAccrw;
+  record GCVc GCr;
+  Boolean testf;
+  record GCTypeVc GCTr;
+  Integer i,rwcnt;
+  string 255 paymode;
+  record DefCashBlock DCb;
+  row PMBlock PMrw;
+
+  wn = CurWindow;
+  mwn = MotherWindow(wn);
+  if (mwn>0) then begin
+    switch (GetWindowFileName(mwn)) begin
+      case "IVCashVc":
+        GetWindowRecord(mwn,IVCashr);
+        testf = true;
+        if (IVCashr.OKFlag!=0) then begin testf = false; end;
+        if (IVCashr.Invalid!=0) then begin testf = false; end;
+        if (testf) then begin
+          DeselectWindow(wn,true);
+          GetWindowRecord(wn,GCr);
+          if (GCr.Amount<=0) then begin
+            MessageBox(2210,"");
+            WindowFieldGoto(wn,GCr,-1,"Amount",true);
+            goto LProceedNPTSGCDClass;      
+          end;
+          
+          rwcnt = MatRowCnt(IVCashr);
+          for (i=0;i<rwcnt;i=i+1) begin
+            MatRowGet(IVCashr,i,IVCashrw);
+            if (IVCashrw.stp==kInvoiceRowTypeGiftVoucherSold) then begin
+              if (GCr.SerNr==IVCashrw.GCNr) then begin
+                MessageBox(2186,"");
+                CloseWindow(wn);
+                goto LProceedNPTSGCDClass;
+              end;
+            end;
+          end;  
+          paymode = GetWindowString(wn,"PayMode");
+          GCr.OKFlag = 1;
+          PutWindowRecord(wn,GCr);
+          if (WindowDoOK(wn,0)) then begin
+            if (nonblank(GCr.Type)) then begin
+              GCTr.Code = GCr.Type;
+              ReadFirstMain(GCTr,1,true);
+            end;
+            ClearRow(IVCashr,IVCashrw,kInvoiceRowTypeGiftVoucherSold);
+            IVCashrw.stp = kInvoiceRowTypeGiftVoucherSold;
+            IVCashrw.GCNr = GCr.SerNr;
+            IVCashrw.PayMode = paymode;
+            IVCashrw.Spec = GCr.Comment;
+            IVCashrw.Sum = GCr.Amount;
+            if (nonblank(GCTr.PayMode)) then begin
+              IVCashrw.PayMode = GCTr.PayMode;
+            end;
+            if (blank(IVCashrw.PayMode)) then begin
+              BlockLoad(DCb);
+              IVCashrw.PayMode = DCb.DefGCSPayMode;
+            end;
+            GetPMRow(IVCashrw.PayMode,PMrw);
+            IVCashrw.SalesAcc = PMrw.AccNr;
+            MatRowPut(IVCashr,rwcnt,IVCashrw);
+            IVCashSumup(IVCashr,true);
+            PutWindowRecord(mwn,IVCashr);
+            GetWindowRecord(mwn,IVCashr);
+            IVCashDClass_RefreshStringList(mwn,IVCashr);
+            WindowFieldGoto(mwn,IVCashr,-1,"ivcashcommand",true);
+          end;
+        end;
+      case "RestAccVc": 
+        GetWindowRecord(mwn,RestAccr);
+        testf = true;
+        if (RestAccr.Closed!=0) then begin testf = false; end;
+        if (RestAccr.Invalid!=0) then begin testf = false; end;
+        if (testf) then begin
+          DeselectWindow(wn,true);
+          GetWindowRecord(wn,GCr);
+          if (GCr.Amount<=0) then begin
+            MessageBox(2210,"");
+            WindowFieldGoto(wn,GCr,-1,"Amount",true);
+            goto LProceedNPTSGCDClass;      
+          end;
+          rwcnt = MatRowCnt(RestAccr);
+          for (i=0;i<rwcnt;i=i+1) begin
+            MatRowGet(RestAccr,i,RestAccrw);
+            if (RestAccrw.stp==kInvoiceRowTypeGiftVoucherSold) then begin
+              if (GCr.SerNr==RestAccrw.GCNr) then begin
+                MessageBox(2186,"");
+                CloseWindow(wn);
+                goto LProceedNPTSGCDClass;
+              end;
+            end;
+          end;  
+          paymode = GetWindowString(wn,"PayMode");
+          GCr.OKFlag = 1;
+          PutWindowRecord(wn,GCr);
+          if (WindowDoOK(wn,0)) then begin
+            if (nonblank(GCr.Type)) then begin
+              GCTr.Code = GCr.Type;
+              ReadFirstMain(GCTr,1,true);
+            end;
+            ClearRow(RestAccr,RestAccrw,kInvoiceRowTypeGiftVoucherSold);
+            RestAccrw.stp = kInvoiceRowTypeGiftVoucherSold;
+            RestAccrw.GCNr = GCr.SerNr;
+            RestAccrw.PayMode = paymode;
+            RestAccrw.Spec = GCr.Comment;
+            RestAccrw.Sum = GCr.Amount;
+            if (nonblank(GCTr.PayMode)) then begin
+              RestAccrw.PayMode = GCTr.PayMode;
+            end;
+            if (blank(RestAccrw.PayMode)) then begin
+              BlockLoad(DCb);
+              RestAccrw.PayMode = DCb.DefGCSPayMode;
+            end;
+            MatRowPut(RestAccr,rwcnt,RestAccrw);
+            RestAccSumup(RestAccr,true);
+            PutWindowRecord(mwn,RestAccr);
+            GetWindowRecord(mwn,RestAccr);
+            RestAccDClass_RefreshStringList(mwn,RestAccr);
+            WindowFieldGoto(mwn,RestAccr,-1,"touchscreenitem",true);
+          end;
+        end;
+    end;  
+  end;
+LProceedNPTSGCDClass:;
+  return;
+end;
+
+global
+procedure NPTSIVCashEditModeDsm()
+begin
+  Integer wn,nwn;
+  record RcVc RepSpec;
+  
+  wn = CurWindow;
+
+  if (GetWindowString(wn,"NPTSIVCashEditMode")=="false" or blank(GetWindowString(wn,"NPTSIVCashEditMode"))) then begin
+    PutWindowString(wn,"NPTSIVCashEditMode","true");
+  end else begin
+    PutWindowString(wn,"NPTSIVCashEditMode","false");
+  end;
+  ClearPOSPageCache;
+  ReRunWindowDef(wn);
+  if (CountRecords("POSButtonGroupsVc")>0 and GetWindowString(wn,"NPTSIVCashEditMode")=="true") then begin
+    nwn = OpenWindow("NPTSSelectPOSButtonGroupWClass",0,wn,"","",RepSpec);
+    DeselectWindow(nwn,false);
+  end;
+  return;
+end;
+
+global
+procedure NPTSIVCashPhoneDsm()
+begin
+  Integer wn,nwn;
+  record RcVc RepSpec;
+  record RcVc newRepSpec;
+  record IVCashVc IVCashr;
+  
+  wn = CurWindow;
+  GetWindowRecord(wn,IVCashr);
+  nwn = OpenWindow("BusinessPhoneWClass",0,wn,"","",RepSpec);
+  return;
+end;
+
+global
+procedure NPTSSelectPOSButtonGroupWClassSelect()
+begin
+  Integer wn,mwn;
+
+  wn = CurWindow;
+  mwn = MotherWindow(wn);
+  CloseWindow(wn);
+  if (mwn>0) then begin
+    PutWindowString(mwn,"NPTSIVCashEditModePOSButtonGroup",PushButtonTag);
+    ClearPOSPageCache;
+    ReRunWindowDef(mwn);
+  end;
+  return;
+end;
+
+procedure DClassTouchScreenDefineButton()
+begin
+  Integer wn,nwn;
+  string 255 tstr,tstr2;
+  record RcVc RepSpec;
+  LongInt pos;
+  record POSButtonsVc POSBr;
+  row POSButtonsVc POSBrw;
+  
+  wn = CurWindow;
+  tstr = PushButtonTag;
+  nwn = OpenWindow("NPTSButtonDefineWClass",0,wn,"","",RepSpec);
+  DeselectWindow(nwn,false);
+  RepSpec.f20 = GetWindowClass(wn);
+  pos = 0;
+  GetNextSubstring(tstr,pos,",",tstr2);
+  RepSpec.f19 = tstr2;
+  GetNextSubstring(tstr,pos,",",tstr2);
+  RepSpec.long1 = StringToLongInt(tstr2);
+  GetNextSubstring(tstr,pos,",",tstr2);
+  RepSpec.long2 = StringToLongInt(tstr2);
+  tstr2 = GetWindowString(wn,"NPTSIVCashEditModePOSButtonGroup");
+  if (nonblank(tstr2)) then begin
+    RepSpec.f19 = tstr2;
+  end;
+
+  POSBr.WindowClass = RepSpec.f20;
+  POSBr.POSButtonGroupCode = RepSpec.f19;
+  POSBr.Page = RepSpec.long1;
+  if (ReadFirstMain(POSBr,3,true)) then begin
+    if (RepSpec.long2<MatRowCnt(POSBr)) then begin
+      MatRowGet(POSBr,RepSpec.long2,POSBrw);
+      RepSpec.OKmode = POSBrw.ButtonType;
+      RepSpec.f2 = POSBrw.Code;
+      RepSpec.f3 = POSBrw.Label;
+      RepSpec.UsedOnly = POSBrw.colnr;
+      RepSpec.AccSpec = POSBrw.KeyCode;
+      RepSpec.Notation = POSBrw.Modifiers;
+      RepSpec.f4 = POSBrw.PrintGroupCode;
+      RepSpec.f5 = POSBrw.POSButtonPictureCode;
+      RepSpec.f6 = POSBrw.POSDisplayPageAfter;
+      RepSpec.flags[0] = POSBrw.AutoFinish;
+    end;
+  end;
+
+  PutWindowRecord(nwn,RepSpec);
+  return;
+end;
+
+global
+procedure IVCashDClassTouchScreenDefineButton()
+begin
+  DClassTouchScreenDefineButton;
+  return;
+end;
+
+global
+procedure RestAccDClassTouchScreenDefineButton()
+begin
+  DClassTouchScreenDefineButton;
+  return;
+end;
+
+global
+updating procedure ProceedNPTSButtonDefineWClass()
+begin
+  Integer wn,mwn;
+  record RcVc RepSpec;
+  string 255 fieldname;
+  LongInt err;
+
+  wn = CurWindow;
+  mwn = MotherWindow(wn);
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+  err = ProceedNPTSButtonDefineRemote(RepSpec,fieldname);
+  if (err>0) then begin
+    WindowFieldGoto(wn,RepSpec,-1,"f2",true);
+    MessageBox(err,"");
+  end else begin
+    CloseWindow(wn);
+  end;
+  if (mwn>0) then begin
+    ClearPOSPageCache;
+    RerunWindowDef(mwn);
+  end;
+  return;
+end;
+
+global
+procedure NPTSButtonDefineWClassSort()
+begin
+  Integer wn;
+  record IVCashVc IVCr;
+  record RestAccVc RAr;
+  
+  wn = CurWindow;
+  switch (GetWindowFileName(wn)) begin    
+    case "IVCashVc":
+      GetWindowRecord(wn,IVCr);
+    case "RestAccVc":
+      GetWindowRecord(wn,RAr);
+  end;
+//Trace("","GetWindowString " & GetWindowString(wn,"Sorting"));  
+  return;
+end;
+
+global
+function Boolean NPTSButtonDefineWClassOnOpenWindow(Integer wn)
+begin
+  record RcVc RepSpec;
+  
+  GetWindowRecord(wn,RepSpec);
+  WindowFieldGoto(wn,RepSpec,-1,"OKmode",false);
+  NPTSButtonDefineWClassOnOpenWindow = true;
+  return;
+end;
+
+global
+function string 40 NPTSButtonDefineWClassSpecPasteName(Integer wn,string defpsname)
+begin
+  string 255 psname;
+  record RcVc RepSpec;
+  
+  GetWindowRecord(wn,RepSpec);
+  psname = defpsname;
+  switch (WindowActiveField(wn)) begin
+    case "f2":
+      switch (RepSpec.OKmode) begin
+        case kPOSButtonTypeGotoPage: psname = "NPTSPagesSClass";
+        case kPOSButtonTypeIncludePage: psname = "NPTSPagesSClass";
+        case kPOSButtonTypeItem: psname = "ForSaleINSClass";
+        case kPOSButtonTypeItemGroup: psname = "ITSClass";
+        case kPOSButtonTypeModifier: psname = "ModifiersSClass";
+        case kPOSButtonTypeSpecialMenu: psname = "SpecialMenuFunSClass";
+        case kPOSButtonTypeReturnInvoiceNo: psname = "StandProblemsSClass";
+        case kPOSButtonTypeReturnReason: psname = "StandProblemsSClass";
+        case kPOSButtonTypeVoidRow: psname = "StandProblemsSClass";
+        case kPOSButtonTypeCashPayment: psname = "RestPMSClass";
+        case kPOSButtonTypeFullPayment: psname = "RestPMSClass";
+        case kPOSButtonTypeLoyaltyPointsPayment: psname = "RestPMSClass";
+        case kPOSButtonTypeCreditCardPayment: psname = "RestPMSClass";
+        case kPOSButtonTypeCreditCardSlipPayment: psname = "RestPMSClass";
+        case kPOSButtonTypeCreditCardPaymentReversal: psname = "RestPMSClass";
+        case kPOSButtonTypeCreditCardTerminalReports: psname = "RestPMSClass";
+        case kPOSButtonTypeDebitCardPayment: psname = "RestPMSClass";
+        case kPOSButtonTypeGiftVoucherPayment: psname = "RestPMSClass";
+        case kPOSButtonTypeGiftVoucherSales: psname = "RestPMSClass";
+        case kPOSButtonTypeChequePayment: psname = "RestPMSClass";
+        case kPOSButtonTypeMPesaPayment: psname = "RestPMSClass";
+        case kPOSButtonTypeSwishPayment:psname = "RestPMSClass";
+        case kPOSButtonTypeSetTable:psname = "TablesViewsSClass";
+      end;
+  end;
+  NPTSButtonDefineWClassSpecPasteName = psname;
+  return;
+end;
+
+global
+function Boolean NPTSButtonDefineWClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record RcVc RepSpec;
+  record INVc INr;
+  record ITVc ITr;
+  record ModifiersVc Modifr;
+  record POSButtonsVc POSBr;
+  
+  switch (fieldname) begin
+    case "OKmode": 
+      if (changed!=0) then begin
+        GetWindowRecord(wn,RepSpec);
+        RepSpec.f3 = StringFromSet(431,RepSpec.OKmode);
+        PutWindowRecord(wn,RepSpec);
+      end;
+    case "f2": 
+      if (changed!=0) then begin
+        GetWindowRecord(wn,RepSpec);
+        switch (RepSpec.OKmode) begin
+          case kPOSButtonTypeItem:
+            INr.Code = RepSpec.f2;
+            if (ReadFirstMain(INr,1,true)) then begin
+              RepSpec.f3 = INr.Name;
+            end;
+          case kPOSButtonTypeItemGroup:
+            ITr.Code = RepSpec.f2;
+            if (ReadFirstMain(ITr,1,true)) then begin
+              RepSpec.f3 = ITr.Comment;
+            end;
+          case kPOSButtonTypeModifier:
+            Modifr.Code = RepSpec.f2;
+            if (ReadFirstMain(Modifr,1,true)) then begin
+              RepSpec.f3 = Modifr.Comment;
+            end;
+          case kPOSButtonTypeGotoPage:
+            POSBr.WindowClass = RepSpec.f20;
+            POSBr.POSButtonGroupCode = RepSpec.f19;
+            POSBr.Page = StringToLongInt(RepSpec.f2);
+            if (ReadFirstMain(POSBr,3,true)) then begin
+              RepSpec.f3 = POSBr.Comment;
+            end;
+          case kPOSButtonTypeIncludePage:
+            POSBr.WindowClass = RepSpec.f20;
+            POSBr.POSButtonGroupCode = RepSpec.f19;
+            POSBr.Page = StringToLongInt(RepSpec.f2);
+            if (ReadFirstMain(POSBr,3,true)) then begin
+              RepSpec.f3 = POSBr.Comment;
+            end;
+        end;
+        PutWindowRecord(wn,RepSpec);
+      end;
+  end;
+  NPTSButtonDefineWClassAfterEditField = res;
+  return;
+end;

@@ -1,0 +1,165 @@
+external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+external function Integer GetIntYc(Date);
+external updating procedure SaveTrans(record TRVc);
+external function string 255 StripCharacter(string,string);
+external procedure TRSumup(var record TRVc,var val);
+external function val StringToValue(string,Integer,string,string);
+
+procedure AddToTransArray(Date TransDate,string comment,string AccNumber,string RowComment,val DebVal,val CredVal,var Array record TRVc aTRr,var Integer arrcnt)
+BEGIN
+  record TRVc TRr;
+  row TRVc TRrw;
+  Integer i,rwcnt;
+
+  for (i=0;i<=arrcnt;i=i+1) begin
+    TRr = aTRr[i];
+    if (TransDate==TRr.TransDate) then begin
+      rwcnt = MatRowCnt(TRr);
+      ClearRow(TRr,TRrw,1);
+      TRrw.AccNumber = AccNumber;
+      TRrw.Comment = RowComment;
+      TRrw.DebVal = DebVal;
+      TRrw.CredVal = CredVal;
+      MatRowPut(TRr,rwcnt,TRrw);
+      aTRr[i] = TRr;
+      goto LAddToTransArray;
+    end;
+  end;
+  
+  RecordNew(TRr);
+  aTRr[arrcnt] = TRr;
+  rwcnt = MatRowCnt(TRr);
+  TRr.TransDate = TransDate;
+  TRr.Comment = Comment;
+  ClearRow(TRr,TRrw,1);
+  TRrw.AccNumber = AccNumber;
+  TRrw.Comment = RowComment;
+  TRrw.DebVal = DebVal;
+  TRrw.CredVal = CredVal;
+  MatRowPut(TRr,rwcnt,TRrw);  
+  aTRr[arrcnt] = TRr;
+  arrcnt = arrcnt + 1;
+LAddToTransArray:;
+  return;
+end;
+
+function date ConvertStringDate(string datestr)
+begin
+  Date res;
+  string 255 tstr,tstr2;
+
+  if (len(datestr)==11) then begin
+    tstr2 = Right(datestr,len(datestr)-1);
+  end else begin
+    tstr2 = datestr;
+  end;
+  res.year = StringToInt(Right(tstr2,4));
+  tstr = Left(tstr2,5);
+  res.month = StringToInt(Right(tstr,2));
+  res.day = StringToInt(Left(tstr2,2));
+  
+  ConvertStringDate = res;
+  return;
+end;
+global
+updating procedure PalkkaFiPayrollIn(record RcVc RepSpec)
+begin
+  record TRVc TRr;
+  row TRVc TRrw;
+  Array record TRVc aTRr;
+  Boolean testf;
+  Integer rwcnt,pos,arrcnt,i,vcnt;
+  val t;
+  string 255 instr,trnumber,companyname,transdate,startdate,enddate,account,amount,tstr,linetype; 
+  record SysFormatBlock SFb;
+  record PalkkaFiPayrollBlock PFiPb;
+
+  BlockLoad(SFb);
+  BlockLoad(PFiPb);
+
+  if (blank(PFiPb.WithholdingTax)) or (blank(PFiPb.PensionInsurance)) or (blank(PFiPb.BankAccount)) or 
+     (blank(PFiPb.UnemploymentInsurance)) or (blank(PFiPb.Salary)) then begin 
+     SetEOF; 
+     MessageBox(0,USetStr(43270)); 
+     goto LPalkkaFiPayrollIn; 
+  end;
+  RecordNew(TRr);
+  testf = true;
+  while (testf) begin  
+    instr = ImportField; 
+    if (blank(instr)) then begin goto LPalkkaFiPayrollIn; end;  
+
+    pos = 0;
+    ExtractObjWithSeparator(";",instr,false,pos,linetype);
+    switch (linetype) begin
+      case "T": 
+        ExtractObjWithSeparator(";",instr,false,pos,trnumber);
+        ExtractObjWithSeparator(";",instr,false,pos,companyname);
+        ExtractObjWithSeparator(";",instr,false,pos,transdate);
+        ExtractObjWithSeparator(";",instr,false,pos,tstr);
+        ExtractObjWithSeparator(";",instr,false,pos,startdate);
+        ExtractObjWithSeparator(";",instr,false,pos,enddate);
+        ExtractObjWithSeparator(";",instr,false,pos,tstr);
+        ExtractObjWithSeparator(";",instr,false,pos,tstr);
+        ExtractObjWithSeparator(";",instr,false,pos,tstr);;
+      case "V": 
+        vcnt = vcnt +1;
+        ExtractObjWithSeparator(";",instr,false,pos,account);
+        ExtractObjWithSeparator(";",instr,false,pos,TRrw.Comment);
+        ExtractObjWithSeparator(";",instr,false,pos,amount);
+        ExtractObjWithSeparator(";",instr,false,pos,tstr);
+        ExtractObjWithSeparator(";",instr,false,pos,tstr);
+        ExtractObjWithSeparator(";",instr,false,pos,tstr);
+        ExtractObjWithSeparator(";",instr,false,pos,tstr);
+        ExtractObjWithSeparator(";",instr,false,pos,tstr);
+        ExtractObjWithSeparator(";",instr,false,pos,tstr);
+    end;
+
+    TRr.Comment = trnumber & " " & companyname & " " &  startdate & ":" & enddate;
+    if (blank(RepSpec.d1)) then begin
+      switch (SFb.dateOrder) begin
+        case 0:  TRr.TransDate = ConvertStringDate(transdate);
+        case 1:  TRr.TransDate = StringToDate(transdate);
+        case 2:  TRr.TransDate = ConvertStringDate(transdate);
+      end;
+    end else begin
+      switch (SFb.dateOrder) begin
+        case 0:  TRr.TransDate = ConvertStringDate(RepSpec.d1);
+        case 1:  TRr.TransDate = StringToDate(RepSpec.d1);
+        case 2:  TRr.TransDate = ConvertStringDate(RepSpec.d1);
+      end;
+    end;
+    if (linetype=="V") then begin
+      switch (vcnt) begin
+        case 1 : TRrw.AccNumber = PFiPb.BankAccount;
+        case 2 : TRrw.AccNumber = PFiPb.WithholdingTax;
+        case 3 : TRrw.AccNumber = PFiPb.Salary ;
+        case 4 : TRrw.AccNumber = PFiPb.PensionInsurance;
+        case 5 : TRrw.AccNumber = PFiPb.UnemploymentInsurance;      
+        case 6 : TRrw.AccNumber = PFiPb.Mileage;      
+      end;
+      if (Left(amount,1)=="-") then begin
+        TRrw.CredVal = StringToValue(StripCharacter(amount,"-"),M4Rate,"",",");
+        TRrw.DebVal = blankval;
+      end else begin
+        TRrw.DebVal = StringToValue(amount,M4Rate,"",",");
+        TRrw.CredVal = blankval;
+      end;
+      AddToTransArray(TRr.TransDate,TRr.Comment,TRrw.AccNumber,TRrw.Comment,TRrw.DebVal,TRrw.CredVal,aTRr,arrcnt);
+    end;
+    testf = NextImportLine(false); 
+  end;
+  for (i=0;i<=arrcnt;i=i+1) begin
+    TRr = aTRr[i];
+    TRr.Number = NextSerNr("TRVc",TRr.TransDate,-1,false,"");   
+    if (TRr.Number!=-1) then begin
+      TRr.IntYc = GetIntYc(TRr.TransDate);
+      TRSumup(TRr,t);
+      RecordStore(TRr,true);
+      OpenWindow("TRDClass",1,0,"","",TRr);
+    end;
+  end;
+
+LPalkkaFiPayrollIn:;  
+  return;
+end;

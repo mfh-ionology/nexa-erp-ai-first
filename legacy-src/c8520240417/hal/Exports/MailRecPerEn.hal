@@ -1,0 +1,130 @@
+external procedure OutRegisterTag(string);
+
+global
+procedure MailRecPerEn(record RcVc RepSpec)
+begin
+  record MailVc Mailr;
+  record MailReadVc MRr;
+  record RLinkVc RLr;
+  record Attach2Vc AT2r;
+  LongInt i;
+
+  ExportFormat;
+  ExportString("mailrecovery");
+  NewLine;
+
+  MRr.mailBoxNr = RepSpec.long1;
+  MRr.accode = kMailStatusCreated;
+  MRr.fDate = RepSpec.sStartDate;
+  MRr.fTime = RepSpec.sStartTime;
+
+  LogText(0,"looking for " & MRr.mailBoxNr & " " & MRr.accode & " " & MRr.fDate & " " & MRr.fTime);
+
+  while (LoopKey("mailBoxNr",MRr,4,true)) begin
+    LogText(0,"found " & MRr.mailBoxNr & " " & MRr.accode & " " & MRr.fDate & " " & MRr.fTime);
+
+    if (MRr.mailBoxNr<>RepSpec.long1) then begin goto out; end;
+    if (MRr.accode<>kMailStatusCreated) then begin goto out; end;
+    if (MRr.fDate>RepSpec.sEndDate) then begin goto out; end;
+    if (MRr.fDate==RepSpec.sEndDate and MRr.fTime>RepSpec.sEndTime) then begin goto out; end;
+
+    Mailr.SerNr = MRr.mailSerNr;
+    if (ReadFirstMain(Mailr,1,true)) then begin
+      OutRegisterTag("MailVc");
+      NewLine;
+      ExportRecord(Mailr);
+      NewLine;
+
+      i = 1;
+      while (ReadRecordLink(Mailr,i,AT2r,RLr)) begin
+        i = i + 1;        
+        ReadFirstMain(AT2r,1,true);
+        OutRegisterTag("Attach2Vc");
+        NewLine;
+        ExportRecord(AT2r);
+        NewLine;
+        
+        ExportAttachFileInline(AT2r);
+        OutRegisterTag("RLinkVc");
+        NewLine;
+        ExportRecord(RLr);
+        NewLine;
+
+      end;
+      
+      NewLine;
+    end;
+  end;
+  
+out:;
+  NewLine;
+end;
+
+global
+updating procedure ReadImportTagmailrecovery(string thetag)
+begin
+  string 255 tag;
+  record MailVc Mailr;
+  record MailVc testMailr;
+  record Attach2Vc AT2r;
+  record Attach2Vc testAT2r;
+  record RLinkVc RLr;
+  Boolean skipuntilmail;
+  string 255 oldtyps;
+  
+  while (NextImportLine(true)) begin
+    tag = ImportField;
+    LogText(0,"got tag: " & tag);
+    switch (tag) begin
+      case "mail3":
+        NextImportLine(false);
+        RecordNew(Mailr);
+        ImportOneRecord(Mailr,"mail3");
+        testMailr.UUID = Mailr.UUID;
+        if (ReadFirstKey("UUID",testMailr,0,true)) then begin
+          LogText(0,"UUID already in system, skipping " & Mailr.UUID);
+          skipuntilmail = true;
+        end else begin
+          LogText(0,"UUID did not exist, importing " & Mailr.UUID);
+          skipuntilmail = false;
+          Mailr.SerNr = -1;
+          RecordImportStore(Mailr,false);
+          LogText(0,"stored mail " & Mailr.SerNr);
+        end;
+      case "attach3":
+        NextImportLine(false);
+        RecordNew(AT2r);
+        ImportOneRecord(AT2r,"attach3");
+        if (skipuntilmail==false) then begin
+          testAT2r.UUID = AT2r.UUID;
+          if (ReadFirstKey("UUID",testAT2r,1,true)) then begin
+            AT2r = testAT2r;
+            LogText(0,"found attachment " & AT2r.SerNr);
+          end else begin
+            AT2r.SerNr = NextSerNr("Attach2Vc",CurrentDate,-1,false,"");
+            RecordImportStore(AT2r,false);
+            LogText(0,"stored attachment " & AT2r.SerNr);
+          end;
+        end;
+      case "inline_file":
+        if (skipuntilmail==false) then begin
+          ImportInlineFile;
+        end else begin
+          SkipPastInlineFile;
+        end;
+      case "RLinkVc":
+        NextImportLine(false);
+        RecordNew(RLr);
+        oldtyps = GetImportTyps;
+        SetImportTyps("RLinkVc");
+        ImportOneRecord(RLr,"RLinkVc");
+        SetImportTyps(oldtyps);
+        if (skipuntilmail==false) then begin
+          RLr.FromRecidStr = BuildRecordIdStr(Mailr,0);
+          RLr.ToRecidStr = BuildRecordIdStr(AT2r,0);
+          LogText(0,"linked from mail " & Mailr.SerNr & " to attachment " & AT2r.SerNr);
+          RecordImportStore(RLr,false);
+        end;
+    end;
+  end;
+end;

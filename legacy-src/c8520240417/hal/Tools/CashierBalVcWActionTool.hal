@@ -1,0 +1,77 @@
+global
+procedure CashierBalVc_PastePerson(var record CashierBalVc CashierBalr)
+begin
+  record UserVc USr;
+  string 255 tstr;
+
+  USr.Code = CashierBalr.UserCode;
+  if (ReadFirstMain(USr,1,true)) then begin end;
+  CashierBalr.UserName = USr.Name;
+  CashierBalr.SalesGroup = USr.SalesGroup;
+  return;
+end;
+
+procedure AddDCModesToArray(string mode,Array string amode,var Integer acnt)
+begin
+  Integer i;
+  
+  for (i=0;i<acnt;i=i+1) begin
+    if (mode==amode[i]) then begin
+      goto LAddDCModesToArray;
+    end;
+  end;
+  amode[acnt] = mode;
+  acnt = acnt + 1;
+
+LAddDCModesToArray:;  
+
+  return;
+end;
+
+global
+procedure CashierBalVc_PastePayMode(var record CashierBalVc CashierBalr)
+begin
+  record UserVc USr;
+  string 255 tstr;
+  row CashierBalVc CashierBalrw;
+  record RestPMBlock RestPMB;
+  row RestPMBlock RestPMBrw;
+  Integer rwcnt,i,pmrwcnt,j,acnt;
+  record DefCashBlock DCb;
+  Boolean foundf;
+  array string 255 amodes;
+
+  BlockLoad(RestPMB);
+  pmrwcnt = MatRowCnt(RestPMB);
+  rwcnt = MatRowCnt(CashierBalr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    ClearRow(CashierBalr,CashierBalrw,0);
+    MatRowPut(CashierBalr,i,CashierBalrw);  
+  end;
+  i = 0;
+  foundf = false;
+  for (j=0;j<pmrwcnt;j=j+1) begin
+    MatRowGet(RestPMB,j,RestPMBrw);
+    if (CashierBalr.Drawer==RestPMBrw.Drawers) and (CashierBalr.MachineName==RestPMBrw.MachineName)  then begin
+      CashierBalrw.PMCode = RestPMBrw.PMCode;
+      foundf = true;
+      MatRowPut(CashierBalr,i,CashierBalrw);  
+      i=i+1;
+    end;
+  end;
+  if (pmrwcnt<0) or (!foundf) then begin 
+    BlockLoad(DCb);
+    if (nonblank(DCb.DefCashPayMode)) then begin AddDCModesToArray(DCb.DefCashPayMode,amodes,acnt); end;
+    if (nonblank(DCb.DefCCPayMode)) then begin AddDCModesToArray(DCb.DefCCPayMode,amodes,acnt); end;
+    if (nonblank(DCb.DefGCSPayMode)) then begin AddDCModesToArray(DCb.DefGCSPayMode,amodes,acnt); end;
+    if (nonblank(DCb.DefGCRPayMode)) then begin AddDCModesToArray(DCb.DefGCRPayMode,amodes,acnt); end;
+    if (nonblank(DCb.DefCashPayDeal)) then begin AddDCModesToArray(DCb.DefCashPayDeal,amodes,acnt); end;
+    if (nonblank(DCb.DefRtrnPayMode)) then begin AddDCModesToArray(DCb.DefRtrnPayMode,amodes,acnt); end;
+    if (nonblank(DCb.DefCWPayMode)) then begin AddDCModesToArray(DCb.DefCWPayMode,amodes,acnt); end;
+    for (i=0;i<acnt;i=i+1) begin
+      CashierBalrw.PMCode = amodes[i];
+      MatRowPut(CashierBalr,i,CashierBalrw);  
+    end;
+  end;
+  return;
+end;

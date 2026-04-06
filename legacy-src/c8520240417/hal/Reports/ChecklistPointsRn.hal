@@ -1,0 +1,197 @@
+external procedure HT2Per(Date, Date , var string);
+
+procedure DoRowCheck(record HRMCheckListVc HRMCheckListr,string checkpoint,string status,string responsible)
+begin
+  Integer i,rwcnt;
+  row HRMCheckListVc HRMCheckListrw;
+  Boolean printf,firstf;
+
+  rwcnt = MatRowCnt(HRMCheckListr); 
+  firstf = true;
+  for (i=0;i<rwcnt;i=i+1) begin
+    printf = false;
+    MatRowGet(HRMCheckListr,i,HRMCheckListrw);
+    
+    if (blank(checkpoint)) and (blank(status)) and (blank(responsible)) then begin
+       printf = true; 
+    end;  
+    if (nonblank(checkpoint)) and (nonblank(status)) and (nonblank(responsible)) then begin
+      if (HRMCheckListrw.CheckPoint==checkpoint) and (StringFromSet(734,HRMCheckListrw.Status)==status) and (HRMCheckListrw.Responsible==responsible) then begin
+         printf = true; 
+      end;
+    end;
+    if (nonblank(checkpoint)) and (nonblank(status)) and (blank(responsible)) then begin
+      if (HRMCheckListrw.CheckPoint==checkpoint) then begin 
+        if (StringFromSet(734,HRMCheckListrw.Status)==status) then begin 
+            printf = true;     
+          end;
+      end;
+    end;  
+    if  (nonblank(status)) and (nonblank(responsible)) and (blank(checkpoint)) then begin
+      if (StringFromSet(734,HRMCheckListrw.Status)==status) then begin 
+        if (HRMCheckListrw.Responsible==responsible) then begin 
+          printf = true;     
+        end;
+      end;
+    end;  
+    if (nonblank(checkpoint)) and (nonblank(responsible)) and (blank(status)) then begin
+      if (HRMCheckListrw.CheckPoint==checkpoint) then begin 
+        if (HRMCheckListrw.Responsible==responsible) then begin 
+          printf = true;     
+        end;
+      end;
+    end;  
+    if (nonblank(checkpoint)) and (blank(status)) and (blank(responsible)) then begin
+      if (HRMCheckListrw.CheckPoint==checkpoint) then begin 
+            printf = true;     
+      end;
+    end;
+    if (blank(checkpoint)) and (nonblank(status)) and (blank(responsible)) then begin
+      if (StringFromSet(734,HRMCheckListrw.Status)==status) then begin 
+          printf = true;     
+      end;
+    end;  
+    if (blank(checkpoint)) and (blank(status)) and (nonblank(responsible)) then begin
+      if (HRMCheckListrw.Responsible==responsible) then begin 
+          printf = true;     
+      end;
+    end; 
+    if (printf) then begin
+      if (firstf) then begin
+        StartFormat(15);
+        OutString(0,0,HRMCheckListr.SerNr,false);
+        OutString(2,0,HRMCheckListr.Employee,false); 
+        OutString(3,0,HRMCheckListr.Name,false); 
+        EndFormat;
+        firstf = false;
+      end;
+      StartFormat(15);
+      OutString(4,0,HRMCheckListrw.CheckPoint,false); 
+      OutString(5,0,HRMCheckListrw.CheckPointComment,false); 
+      OutString(6,0,HRMCheckListrw.Responsible,false); 
+      OutString(7,0,HRMCheckListrw.ResponsibleName,false); 
+      OutString(8,0,StringFromSet(734,HRMCheckListrw.Status),false); 
+      OutString(1,0,HRMCheckListrw.DateCompleted,true);
+      EndFormat;
+    end; 
+  end; 
+  return;
+end;
+
+procedure RunChecklistPointsRn(record RcVc RepSpec)
+begin
+  Integer rw,i,rwcnt;
+  Boolean testf,foundf,printf;
+  record HRMCheckListVc HRMCheckListr;
+  row HRMCheckListVc HRMCheckListrw;
+  
+  foundf = true;
+  HRMCheckListr.StartDate = RepSpec.sStartDate;
+  while (LoopKey("StartDate",HRMCheckListr,1,foundf)) begin
+    if (DateInRange(HRMCheckListr.StartDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin foundf = false; end;
+    if (foundf) then begin
+      testf = foundf;
+     // if (HRMCheckListr.OKFlag==0) then begin testf = false; end;
+      if (nonblank(RepSpec.f1)) then begin
+        if (HRMCheckListr.Employee!=RepSpec.f1) then begin testf = false; end;
+      end;
+      if (RepSpec.flags[1]!=HRMCheckListr.ListType) then begin testf = false; end;
+      if (testf) then begin
+        DoRowCheck(HRMCheckListr,RepSpec.f3,RepSpec.f4,RepSpec.f5); 
+        Gray_Divider(0,1);
+      end;
+    end;
+  end;
+  return;
+end;
+
+global
+procedure ChecklistPointsRn(record RcVc RepSpec)
+begin
+  string 255 tstr,type;
+  Integer rw,i,rwcnt,oldcomp;
+  record CompaniesBlock Cb;
+  row CompaniesBlock Cbrw;
+
+  StartReportJob(USetStr(43250));
+  rw = 1;
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  if (nonblank(RepSpec.f1)) then begin
+    tstr = USetStr(43254) & ": " & RepSpec.f1;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.flags[1])) then begin
+    switch (RepSpec.flags[1]) begin
+      case 0: type = USetStr(43261);
+      case 1: type = USetStr(43262);
+      case 2: type = USetStr(43263);
+    end;
+    tstr = USetStr(43251) & ": " & type;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f3)) then begin
+    tstr = USetStr(43252) & ": " & RepSpec.f3;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f4)) then begin
+    tstr = USetStr(43255) & ": " & RepSpec.f4;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f5)) then begin
+    tstr = USetStr(43256) & ": " & RepSpec.f5;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (RepSpec.IncDaughter!=0) then begin
+    Header(rw,USetStr(19171),1);
+    rw = rw + 1;
+  end;
+  EndHeader;
+
+  SetRepCol(2,30);
+  SetRepCol(3,80);
+  SetRepCol(4,140);
+  SetRepCol(5,190);
+  SetRepCol(6,280);
+  SetRepCol(7,320);
+  SetRepCol(8,380);
+
+  StartFormat(15);
+  OutString(0,0,USetStr(43257),false);
+  OutString(2,0,USetStr(43254),false); 
+  OutString(3,0,USetStr(43258),false);      
+  OutString(4,0,USetStr(43252),false);
+  OutString(5,0,USetStr(43259),false);
+  OutString(6,0,USetStr(43256),false);
+  OutString(8,0,USetStr(43255),false);
+  OutString(1,0,USetStr(43260),true);
+  EndFormat;
+
+  Gray_Divider(0,1);
+  if (RepSpec.IncDaughter!=0) then begin
+    oldcomp = CurrentCompany;
+    BlockLoad(Cb);
+    rwcnt = MatRowCnt(Cb);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(Cb,i,Cbrw);
+      if (SetCompanyCode(Cbrw.CompCode,false)) then begin
+        StartFormat(15);
+        OutString(0,0,Cbrw.CompName,false);
+        EndFormat;      
+        RunChecklistPointsRn(RepSpec);
+        Black_Divider(0,1);
+      end;
+    end;
+    ResetCompany(oldcomp);
+  end else begin
+    RunChecklistPointsRn(RepSpec);
+  end;
+  EndJob;
+  return;
+end;

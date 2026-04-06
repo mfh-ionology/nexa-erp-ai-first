@@ -1,0 +1,233 @@
+external function Boolean FindLocalSerialPortDevice(Integer,LongInt,string,var record LSerialPortDeviceVc);
+external procedure TCPIPWorldPay_DisplayStatus(Integer,LongInt);
+external procedure JSONStringStart(var string);
+external procedure JSONStringPut(var string,string,string);
+external procedure JSONStringAdd(var string,string,string);
+external procedure JSONStringMemberStart(var string,string);
+external procedure JSONStringMemberEnd(var string);
+external procedure JSONStringArrayStart(var string);
+external procedure JSONStringArrayEnd(var string);
+external procedure JSONStringEnd(var string);
+external procedure JSONNotStringAdd(var string,string,string);
+external procedure JSONNotStringPut(var string,string,string);
+external procedure POSAudit_LogIVCashVcRow(record IVCashVc,row IVCashVc,Integer);
+external procedure IVCashDClass_RefreshStringList(Integer,record IVCashVc);
+remote procedure IVCashSumup(var record IVCashVc,Boolean);
+external procedure OpenCashDrawer_IVCashVc(record IVCashVc);
+external updating procedure IVCashDClassTouchScreenFinishButton();
+remote function Integer IVCashPOSButtonAutoFinish(Integer);
+
+procedure TimestampToDateTime(string timestamp,var Date dt,var Time tm)
+begin
+
+  dt.year  = StringToInt(Left(timestamp,4));
+  dt.month = StringToInt(Mid(timestamp,5,2));
+  dt.day   = StringToInt(Mid(timestamp,8,2));
+
+  tm.hour = StringToInt(Mid(timestamp,11,2));
+  tm.minute = StringToInt(Mid(timestamp,15,2));
+  tm.second = StringToInt(Mid(timestamp,17,2));
+
+  return;
+end;
+
+procedure WorldlinkPay_DisplayStatus(Integer ProcessingWn,string errstr)
+begin
+  record RcVc RepSpec;
+
+  if (nonblank(GetWindowClass(ProcessingWn))) then begin
+    GetWindowRecord(ProcessingWn,RepSpec);
+    PutWindowString(ProcessingWn,"Status",errstr);        
+    PutWindowRecord(ProcessingWn,RepSpec);
+  end;
+  return;
+end;
+
+procedure BuildWorldlineToMJSONRequest(var string jsr,LongInt refnr,string curncycode,val sum)
+begin
+
+  JSONStringStart(jsr);
+  JSONStringAdd(jsr,"currency",curncycode);
+  JSONNotStringAdd(jsr,"requestedAmount",ValToString(sum,M4Val,"","",0));
+  JSONStringPut(jsr,"reference",refnr);
+  JSONStringEnd(jsr);
+
+  return;
+end;
+
+global
+updating procedure WorldlineToMCreditCard_Purchase(LongInt refnr,string curncycode,val sum,Integer ProcessingWn)
+begin
+  record LocalMachineBlock LMb;  
+  record LSerialPortDeviceVc LSPDr;
+  string 255 jsr;
+  json jsonreply,js;
+  string 255 host,CtrlSeq,tstr;
+  LongInt socket,receiptsocket,port,receiptport,pos,messagesocket,messageport,errorcode;
+
+  errorcode = 27427;
+  PutWindowString(ProcessingWn,"ProcessingFinished","false");
+
+  BlockLoad(LMb);
+  if (FindLocalSerialPortDevice(kSerialPortDeviceClassCreditCardTerminal,kSerialPortDeviceModelWorldlineToM,LMb.LocalMachineCode,LSPDr)==false) then begin  
+    goto LWorldlineToMCreditCard_Purchase;
+  end;
+
+  BuildWorldlineToMJSONRequest(jsr,refnr,curncycode,sum);
+  js = ParseJSONString(jsr);
+  WorldlinePay(js,kWorldline_Pay,jsonreply,ProcessingWn);
+  
+  errorcode = 0;
+LWorldlineToMCreditCard_Purchase:;
+  if (errorcode<>0) then begin
+    TCPIPWorldPay_DisplayStatus(ProcessingWn,errorcode);
+  end;
+
+  PutWindowString(ProcessingWn,"ProcessingFinished","true");
+
+  return;
+end;  
+
+/*{
+   "actionCode":"WPI_ACTION_CODE_NONE",
+   "applicationIdentifier":"A0000000041010",
+   "applicationLabel":"MASTERCARD",
+   "authorizedAmount":200,
+   "brandName":"Mastercard",
+   "currency":"PLN",
+   "customerLanguage":"pl",
+   "errorCondition":"WPI_ERR_COND_NONE",
+   "formattedReceipt":{
+      "client":"This is to confirm your transaction     \n registered at:                          \n ----------------------------------------\n SolutionsBay  DEMO                      \n Malikow 150D                            \n 25-639 Kielce                           \n ----------------------------------------\n 11.08.2023 14:06:12                     \n Mastercard **** **** **** 0074          \n PLN  2.00                               \n Transaction details:                    \n Status:                          CLEARED\n Authorization code:               (0) - \n ARQC:                   F179390C14C5CA73\n AID                       A0000000041010\n Contactless                             \n Type:                               SALE\n POS ID:                         sol00002\n MID:                          solution01\n Reference:                             5\n Mastercard",
+      "merchant":"This is to confirm your transaction     \n registered at:                          \n ----------------------------------------\n SolutionsBay  DEMO                      \n Malikow 150D                            \n 25-639 Kielce                           \n ----------------------------------------\n 11.08.2023 14:06:12                     \n Mastercard **** **** **** 0074          \n PLN  2.00                               \n Transaction details:                    \n Status:                          CLEARED\n Authorization code:               (0) - \n ARQC:                   F179390C14C5CA73\n AID                       A0000000041010\n Contactless                             \n Type:                               SALE\n POS ID:                         sol00002\n MID:                          solution01\n Reference:                             5\n Mastercard"
+   },
+   "paymentSolutionReference":"3f22ed3e-9132-49ce-96ce-aeec42f61c61",
+   "reference":"5",
+   "remark":"Transaction finished",
+   "result":"WPI_RESULT_SUCCESS",
+   "timestamp":"2023-08-11T14:06:12+02:00"
+}*/
+
+global
+updating procedure WorldlinePayOnResponse(string response)
+begin
+  json js;
+  string 255 result,errorCondition,remark;
+  string 255 pmcode,receiptcust,receiptmerch;
+  val stramt;
+  Integer wn,mwn,mmwn;
+  record IVCashVc IVCashr,prevIVCashr;
+  row IVCashVc IVCashrw;
+  record DefCashBlock DefCashRec;
+  record CCTSVc CCTSr,CCTS2r;
+  area acustomer;
+  Date dt;
+  Time tm;
+
+  // maybe we should use ProceedCCPayTouchScreenDClass...but might have to use transaction string for response...let's see
+  
+  wn = CurWindow;
+  
+  if (GetWindowClass(wn)<>"CCPayVerifoneProcessingWClass") then begin goto LWorldlinePayOnResponse; end;
+  
+  mwn = MotherWindow(wn);
+  if (GetWindowClass(mwn)=="NPTSPaymentOneModeTClass") then begin
+    mwn = MotherWindow(mwn);
+  end;
+
+  js = ParseJSONString(response);
+  result = JSONGet(js,"result");
+
+  //TODO implement actionCode
+  switch (result) begin
+    case "WPI_RESULT_FAILURE": WorldlinkPay_DisplayStatus(wn,JSONGet(js,"remark"));
+    case "WPI_RESULT_SUCCESS": 
+      stramt = StringToVal(JSONGet(js,"authorizedAmount"),M4Val)/100;
+
+      CloseWindow(wn); //Close CC payment status window - only if actioncode not required
+
+      BlockLoad(DefCashRec);
+      if (blank(pmcode)) then begin
+        pmcode =  DefCashRec.DefCCPayMode;
+      end;
+      switch (GetWindowClass(mwn)) begin
+        case "NPTSIVCashDClass":
+          switch (WindowState(mwn)) begin
+            case Rs_update:
+              GetPrevWindowRecord(mwn,prevIVCashr);
+              if (prevIVCashr.OKFlag!=0) then begin
+                CloseWindow(wn);
+                goto LWorldlinePayOnResponse;
+              end;
+              if (prevIVCashr.Invalid!=0) then begin
+                CloseWindow(wn);
+                goto LWorldlinePayOnResponse;
+              end;
+            case Rs_normal:
+              GetWindowRecord(mwn,prevIVCashr);
+              if (prevIVCashr.OKFlag!=0) then begin
+                CloseWindow(wn);
+                goto LWorldlinePayOnResponse;
+              end;
+              if (IVCashr.Invalid!=0) then begin
+                CloseWindow(wn);
+                goto LWorldlinePayOnResponse;
+              end;
+          end;
+          GetWindowRecord(mwn,IVCashr);
+          ClearRow(IVCashr,IVCashrw,kInvoiceRowTypeCreditCardPayment);
+          IVCashrw.stp = kInvoiceRowTypeCreditCardPayment;
+          IVCashrw.Sum = stramt;
+          IVCashrw.PayMode = pmcode;
+          IVCashrw.CurncyCode = JSONGet(js,"currency");
+          IVCashrw.CCReceiptNr = JSONGet(js,"paymentSolutionReference");
+          IVCashrw.CCTimestamp = JSONGet(js,"timestamp");
+          MatRowPut(IVCashr,MatRowCnt(IVCashr),IVCashrw);
+          POSAudit_LogIVCashVcRow(IVCashr,IVCashrw,kPOSEventTypeAddRow);
+          IVCashSumup(IVCashr,true);
+          PutWindowRecord(mwn,IVCashr);
+          
+          IVCashDClass_RefreshStringList(mwn,IVCashr);
+          OpenCashDrawer_IVCashVc(IVCashr);
+          if (IVCashPOSButtonAutoFinish(mwn)==kPOSButtonAutoFinishYes) then begin
+            IVCashDClassTouchScreenFinishButton;
+          end;
+  
+          RecordNew(CCTSr);
+          TimestampToDateTime(JSONGet(js,"timestamp"),dt,tm);
+          CCTSr.TransDate = dt;
+          CCTSr.TransTime = tm;
+          CCTSr.SlipType = "CUSTOMER";
+          CCTSr.LocalMachineCode = CurMachineName;
+          CCTSr.Comment = "Purchase: " & JSONGet(js,"paymentSolutionReference");
+          CCTSr.FileName = "IVCashVc";
+          CCTSr.TransNr = IVCashr.SerNr;
+
+          receiptcust = JSONGet(js,"formattedReceipt/client");
+          ReplaceStringWithString(receiptcust,"\\n","chr(13) & chr(10)");
+          AddTextToArea(receiptcust,acustomer);
+          AddAreaToTextField(acustomer,CCTSr);
+          CCTSr.SerNr = NextSerNr("CCTSVc",CCTSr.TransDate,-1,false,"");
+          if (RecordStore(CCTSr,false)) then begin end;
+
+          RecordNew(CCTS2r);
+          TimestampToDateTime(JSONGet(js,"timestamp"),dt,tm);
+          CCTS2r.TransDate = dt;
+          CCTS2r.TransTime = tm;
+          CCTS2r.SlipType = "MERCHANT";
+          CCTS2r.LocalMachineCode = CurMachineName;
+          CCTS2r.Comment = "Purchase: " & JSONGet(js,"paymentSolutionReference");
+          CCTS2r.FileName = "IVCashVc";
+          CCTS2r.TransNr = IVCashr.SerNr;
+
+          receiptcust = JSONGet(js,"formattedReceipt/merchant");
+          ReplaceStringWithString(receiptcust,"\\n","chr(13) & chr(10)");
+          AddTextToArea(receiptcust,acustomer);
+          AddAreaToTextField(acustomer,CCTS2r);
+          CCTS2r.SerNr = NextSerNr("CCTSVc",CCTS2r.TransDate,-1,false,"");
+          if (RecordStore(CCTS2r,false)) then begin end;
+      end;
+  end;
+LWorldlinePayOnResponse:;
+  return;
+end;

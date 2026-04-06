@@ -1,0 +1,141 @@
+external procedure PrintValueInclZero(string,val,Integer,record LangNrVc,record SysFormatBlock,Boolean);
+external function Boolean FindFormcode(Integer,Integer);
+external function Boolean Getformcode(Integer,Integer,string,string,string,LongInt,LongInt,string,string,Integer,string,var string);
+external function Integer NumberofDocumentPages(string,Integer);
+external procedure GetLangNr(string,var record LangNrVc);
+external procedure CommonDocumentFields(record RcVc);
+external procedure GetDateMonthInWords(Date,var string);
+
+procedure PrintVATDecRows(record RcVc RepSpec,record VATDeclVc VATDeclr,record DocVc Docr,record LangNrVc LangNrr,record SysFormatBlock SFb)
+begin
+  Integer i,rwcnt;
+  row VATDeclVc VATDeclrw;
+
+  rwcnt = MatRowCnt(VATDeclr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(VATDeclr,i,VATDeclrw);
+    OUTFORMFIELD("F_ELEMENT",VATDeclrw.ElementCode);
+    OUTFORMFIELD("F_ROWNAME",VATDeclrw.Comment);
+    PrintValueInclZero("F_BELOPP",StringToVal(VATDeclrw.Value,M4val),M4Val,LangNrr,SFb,false);
+    EndFormRow;
+  end;
+  return;
+end;
+
+global
+procedure DoVATDeclForm(record RcVc RepSpec,record VATDeclVc VATDeclr)
+begin
+  Integer i,rwcnt,intdocnr;
+  string 255 tstr;
+  Boolean printf,langf;
+  string 30 formcode,langcode;
+  record DocVc Docr;
+  record LangNrVc LangNrr;
+  record SysFormatBlock SFb;
+  record TaxRepCUBlock TRCUb;
+  record FormDefVc FDr;
+  row FormDefVc FDrw;
+
+  BlockLoad(TRCUb);
+  BlockLoad(SFb);
+  GetLangNr("",LangNrr);
+  FDr.repname = RepSpec.repname;
+  FDr.shortname = RepSpec.shortname;
+  if (ReadFirstMain(FDr,1,true)==false) then begin
+    MessageBox(1624, " " & USetStr(1623));
+    goto LDoVATDeclForm;
+  end;
+  rwcnt = MatRowCnt(FDr);
+  langcode = "";
+  for (i=rwcnt-1;i>=0;i=i-1) begin
+    MatRowGet(FDr,i,FDrw);
+    if (FDrw.LangCode==langcode) then begin
+      i = -1;
+      langf = true;
+    end;
+  end;
+  if (langf==false) then begin langcode = ""; end;
+  intdocnr = 1;
+  printf = true;
+  while (printf) begin  
+    formcode = "";
+    for (i=rwcnt-1;i>=0;i=i-1) begin
+      MatRowGet(FDr,i,FDrw);
+      if (FindFormcode(VATDeclr.OKFlag,FDrw.Typ)) then begin 
+        if (Getformcode(i,FDrw.intdocnr,FDrw.FPCode,FDrw.UserGroup,FDrw.LangCode,FDrw.SerNr,VATDeclr.Code,FDrw.PrintGroupCode,
+                        langcode,intdocnr,"VATDeclVc",formcode)) then
+                      
+        begin
+          goto LBREAK;
+        end;
+      end;
+    end;
+LBREAK:;
+    if (nonblank(formcode)) then begin
+      if (OpenForm(formcode)) then begin
+          CommonDocumentFields(RepSpec);
+          NumberofDocumentPages(FDrw.FPCode,MatRowCnt(VATDeclr));
+          Docr.Code = formcode;
+          if (ReadFirstMain(Docr,1,true)) then begin end;
+          OUTFORMFIELD("F_VATNR",TRCUb.VATNr);
+          OUTFORMFIELD("F_DATEYEAR",GetYear(VATDeclr.StartDate)); 
+          if (VATDeclr.PeriodType==kPeriodTypeMonth) then begin
+            OUTFORMFIELD("F_DATEMONTH",GetMonth(VATDeclr.StartDate)); 
+            GetDateMonthInWords(VATDeclr.StartDate,tstr);
+            OUTFORMFIELD("F_DATEMONTHINWORDS",tstr);
+          end;
+          if (VATDeclr.PeriodType==kPeriodTypeQuarter) then begin
+            switch (GetMonth(VATDeclr.StartDate)) begin
+              case 1: tstr = "1";
+              case 2: tstr = "1";
+              case 3: tstr = "1";
+              case 4: tstr = "2";
+              case 5: tstr = "2";
+              case 6: tstr = "2";
+              case 7: tstr = "3";
+              case 8: tstr = "3";
+              case 9: tstr = "3";
+              otherwise tstr = "4";
+            end;
+            OUTFORMFIELD("F_QUARTER",tstr);
+          end;
+          switch (VATDeclr.PeriodType) begin
+            case kPeriodTypeMonth: tstr = USetStr(44190);
+            case kPeriodTypeTwoMonths : tstr = USetStr(44191);
+            case kPeriodTypeQuarter: tstr = USetStr(44192);
+            case kPeriodTypeYear: tstr =USetStr(44193);
+          end;
+          OUTFORMFIELD("F_PERIODTYPE",tstr);
+          OUTFORMFIELD("F_TAXAUTHID",TRCUb.TaxAuthID);
+          switch (VATDeclr.Version) begin
+            case 0: tstr = USetStr(44194);
+            case 1: tstr = USetStr(44195);
+          end;
+          OUTFORMFIELD("F_VERSION",tstr);
+          switch (TRCUb.Type) begin
+            case 0: tstr = USetStr(44196);
+            case 1: tstr = USetStr(44197);
+          end;
+          OUTFORMFIELD("F_TYPE",tstr);
+          OUTFORMFIELD("F_TRANSDATE",VATDeclr.TransDate);
+          OUTFORMFIELD("F_PERIODSTART",VATDeclr.StartDate);
+          OUTFORMFIELD("F_PERIODEND",VATDeclr.EndDate);
+          OUTFORMFIELD("F_COMMENT",VATDeclr.Comment);
+          OUTFORMFIELD("F_CORRECTIONREASON",VATDeclr.CorrectionReason);
+          PrintVATDecRows(RepSpec,VATDeclr,Docr,LangNrr,SFb);
+          CloseForm;        
+      end else begin
+        printf = false;
+        MessageBox(1546,formcode);
+      end;
+    end else begin
+      printf = false;
+      if (intdocnr==1) then begin
+        MessageBox(1624, " " & USetStr(1623));
+      end;
+    end;
+    intdocnr = intdocnr + 1;
+  end;
+LDoVATDeclForm:;  
+  return;
+end;

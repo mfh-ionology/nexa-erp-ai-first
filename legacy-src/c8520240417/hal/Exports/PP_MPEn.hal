@@ -1,0 +1,796 @@
+external procedure StripSpace(var string,string);
+external function boolean ValidateIBAN(string);
+external function Boolean GetPMRow(string,var row PMBlock);
+external procedure NewLineExport();
+external function string 255 AddStr(string,string,string);
+external function string 255 ConvertXmlString(string,Boolean);
+external procedure GetMonthText(string,Date,var string);
+
+updating 
+procedure UpdateSentFlagPPVc(integer num, vector boolean exported, vector LongInt PPSerNr)
+begin
+  record PPVc PPr,oldPPr;
+  integer i;
+  
+  for (i=1;i<=num;i=i+1) begin
+    if (exported[i]==true) then begin
+      PPr.SerNr = PPSerNr[i];
+      if ReadFirstMain(PPr,1,true) then begin 
+        if (PPr.SentFlag==0) then begin 
+          RecordCopy(oldPPr,PPr)
+          PPr.SentFlag = 1;
+          if RecordUpdate(oldPPr,PPr,false) then begin
+          end; 
+        end;  
+      end;
+    end; 
+  end;
+  return;
+end;  
+
+procedure PrintCheckLine(LongInt sernr,integer i,record UserVc Userr,string errmess,string sfield)
+begin
+  integer k;
+  
+  StartFormat(15);
+  OutLongInt(0,"DblPPVc",sernr,false); 
+  k = i + 1;
+  OutString(80,0,k,false);
+  OutString(100,0,Userr.Code,false);
+  OutString(190,0,Userr.Name,false);
+  OutString(290,0,errmess,false);
+  OutString(400,0,sfield,false);
+  EndFormat;
+  
+  return;
+end;              
+
+function boolean CheckPP_PMCode(string testcode, record PPVc PPr)
+begin
+  string 20 pmcode;
+  boolean res;
+  row PPVc PPrw;
+  integer i,rwcnt;
+
+  pmcode   = PPr.PayMode;
+  if (testcode == pmcode) then begin
+    res = true;
+    goto LCheckPP_PMCode;
+  end;  
+  
+  rwcnt = MatRowCnt(PPr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(PPr,i,PPrw);      
+    pmcode = PPrw.PayMode;
+    if (testcode == pmcode) then begin
+      res = true;
+      goto LCheckPP_PMCode;
+    end;  
+  end;  
+  
+LCheckPP_PMCode:;        
+  CheckPP_PMCode = res;  
+  return;
+end;  
+  
+global
+function string 60 PPFindBankAcc(string pprwbankacc,string person)
+begin 
+  record UserVc Userr;
+  record CUVc CUr;
+  string 60 bankacc;
+  
+  Userr.Code = person;
+  if ReadFirstMain(Userr,1,true) then begin 
+  end;
+  bankacc = pprwbankacc;
+        
+  if blank(bankacc) then begin 
+    bankacc = Userr.BankAcc;
+  end;
+  if blank(bankacc) then begin 
+    if nonblank(Userr.CustCode) then begin 
+      CUr.Code = Userr.CustCode;
+      if ReadFirstMain(CUr,1,true) then begin 
+        if (blank(bankacc)) then begin
+          bankacc = CUr.IBANCode;
+        end;
+        if (blank(bankacc)) then begin
+          bankacc = CUr.BankAccount;
+        end;
+        if (blank(bankacc)) then begin
+          bankacc = CUr.Bank;
+        end;
+      end;   
+    end;
+  end;      
+  PPFindBankAcc = bankacc;
+  return;
+end;   
+
+global
+function boolean CheckPPVc(record RcVc RepSpec, boolean printflag)
+begin
+  record PPVc PPr;
+  row    PPVc PPrw;
+  record UserVc Userr;
+  boolean found,testf;
+  Integer keys;
+  string 255 ckey,bankacc,tstr;
+  LongInt afr,ato;
+  Integer i,rwcnt,k;
+  Date paymdate;
+  string 10 pmcode,emplcode;
+  boolean testrow,res;
+  
+  if (printflag==true) then begin 
+    StartFormat(15);
+    EndFormat;
+    Black_Divider(0,1);
+  end;
+  
+  res = true;
+  afr = FirstInRange(RepSpec.f1,20);
+  ato = LastInRange(RepSpec.f1,20);
+  found = true;
+  if (RepSpec.OnlyUnprntd==0) then begin
+    keys = 1;
+    ckey = "SentFlag";
+    PPr.SentFlag = 0;
+    if nonblank(RepSpec.f1) then begin 
+      keys = 2;
+      PPr.SerNr = afr;
+    end;
+  end else begin
+    keys = 1;
+    ckey = "OrderedFlag";
+    PPr.OrderedFlag = 1;
+    if nonblank(RepSpec.f1) then begin 
+      keys = 2;
+      PPr.SerNr = afr;
+    end;
+  end;
+  while (LoopKey(ckey,PPr,keys,found)) begin
+    testf = true;
+    if (RepSpec.OnlyUnprntd==0) then begin
+      if (PPr.SentFlag==1) then begin
+        found = false;
+        testf = false;
+      end;
+    end;
+    if nonblank(RepSpec.f1) then begin 
+      if (PPr.SerNr>ato) then begin
+        testf = false;
+        found = false;
+      end;
+    end;
+    if (PPr.Invalid!=0) then begin
+      testf = false;
+    end;
+    if (PPr.OrderedFlag!=1)  then begin
+      testf = false;
+    end; 
+    if (DateInRange(PPr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin
+      testf = false;
+    end;
+    if (PPr.BasePayVal==0) then begin
+      testf = false;
+    end;
+    if (nonblank(RepSpec.FirstAcc)) then begin
+      if CheckPP_PMCode(RepSpec.FirstAcc,PPr)==false then begin
+        testf = false;
+      end;
+    end;
+    if (found==false) then begin
+      testf = false;
+    end;
+    if (testf==true) then begin
+      paymdate = PPr.TransDate;
+      rwcnt = MatRowCnt(PPr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        testrow = true;
+        MatRowGet(PPr,i,PPrw);
+        //IBAN ----------------
+        Userr.Code = PPrw.Person;
+        if (ReadFirstMain(Userr,1,true)) then begin
+        end;     
+        bankacc = PPFindBankAcc(PPrw.BankAcc,PPrw.Person);
+        emplcode = PPrw.Person;
+        pmcode   = PPr.PayMode;
+        if nonblank(PPrw.PayMode) then begin 
+          pmcode   = PPrw.PayMode;
+        end;         
+        if (nonblank(RepSpec.FirstAcc)) then begin
+          if (pmcode != RepSpec.FirstAcc) then begin
+            testrow = false;
+          end;
+        end;  
+        if (testrow==true) then begin 
+          if blank(bankacc) then begin 
+            res = false;
+            if (printflag==true) then begin 
+              PrintCheckLine(PPr.SerNr,i,Userr,"arveldusarve mŠŠramata","");
+            end else begin 
+              goto LCheckPPVc;
+            end;  
+          end else begin   
+            StripSpace(tstr,bankacc);
+            if (ValidateIBAN(tstr)==false) then begin
+              //if (ConverttoIBAN(tstr,tstr)==false) then begin
+              res = false;
+              if (printflag==true) then begin 
+                PrintCheckLine(PPr.SerNr,i,Userr,"vale arveldusarve",tstr);
+              end else begin 
+                goto LCheckPPVc;
+              end;  
+              //end;
+            end;
+          end;
+        end;  
+      end;
+    end;
+  end;
+LCheckPPVc:;
+  CheckPPVc = res;
+  return;
+end;  
+
+
+
+function boolean XMLSepaCompanyCheck(string PMCode)
+begin 
+  boolean res;
+  record BankVc Bankr;
+  string 255 id,tstr;
+  row PMBlock PMrw;
+  record CYBlock CYb;
+  
+  BlockLoad(CYb);
+
+  res = true;
+  
+  GetPMRow(PMCode,PMrw);
+  Bankr.Code = PMrw.BankCode;
+  ReadFirstMain(Bankr,1,true);
+  if (nonblank(PMrw.SortCode)) then begin
+    id = PMrw.SortCode;
+  end else begin
+    if (nonblank(Bankr.BankIDCode)) then begin
+      id = Bankr.BankIDCode;
+    end else begin
+      id = PMrw.BankCode;
+    end;
+  end;
+  if blank(id) then begin 
+    res = false;
+  end;  
+
+  if (nonblank(PMrw.BankNr)) then begin
+    tstr = PMrw.BankNr;
+  end else begin
+    if (nonblank(Bankr.Nr2)) then begin
+      tstr = Bankr.Nr2;
+    end else begin
+      tstr = CYb.Bank2;
+    end;
+  end;
+  if blank(tstr) then begin 
+    res = false;
+  end;  
+  StripSpace(tstr,tstr);
+  if (ValidateIBAN(tstr)==false) then begin
+    res = false;
+  end;
+  if blank(Bankr.SWIFT) then begin 
+  //  res = false;
+  end;
+
+  XMLSepaCompanyCheck = res;
+  return;
+end;
+
+global
+function boolean CheckSEPA_PPOnOK(record RcVc RepSpec)
+begin
+  boolean res;
+  
+  res = true;
+  
+  res = XMLSepaCompanyCheck(RepSpec.FirstAcc);
+  if (res==true) then begin
+    res = CheckPPVc(RepSpec,false);
+  end;
+  CheckSEPA_PPOnOK = res;
+  return;
+end;  
+  
+procedure SetBankCodepage(Integer dosmode,string cp)
+begin
+  string 100 s;
+
+  s = StringSetFromString(89,cp);
+  if (blank(s)) then begin
+    s = "UTF-8";
+  end;    
+  if (SetExportCodepage(s)==false) then begin
+    LogText(0,"Failed to set codepage " & s);
+  end;
+  return;
+end;
+
+procedure ExportTheLevel(Integer level)
+begin
+  string 255 tstr;
+  Integer i;
+  
+  tstr = "";
+  for (i=0;i<level;i=i+1) begin
+    tstr = tstr & "  ";
+  end;
+  ExportPadString(tstr,len(tstr)," ",false);
+  return;
+end;
+
+procedure ExportPlainXml(string value,Integer level)
+begin
+  ExportTheLevel(level);
+  ExportPadString(value,BytesInString(value)," ",false);
+  NewLineExport;
+  return;
+end;
+
+procedure ExportTagXml(string tag,string pvalue,Integer level)
+begin
+  string 255 value;
+  
+  value = pvalue;
+  ExportTheLevel(level);
+  ExportPadString("<",1," ",false);
+  ExportPadString(tag,len(tag)," ",false);
+  ExportPadString(">",1," ",false);  
+  ExportPadString(value,BytesInString(value)," ",false);
+  ExportPadString("</",2," ",false);
+  ExportPadString(tag,len(tag)," ",false);
+  ExportPadString(">",1," ",false);
+  NewLineExport;
+  return;
+end;
+
+procedure ExportAttributeTagXml(string tag,string pvalue,string attr,string attrvalue,Integer level)
+begin
+  string 255 value;
+  
+  value = pvalue;
+  ExportTheLevel(level);
+  ExportPadString("<",1," ",false);
+  ExportPadString(tag,len(tag)," ",false);
+  if (nonblank(attr)) then begin
+    ExportPadString(" ",1," ",false);
+    ExportPadString(attr,len(attr)," ",false);
+    ExportPadString("=""",2," ",false);
+    ExportPadString(attrvalue,BytesInString(attrvalue)," ",false);
+    ExportPadString("""",1," ",false);
+  end;
+  ExportPadString(">",1," ",false);  
+  ExportPadString(value,BytesInString(value)," ",false);
+  ExportPadString("</",2," ",false);
+  ExportPadString(tag,len(tag)," ",false);
+  ExportPadString(">",1," ",false);
+  NewLineExport;
+  return;
+end;
+
+procedure AddToPPSupplierArray(Integer sumup,Integer ExportSuppInvNr,row PPVc PPrw,string emplcode,string bankacc,string curcode,string pmcode,date transdate,LongInt DocSerNr,
+                                Array string apremplcode,Array string aprbankacc,
+                                Array string aprreccur,Array val aprnetoval,Array string aprpmcode,Array date aprdate,Array LongInt aprfirstser,var Integer acnt)
+begin
+  Integer i;
+  
+  if (sumup==1) then begin
+  for (i=0;i<acnt;i=i+1) begin
+    if (apremplcode[i]==emplcode) and (aprbankacc[i]==bankacc) then begin//and (apmcode[i]==pmcode)
+      aprnetoval[i] = aprnetoval[i] + PPrw.PayVal;
+      goto LAddToPPSupplierArray;
+    end;
+  end;
+  end;
+  apremplcode[acnt] = emplcode;
+  aprbankacc[acnt] = bankacc;
+  aprpmcode[acnt] = pmcode;
+  aprreccur[acnt] = curcode;
+  aprnetoval[acnt] = PPrw.PayVal;
+  aprfirstser[acnt] = DocSerNr;
+  acnt = acnt + 1;
+LAddToPPSupplierArray:;
+  return;
+end;
+
+
+
+procedure BankExpEstoniaSEPA_Dom_HeaderPP(record RcVc RepSpec,date PaymDate,string PMCode,string curcode,record BankFileBlock bfr,val CtrlSum,Integer NbOfTxs)
+begin
+  string 255 tstr;
+  LongInt rowsernr;
+  record CYBlock CYb;
+  record BankVc Bankr;
+  row PMBlock PMrw;
+  
+  BlockLoad(CYb);
+  rowsernr = bfr.RowSerNr;
+  if (rowsernr<=0) or (rowsernr>999999) then begin
+    rowsernr = 1;
+  end;
+  ExportPlainXml("<PmtInf>",1);
+
+  ExportTagXml("PmtInfId",rowsernr,2);
+  ExportTagXml("PmtMtd","TRF",2);
+  ExportTagXml("BtchBookg","false",2);
+  ExportTagXml("NbOfTxs",NbOfTxs,2);
+  ExportTagXml("CtrlSum",ValToString(CtrlSum,M4UVal,"",".",0),2);
+  ExportPlainXml("<PmtTpInf>",2);
+
+  ExportPlainXml("<SvcLvl>",3);
+  ExportTagXml("Cd","SEPA",4);
+  ExportPlainXml("</SvcLvl>",3);
+  
+  ExportPlainXml("<CtgyPurp>",3);
+//  ExportTagXml("Cd","SALA",4);
+  ExportTagXml("Cd","SUPP",4);
+  ExportPlainXml("</CtgyPurp>",3);
+
+  ExportPlainXml("</PmtTpInf>",2);
+
+  //if (RepSpec.flags[0]==1) then begin
+    if (PaymDate>CurrentDate) then begin
+      ExportTagXml("ReqdExctnDt",DateToString(PaymDate,"YYYY-MM-DD"),2);
+    end else begin
+      ExportTagXml("ReqdExctnDt",DateToString(CurrentDate,"YYYY-MM-DD"),2);
+    end;
+  //end else begin
+    //ExportTagXml("ReqdExctnDt",DateToString(CurrentDate,"YYYY-MM-DD"),2);
+  //end;
+
+  ExportPlainXml("<Dbtr>",2);
+  ExportTagXml("Nm",ConvertXmlString(Left(CYb.CompName,70),false),3);
+  if(nonblank(CYb.Addr0) and nonblank(CYb.Addr1)) then begin
+    ExportPlainXml("<PstlAdr>",3);
+    ExportTagXml("Ctry",left(CYb.Bank2,2),4);
+    ExportTagXml("AdrLine",ConvertXmlString(CYb.Addr0,false),4);
+    ExportTagXml("AdrLine",ConvertXmlString(CYb.Addr1,false),4);
+    ExportPlainXml("</PstlAdr>",3);
+  end;
+  ExportPlainXml("<Id>",3);
+  ExportPlainXml("<OrgId>",4);
+  ExportPlainXml("<Othr>",5);
+  GetPMRow(PMCode,PMrw);
+  Bankr.Code = PMrw.BankCode;
+  ReadFirstMain(Bankr,1,true);
+  if(nonblank(PMrw.SortCode)) then begin
+    ExportTagXml("Id",PMrw.SortCode,6);
+  end else begin
+    if(nonblank(Bankr.BankIDCode)) then begin
+      ExportTagXml("Id",Bankr.BankIDCode,6);
+    end else begin
+      ExportTagXml("Id",PMrw.BankCode,6);
+    end;
+  end;
+  ExportPlainXml("<SchmeNm>",6);
+  ExportTagXml("Cd","COID",7);
+  ExportPlainXml("</SchmeNm>",6);
+  ExportPlainXml("</Othr>",5);
+  ExportPlainXml("</OrgId>",4);
+  ExportPlainXml("</Id>",3);  
+  ExportPlainXml("</Dbtr>",2);
+  
+  ExportPlainXml("<DbtrAcct>",2);
+  ExportPlainXml("<Id>",3);
+  if (nonblank(PMrw.BankNr)) then begin
+    tstr = PMrw.BankNr;
+  end else begin
+    if (nonblank(Bankr.Nr2)) then begin
+      tstr = Bankr.Nr2;
+    end else begin
+      tstr = CYb.Bank2;
+    end;
+  end;
+  StripSpace(tstr,tstr);
+  if (ValidateIBAN(tstr)) then begin
+    ExportTagXml("IBAN",tstr,4);
+  end else begin
+//    ExportTagXml("BBAN",tstr,4);
+  end;
+  ExportPlainXml("</Id>",3);    
+  ExportTagXml("Ccy",curcode,3);  
+  ExportPlainXml("</DbtrAcct>",2);
+
+  ExportPlainXml("<DbtrAgt>",2);
+  ExportPlainXml("<FinInstnId>",3);
+  ExportTagXml("BIC",Bankr.SWIFT,4);  
+  ExportPlainXml("</FinInstnId>",3);
+  ExportPlainXml("</DbtrAgt>",2);
+
+  if (RepSpec.flags[4]==2) then begin
+    ExportTagXml("ChrgBr","SLEV",2);  
+  end;
+  bfr.RowSerNr = rowsernr + 1;
+  return;
+end;
+
+global
+updating procedure BankEstSEPA_DomesticPPVc(record RcVc RepSpec,var record BankFileBlock bfr,string curcode)
+begin
+  string 255 tstr,refstr;
+  LongInt appsernr;
+  record CYBlock CYb;
+  record PPVc PPr;
+  row PPVc PPrw;
+  record UserVc Userr;
+  record CUVc CUr;
+  Boolean found,testf;
+  Integer keys;
+  string 255 ckey;
+  LongInt afr,ato;
+  Integer i,rwcnt;
+  Integer NbOfTxs;
+  string 255 bankacc;
+  Array string 255 apremplcode;
+  Array string 255 aprbankacc;
+  Array string 255 aprreccur;
+  Array date aprdate;
+  Array val aprnetoval;
+  Array string 10 aprpmcode;
+  Array LongInt aprfirstser;
+  Integer prevacnt,acnt;
+  string 255 timestamp,emplcode,name;
+  time curtime;
+  string 255 codepage;
+  val CtrlSum;
+  Boolean storedf;
+  Date paymdate;
+  string 20 pmcode;
+  boolean added,testrow,res;
+  string 60 addr1, addr2;
+  vector boolean exported;
+  vector LongInt PPSerNr;
+  integer num;
+  
+  res = true;
+  
+  codepage = StringSetFromString(89,RepSpec.f12);
+  if (blank(codepage)) then begin
+    codepage = "UTF-8";
+  end;
+  NbOfTxs = 0;
+  CtrlSum = 0;
+  BlockLoad(CYb);
+  appsernr = bfr.LastSerNr;
+  if (appsernr<=0) or (appsernr>999999) then begin
+    appsernr = 1;
+  end;
+  
+  afr = FirstInRange(RepSpec.f1,20);
+  ato = LastInRange(RepSpec.f1,20);
+  found = true;
+  if (RepSpec.OnlyUnprntd==0) then begin
+    keys = 1;
+    ckey = "SentFlag";
+    PPr.SentFlag = 0;
+    if nonblank(RepSpec.f1) then begin 
+      keys = 2;
+      PPr.SerNr = afr;
+    end;
+  end else begin
+    keys = 1;
+    ckey = "OrderedFlag";
+    PPr.OrderedFlag = 1;
+    if nonblank(RepSpec.f1) then begin 
+      keys = 2;
+      PPr.SerNr = afr;
+    end;
+  end;
+  while (LoopKey(ckey,PPr,keys,found)) begin
+    testf = true;
+    if (RepSpec.OnlyUnprntd==0) then begin
+      if (PPr.SentFlag==1) then begin
+        found = false;
+        testf = false;
+      end;
+    end;
+    if nonblank(RepSpec.f1) then begin 
+      if (PPr.SerNr>ato) then begin
+        testf = false;
+        found = false;
+      end;
+    end;
+    if (PPr.Invalid!=0) then begin
+      testf = false;
+    end;
+    if (PPr.OrderedFlag!=1) then begin
+      testf = false;
+    end; 
+    if (DateInRange(PPr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin
+      testf = false;
+    end;
+    if (PPr.BasePayVal==0) then begin
+      testf = false;
+    end;
+    if (nonblank(RepSpec.FirstAcc)) then begin
+      if CheckPP_PMCode(RepSpec.FirstAcc,PPr)==false then begin
+        testf = false;
+      end;
+    end;
+    if (found==false) then begin
+      testf = false;
+    end;
+    if (testf==true) then begin
+      paymdate = PPr.TransDate;
+      rwcnt = MatRowCnt(PPr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        testrow = true;
+        MatRowGet(PPr,i,PPrw);
+        //IBAN ----------------
+        Userr.Code = PPrw.Person;
+        if (ReadFirstMain(Userr,1,true)) then begin
+        end;     
+        bankacc = PPFindBankAcc(PPrw.BankAcc,PPrw.Person);
+        emplcode = PPrw.Person;
+        pmcode   = PPr.PayMode;
+        if nonblank(PPrw.PayMode) then begin 
+          pmcode   = PPrw.PayMode;
+        end;         
+        if (nonblank(RepSpec.FirstAcc)) then begin
+          if (pmcode != RepSpec.FirstAcc) then begin
+            testrow = false;
+          end;
+        end;  
+        if (testrow==true) then begin 
+          /*
+          if blank(bankacc) then begin 
+            res = false;
+            goto LLBankEstSEPA_DomesticPPVc;
+          end;  
+          */
+          added = true;
+          prevacnt = acnt;
+         // LogText(0, "PPr.SerNr,PPr.DoneFlag: " & PPr.SerNr & "/" & PPr.DoneFlag);
+          AddToPPSupplierArray(RepSpec.flags[5],1,PPrw,emplcode,bankacc,curcode,pmcode,PPr.TransDate,PPr.SerNr,apremplcode,aprbankacc,aprreccur,aprnetoval,aprpmcode,aprdate,aprfirstser,acnt);
+          if (prevacnt!=acnt) then begin              
+            NbOfTxs = NbOfTxs + 1;
+          end;
+          CtrlSum = CtrlSum + PPrw.PayVal;
+        end;  
+      end;
+      if (added==true) then begin 
+          num = num + 1;
+          exported[num] = true;
+          PPSerNr[num]  = PPr.SerNr;
+      end;  
+    end;
+  end;
+  if (num==0) then begin 
+    goto LLBankEstSEPA_DomesticPPVc;
+  end;
+  
+  ExportPlainXml("<?xml version=""1.0"" encoding=""" & codepage & """?>",0); 
+  tstr = "<Document xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns=""urn:iso:std:iso:20022:tech:xsd:pain.001.001.03"">";
+  ExportPlainXml(tstr,0); 
+  ExportPlainXml("<CstmrCdtTrfInitn>",0);
+  ExportPlainXml("<GrpHdr>",1);
+  curtime = CurrentTime;
+  timestamp = DateToString(CurrentDate,"YYMMDD") & GetHour(curtime) & GetMinute(curtime);
+  ExportTagXml("MsgId",appsernr & "-" & timestamp,2);
+  tstr = DateToString(CurrentDate,"YYYY-MM-DD");
+  tstr = tstr & "T";
+  tstr = tstr & CurrentTime;
+  ExportTagXml("CreDtTm",tstr,2);
+  ExportTagXml("NbOfTxs",NbOfTxs,2);
+  ExportTagXml("CtrlSum",ValToString(CtrlSum,M4UVal,"",".",0),2);
+  ExportPlainXml("<InitgPty>",2);
+  ExportTagXml("Nm",ConvertXmlString(Left(CYb.CompName,70),false),3);
+  if (nonblank(CYb.Addr0) and nonblank(CYb.Addr1) and nonblank(CYb.CountryCode)) then begin
+    ExportPlainXml("<PstlAdr>",3);
+    ExportTagXml("Ctry",CYb.CountryCode,4);
+    ExportTagXml("AdrLine",ConvertXmlString((CYb.Addr0 & "," & CYb.Addr1),false),4);
+    ExportPlainXml("</PstlAdr>",3);
+  end;
+  ExportPlainXml("</InitgPty>",2);
+  ExportPlainXml("</GrpHdr>",1);
+  
+  bfr.LastSerNr = appsernr + 1;
+  
+  BankExpEstoniaSEPA_Dom_HeaderPP(RepSpec,paymdate,aprpmcode[0],curcode,bfr,CtrlSum,acnt);
+   
+  for (i=0;i<acnt;i=i+1) begin
+    Userr.Code = apremplcode[i];
+    ReadFirstMain(Userr,1,true);
+
+    ExportPlainXml("<CdtTrfTxInf>",1);
+
+    ExportPlainXml("<PmtId>",2);    
+    ExportTagXml("InstrId",aprfirstser[i],3);  
+    ExportTagXml("EndToEndId",aprfirstser[i] & "-1",3);  
+    ExportPlainXml("</PmtId>",2);
+
+    ExportPlainXml("<Amt>",2);
+    ExportAttributeTagXml("InstdAmt",ValToString(aprnetoval[i],M4Val,"",".",0),"Ccy",aprreccur[i],3);
+    ExportPlainXml("</Amt>",2);
+
+    ExportPlainXml("<Cdtr>",2);
+    ExportTagXml("Nm",ConvertXmlString(Left(Userr.Name,70),false),3); 
+    
+    if nonblank(Userr.CustCode) then begin 
+      CUr.Code = Userr.CustCode;
+      if ReadFirstMain(CUr,1,true) then begin 
+        if (nonblank(CUr.InvAddr0) and nonblank(CUr.InvAddr1)) then begin
+          ExportPlainXml("<PstlAdr>",3);
+          ExportTagXml("Ctry",Left(aprbankacc[i],2),2);
+          ExportTagXml("AdrLine",ConvertXmlString(CUr.InvAddr0,false),4);  
+          ExportTagXml("AdrLine",ConvertXmlString(CUr.InvAddr1,false),4); 
+          if nonblank(CUr.InvAddr2) then begin 
+            ExportTagXml("AdrLine",ConvertXmlString(CUr.InvAddr2,false),4);  
+          end;
+          ExportPlainXml("</PstlAdr>",3);
+        end;  
+      end;  
+    end;  
+    
+    ExportPlainXml("</Cdtr>",2);
+    ExportPlainXml("<CdtrAcct>",2);
+    ExportPlainXml("<Id>",3);
+    StripSpace(tstr,aprbankacc[i]);
+    if (ValidateIBAN(tstr)) then begin
+      ExportTagXml("IBAN",tstr,4);
+    end else begin
+      ExportPlainXml("<Othr>",4);
+      ExportTagXml("Id",tstr,5);
+      ExportPlainXml("</Othr>",4);
+    end;
+    ExportPlainXml("</Id>",3);
+    ExportPlainXml("</CdtrAcct>",2);
+      
+    ExportPlainXml("<RmtInf>",2);
+    
+    if (blank(RepSpec.f10)) then begin
+      //GetMonthText("",aprdate[i],refstr);
+      refstr = USetStr(1500935) &  Userr.Name;
+    end else begin
+      refstr = RepSpec.f10;
+    end;
+    refstr = Left(refstr,130);
+    ExportTagXml("Ustrd",ConvertXmlString(refstr,false),3);
+
+    ExportPlainXml("</RmtInf>",2);
+      
+    ExportPlainXml("</CdtTrfTxInf>",1);
+  end;
+
+  ExportPlainXml("</PmtInf>",1);
+  ExportPlainXml("</CstmrCdtTrfInitn>",0);
+  ExportPlainXml("</Document>",0);
+  
+  UpdateSentFlagPPVc(num,exported,PPSerNr);
+
+
+LLBankEstSEPA_DomesticPPVc:;
+  if (res == false) then begin 
+    MessageBox(0,"Andmed valitud filtriga puuduvad");
+  end;
+  return;
+end;
+
+
+global
+updating procedure PP_MPEn(record RcVc RepSpec)
+begin
+  record BankFileBlock bfr;
+  record BaseCurBlock BCr;
+
+  BlockLoad(bfr);
+  BlockLoad(BCr);
+
+  SetBankCodepage(RepSpec.ArtMode,RepSpec.f12);
+
+  BankEstSEPA_DomesticPPVc(RepSpec,bfr,BCr.BaseCur1); 
+
+  return;
+end;

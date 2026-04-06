@@ -1,0 +1,363 @@
+external procedure GetAccDCTurnover(string,string,Date,Date,record ObjBalVc,string,Integer,Integer,Integer,val,val,var val,var val);
+external function Boolean GetNextTokenReturn(string,var Integer,var string);
+external procedure GetNext2Sep(string,var Integer,var string);
+external procedure GetNextToken(string,var Integer,var string);
+external procedure DefaultPeriod(var string);
+external procedure Bud1Sumup(var record Bud1Vc);
+external procedure Bud2Sumup(var record Bud1Vc);
+external function val FormulaCalcSum(val,string);
+external function val Budg1Calc2(string,string,string,string,Date,Date,Integer,Integer,Integer);
+external function string 255 ServerDateFormat();
+external function Boolean HasYodlee();
+external function Boolean GetAccPMRow(string,var row PMBlock);
+external function string 255 DateToStr(Date);
+external function Boolean GetAccName(string,var string,Integer);
+external function Boolean GetPMRow(string,var row PMBlock);
+remote procedure BankAccountReconWClass_FillDataAsyncCallback(Integer,string);
+external procedure ExtractObj(string,var Integer,var string);
+external function Integer PMCheckType(string,var string,var string);
+external function Integer TypeOfCurncy(var string,var Integer);
+external function Boolean AccInRange(string,string);
+external function string 255 UserBlockedAccs(string);
+external function Boolean ObjIncluded(string,string);
+external procedure FindNLAccBal(string,string,string,Integer,Date,Date,Integer,Integer,Boolean,string,Integer,string,string,var val);
+external procedure In2Period(var string,var Date,var Date);
+external updating procedure UpdateObjBal(string,string,Date,val,val,string,Boolean);
+external function Integer DateGetIntMonth(Date);
+
+global
+procedure BudEntryDClass_Sumup(var record BudEntryVc BEr,Boolean calcbudf,Boolean calcprevresf)
+begin
+  Integer i,rwcnt;
+  row BudEntryVc BErw;
+  record ObjBalVc ObjBalr;
+  val dPb,cPb;
+  Date d1,d2;
+  
+  BEr.EndBal = blankval;
+  d1 = AddYear(BEr.d1,-1);
+  d2 = AddYear(BEr.d2,-1);
+  rwcnt = MatRowCnt(BEr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(BEr,i,BErw);
+    if (calcbudf) then begin
+      BErw.BudVal = Budg1Calc2(BErw.AccNumber,BEr.Objects,BEr.CurncyCode,BEr.BudgetClass,BEr.d1,BEr.d2,0,0,0); 
+    end;
+    if (calcprevresf) then begin
+      ObjBalr.AccNumber = BErw.AccNumber;
+      ObjBalr.Object = BEr.Objects;
+      ReadFirstMain(ObjBalr,2,true);  
+      GetAccDCTurnover(BErw.AccNumber,BEr.Objects,d1,d2,ObjBalr,"",0,0,0,blankval,blankval,dPb,cPb);
+      BErw.RsltVal = dPb - cPb;
+    end;
+    if (calcbudf or calcprevresf) then begin
+      MatRowPut(BEr,i,BErw);
+    end;
+    BEr.BudVal = BEr.BudVal + BErw.BudVal;
+    BEr.EndBal = BEr.EndBal + BErw.NewBudVal;
+  end;
+  return;
+end;
+
+global
+procedure BudEntryDClass_PasteAccNumber(var record BudEntryVc BEr,Integer rownr)
+begin
+  record AccVc Accr;
+  row BudEntryVc BErw;
+  Date d1,d2;
+  
+  MatRowGet(BEr,rownr,BErw);
+  Accr.AccNumber = BErw.AccNumber;
+  if (ReadFirstMain(Accr,1,true)) then begin
+//    In2Period(BEr.Period2Str,d1,d2);
+//    BEr.d1 = d1;
+//    BEr.d2 = d2;
+    BErw.Comment = Accr.Comment;
+    BErw.BudVal = Budg1Calc2(BErw.AccNumber,BEr.Objects,BEr.CurncyCode,BEr.BudgetClass,BEr.d1,BEr.d2,0,0,0); 
+  end;
+  MatRowPut(BEr,rownr,BErw);
+  BudEntryDClass_Sumup(BEr,true,true);
+  return;
+end;
+
+global
+procedure BudEntryDClass_PasteFormula(var record BudEntryVc BEr,Integer rownr)
+begin
+  row BudEntryVc BErw;
+  val d;
+  
+  MatRowGet(BEr,rownr,BErw);
+  BErw.NewBudVal = FormulaCalcSum(BErw.RsltVal + BErw.AddVal,BErw.Formula);  
+  MatRowPut(BEr,rownr,BErw);  
+  BudEntryDClass_Sumup(BEr,false,false);
+  return;
+end;
+
+global
+procedure BudEntryDClass_AddVal(var record BudEntryVc BEr,Integer rownr)
+begin
+  row BudEntryVc BErw;
+  val d;
+  
+  MatRowGet(BEr,rownr,BErw);
+  BErw.NewBudVal = BErw.RsltVal + BErw.AddVal;
+  BErw.NewBudVal = FormulaCalcSum(BErw.NewBudVal,BErw.Formula);  
+  MatRowPut(BEr,rownr,BErw);  
+  BudEntryDClass_Sumup(BEr,false,false);
+  return;
+end;
+
+global
+procedure BudEntryDClass_PastePeriod2Str(var record BudEntryVc BEr)
+begin
+  Date d1,d2;
+  string 30 tstr;
+
+  if (blank(BEr.Period2Str)) then begin
+    DefaultPeriod(BEr.Period2Str);
+  end;
+  In2Period(BEr.Period2Str,d1,d2);
+  BEr.d1 = d1;
+  BEr.d2 = d2;
+  tstr = d1;
+  tstr = tstr & ":";
+  tstr = tstr & d2;
+  BEr.Period2Str = tstr;
+  BudEntryDClass_Sumup(BEr,true,true);
+  return;
+end;
+
+procedure AddBudgetRows(var record BudEntryVc BEr,string Desc)
+begin
+  record AccVc Accr;
+  Boolean addflag;
+  string 255 Nitem;
+  string 255 Nitem2;
+  string 255 NRu;
+  string 5 nsep;
+  Boolean Accs;
+  Integer np;
+  string 255 tstr,ckey;
+  row BudEntryVc BErw;
+  record ObjBalVc ObjBalr;
+  val dPb,cPb;
+  Date d1,d2;
+
+  d1 = AddYear(BEr.d1,-1);
+  d2 = AddYear(BEr.d2,-1);
+  np = 0;
+  GetNext2Sep(Desc,np,nsep);
+  while (GetNextTokenReturn(Desc,np,Nitem)) begin
+    if (nsep=="-") then begin
+      addflag = false; 
+    end else begin
+      addflag = true;
+    end;
+    GetNext2Sep(Desc,np,nsep);
+    if (nsep==".") then begin
+      GetNextToken(Desc,np,NRu);
+      GetNext2Sep(Desc,np,nsep);
+    end else begin
+      NRu = "";
+    end;    
+    if (nsep==":") then begin
+      GetNextToken(Desc,np,Nitem2);
+      GetNext2Sep(Desc,np,nsep);
+    end else begin
+      Nitem2 = "";
+    end;    
+    Accr.AccNumber = Nitem;
+    if (blank(Nitem2)) then begin
+      Accs = ReadFirstMain(Accr,1,true);
+      if ((Accs) and (Accr.GroupAcc==0)) then begin
+        ClearRow(BEr,BErw,1);
+        BErw.AccNumber = Accr.AccNumber;
+        BErw.Comment = Accr.Comment;
+
+        ObjBalr.AccNumber = Accr.AccNumber;
+        ObjBalr.Object = BEr.Objects;
+        ReadFirstMain(ObjBalr,2,true);  
+        GetAccDCTurnover(Accr.AccNumber,BEr.Objects,d1,d2,ObjBalr,"",0,0,0,blankval,blankval,dPb,cPb);
+        BErw.RsltVal = dPb - cPb;
+
+        BErw.BudVal = Budg1Calc2(BErw.AccNumber,BEr.Objects,BEr.CurncyCode,BEr.BudgetClass,BEr.d1,BEr.d2,0,0,0); 
+        MatRowPut(BEr,MatRowCnt(BEr),BErw);
+      end;
+    end else begin
+      if (Nitem<Nitem2) then begin
+        ResetLoop(Accr);
+        Accs = true;
+        while (LoopMain(Accr,1,Accs)) begin
+          if (Accs==true) then begin
+            if (Accr.AccNumber>Nitem2) then begin Accs = false; end;
+          end;
+          if ((Accs) and (Accr.GroupAcc==0)) then begin
+            ClearRow(BEr,BErw,1);
+            BErw.AccNumber = Accr.AccNumber;
+            BErw.Comment = Accr.Comment;
+            ObjBalr.AccNumber = Accr.AccNumber;
+            ObjBalr.Object = BEr.Objects;
+            ReadFirstMain(ObjBalr,2,true);  
+            GetAccDCTurnover(Accr.AccNumber,BEr.Objects,d1,d2,ObjBalr,"",0,0,0,blankval,blankval,dPb,cPb);
+            BErw.RsltVal = dPb - cPb;
+            BErw.BudVal = Budg1Calc2(BErw.AccNumber,BEr.Objects,BEr.CurncyCode,BEr.BudgetClass,BEr.d1,BEr.d2,0,0,0); 
+            MatRowPut(BEr,MatRowCnt(BEr),BErw);
+          end;
+        end;
+      end else begin
+        ResetLoop(Accr);
+        Accr.AccNumber = Nitem;
+        Accs = LoopBackKey("AccNumber",Accr,1,true);
+        while (Accs) begin
+          if (Accs==true) then begin
+            if (Accr.AccNumber<Nitem2) then begin Accs = false; end;
+          end;  
+          if ((Accs) and (Accr.GroupAcc==0)) then begin
+            ClearRow(BEr,BErw,1);
+            BErw.AccNumber = Accr.AccNumber;
+            BErw.Comment = Accr.Comment;
+            ObjBalr.AccNumber = Accr.AccNumber;
+            ObjBalr.Object = BEr.Objects;
+            ReadFirstMain(ObjBalr,2,true);  
+            GetAccDCTurnover(Accr.AccNumber,BEr.Objects,d1,d2,ObjBalr,"",0,0,0,blankval,blankval,dPb,cPb);
+            BErw.RsltVal = dPb - cPb;
+            BErw.BudVal = Budg1Calc2(BErw.AccNumber,BEr.Objects,BEr.CurncyCode,BEr.BudgetClass,BEr.d1,BEr.d2,0,0,0); 
+            MatRowPut(BEr,MatRowCnt(BEr),BErw);
+          end;  
+          Accs = LoopBackKey("AccNumber",Accr,1,true);//Accs = m4_ReadLogicalMain(AccVc,LLoop1--,&Accr);
+        end;
+      end;
+    end;
+  end;
+  return;
+end;
+
+
+global
+procedure BudEntryDClass_OnOpenWindow(var record BudEntryVc BEr)
+begin
+  Boolean found,testf;
+  string 255 ckey;
+  record UserDefRepVc UDRr;
+  record UserDefRepLinesVc UDRLr;
+  
+  BudEntryDClass_PastePeriod2Str(BEr);
+  
+  UDRr.shortname = "ResRn";
+  if (ReadFirstMain(UDRr,1,true)) then begin
+    found = true;
+    ckey = "ShortIDKey:" & UDRr.shortname;
+    UDRLr.IdKey = 0; 
+    while (LoopKey(ckey,UDRLr,1,found)) begin
+      if (found) then begin
+        testf = true;
+        if (UDRLr.RsType!=kRsTypeAccounts) then begin testf = false; end;
+        if (UDRLr.AccType!=kAccTypeIncome and UDRLr.AccType!=kAccTypeExpense) then begin
+          testf = false; 
+        end;
+        if (testf) then begin
+          AddBudgetRows(BEr,UDRLr.Desc);
+          AddBudgetRows(BEr,UDRLr.Desc2);
+          AddBudgetRows(BEr,UDRLr.Desc3);
+        end;
+      end;
+    end;
+  end;
+
+  BudEntryDClass_Sumup(BEr,false,false);
+  return;
+end;
+
+updating function LongInt UpdateBudget(var record BudEntryVc BEr,row BudEntryVc BErw)
+begin
+  LongInt res;
+  Boolean found,testf,bud1f;
+  record Bud1Vc oldBud1r;
+  record Bud1Vc Bud1r;
+  row Bud1Vc Bud1rw;
+  record AccVc Accr;
+  Date td;
+  Integer i,rwcnt;
+  
+  res = 0;
+  Bud1r.AccNumber = BErw.AccNumber;
+  Bud1r.Objects = BEr.Objects;
+  Bud1r.Class = BEr.BudgetClass;
+  Bud1r.StartDate = BEr.d1;
+  found = true;
+  while (LoopKey("AccObjKey",Bud1r,4,found)) begin
+    if (found) then begin
+      if (Bud1r.AccNumber!=BErw.AccNumber) then begin found = false; end;
+      if (Bud1r.Objects!=BEr.Objects) then begin found = false; end;
+      if (Bud1r.Class!=BEr.BudgetClass) then begin found = false; end;
+      if (Bud1r.StartDate!=BEr.d1) then begin found = false; end;
+    end;
+    if (found) then begin
+      testf = true;
+      if (testf) then begin
+        bud1f = true;
+        RecordCopy(oldBud1r,Bud1r);
+        while (MatRowCnt(Bud1r)>0) begin
+          MatRowDelete(Bud1r,0);
+        end;
+        Bud1r.BFCode = BEr.BFCode;
+        Bud1r.YearVal = BErw.NewBudVal;
+        td = BEr.d1;
+        while (td<BEr.d2) begin
+          Bud1rw.BudDate = td;
+          Bud1rw.DefStr = "";
+          Bud1rw.sval = blankval;
+          td = AddMonth(td,1);
+          MatRowPut(Bud1r,MatRowCnt(Bud1r),Bud1rw);
+        end;
+        Bud1Sumup(Bud1r);
+        RecordUpdate(oldBud1r,Bud1r,false);
+      end;
+    end;
+  end;
+  if (bud1f==false) then begin
+    RecordNew(Bud1r);
+    Bud1r.StartDate = BEr.d1;
+    Bud1r.EndDate = BEr.d2;
+    Bud1r.Objects = BEr.Objects;
+    Bud1r.Class = BEr.BudgetClass;
+    Bud1r.BFCode = BEr.BFCode;
+
+    Bud1r.AccNumber = BErw.AccNumber;
+    Accr.AccNumber = Bud1r.AccNumber;
+    ReadFirstMain(Accr,1,true);
+    Bud1r.Comment = Accr.Comment;
+    Bud1r.YearVal = BErw.NewBudVal;
+    td = BEr.d1;
+    while (td<BEr.d2) begin
+      Bud1rw.BudDate = td;
+      Bud1rw.DefStr = "";
+      Bud1rw.sval = blankval;
+      td = AddMonth(td,1);
+      MatRowPut(Bud1r,MatRowCnt(Bud1r),Bud1rw);
+    end;
+    Bud1Sumup(Bud1r);
+    RecordStore(Bud1r,false);
+  end;
+  UpdateBudget = res;
+  return;
+end;
+
+global
+updating function LongInt BudEntryDClassPostRemote(var record BudEntryVc BEr)
+begin
+  LongInt res;
+  Integer i,rwcnt;
+  row BudEntryVc BErw;
+  
+  res = 0;
+  rwcnt = MatRowCnt(BEr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(BEr,i,BErw);
+    if (BErw.NewBudVal!=BErw.RsltVal and BErw.NewBudVal!=0) then begin
+      UpdateBudget(BEr,BErw);
+    end;
+  end;
+  BudEntryDClassPostRemote = res;
+  return;
+end;

@@ -1,0 +1,459 @@
+external procedure JSONStringStart(var string);
+external procedure JSONStringPut(var string,string,string);
+external procedure JSONStringAdd(var string,string,string);
+external procedure JSONStringMemberStart(var string,string);
+external procedure JSONStringMemberEnd(var string);
+external procedure JSONStringArrayStart(var string);
+external procedure JSONStringArrayEnd(var string);
+external procedure JSONStringEnd(var string);
+external procedure JSONNotStringAdd(var string,string,string);
+external procedure JSONNotStringPut(var string,string,string);
+external function string 50 TimeToString(time,string,boolean);
+external procedure MulVATIV(string,val,var val,var val,Integer,Integer);
+
+
+global
+updating procedure StoreIVCashReceiptUrl(var record IVCashVc IVCashr,string receiptUrl,string transdatetime)
+begin
+  record IVCashVc oldIVCashr;
+  Date transdate;
+  Time transtime;
+
+  transdate = StringToDate(Left(transdatetime,10));
+  transtime = StringToTime(Right(transdatetime,8));
+
+  RecordCopy(oldIVCashr,IVCashr);
+  IVCashr.QRCodeURL = receiptUrl;
+  IVCashr.PrintDate = transdate;
+  IVCashr.RegDate = transdate;
+  IVCashr.RegTime = transtime;
+  RecordUpdate(oldIVCashr,IVCashr,true);
+  return;
+end;
+
+global
+updating procedure StoreIVReceiptUrl(var record IVVc IVr,string receiptUrl,string transdatetime)
+begin
+  record IVVc oldIVr;
+  Date transdate;
+  Time transtime;
+
+  transdate = StringToDate(Left(transdatetime,10));
+  transtime = StringToTime(Right(transdatetime,8));
+
+  RecordCopy(oldIVr,IVr);
+  IVr.QRCodeURL = receiptUrl;
+  IVr.PrintDate = transdate;
+  IVr.RegDate = transdate;
+  IVr.RegTime = transtime;
+  RecordUpdate(oldIVr,IVr,true);
+  return;
+end;
+
+global
+updating procedure StoreIVRestAccUrl(var record RestAccVc RestAccr,string receiptUrl,string transdatetime)
+begin
+  record RestAccVc oldRestAccr;
+  Date transdate;
+  Time transtime;
+
+  transdate = StringToDate(Left(transdatetime,10));
+  transtime = StringToTime(Right(transdatetime,8));
+
+  RecordCopy(oldRestAccr,RestAccr);
+  RestAccr.QRCodeURL = receiptUrl;
+  RestAccr.PrintDate = transdate;
+  RestAccr.RegDate = transdate;
+  RestAccr.RegTime = transtime;
+  RecordUpdate(oldRestAccr,RestAccr,true);
+  return;
+end;
+
+global
+procedure WKFLogArea(string type,area amsg)
+begin
+  record WKFBlock WKFb;
+  string 255 fname;
+
+  BlockLoad(WKFb);
+  if (WKFb.LogCommunication) then begin
+    fname = CreateTempFile("_WKF-" & type,".txt");  
+    WriteAreaToFile(amsg,fname,0);
+  end;
+
+  return;
+end;
+
+global
+procedure WKFLogString(string type,string msg)
+begin
+  record WKFBlock WKFb;
+  string 255 fname;
+
+  BlockLoad(WKFb);
+  if (WKFb.LogCommunication) then begin
+    fname = CreateTempFile("_WKF-" & type,".txt");  
+    WriteStringToFile(msg,fname,0);
+  end;
+
+  return;
+end;
+
+procedure BuildWKFReq(LongInt sernr,string custcode,Date transdate,Time transtime,val sum4,string comment,string vatnr,record WKFBlock WKFb,record BaseCurBlock BCb,var string jsr)
+begin
+  string 255 tstr,tstr2,ivcashvatnr;
+  record CUVc CUr;
+  record CashierDefBlock CDb;
+  
+  BlockLoad(CDb);
+
+  ivcashvatnr = vatnr;
+
+  CUr.Code = custcode;
+  ReadFirstMain(CUr,1,true);
+
+  JSONStringStart(jsr);
+  JSONStringAdd(jsr,"transactionNumberPOS",sernr);
+  JSONStringAdd(jsr,"transactionEndDatePOS",DateToString(transdate,"YYYY-MM-DD"));
+  tstr = TimeToString(CurrentTime,"HH",false) & ":" & TimeToString(CurrentTime,"MM",false) & ":" & TimeToString(CurrentTime,"SS",false);
+  JSONStringAdd(jsr,"transactionEndTimePOS",tstr);
+  JSONStringAdd(jsr,"receiptType","PAPER");
+  switch (WKFb.ReceiptPrint) begin
+    case 0: tstr = "false";
+    case 1: tstr = "true";
+  end;
+  JSONNotStringAdd(jsr,"receiptPrint",tstr);
+  // JSONStringAdd(jsr,"receiptType","SMS");
+  // JSONStringAdd(jsr,"recipient","+385993305211");
+  JSONNotStringAdd(jsr,"leaveReceiptOpen","false");
+  JSONNotStringAdd(jsr,"recipient","");
+  JSONStringAdd(jsr,"logoImage","");
+  if (blank(ivcashvatnr)) then begin
+    ivcashvatnr = CUr.VATNr;
+  end;
+  if (InString(ivcashvatnr,"PL")) then begin
+    tstr = Right(ivcashvatnr,len(ivcashvatnr)-2);
+  end else begin
+    tstr = ivcashvatnr;
+  end;
+  if (nonblank(tstr)) then begin
+    if (custcode!=CDb.DefCustCode) then begin
+        JSONStringAdd(jsr,"customerNip",tstr);
+    end else begin
+      if (CUr.VATNr!=vatnr) then begin
+        JSONStringAdd(jsr,"customerNip",tstr);
+      end;
+    end;
+  end;
+  JSONStringAdd(jsr,"currency",BCb.BaseCur1);
+  JSONNotStringAdd(jsr,"valueGrossCheck",ValToString(sum4,M4Val,"","",0));
+  JSONNotStringAdd(jsr,"disableReceiptPdfResponse","false");
+  switch (WKFb.PrintSize) begin
+    case 0: tstr = "true"; tstr = "false";
+    case 1: tstr = "false"; tstr = "true";
+  end;
+  JSONNotStringAdd(jsr,"disableReceiptEsc58Response",tstr);
+  JSONNotStringAdd(jsr,"disableReceiptEsc80Response",tstr2);
+  switch (WKFb.PrintCodepage) begin
+    case 0: tstr = "ascii";
+    case 1: tstr = "cp852";
+    case 2: tstr = "undefined";
+  end;
+  JSONStringAdd(jsr,"codePage",tstr);
+  JSONNotStringAdd(jsr,"receiptPrint","false");
+  // if (nonblank(comment)) then begin
+    JSONStringAdd(jsr,"nonFiscalDescription","Ref. " & sernr);
+  // end;
+  return;
+end;
+
+function string 255 VATLetter(string vatcode)
+begin
+  string 255 res;
+  record FPVATCodeBlock FPVATCodeb;
+  row FPVATCodeBlock FPVATCodebrw;
+  Integer i,rwcnt;
+
+  BlockLoad(FPVATCodeb);
+  rwcnt = MatRowCnt(FPVATCodeb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(FPVATCodeb,i,FPVATCodebrw);
+    if (FPVATCodebrw.VATCode==vatcode) then begin
+      res = FPVATCodebrw.FiscalVATCode;
+      i = rwcnt;
+    end;
+  end;
+
+  VATLetter = res;
+  return;
+end;
+
+procedure BuildWKFReqRows_paymentMethods(string curncycode,string rowtype,val torateb2,val sum,val retvalue,Integer paynr,var string jsr)
+begin
+  val paysum;
+
+  JSONStringAdd(jsr,"paymentNumber",paynr+1);
+  JSONStringAdd(jsr,"paymentMethod",rowtype);
+  if (rowtype=="FOREIGN_CURRENCY") then begin
+    JSONStringAdd(jsr,"currencyIso",curncycode);
+    JSONNotStringAdd(jsr,"exchangeRate",torateb2);
+  end;
+  paysum = sum;
+  if (rowtype=="MONEY" or rowtype=="FOREIGN_CURRENCY") then begin
+    paysum = paysum - retvalue;
+  end;
+  JSONNotStringPut(jsr,"paymentValue",ValToString(paysum,M4Val,"","",0));
+  // JSONStringPut(jsr,"description",tstr);
+
+  return;
+end;
+
+procedure BuildWKFReqRows_transactionPositions(string spec,string artcode,Integer qty,string unitcode,string vatcode,val price,Integer inclvat,Integer notaxonvat,
+                                               string rebateprc,string sernr,var string jsr,var LongInt err)
+begin
+  string 255 tstr,rebate;
+  val vatv,tax1,rwprice;
+
+  JSONStringAdd(jsr,"productName",spec);
+  JSONStringAdd(jsr,"productPLU",artcode);
+  JSONNotStringAdd(jsr,"quantity",qty);
+  JSONStringAdd(jsr,"unit",unitcode);
+
+  MulVATIV(vatcode,price,vatv,tax1,inclvat,notaxonvat);
+  if (inclvat==0) then begin
+    rwprice = price+vatv;
+  end else begin
+    rwprice = price;
+  end;
+  JSONNotStringAdd(jsr,"priceGross",ValToString(rwprice,M4Val,"","",0));
+  tstr = VATLetter(vatcode);
+  if (blank(tstr)) then begin
+    err = 43980;
+  end;
+  JSONStringAdd(jsr,"vatLetter",VATLetter(vatcode));
+
+  tstr = "NONE";
+  rebate = "0";
+  if (nonblank(rebateprc)) then begin
+    tstr = "DISCOUNT";
+    rebate = ValToString(StringToVal(rebateprc,M4Val),M4Val,"","",1);
+  end;
+  JSONStringAdd(jsr,"discountType",tstr); 
+  JSONStringAdd(jsr,"discountValueType","PERCENT");
+  JSONNotStringAdd(jsr,"discountValue",rebate);
+  JSONNotStringAdd(jsr,"priceFinal",ValToString(rwprice-(rwprice*(StringToVal(rebateprc,M4Val)/100)),M4Val,"","",0));
+  if (nonblank(sernr)) then begin
+    JSONStringAdd(jsr,"positionDescription",sernr);
+  end;
+  JSONNotStringPut(jsr,"returnPack","false");
+
+  return;
+end;
+
+procedure AddToArray(Integer rowtype,string curncycode,string bc1,val sum,val torateb2,var array string aCurncyCode,var array string aRowtype,var array val aTorateb2,var array val aSum,var Integer acnt)
+begin
+  string 255 tstr;
+  Integer i;
+
+  switch (rowtype) begin
+    case kInvoiceRowTypeCashPayment: 
+      if (curncycode!=bc1) then begin
+        tstr = "FOREIGN_CURRENCY";
+      end else begin
+        tstr = "MONEY";
+      end;
+    case kInvoiceRowTypeCreditCardPayment:    tstr = "CREDIT_CARD";
+    case kInvoiceRowTypeGiftVoucherPayment:   tstr = "VOUCHER";
+    case kInvoiceRowTypeLoyaltyPointsPayment: tstr = "BON";
+    case kInvoiceRowTypeCredit:               tstr = "CREDIT";
+  end;
+
+  for (i=0;i<acnt;i=i+1) begin
+    if (aRowtype[i]==tstr and aCurncyCode[i]==curncycode) then begin
+      aSum[i] = aSum[i] + sum;
+      goto LAddToArray;
+    end;
+  end;
+
+  aRowtype[acnt] = tstr;
+  aCurncyCode[acnt] = curncycode;
+  aTorateb2[acnt] = torateb2;
+  aSum[acnt] = sum;
+  acnt = acnt + 1;
+LAddToArray:;
+  return;
+end;
+
+global
+procedure DoPrintWKFReceipt_IVVc(var record IVVc IVr,record LSerialPortDeviceVc LSPDr,var string jsr,var LongInt err)
+begin
+  area a_req;
+  Integer rwcnt,i,acnt;
+  record BaseCurBlock BCb;
+  record WKFBlock WKFb;
+  row IVVc IVrw;
+  Boolean prevf;
+  array string 255 aCurncyCode,aRowtype;
+  array val aTorateb2,aSum; 
+
+  BlockLoad(BCb);
+  BlockLoad(WKFb);
+  BuildWKFReq(IVr.SerNr,IVr.CustCode,IVr.TransDate,IVr.TransTime,IVr.Sum4,IVr.InvComment,IVr.VATNr,WKFb,BCb,jsr);
+
+  JSONStringMemberStart(jsr,"transactionPositions");
+  JSONStringArrayStart(jsr);
+  jsr = jsr & "{";
+  rwcnt = MatRowCnt(IVr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(IVr,i,IVrw);
+    if (IVrw.stp==kInvoiceRowTypeNormal) or (IVrw.stp==kInvoiceRowTypeStructuredItemComponent) then begin 
+      if (i>0) then begin
+        if (prevf) then begin
+          jsr = jsr & ",";
+        end;
+        jsr = jsr & "{";
+      end;
+      BuildWKFReqRows_transactionPositions(IVrw.Spec,IVrw.ArtCode,IVrw.Quant,IVrw.UnitCode,IVrw.VATCode,IVrw.Price,
+                                           IVr.InclVAT,IVr.NoTAXonVAT,IVrw.vRebate,IVrw.SerialNr,jsr,err);
+      prevf = true;
+      JSONStringEnd(jsr);
+    end;
+  end;
+  JSONStringArrayEnd(jsr);
+  jsr = jsr & ",";
+
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(IVr,i,IVrw);
+    if (IVrw.stp==kInvoiceRowTypeGiftVoucherPayment or IVrw.stp==kInvoiceRowTypeCashPayment or 
+        IVrw.stp==kInvoiceRowTypeCreditCardPayment or IVrw.stp==kInvoiceRowTypeLoyaltyPointsPayment or 
+        IVrw.stp==kInvoiceRowTypeCredit) then begin
+      AddToArray(IVrw.stp,IVr.CurncyCode,BCb.BaseCur1,IVrw.Sum,IVr.ToRateB2,aCurncyCode,aRowType,aTorateb2,aSum,acnt);
+    end;
+  end;
+
+  JSONStringMemberStart(jsr,"paymentMethods");
+  JSONStringArrayStart(jsr);
+  prevf = false;
+  for (i=0;i<acnt;i=i+1) begin
+    if (prevf) then begin
+      jsr = jsr & ",";
+    end;
+    jsr = jsr & "{";
+    BuildWKFReqRows_paymentMethods(aCurncyCode[i],aRowType[i],aTorateb2[i],aSum[i],IVr.RetValue,i,jsr);
+    prevf = true;
+    JSONStringEnd(jsr);
+  end;
+  JSONStringArrayEnd(jsr);
+  JSONStringEnd(jsr);
+  
+  WKFLogString("receipt",jsr);
+  return;
+end;
+
+global
+procedure DoPrintWKFReceipt_IVCashVc(var record IVCashVc IVCashr,record LSerialPortDeviceVc LSPDr,var string jsr,var LongInt err)
+begin
+  area a_req;
+  Integer rwcnt,i,acnt;
+  record BaseCurBlock BCb;
+  record WKFBlock WKFb;
+  row IVCashVc IVCashrw;
+  Boolean prevf;
+  array string 255 aCurncyCode,aRowtype;
+  array val aTorateb2,aSum; 
+
+  BlockLoad(BCb);
+  BlockLoad(WKFb);
+  BuildWKFReq(IVCashr.SerNr,IVCashr.CustCode,IVCashr.TransDate,IVCashr.TransTime,IVCashr.Sum4,IVCashr.InvComment,IVCashr.VATNr,WKFb,BCb,jsr);
+
+  rwcnt = MatRowCnt(IVCashr);
+  JSONStringMemberStart(jsr,"transactionPositions");
+  JSONStringArrayStart(jsr);
+  jsr = jsr & "{";
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(IVCashr,i,IVCashrw);
+    if (IVCashrw.stp==kInvoiceRowTypeNormal) or (IVCashrw.stp==kInvoiceRowTypeStructuredItemComponent) then begin 
+      if (i>0) then begin
+        if (prevf) then begin
+          jsr = jsr & ",";
+        end;
+        jsr = jsr & "{";
+      end;
+      BuildWKFReqRows_transactionPositions(IVCashrw.Spec,IVCashrw.ArtCode,IVCashrw.Quant,IVCashrw.UnitCode,IVCashrw.VATCode,IVCashrw.Price,
+                                           IVCashr.InclVAT,IVCashr.NoTAXonVAT,IVCashrw.vRebate,IVCashrw.SerialNr,jsr,err);
+      prevf = true;
+      JSONStringEnd(jsr);
+    end;
+  end;
+  JSONStringArrayEnd(jsr);
+  jsr = jsr & ",";
+
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(IVCashr,i,IVCashrw);
+    if (IVCashrw.stp==kInvoiceRowTypeGiftVoucherPayment or IVCashrw.stp==kInvoiceRowTypeCashPayment or 
+        IVCashrw.stp==kInvoiceRowTypeCreditCardPayment or IVCashrw.stp==kInvoiceRowTypeLoyaltyPointsPayment or 
+        IVCashrw.stp==kInvoiceRowTypeCredit) then begin
+      AddToArray(IVCashrw.stp,IVCashr.CurncyCode,BCb.BaseCur1,IVCashrw.Sum,IVCashr.ToRateB2,aCurncyCode,aRowType,aTorateb2,aSum,acnt);
+    end;
+  end;
+
+  JSONStringMemberStart(jsr,"paymentMethods");
+  JSONStringArrayStart(jsr);
+  prevf = false;
+  for (i=0;i<acnt;i=i+1) begin
+    if (prevf) then begin
+      jsr = jsr & ",";
+    end;
+    jsr = jsr & "{";
+    BuildWKFReqRows_paymentMethods(aCurncyCode[i],aRowType[i],aTorateb2[i],aSum[i],IVCashr.RetValue,i,jsr);
+    prevf = true;
+    JSONStringEnd(jsr);
+  end;
+  JSONStringArrayEnd(jsr);
+  JSONStringEnd(jsr);
+  
+  WKFLogString("receipt",jsr);
+
+  return;
+end;
+
+//TODO A LOT OF MISSING FIELDS
+// global
+// procedure DOPrintWKFReceipt_RestAccVc(var record RestAccVc RestAccr,record LSerialPortDeviceVc LSPDr)
+// begin
+//   string 255 jsr;
+//   area a_req;
+//   Integer rwcnt,i;
+//   record BaseCurBlock BCb;
+//   row RestAccVc RestAccrw;
+//   Boolean firstf,firstf2;
+
+//   BlockLoad(BCb);
+
+//   BuildWKFReq(RestAccr.SerNr,RestAccr.CustCode,RestAccr.TransDate,RestAccr.TransTime,RestAccr.Sum4,RestAccr.InvComment,BCb,jsr);
+
+//   rwcnt = MatRowCnt(RestAccr);
+//   for (i=0;i<rwcnt;i=i+1) begin
+//     MatRowGet(RestAccr,i,RestAccrw);
+//     if (RestAccrw.stp==kInvoiceRowTypeNormal) or (RestAccrw.stp==kInvoiceRowTypeStructuredItemComponent) then begin 
+//       BuildWKFReqRows_transactionPositions(RestAccrw.Spec,RestAccrw.ArtCode,RestAccrw.Quant,RestAccrw.UnitCode,RestAccrw.VATCode,RestAccrw.Price,
+//                                            RestAccr.InclVAT,RestAccr.NoTAXonVAT,RestAccrw.vRebate,RestAccrw.SerialNr,jsr,firstf);
+//     end;
+//   end;
+
+//   for (i=0;i<rwcnt;i=i+1) begin
+//     MatRowGet(RestAccr,i,RestAccrw);
+//     if (RestAccrw.stp==kInvoiceRowTypeGiftVoucherPayment or RestAccrw.stp==kInvoiceRowTypeCashPayment or 
+//         RestAccrw.stp==kInvoiceRowTypeCreditCardPayment or RestAccrw.stp==kInvoiceRowTypeLoyaltyPointsPayment or 
+//         RestAccrw.stp==kInvoiceRowTypeCredit) then begin
+//       BuildWKFReqRows_paymentMethods(RestAccrw.stp,RestAccr.CurncyCode,BCb.BaseCur1,RestAccrw.Sum,RestAccr.ToRateB2,jsr,firstf2);
+//     end;
+//   end;
+  
+//   AddStringToArea(jsr,a_req);
+//   WriteAreaToFile(a_req,"_WKFTESTRestAcc.txt",0);
+
+//   DoWKFPrint(LSPDr,jsr);
+
+//   return;
+// end;

@@ -1,0 +1,659 @@
+external function Boolean IBMCloudSendRequestArea(Integer,string,area,string,vector string,var Integer,var area);
+external procedure TalkBotTTSCustomSetWord(string,string,string,var integer);
+external function string 255 TalkBotTTSGetIBMOriginal(string,var integer);
+remote procedure IBMCloudAssistantListWorkspaces(var array string);
+remote procedure IBMCloudAssistantImportWorkspace(string);
+
+global
+procedure WatsonSkillsOClassReload()
+begin
+  string 255 tag,tstr;
+  Integer wn;
+  LongInt pos,idx;
+  record RcVc RepSpec;
+  array string 255 skill_arr;
+  string 255 skill_id,skill_lang,skill_name,skill_desc;
+
+  wn = FindWindow("WatsonSkillsOClass");
+  if (wn<=0) then begin
+    goto LWatsonSkillsOClassReload;
+  end;
+
+  DeSelectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+
+  ClearStringList(wn);
+  tag = "tagLOADING%";
+  AddListRow(wn,"skills",1,tag,0);
+  AddListData(wn,"skills","description","Loading...");
+  PutWindowRecord(wn,RepSpec);
+
+  ThreadRemote.IBMCloudAssistantListWorkspaces(skill_arr);
+
+  ClearStringList(wn);
+  for (idx = 0; idx<skill_arr.length; idx = idx + 1) begin
+    pos = -1;
+    if (!GetNextSubString(skill_arr[idx],pos,chr(0),skill_id)) then begin goto LWatsonSkillsOClassReload_next; end;
+    if (!GetNextSubString(skill_arr[idx],pos,chr(0),skill_lang)) then begin goto LWatsonSkillsOClassReload_next; end;
+    if (!GetNextSubString(skill_arr[idx],pos,chr(0),skill_name)) then begin goto LWatsonSkillsOClassReload_next; end;
+    GetNextSubString(skill_arr[idx],pos,chr(0),skill_desc);
+
+    tag = skill_id;
+    AddListRow(wn,"skills",1,tag,0);
+    AddListData(wn,"skills","id",skill_id);
+    AddListData(wn,"skills","language",skill_lang);
+    AddListData(wn,"skills","name",skill_name);
+    AddListData(wn,"skills","description",skill_desc);
+    
+LWatsonSkillsOClassReload_next:;
+  end;
+  PutWindowRecord(wn,RepSpec);
+
+  SetSelectedListLine(wn,0);
+
+LWatsonSkillsOClassReload:;
+  return;
+end;
+
+global
+function Boolean WatsonSkillsOClassOnOpenWindow(Integer wn)
+begin
+  WatsonSkillsOClassReload;
+  WatsonSkillsOClassOnOpenWindow = false;
+  return;
+end;
+
+global
+procedure ImportWatsonAssistantLsm()
+begin
+  Integer nwn,mwn;
+  record RcVc RepSpec;
+  
+  mwn = CurWindow;
+  nwn = OpenWindow("WatsonSkillsOClass",1,mwn,"","",RepSpec);
+
+  return;
+end;
+
+global
+procedure WatsonSkillsOClassImport()
+begin
+  LongInt line;
+  string 255 skill_id,msg;
+//  area a_ws;
+  Integer wn;
+  Boolean res;
+  
+  wn = CurWindow;
+  
+  line = SelectedListLine(wn);
+  if (line<0) then begin goto LWatsonSkillsOClassImport; end;
+  
+  skill_id = GetListTag(wn,line);
+  if (blank(skill_id)) then begin goto LWatsonSkillsOClassImport; end;
+
+  CloseWindow(wn);
+  
+  OpenProgressWindow(41150,41151,5);
+  ThreadRemoteAsync.IBMCloudAssistantImportWorkspace(skill_id);
+
+LWatsonSkillsOClassImport:;
+  return;
+end;
+
+global
+function Boolean WatsonSkillsOClassListDblClick(Integer wn)
+begin
+  WatsonSkillsOClassImport;
+  WatsonSkillsOClassListDblClick = true;
+  return;
+end;
+
+/*
+global
+updating procedure EditWatsonAssistantWorkspace()
+begin
+  LongInt i,wn;
+  record WatsonAssistantWorkspaceVc WAWr;
+  record IBMCloudAsCredBlock ICACb;
+  string 255 url;
+  
+  wn = CurWindow;
+  i = 1;
+  while (GetRecordFromBrowse(WAWr,wn,i)) begin
+    i = i + 1;
+  end;
+  i = i - 1;
+
+  if (i>1) then begin
+    MessageBox(0,"This operation can only be performed on a single workspace record.");
+    goto LEditWatsonAssistantWorkspace;
+  end;
+
+  if (i==0) then begin
+    MessageBox(0,"This operation requires one selected workspace record.");
+    goto LEditWatsonAssistantWorkspace;
+  end;
+  
+  GetRecordFromBrowse(WAWr,wn,1);
+
+  BlockLoad(ICACb);
+  url = ICACb.ServiceURL;
+  url = url & "/";
+  url = url & ICACb.ServiceID;
+  url = url & "/workspaces/";
+  url = url & WAWr.WorkspaceID;
+  url = url & "/build/dialogx";
+
+  OpenWebBrowser(url);
+
+LEditWatsonAssistantWorkspace:;
+  return;
+end;
+*/
+
+global
+updating procedure TalkBotTTSCreatePronounciationModelWA()
+begin
+  LongInt i,wn;
+  record TalkBotPronModelVc TBPMr,oldTBPMr;
+  string 255 modelid;
+  json js;
+  area a_req,a_message;
+  Integer httpstatus;
+  Boolean res;
+  vector string 255 params_vec;
+
+  wn = CurWindow;
+  GetWindowRecord(wn,TBPMr);
+  if (WindowState(wn)!=Rs_normal) then begin
+    StopAlert("Record must be saved first");
+    goto LTalkBotTTSCreatePronounciationModelWA;
+  end;
+  if (blank(TBPMr.ModelName) or blank(TBPMr.ModelDesc) /*or blank(language)*/) then begin
+    goto LTalkBotTTSCreatePronounciationModelWA;
+  end;
+  
+  AddTextToArea("{",a_req);
+  AddTextToArea("\"name\":\"" & TBPMr.ModelName & "\"",a_req);
+  AddTextToArea(", \"language\":\"" & "en-US" & "\"",a_req);
+  AddTextToArea(", \"description\":\"" & TBPMr.ModelDesc & "\"",a_req);
+  AddTextToArea("}",a_req);
+  res = IBMCloudSendRequestArea(kWatsonServiceTTSCreatePronModel,"/customizations/",a_req,"",params_vec,httpstatus,a_message);
+  js = ParseJSONArea(a_message);
+  modelid = JSONGet(js,"customization_id");
+  
+  if (nonblank(modelid)) then begin
+    oldTBPMr = TBPMr;
+    TBPMr.ModelID = modelid;
+    PutWindowRecord(wn,TBPMr);
+    if (Recordupdate(oldTBPMr,TBPMr,true)==0) then begin
+      SetWindowState(wn,Rs_normal);
+    end;
+  end;
+
+LTalkBotTTSCreatePronounciationModelWA:;
+  return;
+end;
+
+//TODO this should have some kind of conformation window like you are about to delete the whole custom voice set words and all
+//and probably also delete the words asociated with it
+global
+updating procedure TalkBotTTSDeleteCustomModelWA()
+begin
+  LongInt i,wn;
+  record TalkBotPronModelVc TBPMr,oldTBPMr;
+  string 255 modelid;
+  json js;
+  area a_req,a_message;
+  Integer httpstatus;
+  Boolean res;
+  vector string 255 params_vec;
+
+  wn = CurWindow;
+  GetWindowRecord(wn,TBPMr);
+  if (WindowState(wn)!=Rs_normal) then begin
+    StopAlert("Record must be saved first");
+    goto LTalkBotTTSDeleteCustomModelWA;
+  end;
+  if (blank(TBPMr.ModelID)) then begin
+    StopAlert("Record does not have a set custom ID");
+    goto LTalkBotTTSDeleteCustomModelWA;
+  end;
+  
+  res = IBMCloudSendRequestArea(kWatsonServiceTTSRemovePronModel,"/customizations/" & TBPMr.ModelID,a_req,"",params_vec,httpstatus,a_message);
+  js = ParseJSONArea(a_message);
+  modelid = JSONGet(js,"customization_id");
+  
+  if (blank(modelid)) then begin
+    oldTBPMr = TBPMr;
+    TBPMr.ModelID = modelid;
+    PutWindowRecord(wn,TBPMr);
+    if (Recordupdate(oldTBPMr,TBPMr,true)==0) then begin
+      SetWindowState(wn,Rs_normal);
+    end;
+  end;
+
+LTalkBotTTSDeleteCustomModelWA:;
+  return;
+end;
+
+global
+updating procedure SetTalkBotTTSSetCustomWordWA()
+begin
+  LongInt wn;
+  integer result;
+  record TalkBotPronWordVc TBPWr,oldTBPWr;
+  record TalkBotPronModelVc TBPMr;
+  string 255 modelid,pronunciation;
+
+  wn = CurWindow;
+  GetWindowRecord(wn,TBPWr);
+  if (WindowState(wn)!=Rs_normal) then begin StopAlert("Record must be saved first"); goto LSetTalkBotTTSSetCustomWordWA; end;
+  if (blank(TBPWr.ModelID)) then begin StopAlert("Record does not have a set customization"); goto LSetTalkBotTTSSetCustomWordWA; end;
+  TBPMr.SerNr = TBPWr.ModelID;
+  ReadFirstMain(TBPMr,1,true);
+  if (blank(TBPMr.ModelID)) then begin StopAlert("Custom ID record not found"); goto LSetTalkBotTTSSetCustomWordWA; end;
+  TalkBotTTSCustomSetWord(TBPWr.CustomWord,TBPWr.CustomPron,TBPMr.ModelID,result);
+  if (result==1) then begin
+    oldTBPWr = TBPWr;
+    if (blank(TBPWr.CustomIBMPron)) then begin
+      pronunciation = TalkBotTTSGetIBMOriginal(TBPWr.CustomWord,result);
+      if (result==1) then begin
+        TBPWr.CustomIBMPron = pronunciation;
+      end else begin
+        StopAlert("Failed to get IBM original pronounciation");
+      end;
+    end;
+    PutWindowRecord(wn,TBPWr);
+    if (Recordupdate(oldTBPWr,TBPWr,true)==0) then begin
+      SetWindowState(wn,Rs_normal);
+    end;
+  end;
+
+LSetTalkBotTTSSetCustomWordWA:;
+  return;
+end;
+
+global
+updating procedure TalkBotTTSSynthesizeWordWA()
+begin
+  LongInt wn;
+  integer result;
+  record TalkBotPronWordVc TBPWr,oldTBPWr;
+  record TalkBotPronModelVc TBPMr;
+  string 255 modelid,pronunciation;
+
+  wn = CurWindow;
+  GetWindowRecord(wn,TBPWr);
+  if (WindowState(wn)!=Rs_normal) then begin StopAlert("Record must be saved first"); goto LTalkBotTTSSynthesizeWordWA; end;
+  if (blank(TBPWr.ModelID)) then begin StopAlert("Record does not have a set custom ID"); goto LTalkBotTTSSynthesizeWordWA; end;
+  if (blank(TBPWr.CustomWord)) then begin StopAlert("No word to synthesize"); goto LTalkBotTTSSynthesizeWordWA; end;
+  TBPMr.SerNr = TBPWr.ModelID;
+  ReadFirstMain(TBPMr,1,true);
+  if (blank(TBPMr.ModelID)) then begin StopAlert("Custom ID record not found"); goto LTalkBotTTSSynthesizeWordWA; end;
+  if (blank(TBPWr.CustomIBMPron)) then begin
+    pronunciation = TalkBotTTSGetIBMOriginal(TBPWr.CustomWord,result);
+    if (result==1) then begin
+      oldTBPWr = TBPWr;
+      TBPWr.CustomIBMPron = pronunciation;
+    end else begin
+      StopAlert("Failed to get IBM original pronounciation");
+    end;
+    PutWindowRecord(wn,TBPWr);
+    if (Recordupdate(oldTBPWr,TBPWr,true)==0) then begin
+      SetWindowState(wn,Rs_normal);
+    end;
+  end;
+  PutWindowString(wn,"pronounciationModel",TBPMr.ModelID);
+  Speak("en",TBPWr.CustomWord);
+
+LTalkBotTTSSynthesizeWordWA:;
+  return;
+end;
+
+global
+updating procedure TalkBotSTTCreateLanguageModelWA()
+begin
+  LongInt i,wn;
+  record TalkBotSTTLanguageModelVc TBLMr,oldTBLMr;
+  string 255 modelid;
+  json js;
+  area a_req,a_message;
+  Integer httpstatus;
+  Boolean res;
+  vector string 255 params_vec;
+
+  wn = CurWindow;
+  GetWindowRecord(wn,TBLMr);
+  if (WindowState(wn)!=Rs_normal) then begin
+    StopAlert("Record must be saved first");
+    goto LTalkBotSTTCreateLanguageModelWA;
+  end;
+  if (blank(TBLMr.ModelName) or blank(TBLMr.ModelDesc) /*or blank(language)*/) then begin
+    goto LTalkBotSTTCreateLanguageModelWA;
+  end;
+  
+    
+  AddTextToArea("{",a_req);
+  AddTextToArea("\"name\":\"" & TBLMr.ModelName & "\"",a_req);
+  AddTextToArea(", \"base_model_name\":\"" & "en-US_BroadbandModel" & "\"",a_req);
+  AddTextToArea(", \"description\":\"" & TBLMr.ModelDesc & "\"",a_req);
+  AddTextToArea("}",a_req);
+  res = IBMCloudSendRequestArea(kWatsonServiceSTTCreateLangModel,"/customizations/",a_req,"",params_vec,httpstatus,a_message);
+  js = ParseJSONArea(a_message);
+  modelid = JSONGet(js,"customization_id");
+  
+  if (nonblank(modelid)) then begin
+    oldTBLMr = TBLMr;
+    TBLMr.ModelID = modelid;
+    PutWindowRecord(wn,TBLMr);
+    if (Recordupdate(oldTBLMr,TBLMr,true)==0) then begin
+      SetWindowState(wn,Rs_normal);
+    end;
+  end;
+
+LTalkBotSTTCreateLanguageModelWA:;
+  return;
+end;
+
+global
+updating procedure TalkBotSTTCreateAcousticModelWA()
+begin
+  LongInt i,wn;
+  record TalkBotSTTAcousticModelVc TBSAr,oldTBSAr;
+  string 255 modelid;
+  json js;
+  area a_req,a_message;
+  Integer httpstatus;
+  Boolean res;
+  vector string 255 params_vec;
+
+  wn = CurWindow;
+  GetWindowRecord(wn,TBSAr);
+  if (WindowState(wn)!=Rs_normal) then begin
+    StopAlert("Record must be saved first");
+    goto LTalkBotSTTCreateAcousticModelWA;
+  end;
+  if (blank(TBSAr.ModelName) or blank(TBSAr.ModelDesc) /*or blank(language)*/) then begin
+    goto LTalkBotSTTCreateAcousticModelWA;
+  end;
+  
+  AddTextToArea("{",a_req);
+  AddTextToArea("\"name\":\"" & TBSAr.ModelName & "\"",a_req);
+  AddTextToArea(", \"base_model_name\":\"" & "en-US_BroadbandModel" & "\"",a_req);
+  AddTextToArea(", \"description\":\"" & TBSAr.ModelDesc & "\"",a_req);
+  AddTextToArea("}",a_req);
+  res = IBMCloudSendRequestArea(kWatsonServiceSTTCreateAcouModel,"/customizations/",a_req,"",params_vec,httpstatus,a_message);
+  js = ParseJSONArea(a_message);
+  modelid = JSONGet(js,"customization_id");
+  
+  if (nonblank(modelid)) then begin
+    oldTBSAr = TBSAr;
+    TBSAr.ModelID = modelid;
+    PutWindowRecord(wn,TBSAr);
+    if (Recordupdate(oldTBSAr,TBSAr,true)==0) then begin
+      SetWindowState(wn,Rs_normal);
+    end;
+  end;
+
+LTalkBotSTTCreateAcousticModelWA:;
+  return;
+end;
+
+//TODO this should have some kind of conformation window like you are about to delete the whole custom voice set words and all
+//and probably also delete the words asociated with it
+global
+updating procedure TalkBotSTTDeleteLanguageModelWA()
+begin
+  LongInt i,wn;
+  record TalkBotPronModelVc TBPMr,oldTBPMr;
+  string 255 modelid;
+  json js;
+  area a_req,a_message;
+  Integer httpstatus;
+  Boolean res;
+  vector string 255 params_vec;
+
+  wn = CurWindow;
+  GetWindowRecord(wn,TBPMr);
+  if (WindowState(wn)!=Rs_normal) then begin
+    StopAlert("Record must be saved first");
+    goto LTalkBotSTTDeleteLanguageModelWA;
+  end;
+  if (blank(TBPMr.ModelID)) then begin
+    StopAlert("Record does not have a set custom ID");
+    goto LTalkBotSTTDeleteLanguageModelWA;
+  end;
+  
+  res = IBMCloudSendRequestArea(kWatsonServiceSTTRemoveLangModel,"/customizations/" & TBPMr.ModelID,a_req,"",params_vec,httpstatus,a_message);
+  js = ParseJSONArea(a_message);
+  modelid = JSONGet(js,"customization_id");
+  if (blank(modelid)) then begin
+    oldTBPMr = TBPMr;
+    TBPMr.ModelID = modelid;
+    PutWindowRecord(wn,TBPMr);
+    if (Recordupdate(oldTBPMr,TBPMr,true)==0) then begin
+      SetWindowState(wn,Rs_normal);
+    end;
+  end;
+
+LTalkBotSTTDeleteLanguageModelWA:;
+  return;
+end;
+
+//TODO this should have some kind of conformation window like you are about to delete the whole custom voice set words and all
+//and probably also delete the words asociated with it
+global
+updating procedure TalkBotSTTDeleteAcousticModelWA()
+begin
+  LongInt i,wn;
+  record TalkBotPronModelVc TBPMr,oldTBPMr;
+  string 255 modelid;
+  json js;
+  area a_req,a_message;
+  Integer httpstatus;
+  Boolean res;
+  vector string 255 params_vec;
+
+  wn = CurWindow;
+  GetWindowRecord(wn,TBPMr);
+  if (WindowState(wn)!=Rs_normal) then begin
+    StopAlert("Record must be saved first");
+    goto LTalkBotSTTDeleteAcousticModelWA;
+  end;
+  if (blank(TBPMr.ModelID)) then begin
+    StopAlert("Record does not have a set custom ID");
+    goto LTalkBotSTTDeleteAcousticModelWA;
+  end;
+  
+  res = IBMCloudSendRequestArea(kWatsonServiceSTTRemoveAcouModel,"/customizations/" & TBPMr.ModelID,a_req,"",params_vec,httpstatus,a_message);
+  js = ParseJSONArea(a_message);
+  modelid = JSONGet(js,"customization_id");
+  
+  if (blank(modelid)) then begin
+    oldTBPMr = TBPMr;
+    TBPMr.ModelID = modelid;
+    PutWindowRecord(wn,TBPMr);
+    if (Recordupdate(oldTBPMr,TBPMr,true)==0) then begin
+      SetWindowState(wn,Rs_normal);
+    end;
+  end;
+
+LTalkBotSTTDeleteAcousticModelWA:;
+  return;
+end;
+
+global
+function Boolean WatsonAssistantWorkspaceDClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record TalkBotDialogVc TBDr;
+  record WatsonAssistantWorkspaceVc WAWr;
+
+  res = true;
+  switch (fieldname) begin
+    case "DialogNr":
+      if (changed!=0) then begin
+        GetWindowRecord(wn,WAWr);
+        TBDr.SerNr = WAWr.DialogNr;
+        if (ReadFirstMain(TBDr,1,true)) then begin
+          WAWr.DialogComment = TBDr.Comment;
+          PutWindowRecord(wn,WAWr);
+        end;
+      end;
+  end;
+
+  WatsonAssistantWorkspaceDClassAfterEditField = res;
+  return;
+end;
+
+global
+function Boolean TalkBotIntentDClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record TalkBotDialogVc TBDr;
+  record TalkBotIntentVc TBIr;
+
+  res = true;
+  switch (fieldname) begin
+    case "DialogNr":
+      if (changed!=0) then begin
+        GetWindowRecord(wn,TBIr);
+        TBDr.SerNr = TBIr.DialogNr;
+        if (ReadFirstMain(TBDr,1,true)) then begin
+          TBIr.DialogComment = TBDr.Comment;
+          PutWindowRecord(wn,TBIr);
+        end;
+      end;
+  end;
+
+  TalkBotIntentDClassAfterEditField = res;
+  return;
+end;
+
+global
+function Boolean TalkBotEntityDClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record TalkBotDialogVc TBDr;
+  record TalkBotEntityVc TBEr;
+
+  res = true;
+  switch (fieldname) begin
+    case "DialogNr":
+      if (changed!=0) then begin
+        GetWindowRecord(wn,TBEr);
+        TBDr.SerNr = TBEr.DialogNr;
+        if (ReadFirstMain(TBDr,1,true)) then begin
+          TBEr.DialogComment = TBDr.Comment;
+          PutWindowRecord(wn,TBEr);
+        end;
+      end;
+  end;
+
+  TalkBotEntityDClassAfterEditField = res;
+  return;
+end;
+
+global
+function Boolean TalkBotDialogTextsDClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record TalkBotDialogEntryVc TBDEr;
+  record TalkBotDialogTextsVc TBDTr;
+
+  res = true;
+  switch (fieldname) begin
+    case "DialogEntryNr":
+      if (changed!=0) then begin
+        GetWindowRecord(wn,TBDTr);
+        TBDEr.SerNr = TBDTr.DialogEntryNr;
+        if (ReadFirstMain(TBDEr,1,true)) then begin
+          TBDTr.DialogEntryComment = TBDEr.Comment;
+          PutWindowRecord(wn,TBDTr);
+        end;
+      end;
+  end;
+
+  TalkBotDialogTextsDClassAfterEditField = res;
+  return;
+end;
+
+global
+function Boolean TalkBotDialogEntryDClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record TalkBotDialogVc TBDr;
+  record TalkBotDialogEntryVc TBDEr,TBDE2r;
+  row TalkBotDialogEntryVc TBDErw;
+
+  res = true;
+  switch (fieldname) begin
+    case "DialogNr":
+      if (changed!=0) then begin
+        GetWindowRecord(wn,TBDEr);
+        TBDr.SerNr = TBDEr.DialogNr;
+        if (ReadFirstMain(TBDr,1,true)) then begin
+          TBDEr.DialogComment = TBDr.Comment;
+          PutWindowRecord(wn,TBDEr);
+        end;
+      end;
+    case "NextDialogEntryNr":
+      if (changed!=0) then begin
+        GetWindowRecord(wn,TBDEr);
+        TBDE2r.SerNr = TBDEr.NextDialogEntryNr;
+        if (ReadFirstMain(TBDE2r,1,true)) then begin
+          TBDEr.NextDialogEntryComment = TBDE2r.Comment;
+          PutWindowRecord(wn,TBDEr);
+        end;
+      end;
+    case "DialogEntryNr":
+      if (changed!=0) then begin
+        GetWindowRecord(wn,TBDEr);
+        MatRowGet(TBDEr,rownr,TBDErw);
+        TBDE2r.SerNr = TBDErw.DialogEntryNr;
+        if (ReadFirstMain(TBDE2r,1,true)) then begin
+          TBDErw.DialogEntryComment = TBDE2r.Comment;
+          MatRowPut(TBDEr,rownr,TBDErw);
+          PutWindowRecord(wn,TBDEr);
+        end;
+      end;
+  end;
+
+  TalkBotDialogEntryDClassAfterEditField = res;
+  return;
+end;
+
+global
+function Boolean TalkBotDialogDClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record TalkBotDialogEntryVc TBDEr;
+  record TalkBotDialogVc TBDr;
+
+  res = true;
+  switch (fieldname) begin
+    case "FirstDialogEntryNr":
+      if (changed!=0) then begin
+        GetWindowRecord(wn,TBDr);
+        TBDEr.SerNr = TBDr.FirstDialogEntryNr;
+        if (ReadFirstMain(TBDEr,1,true)) then begin
+          TBDr.FirstDialogEntryComment = TBDEr.Comment;
+          PutWindowRecord(wn,TBDr);
+        end;
+      end;
+    case "UnmatchedDialogEntryNr":
+      if (changed!=0) then begin
+        GetWindowRecord(wn,TBDr);
+        TBDEr.SerNr = TBDr.UnmatchedDialogEntryNr;
+        if (ReadFirstMain(TBDEr,1,true)) then begin
+          TBDr.UnmatchedDialogEntryComment = TBDEr.Comment;
+          PutWindowRecord(wn,TBDr);
+        end;
+      end;
+  end;
+
+  TalkBotDialogDClassAfterEditField = res;
+  return;
+end;

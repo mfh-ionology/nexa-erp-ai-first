@@ -1,0 +1,730 @@
+external procedure LogAreaToFile(string,area);
+external procedure JSONStringStart(var string);
+external procedure JSONStringPut(var string,string,string);
+external procedure JSONStringAdd(var string,string,string);
+external procedure JSONStringMemberStart(var string,string);
+external procedure JSONStringMemberEnd(var string);
+external procedure JSONStringArrayStart(var string);
+external procedure JSONStringArrayEnd(var string);
+external procedure JSONStringEnd(var string);
+external function Boolean GetPMRow(string,var row PMBlock);
+external procedure FindPaymentGateway(string,string,Integer,var record CCAccountIDVc,Integer,Integer);
+external outer function Date DateFromString(string,string);
+external function Boolean TimeInRange(Time,Time ,Time);
+external function LongInt TimeDiffinMinutes(Time,Time);
+external procedure SendMpesaTransactionStatusMessage(record MPesaTransVc,string,string);
+external outer function string 255 GetWebHostAndPort3(boolean);
+
+function string 255 GetMPesaToken(record CCAccountIDVc CCAccountIDr)
+begin
+  string 255 tstr,res;
+  Area a_req,a_reply;
+  json js;
+
+  tstr = "Authorization: Basic ";
+  tstr = tstr & base64encode(CCAccountIDr.MPesaConsKey & ":" & CCAccountIDr.MPesaConsSecret) & chr(13) & chr(10);
+  SetWebHeaders(tstr);
+  SendWebRequest(CCAccountIDr.URL,443,-1,true,"GET","/oauth/v1/generate?grant_type=client_credentials","","",false,a_req,a_reply,5);
+  js = ParseJSONArea(a_reply);
+  res = JSONGet(js,"access_token");
+  GetMPesaToken = res;
+  return;
+end;
+
+global
+function string 255 FindMpesaTransactionID(string phone,string amount)
+begin
+  Boolean TrHs,found;
+  string 255 conversationid;
+  record MPesaTransVc MPesaTransr;
+  LongInt diff;
+
+  MPesaTransr.MSISDN = phone;
+  TrHs = true;
+  while (LoopBackKey("MSISDN",MPesaTransr,1,TrHs)) begin
+    if (MPesaTransr.MSISDN!=phone) then begin
+      TrHs = false;
+      found = false;
+    end;
+    found = true;
+    if (TrHs) then begin
+      if (DateInRange(MPesaTransr.TransDate,CurrentDate,CurrentDate)==false) then begin
+        found = false;
+      end;
+      diff = TimeDiffinMinutes(CurrentTime,MPesaTransr.TransTime);
+      if (diff>500) then begin 
+        found = false;
+      end;
+      if (MPesaTransr.TransAmount!=amount) then begin 
+        found = false;
+      end;
+      if (MPesaTransr.MPesaf==1) then begin
+        found = false;
+      end;
+      if (MPesaTransr.Cancld==1) then begin
+        found = false;
+      end;
+      if (found) then begin
+        conversationid = MPesaTransr.TransID;
+        MessageBox(0,"Transaction " & conversationid  & " has been found. It took place at " & MPesaTransr.TransTime); 
+        TrHs = false;
+      end;
+    end;
+  end;
+  if (found==false) begin
+    MessageBox(0,"No matching transaction found!");
+  end;
+  FindMpesaTransactionID = conversationid;
+  return;
+end;
+
+global
+function string 255 GetMPesaTill(string curncy)
+begin
+  record LocalMachineBlock LMb;
+  record LocalMachineVc LocalMachiner;
+  record CCAccountIDVc CCAccountIDr;
+  string 255 res;
+  Boolean foundf;
+
+  BlockLoad(LMb);
+  LocalMachiner.Code = LMb.LocalMachineCode;
+  if (ReadFirstMain(LocalMachiner,1,true)) then begin
+    if (nonblank(LocalMachiner.ShortCode)) then begin
+      res = LocalMachiner.ShortCode;
+      foundf = true;
+    end;
+  end;
+  if (!foundf) then begin
+    FindPaymentGateway(curncy,LMb.LocalMachineCode,kCCAccountTypePOS,CCAccountIDr,kCardHolderAny,kCCPartnerMPesa);
+    res = CCAccountIDr.MPesaTill;
+  end;
+  GetMPesaTill = res;
+  return;
+end;
+
+global
+function string 255 GetMPesaPhone(string custcode)
+begin
+  record CUVc CUr;
+  string 255 res;
+
+  CUr.Code = custcode;
+  if (ReadFirstMain(CUr,1,true)) then begin
+    res = CUr.Phone;
+  end;
+  GetMPesaPhone = res;
+  return;
+end;
+
+global
+function string 255 GetMPesaTransactionId(string phone)
+begin
+  string 255 res;
+  record MPesaTransVc MPesaTransr;
+
+  MPesaTransr.MSISDN = phone;
+  if (ReadFirstMain(MPesaTransr,1,true)) then begin
+    res = MPesaTransr.TransID;
+  end;
+  GetMPesaTransactionId = res;
+  return;
+end;
+
+global 
+procedure MPesaTransVc_PasteTransactionId(var record RcVc RepSpec)
+begin
+  record MPesaTransVc MPesaTransr;
+  record SysFormatBlock SysFormatRec;
+  integer diff;
+  boolean TrHs;
+  string 255 amount;
+
+  BlockLoad(SysFormatRec);
+  TrHs = true;
+  MPesaTransr.MSISDN = RepSpec.f1;
+  while (LoopBackKey("MSISDN",MPesaTransr,1,TrHs)) begin
+    if (DateInRange(MPesaTransr.TransDate,CurrentDate,CurrentDate)==false) then begin
+      TrHs = false;
+    end;
+    diff = TimeDiffinMinutes(CurrentTime,MPesaTransr.TransTime);
+    if (diff>500) then begin
+      TrHs = false;
+    end;
+    amount = ValToString(RepSpec.vals0,M4Val,"",SysFormatRec.decimalPt,0);
+    if (MPesaTransr.TransAmount!=amount) then begin
+      TrHs = false;
+    end;
+    if (MPesaTransr.MPesaf==1) then begin
+      TrHs = false;
+    end;
+    if (MPesaTransr.Cancld==1) then begin
+      TrHs = false;
+    end;
+    if (TrHs) then begin
+      RepSpec.f3 = MPesaTransr.TransID;
+    end;
+  end;
+  return;
+end;
+
+global
+procedure GetMPesaInitiator(string curncy,var string initiator,var string seccred)
+begin
+  record LocalMachineBlock LMb;
+  record LocalMachineVc LocalMachiner;
+  record CCAccountIDVc CCAccountIDr;  
+  string 255 res;
+  Boolean foundf;
+
+  BlockLoad(LMb);
+  LocalMachiner.Code = LMb.LocalMachineCode;
+  if (ReadFirstMain(LocalMachiner,1,true)) then begin
+    if (nonblank(LocalMachiner.Initiator) and nonblank(LocalMachiner.SecurityCredential)) then begin
+      initiator = LocalMachiner.Initiator;
+      seccred = LocalMachiner.SecurityCredential;
+      foundf = true;
+    end;
+  end;
+  if (!foundf) then begin
+    FindPaymentGateway(curncy,LMb.LocalMachineCode,kCCAccountTypePOS,CCAccountIDr,kCardHolderAny,kCCPartnerMPesa);
+    initiator = CCAccountIDr.MPesaInitiator;
+    seccred = CCAccountIDr.MPesaSecCred;
+  end;
+  return;
+end;
+
+function time TimeFromMPesaTimeString(string timestamp)
+begin
+  time res;
+  string 255 timestr;
+
+  timestr = right(timestamp,6);
+  res.hour = StringToInt(left(timestr,2));
+  timestr = right(timestr,4);
+  res.minute = StringToInt(left(timestr,2));
+  res.second = StringToInt(right(timestr,2));
+  TimeFromMPesaTimeString = res;
+  return;
+end;
+
+/* code for the revert transaction 
+
+global 
+updating procedure MPesaGetReplyFromMPesaAboutReverseTransaction(area a) 
+begin
+  json js;
+  record MPesaTransVc MPesaTransr;
+  string 255 code,resultcode,amount,status,value, mainkey,result,phone,timee,reason,id,time2,transactionid;
+  integer i;
+  record MPesaTransVc oldMPesaTransr;
+  boolean foundf,testf,res;
+
+  AddFileToArea("WebMPesaReverseTransactionResult.txt",a,false); 
+  if (GetAreaLength(a)>0) then begin  
+    js = ParseJSONArea(a);
+    resultcode = JSONGet(js,"Result/ResultCode");
+    result = JSONGet(js,"Result/ResultDesc");
+    switch (resultcode) begin
+      case "0": code = "Successfully cancelled";
+      transactionid = JSONGet(js,"Result/TransactionID"); 
+      transactionid = MPesaTransr.TransID;
+      foundf = true;
+      if (ReadFirstKey("TransID",MPesaTransr,1,foundf)) then begin
+        testf = true;
+        if (testf) then begin
+          recordCopy(oldMPesaTransr,MPesaTransr);
+          MPesaTransr.Cancld = 1;
+          RecordUpdate(oldMPesaTransr,MPesaTransr,true);
+          res = true;
+        end;
+      end;
+    end;
+      maybe extract more info, to test and check//trv
+      MPesaTransr.TransTillNumber = ""; 
+      MPesaTransr.TransTillUser = ""; 
+      MPesaTransr.MSISDN = left(JSONGet(js,"Result/ResultParameters/ResultParameter/[0]/Value"),12);
+      time2 = JSONGet(js,"Result/ResultParameters/ResultParameter/[3]/Value"); 
+      MPesaTransr.TransDate = DateFromString(time2,"yyyymmdd");
+      MPesaTransr.TransTime = TimeFromMPesaTimeString(time2);
+      MPesaTransr.TransAmount = JSONGet(js,"Result/ResultParameters/ResultParameter/[10]/Value");
+      MPesaTransr.TransactionType = JSONGet(js,"Result/ResultParameters/ResultParameter/[7]/Value");
+      MPesaTransr.TransID = JSONGet(js,"Result/ResultParameters/ResultParameter/[12]/Value"); 
+      MPesaTransr.SerNr = NextSerNr("MPesaTransVc",MPesaTransr.TransDate,-1,false,"");
+   
+      // if (MPesaTransr.SerNr>0) then begin //design needed: invalidate or delete from list
+      //   RecordStore(MPesaTransr,false);
+      // end;
+    //end; 
+    //  AllClientsRemoteAsync.SendMpesaTransactionStatusMessage(MPesaTransr,resultcode,result);
+  end;   
+  return;
+end;
+*/
+
+global 
+updating procedure MPesaGetReplyFromMPesaAboutTransactionStatus(area a) 
+begin
+  json js;
+  record MPesaTransVc MPesaTransr;
+  string 255 code,resultcode,amount,status,value, mainkey,result,phone,timee,reason,id,time2;
+  integer i;
+
+  AddFileToArea("WebKenianTransactionStatusRequestsReply.txt",a,false);
+  if (GetAreaLength(a)>0) then begin  
+    js = ParseJSONArea(a);
+    resultcode = JSONGet(js,"Result/ResultCode");
+    result = JSONGet(js,"Result/ResultDesc");
+    switch (resultcode) begin
+      case "0": code = "Success";
+      RecordNew(MPesaTransr);
+      MPesaTransr.TransTillNumber = ""; 
+      MPesaTransr.TransTillUser = ""; 
+      MPesaTransr.MSISDN = left(JSONGet(js,"Result/ResultParameters/ResultParameter/[0]/Value"),12);
+      time2 = JSONGet(js,"Result/ResultParameters/ResultParameter/[3]/Value"); 
+      MPesaTransr.TransDate = DateFromString(time2,"yyyymmdd");
+      MPesaTransr.TransTime = TimeFromMPesaTimeString(time2);
+      MPesaTransr.TransAmount = JSONGet(js,"Result/ResultParameters/ResultParameter/[10]/Value");
+      MPesaTransr.TransactionType = JSONGet(js,"Result/ResultParameters/ResultParameter/[7]/Value");
+      MPesaTransr.TransID = JSONGet(js,"Result/ResultParameters/ResultParameter/[12]/Value"); 
+      MPesaTransr.SerNr = NextSerNr("MPesaTransVc",MPesaTransr.TransDate,-1,false,"");
+      if (MPesaTransr.SerNr>0) then begin
+        RecordStore(MPesaTransr,false);
+      end;
+    end; 
+      AllClientsRemoteAsync.SendMpesaTransactionStatusMessage(MPesaTransr,resultcode,result);
+  end;   
+  return;
+end;
+
+global 
+updating procedure MPesaGetTransactionInfoFromTransactionsReply(area a)
+begin
+  json js;
+  record MPesaTransVc MPesaTransr;
+  string 255 tstr;
+
+  AddFileToArea("WebKenianConfirmationUrl.txt",a,false);
+  if (GetAreaLength(a)>0) then begin  
+    js = ParseJSONArea(a);
+    RecordNew(MPesaTransr);
+    MPesaTransr.TransTillNumber = "";
+    MPesaTransr.TransTillUser = "";
+    MPesaTransr.TransID = JSONGet(js,"TransID");
+    MPesaTransr.TransactionType = JSONGet(js,"TransactionType");
+    tstr = JSONGet(js,"TransTime");
+    MPesaTransr.TransDate = DateFromString(tstr,"yyyymmdd");
+    MPesaTransr.TransTime = TimeFromMPesaTimeString(tstr);
+    MPesaTransr.TransAmount = JSONGet(js,"TransAmount");
+    MPesaTransr.BillRefNumber = JSONGet(js,"BillRefNumber");
+    MPesaTransr.MSISDN = JSONGet(js,"MSISDN");
+    MPesaTransr.SerNr = NextSerNr("MPesaTransVc",MPesaTransr.TransDate,-1,false,"");
+    if (MPesaTransr.SerNr>0) then begin
+      RecordStore(MPesaTransr,false);
+      WebOutString( "{""ResultCode"":0,""ResultDesc"":""Success""}" );
+    end;
+  end;
+return;
+end;
+
+global webpublic
+procedure WebKenianConfirmationUrl()
+begin
+  area a;
+  string 255 tstr;
+  json js;
+  record MPesaTransVc MPesaTransr;
+
+  WebGetPostData(a);
+  LogAreaToFile("WebKenianConfirmationUrl" & ".txt",a);
+  qupdating.MPesaGetTransactionInfoFromTransactionsReply(a);
+  return;
+end;
+
+global webpublic
+procedure WebKenianValidationUrl()
+begin
+  area a;
+  WebGetPostData(a);
+  LogAreaToFile("WebKenianValidationUrl" & ".txt",a);
+  return;
+end;
+
+global webpublic
+procedure WebKenianTransactionStatusRequestTimeOutReply()
+begin
+  area a;
+  WebGetPostData(a);
+  LogAreaToFile("WebMPesaTransactionStatusRequestTimeOutReply" & ".txt",a);
+  return;
+end;
+
+global webpublic
+procedure WebKenianTransactionStatusRequestsReply()
+begin
+  area a;
+  WebGetPostData(a);
+  LogAreaToFile("WebKenianTransactionStatusRequestsReply" & ".txt",a);
+  qupdating.MPesaGetReplyFromMPesaAboutTransactionStatus(a);
+  return;
+end;
+/*
+global webpublic
+procedure WebKenianReverseTransactionResult()
+begin
+  area a;
+  WebGetPostData(a);
+  LogAreaToFile("WebMPesaReverseTransactionResult" & ".txt",a);
+  qupdating.MPesaGetReplyFromMPesaAboutReverseTransaction(a);
+  return;
+end;
+
+global webpublic
+procedure WebKenianReverseTransactionResultTimeOutReply()
+begin
+  area a;
+  WebGetPostData(a);
+  LogAreaToFile("WebMPesaReverseTransactionResultTimeOutReply" & ".txt",a);
+  return;
+end;
+*/
+global webpublic
+procedure WebKenianPaymentTransaction()
+begin
+  area a;
+  WebGetPostData(a);
+  LogAreaToFile("WebKenianPaymentTransactionReply" & ".txt",a);
+  return;
+end;
+
+global webpublic
+procedure WebKenianPaymentTransactionTimeOutReply()
+begin
+  area a;
+  WebGetPostData(a);
+  LogAreaToFile("WebKenianPaymentTransactionTimeOutReply" & ".txt",a);
+  return;
+end;
+
+global
+function Boolean MPesaRegisterURL(record CCAccountIDVc CCAccountIDr,record IVCashVc IVCr,string transid,var string message)
+begin
+  string 255 tstr,jsr,auth,url,urlconfirmation,urlvalidation;
+  Area a_req,a_reply;
+  Boolean res;
+  json js;
+
+  // if (WebSecureMode) then begin
+  //   url = "https://" & Webhost;
+  // end else begin
+  //   url = "http://" & Webhost;
+  // end;
+
+  url = CCAccountIDr.MPesaDomain;
+  //url = "https://" & GetWebHostAndPort3(false);
+  urlconfirmation = url & "/WebKenianConfirmationUrl.hal";
+  urlvalidation =  url & "/WebKenianValidationUrl.hal";
+
+  // urlconfirmation = "https://lending.gainteqafrika.co.ke/money_transfer/callback_response/";
+  // urlvalidation = "https://lending.gainteqafrika.co.ke/money_transfer/callback_response/";
+  message = USetStr(41900);
+  JSONStringStart(jsr);
+  JSONStringAdd(jsr,"ShortCode",CCAccountIDr.MPesaTill);
+  JSONStringAdd(jsr,"ResponseType","Completed"); 
+  JSONStringAdd(jsr,"ConfirmationURL",urlconfirmation);
+  JSONStringPut(jsr,"ValidationURL",urlvalidation);
+  JSONStringEnd(jsr);
+  AddTextToArea(jsr,a_req);
+  auth = GetMPesaToken(CCAccountIDr);
+  if (nonblank(auth)) then begin
+    tstr = "Authorization: Bearer " & auth;
+    SetWebHeaders(tstr);
+    SendWebRequest(CCAccountIDr.URL,443,-1,true,"POST","/mpesa/c2b/v1/registerurl","application/json","",false,a_req,a_reply,20); 
+    LogAreaToFile("MPesaVALIDATIONReply" & ".txt",a_reply);
+    LogAreaToFile("MPesaVALIDATIONReq" & ".txt",a_req);
+    js = ParseJSONArea(a_reply);
+    if (JSONGet(js,"ResponseCode")=="0") then begin
+      res = true;
+      message = "Successfully registered";
+    end else begin
+      message = JSONGet(js,"errorMessage");
+    end;
+  end;
+MPesaRegisterURL = res;
+  return;
+end;
+
+function string 255 MPesaCredentialFromPassword(string password)
+begin
+  string 255 res;
+  area a_password;
+  
+  AddTextToArea(password,a_password);
+  res = CryptRSAPublicEncrypt(a_password,"certnew.cer","",kCryptKeyFormatX509);
+  res = Base64Encode(res);
+  MPesaCredentialFromPassword = res;
+  return;
+end;
+
+global
+function Boolean ProceedMPesaPayTouchScreenRemote(record RcVc RepSpec,record CCAccountIDVc CCAccountIDr,record IVCashVc IVCr,Integer txtype,string transid,var string message)
+begin
+  string 255 tstr,jsr,auth,initiator,secretcred,jsr2,returnurl,timeouturl,seccred,url,conversationid,phone,amount;
+  Area a_req,a_reply,a_seccred;
+  Boolean res,found,TrHs;
+  json js;
+  LongInt diff;
+  record MPesaTransVc MPesaTransr;
+  record SysFormatBlock SysFormatRec;
+
+  // if (WebSecureMode) then begin
+  //   url = "https://" & Webhost;
+  // end else begin
+  //   url = "http://" & Webhost;
+  // end;
+  //url = "http://" & GetWebHostAndPort3(false);
+  url = CCAccountIDr.MPesaDomain;
+  returnurl = url & "/WebKenianTransactionStatusRequestsReply.hal?posinvnr=" & IVCr.SerNr;
+  timeouturl = url & "/WebKenianTransactionStatusRequestTimeOutReply.hal?timeout";
+
+  message = USetStr(41900);
+  BlockLoad(SysFormatRec);
+  switch (txtype) begin
+    case kCardTransactionRefund:
+    case kCardTransactionPay:
+      jsr = "";
+      phone = RepSpec.f1;
+      amount = ValToString(RepSpec.vals0,M4Val,"",SysFormatRec.decimalPt,0);
+      GetMPesaInitiator(RepSpec.CurncyCode,initiator,seccred);
+      conversationid = FindMpesaTransactionID(phone,amount);
+      if (nonblank(conversationid)) then begin
+        res = true;
+      end else begin
+        conversationid = RepSpec.f3;
+        secretcred = GetTextField(CCAccountIDr);
+        //secretcred = MPesaCredentialFromPassword(seccred);
+        JSONStringStart(jsr);
+        JSONStringAdd(jsr,"Initiator",initiator);
+        JSONStringAdd(jsr,"SecurityCredential",secretcred);
+        JSONStringAdd(jsr,"CommandID","TransactionStatusQuery");
+        JSONStringAdd(jsr,"TransactionID",conversationid);
+        JSONStringAdd(jsr,"PartyA",CCAccountIDr.MPesaTill);
+        JSONStringAdd(jsr,"IdentifierType","4"); 
+        JSONStringAdd(jsr,"ResultURL",returnurl);       
+        JSONStringAdd(jsr,"QueueTimeOutURL",timeouturl);
+        JSONStringPut(jsr2,"Remarks","TransactionStatusQuery");
+        // JSONStringAdd(jsr,"Occasion",""); 
+        jsr = jsr &  jsr2;
+        JSONStringEnd(jsr);
+        AddTextToArea(jsr,a_req);
+        auth = GetMPesaToken(CCAccountIDr);
+        if (nonblank(auth)) then begin
+          tstr = "Authorization: Bearer " & auth;
+          SetWebHeaders(tstr);
+          SendWebRequest(CCAccountIDr.URL,443,-1,true,"POST","/mpesa/transactionstatus/v1/query","application/json","",false,a_req,a_reply,20);
+          LogAreaToFile("MPesatransactionstatusReply" & ".txt",a_reply);
+          LogAreaToFile("MPesatransactionstatusReq" & ".txt",a_req);
+          js = ParseJSONArea(a_reply);
+          if (JSONGet(js,"ResponseCode")=="0") then begin
+            res = true;
+          end else begin
+            message = JSONGet(js,"errorMessage");
+          end;
+        end;
+      end;
+  end;
+  ProceedMPesaPayTouchScreenRemote = res;
+  return;
+end;
+
+global
+updating function boolean MpesaConfirmTransaction(string transactionID,string billrefrence) begin
+  boolean res;
+  record MPesaTransVc MPesaTransr,oldMPesaTransr;
+  
+  MPesaTransr.TransID = transactionID;
+  if (ReadFirstKey("TransID",MPesaTransr,1,true)) then begin
+    if (MPesaTransr.MPesaf==0) then begin
+      recordCopy(oldMPesaTransr,MPesaTransr);
+      MPesaTransr.MPesaf = 1;
+      MPesaTransr.BillRefNumber = billrefrence;
+      RecordUpdate(oldMPesaTransr,MPesaTransr,true);
+      res = true;
+      MessageBox(0,"Confirmed");
+    end else begin
+      MessageBox(21683,": " & MPesaTransr.TransID);
+    end;
+  end else begin
+    MessageBox(21684,": " & MPesaTransr.TransID);
+  end;
+  MpesaConfirmTransaction = res;
+  return;
+end;
+
+/* code for the revert transaction 
+global
+function Boolean MPesaReverseTransaction(record RcVc RepSpec,record CCAccountIDVc CCAccountIDr,record IVCashVc IVCr,Integer txtype,var string message)
+begin
+  string 255 tstr,jsr,auth,initiator,secretcred,jsr2,resulturl,timeouturl,seccred,url,conversationid,amount;
+  Area a_req,a_reply;
+  Boolean res;
+  record SysFormatBlock SysFormatRec;
+  json js;
+
+  url = CCAccountIDr.MPesaDomain;
+  resulturl = url & "/WebMPesaReverseTransactionResult.hal";
+  timeouturl = url & "/WebMPesaReverseTransactionResultTimeOutReply.hal";
+  message = USetStr(41900);
+  BlockLoad(SysFormatRec);
+  switch (txtype) begin
+    case kCardTransactionRefund:
+    case kCardTransactionPay:
+      jsr = "";
+      GetMPesaInitiator(RepSpec.CurncyCode,initiator,seccred);
+        //secretcred = MPesaCredentialFromPassword(seccred);
+      conversationid = RepSpec.f3;
+      amount = ValToString(RepSpec.vals0,M4Val,"",SysFormatRec.decimalPt,0);
+      secretcred = GetTextField(CCAccountIDr);
+      JSONStringStart(jsr);
+      JSONStringAdd(jsr,"Initiator",initiator);
+      JSONStringAdd(jsr,"SecurityCredential",secretcred);
+      JSONStringAdd(jsr,"CommandID","TransactionReversal");
+      JSONStringAdd(jsr,"TransactionID",conversationid);
+      JSONStringAdd(jsr,"Amount",amount);
+      JSONStringPut(jsr,"ReceiverParty",CCAccountIDr.MPesaTill);
+      JSONStringPut(jsr,"RecieverIdentifierType","4");
+      JSONStringPut(jsr,"ResultURL",resulturl);
+      JSONStringPut(jsr,"QueueTimeOutURL",timeouturl);
+      JSONStringAdd(jsr2,"Remarks","cancelling transaction");
+      // JSONStringAdd(jsr,"Occasion",""); 
+      JSONStringEnd(jsr);
+      AddTextToArea(jsr,a_req);
+      auth = GetMPesaToken(CCAccountIDr);
+      if (nonblank(auth)) then begin
+        tstr = "Authorization: Bearer " & auth;
+        SetWebHeaders(tstr);
+        SendWebRequest(CCAccountIDr.URL,443,-1,true,"POST","/mpesa/reversal/v1/request","application/json","",false,a_req,a_reply,20);
+        LogAreaToFile("MPesaReverseTransactionReply" & ".txt",a_reply);
+        LogAreaToFile("MPesaReverseTransactionReq" & ".txt",a_req);
+        js = ParseJSONArea(a_reply);
+        if (JSONGet(js,"ResponseCode")=="500") then begin 
+          res = true;
+        end else begin
+          message = JSONGet(js,"errorMessage");
+        end;
+      end;
+  end;
+  MPesaReverseTransaction = res;
+  return;
+end;
+
+//B2C payment,currently not needed
+global
+function Boolean MPesaPaymentTransaction(record RcVc RepSpec,record CCAccountIDVc CCAccountIDr,record IVCashVc IVCr,Integer txtype,var string message)
+begin
+  string 255 tstr,jsr,auth,initiator,secretcred,jsr2,returnurl,timeouturl,seccred,url;
+  Area a_req,a_reply;
+  Boolean res;
+  json js;
+  // if (WebSecureMode) then begin
+  //   returnurl = "https://" & Webhost;//10061
+  // end else begin
+  //   returnurl = "http://" & Webhost;//10060
+  // end;
+  //url = "http://" & "54.228.181.112:80"; //mine test server
+  //url = "https://" & "54.228.181.112:443"; //mine test server
+    url = "http://" & "54.75.243.183:10600"; //michael server
+    //url = "https://" & "54.75.243.183:10601"; //michael server
+  returnurl = url & "/WebMPesaPaymentTransactionReply.hal";
+  timeouturl = url & "/WebMPesaPaymentTransactionTimeOutReply.hal";
+  message = USetStr(41900);
+  switch (txtype) begin
+    case kCardTransactionRefund:
+    case kCardTransactionPay:
+      jsr = "";
+      GetMPesaInitiator(RepSpec.CurncyCode,initiator,seccred);
+      secretcred =  "Nljx4PWlvgs2KaKO1BtZitFPCXd9UY1lakiERqVTC7A+Psn/XD4CIdJiz+Hfn4ODDnJMZTRdcUOBWEo1PwboiBcIiEUn83cQ8ExLmysjyXjBmMmx7l3ECDOP+xbuheDmNUiMHf1iEqyCFrYpcbHCvy2MCyrHHzsLdjjiUQWNC0Wk7lRNKgXJGbIpuoyEcW2sWkAlj7aVBmVgButclfn28yBFlrTyB0IwaWSoMO+Az4PwVIAfFELvGZhfrceT2L3t8ypw1XQRyLgZOMOIEc5w9TGQKYlbTFX0mmsqqi9jDs8PApWhKHUy9qvmBIZxR539NHeBg202PnJ28YYhXiJZIA==";
+      JSONStringStart(jsr);
+      JSONStringAdd(jsr,"InitiatorName","initiator_1");
+      JSONStringAdd(jsr,"SecurityCredential",secretcred);
+      JSONStringAdd(jsr,"CommandID","BusinessPayment");
+      JSONStringAdd(jsr,"Amount","100");
+      JSONStringAdd(jsr,"PartyA",CCAccountIDr.MPesaTill);//RepSpec.f1);//601383);
+      JSONStringAdd(jsr,"PartyB","254708374149");
+      JSONStringAdd(jsr2,"Remarks","B2C Payment Request");
+      jsr = jsr &  jsr2;
+      JSONStringAdd(jsr,"QueueTimeOutURL",timeouturl);
+      JSONStringPut(jsr,"ResultURL",returnurl);
+      // JSONStringAdd(jsr,"Occasion",""); 
+      JSONStringEnd(jsr);
+      AddTextToArea(jsr,a_req);
+      auth = GetMPesaToken(CCAccountIDr);
+      if (nonblank(auth)) then begin
+        tstr = "Authorization: Bearer " & auth;
+        SetWebHeaders(tstr);
+        SendWebRequest(CCAccountIDr.URL,443,-1,true,"POST","/mpesa//b2c/v1/paymentrequest","application/json","",false,a_req,a_reply,20);
+        LogAreaToFile("MPesaPaymentRequestReply" & ".txt",a_reply);
+        LogAreaToFile("MPesaPaymentRequestReq" & ".txt",a_req);
+        js = ParseJSONArea(a_reply);
+        if (JSONGet(js,"ResponseCode")=="0") then begin 
+          res = true;
+        end else begin
+          message = JSONGet(js,"errorMessage");
+        end;
+      end;
+  end;
+  MPesaPaymentTransaction = res;
+  return;
+end;
+
+function string 255 MPesaTimeToString(time t)
+begin
+  string 255 res;
+  
+  if (t.hour<10) then begin res = res & "0"; end;
+  res = res & t.hour;
+  if (t.minute<10) then begin res = res & "0"; end;
+  res = res & t.minute;
+  if (t.second<10) then begin res = res & "0"; end;
+  res = res & t.second;
+
+  MPesaTimeToString = res;
+  return;
+end;
+
+//Simulating transaction from mpesa currently not needed
+global
+function Boolean MPesaSimulateTransaction(string phone, string amount, record CCAccountIDVc CCAccountIDr, var string conversationid)
+begin
+  string 255 tstr,jsr,auth,message;
+  Area a_req,a_reply;
+  Boolean res;
+  json js;
+
+  JSONStringStart(jsr);
+  JSONStringAdd(jsr,"CommandID","CustomerPayBillOnline");
+  JSONStringAdd(jsr,"Amount",amount); 
+  JSONStringAdd(jsr,"Msisdn",phone);
+  JSONStringAdd(jsr,"ShortCode",CCAccountIDr.MPesaTill);
+  JSONStringPut(jsr,"BillRefNumber","123456789");
+  JSONStringEnd(jsr);
+  AddTextToArea(jsr,a_req);
+  auth = GetMPesaToken(CCAccountIDr);
+  if (nonblank(auth)) then begin
+    tstr = "Authorization: Bearer " & auth;
+    SetWebHeaders(tstr);
+    SendWebRequest(CCAccountIDr.URL,443,-1,true,"POST","/mpesa/c2b/v1/simulate","application/json","",false,a_req,a_reply,20);
+    LogAreaToFile("MPesaSIMULATIONReplyyyyyyy" & ".txt",a_reply);
+    LogAreaToFile("MPesaSIMULATIONReqqqqqq" & ".txt",a_req);
+    js = ParseJSONArea(a_reply);
+    if (JSONGet(js,"errorCode")=="") then begin
+      res = true;
+      conversationid = JSONGet(js,"ConversationID");
+    end else begin
+      message = JSONGet(js,"errorMessage");
+    end;
+  end; 
+MPesaSimulateTransaction = res;
+  return;
+end;
+*/

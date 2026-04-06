@@ -1,0 +1,43 @@
+function Boolean ValidDateFormat(string dateformat)
+begin
+  Boolean res;
+  Integer i;
+  string 1 ch;
+
+  for (i=0;i<len(dateformat);i=i+1) begin
+    ch = Mid(dateformat,i,1);
+    if (ch!=chr(89) and ch!=chr(77) and ch!=chr(68)) then begin goto LValidDateFormat; end; // Y,M,D
+  end;
+  res = true;
+LValidDateFormat:;
+  ValidDateFormat = res;
+  return;
+end;
+
+global
+updating function LongInt SerNrTrackBlockCheck(var record SerNrTrackBlock SNrb,record SerNrTrackBlock SNr2b,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+
+  res = 0;  
+  if (SNrb.GenSerNumber==2) then begin
+    if (blank(SNrb.SerNrDateFormat)) then begin
+      RecordCheckError(1058,"",-1,"SerNrDateFormat");
+      res = -1;
+      goto LSerNrTrackBlockCheck;
+    end;
+    if (ValidDateFormat(SNrb.SerNrDateFormat)==false) then begin
+      RecordCheckError(43390,"",-1,"SerNrDateFormat");
+      res = -1;
+      goto LSerNrTrackBlockCheck;
+    end;
+    if (SNrb.SerNrLength<Len(SNrb.SerNrDateFormat)) then begin
+      RecordCheckError(43391,"",-1,"SerNrLength");
+      res = -1;
+      goto LSerNrTrackBlockCheck;
+    end;
+  end;
+LSerNrTrackBlockCheck:;
+  SerNrTrackBlockCheck = res;
+  return;
+end;

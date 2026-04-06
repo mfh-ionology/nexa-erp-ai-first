@@ -1,0 +1,778 @@
+external function LongInt DateDiff(Date,Date);
+external function LongInt MonthDiff(Date,Date);
+external procedure FindFiscalYear(Date,var Date,var Date);
+external procedure vTimeDiff(Time,Time,var val);
+external procedure HTDepartments(string,string,var string);
+external procedure HTJobTitles(string,string,var string);
+external procedure HTEmployees(string,string,var string);
+external function Boolean FindHRMCOChange(LongInt,var record HRMCOChangeVc);
+external function roundmode SetRoundModeD(Integer);
+external function LongInt DaysInYear(Integer);
+external function val CheckLeaveUsed(Date,Date,record HRMCOVc);
+external procedure HT2Per(Date,Date,var string);
+
+function Boolean CompanyHasContracts()
+begin
+  Boolean res;
+  record HRMCOVc HRMCOr;
+  Boolean found;
+  Integer cnt;
+  
+  found = true;
+  while (LoopMain(HRMCOr,1,found)) begin
+    cnt = cnt + 1;
+    if (cnt>0) then begin
+      found = false;
+      res = true;
+    end;
+  end;
+
+  CompanyHasContracts = res;
+  
+  return;
+end;
+
+procedure PrintHeader(record RcVc RepSpec)
+begin
+  Integer rw;
+  string 255 tstr;
+  string 255 fremp,toemp;
+
+  rw = 1;
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  tstr = USetStr(19652) & ": " & USetStr(19653+RepSpec.flags[0]);
+  Header(rw,tstr,0);
+  if (nonblank(RepSpec.f1)) then begin
+    fremp = FirstInRange(RepSpec.f1,20);
+    toemp = LastInRange(RepSpec.f1,20);   
+    HTEmployees(fremp,toemp,tstr);
+    Header(rw,tstr,1);
+     rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f3)) then begin
+    HTJobTitles(RepSpec.f3,RepSpec.f3,tstr);
+    Header(rw,tstr,0);
+     rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.FirstAcc)) then begin
+    HTDepartments(RepSpec.FirstAcc,RepSpec.FirstAcc,tstr);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.LastAcc)) then begin
+    tstr = USetStr(19651) & ": " & RepSpec.LastAcc;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+
+  return;
+end;
+
+function val CalculateDaysTaken(record RcVc RepSpec,string Employee,string acttype)
+begin
+  val res,timev;
+  Boolean found,testf;
+  record ActVc Actr;
+  string 255 keystr;
+  Date td,YearStartDate,StartDate,EndDate;
+  Time timet,blanktimet;
+  record LeaveRulesBlock LRb;
+
+  BlockLoad(LRb);
+  td = RepSpec.sEndDate;
+  if (blankdate(td)) then begin
+    td = CurrentDate;
+  end;
+  StartDate = td;
+  switch (LRb.LeaveCalculationBase) begin
+    case kLeaveCalculationBaseCalendarYear:
+      StartDate.month = 1;
+      StartDate.day = 1;
+      EndDate.month = 12;
+      EndDate.day = 31;
+    case kLeaveCalculationBaseFiscalYear:
+      FindFiscalYear(td,StartDate,EndDate);  
+  end;
+  if (StartDate<Actr.TransDate) then begin
+    StartDate = Actr.TransDate;
+  end;
+
+  keystr = "CUCodeTypeDate";
+  Actr.CUCode = Employee;
+  Actr.ActType = acttype;
+  Actr.TransDate = StartDate;
+  found = true;
+  while (LoopKey(keystr,Actr,3,found)) begin
+    if (Actr.CUCode!=Employee) then begin found = false; end;
+    if (Actr.ActType!=acttype) then begin found = false; end;
+    if (Actr.TransDate>RepSpec.sEndDate) then begin found = false; end;
+    if (found) then begin
+      testf = true;
+      if (Actr.OKFlag==0) then begin testf = false; end;
+      if (Actr.Invalid!=0) then begin testf = false; end;
+      if (testf) then begin
+        timet = blanktimet;
+        if (nonblanktime(Actr.CostTime)) then begin
+          vTimeDiff(timet,Actr.CostTime,timev);
+        end else begin
+          vTimeDiff(Actr.EndTime,Actr.StartTime,timev);
+        end;  
+        res = res + timev/8.00;
+      end;
+    end;
+  end;
+LCalculateDaysTaken:;  
+  CalculateDaysTaken = res;
+  return;
+end;
+
+function Boolean LeaveTransferExists(record HRMCOVc HRMCOr,date ed)
+begin
+  Boolean res,TrHs,foundf;
+  record LeaveTransferVc LTr;
+
+  LTr.Employee = HRMCOr.Employee;
+  LTr.TransDate = HRMCOr.StartDate;
+  TrHs = true;
+  while (LoopKey("Employee",LTr,2,TrHs)) begin
+    if (DateInRange(LTr.TransDate,HRMCOr.StartDate,ed)==false) then begin TrHs = false; end;
+    if (TrHs) then begin
+      foundf = true;
+      if (LTr.OKFlag==0) then begin foundf = false;    end;
+      if (LTr.Employee!=HRMCOr.Employee) then begin foundf = false; end;
+        if (foundf) then begin 
+          res = true;
+          goto LLeaveTransferExists;
+        end;
+  
+    end;
+  end;
+LLeaveTransferExists:;
+LeaveTransferExists = res;
+  return;
+end;
+
+/*
+function val LeaveUsed(Date startdate,Date enddate,record HRMCOVc HRMCOr)
+begin
+  val res;
+  Boolean found,testf; 
+  record LeaveApplicationVc LAr;
+  Date td;
+  
+  found = true;
+  LAr.Employee = HRMCOr.Employee;
+  while (LoopKey("Employee",LAr,1,found)) begin
+    if (LAr.Employee!=HRMCOr.Employee) then begin
+      found = false;
+    end;
+    if (found) then begin
+      testf = true;
+      if (DateInRange(LAr.StartDate,startdate,enddate)==false) then begin  testf = false; end;
+//      if (LAr.StartDate>enddate) then begin  testf = false; end;
+      if (LAr.OKFlag==0) then begin  testf = false; end;
+      if (testf) then begin
+        td = enddate;
+        if (td>LAr.EndDate) then begin
+          td = LAr.EndDate;
+        end;
+        res = res + DateDiff(td,LAr.StartDate) + 1;
+      end;
+    end;
+  end;
+  LeaveUsed = res;
+  return;
+end;
+
+*/
+//similar to CalcluateLeaveApplicationFwdBalDays
+function val CalculateLeaveTransfer(record LeaveSchemeVc LSr,row LeaveSchemeVc LSrw,record RcVc RepSpec,record HRMCOVc HRMCOr)
+begin
+  val res;
+  record LeaveRulesBlock LRb;
+  record LeaveTransferVc LTr;
+  Boolean foundf,TrHs;
+  Date StartDate,EndDate,td,appldate,YearStartDate,YearEndDate;
+  Date sd,ed;
+  val fwdbaldays,montshdiff,months;
+  val daysdiff1,daysdiff2;
+  Integer i,rwcnt;
+  
+  BlockLoad(LRb);
+  if (LRb.AutTransferBalance!=0) then begin
+    StartDate = HRMCOr.StartDate;
+    appldate = RepSpec.sEndDate;
+    if (StartDate<appldate and StartDate.year<appldate.year) then begin
+      appldate.year = StartDate.year;
+      appldate.month = 12; appldate.day = 31;
+    end;
+    if (StartDate<appldate) and (appldate==RepSpec.sEndDate) then begin
+      goto LCalculateLeaveTransfer;
+    end;
+    YearStartDate = CurrentDate;
+    YearStartDate.month = 1;
+    YearStartDate.day = 1;
+    YearEndDate = HRMCOr.StartDate;
+    YearEndDate.day = 31;
+    YearEndDate.month = 12;
+    if (appldate>YearStartDate) then begin
+      appldate = AddDay(YearStartDate,-1);
+    end;
+    months = 12;
+    sd = StartDate;
+    ed = RepSpec.sEndDate;
+    if (sd.day!=1) then begin
+      montshdiff = MonthDiff(sd,ed)-1;
+    end else begin
+      montshdiff = MonthDiff(sd,ed);
+    end;
+    if (YearEndDate.year!=GetYear(CurrentDate)) then begin
+      YearEndDate = AddYear(RepSpec.sEndDate,-1); 
+      YearEndDate.month = 12;
+      YearEndDate.day = 31;
+    end;
+    daysdiff2 = DateDiff(appldate,sd)+1;
+    if (LSrw.BankHolidays==kIncludedinAllowance or LSrw.BankHolidays==kExcludedinAllowance) then begin
+      if (DaysInYear(appldate.year)==daysdiff2) then begin 
+        fwdbaldays = fwdbaldays + LSrw.Allowance;
+      end else begin  
+        fwdbaldays = fwdbaldays + (LSrw.Allowance/DaysInYear(appldate.year))*daysdiff2;
+      end;
+    end;  
+    res = fwdbaldays - CheckLeaveUsed(sd,YearStartDate,HRMCOr);
+    td = RepSpec.sEndDate;
+    if (blankdate(td)) then begin
+      td = CurrentDate;
+    end;
+    LTr.Employee = HRMCOr.Employee;
+    LTr.TransDate = sd;
+    TrHs = true;
+    while (LoopKey("EmployeeDate",LTr,2,TrHs)) begin
+      if (DateInRange(LTr.TransDate,StartDate,RepSpec.sEndDate)==false) then begin
+        TrHs = false;
+      end;
+      if (TrHs) then begin
+        foundf = true;
+        if (LTr.Employee!=HRMCOr.Employee) then begin foundf = false; end;
+        if (LTr.TransDate>=td) then begin foundf = false; end;
+        if (LTr.OKFlag==0) then begin foundf = false; end;
+        if (LTr.LeaveActType!=LSrw.ActType) then begin foundf = false; end;
+        if (foundf) then begin
+          res = res + LTr.Days;
+        end;
+      end;
+    end;
+  end else begin
+    td = RepSpec.sEndDate;
+    if (blankdate(td)) then begin
+      td = CurrentDate;
+    end;
+    StartDate = td;
+    switch (LRb.LeaveCalculationBase) begin
+      case kLeaveCalculationBaseCalendarYear:
+        StartDate.month = 1;
+        StartDate.day = 1;
+        EndDate.month = 12;
+        EndDate.day = 31;
+      case kLeaveCalculationBaseFiscalYear:
+        FindFiscalYear(td,StartDate,EndDate);  
+    end;
+    if (StartDate<HRMCOr.StartDate) then begin
+      StartDate = HRMCOr.StartDate;
+    end;
+    LTr.Employee = HRMCOr.Employee;
+    LTr.TransDate = StartDate;
+
+     TrHs = true;
+    while (LoopKey("EmployeeDate",LTr,2,TrHs)) begin
+     if (DateInRange(LTr.TransDate,StartDate,RepSpec.sEndDate)==false) then begin
+        TrHs = false;
+      end;
+       if (TrHs) then begin
+        foundf = true;
+        if (LTr.Employee!=HRMCOr.Employee) then begin foundf = false;     end;
+        if (LTr.TransDate>=td) then begin foundf = false;    end;
+        if (LTr.OKFlag==0) then begin foundf = false;     end;
+        if (LTr.LeaveActType!=LSrw.ActType) then begin foundf = false;      end;
+        if (foundf) then begin
+          res = res + LTr.Days; 
+        end;
+       end;
+    end;
+  end;
+LCalculateLeaveTransfer:;  
+  CalculateLeaveTransfer = res;
+  return;
+end;
+
+function val AddHRMCOChanges(record LeaveSchemeVc LSr,row LeaveSchemeVc LSrw,record RcVc RepSpec,record HRMCOVc HRMCOr)
+begin
+  val res;
+  record HRMCOChangeVc HRMCOCr;
+  Boolean found;
+  
+  found = true;
+  HRMCOCr.HRMCOSerNr = HRMCOr.SerNr;
+  found = true;
+  while (LoopKey("HRMCOSerNr:" & HRMCOr.SerNr,HRMCOCr,1,found)) begin
+    if (HRMCOCr.LeaveFwdBalDate<=RepSpec.sEndDate and HRMCOCr.OKFlag!=0) then begin
+      res = res + HRMCOCr.LeaveFwdBal;
+    end;
+  end;
+  AddHRMCOChanges = res;
+  return;
+end;
+
+function Boolean LastDayOfMonth(date td)
+begin
+  Boolean res;
+
+  if (td.day==DaysInMonth(GetYear(td),GetMonth(td))) then begin res = true; end;
+
+  LastDayOfMonth = res;
+  return;
+end;
+
+function val CalculateAllowance(record LeaveSchemeVc LSr,row LeaveSchemeVc LSrw,record RcVc RepSpec,record HRMCOVc HRMCOr)
+begin
+  val res;
+  record LeaveRulesBlock LRb;
+  record LeaveTransferVc LTr;
+  Boolean found;
+  Date td,appldate,YearStartDate;
+  Date sd,ed,reportstartdate,contractstartdate;
+  val allowance,montshdiff,months;
+  val daysdiff1,daysdiff2;
+  Integer i,rwcnt;
+
+  BlockLoad(LRb);
+  appldate = RepSpec.sEndDate;
+  YearStartDate = appldate;
+  YearStartDate.month = 1;
+  YearStartDate.day = 1;
+
+  months = 12;
+  sd = RepSpec.sStartDate;
+  if (RepSpec.sStartDate< HRMCOr.StartDate) then begin sd = AddDay(HRMCOr.StartDate,0); end;
+  if (LRb.AutTransferBalance==1) then begin
+    appldate.year = sd.year;
+  end;
+  ed = appldate;
+  if (HasLocalization("POL")==false) then begin
+    if (ed.day!=DaysInMonth(ed.year,ed.month)) and ((ed.day!=1) and (ed.month!=1))then begin
+      ed = AddMonth(appldate,-1);
+      ed.day = DaysInMonth(ed.year,ed.month);
+    end;
+  end;
+  montshdiff = MonthDiff(appldate,ed);
+  if (montshdiff==1.00) then begin montshdiff = 0; end;
+  daysdiff2 = DateDiff(appldate,sd)+1;
+  if (daysdiff2==1.00) then begin daysdiff2 = 0;  end;
+  allowance = allowance + (LSrw.Allowance/ months) * montshdiff;
+  if (DaysInYear(appldate.year)==daysdiff2) then begin 
+    allowance = allowance + LSrw.Allowance;
+  end else begin
+    allowance = allowance + (LSrw.Allowance/DaysInYear(appldate.year))*daysdiff2;
+  end;
+  if (allowance<0) then begin allowance = 0; end;
+  res = allowance;
+LCalculateAllowance:;  
+  CalculateAllowance = res;
+  return;
+end;
+
+procedure LeaveBalance_Employee(record RcVc RepSpec,var val tlt,var val tall,var val tdta)
+begin
+  string 255 fremp,toemp;
+  record HRMCOVc HRMCOr;
+  record HRMCOChangeVc HRMCOCr;
+  Boolean found,testf,hrmcocf;
+  record LeaveSchemeVc LSr;
+  row LeaveSchemeVc LSrw;
+  Integer i,rwcnt;
+  date YearStartDate,reportstartdate,contractstartdate,ed;
+  val daystaken,leavetransfer,allowance,zeroallowance,sballowance,daystakenpreviously,calcleavetransfer;
+  record RcVc RepSpec1;
+
+  record LeaveRulesBlock LRbl;
+  BlockLoad(LRbl);
+  fremp = FirstInRange(RepSpec.f1,20);
+  toemp = LastInRange(RepSpec.f1,20);
+  found = true;
+  HRMCOr.Employee = fremp;
+  while (LoopKey("Employee",HRMCOr,1,found)) begin
+    if (nonblank(RepSpec.f1)) then begin
+      if (HRMCOr.Employee>toemp) then begin found = false; end;
+    end;
+    if (found) then begin
+      testf = true;
+      hrmcocf = FindHRMCOChange(HRMCOr.SerNr,HRMCOCr);
+      if (hrmcocf) then begin
+        HRMCOr.JobTitle = HRMCOCr.JobTitle;
+        HRMCOr.GrossSalary = HRMCOCr.GrossSalary;
+        HRMCOr.DepCode = HRMCOCr.DepCode;
+        HRMCOr.LeaveScheme = HRMCOCr.LeaveScheme;
+      end;
+      if (nonblank(RepSpec.FirstAcc)) then begin
+        if (HRMCOr.DepCode!=RepSpec.FirstAcc) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f3)) then begin
+        if (HRMCOr.JobTitle!=RepSpec.f3) then begin testf = false; end;
+      end;
+      if (HRMCOr.StartDate>RepSpec.sEndDate) then begin testf = false; end;
+      if (RepSpec.flags[1]!=1) then begin
+        if (HRMCOr.TerminatedFlag==1) then begin testf = false; end;
+      end;
+      if (testf) then begin
+        StartFormat(15);
+        OutString(0,0,USetStr(19653) & ": ",false);
+        OutString(50,0,HRMCOr.Employee,false);
+        OutString(100,0,HRMCOr.Name,false);
+        OutString(200,0,USetStr(19655) & ": ",false);
+        OutLongInt(250,"DblHRMCOVc",HRMCOr.SerNr,false);
+        EndFormat;
+        Gray_Divider(0,1);        
+        LSr.Code = HRMCOr.LeaveScheme;
+        ReadFirstMain(LSr,1,true);
+        rwcnt = MatRowCnt(LSr);
+        StartFormat(15);
+        OutString(15,0,USetStr(19656),false);
+        OutString(2,0,USetStr(19657),false);
+        OutString(4,0,USetStr(19660),true);
+        OutString(5,0,"Accrued Days",true);
+        OutString(6,0,USetStr(19661),true);
+        OutString(1,0,USetStr(19662),true);
+        EndFormat;
+        for (i=0;i<rwcnt;i=i+1) begin
+          testf = true;
+          MatRowGet(LSr,i,LSrw);
+          if (nonblank(RepSpec.LastAcc)) then begin
+            if (LSrw.ActType!=RepSpec.LastAcc) then begin testf = false; end;
+          end;
+          if (testf) then begin
+            StartFormat(15);
+            OutString(15,0,LSrw.ActType,false);
+            OutString(2,0,LSrw.Comment,false);
+            ed = RepSpec.sEndDate;
+            if (i==0 and nonblank(HRMCOr.LeaveFwdBal) and (HRMCOr.LeaveFwdBalDate<=RepSpec.sEndDate)) then begin
+              leavetransfer = HRMCOr.LeaveFwdBal;
+            end else begin
+              leavetransfer = CalculateLeaveTransfer(LSr,LSrw,RepSpec,HRMCOr);
+            end;
+            if (i==0) then begin
+              leavetransfer = leavetransfer + AddHRMCOChanges(LSr,LSrw,RepSpec,HRMCOr);
+            end;
+            reportstartdate = RepSpec.sStartDate;
+            contractstartdate = HRMCOr.StartDate;
+            allowance = CalculateAllowance(LSr,LSrw,RepSpec,HRMCOr);
+            daystaken = CheckLeaveUsed(RepSpec.sStartDate,RepSpec.sEndDate,HRMCOr);
+            daystakenpreviously = CheckLeaveUsed(HRMCOr.StartDate,AddDay(RepSpec.sStartDate,-1),HRMCOr);
+            if ((reportstartdate.month==contractstartdate.month) and (reportstartdate.year==reportstartdate.year)) or (reportstartdate<HRMCOr.StartDate) then begin 
+              zeroallowance = 0;
+              if (LRbl.AutTransferBalance==1) then begin 
+                sballowance = CalculateAllowance(LSr,LSrw,RepSpec,HRMCOr);
+                sballowance = sballowance - daystakenpreviously;
+                OutVal(4,0,sballowance,M4Val,true);
+              end else begin
+                OutVal(4,0,zeroallowance,M4Val,true);
+              end;
+              allowance = CalculateAllowance(LSr,LSrw,RepSpec,HRMCOr);
+            end else begin
+              RepSpec.sEndDate = AddDay(RepSpec.sStartDate,-1);
+              RepSpec.sStartDate = HRMCOr.StartDate;
+              sballowance = CalculateAllowance(LSr,LSrw,RepSpec,HRMCOr);
+              sballowance = sballowance - daystakenpreviously;
+              OutVal(4,0,Round(sballowance+calcleavetransfer,SetRoundModeD(2)),M4Qty,true);
+            end;
+              if (LRbl.AutTransferBalance==1) then begin 
+                if (LeaveTransferExists(HRMCOr,ed)) then begin
+                  OutVal(5,0,Round(leavetransfer,SetRoundModeD(2)),M4Val,true);
+                end else begin
+                  OutVal(5,0,Round(allowance,SetRoundModeD(2)),M4Val,true);
+                end;
+              end else begin
+                OutVal(5,0,Round(allowance+leavetransfer,SetRoundModeD(2)),M4Val,true);
+              end;
+            YearStartDate = RepSpec.sEndDate;
+            YearStartDate.month = 1;
+            YearStartDate.day = 1;
+            OutVal(6,0,daystaken,M4Qty,true);
+            if (LRbl.AutTransferBalance==1) then begin 
+              if (LeaveTransferExists(HRMCOr,ed)) then begin
+                OutVal(1,0,Round(sballowance+leavetransfer-daystaken,SetRoundModeD(2)),M4Qty,true);
+              end else begin
+                OutVal(1,0,Round(sballowance+allowance-daystaken,SetRoundModeD(2)),M4Qty,true);
+              end;
+            end else begin
+              OutVal(1,0,Round(sballowance+allowance+leavetransfer-daystaken,SetRoundModeD(2)),M4Qty,true);
+            end;
+            EndFormat;
+          end;
+          tlt = tlt + leavetransfer;
+          tall = tall + allowance;
+          tdta = tdta + daystaken;
+        end;
+        Gray_Divider(0,1);        
+        StartFormat(15);
+        EndFormat;
+      end;
+    end;
+  end;
+  return;
+end;
+
+procedure LeaveBalance_LeaveType_PerActType(record RcVc RepSpec,string leaveacttype,var val tlt,var val tall,var val tdta)
+begin
+  string 255 fremp,toemp;
+  record HRMCOVc HRMCOr;
+  record HRMCOChangeVc HRMCOCr;
+  Boolean found,testf,hrmcocf;
+  record LeaveSchemeVc LSr;
+  row LeaveSchemeVc LSrw;
+  Integer i,rwcnt;
+  val daystaken,leavetransfer,allowance;
+  Boolean headerprntedf;
+
+  fremp = FirstInRange(RepSpec.f1,20);
+  toemp = LastInRange(RepSpec.f1,20);
+  found = true;
+  HRMCOr.Employee = fremp;
+  while (LoopKey("Employee",HRMCOr,1,found)) begin
+    if (nonblank(RepSpec.f1)) then begin
+      if (HRMCOr.Employee>toemp) then begin found = false; end;
+    end;
+    if (found) then begin
+      testf = true;
+      hrmcocf = FindHRMCOChange(HRMCOr.SerNr,HRMCOCr);
+      if (hrmcocf) then begin
+        HRMCOr.JobTitle = HRMCOCr.JobTitle;
+        HRMCOr.GrossSalary = HRMCOCr.GrossSalary;
+        HRMCOr.DepCode = HRMCOCr.DepCode;
+      end;
+      if (nonblank(RepSpec.FirstAcc)) then begin
+        if (HRMCOr.DepCode!=RepSpec.FirstAcc) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f3)) then begin
+        if (HRMCOr.JobTitle!=RepSpec.f3) then begin testf = false; end;
+      end;
+      if (HRMCOr.StartDate>RepSpec.sEndDate) then begin testf = false; end;
+      if (RepSpec.flags[1]!=1) then begin
+        if (HRMCOr.TerminatedFlag==1) then begin testf = false; end;
+      end;
+      if (testf) then begin
+        LSr.Code = HRMCOr.LeaveScheme;
+        ReadFirstMain(LSr,1,true);
+        rwcnt = MatRowCnt(LSr);
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(LSr,i,LSrw);
+          if (LSrw.ActType==leaveacttype) then begin
+            if (headerprntedf==false) then begin
+              StartFormat(15);
+              OutString(15,0,USetStr(19653),false);
+              OutString(2,0,USetStr(19663),false);
+              OutString(4,0,USetStr(19660),true);
+              OutString(5,0,"Accrued Days",true);
+              OutString(6,0,USetStr(19661),true);
+              OutString(1,0,USetStr(19662),true);
+              EndFormat;
+              headerprntedf = true;
+            end;
+            StartFormat(15);
+            OutString(15,0,HRMCOr.Employee,false);
+            OutString(2,0,HRMCOr.Name,false);
+            if (i==0 and nonblank(HRMCOr.LeaveFwdBal) and (HRMCOr.LeaveFwdBalDate<=RepSpec.sEndDate)) then begin
+              leavetransfer = HRMCOr.LeaveFwdBal;
+            end else begin
+              leavetransfer = CalculateLeaveTransfer(LSr,LSrw,RepSpec,HRMCOr);
+            end;
+            if (i==0) then begin
+              leavetransfer = leavetransfer + AddHRMCOChanges(LSr,LSrw,RepSpec,HRMCOr);
+            end;
+            allowance = CalculateAllowance(LSr,LSrw,RepSpec,HRMCOr);
+            OutVal(4,0,allowance+leavetransfer,M4Qty,true);
+            OutVal(5,0,allowance,M4Qty,true);
+            daystaken = CalculateDaysTaken(RepSpec,HRMCOr.Employee,LSrw.ActType);
+            OutVal(6,0,daystaken,M4Qty,true);
+            OutVal(1,0,allowance+leavetransfer-daystaken,M4Qty,true);
+            EndFormat;
+            tlt = tlt + leavetransfer;
+            tall = tall + allowance;
+            tdta = tdta + daystaken;
+            i = rwcnt;
+          end;
+        end; 
+      end;
+    end;
+  end;
+  return;
+end;
+
+procedure SortLeaveSchemeArray(record LeaveSchemeVc LSr)
+begin
+  row LeaveSchemeVc LSrw;
+  row LeaveSchemeVc LS2rw;
+  row LeaveSchemeVc tmpLSrw;
+  Integer i,rwcnt;
+  Boolean testf;
+
+  testf = true;
+  while (testf) begin
+    testf = false;
+    rwcnt = MatRowCnt(LSr);
+    for (i=0;i<rwcnt-1;i=i+1) begin
+      MatRowGet(LSr,i,LSrw);
+      MatRowGet(LSr,i+1,LS2rw);
+      if (LSrw.ActType>LS2rw.ActType) then begin
+        MatRowPut(LSr,i,LS2rw);
+        MatRowPut(LSr,i+1,LSrw);
+        testf = true;
+      end;
+    end;
+  end;
+  return;
+end;
+
+procedure AddToLeaveSchemeArray(record LeaveSchemeVc LSr,row LeaveSchemeVc addLSrw)
+begin
+  row LeaveSchemeVc LSrw;
+  Integer i,rwcnt;
+
+  rwcnt = MatRowCnt(LSr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(LSr,i,LSrw);
+    if (addLSrw.ActType==LSrw.ActType) then begin
+      goto LAddToLeaveSchemeArray;
+    end;
+  end;  
+  MatRowPut(LSr,MatRowCnt(LSr),addLSrw);
+LAddToLeaveSchemeArray:;        
+  return;
+end;
+
+procedure LeaveBalance_LeaveType(record RcVc RepSpec,var val tlt,var val tall,var val tdta)
+begin
+  string 255 fremp,toemp;
+  Boolean found,testf;
+  record LeaveSchemeVc LSr;
+  record LeaveSchemeVc combinedLSr;
+  row LeaveSchemeVc LSrw;
+  Integer i,rwcnt;
+
+  fremp = FirstInRange(RepSpec.f1,20);
+  toemp = LastInRange(RepSpec.f1,20);
+  found = true;
+  while (LoopMain(LSr,1,found)) begin
+    if (found) then begin
+      rwcnt = MatRowCnt(LSr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(LSr,i,LSrw);
+        AddToLeaveSchemeArray(combinedLSr,LSrw);
+      end;
+    end;
+  end;
+  rwcnt = MatRowCnt(combinedLSr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(combinedLSr,i,LSrw);
+    testf = true;
+    if (nonblank(RepSpec.LastAcc)) then begin
+      if (LSrw.ActType!=RepSpec.LastAcc) then begin testf = false; end;
+    end;
+    if (testf) then begin
+      StartFormat(15);
+      OutString(0,0,USetStr(19656) & ": ",false);
+      OutString(50,0,LSrw.ActType,false);
+      OutString(360,0,USetStr(19657) & ": ",false);
+      OutString(420,0,LSrw.Comment,false);
+      EndFormat;
+      Gray_Divider(0,1);        
+      LeaveBalance_LeaveType_PerActType(RepSpec,LSrw.ActType,tlt,tall,tdta);
+      Gray_Divider(0,1);        
+      StartFormat(15);
+      EndFormat;
+    end;
+  end;
+  SortLeaveSchemeArray(combinedLSr);
+  return;
+end;
+
+procedure LeaveBalance(record RcVc RepSpec,var val tlt,var val tall,var val tdta)
+begin
+  val clt,call,cdta;
+
+  switch (RepSpec.flags[0]) begin
+    case 0: LeaveBalance_Employee(RepSpec,clt,call,cdta);
+    case 1: LeaveBalance_LeaveType(RepSpec,clt,call,cdta);
+  end;
+  Gray_Divider(0,1);
+  StartFormat(15);
+  OutVal(5,0,Round(call+clt,SetRoundModeD(2)),M4Qty,true);
+  OutVal(6,0,cdta,M4Qty,true);
+  OutVal(1,0,Round(call+clt-cdta,SetRoundModeD(2)),M4Qty,true);
+  EndFormat;
+  tlt = tlt + clt;
+  tall = tall + call;
+  tdta = tdta + cdta;
+  return;
+end;
+
+global
+procedure LeaveBalanceRn(record RcVc RepSpec)
+begin
+  val tlt,tall,tdta;
+  Integer i,rwcnt;
+  record CompaniesBlock Compb;
+  row CompaniesBlock Cbrw;  
+  
+  StartReportJob(USetStr(19650));
+  
+  PrintHeader(RepSpec);
+  EndHeader;
+  /*
+  if (RepSpec.wholemonthf==0) then begin
+    StartFormat(15);
+     OutString(0,0,USetStr(1163),false);     
+    EndFormat;
+    goto LLeaveBalanceRn;
+  end;
+  */
+  SetRepCol(2,65);
+  SetRepCol(3,280);
+  SetRepCol(4,330);
+  SetRepCol(5,380);
+  SetRepCol(6,430);
+  
+  if (RepSpec.IncDaughter!=0) then begin
+    BlockLoad(Compb);
+    rwcnt = MatRowCnt(Compb);  
+    rwcnt = MatRowCnt(Compb);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(Compb,i,Cbrw);
+      if (SetServerCompanyCode(Cbrw.CompCode) and CompanyHasContracts) then begin
+        StartFormat(15);
+        OutString(0,0,Cbrw.CompCode,false);
+        OutString(80,0,Cbrw.CompName,false);
+        EndFormat;
+        Gray_Divider(0,200);
+        LeaveBalance(RepSpec,tlt,tall,tdta);
+      end;
+    end;
+    Gray_Divider(0,1);
+    StartFormat(15);
+
+    OutString(0,0,USetStr(19660),false);
+    OutVal(3,0,tlt,M4Qty,true);
+    OutVal(4,0,tall,M4Qty,true);
+    OutVal(5,0,tall+tlt,M4Qty,true);
+    OutVal(6,0,tdta,M4Qty,true);
+    OutVal(1,0,tall+tlt-tdta,M4Qty,true);
+    EndFormat;
+  end else begin
+    LeaveBalance(RepSpec,tlt,tall,tdta);
+  end;
+
+LLeaveBalanceRn:;  
+  EndJob;
+  return;
+end;

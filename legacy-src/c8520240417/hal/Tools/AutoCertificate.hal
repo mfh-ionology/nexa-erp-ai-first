@@ -1,0 +1,480 @@
+external updating procedure ACMERegisterAccount(var record ACMEWorkspaceVc);
+external updating procedure ACMECreateCertificateKey(var record ACMEWorkspaceVc);
+external updating procedure ACMEPlaceOrder(var record ACMEWorkspaceVc);
+external updating procedure ACMEGetAuthTokens(var record ACMEWorkspaceVc);
+external updating procedure ACMERespondToChallenges(var record ACMEWorkspaceVc);
+external updating procedure ACMECheckValidationStatus(var record ACMEWorkspaceVc);
+external updating procedure ACMESubmitCSR(var record ACMEWorkspaceVc);
+external updating procedure ACMEFetchCertificate(var record ACMEWorkspaceVc);
+external procedure ACMESWaitForRetry(var record ACMEWorkspaceVc);
+external updating procedure ACMECheckOrderStatus(var record ACMEWorkspaceVc);
+
+external function string 255 PublicHostNameRemote();
+external procedure ACMECertificateToStringRemote(var record ACMEWorkspaceVc,var string,var string);
+external procedure AutoCertificate_ReadRemote(string,var string,var string);
+external procedure AutoCertificate_StoreRemote(string,string,string);
+
+external procedure SplitString(string,string,var array string);
+external function LongInt UTCDateToDays(Date);
+external function LongInt DateDiff(Date,Date);
+
+global
+function string 255 GetCertSubField(string field,string subfieldname)
+begin
+  LongInt i,pos,prefixlen;
+  array string 255 subfields;
+  string 255 prefix,res;
+  
+  SplitString(field,"/",subfields);
+  
+  prefix = subfieldname & "=";
+  prefixlen = len(prefix);
+  
+  for (i = 0; i<subfields.length; i = i + 1) begin
+    if (left(subfields[i],prefixlen)==prefix) then begin
+      res = right(subfields[i],len(subfields[i]) - prefixlen);
+    end;
+  end;
+  
+  GetCertSubField = res;
+end;
+
+global
+procedure UpdateProgressWindowOnClient2(LongInt pos,LongInt max,LongInt msg1,LongInt msg2)
+begin
+  //LogText(0,"UpdateProgressWindowOnClient " & pos & " " & max & " " & msg1 & " " & msg2);
+  UpdateProgressWindow(pos,max,msg1,msg2); // This function is actually supported to run on the server
+end;
+
+global
+procedure OpenProgressWindowOnClient2(LongInt msg1,LongInt msg2,LongInt n)
+begin
+  //LogText(0,"OpenProgressWindowOnClient " & msg1 & " " & msg2 & " " &  n);
+  OpenProgressWindow(msg1,msg2,n);
+end;
+
+global
+procedure UpdateProgressWindowOnClient(LongInt pos,LongInt max,LongInt msg1,LongInt msg2)
+begin
+  qupdating.UpdateProgressWindowOnClient2(pos,max,msg1,msg2);
+end;
+
+global
+procedure OpenProgressWindowOnClient(LongInt msg1,LongInt msg2,LongInt n)
+begin
+  qupdating.OpenProgressWindowOnClient2(msg1,msg2,n);
+end;
+
+global
+procedure TraceClient(string s1,string s2)
+begin
+  Trace(s1,s2);
+end;
+
+global updating
+procedure StoreACMEWorkspace(record ACMEWorkspaceVc AWr)
+begin
+  RecordStore(AWr,true);
+end;
+
+function Boolean ValidDomainStartChar(string chrstr)
+begin
+  Boolean res;
+  string 1 tchrstr;
+  
+  tchrstr = Uppercase(chrstr);
+  if (asc("A")<=asc(tchrstr) and asc(tchrstr)<=asc("Z")) then begin
+    res = true;
+  end;
+  
+  if (res==false) then begin
+    LogText2(0,"ValidDomainStartChar " & chrstr & " -> false",kVerbosityDebugDetailed);
+  end;
+  
+  ValidDomainStartChar = res;
+end;
+
+function Boolean ValidDomainChar(string chrstr)
+begin
+  Boolean res;
+  string 1 tchrstr;
+
+  if (ValidDomainStartChar(chrstr)) then begin
+    res = true;
+    goto LValidDomainChar_out;
+  end;
+  
+  tchrstr = Uppercase(chrstr);
+  
+  if (asc("0")<=asc(tchrstr) and asc(tchrstr)<=asc("9")) then begin
+    res = true;
+  end;
+
+  if (tchrstr=="-") then begin
+    res = true;
+  end;
+
+LValidDomainChar_out:;
+  //if (res==false) then begin
+  //  LogText(0,"ValidDomainChar " & chrstr & " -> false");
+  //end;
+  ValidDomainChar = res;
+end;
+
+function Boolean ValidDomainPart(string domainpart)
+begin
+  Boolean res;
+  LongInt i,ln;
+  string 1 chrstr;
+  
+  ln = len(domainpart);
+  
+  if (ln<1) then begin
+    //LogText(0,"ValidDomainPart " & ln & "<1");
+    goto LValidDomainPart_out;
+  end;
+  
+  chrstr = mid(domainpart,0,1);
+  if (ValidDomainStartChar(chrstr)==false) then begin
+    goto LValidDomainPart_out;
+  end;
+  
+  for (i = 1; i<ln; i = i + 1) begin
+    chrstr = mid(domainpart,i,1);
+    if (ValidDomainChar(chrstr)==false) then begin
+      goto LValidDomainPart_out;
+    end;
+  end;
+  
+  res = true;
+LValidDomainPart_out:;
+  //LogText(0,"ValidDomainPart " & domainpart & " -> " & res);
+  ValidDomainPart = res;
+end;
+
+function Boolean ValidDomainName(string domainname)
+begin
+  Boolean res;
+  array string 255 parts;
+  LongInt i;
+  
+  SplitString(domainname,".",parts);
+  
+  if (parts.length<2) then begin
+    //LogText(0,"ValidDomainName " & parts.length & "<2");
+    goto LValidDomainName_out;
+  end;
+  
+  for (i = 0; i<parts.length; i = i + 1) begin
+    if (ValidDomainPart(parts[i])==false) then begin
+      goto LValidDomainName_out;
+    end;
+  end;
+  
+  res = true;
+LValidDomainName_out:;
+  ValidDomainName = res;
+end;
+
+procedure AddSitesToRequest(record ACMEWorkspaceVc AWr,string maindomain)
+begin
+  row ACMEWorkspaceVc AWrw;
+  record WebNGSitesBlock WSb;
+  row WebNGSitesBlock WSbrw;
+  Integer rwcnt,rwn;
+  
+  BlockLoad(WSb);
+  rwcnt = MatRowCnt(WSb);
+  for (rwn = 0; rwn<rwcnt; rwn = rwn + 1) begin
+    MatRowGet(WSb,rwn,WSbrw);
+    if (WSbrw.Host<>maindomain and ValidDomainName(WSbrw.Host)) then begin
+      AWrw.Domain = WSbrw.Host;
+      MatRowPut(AWr,MatRowCnt(AWr),AWrw);
+    end;
+  end;
+end;
+
+procedure AddSitesToSet(var string sites)
+begin
+  record WebNGSitesBlock WSb;
+  row WebNGSitesBlock WSbrw;
+  Integer rwcnt,rwn;
+  
+  BlockLoad(WSb);
+  rwcnt = MatRowCnt(WSb);
+  for (rwn = 0; rwn<rwcnt; rwn = rwn + 1) begin
+    MatRowGet(WSb,rwn,WSbrw);
+    if (ValidDomainName(WSbrw.Host)) then begin
+      AddToSet(sites,WSbrw.Host);
+    end;
+  end;
+end;
+
+function Boolean GetCertificate(string domain,var string cert,var string privkey,var string errormessage)
+begin
+  record ACMEWorkspaceVc AWr;
+  row ACMEWorkspaceVc AWrw;
+  Integer loops;
+  record ProgramStatusBlock PSb;
+  Boolean res;
+  
+  res = false;
+  ClientRemoteAsync.UpdateProgressWindowOnClient(10,100,41120,41128);
+  
+  BlockLoad(PSb);
+  
+  LogText(0,"GetCertificate start");
+  
+  RecordNew(AWr);
+  AWr.DebugFlag = PSb.AutoCertDebug;
+  
+  if (AWr.SerNr<=0) then begin
+    AWr.SerNr = NextSerNr("ACMEWorkspaceVc",CurrentDate,-1,false,"");
+  end;
+  
+  AWrw.Domain = domain;
+  MatRowPut(AWr,0,AWrw);
+  AddSitesToRequest(AWr,domain);
+  qupdating.StoreACMEWorkspace(AWr);
+  
+  LogText(0,"GetCertificate AWr.SerNr " & AWr.SerNr);
+  
+  qupdating.ACMERegisterAccount(AWr);
+  
+  LogText(0,"GetCertificate after register AWr.SerNr " & AWr.SerNr & " '" & AWr.OrderStatus & "'");
+  if (AWr.OrderStatus<>"valid") then begin
+    errormessage = "failed to register ACME account";
+    goto LGetCertificate_out;
+  end;
+  
+  ClientRemoteAsync.UpdateProgressWindowOnClient(20,100,41120,41129);
+  
+  qupdating.ACMECreateCertificateKey(AWr);
+  
+  LogText(0,"GetCertificate after create key AWr.SerNr " & AWr.SerNr & " " & AWr.OrderStatus);
+  
+  qupdating.ACMEPlaceOrder(AWr);
+  
+  LogText(0,"GetCertificate after place order AWr.SerNr " & AWr.SerNr & " " & AWr.OrderStatus);
+  
+  ClientRemoteAsync.UpdateProgressWindowOnClient(30,100,41120,41130);
+  
+  qupdating.ACMEGetAuthTokens(AWr);
+  // if AWr.OrderStatus==error ... then errormessage = AWr.ErrorString; goto out;
+  
+  LogText(0,"GetCertificate after get auth token AWr.SerNr " & AWr.SerNr & " " & AWr.OrderStatus);
+  
+  ClientRemoteAsync.UpdateProgressWindowOnClient(40,100,41120,41131);
+  
+  qupdating.ACMERespondToChallenges(AWr);
+  
+  LogText(0,"GetCertificate after respond to challenges AWr.SerNr " & AWr.SerNr & " " & AWr.OrderStatus);
+  
+  ClientRemoteAsync.UpdateProgressWindowOnClient(50,100,41120,41132);
+  
+  while (AWr.OrderStatus<>"ready" and AWr.OrderStatus<>"invalid") begin
+    loops = loops + 1;
+    if (loops>10) then begin
+      errormessage = "ACME challenge not validated after 30 seconds";
+      goto LGetCertificate_out;
+    end;
+    Sleep(3);
+    qupdating.ACMECheckValidationStatus(AWr);
+  end;
+  
+  if (AWr.OrderStatus=="invalid") then begin
+    LogText(0,"GetCertificate Failed after check validation status AWr.SerNr " & AWr.SerNr & " " & AWr.OrderStatus);
+    ClientRemoteAsync.UpdateProgressWindowOnClient(100,100,41120,41128);
+    res = true;
+    goto LGetCertificate_out;
+  end;
+  
+  LogText(0,"GetCertificate after check validation status AWr.SerNr " & AWr.SerNr & " " & AWr.OrderStatus);
+  
+  ClientRemoteAsync.UpdateProgressWindowOnClient(70,100,41120,41133);
+  
+  qupdating.ACMESubmitCSR(AWr);
+  
+  LogText(0,"GetCertificate after submit CSR AWr.SerNr " & AWr.SerNr & " " & AWr.OrderStatus);
+  
+  ClientRemoteAsync.UpdateProgressWindowOnClient(80,100,41120,41134);
+  
+  while (AWr.OrderStatus=="processing") begin
+    ACMESWaitForRetry(AWr);
+    qupdating.ACMECheckOrderStatus(AWr);
+    LogText(0,"GetCertificate after updated status AWr.SerNr " & AWr.SerNr & " " & AWr.OrderStatus);
+  end;
+  
+  qupdating.ACMEFetchCertificate(AWr);
+  
+  LogText(0,"GetCertificate after fetch certificate AWr.SerNr " & AWr.SerNr & " " & AWr.OrderStatus);
+  
+  qupdating.ACMECertificateToStringRemote(AWr,cert,privkey);
+  
+  res = true;
+LGetCertificate_out:;
+  GetCertificate = res;
+end;
+
+function Boolean IsValidCertificateFile(string certfile,string privkeyfile)
+begin
+  string 255 cert,privkey;
+  
+  cert = ReadFileToString(certfile);
+  privkey = ReadFileToString(privkeyfile);
+  
+  IsValidCertificateFile = IsValidCertificate(cert,privkey);
+end;
+
+global
+function Boolean Do_GetAutoCertificateIfNeeded()
+begin
+  Boolean res;
+  record ProgramStatusBlock PSb;
+  CryptoKey CurrentCertificate;
+  string 255 cert,privkey,pubhost,errormessage;
+  string 255 subject,issuer,certnames,minremainingstr;
+  date expires;
+  LongInt minremaining,pos;
+  string 255 certsite,neededsites;
+
+  BlockLoad(PSb);
+  
+  ClientRemoteAsync.OpenProgressWindowOnClient(41120,41121,1);
+  ClientRemoteAsync.UpdateProgressWindowOnClient(1,100,41120,41121);
+  
+  if (InString(PSb.SSLCertFile,"@auto")==0) then begin
+    if (IsValidCertificateFile(PSb.SSLCertFile,PSb.SSLPrivKeyFile)) then begin
+      LogText2(0,"GetAutoCertificateIfNeeded " & PSb.SSLCertFile & " is valid",kVerbosityDebugDetailed);
+      ClientRemoteAsync.UpdateProgressWindowOnClient(100,100,41120,41122);
+      res = true;
+      goto LDo_GetAutoCertificateIfNeeded_out;
+    end;
+  end;
+  
+  pubhost = PublicHostNameRemote();
+  ClientRemoteAsync.UpdateProgressWindowOnClient(2,100,41120,41121);
+
+  if (ValidDomainName(pubhost)==false) then begin
+    LogText(0,"GetAutoCertificateIfNeeded '" & pubhost & "' is not a valid hostname");
+    ClientRemoteAsync.UpdateProgressWindowOnClient(100,100,41120,41123);
+    res = true;
+    goto LDo_GetAutoCertificateIfNeeded_out;
+  end;
+  
+  AutoCertificate_ReadRemote(pubhost,cert,privkey);
+  ClientRemoteAsync.UpdateProgressWindowOnClient(5,100,41120,41121);
+
+  if (IsValidCertificate(cert,privkey)) then begin
+    GetProcessParameter("tls-auto-cert-min-valid-days",minremainingstr);
+    minremaining = StringToLongInt(minremainingstr);
+    
+    if (minremaining<0 or 100<minremaining) then begin
+      minremaining = 3;
+    end;
+    
+    GetCertificateDetailsFromString(cert,subject,issuer,expires,certnames);
+    
+    neededsites = pubhost;
+    AddSitesToSet(neededsites);
+    
+    AddToSet(certnames,GetCertSubField(subject,"CN"));
+    
+    LogText(0,"AutoCertificate we have a certificate for " & certnames);
+    LogText(0,"AutoCertificate we want a certificate for " & neededsites);
+
+    while (GetNextSubstring(certsite,pos,",",certnames)) begin
+      RemoveFromSet(neededsites,certsite);
+    end;
+    
+    if (neededsites<>"") then begin
+      LogText(0,"GetAutoCertificateIfNeeded attached certificates lacks " & neededsites & ", fetching new certificate");
+      goto LDo_GetAutoCertificateIfNeeded_Get;
+    end;
+    
+    if (DateDiff(expires,CurrentDate)>minremaining) then begin
+      LogText(0,"GetAutoCertificateIfNeeded attached certificates are valid");
+      ClientRemoteAsync.UpdateProgressWindowOnClient(100,100,41120,41124);
+      res = true;
+      goto LDo_GetAutoCertificateIfNeeded_out;
+    end else begin
+      LogText(0,"GetAutoCertificateIfNeeded attached certificates expires in " & DateDiff(expires,CurrentDate) & " days, fetching new certificate");
+    end;
+    
+  end;
+  
+LDo_GetAutoCertificateIfNeeded_Get:;
+  cert = "";
+  privkey = "";
+  
+  if (GetCertificate(pubhost,cert,privkey,errormessage)==false) then begin
+    //LogText(0,"GetAutoCertificateIfNeeded GetCertificate failed");
+    ClientRemoteAsync.UpdateProgressWindowOnClient(100,100,41120,41128);
+    ClientRemoteAsync.TraceClient(USetStr(41128),errormessage);
+    res = false;
+    goto LDo_GetAutoCertificateIfNeeded_out;
+  end;
+  
+  if (IsValidCertificate(cert,privkey)) then begin
+    LogText(0,"GetAutoCertificateIfNeeded new certificate is valid");
+    ClientRemoteAsync.UpdateProgressWindowOnClient(95,100,41120,41125);
+    AutoCertificate_StoreRemote(pubhost,cert,privkey);
+    ClientRemoteAsync.UpdateProgressWindowOnClient(100,100,41120,41126);
+    res = true;
+  end else begin
+    LogText(0,"GetAutoCertificateIfNeeded new certificate is NOT valid");
+    ClientRemoteAsync.UpdateProgressWindowOnClient(100,100,41120,41127);
+    res = false;
+  end;
+  
+LDo_GetAutoCertificateIfNeeded_out:;
+  Do_GetAutoCertificateIfNeeded = res;
+end;
+
+global
+procedure Do_GetAutoCertificateIfNeededNoretval()
+begin
+  Do_GetAutoCertificateIfNeeded;
+end;
+
+global
+procedure GetAutoCertificateIfNeeded()
+begin
+  threadremoteasync.Do_GetAutoCertificateIfNeededNoretval;
+end;
+
+global
+procedure GetAutoCertificateTask(string arg)
+begin
+  LongInt daynumber,lastrun;
+  record ProgramStatusBlock PSb;
+  
+  BlockLoad(PSb);
+  if (PSb.UseHttps==0) then begin
+    LogText2(0,"GetAutoCertificateTask - HTTPS turned off",kVerbosityDebug);
+    goto LGetAutoCertificateTask_out;
+  end;
+  
+  lastrun = GetGlobalLongInt("GetAutoCertificateLastRun");
+  daynumber = UTCDateToDays(CurrentDate);
+  
+  if (daynumber<>lastrun) then begin
+    if (Do_GetAutoCertificateIfNeeded) then begin
+      SetGlobalLongInt("GetAutoCertificateLastRun",daynumber);
+    end;
+  end;
+  
+  if (PSb.AutoCertTest<>0) then begin
+    ChangeTaskTiming("GetAutoCertificateTask",300);
+  end else begin
+    ChangeTaskTiming("GetAutoCertificateTask",1200);
+  end;
+  
+LGetAutoCertificateTask_out:;
+end;
+
+global
+procedure InitCertificateIdleTask()
+begin
+  NewPeriodicTask2("GetAutoCertificateTask","Refresh server certificate when needed","GetAutoCertificateTask","",90,"");
+end;

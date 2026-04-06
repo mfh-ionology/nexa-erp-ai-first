@@ -1,0 +1,587 @@
+external procedure ToolWebStartHeader();
+external procedure ToolWebStartHeaderEnd();
+external procedure ToolWebStartPage();
+external procedure ToolWebEndPage(Boolean);
+external procedure HTTPHeaderLine(string,var string,var string,string);
+external function Boolean ParseHTTPHeader(area,string,var Integer,var string,var string);
+external procedure LogAreaToFile(string,area);
+external function string 255 StripCharacter(string,string);
+remote function string 255 GBRHMRCHost();
+remote updating function LongInt SendGBRVatDeclaration(var record VATDeclVc);
+remote updating function LongInt SendFINVatDeclaration(var record VATDeclVc,var string);
+external function Integer DateGetIntMonth(Date);
+remote procedure CalculateVATDecl_Remote(var record VATDeclVc);
+remote updating procedure NorVATTmpEn(var record VATDr);
+external updating procedure DEUVATTmpEn(var record VATDr);
+external updating procedure NorVATGetReceiptBasic(var record VATDr);
+external procedure GetNextVATDeclNr(var string);
+remote function Boolean EVATDeclGetCertificate();
+remote procedure GBRHMRCAccessToken(var string);
+
+
+function Boolean VATDeclDClassStartDateEFAfter(Integer wn,Boolean changedf)
+begin
+  Boolean res;
+  record VATDeclVc VATDr;
+  LongInt md;
+  
+  if (changedf) then begin
+    GetWindowRecord(wn,VATDr);
+    md = GetMonth(VATDr.EndDate) - GetMonth(VATDr.StartDate) + 1;
+    switch (md) begin
+       case 1: VATDr.PeriodType = kPeriodTypeMonth;
+       case 2: VATDr.PeriodType = kPeriodTypeTwoMonths;
+       case 3: VATDr.PeriodType = kPeriodTypeQuarter;
+       case 12:  VATDr.PeriodType = kPeriodTypeYear;
+    end;
+    PutWindowRecord(wn,VATDr);
+  end;
+  VATDeclDClassStartDateEFAfter = res;
+  return;
+end;
+
+function Boolean VATDeclDClassEndDateEFAfter(Integer wn,Boolean changedf)
+begin
+  Boolean res;
+  record VATDeclVc VATDr;
+  LongInt md;
+  
+  if (changedf) then begin
+    GetWindowRecord(wn,VATDr);
+    md = DateGetIntMonth(VATDr.EndDate) - DateGetIntMonth(VATDr.StartDate) + 1;
+    switch (md) begin
+       case 1: VATDr.PeriodType = kPeriodTypeMonth;
+       case 2: VATDr.PeriodType = kPeriodTypeTwoMonths;
+       case 3: VATDr.PeriodType = kPeriodTypeQuarter;
+       case 12:  VATDr.PeriodType = kPeriodTypeYear;
+    end;
+    PutWindowRecord(wn,VATDr);
+  end;
+  VATDeclDClassEndDateEFAfter = res;
+  return;
+end;
+
+global
+function Boolean VATDeclDClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
+begin
+  Boolean res;
+
+  switch (fieldname) begin
+    case "StartDate": res = VATDeclDClassStartDateEFAfter(wn,changed!=0);
+    case "EndDate": res = VATDeclDClassEndDateEFAfter(wn,changed!=0);
+  end;
+  VATDeclDClassAfterEditField = res;
+  return;
+end;
+
+global
+function Boolean VATDeclDClassActiveEditField(Integer wn,string fieldname,Integer fn,Integer wnst,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record VATDeclVc VATDr;
+
+  switch (fieldname) begin
+    case "TaxServTimestamp": goto LVATDeclDClassActiveEditField;
+    case "TaxServID": goto LVATDeclDClassActiveEditField;
+  end;
+  switch (wnst) begin
+    case Rs_update:
+      GetPrevWindowRecord(wn,VATDr);
+      if (VATDr.OKFlag!=0) then begin
+        goto LVATDeclDClassActiveEditField;
+      end;
+  end;
+  res = true;
+LVATDeclDClassActiveEditField:;  
+  VATDeclDClassActiveEditField = res;
+  return;
+end;
+
+global
+function Boolean VATDeclDClassOKFlagButtonAction(Integer wn,Integer value)
+begin
+  Boolean res;
+  record VATDeclVc VATDeclr;
+ 
+  res = true;
+  switch (WindowState(wn)) begin
+    case Rs_update:
+      GetPrevWindowRecord(wn,VATDeclr);
+      if (VATDeclr.OKFlag!=0) then begin
+        res = UserCanAction("UnOKAll",false);
+      end;
+  end;  
+  if (HasLocalization("NOR,DEU")) then begin
+    res = false;
+  end;
+  VATDeclDClassOKFlagButtonAction = res;
+  return;
+end;
+
+global
+function Boolean VATDeclDClassTaxServStatusButtonAction(Integer wn,Integer value)
+begin
+  Boolean res;
+  record VATDeclVc VATDeclr;
+ 
+  res = false;
+  VATDeclDClassTaxServStatusButtonAction = res;
+  return;
+end;
+
+global
+function Boolean VATDeclDClassPeriodTypeButtonAction(Integer wn,Integer value)
+begin
+  Boolean res;
+  record VATDeclVc VATDeclr;
+ 
+  res = true;
+  switch (WindowState(wn)) begin
+    case Rs_update:
+      GetPrevWindowRecord(wn,VATDeclr);
+      if (VATDeclr.OKFlag!=0) then begin
+        goto LVATDeclDClassPeriodTypeButtonAction;
+      end;
+  end;  
+  GetWindowRecord(wn,VATDeclr);
+  switch (value) begin
+    case 0: 
+      VATDeclr.EndDate = VATDeclr.StartDate;
+      VATDeclr.EndDate = AddDay(VATDeclr.EndDate,-GetDay(VATDeclr.EndDate)+DaysInMonth(GetYear(VATDeclr.EndDate),GetMonth(VATDeclr.EndDate)));
+    case 1: 
+      VATDeclr.EndDate = AddMonth(VATDeclr.StartDate,2);
+      VATDeclr.EndDate = AddDay(VATDeclr.EndDate,-GetDay(VATDeclr.EndDate)+DaysInMonth(GetYear(VATDeclr.EndDate),GetMonth(VATDeclr.EndDate)));
+    case 2:
+      VATDeclr.EndDate = AddMonth(VATDeclr.StartDate,11);
+      VATDeclr.EndDate = AddDay(VATDeclr.EndDate,-GetDay(VATDeclr.EndDate)+DaysInMonth(GetYear(VATDeclr.EndDate),GetMonth(VATDeclr.EndDate)));
+  end;
+  PutWindowRecord(wn,VATDeclr);
+LVATDeclDClassPeriodTypeButtonAction:;  
+  VATDeclDClassPeriodTypeButtonAction = res;
+  return;
+end;
+
+global 
+updating procedure CalculateVATDeclDsm()
+begin
+  record VATDeclVc VATDr;
+  Integer wn;
+  record XBRLSettingsVc XBRLSr;
+  
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,VATDr);
+  if (blankdate(VATDr.StartDate)) then begin
+    goto LCalculateVATDeclDsm;
+  end;
+  if (blankdate(VATDr.EndDate)) then begin
+    goto LCalculateVATDeclDsm;
+  end;
+  CalculateVATDecl_Remote(VATDr);
+  PutWindowRecord(wn,VATDr);
+  WindowDoOK(wn,0);
+LCalculateVATDeclDsm:;  
+  return;
+end;
+
+global 
+procedure ExportVATDeclDsm()
+begin
+  record VATDeclVc VATDr;
+  record RcVc RepSpec;
+  Integer wn;
+  
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,VATDr);
+  if (HasLocalization("NOR")) then begin
+    ReportDefaults(RepSpec,"NORPeriodicVATEClass");
+    RepSpec.repname = "NORPeriodicVATEn";
+    RepSpec.Media = mtFile;
+    RepSpec.f1 = VATDr.Code;
+    wn = OpenWindow("NORPeriodicVATEClass",1,0,"","",RepSpec);
+  end else begin
+    ReportDefaults(RepSpec,"PeriodicVATEClass");
+    RepSpec.repname = "PeriodicVATEn";
+    RepSpec.Media = mtFile;
+    RepSpec.f1 = VATDr.Code;
+    wn = OpenWindow("PeriodicVATEClass",1,0,"","",RepSpec);
+  end;
+LCalculateVATDeclDsm:;  
+  return;
+end;
+
+global
+updating procedure SendNORVatDeclDsm()
+begin
+  record VATDeclVc VATDr;
+  record RcVc RepSpec;
+  Integer wn,mwn;
+  
+  LogText(0,"SendNORVatDeclDsm");
+  
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,VATDr);
+  if (blank(VATDr.TaxServID) or VATDr.OKFlag==0) then begin
+    LogText(0,"SendNORVatDeclDsm exporting");
+    NorVATTmpEn(VATDr);
+    //TaxServID protected
+    PutWindowRecord(wn,VATDr);
+    WindowDoOK(wn,0);
+  end else begin
+    MessageBox(38007,"");
+  end;
+  
+  return;
+end;
+
+global 
+updating procedure CheckNORVATDeclDsm()
+begin
+  record VATDeclVc VATDr;
+  record RcVc RepSpec;
+  Integer wn,mwn;
+  
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,VATDr);
+  
+  if (nonblank(VATDr.TaxServID)) then begin
+    NorVATGetReceiptBasic(VATDr);
+    PutWindowRecord(wn,VATDr);
+    //TaxServID protected
+    WindowDoOK(wn,0);
+  end else begin
+    MessageBox(38007,"");
+  end;
+  return;
+end;
+
+global 
+updating procedure SendDEUVatDeclDsm()
+begin
+  record VATDeclVc VATDr;
+  record RcVc RepSpec;
+  Integer wn,mwn;
+  string 255 tstr;
+  LongInt vatdeclnr;
+  
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,VATDr);
+  if (blank(VATDr.Code)) then begin
+    GetNextVATDeclNr(tstr);
+    VATDr.Code = tstr;    
+    vatdeclnr = NextSerNr("VATDeclVc",VATDr.TransDate,-1,false,"");
+    if (StringToLongInt(VATDr.Code)<vatdeclnr) then begin
+      VATDr.Code = vatdeclnr;
+    end;
+  end;
+  WindowDoOK(wn,0);
+  if (blank(VATDr.TaxServID) or VATDr.OKFlag==0) then begin
+    DEUVATTmpEn(VATDr);
+    if (blank(VATDr.Code)) then begin
+      GetNextVATDeclNr(tstr);
+      VATDr.Code = tstr;    
+      vatdeclnr = NextSerNr("VATDeclVc",VATDr.TransDate,-1,false,"");
+      if (StringToLongInt(VATDr.Code)<vatdeclnr) then begin
+        VATDr.Code = vatdeclnr;
+      end;
+    end;
+    PutWindowRecord(wn,VATDr);
+    WindowDoOK(wn,0);
+  end else begin
+    MessageBox(38007,"");
+  end;
+  
+  return;
+end;
+
+global 
+updating procedure SendGBRVatDeclDsm()
+begin
+  LongInt err;
+  record VATDeclVc VATDr;
+  record RcVc RepSpec;
+  Integer wn,mwn,nwn;
+  Boolean testf;
+  
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,VATDr);
+  testf = true;
+  if (VATDr.OKFlag==0) then begin
+    testf = false;
+    MessageBox(41956,"");
+  end;
+  if (VATDr.TaxServStatus!=0 or nonblank(VATDr.TaxServID)) then begin
+    testf = false;
+    MessageBox(41955,"");
+  end;
+  if (testf) then begin
+    err = SendGBRVatDeclaration(VATDr);
+    if (err==0) then begin
+      PutWindowRecord(wn,VATDr);
+      WindowDoCancel(wn);//only protectfields changed 
+//      WindowDoOK(wn,0);
+      CheckmarkBox(38001,"");
+      
+      RecordClear(RepSpec);
+      ReportDefaults(RepSpec,"ReconcileVATDeclVClass");
+      RepSpec.repname = "ReconcileVATDeclMn";
+      RepSpec.sStartDate = VATDr.StartDate;
+      RepSpec.sEndDate = VATDr.EndDate;
+      RepSpec.d1 = VATDr.TransDate;
+      RepSpec.Period2Str = RepSpec.sStartDate;
+      RepSpec.Period2Str = RepSpec.Period2Str & ":";
+      RepSpec.Period2Str = RepSpec.Period2Str & RepSpec.sEndDate;
+      RepSpec.f1 = VATDr.Code;
+      RepSpec.f2 = VATDr.shortname;
+      RepSpec.ArtMode = kUserDefRepVAT;
+      nwn = OpenWindow("ReconcileVATDeclVClass",1,0,"","",RepSpec);
+    end;
+  end;  
+  return;
+end;
+
+global 
+updating procedure SendFINVatDeclDsm()
+begin
+  LongInt err;
+  record VATDeclVc VATDr;
+  record RcVc RepSpec;
+  Integer wn,mwn,nwn;
+  Boolean testf;
+  string 255 errmsg;
+  
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,VATDr);
+  testf = true;
+  if (VATDr.OKFlag==0) then begin
+    testf = false;
+    MessageBox(41956,"");
+  end;
+  if (testf) then begin
+    err = SendFINVatDeclaration(VATDr,errmsg);
+    if (err==0) then begin
+      PutWindowRecord(wn,VATDr);
+      WindowDoCancel(wn);//only protectfields changed 
+//      WindowDoOK(wn,0);
+      CheckmarkBox(38001,"");
+    end else begin
+      MessageBox(err,errmsg);
+    end;
+  end;  
+  return;
+end;
+
+global
+updating procedure HRMCTaxAuthorize(string code,var Integer status,var string comment,var string result,var string errstr,var string authtoken,var string refreshtoken)
+begin
+  Boolean res;
+  area request,reply,replyheader;
+  record EVATDeclBlock EVATDb;
+  string 255 path;
+  json jsr;
+
+  BlockLoad(EVATDb);
+  
+  path = "/oauth/token";
+
+  AddTextToArea("client_secret=" & EVATDb.SenderKey,request);//42e5a3f7-ca1e-4b79-8f61-a00424656df5
+  AddTextToArea("&client_id=" & EVATDb.SenderID,request);//GFOBHEI0yw0YVquYIhBD6EpPlUka
+  AddTextToArea("&grant_type=" & "authorization_code",request);
+  if (SingleUserMode) then begin
+//    AddTextToArea("&redirect_uri=" & "http%3A%2F%2Flocalhost" & "%3A" & ServerHTTPPort & "%2Fhrmc-tax-oauth-authorize",request);
+    AddTextToArea("&redirect_uri=" & "urn:ietf:wg:oauth:2.0:oob",request);
+  end else begin
+    AddTextToArea("&redirect_uri=" & "urn:ietf:wg:oauth:2.0:oob",request);
+  end;
+  AddTextToArea("&code=" & code,request);
+
+  LogAreaToFile("_HRMCTaxAuthorize_request.txt",request);
+
+  res = SendWebRequest3(GBRHMRCHost,443,-1,true,"POST",path,"application/x-www-form-urlencoded","",false,request,reply,replyheader,40);
+
+  if (res) then begin
+    jsr = ParseJSONArea(reply);
+
+    ParseHTTPHeader(replyheader,"",status,comment,result);
+    switch (status) begin
+      case 200:
+        authtoken = JSONGet(jsr,"access_token");
+        refreshtoken = JSONGet(jsr,"refresh_token");
+/*      
+        EVATDb.AuthorisationCode = code;
+        EVATDb.OAuthToken = JSONGet(jsr,"access_token");
+        EVATDb.OAuthRefreshToken = JSONGet(jsr,"refresh_token");
+        BlockStore(EVATDb);
+*/        
+      otherwise
+        errstr = JSONGet(jsr,"error") & "; " & JSONGet(jsr,"error_description");
+    end;
+    
+  end else begin
+    errstr = USetStr(41954);
+  end;
+
+  LogAreaToFile("_HRMCTaxAuthorize_replyheader.txt",replyheader);
+  LogAreaToFile("_HRMCTaxAuthorize_reply.txt",reply);
+
+  return;
+end;
+  
+global webpublic
+updating procedure WebHRMCTaxAuthorize()
+begin
+  Boolean res;
+  string 255 code,error,errortext,authtoken,refreshtoken;
+  string 255 comment,result;
+  Integer status;
+  record EVATDeclBlock EVATDb;
+  
+  error = WebGetArg("error");
+  if (nonblank(error)) then begin
+    errortext = WebGetArg("error_description");
+    errortext = StripCharacter(errortext,"+");
+    MessageBox(0,errortext);
+    goto LWebHRMCTaxAuthorize;
+  end;
+  code = WebGetArg("code");
+  if (blank(code)) then begin
+    MessageBox(41954,"");
+    goto LWebHRMCTaxAuthorize;
+  end;
+
+  HRMCTaxAuthorize(code,status,comment,result,errortext,authtoken,refreshtoken);
+
+  WebOutStringFormatNL("<!DOCTYPE HTML>");
+  WebOutTagOpen("<html>");
+  WebOutTagOpen("<head>");
+
+  WebOutTagOpen("<style>");
+  WebOutString("body {");
+  WebOutString("line-height: 1;");
+  WebOutString("}");
+  WebOutTagClose("</style>");
+
+  WebOutTagClose("</head>");
+  WebOutTagOpen("<body>");
+  
+  WebOutTagOpen("<style>");
+  WebOutString(".serp-title {");
+  WebOutString("  margin-top: 25px;");
+  WebOutString("  text-align: center;");
+  WebOutString("}");
+
+  WebOutString(".disc-serp-title {");
+  WebOutString("	max-height: 92px;");
+  WebOutString("	height: auto;");
+  WebOutString("  text-align: center;");
+  WebOutString("}");
+  
+  WebOutString(".img-center {");
+  WebOutString("	text-align: center;");
+  WebOutString("}");
+
+  WebOutString(".description {");
+  WebOutString("	text-align: center;");
+  WebOutString("	padding-top: 15px;");
+  WebOutString("	padding-bottom: 15px;");
+  WebOutString("}");
+
+  WebOutString(".title {");
+  WebOutString("	color: #005CAB;");
+  WebOutString("	font-size: 21px;");
+  WebOutString("	font-weight: 400;");
+  WebOutString("	letter-spacing: 0.085em;");
+  WebOutString("	text-align: center;");
+  WebOutString("	margin-bottom: 10px;");
+  WebOutString("	margin-top: 24px;");
+  WebOutString("}");
+  WebOutTagClose("</style>");
+
+  switch (status) begin
+    case 200:
+      BlockLoad(EVATDb);
+      EVATDb.AuthorisationCode = code;
+      EVATDb.OAuthToken = authtoken;
+      EVATDb.OAuthRefreshToken = refreshtoken;
+      BlockStore(EVATDb);
+
+      WebOutString("<section class=""serp-title"">");
+      WebOutString("<img class=""disc-serp-title"" src=""http://www.hansaworld.com/mkt-img?file=Access-Granter.png"" alt=""Standard ERP Logo""/>");
+      WebOutString("</section>");
+
+      WebOutString("<section class=""disc-footer-section"">");
+      WebOutString("<div class=""title"">");
+      WebOutString(USetStr(41958));
+      WebOutString("</div>");
+      WebOutString("</section>");
+      
+      WebOutString("<section class=""description"">");
+      WebOutString(USetStr(41957));
+      WebOutString("</section>");
+    otherwise
+      WebOutString("<section class=""disc-footer-section"">");
+      WebOutString("<div class=""title"">");
+      WebOutString(USetStr(41958));
+      WebOutString("</div>");
+      WebOutString("</section>");
+      WebOutString("<section class=""description"">");
+      if (nonblank(errortext)) then begin
+        WebOutString(errortext);
+      end else begin
+        WebOutString(USetStr(41959));
+      end;
+      WebOutString("</section>");
+  end;
+  WebOutTagClose("</body>");
+  WebOutTagClose("</html>");  
+
+LWebHRMCTaxAuthorize:;  
+  return;
+end;
+
+global 
+procedure EVATDeclAccessTokenTsm()
+begin
+  string 255 url;
+
+  GBRHMRCAccessToken(url);
+  if (nonblank(url)) then begin
+    OpenWebBrowser(url);
+    CloseWindow(CurWindow);
+  end;
+  return;
+end;
+
+global
+function Integer VATDeclDClassSelectSetToPaste(Integer wn,string fieldname)
+begin
+  Integer res;
+  record VATDeclVc VATDr;
+  
+  res = 347;
+  GetWindowRecord(wn,VATDr);
+  switch (fieldname) begin
+    case "DeclareBox":
+      if (HasLocalization("FIN")) then begin
+        res = 739;
+      end;   
+  end;
+
+  VATDeclDClassSelectSetToPaste = res;
+  return;
+end;
+
+global 
+procedure EVATDeclGetCertificateTsm()
+begin
+  if (EVATDeclGetCertificate) then begin
+    CheckmarkBox(43381,"");
+  end;
+  return;
+end;

@@ -1,0 +1,53 @@
+external procedure RecordActionCashIn_Print(var record CLInVc,string,Boolean);
+external procedure FindNextCLInVcOfficialSerialNr(var record CLInVc);
+external updating procedure UpdateOffSerNr(LongInt,string,Integer,string,Boolean);
+external procedure GetLegalInvNrRow(string,var row LegalInvNrBlock);
+
+global
+updating procedure CLInForm(record RcVc RepSpec)
+BEGIN
+  record CLInVc CLInr,oCLInr;
+  record LegalInvNrBlock LINrb;
+  row LegalInvNrBlock LINrbrw;
+  Boolean TrHs;
+  LongInt afr,ato;
+
+  StartPrintDialogGroup;
+  if (blank(RepSpec.f1)) then begin
+    goto LCLInForm;
+  end;
+  afr = FirstInRange(RepSpec.f1,10);
+  ato = LastInRange(RepSpec.f1,10);
+  CLInr.SerNr = afr;
+  TrHs = true;
+  while (LoopMain(CLInr,1,TrHs)) begin
+    if (TrHs) then begin
+      if (ato!=-1) then begin
+        if (CLInr.SerNr>ato) then begin
+           TrHs = false;
+        end;
+      end;     
+    end;
+    if (TrHs) then begin
+      if (blank(CLInr.OfficialSerNr)) then begin
+        RecordCopy(oCLInr,CLInr);
+        FindNextCLInVcOfficialSerialNr(CLInr);
+        BlockLoad(LINrb);
+        if (nonblank(CLInr.OfficialSerNr)) and ((MatRowCnt(LINrb)>0)) then begin
+          GetLegalInvNrRow(CLInr.OfficialSerNr,LINrbrw);
+          if (LINrbrw.SelectionType!=kLegalInvNrSelectionTypeAtPrintout) begin
+            CLInr.OfficialSerNr = "";
+          end else begin
+            if (RecordUpdate(oCLInr,CLInr,false)==0) then begin
+              UpdateOffSerNr(CLInr.SerNr,"CLInVc",0,CLInr.OfficialSerNr,false);
+            end;
+          end;
+        end;
+      end;
+      RecordActionCashIn_Print(CLInr,"",false);//RecidAction(rlCashInDPrint,CLInVc,recid,NIL);
+    end;
+  end;
+LCLInForm:;
+  EndPrintDialogGroup;
+  RETURN;
+END;

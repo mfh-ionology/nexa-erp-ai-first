@@ -1,0 +1,216 @@
+external procedure DoPayspaceWebRequest(string,string,var area);
+external function val StringToValue(string,Integer,string,string);
+
+global
+procedure PayspacePayslipsRn(record RcVc RepSpec)
+begin
+  string 255 key,mainkey;
+  string 255 PayslipId,PeriodStart,PeriodEnd,EmployeeNr;
+  string 255 tstr,taxcode,comment,crncy;
+  Integer incnt,dedcnt,contrcnt,cnt;
+  val workhours,amount;
+  val vsum1,vsum2,vsum3,totvsum1,totvsum2,totvsum3;
+  array val aworkhours,ainval;
+  Area reply;
+  json js;
+  integer i,j,rw,l;
+  Boolean incomef,contibutionf,deductionf;
+  array string 255 acomment,acontrcomment,adedcomment,aincomment;
+  array val aval,adedval,acontrval;
+  record PayspaceBlock PayspaceBl;
+
+  StartReportJob(USetStr(42880));
+  rw = 1;
+  tstr = USetStr(42881) & ": " & RepSpec.f1;
+  Header(rw,tstr,1); 
+  rw = rw + 1;
+  tstr = USetStr(42882) & ": " RepSpec.f2;
+  Header(rw,tstr,1); rw = rw + 1;
+  EndHeader;
+
+  SetRepCol(2,80);
+  SetRepCol(3,140);
+  SetRepCol(4,160);
+  SetRepCol(5,270);
+  SetRepCol(6,290);
+  SetRepCol(7,390);
+  SetRepCol(8,400);
+  SetRepCol(9,410);
+
+  Gray_Divider(0,1);
+
+  if (blank(RepSpec.f1)) then begin
+    OutString(0,0,USetStr(42883),false);
+    goto LPayspacePayslipsRn; 
+  end;
+  if (blank(RepSpec.f2)) then begin     
+    OutString(0,0,USetStr(42884),false); 
+    goto LPayspacePayslipsRn; 
+  end;
+
+  BlockLoad(PayspaceBl);
+
+  DoPayspaceWebRequest(RepSpec.f1,RepSpec.f2,reply);
+  if (GetAreaLength(reply)<=0) then begin goto LPayspacePayslipsRn; end;
+
+  js = ParseJSONArea(reply);
+  while (JSONNodeExists(js,"value/" & "[" & i & "]")) begin
+    mainkey     = "value/[" & i & "]";
+    PayslipId   = JSONGet(js,mainkey & "/PayslipId");
+    PeriodStart = JSONGet(js,mainkey & "/PeriodStartDate");
+    PeriodEnd   = JSONGet(js,mainkey & "/PeriodEndDate"); 
+    EmployeeNr  = JSONGet(js,mainkey & "/EmployeeNumber");
+
+    StartFormat(15);
+    OutString(0,0,USetStr(42885),false);
+    OutString(2,0,USetStr(42886),false);
+    OutString(4,0,USetStr(42887),false);
+    EndFormat;
+
+    StartFormat(15);
+    OutString(0,0,EmployeeNr,false);
+    OutString(2,0,Left(PeriodStart,10) & ":" & Left(PeriodEnd,10),false);
+    OutString(4,0,PayslipId,false);
+    EndFormat;
+
+    StartFormat(15);
+    EndFormat;
+
+    StartFormat(15);
+    OutString(0,0,USetStr(42888),false);
+    OutString(2,0,USetStr(42889),false);
+    OutString(3,0,USetStr(42892),true);
+    OutString(4,0,USetStr(42890),false);
+    OutString(5,0,USetStr(42892),true);
+    OutString(6,0,USetStr(42891),false);
+    OutString(7,0,USetStr(42892),true);
+    OutString(1,0,USetStr(42895),true);
+
+    EndFormat;
+    Gray_Divider(0,1);
+
+    vsum1 = blankval; 
+    vsum2 = blankval; 
+    vsum3 = blankval;
+    j=0; dedcnt = 0; contrcnt = 0; incnt = 0;
+    while (JSONNodeExists(js,mainkey & "/PayslipLines/" & "[" & j & "]")) begin
+      key = mainkey & "/PayslipLines/[" & j & "]";
+      //crncy = PayspaceBl.DefautCur;
+      comment   = JSONGet(js,key & "/AliasDescription");
+      tstr      = JSONGet(js,key & "/PayslipLineValue"); 
+      amount    = StringToValue(tstr,M4Rate,"",".");
+      workhours = StringToValue(JSONGet(js,key & "/Quantity"),M4Rate,"",".");
+      taxcode   = JSONGet(js,key & "/TaxCode"); 
+
+      incomef = false; 
+      contibutionf = false; 
+      deductionf = false;
+      if ((taxcode!="0000" and taxcode!="4149") or (taxcode=="0000" and comment=="Net Pay")) then begin
+        switch (taxcode) begin 
+          case "3601": incomef = true;
+          case "3605": incomef = true;
+          case "4102": deductionf = true; 
+          case "4141": 
+            if (comment=="UIF Employer") then begin 
+              contibutionf = true;
+            end else begin 
+              deductionf = true;  
+            end;
+          case "4142": contibutionf = true;
+          case "4142": contibutionf = true;
+        end;
+        if (incomef) then begin
+          aincomment[incnt] = comment;
+          if (comment=="Basic Pay") then begin
+            aworkhours[incnt] = StringToVal(workhours,M4Val); 
+          end;
+          ainval[incnt] = amount;
+          vsum1 = vsum1 + amount;
+          incnt = incnt + 1;
+        end;
+        if (deductionf) then begin
+          adedcomment[dedcnt] = comment;
+          adedval[dedcnt] = amount;
+          vsum2 = vsum2 + amount;
+          dedcnt = dedcnt + 1; 
+        end;
+        if (contibutionf) then begin
+          if (comment!="Net Pay")then begin
+            acontrcomment[contrcnt] = comment;
+            acontrval[contrcnt] = amount;
+            vsum3 = vsum3 + amount;
+            contrcnt = contrcnt + 1;
+          end;
+        end;
+        // if (comment=="Net Pay")then begin
+        // acomment[acomment.length] = comment;
+        // aval[acomment.length] = amount;
+        // end; 
+      end;  
+      j = j + 1;   
+    end; 
+    i = i + 1;
+
+    StartFormat(15); 
+    if (incnt==dedcnt and incnt==contrcnt) then begin
+      cnt = incnt;
+    end; 
+    for (l=0;l<cnt;l=l+1) begin 
+      OutString(0,0,aincomment[l],false);
+      OutVal(2,0,aworkhours[l],M4Val,false);
+      OutVal(3,0,ainval[l],M4Val,true);
+      OutString(4,0,adedcomment[l],false);
+      OutVal(5,0,adedval[l],M4Val,true);
+      OutString(6,0,acontrcomment[l],false);
+      OutVal(7,0,acontrval[l],M4Val,true);
+      OutString(9,0,acomment[l],false);
+      OutVal(460,0,aval[l],M4Val,true);
+    end;
+    EndFormat;
+
+    StartFormat(15);
+    Gray_Divider(0,1);
+    OutString(0,0,USetStr(42893),false);
+    OutVal(3,0,vsum1,M4Val,true);
+    OutVal(5,0,vsum2,M4Val,true);
+    OutVal(7,0,vsum3,M4Val,true);
+    OutVal(1,0,vsum1-vsum2,M4Val,true);
+    EndFormat;
+    StartFormat(15);
+    EndFormat;
+
+    StartFormat(15);
+    OutString(0,0,JSONGet(js,mainkey & "/LeaveBalances/[0]/Description"),false);
+    OutString(2,0,JSONGet(js,mainkey & "/LeaveBalances/[0]/Balance"),false);
+    EndFormat;
+
+    Black_Divider(0,1);
+
+    totvsum1 = totvsum1 + vsum1;
+    totvsum2 = totvsum2 + vsum2;
+    totvsum3 = totvsum3 + vsum3;
+  end; 
+  StartFormat(15);
+  OutString(0,0,USetStr(42894),false);
+  OutString(3,0,USetStr(42888),true);
+  OutString(250,0,USetStr(42890),true);
+  OutString(8,0,USetStr(42891),true);
+  OutString(1,0,USetStr(42895),true);
+  EndFormat;
+
+  StartFormat(15);
+  OutString(0,0,USetStr(42893),false);
+  OutVal(3,0,totvsum1,M4Val,true);  
+  OutVal(250,0,totvsum2,M4Val,true);
+  OutVal(8,0,totvsum3,M4Val,true);
+  OutVal(1,0,totvsum1-totvsum2,M4Val,true);  
+  EndFormat;
+
+  StartFormat(15);
+  OutString(9,"DblPayspaceMnWn",USetStr(42896),false);
+  EndFormat;
+
+  EndJob;
+LPayspacePayslipsRn:;
+  return;
+end;

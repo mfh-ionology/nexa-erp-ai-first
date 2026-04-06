@@ -1,0 +1,328 @@
+external procedure LogAreaToFile(string,area);
+external procedure JSONStringStart(var string);
+external procedure JSONStringPut(var string,string,string);
+external procedure JSONStringAdd(var string,string,string);
+external procedure JSONStringMemberStart(var string,string);
+external procedure JSONStringMemberEnd(var string);
+external procedure JSONStringArrayStart(var string);
+external procedure JSONStringArrayEnd(var string);
+external procedure JSONStringEnd(var string);
+external function Boolean GetPMRow(string,var row PMBlock);
+external procedure FindPaymentGateway(string,string,Integer,var record CCAccountIDVc,Integer,Integer);
+
+global
+procedure PausedPOInvoices(string user,var array record IVCashVc aIVCashr)
+begin
+  record IVCashVc IVCashr;
+  Boolean found,testf;
+  
+//  OpenSerNr
+  IVCashr.OKFlag = 0;
+  found = true;
+  while (LoopKey("OKFlag",IVCashr,1,found)) begin
+    if (IVCashr.OKFlag!=0) then begin found = false; end;
+    if (found) then begin
+      testf = true;
+      if (IVCashr.SalesMan!=user) then begin testf = false; end;
+      if (testf) then begin
+        aIVCashr[aIVCashr.length] = IVCashr;
+      end;
+    end;
+  end;
+  return;
+end;
+
+updating function Integer AddItemGroupPage(record RcVc RepSpec,record ITVc ITr)
+begin
+  Integer res;
+  record POSButtonsVc POSBr;
+  row POSButtonsVc POSBrw;
+  record INVc INr;
+  Boolean found;
+  uuid blanku;
+  
+  POSBr.WindowClass = RepSpec.f20;
+  POSBr.POSButtonGroupCode = RepSpec.f19;
+  if (ReadLastMain(POSBr,2,true)) then begin
+    POSBr.UUID = blanku;
+    POSBr.Page = POSBr.Page + 1;
+    while (MatRowCnt(POSBr)>0) begin
+      MatRowDelete(POSBr,0);
+    end;
+    found = true;
+    INr.Group = ITr.Code;
+    while LoopKey("Code:" & ITr.Code,INr,1,true) begin
+      if (INr.Group!=ITr.Code) then begin found = false; end;
+      if (found) then begin
+        ClearRow(POSBr,POSBrw,1);
+        POSBrw.ButtonType = kPOSButtonTypeItem;
+        POSBrw.Code = INr.Code;
+        POSBrw.Label = INr.Name;
+        POSBrw.colnr = RepSpec.UsedOnly;
+        POSBrw.KeyCode = 0;
+        POSBrw.Modifiers = 0;
+        POSBrw.PrintGroupCode = RepSpec.f4;
+        POSBrw.POSButtonPictureCode = "";
+        MatRowPut(POSBr,MatRowCnt(POSBr),POSBrw);        
+      end;
+    end;
+    POSBr.Comment = ITr.Comment;
+    RecordInsert(POSBr,false);
+    res = POSBr.Page;
+  end;
+  AddItemGroupPage = res;
+  return;
+end;
+
+global
+updating function LongInt ProceedNPTSButtonDefineRemote(var record RcVc RepSpec,var string fieldname)
+begin
+  LongInt res,err;
+  record INVc INr;
+  record ITVc ITr;
+  record POSButtonsVc POSBr;
+  record POSButtonsVc oldPOSBr;
+  record ModifiersVc Modifr;
+  row POSButtonsVc POSBrw;
+  row PMBlock PMrw;
+  Boolean testf;
+  
+  res = 0;
+  fieldname = "";
+//  if (CountRecords("POSButtonsVc")==0) then begin
+  POSBr.WindowClass = RepSpec.f20;
+  POSBr.POSButtonGroupCode = RepSpec.f19;
+  POSBr.Page = 1;
+  if (ReadFirstMain(POSBr,3,true)==false or CountRecords("POSButtonsVc")==0) then begin
+    POSBr.WindowClass = RepSpec.f20;
+    POSBr.POSButtonGroupCode = RepSpec.f19;
+    POSBr.Page = 1;
+    POSBr.Comment = "1";
+    RecordStore(POSBr,false);
+    RepSpec.long1 = 1;
+  end;
+  switch (RepSpec.OKmode) begin
+    case kPOSButtonTypeGotoPage:
+      if (blank(POSBr.Page)) then begin
+        res = 2210;
+        fieldname = "f2";
+        goto LProceedNPTSButtonDefineRemote;
+      end;
+      POSBr.WindowClass = RepSpec.f20;
+      POSBr.POSButtonGroupCode = RepSpec.f19;
+      POSBr.Page = StringToLongInt(RepSpec.f2);
+      if (ReadFirstMain(POSBr,3,true)) then begin
+//        res = 1063;
+//        fieldname = "f2";
+      end else begin
+        POSBr.WindowClass = RepSpec.f20;
+        POSBr.POSButtonGroupCode = RepSpec.f19;
+        POSBr.Page = StringToLongInt(RepSpec.f2);
+        POSBr.Comment = RepSpec.f3;
+        testf = RecordStore(POSBr,false);
+      end;
+    case kPOSButtonTypeIncludePage:
+      if (blank(POSBr.Page)) then begin
+        res = 2210;
+        fieldname = "f2";
+      end;
+    case kPOSButtonTypeItem:
+      INr.Code = RepSpec.f2;
+      if (ReadFirstMain(INr,1,true)==false) then begin
+        res = 1290;
+        fieldname = "f2";
+      end;
+    case kPOSButtonTypeItemGroup:
+      ITr.Code = RepSpec.f2;
+      if (ReadFirstMain(ITr,1,true)==false) then begin
+        res = 1290;
+        fieldname = "f2";
+      end;
+    case kPOSButtonTypeModifier:
+      Modifr.Code = RepSpec.f2;
+      if (ReadFirstMain(Modifr,1,true)==false) then begin
+        res = 1290;
+        fieldname = "f2";
+      end;      
+    case kPOSButtonTypeCashPayment:
+      if (GetPMRow(RepSpec.f2,PMrw)==false) then begin 
+        res = 1101;
+        fieldname = "f2";
+      end;
+    case kPOSButtonTypeFullPayment:
+      if (GetPMRow(RepSpec.f2,PMrw)==false) then begin 
+        res = 1101;
+        fieldname = "f2";
+      end;
+    case kPOSButtonTypeLoyaltyPointsPayment:
+      if (GetPMRow(RepSpec.f2,PMrw)==false) then begin 
+        res = 1101;
+        fieldname = "f2";
+      end;
+    case kPOSButtonTypeCreditCardPayment:
+      if (GetPMRow(RepSpec.f2,PMrw)==false) then begin 
+        res = 1101;
+        fieldname = "f2";
+      end;
+    case kPOSButtonTypeMPesaPayment:
+      if (GetPMRow(RepSpec.f2,PMrw)==false) then begin
+        res = 1101;
+        fieldname = "f2";
+      end;
+    case kPOSButtonTypeCreditCardSlipPayment:
+      if (GetPMRow(RepSpec.f2,PMrw)==false) then begin 
+        res = 1101;
+        fieldname = "f2";
+      end;
+    case kPOSButtonTypeCreditCardPaymentReversal:
+      if (blank(RepSpec.f2)) then begin 
+        res = 42417;
+        fieldname = "f2";
+      end;
+    case kPOSButtonTypeCreditCardTerminalReports:
+      if (blank(RepSpec.f2)) then begin 
+        res = 42417;
+        fieldname = "f2";
+      end;
+    case kPOSButtonTypeDebitCardPayment:
+      if (GetPMRow(RepSpec.f2,PMrw)==false) then begin 
+        res = 1101;
+        fieldname = "f2";
+      end;
+/*    
+    case kPOSButtonTypeOnAccountPayment:
+      if (GetPMRow(RepSpec.f2,PMrw)==false) then begin 
+        res = 1101;
+        fieldname = "f2";
+      end;
+*/      
+    case kPOSButtonTypeGiftVoucherPayment:
+      if (GetPMRow(RepSpec.f2,PMrw)==false) then begin 
+        res = 1101;
+        fieldname = "f2";
+      end;
+    case kPOSButtonTypeGiftVoucherSales:
+      if (GetPMRow(RepSpec.f2,PMrw)==false) then begin 
+        res = 1101;
+        fieldname = "f2";
+      end;
+    case kPOSButtonTypeChequePayment:
+      if (GetPMRow(RepSpec.f2,PMrw)==false) then begin 
+        res = 1101;
+        fieldname = "f2";
+      end;
+  end;
+  if (res==0) then begin
+    POSBr.WindowClass = RepSpec.f20;
+    POSBr.POSButtonGroupCode = RepSpec.f19;
+    POSBr.Page = RepSpec.long1;
+    if (ReadFirstMain(POSBr,3,true)) then begin
+      RecordCopy(oldPOSBr,POSBr);
+      ClearRow(POSBr,POSBrw,1);
+
+      switch (RepSpec.OKmode) begin
+        case kPOSButtonTypeItemGroup:
+          POSBrw.ButtonType = kPOSButtonTypeGotoPage;
+          POSBrw.Code = AddItemGroupPage(RepSpec,ITr);
+        otherwise
+          POSBrw.ButtonType = RepSpec.OKmode;
+          POSBrw.Code = RepSpec.f2;        
+      end;
+
+      POSBrw.Label = RepSpec.f3;
+      POSBrw.colnr = RepSpec.UsedOnly;
+      POSBrw.KeyCode = RepSpec.AccSpec;
+      POSBrw.Modifiers = RepSpec.Notation;
+      POSBrw.PrintGroupCode = RepSpec.f4;
+      POSBrw.POSButtonPictureCode = RepSpec.f5;
+      POSBrw.POSDisplayPageAfter = RepSpec.f6;
+      POSBrw.AutoFinish = RepSpec.flags[0];
+      if (RepSpec.long2>=0) then begin
+        MatRowPut(POSBr,RepSpec.long2,POSBrw);
+      end;
+      err = RecordUpdate(oldPOSBr,POSBr,false);    
+    end;
+  end;
+LProceedNPTSButtonDefineRemote:;  
+  ProceedNPTSButtonDefineRemote = res;
+  return;
+end;
+
+global
+procedure ReadPOSButtonGroups(array record POSButtonGroupsVc aPOSBGr)
+begin
+  Boolean found;
+  record POSButtonGroupsVc POSBGr;
+  
+  found = true;
+  while (LoopMain(POSBGr,1,found)) begin
+    if (found) then begin
+      aPOSBGr[aPOSBGr.length] = POSBGr;
+    end;
+  end;
+  return;
+end;
+
+global
+procedure ProceedSwishPayTouchScreenRemote(record RcVc RepSpec,record CCAccountIDVc CCAccountIDr,record IVCashVc IVCr,Integer txtype,string transid)
+begin
+  string 255 returnurl;
+  string 255 base,tourl,amount,authcode,tstr,link,link2;
+  string 255 jsr;
+  Area req; 
+
+  if (WebSecureMode) then begin
+    returnurl = "https://" & Webhost;
+  end else begin
+    returnurl = "http://" & Webhost;
+  end;
+  returnurl = "https://" & "37.248.161.26:8443";
+  returnurl = returnurl & "/WebSwishPaymentrequestsReply.hal?posinvnr=" & IVCr.SerNr;
+//  base = GetLinkToShop;
+//  returnurl = "https://example.com/api/swishcb/paymentrequests";
+
+  switch (txtype) begin
+    case kCardTransactionRefund:
+    case kCardTransactionPay:
+      JSONStringStart(jsr);
+      JSONStringAdd(jsr,"payeePaymentReference","POS-" & IVCr.SerNr);
+      JSONStringAdd(jsr,"callbackUrl",returnurl);
+      JSONStringAdd(jsr,"payerAlias",RepSpec.f1);
+      JSONStringAdd(jsr,"payeeAlias",CCAccountIDr.AccountRef);
+//      JSONStringAdd(jsr,"payeeAlias","1230684654");
+      JSONStringAdd(jsr,"amount",ValToString(RepSpec.vals0,M4Val,"",".",0));
+      JSONStringAdd(jsr,"currency",RepSpec.CurncyCode);
+      JSONStringPut(jsr,"message",USetStr(1808) & IVCr.SerNr);    
+      JSONStringEnd(jsr);
+      AddTextToArea(jsr,req); 
+      
+      SetSSLClientCertificate(CCAccountIDr.Certificate);
+      SetSSLClientPivateKey(CCAccountIDr.PrivateKey);  
+      SetSSLClientPrivateKeyPassword(CCAccountIDr.PrivateKeyPsswd);
+
+      LogAreaToFile("SwishPaymentRequest" & ".txt",req);
+      
+//      SendAsyncWebRequest("cpc.getswish.net",443,-1,true,"POST","/swish-cpcapi/api/v1/paymentrequests/","application/json","",req,"SwishPayTouchScreenReply",30);    //180
+      SendAsyncWebRequest(CCAccountIDr.URL,443,-1,true,"POST","/swish-cpcapi/api/v1/paymentrequests/","application/json","",req,"SwishPayTouchScreenReply",30);    //180
+      
+  end;
+  return;
+end;
+
+global webpublic
+procedure WebSwishPaymentrequestsReply()
+begin
+  area a;
+
+  WebGetPostData(a);
+  LogAreaToFile("SwishWebSwishPaymentrequestsReply" & ".txt",a);
+  return;
+end;
+
+global
+procedure SwishPayTouchScreenReply(Area reply,Area replyheader,Boolean timedout)
+begin
+  LogAreaToFile("SwishPayTouchScreenReply-reply" & ".txt",reply);
+  LogAreaToFile("SwishPayTouchScreenReply-replyheader" & ".txt",replyheader);
+  return;
+end;

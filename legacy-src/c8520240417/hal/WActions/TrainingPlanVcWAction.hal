@@ -1,0 +1,170 @@
+external function Time AddTime_Minutes(Time,Time);
+
+function Boolean TrainingPlanDClassTopicEFAfter(Integer wn,Boolean changedf)
+begin
+  Boolean res;
+  record TrainingPlanVc TrainingPlanr;
+  record HRMSkillVc HRMSkillr;
+  res = true;
+
+  if (changedf) then begin
+    GetWindowRecord(wn,TrainingPlanr);
+    HRMSkillr.Code = TrainingPlanr.Topic;
+    if (ReadFirstMain(HRMSkillr,1,true)) then begin
+      TrainingPlanr.Description = HRMSkillr.Name;
+    end;
+    PutWindowRecord(wn,TrainingPlanr);
+  end;
+  TrainingPlanDClassTopicEFAfter = res;
+  return;
+end;
+
+function Boolean TrainingPlanDClassEmployeeEFAfter(Integer wn,Boolean changedf)
+begin
+  Boolean res;
+  record TrainingPlanVc TrainingPlanr;
+  record CUVc CUr;
+
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,TrainingPlanr);
+    CUr.Code = TrainingPlanr.Employee;
+    if (ReadFirstMain(CUr,1,true)) then begin
+      TrainingPlanr.Name = CUr.Name;
+    end;
+    PutWindowRecord(wn,TrainingPlanr);
+  end;
+  TrainingPlanDClassEmployeeEFAfter = res;
+  return;
+end;
+
+function Boolean TrainingPlanDClassShadowerEFAfter(Integer wn,Boolean changedf)
+begin
+  Boolean res;
+  record TrainingPlanVc TrainingPlanr;
+  record CUVc CUr;
+
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,TrainingPlanr);
+    CUr.Code = TrainingPlanr.Shadower;
+    ReadFIrstMain(CUr,1,true);
+    TrainingPlanr.ShadowerName = CUr.Name;
+    PutWindowRecord(wn,TrainingPlanr);
+  end;
+  TrainingPlanDClassShadowerEFAfter = res;
+  return;
+end;
+
+function Boolean TrainingPlanDClassShadower2EFAfter(Integer wn,Boolean changedf)
+begin
+  Boolean res;
+  record TrainingPlanVc TrainingPlanr;
+  record CUVc CUr;
+
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,TrainingPlanr);
+    CUr.Code = TrainingPlanr.Shadower2;
+    ReadFIrstMain(CUr,1,true);
+    TrainingPlanr.ShadowerName2 = CUr.Name;
+    PutWindowRecord(wn,TrainingPlanr);
+  end;
+  TrainingPlanDClassShadower2EFAfter = res;
+  return;
+end;
+
+function Boolean TrainingPlanDClassShadower3EFAfter(Integer wn,Boolean changedf)
+begin
+  Boolean res;
+  record TrainingPlanVc TrainingPlanr;
+  record CUVc CUr;
+
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,TrainingPlanr);
+    CUr.Code = TrainingPlanr.Shadower3;
+    ReadFIrstMain(CUr,1,true);
+    TrainingPlanr.ShadowerName3 = CUr.Name;
+    PutWindowRecord(wn,TrainingPlanr);
+  end;
+  TrainingPlanDClassShadower3EFAfter = res;
+  return;
+end;
+
+function Boolean TrainingPlanDClassTrainerEFAfter(Integer wn,Boolean changedf)
+begin
+  Boolean res;
+  record TrainingPlanVc TrainingPlanr;
+  record CUVc CUr;
+
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,TrainingPlanr);
+    CUr.Code = TrainingPlanr.Trainer;
+    ReadFIrstMain(CUr,1,true);
+    TrainingPlanr.TrainerName = CUr.Name;
+    PutWindowRecord(wn,TrainingPlanr);
+  end;
+  TrainingPlanDClassTrainerEFAfter = res;
+  return;
+end;
+
+function Boolean TrainingPlanDClassTrainingStartEFAfter(Integer wn,Boolean changedf)
+begin
+  Boolean res;
+  record TrainingPlanVc TrainingPlanr;
+  record HRMSkillVc HRMSkillr;
+  res = true;
+
+  if (changedf) then begin
+    GetWindowRecord(wn,TrainingPlanr);
+    HRMSkillr.Code = TrainingPlanr.Topic;
+    if (ReadFirstMain(HRMSkillr,1,true)) then begin
+      TrainingPlanr.TrainingEnd = AddTime_Minutes(TrainingPlanr.TrainingStart,HRMSkillr.PlannedDuration);
+    end;
+    PutWindowRecord(wn,TrainingPlanr);
+  end;
+  
+  TrainingPlanDClassTrainingStartEFAfter = res;
+  return;
+end;
+
+global
+function Boolean TrainingPlanDClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
+begin
+  Boolean res;
+
+  switch (fieldname) begin
+    case "Employee": res = TrainingPlanDClassEmployeeEFAfter(wn,changed!=0);
+    case "Topic": res = TrainingPlanDClassTopicEFAfter(wn,changed!=0);
+    case "Trainer": res = TrainingPlanDClassTrainerEFAfter(wn,changed!=0);
+    case "Shadower": res = TrainingPlanDClassShadowerEFAfter(wn,changed!=0);
+    case "Shadower2": res = TrainingPlanDClassShadower2EFAfter(wn,changed!=0);
+    case "Shadower3": res = TrainingPlanDClassShadower3EFAfter(wn,changed!=0);
+    case "TrainingStart": res = TrainingPlanDClassTrainingStartEFAfter(wn,changed!=0);
+  end;
+  TrainingPlanDClassAfterEditField = res;
+  return;
+end;
+
+global
+procedure EmployeeTrainingDsm()
+begin
+  record AT2UnitVc ATUnitr;
+  record TrainingPlanVc TrainingPlanr;
+  record RcVc RepSpec;
+  Integer wn;
+
+  wn = CurWindow;
+  GetWindowRecord(wn,TrainingPlanr);
+  RecordNew(RepSpec);
+  RepSpec.repname = "EmployeeTrainingRn";
+  RepSpec.f2 = TrainingPlanr.Topic;
+  RepSpec.f3 = TrainingPlanr.Status;
+  RepSpec.Media = mtScreen; 
+  RepSpec.sStartDate = "01-01-1980";
+  RepSpec.sEndDate = CurrentDate;
+  RunReport(RepSpec,0);
+  return;
+end;

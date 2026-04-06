@@ -1,0 +1,194 @@
+external procedure NewLineExport();
+
+global
+procedure BankNedbankHeader(record RcVc RepSpec)
+begin
+  record CYBlock CYb;
+  LongInt rowcnt;
+  val totpayval;
+
+  BlockLoad(CYb);  
+  ExportPadString(USetStr(43555),len(USetStr(43555))+1,",",false);
+  ExportPadString(USetStr(43556),len(USetStr(43556))+1,",",false);
+  ExportPadString(USetStr(43557),len(USetStr(43557))+1,",",false);
+  ExportPadString(USetStr(43558),len(USetStr(43558))+1,",",false);
+  ExportPadString(USetStr(43559),len(USetStr(43559))+1,",",false);
+  ExportPadString(USetStr(43560),len(USetStr(43560))+1,",",false);
+  ExportPadString(USetStr(43561),len(USetStr(43561))+1,",",false);
+  ExportPadString(USetStr(43562),len(USetStr(43562))+1,",",false);
+  ExportPadString(USetStr(43563),len(USetStr(43563)),",",false);
+  NewLineExport;
+        
+  return;
+end;
+
+global
+procedure GetPaymentModeRow(string code,row PMBlock PMBrw)
+begin
+  record PMBlock PMB;
+  integer i,rwcnt;
+  
+  BlockLoad(PMB);
+  rwcnt = MatrowCnt(PMB);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(PMB,i,PMBrw);
+    if (PMBrw.Code==code) then begin
+      goto LGetPaymentModeRow;
+    end;
+  end;
+LGetPaymentModeRow:;  
+  return;
+end;
+
+procedure AddToArr(string accnumber,string accdesc,string mystatment,string benaccnumber,string bensubaccnumber,string benaccbranchcode,string benname,string benstatdesc,val amount,
+                   array string aaccnumber,array string aaccdesc,array string amystatment,array string abenaccnumber,array string abensubaccnumber,array string abenaccbranchcode,array string abenname,array string abenstatdesc,array val aamount,var integer acnt)
+begin
+  Integer i;
+  for (i=0;i<acnt;i=i+1) begin
+    if (aaccnumber[i]==accnumber) and (aaccdesc[i]==accdesc) and (abenaccnumber[i]==benaccnumber) and (abensubaccnumber[i]==bensubaccnumber) 
+    and (abenaccbranchcode[i]==benaccbranchcode) and (abenname[i]==benname) then begin
+       aamount[i] = aamount[i] + amount;
+       goto LAddToArr;
+    end;
+  end;
+  aaccnumber[acnt]=accnumber; 
+  aaccdesc[acnt]=accdesc; 
+  abenaccnumber[acnt]=benaccnumber; 
+  abensubaccnumber[acnt]=bensubaccnumber; 
+  abenaccbranchcode[acnt]=benaccbranchcode; 
+  abenname[acnt]=benname;
+  aamount[acnt] = amount;
+  acnt = acnt + 1;
+
+LAddToArr:;
+  return;
+end;
+
+global
+procedure BankNedbank(record OPVc OPr,Integer persupp)
+begin
+  row OPVc OPrw;
+  Integer i,rwcnt,acnt,PayperSupplier;
+  record CUVc VEr;
+  row PMBlock PMBrw;
+  record VIVc VIr;
+  string 255 accnumber,accdesc,mystatment,benaccnumber,bensubaccnumber,benaccbranchcode,benname,benstatdesc;
+  val amount;
+  array string 255 aaccnumber,aaccdesc,amystatment,abenaccnumber,abensubaccnumber,abenaccbranchcode,abenname,abenstatdesc;
+  array val aamount;
+
+  PayperSupplier = OPr.PayperSupplier;
+  if (PayperSupplier==0) then begin
+    PayperSupplier = persupp;
+  end;
+  rwcnt = MatRowCnt(OPr);
+  switch (PayperSupplier) begin
+    case 0:
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(OPr,i,OPrw);
+        GetPaymentModeRow(OPrw.PayMode,PMBrw)
+        ExportPadString(PMbrw.BankNr,len(PMbrw.BankNr)+1,",",false);
+        ExportPadString(PMbrw.BankName,len(PMbrw.BankName)+1,",",false);
+        VIr.SerNr = OPrw.VISerNr;
+        if (ReadFirstMain(VIr,1,true)) then begin end;
+        if (nonblank(VIr.InvoiceNr)) then begin
+          ExportPadString(VIr.InvoiceNr,len(VIr.InvoiceNr)+1,",",false);
+        end else begin
+          ExportPadString(OPrw.Comment,len(OPrw.Comment)+1,",",false);
+        end;
+        VEr.Code = OPrw.VECode;
+        if (ReadFirstMain(VEr,1,true)) then begin end;
+        if (nonblank(OPrw.BankAcc)) then begin
+          ExportPadString(OPrw.BankAcc,len(OPrw.BankAcc)+1,",",false);
+        end else begin
+          if (nonblank(VIr.BankAcc)) then begin
+            ExportPadString(VIr.BankAcc,len(VIr.BankAcc)+1,",",false);
+          end else begin
+            ExportPadString(VEr.BankAccount,len(VEr.BankAccount)+1,",",false);
+          end;
+        end;
+        ExportPadString(" ",len(1)+1,",",false);
+        if (nonblank(OPrw.SortCode)) then begin
+          ExportPadString(OPrw.SortCode,len(OPrw.SortCode)+1,",",false);
+        end else begin
+          if (nonblank(VIr.SortCode)) then begin
+            ExportPadString(VIr.SortCode,len(VIr.SortCode)+1,",",false);
+          end else begin
+            ExportPadString(VEr.SortCode,len(VEr.SortCode)+1,",",false);
+          end;
+        end;
+        VIr.SerNr = OPrw.VISerNr;
+        if (ReadFirstMain(VIr,1,true)) then begin 
+          ExportPadString(VIr.VEName,len(VIr.VEName)+1,",",false);
+        end;    
+        if (nonblank(VIr.InvoiceNr)) then begin
+          ExportPadString(VIr.InvoiceNr,len(VIr.InvoiceNr)+1,",",false);
+        end else begin
+          ExportPadString(OPrw.Comment,len(OPrw.Comment)+1,",",false);
+        end;
+        ExportPadString(ValToString(OPrw.RecVal,M4Val,"",".",0),len(ValToString(OPrw.RecVal,M4Val,"",".",0)),",",true);
+        NewLineExport;      
+      end;
+    case 1:
+  		for (i=0;i<rwcnt;i=i+1) begin
+		    MatRowGet(OPr,i,OPrw);
+        GetPaymentModeRow(OPrw.PayMode,PMBrw);
+        accnumber = PMbrw.BankNr;
+        accdesc = PMbrw.BankName;
+        VIr.SerNr = OPrw.VISerNr;
+        if (ReadFirstMain(VIr,1,true)) then begin end;
+        if (nonblank(VIr.InvoiceNr)) then begin
+          mystatment = VIr.InvoiceNr;
+        end else begin
+          mystatment = OPrw.Comment;
+        end;
+        VEr.Code = OPrw.VECode;
+        if (ReadFirstMain(VEr,1,true)) then begin end;
+        if (nonblank(OPrw.BankAcc)) then begin
+          benaccnumber = OPrw.BankAcc;
+        end else begin
+          if (nonblank(VIr.BankAcc)) then begin
+            benaccnumber = VIr.BankAcc;
+          end else begin
+            benaccnumber = VEr.BankAccount;
+          end;
+        end;
+        bensubaccnumber = " ";
+        if (nonblank(OPrw.SortCode)) then begin
+          benaccbranchcode = OPrw.SortCode;
+        end else begin
+          if (nonblank(VIr.SortCode)) then begin
+            benaccbranchcode = VIr.SortCode;
+          end else begin
+            benaccbranchcode = VEr.SortCode;
+          end;
+        end;
+        VIr.SerNr = OPrw.VISerNr;
+        if (ReadFirstMain(VIr,1,true)) then begin 
+          benname = VIr.VEName;
+        end;    
+        if (nonblank(VIr.InvoiceNr)) then begin
+          benstatdesc = VIr.InvoiceNr;
+        end else begin
+          benstatdesc = OPrw.Comment;
+        end;
+        amount = OPrw.RecVal;
+        AddToArr(accnumber,accdesc,mystatment,benaccnumber,bensubaccnumber,benaccbranchcode,benname,benstatdesc,amount,
+                    aaccnumber,aaccdesc,amystatment,abenaccnumber,abensubaccnumber,abenaccbranchcode,abenname,abenstatdesc,aamount,acnt);
+        end;
+        for (i=0;i<acnt;i=i+1) begin	   
+          ExportPadString(aaccnumber[i],len(aaccnumber[i])+1,",",false);
+          ExportPadString(aaccdesc[i],len(aaccdesc[i])+1,",",false); 
+          ExportPadString(amystatment[i],len(amystatment[i])+1,",",false);
+          ExportPadString(abenaccnumber[i],len(abenaccnumber[i])+1,",",false);
+          ExportPadString(abensubaccnumber[i],len(abensubaccnumber[i])+1,",",false);
+          ExportPadString(abenaccbranchcode[i],len(abenaccbranchcode[i])+1,",",false);
+          ExportPadString(abenname[i],len(abenname[i])+1,",",false);
+          ExportPadString(abenstatdesc[i],len(abenstatdesc[i])+1,",",false);
+          ExportPadString(ValToString(aamount[i],M4Val,"",".",0),len(ValToString(aamount[i],M4Val,"",".",0)),",",true);
+          NewLineExport;   
+        end;
+  end;
+ 
+  return;
+end;

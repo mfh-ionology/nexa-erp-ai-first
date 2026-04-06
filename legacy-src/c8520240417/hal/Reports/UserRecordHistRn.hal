@@ -1,0 +1,87 @@
+
+global
+procedure UserRecordHistRn(record RcVc RepSpec)
+begin
+  record RHistVc RHr;
+  Boolean foundf,testf;
+  val a;
+  Integer compnr;
+  string 255 vcname,lastuser;
+  
+  StartReportJob(USetStr(41070));
+  EndHeader;
+  SetRepCol(3,60);
+  SetRepCol(4,100);
+  SetRepCol(5,160);
+  SetRepCol(6,260);
+  SetRepCol(7,360);
+  
+  StartFormat(15);
+  OutString(0,0,USetStr(41071),false);
+  OutString(3,0,USetStr(41072),false);
+  OutString(4,0,USetStr(41073),false);
+  OutString(5,0,USetStr(41074),false);
+  OutString(6,0,USetStr(41075),false);
+  //OutString(1,0,USetStr(16351),true);
+  EndFormat;
+  Gray_Divider(0,1);
+  foundf = true;
+  
+  RHr.TransDate = RepSpec.sStartDate;
+
+  if (nonblank(RepSpec.f1)) then begin
+    RHr.User = RepSpec.f1;
+  end;
+  
+  while (LoopKey("UserDateTime",RHr,2,foundf)) begin
+    if (nonblank(RepSpec.f1)) then begin
+      if (RHr.User!=RepSpec.f1) then begin foundf = false; end;
+    end;
+    if (DateInRange(RHr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin
+      foundf = false;
+    end;
+    testf = foundf;
+    if (blank(RepSpec.f1)) then begin
+      if (DateInRange(RHr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin
+        testf = false;
+      end;
+    end;
+    if (testf) then begin
+      compnr = GetRecordLinkFields(RHr.RecidStr,vcname);
+      
+      if (lastuser!=RHr.User) then begin
+        if (nonblank(lastuser)) then begin
+          Gray_Divider(0,1);
+        end;
+        StartFormat(15);
+         OutString(0,0,USetStr(41077) & ": " & RHr.User,false);
+        EndFormat;
+        Gray_Divider(0,100);
+      end;
+      StartFormat(15);
+      OutString(0,0,compnr,false);
+      if (BlobSize(RHr)>0) then begin
+        OutDateID(3,"DblRHist",RHr.TransDate,false,RHr.SerNr);
+      end else begin
+        OutDate(3,0,RHr.TransDate,false);
+      end;
+      OutString(4,0,RHr.TransTime,false);
+      switch (RHr.accode) begin
+        case kRecordHistoryActionCreated: OutString(5,0,USetStr(9061),false);
+        case kRecordHistoryActionUpdated: OutString(5,0,USetStr(9062),false);
+        case kRecordHistoryActionDeleted: OutString(5,0,USetStr(9063),false);
+        case kRecordHistoryActionRead: OutString(5,0,USetStr(9067),false);
+        case kRecordHistoryActionPrinted: OutString(5,0,USetStr(9068),false);
+        otherwise OutString(5,0,USetStr(41076) & " " & RHr.accode,false);
+      end;
+      
+      OutString(6,0,vcname,false); // translate to english
+      EndFormat;
+      lastuser = RHr.User;
+    end;
+  end;
+  Gray_Divider(0,1);
+  
+  EndJob;
+  return;
+end;

@@ -1,0 +1,141 @@
+remote function Boolean SmartPayPairingRequest(string,string,string);
+external procedure CopyLocalMachineSettings(record LocalMachineSetVc,var record LocalMachineBlock);
+external procedure CopyLocalMachineAppearanceSettings(record LocalMachineVc,var record LocalMachineBlock);
+
+function Boolean LocalMachineTClassLocalMachineCodeEFAfter(Integer wn,Boolean changedf)
+begin
+  record LocalMachineBlock LMb;
+  record LocalMachineSetVc LMSr;
+  record LocalMachineVc LMr;
+
+  if (changedf) then begin
+    GetWindowRecord(wn,LMb);  
+    LMSr.LocalMachine = LMb.LocalMachineCode;
+    if (ReadFirstMain(LMSr,1,true)) then begin
+      CopyLocalMachineSettings(LMSr,LMb);
+    end else begin
+      LMSr.LocalMachine = "";
+      if (ReadFirstMain(LMSr,1,true)) then begin
+        CopyLocalMachineSettings(LMSr,LMb);
+      end;
+    end;
+    LMr.Code = LMb.LocalMachineCode;
+    if (ReadFirstMain(LMr,1,true)) then begin
+      CopyLocalMachineAppearanceSettings(LMr,LMb);
+    end;
+    
+    PutWindowRecord(wn,LMb);    
+  end;
+  LocalMachineTClassLocalMachineCodeEFAfter = true;
+  return;
+end;
+
+global
+function Boolean LocalMachineTClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
+begin
+  Boolean res;
+
+  switch (fieldname) begin
+    case "LocalMachineCode": res = LocalMachineTClassLocalMachineCodeEFAfter(wn,changed!=0);
+  end;
+  LocalMachineTClassAfterEditField = res;
+  return;
+end;
+
+global
+procedure NZLSmartPayPairingTsm()
+begin
+  record LocalMachineBlock LMb;
+  record RahaxiBlock Rb;
+  record RcVc RepSpec;
+  Integer nwn;
+  
+  BlockLoad(LMb);
+  if (blank(LMb.LocalMachineCode)) then begin
+    MessageBox(1770,"");
+    goto LNZLSmartPayPairingTsm;
+  end;
+  if (blank(LMb.TerminalID)) then begin
+    MessageBox(41901,"");
+    goto LNZLSmartPayPairingTsm;
+  end;
+  BlockLoad(Rb);
+  if (Rb.TerminalType!=kLocalCCTerminalSmartPay) then begin
+    MessageBox(41902,"");
+    goto LNZLSmartPayPairingTsm;
+  end;
+  if (blank(Rb.RahaxiServerIP)) then begin
+    MessageBox(41903,"");
+    goto LNZLSmartPayPairingTsm;
+  end;
+  if (Rb.RahaxiServerPort<=0) then begin
+    MessageBox(41904,"");
+    goto LNZLSmartPayPairingTsm;
+  end;
+  if (nonblank(LMb.LocalMachineCode) and nonblank(LMb.TerminalID)) then begin
+    if (Rb.TerminalType==kLocalCCTerminalSmartPay) then begin
+      nwn = OpenWindow("NPTSPairingCodeOClass",1,0,"","",RepSpec);      
+    end;
+  end;
+LNZLSmartPayPairingTsm:;
+  return;
+end;
+
+global
+updating procedure ProceedNPTSPairingCodeOClass()
+begin
+  Integer wn;
+  record RcVc RepSpec;
+  record LocalMachineBlock LMb;
+  
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+  if (nonblank(RepSpec.f1)) begin
+    BlockLoad(LMb);
+    if (SmartPayPairingRequest(LMb.LocalMachineCode,LMb.TerminalID,RepSpec.f1)) then begin
+      CloseWindow(wn);
+      LMb.Paired = 1;
+      BlockStore(LMb);
+    end;
+  end;
+  return;
+end;
+
+global
+procedure CancelNPTSPairingCodeOClass()
+begin
+  CloseWindow(CurWindow);
+  return;
+end;
+
+global
+function Boolean CCPreauthDClassActiveEditField(Integer wn,string fieldname,Integer fn,Integer wnst,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  
+  res = true;
+  switch (fieldname) begin
+    case "vals0": res = false;
+    case "CurncyCode": res = false;
+    case "f3": res = false;
+  end;
+  CCPreauthDClassActiveEditField = res;
+  return;
+end;
+
+global
+function Boolean CCPreauthChargeDClassActiveEditField(Integer wn,string fieldname,Integer fn,Integer wnst,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record RcVc RepSpec;
+  
+  res = true;
+  GetWindowRecord(wn,RepSpec);
+  switch (fieldname) begin
+    case "CurncyCode": res = false;
+    case "f3": res = false;
+  end;
+  CCPreauthChargeDClassActiveEditField = res;
+  return;
+end;

@@ -1,0 +1,204 @@
+function Boolean CheckReportSpecification(record RcVc RepSpec,record CloudNodeVc CNr)
+begin
+  Boolean res;
+  LongInt pos;
+  string 255 tstr;
+  record HostingConfigurationVc HCr;
+
+  res = true;
+
+  if (CNr.Closed!=0) then begin
+    res = false;
+    goto LCheckReportSpecification;
+  end;
+  if (RepSpec.flags[3]>0) then begin
+    if (RepSpec.flags[3]!=CNr.NodeType) then begin
+      res = false;
+      goto LCheckReportSpecification;
+    end;
+  end;
+  if (nonblank(RepSpec.f3)) then begin
+    if (SetInSet(RepSpec.f3,CNr.Classification)==false) then begin
+      res = false;
+    end;
+  end;
+  if (RepSpec.flags[1]>0) then begin
+    HCr.SerNr = CNr.HostingConfig;
+    if (ReadFirstMain(HCr,1,true)) then begin
+      if (HCr.HostingType!=RepSpec.flags[1]) then begin
+        res = false;
+        goto LCheckReportSpecification;
+      end;
+    end else begin
+      res = false;
+    end;
+  end;
+  if (RepSpec.flags[2]>0) then begin
+    if (RepSpec.flags[2]!=CNr.Platform) then begin
+      res = false;
+      goto LCheckReportSpecification;
+    end;
+  end;
+  if (nonblank(RepSpec.f4)) then begin
+    if (RepSpec.f4!=CNr.Person) then begin
+      res = false;
+      goto LCheckReportSpecification;
+    end;
+  end;
+  if (nonblank(RepSpec.long1)) then begin
+    if (CNr.ServerDiskFree<RepSpec.long1) then begin
+      res = false;
+      goto LCheckReportSpecification;
+    end;
+  end;
+  if (nonblank(RepSpec.long2)) then begin
+    if ((CNr.ServerDiskFree/CNr.ServerDiskTotal)*100<RepSpec.long2) then begin
+      res = false;
+      goto LCheckReportSpecification;
+    end;
+  end;
+  if (RepSpec.flags[0]==1 and CNr.LastUpdateFailedFlag!=1) then begin
+    res = false;
+    goto LCheckReportSpecification;
+  end;
+
+LCheckReportSpecification:;
+  CheckReportSpecification = res;
+  return;
+end;
+
+global
+procedure ASPListCloudNodeRn(record RcVc RepSpec)
+begin
+  record CloudNodeVc CNr;
+  record HostingConfigurationVc HCr;
+  Boolean found,testf;
+  Integer rw;
+  string 255 tstr;
+
+  StartReportJob("List Cloud Nodes");
+  rw = 1;
+
+  tstr = "All";
+  if (nonblank(RepSpec.f1)) then begin
+    tstr = RepSpec.f1;
+  end;
+  Header(rw,"Cloud Node: " & tstr,1); rw = rw + 1;
+  tstr = "Overview";
+  if (RepSpec.ArtMode==1) then begin
+    tstr = "Detailed";
+  end;
+  Header(rw,"Function: " & tstr,1); rw = rw + 1;
+  if (RepSpec.flags[3]>0) then begin
+    Header(rw,"Node Type: " & StringFromSet(20006,RepSpec.flags[3]),1); rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f3)) then begin
+    Header(rw,"Classification: " & RepSpec.f3,1); rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f4)) then begin
+    Header(rw,"Owner: " & RepSpec.f4,1); rw = rw + 1;
+  end;
+  if (RepSpec.flags[1]>0) then begin
+    Header(rw,"Hosting Type: " & StringFromSet(331,RepSpec.flags[1]),1); rw = rw + 1;
+  end;
+  if (RepSpec.flags[2]>0) then begin
+    Header(rw,"Platform: " & StringFromSet(601,RepSpec.flags[2]),1); rw = rw + 1;
+  end;
+  if (RepSpec.long1>0) then begin
+    Header(rw,"Min Free Disk Space (MB): " & RepSpec.long1,1); rw = rw + 1;
+  end;
+  if (RepSpec.long2>0) then begin
+    Header(rw,"Min Free Disk Space %: " & RepSpec.long2,1); rw = rw + 1;
+  end;
+  if (RepSpec.flags[0]>0) then begin
+    Header(rw,"Cloud Nodes with failed last update",1); rw = rw + 1;
+  end;
+  EndHeader;
+
+  SetRepCol(2,70);
+  SetRepCol(3,130);
+  SetRepCol(4,190);
+  SetRepCol(5,230);
+  SetRepCol(6,280);
+  SetRepCol(7,340);
+  SetRepCol(8,410);
+  SetRepCol(9,445);
+
+  switch (RepSpec.ArtMode) begin
+    case 0:
+      StartFormat(15);
+      OutString(0,0,"Node Name",false);
+      OutString(2,0,"Owner",false);
+      OutString(3,0,"Classification",false);
+      OutString(200,0,"Hosting Type",false);
+      OutString(6,0,"Comment",false);
+      EndFormat;
+    case 1:
+      StartFormat(15);
+      OutString(0,0,"Node Name",false);
+      OutString(2,0,"Instance Type",false);
+      OutString(3,0,"Hostname",false);
+      OutString(4,0,"Owner",false);
+      OutString(5,0,"Classification",false);
+      OutString(6,0,"Hosting Type",false);
+      OutString(7,0,"Platform",false);
+      OutString(8,0,"Total",true);
+      OutString(9,0,"Free",true);
+      OutString(1,0,"Max Used",true);
+      EndFormat;
+  end;
+  Black_Divider(0,1);
+  
+  found = true;
+  CNr.Code = RepSpec.f1;
+  while (LoopMain(CNr,1,found)) begin
+    if (nonblank(RepSpec.f1)) then begin
+      if (CNr.Code!=RepSpec.f1) then begin found = false; end;
+    end;
+    if (found) then begin
+      testf = CheckReportSpecification(RepSpec,CNr);
+      if (testf) then begin
+        HCr.SerNr = CNr.HostingConfig;
+        if (ReadFirstMain(HCr,1,true)) then begin end;
+        switch (RepSpec.ArtMode) begin
+          case 0:
+            StartFormat(15);
+            OutStringID(0,"DblRCSList",CNr.Code,false,CNr.Code);
+            OutString(2,0,CNr.Person,false);
+            OutString(3,0,CNr.Classification,false);
+            OutString(200,0,StringFromSet(331,HCr.HostingType),false);
+            if (len(CNr.Comment)<50) then begin
+              OutString(6,0,CNr.Comment,false);
+              EndFormat;
+            end else begin
+              EndFormat;
+              StartFormat(15);
+              OutString(2,0,  CNr.Comment,false);
+              EndFormat;
+            end;
+          case 1:
+            StartFormat(15);
+            OutStringID(0,"DblRCSList",CNr.Code,false,CNr.Code);
+            OutString(2,0,CNr.AmazonInstanceType,false);
+            OutString(3,0,CNr.HostName,false);
+            OutString(4,0,CNr.Person,false);
+            OutString(5,0,CNr.Classification,false);
+            OutString(6,0,StringFromSet(331,HCr.HostingType),false);
+            OutString(7,0,StringFromSet(601,CNr.Platform),false);
+            OutString(8,0,CNr.ServerDiskTotal,true);
+            OutString(9,0,CNr.ServerDiskFree,true);
+            OutString(1,0,CNr.ServerDiskMaxUsed,true);
+            EndFormat;
+            if (nonblank(CNr.Comment)) then begin
+              StartFormat(15);
+              OutString(2,0,"Comment: " & CNr.Comment,false);
+              EndFormat;
+            end;
+        end;
+        Gray_Divider(0,1);
+      end;
+    end;
+  end;
+  EndJob;
+  return;
+end;

@@ -1,0 +1,183 @@
+external updating procedure FinishEULAUpload(string);
+external function Boolean CheckIfEULACanBeUploaded();
+external function Boolean CanUploadFileInIssueTracking(Boolean);
+external updating procedure IssueTrackFinishUpload(string);
+external updating procedure FinishForumUpload(string);
+external updating procedure FinishBannerUpload(string,string,string,string);
+external outer procedure FinishVoiceItEnrollUpload(string,string,string,string);
+external outer procedure FinishVoiceItIdentifyUpload(string,string,string,string);
+external function Integer CurrentPartnerLocal();
+
+
+function Boolean UploadFilePart(string sess,var Integer err)
+begin
+  Longint part,lastpart;
+  string 255 path,tag;
+  Boolean res;
+  area filearea;
+  
+  part = StringToLongint(WebGetArg("part"));
+  lastpart = StringToLongint(GetSessionString("fu_lastpart" & sess));
+  tag = GetSessionString("wfu_tag" & sess);
+  if (lastpart<part) then begin
+    if (nonblank(sess)) then begin
+      WebGetRawPostData(filearea);
+      if (GetAreaLength(filearea)>0) then begin
+        path = "tmp/" & tag & "/" & sess;
+        if (FileExists(path)) then begin
+          AppendAreaToFile(path,filearea);
+          res = true;
+        end;
+      end;
+
+      if (!res) then begin
+        err = 2;
+      end else begin
+        PutSessionString("fu_lastpart" & sess,part);
+      end;
+    end else begin
+      err = 4;
+    end;
+  end else begin
+    err = 5;
+  end;
+
+  UploadFilePart = res;
+  return;
+end;
+
+procedure SetupWebUploadSessionVars(var string sess,string filename,string id,string tag)
+begin
+  string 255 path;
+
+  sess = MakeUUID;
+  PutSessionString("wfu_fn" & sess,filename);
+  PutSessionString("wfu_id" & sess,id);
+  PutSessionString("wfu_tag" & sess,tag);
+  path = "tmp/" & tag;
+  if (DirExists(path)==false) then begin
+    CreateFolder(path);
+  end;
+  if (FileExists(path & "/" & sess)) then begin
+    Delete_File(path & "/" & sess);
+  end;
+  CreateFile(path & "/" & sess);
+  CloseFile;
+
+  return;
+end;
+
+global
+procedure GetWebUploadSessionVars(string sess,var string filename,var string id,var string tag)
+begin
+
+  filename = GetSessionString("wfu_fn" & sess);
+  id = GetSessionString("wfu_id" & sess);
+  tag = GetSessionString("wfu_tag" & sess);
+
+  return;
+end;
+
+global
+procedure ReadWebUploadArgs(var string filename,var string id,var string tag)
+begin
+  
+  filename = WebGetArg("filename");
+  id = WebGetArg("id");
+  tag = WebGetArg("tag");
+
+  return;
+end;
+
+global
+procedure HandleFileUploadFinish(string sess)
+begin
+  string 255 path,filename,id,tag;
+
+  GetWebUploadSessionVars(sess,filename,id,tag);
+
+  LogText2(0,"HandleFileUploadFinish filename=" & filename & ", id=" & id & ", tag=" & tag,kVerbosityDebug);
+
+  switch (tag) begin
+    case "eula":
+      qupdating.FinishEULAUpload(sess);
+    case "issuetrack":
+      qupdating.IssueTrackFinishUpload(sess);
+    case "forum":
+      qupdating.FinishForumUpload(sess);
+    case "banner":
+      qupdating.FinishBannerUpload(sess,filename,id,tag);
+    case "voiceitEnroll":
+      FinishVoiceItEnrollUpload(sess,filename,id,tag);
+    case "voiceitIdentify":
+      FinishVoiceItIdentifyUpload(sess,filename,id,tag);
+  end;
+
+  path = "tmp/" & tag & "/" & sess;
+  if (FileExists(path)) then begin
+    Delete_File(path);
+  end;
+
+  return;
+end;
+
+function Boolean FileCanBeUploaded(string sess)
+begin
+  Boolean res;
+  string 255 tag,filename,id;
+  Boolean initf;
+  
+  if (nonblank(sess)) then begin
+    GetWebUploadSessionVars(sess,filename,id,tag);
+  end else begin
+    tag = WebGetArg("tag");
+    initf = true;
+  end;
+  
+  switch (tag) begin
+    case "eula":
+      res = CheckIfEULACanBeUploaded();
+    case "issuetrack":
+      res = CanUploadFileInIssueTracking(initf);
+    case "forum":
+      res = nonblank(CurrentCust);//TODO::check for existing forum record
+    case "banner":
+      res = CurrentPartnerLocal>0;
+    case "voiceitEnroll":
+      res = nonblank(CurrentCust);
+    case "voiceitIdentify":
+      res = true;//nonblank(CurrentCust);
+  end;
+
+  FileCanBeUploaded = res;
+  return;
+end;
+
+global
+procedure WebFileUpload()
+begin
+  string 255 action,tag,filename,id;
+  Boolean res;
+  string 255 sess;
+  Integer err;
+  
+  res = FileCanBeUploaded(WebGetArg("sess"));
+  action = WebGetArg("action");
+
+  if (res) then begin
+    switch (action) begin
+      case "startupload":
+        ReadWebUploadArgs(filename,id,tag);
+        SetupWebUploadSessionVars(sess,filename,id,tag);
+        //Create the file here?
+        WebOutString("<res stat='1' sessionid='" & sess & "'></res>");
+      case "doupload":
+        res = UploadFilePart(WebGetArg("sess"),err);
+        WebOutString("<uploadpart res='" & res & "' err='" & err & "'></uploadpart>");
+      case "finishupload":
+        HandleFileUploadFinish(WebGetArg("sess"));
+    end;
+  end;  
+
+  return;
+end;

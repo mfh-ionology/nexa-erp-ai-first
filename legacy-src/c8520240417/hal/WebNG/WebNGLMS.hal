@@ -1,0 +1,3207 @@
+//Tools
+external function string 255 removenextnode(var string);
+external function Boolean SetInSet2(string,string);
+external procedure RedirectToURL(string);
+external function string 255 LF();
+external function string 255 FormatSimpleLink(string,boolean);
+external function string 255 CrlfStringToHtml(string);
+external procedure SplitString(string,string,var array string);
+external procedure AddFileAsTag(var string,string,string,string);
+external function string 255 ToolWebBuildLink(string,string);
+external function string 255 FormatLink(string,string,boolean,boolean);
+external function string 50 TimeToString(time,string,boolean);
+external function Date DateFromString(string,string);
+//LMS Tools
+external function Boolean LMSUserLoggedIn();
+external function string 255 LMSUserName();
+external function Boolean IsLMSAdmin();
+external function Boolean IsTeacher();
+external function Boolean IsCourseTeacher(LongInt);
+external function Boolean IsEnrolledStudent(LongInt,var Boolean);
+external function Boolean HasCourseAccess(LongInt,string,var Boolean);
+external updating procedure RefreshTopicSortOrder(LongInt);
+external function Boolean StudentPendingApproval(string,LongInt);
+external procedure WebOutClass(string,string);
+external procedure WebOutImage(string,string,string,string);
+//Pages
+external procedure ShowWebAppPageStart(record WebNGPageVc,string);
+external procedure ShowWebAppPageEnd(record WebNGPageVc);
+//Elements
+external procedure ShowWebElementTemplate(string,integer);
+//Functions
+external outer procedure WebHWULMSTest(LongInt);
+external outer procedure WebHWULMSTARRefresh();
+external outer procedure WebHWULMSTestNavigate();
+//Record Checks
+external function LongInt Course2VcRecordCheck(var record Course2Vc,record Course2Vc,LongInt,LongInt);
+external function LongInt CourseContentVcRecordCheck(var record CourseContentVc,record CourseContentVc,LongInt,LongInt);
+external function LongInt StudentCourseVcRecordCheck(var record StudentCourseVc,record StudentCourseVc,LongInt,LongInt);
+
+function string 255 LMSAppHead()
+begin
+  string 255 res;
+
+  
+  res = res & "<script type='text/javascript' src='https://code.jquery.com/jquery-3.6.0.min.js'></script>" & LF;
+  AddFileAsTag(res,"WebNGLMSCoursesApp.js","script","text/javascript");
+  AddFileAsTag(res,"WebNGLMSCoursesApp.css","style","text/css");
+  
+  // res = res & "<script type='text/javascript' src='/js/WebNGLMSCoursesApp.js'></script>" & LF; //TEMP!!!!!!!!!!
+  // res = res & "<link type='text/css' rel='stylesheet' href='/styles/WebNGLMSCoursesApp.css'>" & LF; //TEMP!!!!!!!!!!
+  // res = res & "<script src='https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.12.6/js/standalone/selectize.min.js' integrity='sha256-+C0A5Ilqmu4QcSPxrlGpaZxJ04VjsRjKu+G82kl5UJk=' crossorigin='anonymous'></script>" & LF;
+  // res = res & "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.12.6/css/selectize.bootstrap3.min.css' integrity='sha256-ze/OEYGcFbPRmvCnrSeKbRTtjG4vGLHXgOqsyLFTRjg=' crossorigin='anonymous' />" & LF;
+
+  res = res & "<script type='text/javascript'>" & LF;
+  res = res & "  LMSCourses.UpdateCourse                      = '/" & GetEncryptedLink("lms/ajax?action=updatecourse") & "';" & LF;
+  res = res & "  LMSCourses.CreateCourse                      = '/" & GetEncryptedLink("lms/ajax?action=createcourse") & "';" & LF;
+  res = res & "  LMSCourses.DeleteCourse                      = '/" & GetEncryptedLink("lms/ajax?action=deletecourse") & "';" & LF;
+  res = res & "  LMSCourses.UpdateCourseVisible               = '/" & GetEncryptedLink("lms/ajax?action=updatecoursevisible") & "';" & LF;
+  res = res & "  LMSCourses.UpdateTopic                       = '/" & GetEncryptedLink("lms/ajax?action=updatetopic") & "';" & LF;
+  res = res & "  LMSCourses.UpdateTopicVisible                = '/" & GetEncryptedLink("lms/ajax?action=updatetopicvisible") & "';" & LF;
+  res = res & "  LMSCourses.UpdateTopicSortOrder              = '/" & GetEncryptedLink("lms/ajax?action=updatetopicsortorder") & "';" & LF;
+  res = res & "  LMSCourses.UpdateCourseContent               = '/" & GetEncryptedLink("lms/ajax?action=updatecoursecontent") & "';" & LF;
+  res = res & "  LMSCourses.UpdateCourseContentSortOrder      = '/" & GetEncryptedLink("lms/ajax?action=updatecoursecontentsortorder") & "';" & LF;
+  res = res & "  LMSCourses.UpdateCourseContentVisible        = '/" & GetEncryptedLink("lms/ajax?action=updatecoursecontentvisible") & "';" & LF;
+  res = res & "  LMSCourses.CreateCourseContent               = '/" & GetEncryptedLink("lms/ajax?action=createcoursecontent") & "';" & LF;
+  res = res & "  LMSCourses.DeleteCourseContent               = '/" & GetEncryptedLink("lms/ajax?action=deletecoursecontent") & "';" & LF;
+  res = res & "  LMSCourses.DeleteTopic                       = '/" & GetEncryptedLink("lms/ajax?action=deletetopic") & "';" & LF;
+  res = res & "  LMSCourses.CreateTopic                       = '/" & GetEncryptedLink("lms/ajax?action=createtopic") & "';" & LF;
+  res = res & "  LMSCourses.UpdateStudentCourse               = '/" & GetEncryptedLink("lms/ajax?action=updatestudentcourse") & "';" & LF;
+  res = res & "  LMSCourses.DeleteStudentCourse               = '/" & GetEncryptedLink("lms/ajax?action=deletestudentcourse") & "';" & LF;
+  res = res & "  LMSCourses.CreateStudentCourse               = '/" & GetEncryptedLink("lms/ajax?action=createstudentcourse") & "';" & LF;
+  res = res & "  LMSCourses.DeleteAllStudentCourse            = '/" & GetEncryptedLink("lms/ajax?action=deleteallstudentcourse") & "';" & LF;
+  res = res & "</script>" & LF;
+
+  LMSAppHead = res;
+end;
+
+function Integer GetLastSortOrder(Integer parentId,string fn)
+begin
+  Integer res;
+  Boolean foundf;
+  record CourseContentVc CourseContentr;
+  record WebNGLMSTopicVc WebNGLMSTopicr;
+
+  foundf = true;
+
+  switch (fn) begin
+    case "CourseContentVc":
+      CourseContentr.Topic = parentId;
+      CourseContentr.SortOrder = 99999999999;
+      if (LoopBackKey("Topic",CourseContentr,2,foundf)) then begin
+        if (CourseContentr.Topic!=parentId) then begin foundf = false; end;
+        if (foundf) then begin
+          res = CourseContentr.SortOrder;
+          goto LGetLastSortOrder;
+        end;
+      end;
+    case "WebNGLMSTopicVc":
+      WebNGLMSTopicr.Course = parentId;
+      WebNGLMSTopicr.SortOrder = 99999999999;
+      if (LoopBackKey("Course",WebNGLMSTopicr,2,foundf)) then begin
+        if (WebNGLMSTopicr.Course!=parentId) then begin foundf = false; end;
+        if (foundf) then begin
+          res = WebNGLMSTopicr.SortOrder;
+          goto LGetLastSortOrder;
+        end;
+      end;
+  end;
+
+LGetLastSortOrder:;
+  GetLastSortOrder = res;
+  return;
+end;
+
+procedure Interface_EditIcon(string fn,Integer rectype,string recnr)
+begin
+  WebOutString("<img class='interface-icon edit-icon' onclick='editRecord(this,\"" & fn & "\",\"" & rectype & "\",\"" & recnr & "\")' src='/images/svg/interface/edit.svg' />");
+  return;
+end;
+
+procedure Interface_DeleteIcon(string fn)
+begin
+  WebOutString("<img class='interface-icon delete-icon' onclick='deleteRecord(this,\"" & fn & "\")' src='/images/svg/interface/delete.svg' />");
+  return;
+end;
+
+procedure Select_Student()
+begin
+  record CUVc CUr;
+
+  WebOutString("<option value=''>Select</option>");
+  while (LoopMain(CUr,1,true)) begin
+    if (CUr.StudentType==1) then begin
+      WebOutString("<option value='" & CUr.Code & "'>" & CUr.Name & "</option>");
+    end;
+  end;
+
+  return;
+end;
+
+procedure Select_ActivityType(string type,Boolean editmodef)
+begin
+  record ActTypeVc ATr;
+  string 255 tstr;
+
+  WebOutString("<option value=''>Select</option>");
+  while (LoopMain(ATr,1,true)) begin
+    if (editmodef) then begin
+      tstr = "";
+      if (ATr.Code==type) then begin
+        tstr = "selected";
+      end;
+    end;
+    WebOutString("<option value='" & ATr.Code & "' " & tstr & ">" & ATr.Comment & "</option>");
+  end;
+
+  return;
+end;
+
+procedure Select_CourseType(string type,Boolean editmodef)
+begin
+  record CourseTypeVc CourseTyper;
+  string 255 tstr;
+
+  WebOutString("<option value=''>Select</option>");
+  while (LoopMain(CourseTyper,1,true)) begin
+    tstr = "";
+    if (editmodef) then begin
+      if (CourseTyper.Code==type) then begin
+        tstr = "selected";
+      end;
+    end;
+    WebOutString("<option value='" & CourseTyper.Code & "' " & tstr & ">" & CourseTyper.Comment & "</option>");
+  end;
+
+  return;
+end;
+
+procedure Select_Classification()
+begin
+  record CourseClassVc CourseClassr;
+
+  WebOutString("<option value=''>Select</option>");
+  while (LoopMain(CourseClassr,1,true)) begin
+    WebOutString("<option value='" & CourseClassr.Code & "'>" & CourseClassr.Comment & "</option>");
+  end;
+
+  return;
+end;
+
+procedure Select_Teacher()
+begin
+  record CUVc CUr;
+
+  WebOutString("<option value=''>Select</option>");
+  while (LoopMain(CUr,1,true)) begin
+    if (CUr.TeacherType==1) then begin
+      WebOutString("<option value='" & CUr.Code & "'>" & CUr.Name & "</option>");
+    end;
+  end;
+
+  return;
+end;
+
+procedure Select_Department()
+begin
+  record DepVc Depr;
+
+  WebOutString("<option value=''>Select</option>");
+  while (LoopMain(Depr,1,true)) begin
+    WebOutString("<option value='" & Depr.Code & "'>" & Depr.Description & "</option>");
+  end;
+
+  return;
+end;
+
+procedure Select_Responsible(string responsible,Boolean editmodef)
+begin
+  record CUVc CUr;
+  string 255 tstr;
+
+  WebOutString("<option value=''>Select</option>");
+  while (LoopMain(CUr,1,true)) begin
+    if (editmodef) then begin
+      tstr = "";
+      if (CUr.Code==responsible) then begin
+        tstr = "selected";
+      end;
+    end;
+    WebOutString("<option value='" & CUr.Code & "' " & tstr & ">" & CUr.Name & "</option>");
+  end;
+
+  return;
+end;
+procedure Select_WebTest(LongInt test,Boolean editmodef)
+begin
+  record UnivTest2Vc UTr;
+  string 255 tstr;
+
+  WebOutString("<option value=''>Select</option>");
+  while (LoopMain(UTr,1,true)) begin
+    if (UTr.Closed==0) then begin
+      if (editmodef) then begin
+        tstr = "";
+        if (UTr.SerNr==test) then begin
+          tstr = "selected";
+        end;
+      end;
+      WebOutString("<option value='" & UTr.SerNr & "' " & tstr & ">" & UTr.CourseName & "</option>");
+    end;
+  end;
+
+  return;
+end;
+
+procedure ContentDivider()
+begin
+  WebOutString("<div class='gray-divider'></div>")
+  return;
+end;
+
+procedure ShowVisibilityIcons(Integer visible)
+begin
+  transaction Boolean gEditModef;
+
+  WebOutString("<img class='interface-icon show-icon' onclick='toggleShow(this,1," & gEditModef & ")' src='/images/svg/interface/show.svg'");
+  if (visible==1) then begin
+    WebOutString("style='display:none;'");
+  end;
+  WebOutString("/>");
+
+  WebOutString("<img class='interface-icon hide-icon' onclick='toggleShow(this,0," & gEditModef & ")' src='/images/svg/interface/hide.svg'");
+  if (visible==0) then begin
+    WebOutString("style='display:none;'");
+  end;
+  WebOutString("/>");
+
+  return;
+end;
+
+function Boolean TopicHasContent(LongInt topic)
+begin
+  Boolean res;
+  record CourseContentVc CourseContentr;
+
+  CourseContentr.Topic = topic;
+  if (ReadFirstKey("Topic",CourseContentr,1,true)) then begin
+    res = true;
+  end;
+
+  TopicHasContent = res;
+  return;
+end;
+
+procedure ShowCourseContentEditIcons(Integer visible,Boolean renamef,Integer type,LongInt recnr)
+begin
+  transaction Boolean gEditModef;
+
+  if (gEditModef==false) then begin goto LShowCourseContentEditIcons; end;
+
+  WebOutString("<div class='edit-container'>");
+  Interface_EditIcon("CourseContentVc",type,recnr);
+  Interface_DeleteIcon("CourseContentVc");
+  ShowVisibilityIcons(visible);
+  WebOutString("</div>");
+
+LShowCourseContentEditIcons:;
+  return;
+end;
+
+procedure ShowSortOrderIcons(LongInt courseId,Integer sortorder)
+begin
+  if (sortorder>1) then begin
+    WebOutString("<img class='interface-icon arrow-up' onclick='updateTopicSortOrder(this)' src='/images/svg/interface/arrow-up.svg' />");
+  end;
+  if (sortorder+1<=GetLastSortOrder(courseId,"WebNGLMSTopicVc")) then begin
+    WebOutString("<img class='interface-icon arrow-down' onclick='updateTopicSortOrder(this)' src='/images/svg/interface/arrow-down.svg' />");
+  end;
+  return;
+end;
+
+procedure ShowTopicEditIcons(Integer visible,Integer sortOrder,LongInt courseId,LongInt recnr)
+begin
+  transaction Boolean gEditModef;
+
+  if (gEditModef==false) then begin goto LShowTopicEditIcons; end;
+
+  WebOutString("<div class='edit-container'>");
+  Interface_EditIcon("WebNGLMSTopicVc",0,recnr);
+  Interface_DeleteIcon("WebNGLMSTopicVc");
+  ShowVisibilityIcons(visible);
+  ShowSortOrderIcons(courseId,sortOrder);
+  WebOutString("</div>");
+
+LShowTopicEditIcons:;
+  return;
+end;
+
+procedure ShowCourseEditIcons(Integer visible,LongInt recnr)
+begin
+  transaction Boolean gEditModef;
+
+  if (gEditModef==false) then begin goto LShowCourseEditIcons; end;
+
+  WebOutString("<div class='edit-container'>");
+  Interface_EditIcon("Course2Vc",0,recnr);
+  Interface_DeleteIcon("Course2Vc");
+  ShowVisibilityIcons(visible);
+  WebOutString("</div>");
+LShowCourseEditIcons:;
+  return;
+end;
+
+function Boolean IsEmbeddable(string url,var string service)
+begin
+  Boolean res;
+  record URLVc URLr;
+
+  res = true;
+
+  URLr.URLString = url;
+  ParseURL(URLr);
+  service = URLr.Host;
+
+  switch (URLr.Host) begin
+    case "www.youtube.com": 
+    case "www.podbean.com":
+    otherwise
+      res = false;
+      service = "";
+      goto LIsEmbeddable;
+  end;
+
+LIsEmbeddable:;
+  IsEmbeddable = res;
+  return;
+end;
+
+function string 255 GetFileExtension(string fn)
+begin
+  string 255 res;
+  Integer i;
+
+  for (i=len(fn)-1;i>=0;i=i-1) begin
+    if (mid(fn,i,1)==".") then begin
+      goto Lexit;
+    end;
+    res = mid(fn,i,1) & res;
+  end;
+
+Lexit:;
+  GetFileExtension = res;
+  return;
+end;
+
+function string 255 ShowElementTranslation(string el)
+begin
+  string 255 res;
+  Integer lcnt,i;
+  record WebNGTranslateVc WTr;
+
+  WTr.Code = el;
+  if (ReadFirstMain(WTr,1,true)) then begin
+    lcnt = LineTextCnt(WTr);
+    for (i=0;i<lcnt;i=i+1) begin
+      res = res & LineTextGet(WTr,i);
+    end;
+  end;
+
+  ShowElementTranslation = res;
+  return;
+end;
+
+procedure WebOutDepartmentSelection()
+begin
+  record DepVc Depr;
+  Integer i;
+  array string 255 arrCode;
+  array string 255 arrName;
+  string 255 tstr,department;
+
+  department = WebGetArg("department");
+
+  while (LoopMain(Depr,1,true)) begin
+    arrCode[arrCode.length] = Depr.Code;
+    arrName[arrName.length] = Depr.Description;
+  end;
+
+  if (arrCode.length==0) then begin
+    tstr = "disabled";
+  end;
+
+  WebOutString("<div class='dep-sel-container'>");
+  WebOutString("<label for='department'>Department:</label>");
+  WebOutString("<select " & tstr & " name='department' id='department-select'>");
+  if (arrCode.length>0) then begin
+    WebOutString("<option value=''>All Departments</option>");
+  end else begin
+    WebOutString("<option value=''>No Departments</option>");
+  end;
+  for (i=0;i<arrCode.length;i=i+1) begin
+    tstr = "";
+    if (department==arrCode[i]) then begin
+      tstr = "selected";
+    end;
+    WebOutString("<option value='" & arrCode[i] & "' " & tstr & ">" & arrName[i] & "</option>");
+  end;
+  WebOutString("</select>");
+  WebOutString("</div>");
+
+  return;
+end;
+
+procedure WebOutTeacherSelection()
+begin
+  record CUVc CUr;
+  Integer i;
+  array string 255 arrCode;
+  array string 255 arrName;
+  string 255 tstr,teacher;
+
+  teacher = WebGetArg("teacher");
+
+  while (LoopMain(CUr,1,true)) begin
+    if (CUr.TeacherType) then begin
+      arrCode[arrCode.length] = CUr.Code;
+      arrName[arrName.length] = CUr.Name;
+    end;
+  end;
+
+  if (arrCode.length==0) then begin
+    tstr = "disabled";
+  end;
+
+  WebOutString("<div class='teacher-sel-container'>");
+  WebOutString("<label for='teacher'>Teacher:</label>");
+  WebOutString("<select " & tstr & " name='teacher' id='teacher-select'>");
+  if (arrCode.length>0) then begin
+    WebOutString("<option value=''>All Teachers</option>");
+  end else begin
+    WebOutString("<option value=''>No Teachers</option>");
+  end;
+  for (i=0;i<arrCode.length;i=i+1) begin
+    tstr = "";
+    if (teacher==arrCode[i]) then begin
+      tstr = "selected";
+    end;
+    WebOutString("<option value='" & arrCode[i] & "' " & tstr & ">" & arrName[i] & "</option>");
+  end;
+  WebOutString("</select>");
+  WebOutString("</div>");
+  return;
+end;
+
+procedure WebOutCourseList()
+begin
+  record Course2Vc Courser;
+  string 255 res,url,node,department,teacher,tstr,hidden,hiddeneditmode,extraclass;
+  Boolean testf,availablef;
+  Integer i;
+  array record Course2Vc arrMyCourser,arrOtherCourser;
+  array Boolean arrAvailablef;
+  transaction Boolean gEditModef;
+
+  department = WebGetArg("department");
+  teacher = WebGetArg("teacher");
+  if (IsTeacher) then begin
+    teacher = CurrentCust;
+  end;
+
+  while (LoopMain(Courser,1,true)) begin
+    testf = true;
+    if ((IsEnrolledStudent(Courser.SerNr,availablef)==false and Courser.EnableSelfEnrol==0) and Courser.AllowApplications==0) then begin
+      testf = false;
+    end;
+    if (testf==false) then begin
+      if (SetInSet2(CurrentCust,Courser.Teachers)) then begin
+        testf = true;
+      end;
+      if (IsLMSAdmin) then begin
+        testf = true; 
+      end;
+    end;
+    //Filters
+    if (nonblank(department)) then begin
+      if (SetInSet2(department,Courser.Departments)==false) then begin testf = false; end;
+    end;
+    if (nonblank(teacher)) then begin
+      if (SetInSet2(teacher,Courser.Teachers)==false) then begin testf = false; end;
+    end;
+    if (IsLMSAdmin==false and SetInSet2(CurrentCust,Courser.Teachers)==false) then begin
+      if (Courser.Visibility==0) then begin testf = false; end;
+      if (DateInRange(CurrentDate,Courser.StartDate,Courser.EndDate)==false) then begin 
+        if (CurrentDate>Courser.EndDate) then begin testf = false; end;
+      end;
+    end;
+    if (Courser.Terminated==1) then begin testf = false; end;
+    if (testf) then begin
+      if (IsEnrolledStudent(Courser.SerNr,availablef) or IsLMSAdmin or SetInSet2(CurrentCust,Courser.Teachers)) then begin
+        arrMyCourser[arrMyCourser.length] = Courser;
+        if (IsLMSAdmin or SetInSet2(CurrentCust,Courser.Teachers)) then begin
+          arrAvailablef[arrAvailablef.length] = true;
+        end else begin
+          arrAvailablef[arrAvailablef.length] = availablef;
+        end;
+      end else begin
+        if (IsTeacher==false or Courser.AllowApplications==1) then begin
+          arrOtherCourser[arrOtherCourser.length] = Courser;
+        end;
+      end;
+    end;
+  end;
+
+  WebOutString("<div class='my-courses-container'>");
+  tstr = "My Courses";
+  if (IsLMSAdmin or IsTeacher) then begin
+    tstr = "Courses";
+  end;
+  WebOutString("<h3 class='course-list-header-title'>" & tstr & "</h3>");
+  if (arrMyCourser.length>0) then begin
+    for (i=0;i<arrMyCourser.length;i=i+1) begin
+      node = "overview";
+      if (gEditModef) then begin
+        node = "manage/enrolment";
+      end;
+      Courser = arrMyCourser[i];
+
+      hidden = "";
+      hiddeneditmode = "";
+      if (Courser.Visibility==0) then begin
+        if (gEditModef==false) then begin
+          hidden = "hidden";
+        end else begin
+          hiddeneditmode = "hidden-editmode";
+        end;
+      end;
+      url = FormatSimpleLink("/lms/course/" & Courser.SerNr & "/" & node,true);
+      extraclass = "";
+      if (arrAvailablef[i]==false) then begin
+        extraclass = "course-unavailable";
+      end;
+      WebOutString("<div data-recordid='" & Courser.SerNr & "' data-recordtype='Course2Vc'");
+      WebOutClass("content-line course-line " & extraclass & "",hidden);
+      WebOutString(">");
+      if (arrAvailablef[i]) then begin
+        WebOutString("<a href='" & url & "'");
+        WebOutClass("",hiddeneditmode);  
+        WebOutString(">");
+      end;
+      tstr = "";
+      WebOutString("<li class='course-item " & extraclass & "'>" & Courser.Name & "</li>");
+      if (arrAvailablef[i]) then begin
+        WebOutString("</a>");
+      end;
+      if (DateInRange(CurrentDate,Courser.StartDate,Courser.EndDate)==false or arrAvailablef[i]==false) then begin
+        if (nonblankdate(Courser.StartDate) and nonblankdate(Courser.EndDate)) then begin
+          tstr = Courser.StartDate & " - " & Courser.EndDate;
+        end else begin
+          if (blank(Courser.StartDate) and nonblank(Courser.EndDate)) then begin
+            tstr = "Ended on " & Courser.EndDate;
+          end;
+          if (nonblank(Courser.StartDate) and blank(Courser.EndDate)) then begin
+            tstr = "Starts on " & Courser.StartDate;
+          end;
+        end;
+        WebOutString("<span class='course-unavailable-text'>(" & tstr & ")</span>");
+      end;
+      ShowCourseEditIcons(Courser.Visibility,Courser.SerNr);
+      WebOutString("</div>");
+    end;
+  end else begin
+    WebOutString("<span class='no-content'>No courses</span>");
+  end;
+  WebOutString("</div>");
+
+  if (arrOtherCourser.length>0) then begin
+    WebOutString("<div class='other-courses-container'>");
+    WebOutString("<h3 class='course-list-header-title'>Other Courses</h3>");
+    for (i=0;i<arrOtherCourser.length;i=i+1) begin
+      Courser = arrOtherCourser[i];
+
+      hidden = "";
+      hiddeneditmode = "";
+      if (Courser.Visibility==0) then begin
+        if (gEditModef==false) then begin
+          hidden = "hidden";
+        end else begin
+          hiddeneditmode = "hidden-editmode";
+        end;
+      end;
+      node = "register";
+      url = FormatSimpleLink("/lms/course/" & Courser.SerNr & "/" & node,true);
+      WebOutString("<div data-recordid='" & Courser.SerNr & "' data-recordtype='Course2Vc'");
+      WebOutClass("course-line",hidden);
+      WebOutString(">");
+      WebOutString("<a href='" & url & "'");
+      WebOutClass("",hiddeneditmode);
+      WebOutString(">");
+      WebOutString("<li class='course-item'>" & Courser.Name & "</li>");
+      WebOutString("</a>");
+      ShowCourseEditIcons(Courser.Visibility,Courser.SerNr);
+      WebOutString("</div>");
+    end;
+    WebOutString("</div>");
+  end;
+  
+LWebOutCourseList:;
+  return;
+end;
+
+global
+updating procedure LMSCourseApp_UpdateTopicVisible()
+begin
+  record WebNGLMSTopicVc oldWebNGLMSTopicr,WebNGLMSTopicr;
+  string 255 actiontype,topic;
+  LongInt visible;
+
+  actiontype = WebGetArg("actiontype");
+  topic = WebGetArg("topic");
+  visible = StringToLongInt(WebGetArg("visible"));
+
+  WebNGLMSTopicr.SerNr = topic;
+  if (ReadFirstMain(WebNGLMSTopicr,1,true)) then begin
+    RecordCopy(oldWebNGLMSTopicr,WebNGLMSTopicr);
+    if (visible!=WebNGLMSTopicr.Visible and visible!=-1) then begin
+      WebNGLMSTopicr.Visible = visible;
+    end;
+    RecordUpdate(oldWebNGLMSTopicr,WebNGLMSTopicr,true);
+  end;
+
+  return;
+end;
+
+global
+updating procedure LMSCourseApp_UpdateTopicSortOrder()
+begin
+  record WebNGLMSTopicVc oldWebNGLMSTopicr,WebNGLMSTopicr;
+  record WebNGLMSTopicVc oldWebNGLMSTopic2r,WebNGLMSTopic2r;
+  string 255 actiontype,topicId,direction,status,errmsg;
+  Integer poschange;
+
+  actiontype = WebGetArg("actiontype");
+  topicId = WebGetArg("topic");
+  direction = WebGetArg("direction");
+
+  if (direction=="up") then begin
+    poschange = -1;
+  end else begin
+    poschange = 1;
+  end;
+
+  WebNGLMSTopicr.SerNr = topicId;
+  if (ReadFirstMain(WebNGLMSTopicr,1,true)) then begin
+    RecordCopy(oldWebNGLMSTopicr,WebNGLMSTopicr);
+    WebNGLMSTopicr.SortOrder = WebNGLMSTopicr.SortOrder + poschange;
+
+    WebNGLMSTopic2r.SortOrder = WebNGLMSTopicr.SortOrder;
+    WebNGLMSTopic2r.Course = WebNGLMSTopicr.Course;
+    if (ReadFirstKey("SortOrder",WebNGLMSTopic2r,2,true)) then begin
+      RecordCopy(oldWebNGLMSTopic2r,WebNGLMSTopic2r);
+      WebNGLMSTopic2r.SortOrder = WebNGLMSTopic2r.SortOrder - poschange;
+      if (WebNGLMSTopic2r.SortOrder<1) then begin
+        WebNGLMSTopic2r.SortOrder = 1;
+      end;
+      RecordUpdate(oldWebNGLMSTopic2r,WebNGLMSTopic2r,true);
+    end;
+    if (WebNGLMSTopicr.SortOrder<1) then begin
+      WebNGLMSTopicr.SortOrder = 1;
+    end;
+    if (RecordUpdate(oldWebNGLMSTopicr,WebNGLMSTopicr,true)==0) then begin
+      status = "success";
+    end else begin
+      status = "failed";
+      errmsg = "Unknown error, contact System Administrator";
+    end;
+  end;
+
+  WebOutString("<div>");
+  WebOutString("<status code='" & status & "' errmsg='" & errmsg & "'></status>");
+  WebOutString("</div>");
+  return;
+end;
+
+global
+updating procedure LMSCourseApp_UpdateCourseContent()
+begin
+  record CourseContentVc oldCourseContentr,CourseContentr;
+  string 255 actiontype,tstr,status;
+  LongInt recnr,errno,res;
+  string 255 vcname,errmsg,fieldname;
+  Integer rowno;
+
+  actiontype = WebGetArg("actiontype");
+  recnr = StringToLongInt(WebGetArg("coursecontent"));
+
+  CourseContentr.SerNr = recnr;
+  if (ReadFirstMain(CourseContentr,1,true)) then begin
+    RecordCopy(oldCourseContentr,CourseContentr);
+    CourseContentr.Type = StringToInt(WebGetArg("rectype"));
+    CourseContentr.Name = WebGetArg("name");
+    CourseContentr.URL = WebGetArg("url");
+    CourseContentr.URLAppearance = StringToInt(WebGetArg("appearance"));
+    SetTextField(CourseContentr,WebGetArg("description"));
+    CourseContentr.Visible = StringToInt(WebGetArg("visible"));
+    CourseContentr.FileDisplay = StringToInt(WebGetArg("filedisplay"));
+    CourseContentr.ShowType = StringToInt(WebGetArg("showtype"));
+    CourseContentr.ShowSize = StringToInt(WebGetArg("showsize"));
+    CourseContentr.ShowDate = StringToInt(WebGetArg("showdate"));
+    CourseContentr.VisibleFromDate = DateFromString(WebGetArg("visibleFromDate"),"YYYY-MM-DD");
+    CourseContentr.VisibleToDate = DateFromString(WebGetArg("visibleToDate"),"YYYY-MM-DD");
+    CourseContentr.AttendanceDate = DateFromString(WebGetArg("attendanceDate"),"YYYY-MM-DD");
+    CourseContentr.AttendanceFromTime = WebGetArg("attendanceFromTime");
+    CourseContentr.AttendanceToTime = WebGetArg("attendanceToTime");
+    CourseContentr.RepeatUntilDate = DateFromString(WebGetArg("repeatUntilDate"),"YYYY-MM-DD");
+    CourseContentr.RepeatPeriod = StringToInt(WebGetArg("repeatPeriod"));
+    CourseContentr.EveryMonday = StringToInt(WebGetArg("everyMonday"));
+    CourseContentr.EveryTuesday = StringToInt(WebGetArg("everyTuesday"));
+    CourseContentr.EveryWednesday = StringToInt(WebGetArg("everyWednesday"));
+    CourseContentr.EveryThursday = StringToInt(WebGetArg("everyThursday"));
+    CourseContentr.EveryFriday = StringToInt(WebGetArg("everyFriday"));
+    CourseContentr.EverySaturday = StringToInt(WebGetArg("everySaturday"));
+    CourseContentr.EverySunday = StringToInt(WebGetArg("everySunday"));
+    CourseContentr.InclHolidays = StringToInt(WebGetArg("inclHolidays"));  
+    CourseContentr.Test = StringToLongInt(WebGetArg("webtest"));
+
+    SetRecordCheckVc("CourseContentVc");
+    res = CourseContentVcRecordCheck(CourseContentr,oldCourseContentr,-1,-1);
+
+    if (GetRecordCheckError(vcname,errno,errmsg,rowno,fieldname)) then begin
+      status = "failed";
+      errmsg = USetStr(errno) & " " & errmsg;
+    end else begin
+      if (RecordUpdate(oldCourseContentr,CourseContentr,true)==0) then begin
+        status = "success";
+      end else begin
+        status = "failed";
+        errmsg = "Unknown error, contact System Administrator";
+      end;
+    end;
+  end;
+  WebOutString("<div>");
+  WebOutString("<status code='" & status & "' errmsg='" & errmsg & "'></status>");
+  WebOutString("</div>");
+  return;
+end;
+
+global
+updating procedure LMSCourseApp_UpdateCourse()
+begin
+  record Course2Vc oldCourser,Courser;
+  string 255 actiontype,tstr,status,errmsg;
+  LongInt recnr,res,errno;
+  string 255 vcname,fieldname;
+  Integer rowno;
+
+  actiontype = WebGetArg("actiontype");
+  recnr = StringToLongInt(WebGetArg("course"));
+
+  Courser.SerNr = recnr;
+  if (ReadFirstMain(Courser,1,true)) then begin
+    RecordCopy(oldCourser,Courser);
+    Courser.Name = WebGetArg("name");
+    Courser.Visibility = StringToInt(WebGetArg("visible"));
+    Courser.EnableSelfEnrol = StringToInt(WebGetArg("selfenrol"));
+    Courser.RegKey = WebGetArg("regkey");
+    Courser.StartDate = DateFromString(WebGetArg("startdate"),"YYYY-MM-DD");
+    Courser.EndDate = DateFromString(WebGetArg("enddate"),"YYYY-MM-DD");
+    SetTextField(Courser,WebGetArg("description"));
+    Courser.ActType = WebGetArg("acttype");
+    Courser.Type = WebGetArg("coursetype");
+    Courser.Classification = WebGetArg("classification");
+    Courser.Teachers = WebGetArg("teacher");
+    Courser.Responsible = WebGetArg("responsible");
+    Courser.Departments = WebGetArg("department");
+    Courser.Format = StringToInt(WebGetArg("format"));
+    Courser.Groups = StringToInt(WebGetArg("groups"));
+    Courser.AllowApplications = StringToInt(WebGetArg("allowapplications"));
+
+    SetRecordCheckVc("Course2Vc");
+    res = Course2VcRecordCheck(Courser,oldCourser,-1,-1);
+
+    if (GetRecordCheckError(vcname,errno,errmsg,rowno,fieldname)) then begin
+      status = "failed";
+      errmsg = USetStr(errno) & " " & errmsg;
+    end else begin
+      if (RecordUpdate(oldCourser,Courser,true)==0) then begin
+        status = "success";
+      end else begin
+        status = "failed";
+        errmsg = "Unknown error, contact System Administrator";
+      end;
+    end;
+  end;
+  WebOutString("<div>");
+  WebOutString("<status code='" & status & "' errmsg='" & errmsg & "'></status>");
+  WebOutString("</div>");
+  return;
+end;
+
+function Boolean WebUploadFileToArea(var area rfilearea)
+begin
+  Area FileArea,FADone,nFileArea;
+  boolean savef;
+  Longint tick;
+
+  savef = true;
+  WebGetRawPostData(rFileArea);
+  WebUploadFileToArea = savef;
+  return;
+end;
+
+global
+updating procedure LMSCourseApp_CreateCourseContent()
+begin
+  record CourseContentVc CourseContentr,oldCourseContentr;
+  string 255 actiontype,status,errmsg,filename;
+  string 255 filecontents;
+  Integer topicId,rowno;
+  area filearea;
+  LongInt pos,res,errno;
+  Boolean savedf;
+  string 255 vcname,fieldname;
+
+  actiontype = WebGetArg("actiontype");
+  topicId = StringToInt(WebGetArg("topicId"));
+
+  RecordNew(CourseContentr);
+  RecordCopy(oldCourseContentr,CourseContentr);
+  CourseContentr.SerNr = NextSerNr("CourseContentVc",CurrentDate,-1,false,"");
+  CourseContentr.SortOrder = (GetLastSortOrder(topicId,"CourseContentVc") + 1);
+  CourseContentr.Type = StringToInt(WebGetArg("rectype"));
+  CourseContentr.Topic = topicId;
+  CourseContentr.Name = WebGetArg("name");
+  CourseContentr.URL = WebGetArg("url");
+  CourseContentr.URLAppearance = StringToInt(WebGetArg("appearance"));
+  SetTextField(CourseContentr,WebGetArg("description"));
+  CourseContentr.Visible = StringToInt(WebGetArg("visible"));
+  CourseContentr.FileDisplay = StringToInt(WebGetArg("filedisplay"));
+  CourseContentr.ShowType = StringToInt(WebGetArg("showtype"));
+  CourseContentr.ShowSize = StringToInt(WebGetArg("showsize"));
+  CourseContentr.ShowDate = StringToInt(WebGetArg("showdate"));
+  CourseContentr.VisibleFromDate = DateFromString(WebGetArg("visibleFromDate"),"YYYY-MM-DD");
+  CourseContentr.VisibleToDate = DateFromString(WebGetArg("visibleToDate"),"YYYY-MM-DD");
+  CourseContentr.AttendanceDate = DateFromString(WebGetArg("attendanceDate"),"YYYY-MM-DD");
+  CourseContentr.AttendanceFromTime = WebGetArg("attendanceFromTime");
+  CourseContentr.AttendanceToTime = WebGetArg("attendanceToTime");
+  CourseContentr.RepeatUntilDate = DateFromString(WebGetArg("repeatUntilDate"),"YYYY-MM-DD");
+  CourseContentr.RepeatPeriod = StringToInt(WebGetArg("repeatPeriod"));
+  CourseContentr.EveryMonday = StringToInt(WebGetArg("everyMonday"));
+  CourseContentr.EveryTuesday = StringToInt(WebGetArg("everyTuesday"));
+  CourseContentr.EveryWednesday = StringToInt(WebGetArg("everyWednesday"));
+  CourseContentr.EveryThursday = StringToInt(WebGetArg("everyThursday"));
+  CourseContentr.EveryFriday = StringToInt(WebGetArg("everyFriday"));
+  CourseContentr.EverySaturday = StringToInt(WebGetArg("everySaturday"));
+  CourseContentr.EverySunday = StringToInt(WebGetArg("everySunday"));
+  CourseContentr.InclHolidays = StringToInt(WebGetArg("inclHolidays"));  
+  CourseContentr.Test = StringToLongInt(WebGetArg("webtest"));
+
+  pos = 0;
+  GetNextSubString(WebGetArg("filecontent"),pos,",",filecontents);
+  GetNextSubString(WebGetArg("filecontent"),pos,",",filecontents);
+  AddTextToArea(Base64Decode(filecontents),filearea); //SHOULD BE REFACTORED AS ITS NOT OPTIMISED
+  if (GetAreaLength(filearea)>0) then begin
+    filename = WebGetArg("filename");
+    WriteAreaToFile(filearea,"tmp/" & filename,0);
+    if (FileExists("tmp/" & filename)) then begin
+      RecordLinkFile("tmp/" & filename,0,CourseContentr,CurrentCompany);
+      Delete_File("tmp/" & filename);
+    end;
+  end;
+
+  SetRecordCheckVc("CourseContentVc");
+  res = CourseContentVcRecordCheck(CourseContentr,oldCourseContentr,-1,-1);
+
+  if (GetRecordCheckError(vcname,errno,errmsg,rowno,fieldname)) then begin
+    status = "failed";
+    errmsg = USetStr(errno) & " " & errmsg;
+  end else begin
+    switch (actiontype) begin
+      case "update_record": res = RecordUpdate(oldCourseContentr,CourseContentr,true);
+      case "create_record": savedf = RecordStore(CourseContentr,true);
+    end;
+    if (res==0 and savedf) then begin
+      status = "success";
+    end else begin
+      status = "failed";
+      errmsg = "Unknown error, contact System Administrator";
+    end;
+  end;
+  WebOutString("<div>");
+  WebOutString("<status code='" & status & "' errmsg='" & errmsg & "'></status>");
+  WebOutString("</div>");
+  return;
+end;
+
+global
+updating procedure LMSCourseApp_CreateTopic()
+begin
+  record WebNGLMSTopicVc WebNGLMSTopicr;
+  string 255 actiontype,status,errmsg;
+  Boolean res;
+  LongInt courseId;
+
+  actiontype = WebGetArg("actiontype");
+  courseId = StringToLongInt(WebGetArg("courseId"));
+
+  RecordNew(WebNGLMSTopicr);
+  WebNGLMSTopicr.SerNr = NextSerNr("WebNGLMSTopicVc",CurrentDate,-1,false,"");
+  WebNGLMSTopicr.SortOrder = (GetLastSortOrder(courseId,"WebNGLMSTopicVc") + 1);
+  WebNGLMSTopicr.Desc = WebGetArg("name"); //yes
+  WebNGLMSTopicr.Visible = StringToInt(WebGetArg("visible"));
+  WebNGLMSTopicr.Course = courseId;
+
+  if (RecordStore(WebNGLMSTopicr,true)) then begin
+    status = "success";
+    RefreshTopicSortOrder(courseId);
+  end else begin
+    status = "failed";
+    errmsg = "Unknown error, contact System Administrator";
+  end;
+
+  WebOutString("<div>");
+  WebOutString("<status code='" & status & "' errmsg='" & errmsg & "'></status>");
+  WebOutString("</div>");
+  return;
+end;
+
+global
+updating procedure LMSCourseApp_UpdateTopic()
+begin
+  record WebNGLMSTopicVc oldWebNGLMSTopicr,WebNGLMSTopicr;
+  string 255 actiontype,status,errmsg;
+  Boolean res;
+  LongInt topicnr;
+
+  actiontype = WebGetArg("actiontype");
+  topicnr = StringToLongInt(WebGetArg("topic"));
+
+  logtext(0,"topicnr=" & topicnr);
+
+  WebNGLMSTopicr.SerNr = topicnr;
+  if (ReadFirstMain(WebNGLMSTopicr,1,true)) then begin
+    RecordCopy(oldWebNGLMSTopicr,WebNGLMSTopicr);
+    WebNGLMSTopicr.Desc = WebGetArg("name"); //yes
+    WebNGLMSTopicr.Visible = StringToInt(WebGetArg("visible"));
+    if (RecordUpdate(oldWebNGLMSTopicr,WebNGLMSTopicr,true)==0) then begin
+      status = "success";
+    end else begin
+      status = "failed";
+      errmsg = "Unknown error, contact System Administrator";
+    end;
+  end else begin
+    status = "failed";
+    errmsg = "Unknown error, contact System Administrator";
+  end;
+
+  WebOutString("<div>");
+  WebOutString("<status code='" & status & "' errmsg='" & errmsg & "'></status>");
+  WebOutString("</div>");
+  return;
+end;
+
+global
+updating procedure LMSCourseApp_CreateCourse()
+begin
+  record Course2Vc oldCourser,Courser;
+  string 255 actiontype,status,errmsg;
+  LongInt courseId,res,errno;
+  string 255 vcname,fieldname;
+  Integer rowno;
+
+  actiontype = WebGetArg("actiontype");
+
+  RecordNew(Courser);
+  RecordCopy(oldCourser,Courser);
+  Courser.SerNr = NextSerNr("Course2Vc",CurrentDate,-1,false,"");
+  Courser.Name = WebGetArg("name");
+  Courser.Visibility = StringToInt(WebGetArg("visible"));
+  Courser.EnableSelfEnrol = StringToInt(WebGetArg("selfenrol"));
+  Courser.RegKey = WebGetArg("regkey");
+  Courser.StartDate = DateFromString(WebGetArg("startdate"),"YYYY-MM-DD");
+  Courser.EndDate = DateFromString(WebGetArg("enddate"),"YYYY-MM-DD");
+  SetTextField(Courser,WebGetArg("description"));
+  Courser.ActType = WebGetArg("acttype");
+  Courser.Type = WebGetArg("coursetype");
+  Courser.Classification = WebGetArg("classification");
+  Courser.Teachers = WebGetArg("teacher");
+  Courser.Responsible = WebGetArg("responsible");
+  Courser.Departments = WebGetArg("department");
+  Courser.Format = StringToInt(WebGetArg("format"));
+  Courser.Groups = StringToInt(WebGetArg("groups"));
+  Courser.AllowApplications = StringToInt(WebGetArg("allowapplications"));
+
+  SetRecordCheckVc("Course2Vc");
+  res = Course2VcRecordCheck(Courser,oldCourser,-1,-1);
+
+  if (GetRecordCheckError(vcname,errno,errmsg,rowno,fieldname)) then begin
+    status = "failed";
+    errmsg = USetStr(errno) & " " & errmsg;
+  end else begin
+    if (RecordStore(Courser,true)) then begin
+      status = "success";
+    end else begin
+      status = "failed";
+      errmsg = "Unknown error, contact System Administrator";
+    end;
+  end;
+
+  WebOutString("<div>");
+  WebOutString("<status code='" & status & "' errmsg='" & errmsg & "'></status>");
+  WebOutString("</div>");
+  return;
+end;
+
+global
+updating procedure LMSCourseApp_DeleteCourseContent()
+begin
+  record CourseContentVc CourseContentr;
+  LongInt contentnr;
+  string 255 status;
+
+  contentnr = StringToLongInt(WebGetArg("recordId"));
+
+  CourseContentr.SerNr = contentnr;
+  if (ReadFirstMain(CourseContentr,1,true)) then begin
+    RecordDelete(CourseContentr);
+  end;
+
+  WebOutString("<div>");
+  WebOutString("<status code='success'></status>");
+  WebOutString("</div>");
+    return;
+end;
+
+
+global
+updating procedure LMSCourseApp_DeleteCourse()
+begin
+  record Course2Vc oldCourser,Courser;
+  // record WebNGLMSTopicVc WebNGLMSTopicr;
+  LongInt recordnr;
+  string 255 status,errmsg;
+
+  recordnr = StringToLongInt(WebGetArg("recordId"));
+
+  // WebNGLMSTopicr.Course = recordnr;
+  // if (ReadFirstKey("Course",WebNGLMSTopicr,1,true)) then begin
+  //   status = "failed";
+  //   errmsg = "Course must be empty";
+  //   goto LLMSCourseApp_DeleteCourse;
+  // end;
+
+  Courser.SerNr = recordnr;
+  if (ReadFirstMain(Courser,1,true)) then begin
+    RecordCopy(oldCourser,Courser);
+    Courser.Terminated = 1;
+    RecordUpdate(oldCourser,Courser,true);
+    status = "success";
+  end else begin
+    status = "failed";
+    errmsg = "Unknown error, contact System Administrator";
+  end;
+  WebOutString("<div>");
+  WebOutString("<status code='" & status & "' errmsg='" & errmsg & "'></status>");
+  WebOutString("</div>");
+  return;
+end;
+
+global
+updating procedure LMSCourseApp_DeleteStudentCourse()
+begin
+  record StudentCourseVc StudentCourser;
+  LongInt recordnr;
+  string 255 status;
+
+  recordnr = StringToLongInt(WebGetArg("recordId"));
+
+  StudentCourser.SerNr = recordnr;
+  if (ReadFirstMain(StudentCourser,1,true)) then begin
+    RecordDelete(StudentCourser);
+  end;
+
+  WebOutString("<div>");
+  WebOutString("<status code='success'></status>");
+  WebOutString("</div>");
+  return;
+end;
+
+global
+updating procedure LMSCourseApp_DeleteAllStudentCourse()
+begin
+  record StudentCourseVc StudentCourser;
+  LongInt recordnr;
+  string 255 status;
+  Boolean foundf;
+
+  recordnr = StringToLongInt(WebGetArg("course"));
+
+  foundf = true;
+  StudentCourser.Course = recordnr;
+  while (LoopKey("Course",StudentCourser,1,foundf)) begin
+    if (StudentCourser.Course!=recordnr) then begin foundf = false; end;
+    if (foundf) then begin
+      RecordDelete(StudentCourser);
+      StepBack(StudentCourser);
+    end;
+  end;
+
+  WebOutString("<div>");
+  WebOutString("<status code='success'></status>");
+  WebOutString("</div>");
+  return;
+end;
+
+updating function Boolean ApproveStudent(string student,LongInt course)
+begin
+  Boolean res;
+  record StudentCourseVc oldStudentCourser,StudentCourser;
+
+  StudentCourser.Course = course;
+  StudentCourser.Student = student;
+  StudentCourser.Approved = 0;
+  if (ReadFirstKey("Course",StudentCourser,3,true)) then begin
+    RecordCopy(oldStudentCourser,StudentCourser);
+    StudentCourser.Approved = 1;
+    if (RecordUpdate(oldStudentCourser,StudentCourser,true)==0) then begin
+      res = true;
+    end;
+  end;
+
+  ApproveStudent = res;
+  return;
+end;
+
+global
+updating procedure LMSCourseApp_CreateStudentCourse()
+begin
+  record Course2Vc Courser;
+  record CUVc CUr;
+  record StudentCourseVc oldStudentCourser,StudentCourser;
+  LongInt course,errno;
+  string 255 regkey,student,errmsg,status,selfenrol;
+  Date availableFromDate,availableToDate;
+  Time availableFromTime,availableToTime;
+  Boolean selfenrolf,approvedf,applyf;
+  LongInt res;
+  string 255 vcname,fieldname;
+  Integer rowno;
+
+
+  regkey = WebGetArg("regkey");
+  course = StringToLongInt(WebGetArg("course"));
+  student = WebGetArg("student");
+  selfenrolf = (WebGetArg("selfenrol")=="1");
+  applyf = (WebGetArg("apply")=="1");
+  availableFromDate = DateFromString(WebGetArg("availableFromDate"),"YYYY-MM-DD");
+  availableToDate = DateFromString(WebGetArg("availableToDate"),"YYYY-MM-DD");
+  if (nonblank(WebGetArg("availableFromTime"))) then begin
+    availableFromTime = StringToTime(WebGetArg("availableFromTime"));
+  end else begin
+    availableFromTime = StringToTime("00:00:01");
+  end;
+  if (nonblank(WebGetArg("availableToTime"))) then begin
+    availableToTime = StringToTime(WebGetArg("availableToTime"));
+  end else begin
+    availableToTime = StringToTime("23:59:59");
+  end;
+
+  if (applyf) then begin
+    selfenrolf = false;
+  end;
+
+  if (blank(course) or blank(student)) then begin
+    status = "failed";
+    errmsg = "Something went wrong, contact System Administrator";
+    goto LLMSCourseApp_CreateStudentCourse;
+  end;
+
+  if (blank(regkey) and selfenrolf) then begin
+    status = "failed";
+    errmsg = "Registration key may not be blank";
+    goto LLMSCourseApp_CreateStudentCourse;
+  end;
+
+  Courser.SerNr = course;
+  if (ReadFirstMain(Courser,1,true)) then begin
+    if (selfenrolf) then begin
+      if (Courser.EnableSelfEnrol==0) then begin 
+        status = "failed";
+        errmsg = "Course does not allow self enrolment";
+        goto LLMSCourseApp_CreateStudentCourse;
+      end;
+      if (Courser.RegKey!=regkey) then begin
+        status = "failed";
+        errmsg = "Invalid registration key";
+        goto LLMSCourseApp_CreateStudentCourse;
+      end;
+      approvedf = true;
+    end;
+  end;
+
+  if (StudentPendingApproval(student,course) and selfenrolf) then begin
+    if (ApproveStudent(student,course)) then begin
+      status = "success";
+    end else begin
+      status = "failed";
+      errmsg = "Unknown error, contact System Administrator";
+    end;
+    goto LLMSCourseApp_CreateStudentCourse;
+  end;
+
+  RecordNew(StudentCourser);
+  RecordCopy(oldStudentCourser,StudentCourser);
+  StudentCourser.SerNr = NextSerNr("StudentCourseVc",CurrentDate,-1,false,"");
+  StudentCourser.Course = course;
+  StudentCourser.CourseName = Courser.Name;
+  StudentCourser.Student = student;
+  CUr.Code = student;
+  ReadFirstMain(CUr,1,true);
+  StudentCourser.StudentName = CUr.Name;
+  StudentCourser.StartDate = availableFromDate;
+  StudentCourser.StartTime = availableFromTime;
+  StudentCourser.EndDate = availableToDate;
+  StudentCourser.EndTime = availableToTime;
+  if (approvedf or WebGetArg("approved")=="1") then begin
+    StudentCourser.Approved = 1;
+  end;
+
+  if (StudentCourser.Approved==0) then begin
+    if (StudentPendingApproval(student,course)) then begin
+        status = "failed";
+        errmsg = "Student already has a pending application for this course";
+        goto LLMSCourseApp_CreateStudentCourse;
+    end;
+  end;
+
+  SetRecordCheckVc("StudentCourser");
+  res = StudentCourseVcRecordCheck(StudentCourser,oldStudentCourser,-1,-1);
+
+  if (GetRecordCheckError(vcname,errno,errmsg,rowno,fieldname)) then begin
+    status = "failed";
+    errmsg = USetStr(errno) & " " & errmsg;
+  end else begin
+    if (RecordStore(StudentCourser,true)) then begin
+      status = "success";
+    end else begin
+      status = "failed";
+      errmsg = "Unknown error, contact System Administrator";
+    end;
+  end;
+LLMSCourseApp_CreateStudentCourse:;
+  WebOutString("<div>");
+  WebOutString("<status code='" & status & "' errmsg='" & errmsg & "'></status>");
+  WebOutString("</div>");
+  return;
+end;
+
+global
+updating procedure LMSCourseApp_UpdateStudentCourse()
+begin
+  record Course2Vc Courser;
+  record CUVc CUr;
+  record StudentCourseVc oldStudentCourser,StudentCourser;
+  LongInt course,errno;
+  string 255 errmsg,status,selfenrol;
+  Date availableFromDate,availableToDate;
+  Time availableFromTime,availableToTime;
+  LongInt res;
+  string 255 vcname,fieldname;
+  Integer rowno;
+
+  availableFromDate = DateFromString(WebGetArg("availableFromDate"),"YYYY-MM-DD");
+  availableToDate = DateFromString(WebGetArg("availableToDate"),"YYYY-MM-DD");
+  if (nonblank(WebGetArg("availableFromTime"))) then begin
+    availableFromTime = StringToTime(WebGetArg("availableFromTime"));
+  end else begin
+    availableFromTime = StringToTime("00:00:01");
+  end;
+  if (nonblank(WebGetArg("availableToTime"))) then begin
+    availableToTime = StringToTime(WebGetArg("availableToTime"));
+  end else begin
+    availableToTime = StringToTime("23:59:59");
+  end;
+
+  StudentCourser.SerNr = StringToLongInt(WebGetArg("student"));
+  if (ReadFirstMain(StudentCourser,1,true)==false) then begin
+    status = "failed";
+    errmsg = "Something went wrong, contact System Administrator";
+    goto LLMSCourseApp_UpdateStudentCourse;
+  end;
+
+  Courser.SerNr = StudentCourser.Course;
+  ReadFirstMain(Courser,1,true);
+
+  RecordCopy(oldStudentCourser,StudentCourser);
+  StudentCourser.StartDate = availableFromDate;
+  StudentCourser.StartTime = availableFromTime;
+  StudentCourser.EndDate = availableToDate;
+  StudentCourser.EndTime = availableToTime;
+  StudentCourser.Approved = StringToInt(WebGetArg("approved"));
+
+  SetRecordCheckVc("StudentCourser");
+  res = StudentCourseVcRecordCheck(StudentCourser,oldStudentCourser,-1,-1);
+
+  if (GetRecordCheckError(vcname,errno,errmsg,rowno,fieldname)) then begin
+    status = "failed";
+    errmsg = USetStr(errno) & " " & errmsg;
+  end else begin
+    if (RecordUpdate(oldStudentCourser,StudentCourser,true)==0) then begin
+      status = "success";
+    end else begin
+      status = "failed";
+      errmsg = "Unknown error, contact System Administrator";
+    end;
+  end;
+LLMSCourseApp_UpdateStudentCourse:;
+  WebOutString("<div>");
+  WebOutString("<status code='" & status & "' errmsg='" & errmsg & "'></status>");
+  WebOutString("</div>");
+  return;
+end;
+
+global
+updating procedure LMSCourseApp_DeleteTopic()
+begin
+  record WebNGLMSTopicVc WebNGLMSTopicr;
+  LongInt topicnr,course;
+  string 255 status,errmsg;
+
+  topicnr = StringToLongInt(WebGetArg("recordId"));
+  course = StringToLongInt(WebGetArg("course"));
+
+  WebNGLMSTopicr.SerNr = topicnr;
+  if (ReadFirstMain(WebNGLMSTopicr,1,true)) then begin
+    if (TopicHasContent(WebNGLMSTopicr.SerNr)==false) then begin
+      RecordDelete(WebNGLMSTopicr);
+      RefreshTopicSortOrder(course);
+      status = "success";
+    end else begin
+      status = "failed";
+      errmsg = "Topic must be empty";
+    end;
+  end;
+
+  if (blank(status)) then begin
+    status = "failed";
+    errmsg = "Unknown error, contact System Administrator";
+  end;
+
+  WebOutString("<div>");
+  WebOutString("<status code='" & status & "' errmsg='" & errmsg & "'></status>");
+  WebOutString("</div>");
+  
+  return;
+end;
+
+global
+updating procedure LMSCourseApp_UpdateCourseContentSortOrder()
+begin
+  record CourseContentVc oldCourseContentr,CourseContentr;
+  string 255 actiontype;
+  LongInt sortOrder,contentnr;
+
+  actiontype = WebGetArg("actiontype"); //for now, might not be necessary
+  contentnr = StringToLongInt(WebGetArg("coursecontent"));
+  sortOrder = StringToLongInt(WebGetArg("sortOrder"));
+
+  CourseContentr.SerNr = contentnr;
+  if (ReadFirstMain(CourseContentr,1,true)) then begin
+    RecordCopy(oldCourseContentr,CourseContentr);
+    if (sortOrder!=CourseContentr.SortOrder and sortOrder!=-1) then begin
+      CourseContentr.SortOrder = sortOrder;
+    end;
+    RecordUpdate(oldCourseContentr,CourseContentr,true);
+  end;
+  return;
+end;
+
+global
+updating procedure LMSCourseApp_UpdateCourseContentVisible()
+begin
+  record CourseContentVc oldCourseContentr,CourseContentr;
+  string 255 actiontype;
+  LongInt visible,contentnr;
+
+  actiontype = WebGetArg("actiontype"); //for now, might not be necessary
+  contentnr = StringToLongInt(WebGetArg("coursecontent"));
+  visible = StringToLongInt(WebGetArg("visible"));
+
+  CourseContentr.SerNr = contentnr;
+  if (ReadFirstMain(CourseContentr,1,true)) then begin
+    RecordCopy(oldCourseContentr,CourseContentr);
+    if (visible!=CourseContentr.Visible and visible!=-1) then begin
+      CourseContentr.Visible = visible;
+    end;
+    RecordUpdate(oldCourseContentr,CourseContentr,true);
+  end;
+
+LLMSCourseApp_UpdateCourseContentVisible:;
+  return;
+end;
+
+global
+updating procedure LMSCourseApp_UpdateCourseVisible()
+begin
+  record Course2Vc oldCourser,Courser;
+  string 255 actiontype;
+  LongInt visible,coursenr;
+
+  actiontype = WebGetArg("actiontype"); //for now, might not be necessary
+  coursenr = StringToLongInt(WebGetArg("course"));
+  visible = StringToLongInt(WebGetArg("visible"));
+
+  Courser.SerNr = coursenr;
+  if (ReadFirstMain(Courser,1,true)) then begin
+    RecordCopy(oldCourser,Courser);
+    if (visible!=Courser.Visibility and visible!=-1) then begin
+      Courser.Visibility = visible;
+    end;
+    RecordUpdate(oldCourser,Courser,true);
+  end;
+
+  return;
+end;
+
+global
+procedure WebLMSCourseAction(string mpath)
+begin
+  string 255 action,path;
+  Integer cnt;
+
+  // path = mpath;
+  // if (!LoggedInMyStandardCustomer) then begin
+  //   WebOutStringFormat("<msg err='1' errtype='5' errmsg='not logged in'></msg>");
+  //   goto LWebMyServerAction;
+  // end;
+
+  // if (UrlSignatureStatus<>kUrl_Signed) then begin
+  //   WebOutStringFormat("<msg err='1' errtype='5' errmsg='URL not signed'></msg>");
+  //   goto LWebMyServerAction;
+  // end;
+
+  // while (blank(GetHansaWorldIDSession)) begin
+  //   //LogText(0,"Waiting for Standard ID session");
+  //   //TODO: display pretty a "logging in..." style message
+  //   if (cnt<30) then begin
+  //     MilliSleep(100);
+  //   end else begin
+  //     goto LWebMyServerActionSkip;
+  //   end;
+  //   cnt = cnt + 1;
+  // end;
+
+LWebMyServerActionSkip:;
+  if (blank(path)) then begin
+    action = WebGetArg("action");
+  end else begin
+    action = removenextnode(path);
+  end;
+  switch (action) begin
+    case "updatecourse":                  qupdating.LMSCourseApp_UpdateCourse;
+    case "createcourse":                  qupdating.LMSCourseApp_CreateCourse;
+    case "deletecourse":                  qupdating.LMSCourseApp_DeleteCourse;
+    case "updatetopic":                   qupdating.LMSCourseApp_UpdateTopic;
+    case "updatecoursevisible":           qupdating.LMSCourseApp_UpdateCourseVisible;
+    case "updatetopicvisible":            qupdating.LMSCourseApp_UpdateTopicVisible;
+    case "updatetopicsortorder":          qupdating.LMSCourseApp_UpdateTopicSortOrder;
+    case "updatecoursecontent":           qupdating.LMSCourseApp_UpdateCourseContent;
+    case "updatecoursecontentsortorder":  qupdating.LMSCourseApp_UpdateCourseContentSortOrder;
+    case "updatecoursecontentvisible":    qupdating.LMSCourseApp_UpdateCourseContentVisible;
+    case "createcoursecontent":           qupdating.LMSCourseApp_CreateCourseContent;
+    case "deletecoursecontent":           qupdating.LMSCourseApp_DeleteCourseContent;
+    case "deletetopic":                   qupdating.LMSCourseApp_DeleteTopic;
+    case "createtopic":                   qupdating.LMSCourseApp_CreateTopic;
+    case "deletestudentcourse":           qupdating.LMSCourseApp_DeleteStudentCourse;
+    case "createstudentcourse":           qupdating.LMSCourseApp_CreateStudentCourse;
+    case "updatestudentcourse":           qupdating.LMSCourseApp_UpdateStudentCourse;
+    case "deleteallstudentcourse":        qupdating.LMSCourseApp_DeleteAllStudentCourse;
+  end;
+
+LWebMyServerAction:;
+  return;
+end;
+
+procedure GetCourseContentData(var array record CourseContentVc arrCourseContentr,LongInt topic)
+begin
+  Boolean foundf,testf;
+  record CourseContentVc CourseContentr;
+
+  ClearArray(arrCourseContentr);
+
+  foundf = true;
+  CourseContentr.Topic = topic;
+  CourseContentr.SortOrder = 0;
+  while (LoopKey("Topic",CourseContentr,2,foundf)) begin
+    if (CourseContentr.Topic!=topic) then begin foundf = false; end;
+    if (foundf) then begin
+      testf = true;
+      if (CourseContentr.Type==kCourseContentTypeTest) then begin
+        if (blank(CourseContentr.Test)) then begin testf = false; end;
+      end;
+      // if (CourseContentr.Visible==0) then begin testf = false; end;
+      if (testf) then begin
+        arrCourseContentr[arrCourseContentr.length] = CourseContentr;
+      end;
+    end;
+  end;
+  return;
+end;
+
+procedure ShowCourseContentData_File(record CourseContentVc CourseContentr,record Attach2Vc Attachr,string fname,string baseURL,string ext,Integer source,LongInt course,Boolean showrecordidf)
+begin
+  string 255 downloadURL,hidden,hiddeneditmode;
+  transaction Boolean gEditModef;
+
+  downloadURL = baseURL & "/" & course & "/content/" & CourseContentr.SerNr & "/download/" & Base64EncodeURL(Attachr.FileName);
+
+  if (CourseContentr.Visible==0) then begin
+    if (gEditModef==false) then begin
+      hidden = "hidden";
+    end else begin
+      if (showrecordidf) then begin
+        hiddeneditmode = "hidden-editmode";
+      end;
+    end;
+  end;
+
+  WebOutString("<div");
+  WebOutClass("content-line",hidden);
+    if (gEditModef) then begin
+    WebOutString("draggable='true'");
+  end;
+  if (gEditModef==false) then begin
+    WebOutString("onclick=\"location.href='" & downloadURL & "';\"");
+  end;
+  if (showrecordidf) then begin
+    WebOutString("data-recordid='" & CourseContentr.SerNr & "' data-recordtype='CourseContentVc'");
+  end;
+  WebOutString(">");
+  if (CourseContentr.ShowType and ext!="") then begin
+    WebOutString("<img src='/images/svg/files/" & LowerCase(ext) & ".svg'");
+    WebOutClass("content-icon",hiddeneditmode);
+    WebOutString("/>");
+  end;
+  WebOutString("<p");
+  WebOutClass("",hiddeneditmode);
+  WebOutString(">");
+  WebOutString(fname);
+  WebOutString("</p>");
+  if (CourseContentr.ShowSize) then begin
+    WebOutString("<p");
+    WebOutClass("file-size",hiddeneditmode);
+    WebOutString(">");
+    WebOutString(Attachr.FileSize & " KB)");
+    WebOutString("</p>");
+  end;
+  if (showrecordidf) then begin
+    ShowCourseContentEditIcons(CourseContentr.Visible,false,CourseContentr.Type,CourseContentr.SerNr);
+  end;
+  WebOutString("</div>");
+  return;
+end;
+
+function Integer AutomaticURLAppearance(string url)
+begin
+  Integer res;
+  string 255 service;
+
+  if (IsEmbeddable(url,service)) then begin
+    res = kURLAppearanceEmbed;
+  end else begin
+    res = kURLAppearanceNewWindow;
+  end;
+
+  AutomaticURLAppearance = res;
+  return;
+end;
+
+procedure ShowCourseContentData_URL(record CourseContentVc CourseContentr,string baseURL,LongInt course)
+begin
+  string 255 url,hidden,hiddeneditmode;
+  transaction Boolean gEditModef;
+
+  if (CourseContentr.Visible==0) then begin
+    if (gEditModef==false) then begin
+      hidden = "hidden";
+    end else begin
+      hiddeneditmode = "hidden-editmode";
+    end;
+  end;
+
+  WebOutString("<div");
+  WebOutClass("content-line",hidden);
+  if (gEditModef) then begin
+    WebOutString("draggable='true'");
+  end;
+  if (gEditModef==false) then begin
+    url = CourseContentr.URL;
+    if (CourseContentr.URLAppearance==kURLAppearanceAutomatic) then begin
+      CourseContentr.URLAppearance = AutomaticURLAppearance(CourseContentr.URL);
+    end;
+    switch (CourseContentr.URLAppearance) begin
+      case kURLAppearanceEmbed:       
+        url = baseURL & "/" & course & "/content/" & CourseContentr.SerNr & "/details";  
+        WebOutString("onclick=\"location.href='" & url & "';\"");
+      case kURLAppearanceNewWindow: WebOutString("onclick=\"window.open('" & url & "')\"");
+      case kURLAppearanceOpen:      WebOutString("onclick=\"location.href='" & url & "';\"");
+      case kURLAppearancePopUp:     WebOutString("onclick=\"openPopup('" & url & "','" & CourseContentr.Name & "',700,500)\"");
+    end;
+  end;
+  WebOutString("data-recordid='" & CourseContentr.SerNr & "' data-recordtype='CourseContentVc'>");
+  WebOutString("<img src='/images/svg/hyperlink.svg'");
+  WebOutClass("content-icon",hiddeneditmode);
+  WebOutString("/>");
+  WebOutString("<p");
+  WebOutClass("",hiddeneditmode);
+  WebOutString(">");
+  WebOutString(CourseContentr.Name);
+  WebOutString("</p>");
+  ShowCourseContentEditIcons(CourseContentr.Visible,true,CourseContentr.Type,CourseContentr.SerNr);
+  WebOutString("</div>");
+
+  return;
+end;
+
+procedure ShowCourseContentData_Test(record CourseContentVc CourseContentr,string baseURL,LongInt course)
+begin
+  string 255 url,hidden,hiddeneditmode;
+  transaction Boolean gEditModef;
+
+  if (CourseContentr.Visible==0) then begin
+    if (gEditModef==false) then begin
+      hidden = "hidden";
+    end else begin
+      hiddeneditmode = "hidden-editmode";
+    end;
+  end;
+
+  url = baseURL & "/" & course & "/test/" & CourseContentr.SerNr;
+
+  WebOutString("<div");
+  WebOutClass("content-line",hidden);
+  if (gEditModef) then begin
+    WebOutString("draggable='true'");
+  end;
+  if (gEditModef==false) then begin
+    WebOutString("onclick=\"location.href='" & url & "';\"");
+  end;
+  WebOutString("data-recordid='" & CourseContentr.SerNr & "' data-recordtype='CourseContentVc'>");
+  WebOutString("<img src='/images/svg/test.svg'");
+  WebOutClass("content-icon",hiddeneditmode);
+  WebOutString("/>");
+  WebOutString("<p");
+  WebOutClass("",hiddeneditmode);
+  WebOutString(">");
+  WebOutString(CourseContentr.Name);
+  WebOutString("</p>");
+  ShowCourseContentEditIcons(CourseContentr.Visible,true,CourseContentr.Type,CourseContentr.SerNr);
+  WebOutString("</div>");
+  return;
+end;
+
+procedure ShowCourseContentData_Assignment(record CourseContentVc CourseContentr,string baseURL,LongInt course)
+begin
+  string 255 url,hidden,hiddeneditmode;
+  transaction Boolean gEditModef;
+
+  if (CourseContentr.Visible==0) then begin
+    if (gEditModef==false) then begin
+      hidden = "hidden";
+    end else begin
+      hiddeneditmode = "hidden-editmode";
+    end;
+  end;
+
+  url = baseURL & "/" & course & "/content/" & CourseContentr.SerNr & "/details";
+
+  WebOutString("<div");
+  WebOutClass("content-line",hidden);
+  if (gEditModef) then begin
+    WebOutString("draggable='true'");
+  end;
+  if (gEditModef==false) then begin
+    WebOutString("onclick=\"location.href='" & url & "';\"");
+  end;
+  WebOutString("data-recordid='" & CourseContentr.SerNr & "' data-recordtype='CourseContentVc'>");
+  WebOutString("<img src='/images/svg/assignment.svg'");
+  WebOutClass("content-icon",hiddeneditmode);
+  WebOutString("/>");
+  WebOutString("<p");
+  WebOutClass("",hiddeneditmode);
+  WebOutString(">");
+  WebOutString(CourseContentr.Name);
+  WebOutString("</p>");
+  ShowCourseContentEditIcons(CourseContentr.Visible,true,CourseContentr.Type,CourseContentr.SerNr);
+  WebOutString("</div>");
+  return;
+end;
+
+procedure ShowCourseContentData_Attendance(record CourseContentVc CourseContentr,string baseURL,LongInt course)
+begin
+  string 255 url,hidden,hiddeneditmode;
+  transaction Boolean gEditModef;
+
+  if (CourseContentr.Visible==0) then begin
+    if (gEditModef==false) then begin
+      hidden = "hidden";
+    end else begin
+      hiddeneditmode = "hidden-editmode";
+    end;
+  end;
+
+  url = baseURL & "/" & course & "/content/" & CourseContentr.SerNr & "/details";
+
+  WebOutString("<div");
+  WebOutClass("content-line",hidden);
+  if (gEditModef) then begin
+    WebOutString("draggable='true'");
+  end;
+  if (gEditModef==false) then begin
+    WebOutString("onclick=\"location.href='" & url & "';\"");
+  end;
+  WebOutString("data-recordid='" & CourseContentr.SerNr & "' data-recordtype='CourseContentVc'>");
+  WebOutImage("/images/svg/attendance.svg","","content-icon",hiddeneditmode);
+  // WebOutString("<img src='/images/svg/attendance.svg'");
+  // WebOutClass("content-icon",hiddeneditmode);
+  // WebOutString("/>");
+  WebOutString("<p");
+  WebOutClass("",hiddeneditmode);
+  WebOutString(">");
+  WebOutString(CourseContentr.Name);
+  WebOutString("</p>");
+  ShowCourseContentEditIcons(CourseContentr.Visible,true,CourseContentr.Type,CourseContentr.SerNr);
+  WebOutString("</div>");
+  return;
+end;
+
+procedure ShowCourseContentData(array record CourseContentVc arrCourseContentr,LongInt course)
+begin
+  record CourseContentVc CourseContentr;
+  Integer i,filenr;
+  record RLinkVc RLr;
+  record Attach2Vc Attachr;
+  string 255 downloadURL,baseURL,hidden,hiddeneditmode;
+  transaction Boolean gEditModef;
+  
+  //https://www.svgrepo.com/collection/files-types/
+  //https://www.svgrepo.com/collection/files-folders-4/
+
+  baseURL = "/lms/course";
+
+  for (i=0;i<arrCourseContentr.length;i=i+1) begin
+    CourseContentr = arrCourseContentr[i];
+
+    if (CourseContentr.Visible==0) then begin
+      if (gEditModef==false) then begin
+        hidden = "hidden";
+      end else begin
+        hiddeneditmode = "hidden-editmode";
+      end;
+    end;
+
+    switch (CourseContentr.Type) begin
+      case kCourseContentTypeAttendance:
+        ShowCourseContentData_Attendance(CourseContentr,baseURL,course);
+      case kCourseContentTypeFile:
+        if (ReadRecordLink(CourseContentr,0,Attachr,RLr)) then begin
+          ShowCourseContentData_File(CourseContentr,Attachr,Attachr.FileName,baseURL,GetFileExtension(Attachr.FileName),kCourseContentTypeFile,course,true);
+        end;
+      case kCourseContentTypeFolder:
+        WebOutString("<div");
+        WebOutClass("content-line",hidden);
+        if (gEditModef) then begin
+          WebOutString("draggable='true'");
+        end;
+        WebOutString("data-recordid='" & CourseContentr.SerNr & "' data-recordtype='CourseContentVc'>");
+        WebOutString("<details");
+        WebOutClass("",hiddeneditmode);
+        WebOutString(">");
+        WebOutString("<summary class='summary'>");
+        WebOutString("<span class='folder-title'>" & CourseContentr.Name & "</span>");
+        WebOutString("</summary>");
+        filenr = 1;
+        while (ReadRecordLink(CourseContentr,filenr,Attachr,RLr)) begin
+          filenr = filenr + 1;
+          ShowCourseContentData_File(CourseContentr,Attachr,Attachr.FileName,baseURL,GetFileExtension(Attachr.FileName),kCourseContentTypeFolder,course,false);
+        end;
+        WebOutString("</details>");
+        ShowCourseContentEditIcons(CourseContentr.Visible,false,CourseContentr.Type,CourseContentr.SerNr);
+        WebOutString("</div>");
+      case kCourseContentTypeURL:
+        ShowCourseContentData_URL(CourseContentr,baseURL,course);
+      case kCourseContentTypeAssignment:
+        ShowCourseContentData_Assignment(CourseContentr,baseURL,course);
+      case kCourseContentTypeTest:
+        ShowCourseContentData_Test(CourseContentr,baseURL,course);
+    end;
+  end;
+  return;
+end;
+
+procedure GetCourseTopics(var array record WebNGLMSTopicVc arrWebNGLMSTopicr,LongInt coursenr)
+begin
+  Boolean foundf,testf;
+  record WebNGLMSTopicVc WebNGLMSTopicr;
+
+  foundf = true;
+  WebNGLMSTopicr.Course = coursenr;
+  WebNGLMSTopicr.SortOrder = 0;
+  while (LoopKey("Course",WebNGLMSTopicr,3,foundf)) begin
+    if (WebNGLMSTopicr.Course!=coursenr) then begin foundf = false; end;
+    if (foundf) then begin
+      arrWebNGLMSTopicr[arrWebNGLMSTopicr.length] = WebNGLMSTopicr;
+    end;
+  end;
+
+  return;
+end;
+
+procedure CourseContentHeader(record Course2Vc Courser,string title,Boolean showeditf)
+begin
+  transaction Boolean gEditModef;
+  string 255 headertitle;
+  Boolean returnf;
+
+  headertitle = title;
+  if (blank(headertitle)) then begin
+    headertitle = Courser.Name;
+  end;
+
+  WebOutString("<div class='title-container' data-recordid='" & Courser.SerNr & "' data-recordtype='Course2Vc'>");
+  WebOutString("<div class='title'>");
+  WebOutString("<h>" & headertitle & "</h>");
+  WebOutString("</div>");
+  WebOutString("<div class='toggle-edit-container'>");
+  if (IsCourseTeacher(Courser.SerNr) or IsLMSAdmin) then begin
+    if (showeditf) then begin
+      if (gEditModef) then begin
+        WebOutString("<details class='user-menu'>");
+        WebOutString("<summary>");
+        WebOutString("<div class='avatar-container'>");
+        WebOutString("<img class='interface-icon gear' src='/images/svg/interface/gear.svg' />");
+        WebOutString("</summary>");
+        WebOutString("<ul>");
+        WebOutString("<li><a href='/lms/courses/edit/" & Courser.SerNr & "'>Edit Settings</a></li>");
+        WebOutString("<li><a href='/lms/course/" & Courser.SerNr & "/manage/users'>Manage Users</a></li>");
+        WebOutString("</ul>");
+        WebOutString("</details>");
+      end;
+      WebOutString("<button role='button' onclick=\"GoBackWithRefresh()\">Back</button>");
+      if (gEditModef) then begin
+        WebOutString("<button id='new-topic' role='button' onclick=\"location.href='new?fn=WebNGLMSTopicVc&parentid=" & Courser.SerNr & "';\">New Topic</button>");
+      end;
+      WebOutString("<button id='edit-toggle' role='button' onClick='toggleEditMode()'>Toggle Edit Mode</button>");
+      returnf = true;
+    end else begin
+      WebOutString("<button role='button' onclick=\"GoBackWithRefresh()\">Back</button>");
+      returnf = true;
+    end;  
+  end;
+  if (returnf==false) then begin
+    WebOutString("<button role='button' onclick=\"GoBackWithRefresh()\">Back</button>");
+  end;
+  WebOutString("</div>");
+  WebOutString("</div>");
+
+  return;
+end;
+
+procedure ContentEditHeader(record Course2Vc Courser,string title,Boolean editmodef)
+begin
+  transaction Boolean gEditModef;
+  string 255 headertitle,buttonstr;
+  Boolean returnf;
+
+  headertitle = title;
+  if (blank(headertitle)) then begin
+    headertitle = Courser.Name;
+  end;
+
+  buttonstr = "Create";
+  if (editmodef) then begin
+    buttonstr = "Save";
+  end;
+
+  WebOutString("<div class='title-container' data-recordid='" & Courser.SerNr & "' data-recordtype='Course2Vc'>");
+  WebOutString("<div class='title'>");
+  WebOutString("<h>" & headertitle & "</h>");
+  WebOutString("</div>");
+  WebOutString("<div class='toggle-edit-container'>");
+  WebOutString("<button type='submit' id='createButton'>" & buttonstr & "</button>");
+  WebOutString("<button role='button' onclick=\"GoBackWithRefresh()\">Back</button>");
+  WebOutString("</div>");
+  WebOutString("</div>");
+
+  return;
+end;
+
+procedure ManageUsersHeader(record Course2Vc Courser)
+begin
+  transaction Boolean gEditModef;
+  
+  WebOutString("<div class='title-container' data-recordid='" & Courser.SerNr & "' data-recordtype='Course2Vc'>");
+  WebOutString("<div class='title'>");
+  WebOutString("<h>" & Courser.Name & " - Enrolled Users</h>");
+  WebOutString("</div>");
+  WebOutString("<div class='toggle-edit-container'>");
+  if (gEditModef) then begin
+    WebOutString("<button role='button' onClick='unEnrolAll(\"" & Courser.SerNr & "\")'>Remove All Users</button>");
+  end;
+  WebOutString("<button id='edit-toggle' role='button' onClick='toggleEditMode()'>Toggle Edit Mode</button>");
+  WebOutString("<button role='button' onclick=\"GoBackWithRefresh()\">Back</button>");
+  WebOutString("</div>");
+  WebOutString("</div>");
+
+  return;
+end;
+
+procedure CourseContent(LongInt course)
+begin
+  Boolean foundf,dividerf;
+  array record CourseContentVc arrCourseContentr;
+  array record WebNGLMSTopicVc arrWebNGLMSTopicr;
+  record WebNGLMSTopicVc WebNGLMSTopicr;
+  record Course2Vc Courser;
+  Integer i;
+  transaction Boolean gEditModef;
+  string 255 hidden,hiddeneditmode;
+
+  Courser.SerNr = course;
+  ReadFirstMain(Courser,1,true);
+
+  GetCourseTopics(arrWebNGLMSTopicr,Courser.SerNr);
+
+  CourseContentHeader(Courser,"",true);
+  WebOutString("<div class='course-content'>");
+  if (arrWebNGLMSTopicr.length==0) then begin
+    WebOutString("<div class='title'>");
+    WebOutString("No topics found");
+    WebOutString("</div>");
+    goto LCourseContent;
+  end;
+
+  for (i=0;i<arrWebNGLMSTopicr.length;i=i+1) begin
+    WebNGLMSTopicr = arrWebNGLMSTopicr[i];
+    GetCourseContentData(arrCourseContentr,WebNGLMSTopicr.SerNr);
+    // if (arrCourseContentr.length==0) then begin goto LNextTopic; end;
+
+    if (WebNGLMSTopicr.Visible==0) then begin
+      if (gEditModef==false) then begin
+        hidden = "hidden";
+      end else begin
+        hiddeneditmode = "hidden-editmode";
+      end;
+    end;
+
+    WebOutString("<div");
+    WebOutClass("content-list",hidden);
+    WebOutString("data-recordid='" & WebNGLMSTopicr.SerNr & "'>");
+    WebOutString("<div id='topic' class='title' data-recordid='" & WebNGLMSTopicr.SerNr & "' data-recordtype='WebNGLMSTopicVc' data-courseid='" & Courser.SerNr & "'>");
+    WebOutString("<h id='topic-title'");
+    WebOutClass("",hiddeneditmode);
+    WebOutString(">");
+    WebOutString(WebNGLMSTopicr.Desc);
+    WebOutstring("</h>");
+    ShowTopicEditIcons(WebNGLMSTopicr.Visible,WebNGLMSTopicr.SortOrder,course,WebNGLMSTopicr.SerNr);
+    WebOutString("</div>");
+    ShowCourseContentData(arrCourseContentr,Courser.SerNr);
+    WebOutString("</div>");     
+    if (i+1<arrWebNGLMSTopicr.length and WebNGLMSTopicr.Visible or (WebNGLMSTopicr.Visible==0 and gEditModef)) then begin ContentDivider; end; 
+LNextTopic:;
+  end;
+LCourseContent:;
+  WebOutString("</div>");
+  return;
+end;
+
+function Boolean DownloadCourseContentFile(record CourseContentVc CourseContentr,string fname)
+begin
+  Boolean res;
+  record RLinkVc RLr;
+  record Attach2Vc Attachr;
+  Integer i;
+
+  while (ReadRecordLink(CourseContentr,i,Attachr,RLr)) begin
+    if (Attachr.FileName==fname) then begin
+      res = true;
+      WebSetContentDisposition("attachment;filename=" & Attachr.FileName);
+      WebSetContentType("application/" & GetFileExtension(Attachr.FileName));
+      WebOutAttachment(Attachr.SerNr);
+    end;
+    i = i + 1;
+  end;
+
+  DownloadCourseContentFile = res;
+  return;
+end;
+
+procedure WebLMSHandleContentDownload(string path)
+begin
+  string 255 node,mpath;
+  record CourseContentVc CourseContentr;
+
+  mpath = path;
+  node = removenextnode(mpath);
+
+  CourseContentr.SerNr = StringToLongInt(node);
+  if (ReadFirstMain(CourseContentr,1,true)==false) then begin goto LWebLMSHandleContentDownload; end;
+  node = removenextnode(mpath);
+  node = removenextnode(mpath);
+
+  if (DownloadCourseContentFile(CourseContentr,node)==false) then begin
+    if (DownloadCourseContentFile(CourseContentr,Base64Decode(node))==false) then begin
+      //todo handle error
+    end;
+  end;
+  
+LWebLMSHandleContentDownload:;
+  return;
+end;
+
+procedure EmbedPodbean(string url)
+begin
+  record URLVc URLr;
+  array string 255 aqueryparams;
+  string 255 podid;
+  Integer i;
+
+  URLr.URLString = url;
+  ParseURL(URLr);
+  SplitString(URLr.Path,"/",aqueryparams);
+
+  for (i=0;i<aqueryparams.length;i=i+1) begin
+    if (left(aqueryparams[i],3)=="pb-") then begin
+      podid = right(aqueryparams[i],len(aqueryparams[i])-3) & "-pb";
+    end;
+  end;
+
+  WebOutBegin;
+  <div>
+    <iframe 
+      title="" 
+      width="800" 
+      height="150"
+      style="border: none; min-width: 100%;height:150px;" 
+      data-name="pb-iframe-player" 
+      src="https://www.podbean.com/player-v2/?i=<?var(podid)?>&from=pb6admin&share=0&download=0&rtl=0&fonts=Arial&skin=f6f6f6&font-color=auto&logo_link=none&btn-skin=3267a3" 
+      loading="lazy" 
+      allowfullscreen=""
+      referrerpolicy="no-referrer"
+    >
+    </iframe>
+  </div>
+  EndWebOut;
+  return;
+end;
+
+procedure EmbedYoutube(string url)
+begin
+  string 255 vid;
+  Integer i;
+  record URLVc URLr;
+  array string 255 aqueryparams;
+
+  URLr.URLString = url;
+  ParseURL(URLr);
+  SplitString(URLr.Query,"&",aqueryparams);
+
+  for (i=0;i<aqueryparams.length;i=i+1) begin
+    if (left(aqueryparams[i],2)=="v=") then begin
+      vid = right(aqueryparams[i],len(aqueryparams[i])-2);
+    end;
+  end;
+
+  WebOutBegin;
+  <div class="mt-5">
+    <iframe 
+      width="560" 
+      height="315" 
+      src="https://www.youtube.com/embed/<?var(vid)?>" 
+      title="" 
+      frameborder="0" 
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+      allowfullscreen
+    >
+    </iframe>
+  </div>
+  EndWebOut;
+  return;
+end;
+
+procedure EmbedURL(string url)
+begin
+  string 255 service;
+
+  if (IsEmbeddable(url,service)==false) then begin
+    WebOutString("<br><br>Embedding not supported for this URL (<a class='course-item' href=\"" & url & "\">" & url & "</a>)");
+    goto LEmbedURL;
+  end;
+
+  WebOutString("<br><br>");
+
+  switch (service) begin
+    case "www.youtube.com": EmbedYouTube(url);
+    case "www.podbean.com": EmbedPodbean(url);
+  end;
+
+LEmbedURL:;
+  return;
+end;
+
+procedure ShowCourseContentDetails(string path)
+begin
+  string 255 node,mpath,tstr,service;
+  record CourseContentVc CourseContentr;
+
+  mpath = path;
+  node = removenextnode(mpath);
+
+  CourseContentr.SerNr = StringToLongInt(node);
+  if (ReadFirstMain(CourseContentr,1,true)==false) then begin goto LShowCourseContentDetails; end;
+
+  WebOutString("<div class='title-container'>");
+  WebOutString("<h class='title'>" & CourseContentr.Name & "</h>");
+  WebOutString("<div class='toggle-edit-container'>");
+  WebOutString("<button role='button' onclick=\"GoBackWithRefresh()\">Back</button>");
+  WebOutString("</div>");
+  WebOutString("</div>");
+  WebOutString("<div class='course-content'>");
+  
+  // WebOutText(CourseContentr,false,"");
+  tstr = GetTextField(CourseContentr);
+  WebOutString(CrlfStringToHtml(HTMLEncodeText(tstr)));
+  
+  if (CourseContentr.Type==kCourseContentTypeURL) then begin
+    if ((CourseContentr.URLAppearance==kURLAppearanceEmbed or CourseContentr.URLAppearance==kURLAppearanceAutomatic)) then begin
+      EmbedURL(CourseContentr.URL);
+    end;
+  end;
+
+  WebOutString("</div>");
+LShowCourseContentDetails:;
+  return;
+end;
+
+procedure WebLMSCourseNewRecord_CourseContent(LongInt course,Integer rectype,string parentid,LongInt recnr,Boolean editmodef)
+begin
+  record Course2Vc Courser;
+  record CourseContentVc CourseContentr;
+  string 255 tstr,title;
+
+  Courser.SerNr = course;
+  ReadFirstMain(Courser,1,true);
+
+  title = Courser.Name & " - Add Course Content";
+  if (editmodef) then begin
+    CourseContentr.SerNr = recnr;
+    ReadFirstMain(CourseContentr,1,true);
+    title = CourseContentr.Name & " - Edit";
+  end;
+
+  ContentEditHeader(Courser,title,editmodef);
+  WebOutString("<form id='createCourseContent' method='post'>");
+  WebOutString("<input type='hidden' id='fn' value='CourseContentVc'>");
+  WebOutString("<input type='hidden' id='course' value='" & course & "'>");
+  WebOutString("<input type='hidden' id='rectype' value='" & rectype & "'>");
+  if (editmodef) then begin
+    WebOutString("<input type='hidden' id='editmode' value='1'>");
+    WebOutString("<input type='hidden' id='recnr' value='" & recnr & "'>");
+  end else begin
+    WebOutString("<input type='hidden' id='parentid' value='" & parentid & "'>");
+    WebOutString("<input type='hidden' id='editmode' value='0'>");
+  end;
+
+  WebOutString("<div class='form-group'>");
+  WebOutString("<label for='name'>Name:</label>");
+  WebOutString("<input type='text' id='name' name='name' ");
+  WebOutString("value='" & CourseContentr.Name & "'");
+  WebOutString(">");
+  WebOutString("</div>");
+
+  if (rectype==kCourseContentTypeURL) then begin
+    WebOutString("<div class='form-group'>");
+    WebOutString("<label for='url'>URL:</label>");
+    WebOutString("<input type='url' id='url' name='url' ");
+    WebOutString("value='" & CourseContentr.URL & "'");
+    WebOutString(">");
+    WebOutString("</div>");
+
+    WebOutString("<div class='form-group'>");
+    WebOutString("<label for='appearance'>Appearance:</label>");
+    WebOutString("<select id='appearance' name='appearance'>");
+
+
+    if (CourseContentr.URLAppearance==kURLAppearanceAutomatic) then begin tstr = "selected"; end else begin tstr = ""; end;
+    WebOutString("<option value='" & kURLAppearanceAutomatic & "' " & tstr & ">Automatic</option>");
+    if (CourseContentr.URLAppearance==kURLAppearanceEmbed) then begin tstr = "selected"; end else begin tstr = ""; end;
+    WebOutString("<option value='" & kURLAppearanceEmbed & "' " & tstr & ">Embed</option>");
+    if (CourseContentr.URLAppearance==kURLAppearanceNewWindow) then begin tstr = "selected"; end else begin tstr = ""; end;
+    WebOutString("<option value='" & kURLAppearanceNewWindow & "' " & tstr & ">New Window</option>");
+    if (CourseContentr.URLAppearance==kURLAppearanceOpen) then begin tstr = "selected"; end else begin tstr = ""; end;
+    WebOutString("<option value='" & kURLAppearanceOpen & "' " & tstr & ">Open</option>");
+    if (CourseContentr.URLAppearance==kURLAppearancePopUp) then begin tstr = "selected"; end else begin tstr = ""; end;
+    WebOutString("<option value='" & kURLAppearancePopUp & "' " & tstr & ">Pop-Up</option>");
+    WebOutString("</select>");
+    WebOutString("</div>");
+  end;
+
+  WebOutString("<div class='form-group'>");
+  WebOutString("<label for='description'>Description:</label>");
+  WebOutString("<textarea id='description' name='description'>");
+  WebOutString(GetTextField(CourseContentr));
+  WebOutString("</textarea>");
+  WebOutString("</div>");
+
+  if (rectype==kCourseContentTypeFile) then begin
+    WebOutString("<div class='form-group'>");
+    WebOutString("<label for='filedisplay'>Display:</label>");
+    WebOutString("<select id='filedisplay' name='filedisplay'>");
+    if (CourseContentr.FileDisplay==0) then begin tstr = "selected"; end else begin tstr = ""; end;
+    WebOutString("<option value='0' " & tstr & ">Automatic</option>");
+    if (CourseContentr.FileDisplay==1) then begin tstr = "selected"; end else begin tstr = ""; end;
+    WebOutString("<option value='1' " & tstr & ">Embed</option>");
+    if (CourseContentr.FileDisplay==2) then begin tstr = "selected"; end else begin tstr = ""; end;
+    WebOutString("<option value='2' " & tstr & ">Force Download</option>");
+    if (CourseContentr.FileDisplay==3) then begin tstr = "selected"; end else begin tstr = ""; end;
+    WebOutString("<option value='3' " & tstr & ">Open</option>");
+    if (CourseContentr.FileDisplay==4) then begin tstr = "selected"; end else begin tstr = ""; end;
+    WebOutString("<option value='4' " & tstr & ">Pop-up</option>");
+    WebOutString("</select>");
+    WebOutString("</div>");
+
+    WebOutString("<div class='form-group checkbox-group'>");
+    if (CourseContentr.ShowSize==1) then begin tstr = "checked"; end else begin tstr = ""; end;
+    WebOutString("<input type='checkbox' id='showsize' name='showsize' " & tstr & ">");
+    WebOutString("<label for='showsize'>Show Size</label>");
+    WebOutString("</div>");
+    WebOutString("<div class='form-group checkbox-group'>");
+    if (CourseContentr.ShowType==1) then begin tstr = "checked"; end else begin tstr = ""; end;
+    WebOutString("<input type='checkbox' id='showtype' name='showtype' " & tstr & ">");
+    WebOutString("<label for='showtype'>Show Type</label>");
+    WebOutString("</div>");
+    // WebOutString("<div class='form-group checkbox-group'>");
+    // WebOutString("<input type='checkbox' id='showdate' name='showdate' ");
+    // WebOutString("value='" & CourseContentr.ShowDate & "'");
+    // WebOutString(">");
+    // WebOutString("<label for='showdate'>Show Upload / Modified Date</label>");
+    // WebOutString("</div>");
+
+    if (editmodef==false) then begin //for now since I don't know how to edit file yet..
+      WebOutString("<div class='form-group'>");
+      WebOutString("<label for='fileupload'>Upload File:</label>");
+      WebOutString("<input type='file' id='fileupload' name='fileupload'>");
+      WebOutString("</div>");
+    end;
+  end;
+
+  if (rectype==kCourseContentTypeTest) then begin
+    WebOutString("<div class='form-group'>");
+    WebOutString("<label for='webtest'>Web Test:</label>");
+    WebOutString("<select id='webtest' name='webtest'>");
+    Select_WebTest(CourseContentr.Test,editmodef);
+    WebOutString("</select>");
+    WebOutString("</div>");
+  end;
+
+  if (rectype==kCourseContentTypeAttendance) then begin
+    WebOutString("<div class='date-time-group'>");
+
+    WebOutString("<div>");
+    WebOutString("<label for='attendanceDate'>Attendance From:</label>");
+    WebOutString("<input type='date' id='attendanceDate' name='attendanceDate' ");
+    WebOutString("value='");
+    if (editmodef) then begin
+      WebOutString(DateToString(CourseContentr.AttendanceDate,"YYYY-MM-DD"));
+    end else begin
+      WebOutString(DateToString(CurrentDate,"YYYY-MM-DD"));
+    end;
+    WebOutString("'>");
+    WebOutString("</div>");
+
+    WebOutString("<div>");
+    WebOutString("<label for='attendanceFromTime'>From Time:</label>");
+    WebOutString("<input type='time' id='attendanceFromTime' name='attendanceFromTime' ");
+    WebOutString("value='" & CourseContentr.AttendanceFromTime & "'");
+    WebOutString(">");
+    WebOutString("</div>");
+
+    WebOutString("<div>");
+    WebOutString("<label for='attendanceToTime'>To Time:</label>");
+    WebOutString("<input type='time' id='attendanceToTime' name='attendanceToTime' ");
+    WebOutString("value='" & CourseContentr.AttendanceToTime & "'");
+    WebOutString(">");
+    WebOutString("</div>");
+    WebOutString("</div>");
+
+
+    WebOutString("<div class='date-time-group'>");
+    WebOutString("<div>");
+    WebOutString("<label for='repeatUntilDate'>Repeat Until:</label>");
+    WebOutString("<input type='date' id='repeatUntilDate' name='repeatUntilDate' ");
+    WebOutString("value='");
+    WebOutString(DateToString(CourseContentr.RepeatUntilDate,"YYYY-MM-DD"));
+    WebOutString("'>");
+    WebOutString("</div>");
+    WebOutString("<div>");
+    WebOutString("<label for='repeatPeriod'>Repeat Every:</label>");
+    WebOutString("<input type='number' id='repeatPeriod' name='repeatPeriod' ");
+    WebOutString("value='" & CourseContentr.RepeatPeriod & "'");
+    WebOutString(">");
+    WebOutString("</div>");
+    WebOutString("</div>");
+
+    WebOutString("<div class='form-group checkbox-group'>");
+    if (CourseContentr.EveryMonday==1) then begin tstr = "checked"; end else begin tstr = ""; end;
+    WebOutString("<input type='checkbox' id='everyMonday' name='everyMonday' " & tstr & ">");
+    WebOutString("<label for='everyMonday'>Monday</label>");
+    if (CourseContentr.EveryTuesday==1) then begin tstr = "checked"; end else begin tstr = ""; end;
+    WebOutString("<input type='checkbox' id='everyTuesday' name='everyTuesday' " & tstr & ">");
+    WebOutString("<label for='everyTuesday'>Tuesday</label>");
+    if (CourseContentr.EveryWednesday==1) then begin tstr = "checked"; end else begin tstr = ""; end;
+    WebOutString("<input type='checkbox' id='everyWednesday' name='everyWednesday' " & tstr & ">");
+    WebOutString("<label for='everyWednesday'>Wednesday</label>");
+    if (CourseContentr.EveryThursday==1) then begin tstr = "checked"; end else begin tstr = ""; end;
+    WebOutString("<input type='checkbox' id='everyThursday' name='everyThursday' " & tstr & ">");
+    WebOutString("<label for='everyThursday'>Thursday</label>");
+    if (CourseContentr.EveryFriday==1) then begin tstr = "checked"; end else begin tstr = ""; end;
+    WebOutString("<input type='checkbox' id='everyFriday' name='everyFriday' " & tstr & ">");
+    WebOutString("<label for='everyFriday'>Friday</label>");
+    if (CourseContentr.EverySaturday==1) then begin tstr = "checked"; end else begin tstr = ""; end;
+    WebOutString("<input type='checkbox' id='everySaturday' name='everySaturday' " & tstr & ">");
+    WebOutString("<label for='everySaturday'>Saturday</label>");
+    if (CourseContentr.EverySunday==1) then begin tstr = "checked"; end else begin tstr = ""; end;
+    WebOutString("<input type='checkbox' id='everySunday' name='everySunday' " & tstr & ">");
+    WebOutString("<label for='everySunday'>Sunday</label>");
+    WebOutString("</div>");
+
+    WebOutString("<div class='form-group checkbox-group'>");
+    if (CourseContentr.InclHolidays==1) then begin tstr = "checked"; end else begin tstr = ""; end;
+    WebOutString("<input type='checkbox' id='inclHolidays' name='inclHolidays' " & tstr & ">");
+    WebOutString("<label for='inclHolidays'>Including Holidays</label>");
+    WebOutString("</div>");
+  end;
+
+// Checkbox - need both in WEB and Interface - "Including Holidays" - by default not ticked
+
+  WebOutString("<div class='form-group checkbox-group'>");
+  if (editmodef==false) then begin
+    tstr = "checked";
+  end else begin
+    if (CourseContentr.Visible==1) then begin
+      tstr = "checked";
+    end else begin
+      tstr = "";
+    end;
+  end;
+  WebOutString("<input type='checkbox' id='visible' name='visible' " & tstr & ">");
+  WebOutString("<label for='visible'>Visible</label>");
+  WebOutString("</div>");
+
+  WebOutString("<div class='date-time-group'>");
+  WebOutString("<div>");
+  WebOutString("<label for='visibleFromDate'>Visible From Date:</label>");
+  WebOutString("<input type='date' id='visibleFromDate' name='visibleFromDate' ");
+  WebOutString("value='" & DateToString(CourseContentr.VisibleFromDate,"YYYY-MM-DD") & "'");
+  WebOutString(">");
+  WebOutString("</div>");
+  WebOutString("<div>");
+  WebOutString("<label for='visibleFromTime'>Visible From Time:</label>");
+  WebOutString("<input type='time' id='visibleFromTime' name='visibleFromTime' ");
+  WebOutString("value='" & CourseContentr.VisibleFromTime & "'");
+  WebOutString(">");
+  WebOutString("</div>");
+  WebOutString("</div>");
+
+  WebOutString("<div class='date-time-group'>");
+  WebOutString("<div>");
+  WebOutString("<label for='visibleToDate'>Visible To Date:</label>");
+  WebOutString("<input type='date' id='visibleToDate' name='visibleToDate' ");
+  WebOutString("value='" & DateToString(CourseContentr.VisibleToDate,"YYYY-MM-DD") & "'");
+  WebOutString(">");
+  WebOutString("</div>");
+
+  WebOutString("<div>");
+  WebOutString("<label for='visibleToTime'>Visible To Time:</label>");
+  WebOutString("<input type='time' id='visibleToTime' name='visibleToTime' ");
+  WebOutString("value='" & CourseContentr.VisibleToTime & "'");
+  WebOutString(">");
+  WebOutString("</div>");
+  WebOutString("</div>");
+  WebOutString("</form>");
+  return;
+end;
+
+procedure WebLMSCourseNewRecord_Topic(LongInt course,string parentid,LongInt recnr,Boolean editmodef)
+begin
+  record Course2Vc Courser;
+  record WebNGLMSTopicVc WebNGLMSTopicr;
+  string 255 tstr;
+
+  Courser.SerNr = course;
+  ReadFirstMain(Courser,1,true);
+
+  WebNGLMSTopicr.SerNr = recnr;
+  ReadFirstMain(WebNGLMSTopicr,1,true);
+
+  ContentEditHeader(Courser,Courser.Name & " - Add Topic",editmodef);
+  WebOutString("<form id='createTopic' method='post'>");
+  if (editmodef) then begin
+    WebOutString("<input type='hidden' id='editmode' value='1'>");
+    WebOutString("<input type='hidden' id='recnr' value='" & recnr & "'>");
+  end else begin
+    WebOutString("<input type='hidden' id='parentid' value='" & parentid & "'>");
+    WebOutString("<input type='hidden' id='editmode' value='0'>");
+    WebOutString("<input type='hidden' id='course' value='" & course & "'>");
+  end;
+  WebOutString("<input type='hidden' id='fn' value='WebNGLMSTopicVc'>");
+ 
+  WebOutString("<div class='form-group'>");
+  WebOutString("<label for='name'>Name:</label>");
+  WebOutString("<input type='text' id='name' name='name' ");
+  WebOutString("value='");
+  if (editmodef) then begin
+    WebOutString(WebNGLMSTopicr.Desc);
+  end;
+  WebOutString("'>");
+  WebOutString("</div>");
+
+  WebOutString("<div class='form-group checkbox-group'>");
+  if (editmodef==false) then begin
+    tstr = "checked";
+  end else begin
+    if (WebNGLMSTopicr.Visible==1) then begin
+      tstr = "checked";
+    end else begin
+      tstr = "";
+    end;
+  end;
+  WebOutString("<input type='checkbox' id='visible' name='visible' " & tstr & ">");
+  WebOutString("<label for='visible'>Visible</label>");
+  WebOutString("</div>");
+  WebOutString("</form>");
+  return;
+end;
+
+procedure WebLMSCourseNewRecord(LongInt course,string node,Boolean editmodef)
+begin
+  string 255 fn,parentid,recnr;
+  Integer rectype;
+  LongInt pos;
+
+  fn = WebGetArg("fn");
+  rectype = StringToInt(WebGetArg("rectype"));
+  parentid = WebGetArg("parentid");
+
+  pos = 0;
+  GetNextSubString(node,pos,"?",recnr);
+  switch (fn) begin
+    case "CourseContentVc": WebLMSCourseNewRecord_CourseContent(course,rectype,parentid,StringToLongInt(recnr),editmodef);
+    case "WebNGLMSTopicVc": WebLMSCourseNewRecord_Topic(course,parentid,StringToLongInt(recnr),editmodef);
+  end;  
+
+  return;
+end;
+
+procedure WebLMSManageCourseUsers(LongInt course)
+begin
+  record Course2Vc Courser;
+  record StudentCourseVc StudentCourser;
+  record CUVc CUr;
+  Boolean foundf;
+  array string 255 arrStudent,arrStudentName;
+  array LongInt arrSerNr;
+  array string 255 arrAvailableFromDate,arrAvailableFromTime;
+  array string 255 arrAvailableToDate,arrAvailableToTime;
+  array Integer arrApproved;
+  Integer i;
+  transaction Boolean gEditModef;
+  string 255 tstr;
+
+  Courser.SerNr = course;
+  ReadFirstMain(Courser,1,true);
+
+  ManageUsersHeader(Courser);
+  WebOutString("<div class='course-content'>");
+
+  foundf = true;
+  StudentCourser.Course = Courser.SerNr;
+  while (LoopKey("Course",StudentCourser,1,foundf)) begin
+    if (StudentCourser.Course!=Courser.SerNr) then begin foundf = false; end;
+    if (foundf) then begin
+      arrStudent[arrStudent.length] = StudentCourser.Student;
+      arrStudentName[arrStudentName.length] = StudentCourser.StudentName;
+      arrSerNr[arrSerNr.length] = StudentCourser.SerNr;
+      arrAvailableFromDate[arrAvailableFromDate.length] = StudentCourser.StartDate;
+      arrAvailableFromTime[arrAvailableFromTime.length] = StudentCourser.StartTime;
+      arrAvailableToDate[arrAvailableToDate.length] = StudentCourser.EndDate;
+      arrAvailableToTime[arrAvailableToTime.length] = StudentCourser.EndTime;
+      arrApproved[arrApproved.length] = StudentCourser.Approved;
+    end;
+  end;
+
+
+  if (arrStudent.length==0 and gEditModef==false) then begin
+    WebOutString("<div class='title'>");
+    WebOutString("No users enrolled");
+    WebOutString("</div>");
+    goto LWebLMSManageCourseUsers;
+  end;
+
+  WebOutString("<table border='1'>");
+  WebOutString("<thead>");
+  WebOutString("<tr>");
+  WebOutString("<th>Name</th>");
+  WebOutString("<th>From Date</th>");
+  WebOutString("<th>From Time</th>");
+  WebOutString("<th>To Date</th>");
+  WebOutString("<th>To Time</th>");
+  WebOutString("<th>Status</th>");
+  if (gEditModef) then begin
+    WebOutString("<th></th>");
+  end;
+  WebOutString("</tr>");
+  WebOutString("</thead>");
+  WebOutString("<tbody>");
+  for (i=0;i<arrStudent.length;i=i+1) begin
+    WebOutString("<tr data-rownr='" & i & "'>");
+    WebOutString("<td>");
+    WebOutString(arrStudentName[i]);
+    WebOutString("</td>");
+    WebOutString("<td>");
+    if (gEditModef) then begin
+      WebOutString("<input type='date' id='availableFromDate' name='availableFromDate' ");
+      WebOutString("value='" & arrAvailableFromDate[i] & "'");
+      WebOutString(">");
+    end else begin
+      if (blank(arrAvailableFromDate[i])) then begin
+        WebOutString("-");
+      end else begin
+        WebOutString(arrAvailableFromDate[i]);
+      end;
+    end;
+    WebOutString("</td>");
+    WebOutString("<td>");
+    if (gEditModef) then begin
+      WebOutString("<input type='time' id='availableFromTime' name='availableFromTime' ");
+      WebOutString("value='" & arrAvailableFromTime[i] & "'");
+      WebOutString(">");
+    end else begin
+      if (blank(arrAvailableFromTime[i])) then begin
+        WebOutString("-");
+      end else begin
+        WebOutString(arrAvailableFromTime[i]);
+      end;
+    end;
+    WebOutString("</td>");
+    WebOutString("<td>");
+    if (gEditModef) then begin
+      WebOutString("<input type='date' id='availableToDate' name='availableToDate' ");
+      WebOutString("value='" & arrAvailableToDate[i] & "'");
+      WebOutString(">");
+    end else begin
+      if (blank(arrAvailableToDate[i])) then begin
+        WebOutString("-");
+      end else begin
+        WebOutString(arrAvailableToDate[i]);
+      end;
+    end;
+    WebOutString("</td>");
+    WebOutString("<td>");
+    if (gEditModef) then begin
+      WebOutString("<input type='time' id='availableToTime' name='availableToTime' ");
+      WebOutString("value='" & arrAvailableToTime[i] & "'");
+      WebOutString(">");
+    end else begin
+      if (blank(arrAvailableToTime[i])) then begin
+        WebOutString("-");
+      end else begin
+        WebOutString(arrAvailableToTime[i]);
+      end;
+    end;
+    WebOutString("</td>");
+    tstr = "Not Approved";
+    if (arrApproved[i]) then begin
+      tstr = "Approved";
+    end;
+    WebOutString("<td class='" & "approval-status-" & arrApproved[i] & "'>");
+    WebOutString(tstr);
+    WebOutString("</td>");
+    if (gEditModef) then begin
+      WebOutString("<td>");
+      WebOutString("<div class='toggle-edit-container'>");
+      if (arrApproved[i]==0) then begin
+        tstr = "Approve";
+      end else begin
+        tstr = "Save";
+      end;
+      WebOutString("<button type='button' id='updateStudentButton' data-rownr='" & i & "' data-recordid='" & arrSerNr[i] & "' onclick='updateStudent(this,1)'>" & tstr & "</button>");
+      WebOutString("<button type='button' data-rownr='" & i & "' data-recordid='" & arrSerNr[i] & "' onclick='unEnrolStudent(this)'>Remove</button>");
+      WebOutString("</div>");
+      WebOutString("</td>");
+    end;
+    WebOutString("</tr>");
+  end;
+  
+  if (gEditModef) then begin
+    WebOutString("<tr>");
+    WebOutString("<td>");
+    WebOutString("<select id='newstudent' name='newstudent'>");
+    Select_Student;
+    WebOutString("</select>");
+    WebOutString("</td>");
+    WebOutString("<td>");
+    WebOutString("<input type='date' id='availableFromDate' name='availableFromDate'>");
+    WebOutString("</td>");
+    WebOutString("<td>");
+    WebOutString("<input type='time' id='availableFromTime' name='availableFromTime'>");
+    WebOutString("</td>");
+    WebOutString("<td>");
+    WebOutString("<input type='date' id='availableToDate' name='availableToDate'>");
+    WebOutString("</td>");
+    WebOutString("<td>");
+    WebOutString("<input type='time' id='availableToTime' name='availableToTime'>");
+    WebOutString("</td>");
+    WebOutString("<td class='approval-status-1'>");
+    WebOutString("Approved");
+    WebOutString("</td>");
+    WebOutString("<td>");
+    WebOutString("<button id='addStudentButton' type='button' data-courseid='" & Courser.SerNr & "' onclick='addStudent(this)''>Add</button>");
+    WebOutString("</td>");
+    WebOutString("</tr>");
+  end;
+  WebOutString("</tbody>");
+  WebOutString("</table>");
+
+LWebLMSManageCourseUsers:;
+  WebOutString("</div>");
+  return;
+end;
+
+procedure WebLMSCourseRegister(LongInt course)
+begin
+  record Course2Vc Courser;
+  string 255 tstr;
+  Boolean applyf;
+
+  Courser.SerNr = course;
+  ReadFirstMain(Courser,1,true);
+
+  CourseContentHeader(Courser,Courser.Name & " - Enrol",false);
+  applyf = Courser.AllowApplications;
+
+  WebOutString("<form id='enrolStudent' method='post'>");
+  WebOutString("<input type='hidden' id='course' value='" & Courser.SerNr & "'>");
+  WebOutString("<input type='hidden' id='student' value='" & CurrentCust & "'>");
+  if (Courser.EnableSelfEnrol==1) then begin
+    WebOutString("<div>");
+    WebOutString("<label for='regkey'>Registration Key:</label>");
+    WebOutString("<input type='text' id='regkey' name='regkey'>");
+    WebOutString("</div>");
+    WebOutString("<div class='form-group'>");
+    WebOutString("<button id='enrolButton' data-apply='0' type='submit'>Enrol</button>"); //submits twice, to fix
+    WebOutString("</div>");
+  end;
+  if (StudentPendingApproval(CurrentCust,course)==false) then begin
+    if (applyf) then begin
+      WebOutString("<div>");
+      WebOutString("<p>Apply for this Course</p>")
+      WebOutString("</div>");
+      WebOutString("<div class='form-group'>");
+      WebOutString("<button id='applyButton' data-apply='1' type='submit'>Apply</button>"); //submits twice, to fix
+      WebOutString("</div>");
+    end;
+  end else begin
+    WebOutString("<div>");
+    WebOutString("<p>Application Pending Approval</p>")
+    WebOutString("</div>");
+  end;
+  WebOutString("</form>");
+
+  return;
+end;
+
+procedure WebLMSCourse(record OnlineLearningBlock OLb,LongInt course,string path)
+begin
+  string 255 node,mpath,mpath2,tstr,link,childnode;
+  record WebNGPageVc WPr;
+  Boolean foundf;
+  transaction Boolean gEditModef;
+
+  mpath = path;
+  node = removenextnode(mpath);
+  mpath2 = mpath;
+
+  if (WebGetArg("edit")=="true" and (IsLMSAdmin or IsCourseTeacher(course))) then begin
+    gEditModef = true;
+  end;  
+
+  switch (node) begin
+    case "overview":
+    case "new":     childnode = node;
+    case "edit":    childnode = node;
+    case "manage":  childnode = removenextnode(mpath2);
+    case "content": 
+      childnode = removenextnode(mpath2);
+      childnode = removenextnode(mpath2);
+      if (childnode=="download") then begin
+        WebLMSHandleContentDownload(mpath);
+      end;
+    case "test":
+      // logtext(0,"mpath=" & mpath & ", mpath2=" & mpath2 & ", path=" & path & ", node=" & node);
+      switch (mpath) begin
+        case "WebHWULMSTARRefresh":  WebHWULMSTARRefresh;
+        case "WebHWULMSTestNavigate": WebHWULMSTestNavigate;
+        otherwise
+           WebHWULMSTest(StringToLongInt(mpath));
+      end;
+      goto LWebLMSCourse;
+    case "register":  childnode = node;
+    otherwise
+      link = FormatSimpleLink("/lms/course/" & course & "/overview",true);
+      RedirectToURL(link);
+  end;
+
+  WPr.Code = OLb.PageCourse;
+  if (ReadFirstMain(WPr,1,true)) then begin
+    ShowWebAppPageStart(WPr,"");
+    ShowWebElementTemplate(OLb.ElementCourse,0);
+    WebOutString("<div class='content-container'>");
+    WebOutString("<div class='course-content-wrapper'>");
+    switch (childnode) begin      
+      case "details":   ShowCourseContentDetails(mpath);
+      case "new":       WebLMSCourseNewRecord(course,-1,false);
+      case "edit":      WebLMSCourseNewRecord(course,removenextnode(mpath2),true);
+      case "users":     WebLMSManageCourseUsers(course);
+      case "register":  WebLMSCourseRegister(course);
+      otherwise 
+        CourseContent(course);
+    end;
+    WebOutString("</div>");
+    WebOutString("</div>");
+  end else begin
+    //ERROR PAGE NOT DEFINED
+  end;
+
+LWebLMSCourse:;
+  return;
+end;
+
+procedure WebLMSCourseNew(LongInt coursenr,Boolean editmodef)
+begin
+  record Course2Vc Courser;
+  string 255 title,tstr;
+  LongInt pos;
+
+  title = "Add New Course";
+  if (editmodef) then begin
+    Courser.SerNr = coursenr;
+    ReadFirstMain(Courser,1,true);
+    title = Courser.Name & " - Edit";
+  end;
+
+  WebOutString("<div class='content-container'>");
+  WebOutString("<div class='course-content-wrapper'>");
+  ContentEditHeader(Courser,title,editmodef);
+  WebOutString("<form id='createCourse' method='post'>");
+  if (editmodef) then begin
+    WebOutString("<input type='hidden' id='editmode' value='1'>");
+    WebOutString("<input type='hidden' id='recnr' value='" & coursenr & "'>");
+  end;
+  WebOutString("<div class='form-group'>");
+  WebOutString("<label for='name'>Name:</label>");
+  WebOutString("<input type='text' id='name' name='name' ");
+  WebOutString("value='" & Courser.Name & "'");
+  WebOutString(">");
+  WebOutString("</div>");
+
+  WebOutString("<div class='date-time-group'>");
+  WebOutString("<div>");
+  WebOutString("<label for='startdate'>Start Date:</label>");
+  WebOutString("<input type='date' id='startdate' name='startdate' ");
+  WebOutString("value='" & Courser.StartDate & "'");
+  WebOutString(">");
+  WebOutString("</div>");
+  WebOutString("<div>");
+  WebOutString("<label for='enddate'>End Date:</label>");
+  WebOutString("<input type='date' id='enddate' name='enddate' ");
+  WebOutString("value='" & Courser.EndDate & "'");
+  WebOutString(">");
+  WebOutString("</div>");
+  WebOutString("</div>");
+
+  WebOutString("<div class='select-group'>");
+  WebOutString("<div class='form-group'>");
+  WebOutString("<label for='coursetype'>Type:</label>");
+  WebOutString("<select id='coursetype' name='coursetype'>");
+  Select_CourseType(Courser.Type,editmodef);
+  WebOutString("</select>");
+  WebOutString("</div>");
+
+  // WebOutString("<div class='form-group'>");
+  // WebOutString("<label for='acttype'>Act. Type:</label>");
+  // WebOutString("<select id='acttype' name='acttype'>");
+  // Select_ActivityType(Courser.ActType,editmodef);
+  // WebOutString("</select>");
+  // WebOutString("</div>");
+
+  WebOutString("<div class='tags-input-container'>");
+  WebOutString("<label for='classification'>Classifications:</label>");
+  WebOutString("<select id='classification-form-select'>");
+  Select_Classification;
+  WebOutString("</select>");
+  WebOutString("<div id='classification-list'>");
+  if (editmodef) then begin
+    pos = 0;
+    while (GetNextSubString(Courser.Classification,pos,",",tstr)) begin
+      WebOutString("<span class='classification'>");
+      WebOutString(tstr);
+      WebOutString("<span id='remove-classification'>X</span>");
+      WebOutString("</span>");
+    end;
+  end;
+  WebOutString("</div>");
+  WebOutString("</div>");
+  WebOutString("</div>");
+
+  WebOutString("<div class='form-group'>");
+  WebOutString("<label for='description'>Description:</label>");
+  WebOutString("<textarea id='description' name='description'>");
+  WebOutString(GetTextField(Courser));
+  WebOutString("</textarea>");
+  WebOutString("</div>");
+
+  WebOutString("<div class='select-group'>");
+  WebOutString("<div class='tags-input-container'>");
+  WebOutString("<label for='teacher'>Teachers:</label>");
+  WebOutString("<select id='teacher-form-select'>");
+  Select_Teacher;
+  WebOutString("</select>");
+  WebOutString("<div id='teacher-list'>");
+  if (editmodef) then begin
+    pos = 0;
+    while (GetNextSubString(Courser.Teachers,pos,",",tstr)) begin
+      WebOutString("<span class='teacher'>");
+      WebOutString(tstr);
+      WebOutString("<span id='remove-teacher'>X</span>");
+      WebOutString("</span>");
+    end;
+  end;
+  WebOutString("</div>");
+  WebOutString("</div>");
+
+  WebOutString("<div class='tags-input-container'>");
+  WebOutString("<label for='department'>Departments:</label>");
+  WebOutString("<select id='department-form-select'>");
+  Select_Department;
+  WebOutString("</select>");
+  WebOutString("<div id='department-list'>");
+  if (editmodef) then begin
+    pos = 0;
+    while (GetNextSubString(Courser.Departments,pos,",",tstr)) begin
+      WebOutString("<span class='department'>");
+      WebOutString(tstr);
+      WebOutString("<span id='remove-department'>X</span>");
+      WebOutString("</span>");
+    end;
+  end;
+  WebOutString("</div>");
+  WebOutString("</div>");
+
+  // WebOutString("<div class='form-group'>");
+  // WebOutString("<label for='responsible'>Responsible:</label>");
+  // WebOutString("<select id='responsible' name='responsible'>");
+  // Select_Responsible(Courser.Responsible,editmodef);
+  // WebOutString("</select>");
+  // WebOutString("</div>");
+  WebOutString("</div>");
+
+  WebOutString("<div class='form-group checkbox-group'>");
+  if (editmodef==false) then begin
+    tstr = "checked";
+  end else begin
+    if (Courser.Visibility==1) then begin
+      tstr = "checked";
+    end else begin
+      tstr = "";
+    end;
+  end;
+  WebOutString("<input type='checkbox' id='visible' name='visible' " & tstr & ">");
+  WebOutString("<label for='visible'>Visible</label>");
+  WebOutString("</div>");
+
+  WebOutString("<fieldset>");
+  WebOutString("<legend>Format</legend>");
+  if (Courser.Format==0) then begin tstr = "checked"; end else begin tstr = ""; end;
+  WebOutString("<label><input type='radio' name='format' value='0' " & tstr & "> Single Activity Format</label>");
+  if (Courser.Format==1) then begin tstr = "checked"; end else begin tstr = ""; end;
+  WebOutString("<label><input type='radio' name='format' value='1' " & tstr & "> Topics Format</label>");
+  if (Courser.Format==2) then begin tstr = "checked"; end else begin tstr = ""; end;
+  WebOutString("<label><input type='radio' name='format' value='2' " & tstr & "> Weekly Format</label>");
+  WebOutString("</fieldset>");
+
+  WebOutString("<fieldset>");
+  WebOutString("<legend>Groups</legend>");
+  if (Courser.Groups==0) then begin tstr = "checked"; end else begin tstr = ""; end;
+  WebOutString("<label><input type='radio' name='groups' value='0' " & tstr & "> No Group</label>");
+  if (Courser.Groups==1) then begin tstr = "checked"; end else begin tstr = ""; end;
+  WebOutString("<label><input type='radio' name='groups' value='1' " & tstr & "> Separate Groups</label>");
+  WebOutString("</fieldset>");
+  WebOutString("<div class='form-group checkbox-group'>");
+  WebOutString("<input type='checkbox' id='selfenrol' name='selfenrol' ");
+  if (Courser.EnableSelfEnrol==1) then begin 
+    WebOutString("checked"); 
+  end;
+  WebOutString(">");
+  WebOutString("<label for='selfenrol'>Enable Self Enrolment</label>");
+  WebOutString("</div>");
+  WebOutString("<div class='form-group checkbox-group'>");
+  WebOutString("<input type='checkbox' id='allowapplications' name='allowapplications' ");
+  if (Courser.AllowApplications==1) then begin 
+    WebOutString("checked"); 
+  end;
+  WebOutString(">");
+  WebOutString("<label for='allowapplications'>Allow Applications</label>");
+  WebOutString("</div>");
+
+  WebOutString("<div class='form-group'>");
+  WebOutString("<label for='regkey'>Registration Key:</label>");
+  WebOutString("<input type='text' id='regkey' name='regkey' ");
+  WebOutString("value='" & Courser.RegKey & "'");
+  WebOutString(">");
+  WebOutString("</div>");
+  WebOutString("</form>");
+  WebOutString("</div>");
+  WebOutString("</div>");
+  return;
+end;
+
+procedure WebLMSCourses(record OnlineLearningBlock OLb,string path)
+begin
+  string 255 node,mpath,tstr;
+  record WebNGPageVc WPr;
+  record CourseContentVc CourseContentr;
+  Boolean foundf;
+  transaction Boolean gEditModef;
+
+  mpath = path;
+  node = removenextnode(mpath);
+  node = removenextnode(mpath);
+
+  WPr.Code = OLb.PageCourses;
+  if (ReadFirstMain(WPr,1,true)) then begin
+    ShowWebAppPageStart(WPr,"");
+    ShowWebElementTemplate(OLb.ElementCourses,0);
+    WebOutString("<div class='content-container'>");
+    switch (node) begin
+      case "new":     WebLMSCourseNew(-1,false);
+      case "edit":    WebLMSCourseNew(StringToLongInt(mpath),true);
+      otherwise
+        WebOutString("<div class='course-list-wrapper'>");
+        WebOutString("<div class='course-list-header'>");
+        WebOutString("<div class='filter-wrapper'>");
+        WebOutDepartmentSelection;
+        if (IsTeacher==false) then begin
+          WebOutTeacherSelection;
+        end;
+        WebOutString("</div>");
+        if (IsLMSAdmin) then begin
+          WebOutString("<div class='toggle-edit-container'>");
+          if (gEditModef) then begin
+            WebOutString("<button id='new-course' role='button' onclick=\"location.href='/lms/courses/new?fn=Course2Vc'\">New Course</button>");
+          end;
+          WebOutString("<button id='edit-toggle' role='button' onClick='toggleEditMode()'>Toggle Edit Mode</button>");
+          WebOutString("</div>");
+        end;
+        WebOutString("</div>");
+        WebOutString("<div id='course-list'>");
+        WebOutCourseList;
+        WebOutString("</div>");
+        WebOutString("</div>");
+    end;
+    WebOutString("</div>");
+  end else begin
+    //ERROR PAGE NOT DEFINED
+  end;
+   
+  return;
+end;
+
+procedure WebNGLMSLoginPage(record OnlineLearningBlock OLb)
+begin
+  record WebNGPageVc WPr;
+  record CourseContentVc CourseContentr;
+  Boolean foundf;
+  string 255 failed;
+
+  failed = WebGetArg("failed");
+
+  WPr.Code = "LMS-LOGIN";
+  if (ReadFirstMain(WPr,1,true)) then begin
+    ShowWebAppPageStart(WPr,"");
+    WebOutString("<div class=\"login-container\">");
+    WebOutString("<form class=\"login-form\" action=\"" & FormatLink("/dologin","",true,true) & "\" method=\"post\">");
+    WebOutStringFormatNL("<input type=""hidden"" id=""company"" name=""company"" value=\"1\">");
+    WebOutStringFormatNL("<input type=""hidden"" id=""failed"" name=""failed"" value=""" & FormatLink("/lms/login","action=afterlogin&failed=1",true,true) & """>");
+    WebOutStringFormatNL("<input type=""hidden"" id=""custpage"" name=""custpage"" value=""" & FormatLink("/lms/login","action=afterlogin&cust=1",true,true) & """>");
+    WebOutStringFormatNL("<input type=""hidden"" id=""userpage"" name=""userpage"" value=""" & FormatLink("/lms/login","action=afterlogin&user=1",true,true) & """>");
+    WebOutString("<h2>Login</h2>");
+    WebOutString("<div class=\"form-group\">");
+    WebOutString("<label for=\"username\">Email</label>");
+    WebOutString("<input type=\"text\" id=\"login\" name=\"login\" required>");
+    WebOutString("</div>");
+    WebOutString("<div class=\"form-group\">");
+    WebOutString("<label for=\"password\">Password</label>");
+    WebOutString("<input type=\"password\" id=\"passwd\" name=\"passwd\" required>");
+    WebOutString(" </div>");
+    WebOutString("<button type=\"submit\" class=\"login-button\">Login</button>");
+    if (nonblank(failed)) then begin
+      WebOutString("<div class=\"login-error\">");
+      WebOutString("Wrong email addres or password");
+      WebOutString("</div>");
+    end;  
+    WebOutString("</form>");
+    WebOutString("</div>");
+  end else begin
+    //ERROR PAGE NOT DEFINED
+  end;
+   
+  return;
+end;
+
+function Boolean CourseDisplayTest(LongInt course,string node,var Boolean availablef)
+begin
+  Boolean res;
+
+  res = true;
+  if (course==-1) then begin
+    res = false;
+    goto LCourseDisplayTest;
+  end;
+  if (HasCourseAccess(course,node,availablef)==false) then begin
+    res = false;
+    goto LCourseDisplayTest;
+  end;
+
+LCourseDisplayTest:;
+  if (res==false) then begin
+    RedirectToURL(FormatSimpleLink("/lms/courses",true));
+  end;
+  CourseDisplayTest = res;
+  return;
+end;
+
+global
+updating procedure LMSCoursesApp(record WebNGStructVc WSr,string path)
+begin
+  string 255 node,mpath,tstr;
+  string 255 course;
+  record OnlineLearningBlock OLb;
+  record WebNGPageVc WPr;
+  transaction string 255 gExtraHeadHTML;
+  transaction Boolean gEditModef;
+  Boolean availablef,testf;
+
+  BlockLoad(OLb);
+
+  if (OLb.Active==0) then begin 
+    goto LLMSCoursesApp; 
+  end;
+
+  if (WebGetArg("edit")=="true" and IsLMSAdmin) then begin
+    gEditModef = true;
+  end;  
+
+  gExtraHeadHTML = LMSAppHead;
+
+  mpath = path;
+  node = removenextnode(mpath);
+
+  if (LMSUserLoggedIn==false and node!="login") then begin
+    RedirectToURL(FormatSimpleLink("/lms/login",true));
+  end;
+
+  switch (node) begin
+    case "login":
+      if (LMSUserLoggedIn) then begin
+        RedirectToURL(FormatSimpleLink("/lms/courses",true));
+      end else begin
+        WebNGLMSLoginPage(OLb);
+      end;
+    case "logout": 
+      WebLogOut;
+      RedirectToURL(FormatSimpleLink("/lms/courses",true));
+    case "ajax": WebLMSCourseAction(path);
+    case "course":
+      node = StringToLongInt(removenextnode(mpath));
+      testf = CourseDisplayTest(node,mpath,availablef);
+      if (availablef) then begin
+        WebLMSCourse(OLb,node,mpath);
+      end else begin
+        RedirectToURL(FormatSimpleLink("/lms/courses",true));
+      end;
+    case "courses": WebLMSCourses(OLb,path);
+    otherwise
+      if (LMSUserLoggedIn) then begin
+        RedirectToURL(FormatSimpleLink("/lms/courses",true));
+      end;
+  end;
+
+  //function string 255 FormatSimpleLink(string path,boolean callfromweb);
+
+  // ShowWebAppPageEnd(WPr);
+
+LLMSCoursesApp:;
+  return;
+end;
+
+global
+procedure ShowLMSSidebarContent()
+begin
+  record Course2Vc Courser;
+  Boolean testf,availablef;
+
+  WebOutString("<div class='sidebar-item'>");
+  WebOutString("<a href='" & FormatSimpleLink("/lms",true) & "'>");
+  WebOutString("Home");
+  WebOutString("</a>");
+  WebOutString("</div>");
+
+  while (LoopMain(Courser,1,true)) begin
+    testf = true;
+    if (Courser.Visibility==0) then begin testf = false; end;
+    if (Courser.Terminated==1) then begin testf = false; end;
+    if (DateInRange(CurrentDate,Courser.StartDate,Courser.EndDate)==false) then begin testf = false; end;
+    if (IsLMSAdmin==false and IsEnrolledStudent(Courser.SerNr,availablef)==false and SetInSet2(CurrentCust,Courser.Teachers)==false) then begin testf = false; end;
+    if (testf and availablef) then begin
+      WebOutString("<div class='sidebar-item'>");
+      WebOutString("<a href='" & FormatSimpleLink("/lms/course/" & Courser.SerNr & "/overview",true) & "'>");
+      WebOutString(Courser.Name);
+      WebOutString("</a>");
+      WebOutString("</div>");
+    end;
+  end;
+  return;
+end;
+
+global
+procedure ShowLMSHeaderUserMenu()
+begin
+  if (LMSUserLoggedIn) then begin
+    WebOutString("<div class='user-name'>" & LMSUserName & "</div>");
+    WebOutString("<details class='user-menu'>");
+    WebOutString("<summary>");
+    WebOutString("<div class='avatar-container'>");
+    WebOutString("<svg fill='currentColor' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'>");
+    WebOutString("<path fill-rule='evenodd' d='M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z' clip-rule='evenodd'></path>");
+    WebOutString("</svg>");
+    WebOutString("</summary>");
+    WebOutString("<ul>");
+    WebOutString("<li><a href='#'>Change Password</a></li>");
+    WebOutString("<li><a href='/lms/logout'>Logout</a></li>");
+    WebOutString("</ul>");
+    WebOutString("</details>");
+    WebOutString("</div>");
+  end;
+  return;
+end;

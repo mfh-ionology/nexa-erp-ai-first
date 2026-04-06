@@ -1,0 +1,281 @@
+remote function LongInt DoEnableBankRegistration(var string,var string);
+remote function LongInt DoEBPaymentRequest(record OPVc,string,var string,var string,integer);
+remote updating procedure UpdateEnableBankBlock(string,string,string);
+external procedure GetPaymentModeRow(string,row PMBlock);
+remote function Boolean EPaymentStatusAlreadyCreated(LongInt,date,integer);
+remote procedure CreateEBBulkPaymentBody(record OPVc,var area,Integer,Boolean);
+remote function LongInt DoEBBulkPaymentRequest(area,record OPVc,string,var string,var string,array integer);
+
+global
+function Boolean EnableBankingSupportedPaymentInitiation(string bank,var boolean bulkpaysupf,var boolean busness_psu_types)
+begin
+  Boolean paymentinitf;
+  record BankVc Bankr;
+
+  Bankr.Code = bank;
+  if (ReadFirstMain(Bankr,1,true)) then begin end;
+  switch (Bankr.EBBank) begin
+//live//
+    case "Eurocard" :                paymentinitf = true;  bulkpaysupf = false; busness_psu_types = true;
+    case "OP":                       paymentinitf = true;  bulkpaysupf = false; busness_psu_types = true;
+    case "Holvi" :                   paymentinitf = true;  bulkpaysupf = false; busness_psu_types = true;
+  end;
+
+  EnableBankingSupportedPaymentInitiation = paymentinitf;
+  return;
+end;
+
+global
+function Boolean TestEnableBankingSupportedPaymentInitiation(string bank,var boolean bulkpaysupf,var boolean busness_psu_types)
+begin
+  Boolean paymentinitf;
+  record BankVc Bankr;
+
+  Bankr.Code = bank;
+  if (ReadFirstMain(Bankr,1,true)) then begin end;
+  switch (Bankr.EBBank) begin
+    case "Nordea"           : paymentinitf = false; busness_psu_types = false; bulkpaysupf = false;
+    case "S-Pankki"         : paymentinitf = true;  busness_psu_types = false; bulkpaysupf = false;
+    case "Handelsbanken"    : paymentinitf = true;  busness_psu_types = true;  bulkpaysupf = false;
+    case "Mock ASPSP"       : paymentinitf = false; busness_psu_types = true;  bulkpaysupf = false;
+    case "Nordea First Card": paymentinitf = false; busness_psu_types = true;  bulkpaysupf = false;
+    // case "S-Pankki"         : paymentinitf = true;  busness_psu_types = false; bulkpaysupf = true; //for bulk testing
+  end;
+
+  TestEnableBankingSupportedPaymentInitiation = paymentinitf;
+  return;
+end;
+
+function Boolean EnableBankTClassCountryEFAfter(Integer wn,Integer rownr,Boolean changedf)
+begin
+  record CountryVc Countryr;
+  record EnableBankBlock EnableBankBl;
+
+  if (changedf) then begin
+    GetWindowRecord(wn,EnableBankBl);
+    Countryr.Code = EnableBankBl.Country;
+    if (ReadFirstMain(Countryr,1,true)) then begin
+      EnableBankBl.Country = Countryr.ISOCode;
+    end;
+    PutWindowRecord(wn,EnableBankBl);
+  end;
+
+  EnableBankTClassCountryEFAfter = true;
+  return;
+end;
+
+function Boolean EnableBankTClassRegionEFAfter(Integer wn,Integer rownr,Boolean changedf)
+begin
+  record EnableBankBlock EnableBankBl;
+  record CountryRegionVc CountryRegionr;
+
+  if (changedf) then begin
+    GetWindowRecord(wn,EnableBankBl);
+    CountryRegionr.Code = EnableBankBl.Region;
+    if (ReadFirstMain(CountryRegionr,1,true)) then begin
+      EnableBankBl.Region = CountryRegionr.Comment;
+    end;
+    PutWindowRecord(wn,EnableBankBl);
+  end;
+
+  EnableBankTClassRegionEFAfter = true;
+  return;
+end;
+
+global
+function boolean EnableBankTClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
+begin
+  Boolean res;
+
+  switch (fieldname) begin
+    case "Country": res = EnableBankTClassCountryEFAfter(wn,rownr,changed!=0);
+    case "Region": res = EnableBankTClassRegionEFAfter(wn,rownr,changed!=0);
+  end;
+  EnableBankTClassAfterEditField = res;
+  return;
+end;
+  
+global 
+procedure CreateCertAndPrivKeyToEnableBankingTsm()
+begin
+  record EnableBankBlock EnableBankBl;
+  LongInt err;
+  string 255 errmsg,ApplicationID;
+  Integer wn;
+
+  BlockLoad(EnableBankBl);
+
+  wn = CurWindow;
+  GetWindowRecord(wn,EnableBankBl);
+
+  // if (FileExists(EnableBankBl.Certificate)) and (FileExists(EnableBankBl.PrivateKey)) then begin
+  //   if (EnableBankBl.ExpDate>CurrentDate) then begin
+  //     MessageBox(44053,"");
+  //     goto LCreateCertAndPrivKeyToEnableBankingTsm;
+  //   end;
+  // end;
+
+  err = DoEnableBankRegistration(errmsg,ApplicationID);
+  if (err!=0 or nonblank(errmsg)) then begin
+    MessageBox(err,": " & errmsg);
+  end else begin
+    qupdating.UpdateEnableBankBlock("private.key","cert.pem",ApplicationID);
+    CheckMarkBox(43862,"");
+    CloseWindow(wn);
+    OpenWindow("EnableBankTClass",1,0,"","",EnableBankBl);
+  end;
+
+LCreateCertAndPrivKeyToEnableBankingTsm:;
+  return;
+end;
+
+global
+procedure EnableBankingFlowOClassClose()
+begin
+  CloseWindow(CurWindow);
+  return;
+end;
+
+procedure DoOPSendtoEnableBanking(record OPVc OPr,integer payrow)
+begin
+  record RcVc RepSpec;
+  integer wn,nwn,mwn;
+  row OPVc OPrw;
+  LongInt err;
+  string 255 errmsg,url;
+  record EnableBankBlock EnableBankBl;
+
+  wn = CurWindow;
+  mwn = MotherWindow(wn);
+  BlockLoad(EnableBankBl);
+
+  MatRowGet(OPr,payrow,OPrw);
+  if (OPrw.RecVal>0) and (nonblank(OPrw.RecCurncy)) then begin
+    err = DoEBPaymentRequest(OPr,"payments",errmsg,url,payrow);
+    if (err!=0 or nonblank(errmsg)) then begin
+      MessageBox(err,": " & errmsg);
+    end else begin
+      OpenWebBrowser(url);
+      CloseWindow(wn);
+      RepSpec.flags[0] = payrow + 1;
+      nwn = OpenWindow("EnableBankingFlowOClass",0,mwn,"","",RepSpec);
+    end; 
+  end;
+
+  return;
+end;
+
+global
+procedure EnableBankingFlowOClassOClassContinue()
+begin
+  record RcVc RepSpec;
+  integer mwn,wn,payrow,rwcnt,i;
+  record OPVc OPr;
+  row OPVc OPrw;
+
+  wn = CurWindow;
+  GetWindowRecord(wn,RepSpec);
+  DeselectWindow(wn,false);
+  mwn = MotherWindow(wn);
+  GetWindowRecord(mwn,OPr);
+  payrow = RepSpec.flags[0];
+
+  rwcnt = MatRowCnt(OPr);
+  for (i=payrow;i<rwcnt;i=i+1) begin
+    MatRowGet(OPr,i,OPrw);
+    if (OPrw.RecVal>0) and (nonblank(OPrw.RecCurncy)) then begin
+      if (EPaymentStatusAlreadyCreated(OPr.SerNr,OPr.PayDate,i)==false) then begin
+        DoOPSendtoEnableBanking(OPr,i);
+        i = rwcnt;
+      end;
+    end;
+  end;
+end;
+
+procedure AddToArr(integer irow,var Array integer airow)
+begin
+  Integer i;
+
+  airow[airow.length] = irow;
+
+  return;
+end;
+
+global
+procedure OPSendtoEnableBankingDsm()
+begin
+  record EnableBankBlock EnableBankBl;
+  record OPVc OPr;
+  row OPVc OPrw;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record RcVc RepSpec;
+  string 255 errmsg,url;
+  LongInt err;
+  area req;
+  Integer wn,i,rwcnt,nwn;
+  Boolean bulkpaysupf,busness_psu_types,firstf;
+  Array integer airow;
+
+  wn = CurWindow;
+  GetWindowRecord(wn,OPr);
+  i = 0;
+  BlockLoad(EnableBankBl);
+  GetPaymentModeRow(OPr.PayMode,PMBrw);
+  if (EnableBankBl.LiveFlag==kEbayLive) begin
+    if (EnableBankingSupportedPaymentInitiation(PMBrw.BankCode,bulkpaysupf,busness_psu_types)) then begin
+    end;
+  end else begin
+    if (TestEnableBankingSupportedPaymentInitiation(PMBrw.BankCode,bulkpaysupf,busness_psu_types)) then begin
+    end;
+  end;
+  rwcnt = MatRowCnt(OPr);
+  if (!bulkpaysupf) then begin 
+    for (i=0;i<rwcnt;i=i+1) begin  
+      MatRowGet(OPr,i,OPrw);
+      if (OPrw.RecVal>0) and (nonblank(OPrw.RecCurncy)) then begin
+        if (EPaymentStatusAlreadyCreated(OPr.SerNr,OPr.PayDate,i)==false) then begin
+          err = DoEBPaymentRequest(OPr,"payments",errmsg,url,i);
+          if (err!=0 or nonblank(errmsg)) then begin
+            MessageBox(err,": " & errmsg);
+            goto LOPSendtoEnableBankingDsm;
+          end else begin
+            OpenWebBrowser(url);
+            if (rwcnt>1) then begin
+              RepSpec.flags[0] = i + 1;
+              nwn = OpenWindow("EnableBankingFlowOClass",0,wn,"","",RepSpec); 
+              i = rwcnt;
+              end;
+          end; 
+        end;
+      end;  
+    end;
+  end else begin
+    firstf = true;
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(OPr,i,OPrw);
+      if (OPrw.RecVal>0) and (nonblank(OPrw.RecCurncy)) then begin
+        if (EPaymentStatusAlreadyCreated(OPr.SerNr,OPr.PayDate,i)==false) then begin
+          CreateEBBulkPaymentBody(OPr,req,i,firstf);
+          AddToArr(i,airow);
+          firstf = false;
+        end;
+      end;  
+    end;
+
+    //TODO  rows in the suppport register!
+    err = DoEBBulkPaymentRequest(req,OPr,"payments",errmsg,url,airow);
+    if (err!=0 or nonblank(errmsg)) then begin
+      MessageBox(err,": " & errmsg);
+    end else begin
+      OpenWebBrowser(url);
+      // if (rwcnt>1) then begin
+      //   RepSpec.flags[0] = i + 1;
+      //   nwn = OpenWindow("EnableBankingFlowOClass",0,wn,"","",RepSpec); 
+      //   i = rwcnt;
+      // end;
+    end; 
+  end;
+LOPSendtoEnableBankingDsm:;
+  return;
+end;  

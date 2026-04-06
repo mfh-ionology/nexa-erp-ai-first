@@ -1,0 +1,69 @@
+external function val StringToValue(string,Integer,string,string);
+
+global
+updating procedure INPrUpdIn()
+BEGIN
+  string 255  InLine,group,unit,price,baseprice;
+  record INVc oldINr,INr;
+  record UnitVc Unitr;
+  record ITVc ITr;
+  Boolean testf;
+  
+  while (TestEOF()==false) begin
+    RecordNew(INr);
+    InLine = ImportField;
+    if (blank(InLine)) then begin
+      goto LSKIP;
+    end;  
+    INr.Code = InLine;
+    if (ReadFirstMain(INr,1,true)==false) then begin
+      RecordNew(INr);
+      INr.Code = InLine;
+      INr.Name = ImportField;
+      group = ImportField;
+      ITr.Code = group;
+      if ReadFirstMain(ITr,1,true) then begin
+        INr.Group = group;
+      end; 
+      unit = ImportField;
+      Unitr.Code = unit;
+      if (ReadFIrstMain(Unitr,1,true)) then begin
+        INr.Unittext = unit;
+      end;  
+      baseprice = ImportField;
+      INr.InPrice = StringToValue(baseprice,M4Val,".",",");  
+      price = ImportField;
+      INr.UPrice1 = StringToValue(price,M4Val,".",",");
+      INr.LastPriceChange = CurrentDate;   
+      if (RecordStore(INr,false)) then begin end;
+    end else begin
+      RecordCopy(oldINr,INr);
+      InLine = ImportField;
+      if (len(InLine)>60) then begin
+        InLine = Left(InLine,60);
+      end;  
+      INr.Name = InLine;
+      group = ImportField;
+      ITr.Code = group;
+      if (ReadFirstMain(ITr,1,true)) then begin
+        INr.Group = group;
+      end; 
+      unit = ImportField;
+      Unitr.Code = unit;
+      if (ReadFIrstMain(Unitr,1,true)) then begin
+        INr.Unittext = unit;
+      end;  
+      baseprice = ImportField;
+      INr.InPrice = StringToValue(baseprice,M4Val,".",",");  
+      price = ImportField;
+      INr.UPrice1 = StringToValue(price,M4Val,".",",");
+      if (INr.Terminated==1) then begin INr.Terminated = 0; end;
+      INr.LastPriceChange = CurrentDate;   
+      if (RecordUpdate(oldINr,INr,false)==0) then begin end;
+    end;
+    UserTrace(INr.Code,M4Str);
+LSKIP:;   
+    testf = NextImportLine(true); 
+  end;  
+  RETURN;
+END;

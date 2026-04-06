@@ -1,0 +1,82 @@
+external function string 50 TimeToString(time,string,boolean);
+
+global
+procedure LoggingStatsRn(record RcVc RepSpec)
+begin
+  record RHistVc RHr;
+  record RHistSetBlock RHSb;
+  row RHistSetBlock RHSrw;
+  Boolean foundf;
+  Integer rwcnt;
+  Integer i,i2;
+  LongInt sum;
+  string 255 tstr;
+  vector LongInt v_count;
+  vector string 255 v_regname;
+  vector string 255 v_firstrec;
+  vector string 255 v_lastrec;
+  array string 255 a_regs;
+
+  StartReportJob(USetStr(42680));
+  EndHeader;
+  
+  SetRepCol(2,100);
+  SetRepCol(3,150);
+  SetRepCol(4,220);
+  SetRepCol(5,230);
+
+  StartFormat(15);
+  OutString(0,0,USetStr(42681),false);
+  OutString(2,0,USetStr(42682),false);
+  OutString(3,0,USetStr(42683),false);
+  OutString(4,0,USetStr(42684),true);
+  OutString(5,0,USetStr(42686),false);
+  EndFormat;
+  
+  Gray_Divider(0,1);
+
+  foundf = true;
+  while (LoopMain(RHr,0,foundf)) begin
+    tstr = RecordIdVcName(RHr.RecidStr);
+    if (v_count[tstr]==-1) then begin
+      v_regname[tstr] = tstr;
+      v_firstrec[tstr] = DateToString(RHr.TransDate,"YYYY-MM-DD");
+      v_count[tstr] = 0;
+    end;
+    v_count[tstr] = v_count[tstr] + 1;
+    v_lastrec[tstr] = DateToString(RHr.TransDate,"YYYY-MM-DD");
+  end;
+
+  BlockLoad(RHSb);
+  rwcnt = MatRowCnt(RHSb);
+
+  sum = 0;
+  GetVectorTags(v_regname,a_regs);
+  for (i = 0; i<a_regs.length; i = i + 1) begin
+    StartFormat(15);
+    sum = sum + v_count[a_regs[i]];
+    OutString(0,0,GetRegisterName(v_regname[a_regs[i]]),false);
+    OutString(2,0,v_firstrec[a_regs[i]],false);
+    OutString(3,0,v_lastrec[a_regs[i]],false);
+    OutString(4,0,v_count[a_regs[i]],true);
+    tstr = USetStr(42688);
+    for (i2=0;i2<rwcnt;i2=i2+1) begin
+      MatRowGet(RHSb,i2,RHSrw);
+      if (RHSrw.VcName==v_regname[a_regs[i]]) then begin
+        tstr = USetStr(42687);
+      end;
+    end;
+    OutString(5,0,tstr,false);
+    EndFormat;
+  end;
+  
+  Gray_Divider(0,1);
+
+  StartFormat(15);
+  OutString(4,0,USetStr(42685) & " " & sum,true);
+  EndFormat;
+
+  EndJob;
+  
+  return;
+end;

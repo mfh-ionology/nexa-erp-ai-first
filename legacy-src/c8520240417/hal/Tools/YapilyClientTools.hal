@@ -1,0 +1,136 @@
+remote function LongInt Yapily_InitiateAccountRequest(string,Integer,string,var string);
+remote outer updating function LongInt Yapily_RevokeAccountAuth(string,Integer,string);
+
+global
+procedure YapilyAuthBankDsm()
+begin
+  Integer wn,nwn;
+  record RcVc RepSpec;
+
+  wn = CurWindow;
+  RepSpec.flags[0] = WindowActiveRow(wn);
+  nwn = OpenWindow("BankAuthTOSWClass",wn,0,"","",RepSpec);
+  PutWindowRecord(nwn,RepSpec);
+
+  return;
+end;
+
+global
+procedure YapilyRevokeAuthDsm()
+begin
+  LongInt err;
+  Integer wn,rownr;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record BankVc Bankr;
+  string 255 url;
+
+  wn = CurWindow;
+  rownr = WindowActiveRow(wn);
+  if (rownr>=0) then begin
+    GetWindowRecord(wn,PMb);
+    MatRowGet(PMb,rownr,PMbrw);
+    if (nonblank(PMbrw.BankCode)) then begin
+      Bankr.Code = PMbrw.BankCode;
+      if (ReadFirstMain(Bankr,1,true)==false) then begin
+        MessageBox(43480,"");
+        goto LYapilyRevokeAuthDsm;
+      end;
+      err = qupdating.Yapily_RevokeAccountAuth(Bankr.YapilyBank,rownr,CurrentUser);
+      if (err!=0) then begin
+        MessageBox(err,"");
+        goto LYapilyRevokeAuthDsm;
+      end;
+      CheckMarkBox(43483,"");
+    end;
+    
+  end;
+LYapilyRevokeAuthDsm:;
+  return;
+end;
+
+global
+procedure YapilyAuthHistRepDsm()
+begin
+  Integer wn,rownr;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  Record RcVc RepSpec;
+
+  wn = CurWindow;
+  rownr = WindowActiveRow(wn);
+  if (rownr>=0) then begin
+    GetWindowRecord(wn,PMb);
+    MatRowGet(PMb,rownr,PMbrw);
+    RepSpec.sStartDate = AddMonth(CurrentDate,-6);
+    RepSpec.sEndDate = CurrentDate;
+    RepSpec.f1 = PMbrw.Code;
+    RepSpec.f2 = PMbrw.BankCode;
+    RepSpec.flags[1] = 1;
+    RepSpec.flags[2] = 1;
+    RepSpec.flags[3] = 1;
+    RepSpec.repname = "YapilyAuthHistRn";
+    RepSpec.Media = mtScreen;    
+    RunReport(RepSpec,0);
+  end;
+
+  return;
+end;
+
+global
+procedure BankAuthDeclineDsm()
+begin
+  CloseWindow(CurWindow);
+  return;
+end;
+
+global
+procedure BankAuthAcceptDsm()
+begin
+  LongInt err;
+  Integer wn,rownr,mwn;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record BankVc Bankr;
+  record RcVc RepSpec;
+  string 255 url;
+
+  err = 0;
+
+  wn = CurWindow;
+  GetWindowRecord(wn,RepSpec);
+  CloseWindow(wn);
+  rownr = RepSpec.flags[0];
+  if (rownr>=0) then begin
+    BlockLoad(PMb);
+    MatRowGet(PMb,rownr,PMbrw);
+    Bankr.Code = PMbrw.BankCode;
+    if (ReadFirstMain(Bankr,1,true)==false) then begin
+      err = 43480;
+      goto LBankAuthAcceptDsm;
+    end;
+    if (blank(Bankr.YapilyBank)) then begin
+      err = 43480;
+      goto LBankAuthAcceptDsm;
+    end;
+    err = Yapily_InitiateAccountRequest(Bankr.YapilyBank,rownr,CurrentUser,url);
+    if (err!=0) then begin
+      goto LBankAuthAcceptDsm;
+    end;
+    if (nonblank(url)) then begin
+      OpenWebBrowser(url);
+    end;
+  end;
+LBankAuthAcceptDsm:;
+  if (err!=0) then begin
+    MessageBox(err,"");
+  end;
+  return;
+end;
+
+global
+procedure ViewYapilyConnectTOSDsm()
+begin
+  OpenWebBrowser("https://www.yapily.com/legal/yapilyconnect-terms-and-conditions");
+  return;
+end;

@@ -1,0 +1,83 @@
+external function Boolean ParseHTTPHeader(area,string,var Integer,var string,var string);
+external procedure AmazonMWSLogAreaToFile(string,area);
+external function string 255 GetAmazonRequestPath(string,string,string,string,string);
+external function string 255 HexToBase64(string);
+
+global
+procedure PrintSubmissionStatus(record RcVc RepSpec)
+begin
+  area areq,areply;
+  string 255 timestamp,path,tstr,docpath,method;
+  record AmazonWSBlock AWSb;
+  transaction string 255 gAmazonAction;
+  Integer rw;
+  xml xreply;
+
+  BlockLoad(AWSb);
+
+  gAmazonAction = "GetFeedSubmissionResult";
+  method = "POST";
+  path = GetAmazonRequestPath(gAmazonAction,"",RepSpec.f1,"",method);
+  tstr = MD5Area(areq);  
+  SetWebHeaders("Content-MD5: " & HexToBase64(tstr));
+  
+  if (AWSb.Enable) then begin
+    AmazonMWSLogAreaToFile("request",areq);
+    if (SendWebRequest(AWSb.Host,443,-1,true,method,"/?" & path,"text/xml; charset=""utf-8""","",false,areq,areply,30)) then begin
+      AmazonMWSLogAreaToFile("reply",areply);
+      xreply = ParseXMLArea(areply);
+      docpath = "AmazonEnvelope/Message/ProcessingReport";
+
+      StartReportJob(USetStr(42810));
+      rw = 1;
+      Header(rw,USetStr(42811) & ": " & RepSpec.f1,1);
+      EndHeader;
+
+      if (XmlNodeExists(xreply,"ErrorResponse")) then begin
+        OutString(0,0,XmlGet(xreply,"ErrorResponse/Error/Message"),false);
+        goto LPrintSubmissionStatus;
+      end;
+
+      SetRepCol(2,60);
+      SetRepCol(3,120);
+      SetRepCol(4,200);
+      SetRepCol(5,350);
+
+      StartFormat(15);
+      OutString(2,0,USetStr(42812) & ":",false);
+      OutString(3,0,XmlGet(xreply,docpath & "/StatusCode"),false);
+      EndFormat;
+
+      StartFormat(15);
+      OutString(2,0,USetStr(42813) & ":",false);
+      OutString(3,0,XmlGet(xreply,docpath & "/ProcessingSummary/MessagesProcessed"),false);
+      EndFormat;
+
+      StartFormat(15);
+      OutString(2,0,USetStr(42814) & ":",false);
+      OutString(3,0,XmlGet(xreply,docpath & "/ProcessingSummary/MessagesSuccessful"),false);
+      EndFormat;
+
+      StartFormat(15);
+      OutString(2,0,USetStr(42815) & ":",false);
+      OutString(3,0,XmlGet(xreply,docpath & "/ProcessingSummary/MessagesWithError"),false);
+      EndFormat;
+
+      StartFormat(15);
+      OutString(2,0,USetStr(42816) & ":",false);
+      OutString(3,0,XmlGet(xreply,docpath & "/ProcessingSummary/MessagesWithWarning"),false);
+      EndFormat;
+
+    end;
+  end;
+LPrintSubmissionStatus:;
+  EndJob;
+  return;
+end;
+
+global
+procedure AmazonCheckSubmissionResultRn(record RcVc RepSpec)
+begin
+  PrintSubmissionStatus(RepSpec);
+  return;
+end;

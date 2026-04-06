@@ -1,0 +1,85 @@
+
+global
+function LongInt CourseContentVcRecordDuplicate(var record CourseContentVc CourseContentr,record CourseContentVc CourseContent2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  
+  CourseContentr.SerNr = -1;
+  if (CourseContentr.SerNr<=0) then begin
+    CourseContentr.SerNr = NextSerNr("CourseContentVc",CurrentDate,-1,false,"");
+  end;
+
+  CourseContentVcRecordDuplicate = res; 
+  return;
+end;
+
+global
+function LongInt CourseContentVcRecordCheck(var record CourseContentVc CourseContentr,record CourseContentVc CourseContent2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  Integer insertmode,updatemode;
+    
+  res = 0;
+  insertmode = 1;//Rs_insert
+  updatemode = 2;//Rs_update
+  if (CourseContentr.SerNr<=0) then begin
+    CourseContentr.SerNr = NextSerNr("CourseContentVc",CurrentDate,-1,false,"");
+  end;
+  if (blank(CourseContentr.Topic)) then begin
+    RecordCheckError(1058,"",-1,"Topic");
+    res = -1;
+    goto LCourseContentVcRecordCheck;
+  end;
+  if (blank(CourseContentr.Name)) then begin
+    RecordCheckError(1058,"",-1,"Name");
+    res = -1;
+    goto LCourseContentVcRecordCheck;
+  end; 
+  if (CourseContentr.Type==kCourseContentTypeAttendance) then begin
+    if (blank(CourseContentr.AttendanceDate)) then begin
+      RecordCheckError(1058,"",-1,"AttendanceDate");
+      res = -1;
+      goto LCourseContentVcRecordCheck;
+    end;  
+    if (blank(CourseContentr.AttendanceFromTime)) then begin
+      RecordCheckError(1058,"",-1,"AttendanceFromTime");      
+      res = -1;
+      goto LCourseContentVcRecordCheck;
+    end;  
+    if (blank(CourseContentr.AttendanceToTime)) then begin
+      RecordCheckError(1058,"",-1,"AttendanceToTime");      
+      res = -1;
+      goto LCourseContentVcRecordCheck;
+    end;  
+    if (CourseContentr.RepeatPeriod<0) then begin
+      RecordCheckError(43512,"",-1,"RepeatPeriod");      
+      res = -1;
+      goto LCourseContentVcRecordCheck;
+    end;  
+  end;
+  if ((CourseContentr.EveryMonday or CourseContentr.EveryTuesday or
+      CourseContentr.EveryWednesday or CourseContentr.EveryThursday or
+      CourseContentr.EveryFriday or CourseContentr.EverySaturday or
+      CourseContentr.EverySunday) and blank(CourseContentr.RepeatUntilDate)) then begin
+    RecordCheckError(43512,"",-1,"RepeatUntilDate");      
+    res = -1;
+    goto LCourseContentVcRecordCheck;
+  end;
+LCourseContentVcRecordCheck:;
+  CourseContentVcRecordCheck = res; 
+  return;
+end;
+
+global
+function LongInt CourseContentVcRecordDefaults(var record CourseContentVc CourseContentr,record CourseContentVc CourseContent2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  
+  CourseContentr.SerNr = -1;
+  if (CourseContentr.SerNr<=0) then begin
+    CourseContentr.SerNr = NextSerNr("CourseContentVc",CurrentDate,-1,false,"");
+  end;
+  
+  CourseContentVcRecordDefaults = res; 
+  return;
+end;

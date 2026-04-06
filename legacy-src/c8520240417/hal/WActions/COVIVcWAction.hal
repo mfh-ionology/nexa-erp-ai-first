@@ -1,0 +1,324 @@
+//remote procedure COVIVc_PastePayDeal(var record COVc);
+external procedure RemoveOldContractClassObjects(string,var string);
+remote function Boolean COVIVc_PasteVECode(var record COVIVc);
+remote procedure COVIVc_PasteCurncyCode(var record COVIVc);
+remote function Boolean COVIVc_PasteAccNumber(var record COVIVc,string,Integer,Integer);
+remote procedure COVISumup(var record COVIVc);
+remote procedure COVIVc_PasteACShort(var record COVIVc,Integer,Integer);
+remote function val CalculateCOVICalcVATVal(var record COVIVc);
+remote function val CalculateCOVINettVal(var record COVIVc);
+remote procedure COVIVc_PasteDepartment(var record COVIVc);
+remote procedure CalcCOVIRow(var record COVIVc,Integer);
+
+function Boolean COVIDClassVATCodeEFAfter(Integer wn,Integer fn,Integer rownr,Boolean changedf)
+begin
+  record COVIVc COVIr;
+
+  if (changedf) then begin
+    GetWindowRecord(wn,COVIr);
+    COVIr.NettVal = CalculateCOVINettVal(COVIr);
+    COVIr.CalcVATVal = CalculateCOVICalcVATVal(COVIr);
+    PutWindowRecord(wn,COVIr);
+  end;
+  COVIDClassVATCodeEFAfter = true;
+  return;
+end;
+
+function Boolean COVIDClassContractClassEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf)
+begin
+  record COVIVc COVIr;
+  record ContractClassBlock CCb;
+  row ContractClassBlock CCbw;
+  string 255 tstr,t2;
+  Integer rwcnt,i;
+ 
+  if (changedf!=0) then begin
+    GetWindowRecord(wn,COVIr);
+    tstr = WindEFstr(wn);
+    if ((tstr!=COVIr.ContractClass) and (nonblank(tstr))) then begin
+      t2 = COVIr.Objects;
+      RemoveOldContractClassObjects(tstr,t2);
+      COVIr.Objects = t2;
+    end;
+    BlockLoad(CCb);
+    rwcnt = MatRowCnt(CCb);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(CCb,i,CCbw);
+      if (CCbw.Code==COVIr.ContractClass) then begin
+        if (nonblank(COVIr.Objects)) Then begin
+          COVIr.Objects = COVIr.Objects & ",";
+        end;
+        COVIr.Objects = COVIr.Objects & CCbw.DefObject;
+      end;
+    end;
+    PutWindowRecord(wn,COVIr);
+  end;
+  COVIDClassContractClassEFAfter = true;
+  return;
+end;
+
+function Boolean COVIDClassBaseRate2EFAfter(Integer wn,Integer fn,Integer rownr,Integer changed)
+begin  
+  record COVIVc COVIr;
+
+  if (changed!=0) then begin  
+    GetWindowRecord(wn,COVIr);
+    CalcCOVIRow(COVIr,rownr);
+    PutWindowRecord(wn,COVIr);
+  end;  
+  COVIDClassBaseRate2EFAfter = true;
+  return;
+end;
+
+function Boolean COVIDClassBaseRate1EFAfter(Integer wn,Integer fn,Integer rownr,Integer changed)
+begin  
+  record COVIVc COVIr;
+
+  if (changed!=0) then begin  
+    GetWindowRecord(wn,COVIr);
+    CalcCOVIRow(COVIr,rownr);
+    PutWindowRecord(wn,COVIr);
+  end;  
+  COVIDClassBaseRate1EFAfter = true;
+  return;
+end;
+
+function Boolean COVIDClassFrRateEFAfter(Integer wn,Integer fn,Integer rownr,Integer changed)
+begin  
+  record COVIVc COVIr;
+
+  if (changed!=0) then begin  
+    GetWindowRecord(wn,COVIr);
+    CalcCOVIRow(COVIr,rownr);
+    PutWindowRecord(wn,COVIr);
+  end;  
+  COVIDClassFrRateEFAfter = true;
+  return;
+end;
+
+function Boolean COVIDClassToRateB1EFAfter(Integer wn,Integer fn,Integer rownr,Integer changed)
+begin  
+  record COVIVc COVIr;
+
+  if (changed!=0) then begin  
+    GetWindowRecord(wn,COVIr);
+    CalcCOVIRow(COVIr,rownr);
+    PutWindowRecord(wn,COVIr);
+  end;  
+  COVIDClassToRateB1EFAfter = true;
+  return;
+end;
+
+function Boolean COVIDClassToRateB2EFAfter(Integer wn,Integer fn,Integer rownr,Integer changed)
+begin  
+  record COVIVc COVIr;
+
+  if (changed!=0) then begin  
+    GetWindowRecord(wn,COVIr);
+    CalcCOVIRow(COVIr,rownr);
+    PutWindowRecord(wn,COVIr);
+  end;  
+  COVIDClassToRateB2EFAfter = true;
+  return;
+end;
+
+function Boolean COVIDClassDepartmentEFAfter(Integer wn,Integer fn,Integer rownr,Integer changed)
+begin  
+  record COVIVc COVIr;
+
+  if (changed!=0) then begin
+    GetWindowRecord(wn,COVIr);
+    COVIVc_PasteDepartment(COVIr);
+    PutWindowRecord(wn,COVIr);
+  end; 
+  COVIDClassDepartmentEFAfter = true;
+  return;
+end;
+
+function Boolean COVIDClassVECodeEFAfter(Integer wn,Integer fn,Integer rownr,Integer changed)
+begin  
+  record COVIVc COVIr;
+
+  if (changed) then begin
+    GetWindowRecord(wn,COVIr);
+    if ((changed!=0) or ((blank(COVIr.Addr0)) and (nonblank(COVIr.VECode)))) then begin
+      if (COVIVc_PasteVECode(COVIr)) then begin
+        PutWindowRecord(wn,COVIr);
+      end else begin
+        Beep;
+      end;
+    end;  
+  end;  
+  COVIDClassVECodeEFAfter = true;
+  return;
+end;
+
+function Boolean COVIDClassPayDealEFAfter(Integer wn,Integer fn,Boolean changedf)
+begin
+  record COVIVc COVIr;
+  
+  if (changedf) then begin
+    GetWindowRecord(wn,COVIr);    
+    //COVIVc_PastePayDeal(COVIr);    
+    PutWindowRecord(wn,COVIr);    
+  end; 
+  COVIDClassPayDealEFAfter = true;
+  return;
+end;
+
+function Boolean COVIDClassCurncyCodeEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf)
+begin
+  record COVIVc COr;
+
+  if (changedf!=0) then begin  
+    GetWindowRecord(wn,COr);
+    COVIVc_PasteCurncyCode(COr);
+    PutWindowRecord(wn,COr);
+  end;
+  COVIDClassCurncyCodeEFAfter = true;
+  return;
+end;
+
+function Boolean COVIDClassAccNumberEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf)
+begin
+record COVIVc COVIr;
+  row COVIVc COVIrw;
+  Boolean res;
+
+ if (changedf!=0) then begin 
+    GetWindowRecord(wn,COVIr);
+    res = COVIVc_PasteAccNumber(COVIr,WindowState(wn),changedf,rownr);
+    MatRowGet(COVIr,rownr,COVIrw);
+    if (res) then begin
+      MatRowPut(COVIr,rownr,COVIrw);
+      PutWindowRecord(wn,COVIr);
+    end;
+ end;  
+  COVIDClassAccNumberEFAfter = true;
+  return;
+end;
+
+function Boolean COVIDClassSumEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf)
+begin
+  record COVIVc COVIr;
+
+  if (changedf!=0) then begin 
+    GetWindowRecord(wn,COVIr); 
+    COVIr.NettVal = CalculateCOVINettVal(COVIr);
+    COVIr.CalcVATVal = CalculateCOVICalcVATVal(COVIr);
+    PutWindowRecord(wn,COVIr);
+  end;
+  COVIDClassSumEFAfter = true;
+  return;
+end;
+
+function Boolean COVIDClassACShortEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf)
+begin
+  Boolean res;
+  record COVIVc COVIr;
+  row COVIVc COVIrw;
+  
+  if (changedf!=0) then begin 
+    GetWindowRecord(wn,COVIr);
+    COVIVc_PasteACShort(COVIr,rownr,changedf)
+    PutWindowRecord(wn,COVIr);
+  end;
+  COVIDClassACShortEFAfter = true;
+  return;
+end;
+
+function Boolean COVIDClassPayValEFAfter(Integer wn,Integer fn,Integer rownr,Integer changed)
+begin  
+  record COVIVc COVIr;
+
+  if (changed!=0) then begin  
+    GetWindowRecord(wn,COVIr);
+    COVISumup(COVIr);
+    PutWindowRecord(wn,COVIr);
+  end;  
+  COVIDClassPayValEFAfter = true;
+  return;
+end;
+
+global
+function Boolean COVIDClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+
+  switch (fieldname) begin 
+    case "VECode":        res = COVIDClassVECodeEFAfter(wn,fn,rownr,changed);
+    case "FrRate":        res = COVIDClassFrRateEFAfter(wn,fn,rownr,changed);
+    case "ToRateB1":      res = COVIDClassToRateB1EFAfter(wn,fn,rownr,changed);
+    case "ToRateB2":      res = COVIDClassToRateB2EFAfter(wn,fn,rownr,changed);
+    case "BaseRate1":     res = COVIDClassBaseRate1EFAfter(wn,fn,rownr,changed);
+    case "BaseRate2":     res = COVIDClassBaseRate2EFAfter(wn,fn,rownr,changed);
+    case "CurncyCode":    res = COVIDClassCurncyCodeEFAfter(wn,fn,rownr,changed);
+    case "AccNumber":     res = COVIDClassAccNumberEFAfter(wn,fn,rownr,changed);
+    case "Sum":           res = COVIDClassSumEFAfter(wn,fn,rownr,changed);
+    case "VATCode":       res = COVIDClassVATCodeEFAfter(wn,fn,rownr,changed);
+    case "ContractClass": res = COVIDClassContractClassEFAfter(wn,fn,rownr,changed);
+    case "ACShort":       res = COVIDClassACShortEFAfter(wn,fn,rownr,changed);
+    case "Department":    res = COVIDClassDepartmentEFAfter(wn,fn,rownr,changed);
+    case "PayVal":        res = COVIDClassPayValEFAfter(wn,fn,rownr,changed);
+  end;
+  COVIDClassAfterEditField = res;
+  return;
+end;
+
+global 
+function Boolean COVIDClassInsertRowTest(Integer wn, Integer rownr)
+begin
+  Boolean res;
+  record COVIVc COVIr;
+
+  res = true;
+  switch (WindowState(wn)) begin
+    case 0://Rs_normal
+      GetWindowRecord(wn,COVIr);
+      if (COVIr.OKFlag!=0) then begin res = false; end;
+    case 1://Rs_insert
+      res = true;
+    case 2://Rs_update
+      GetPrevWindowRecord(wn,COVIr);
+      if (COVIr.OKFlag!=0) then begin res = false; end;
+    otherwise
+      res = false;
+  end;
+  COVIDClassInsertRowTest = res;
+  return;
+end;
+
+global 
+function Boolean COVIDClassDeleteRowTest(Integer wn,Integer rownr)
+begin
+  record COVIVc COVIr;
+  Boolean res;
+
+  res = true;
+  if (WindowState(wn)==2) then begin//Rs_update
+    GetPrevWindowRecord(wn,COVIr);    
+    if (COVIr.OKFlag!=0) then begin res = false; end;
+  end;
+LCOVIDClassDeleteRowTest:;  
+  COVIDClassDeleteRowTest = res;
+  return;
+ end;
+
+global
+function Boolean COVIDClassActiveEditField(Integer wn,string fieldname,Integer fn,Integer wnst,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record COVIVc COVIr;
+
+  switch (wnst) begin
+    case Rs_update:
+      GetPrevWindowRecord(wn,COVIr);
+    otherwise  
+      GetWindowRecord(wn,COVIr);
+  end;
+  if (COVIr.OKFlag==0) then begin
+    res = true;
+  end;
+  COVIDClassActiveEditField = res;
+  return;
+end;

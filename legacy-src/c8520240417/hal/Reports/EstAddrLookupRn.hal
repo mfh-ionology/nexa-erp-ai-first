@@ -1,0 +1,185 @@
+external procedure DoSendAddrLookupRIKVer62(string,string,var area,var Boolean,var Boolean,var Boolean);
+external function string 255 ConvertXml(string);
+
+function string 255 cutString(string namestr)
+begin
+  string 255 cutlist,cutlist2,newnamestr;
+
+  newnamestr = namestr;
+  cutlist = USetStr(42520);
+  cutlist2 = USetStr(42521);
+  if (SetInSet(right(namestr,2),cutlist)) then begin
+    newnamestr = Left(namestr,(len(namestr)-3));
+  end;
+  if (SetInSet(right(namestr,3),cutlist2)) then begin
+    newnamestr = Left(namestr,(len(namestr)-4));
+  end;
+  cutString = newnamestr;
+  return;
+end;
+
+function boolean RequestAddrForRegAndNameRIKVer6(string regno,string namestr,var area reply,var Boolean scf)
+begin
+  Boolean res,noResult;
+  string 255 newnamestr;
+  record CYBlock CYb;
+  Integer cnt;
+  
+  newnamestr = Uppercase(namestr);
+  DoSendAddrLookupRIKVer62(regno,ConvertXml(newnamestr),reply,noResult,res,scf);
+  if (noResult) then begin
+    newnamestr = cutString(Uppercase(namestr));
+    if (newnamestr != namestr) then begin
+      DoSendAddrLookupRIKVer62(regno,ConvertXml(newnamestr),reply,noResult,res,scf);
+    end;
+  end;
+  if (res) then begin
+    BlockLoad(CYb);
+    cnt = 1;
+    if (noResult) then begin cnt = 0; end;
+  end;
+  RequestAddrForRegAndNameRIKVer6 = res;
+  return;
+end;
+
+global
+procedure EstAddrLookupRn(record RcVc RepSpec)
+begin
+  xml xmlReply;
+  Boolean res,noResult,scf;
+  string 255 xkey,subxkey,tstr,name,regnr,vatnr,addr1,addr2,addr3,status,link;
+  array string 255 aCUInf;
+  Integer i,aCnt,rw;
+  Area a_reply;
+
+  res = RequestAddrForRegAndNameRIKVer6(RepSpec.f2,RepSpec.f3,a_reply,scf);
+  rw = 1;
+  StartReportJob(USetStr(42522));
+  if (nonblank(RepSpec.f2)) then begin 
+    tstr = USetStr(42524) & ": " & RepSpec.f2;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f3)) then begin 
+    tstr = USetStr(42523) & ": " & RepSpec.f3;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  EndHeader;
+
+  xmlReply = ParseXMLArea(a_reply);
+
+  aCnt = 0;
+  SetRepCol(2,110);
+  SetRepCol(3,152);
+  SetRepCol(4,209);
+  SetRepCol(5,275);
+  
+  if (res == false) then begin
+    goto LEstAddrLookupRn;
+  end;
+  
+  if (XmlNodeExists(xmlReply,"SOAP-ENV:Envelope/SOAP-ENV:Body/SOAP-ENV:Fault/faultstring")) then begin
+    tstr = XmlGet(xmlReply,"SOAP-ENV:Envelope/SOAP-ENV:Body/SOAP-ENV:Fault/faultstring");
+    StartFormat(15);
+     OutString(0,0,tstr,false);
+    EndFormat;
+    goto LEstAddrLookupRn;
+  end;
+
+  xkey = "SOAP-ENV:Envelope/SOAP-ENV:Body/ns1:ettevotjaRekvisiidid_v1Response/ns1:keha/ns1:ettevotjad/";
+  for (i=0; XmlNodeExists(xmlReply,xkey & "ns1:Item[" & i & "]"); i=i+1) begin
+    subxkey = xkey & "ns1:Item[" & i & "]/";
+    name = XmlGet(xmlReply,subxkey & "ns1:nimi");
+    regnr = XmlGet(xmlReply,subxkey & "ns1:ariregistri_kood");
+    vatnr = XmlGet(xmlReply,subxkey & "ns1:kmkr_nr");
+    tstr = XmlGet(xmlReply,subxkey & "ns1:ettevotja_staatus");
+    status = XmlGet(xmlReply,subxkey & "ns1:ettevotja_staatus_tekstina");
+    addr1 = XmlGet(xmlReply,subxkey & "ns1:ettevotja_aadress/ns1:asukoht_ettevotja_aadressis");
+    addr2 = XmlGet(xmlReply,subxkey & "ns1:ettevotja_aadress/ns1:asukoha_ehak_tekstina");
+    addr3 = XmlGet(xmlReply,subxkey & "ns1:ettevotja_aadress/ns1:indeks_ettevotja_aadressis");
+    link = XmlGet(xmlReply,subxkey & "ns1:teabesysteemi_link");
+    ACUInf[aCnt] = RepSpec.ArtMode & ";" & name & ";" & regnr & ";" & vatnr & ";" & addr1 & ";" & addr2 & ";" & addr3;
+    if (aCnt == 0) then begin
+      StartFormat(15);
+      OutString(0,0,USetStr(42523),false);
+      OutString(2,0,USetStr(42524),false);
+      OutString(3,0,USetStr(42525),false);
+      OutString(4,0,USetStr(42526),false);
+      OutString(5,0,USetStr(42527),false);
+      EndFormat;
+    end;
+    Gray_Divider(0,1);
+    StartFormat(15);
+    OutString(0,0,name,false);
+    OutString(2,0,regnr,false);
+    OutString(3,0,vatnr,false);
+    OutString(4,0,status,false);
+    OutString(5,0,addr1,false);
+    if (RepSpec.ArtMode > 0) then begin
+      if (RepSpec.flags[1] == 1) then begin
+        OutStringID(1,"DblAddrUpdCU",USetStr(42535),true,ACUInf[aCnt]);
+        EndFormat;
+        StartFormat(15);
+        OutString(5,0,addr2,false);
+        OutStringID(1,"DblAddrCreateCU",USetStr(42536),true,ACUInf[aCnt]);
+        EndFormat;
+        StartFormat(15);
+        OutString(5,0,addr3,false);
+      end else begin
+        OutStringID(1,"DblAddrUpdCU",USetStr(42529),true,ACUInf[aCnt]);
+        EndFormat;
+        StartFormat(15);
+        OutString(5,0,addr2,false);
+        OutStringID(1,"DblAddrUpdCUName",USetStr(42534),true,ACUInf[aCnt]);
+        EndFormat;
+        StartFormat(15);
+        OutString(5,0,addr3,false);
+        OutStringID(1,"DblAddrCreateCU",USetStr(42530),true,ACUInf[aCnt]);
+        EndFormat;
+        StartFormat(15);
+      end;
+      OutStringID(1,"DblOpenCUInfoInWeb",USetStr(42531),true,link);
+      EndFormat;
+    end else begin
+      OutStringID(1,"DblAddrCreateCU",USetStr(42530),true,ACUInf[aCnt]);
+      EndFormat;
+      StartFormat(15);
+      OutString(5,0,addr2,false);
+      OutStringID(1,"DblOpenCUInfoInWeb",USetStr(42531),true,link);
+      EndFormat;
+      if (nonblank(addr3)) then begin
+        StartFormat(15);
+        OutString(5,0,addr3,false);
+        EndFormat;
+      end;
+    end;
+    aCnt = aCnt + 1; 
+  end;
+  Black_Divider(0,1);
+  StartFormat(15);
+  if (aCnt >= 100) then begin
+    OutString(6,0,USetStr(42532),false);
+  end else begin
+    OutString(6,0,USetStr(42533) & aCnt,false);
+  end;
+  EndFormat;  
+LEstAddrLookupRn:;
+  if (aCnt==0) then begin
+    if (!scf) then begin
+      tstr = USetStr(42538);
+    end else begin
+      tstr = USetStr(42528);
+    end;
+    StartFormat(15);
+    OutString(0,0,tstr,false);
+    EndFormat;
+  end;
+  if (res==false and scf) then begin
+    StartFormat(15);
+    OutString(0,0,USetStr(42539),false);
+    EndFormat;
+  end;
+  EndJob;
+  return;
+end;

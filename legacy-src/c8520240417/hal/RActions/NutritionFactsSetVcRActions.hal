@@ -1,0 +1,42 @@
+global
+function LongInt NutritionFactsSetVcRecordCheck(var record NutritionFactsSetVc NFr,record NutritionFactsSetVc NF2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  record INVc INr;
+  record NutritionFactsSetVc NFSetr;
+  LongInt errcode;
+
+  res = 0;
+  if (blank(NFr.Code)) then begin
+    RecordCheckError(1058,"",-1,"Code");
+    res = -1;
+    goto LNutritionFactsSetVcRecordCheck;
+  end; 
+  if (nonblank(NFr.Code)) then begin
+    NFSetr.Code = NFr.Code; 
+    if (ReadFirstMain(NFSetr,1,true)) then begin
+      RecordCheckError(1547,"",-1,"Code");
+      res = -1;
+      goto LNutritionFactsSetVcRecordCheck;
+    end;
+  end;
+  if (blank(NFr.ItemGroup)) then begin
+    RecordCheckError(1058,"",-1,"ItemGroup");
+    res = -1;
+    goto LNutritionFactsSetVcRecordCheck;
+  end;  
+  NFSetr.ItemGroup = NFr.ItemGroup;
+  if (ReadFirstKey("ItemGroup",NFSetr,1,true)) then begin
+    errcode = 1547;
+    if (NFSetr.ItemGroup=="*") then begin
+      errcode = 21655;
+    end;
+    RecordCheckError(errcode," " & NFr.ItemGroup,-1,"ItemGroup");
+    res = -1;
+    goto LNutritionFactsSetVcRecordCheck;
+  end;
+LNutritionFactsSetVcRecordCheck:;
+  NutritionFactsSetVcRecordCheck = res;
+  return;
+end;
+

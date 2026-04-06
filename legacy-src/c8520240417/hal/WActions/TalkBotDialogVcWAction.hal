@@ -1,0 +1,337 @@
+remote updating procedure WatsonAssistantClear();
+remote updating procedure WatsonAssistantExport(LongInt,var area);
+
+global
+function Boolean TalkBotDialogEntryDClassUpdateWindowSubset(Integer wn,var string subsetname)
+begin
+  record TalkBotDialogEntryVc TBDEr;
+  
+  GetWindowRecord(wn,TBDEr);
+  if (nonblank(TBDEr.SerNr)) then begin
+    subsetname = TBDEr.SerNr;
+  end else begin
+    subsetname = chr(0);
+  end;
+  
+  TalkBotDialogEntryDClassUpdateWindowSubset = true;
+  return;
+end;
+
+global
+updating procedure TalkBotWatsonAssistantClearLsm()
+begin
+  WatsonAssistantClear;
+  
+  UpdateBrowses("TalkBotDialogVc");
+  UpdateBrowses("TalkBotIntentVc");
+  UpdateBrowses("TalkBotEntity");
+  UpdateBrowses("TalkBotDialogEntryVc");
+  return;
+end;
+
+global
+updating procedure TalkBotWatsonAssistantExportLsm()
+begin
+  string 255 expfile;
+  area a_json;
+  record TalkBotDialogVc TBDr;
+  LongInt wn;
+  
+  wn = CurWindow;
+  if (GetRecordFromBrowse(TBDr,wn,1)==false) begin
+    Beep;
+    goto LTalkBotWatsonAssistantExportLsm;
+  end;
+  if (GetRecordFromBrowse(TBDr,wn,2)==true) begin
+    Beep;
+    goto LTalkBotWatsonAssistantExportLsm;
+  end;
+
+  expfile = SaveFileDialog(expfile,"","json");
+  if (blank(expfile)) then begin goto LTalkBotWatsonAssistantExportLsm; end;
+  
+  Delete_file(expfile);
+  WatsonAssistantExport(TBDr.SerNr,a_json);
+  WriteAreaToFile(a_json,expfile,0);
+  
+LTalkBotWatsonAssistantExportLsm:;
+  return;
+end;
+
+function Boolean GetActiveRow(Integer wn,var row TalkBotDialogEntryVc TBDErw)
+begin
+  record TalkBotDialogEntryVc TBDEr;
+  Integer rownr;
+  Boolean res;
+
+  GetWindowRecord(wn,TBDEr);
+  rownr = WindowActiveRow(wn);
+  if (rownr>=0) then begin
+    MatRowGet(TBDEr,rownr,TBDErw);
+    res = true;
+  end;
+
+  GetActiveRow = res;
+  return;
+end;
+
+/*
+global
+function string 40 TalkBotDialogEntryDClassSpecPasteName(Integer wn,string defpsname)
+begin
+  string 255 psname;
+  row TalkBotDialogEntryVc TBDErw;
+
+  psname = defpsname;
+  switch (WindowActiveField(wn)) begin
+    case "ItemData1":
+      if (GetActiveRow(wn,TBDErw)) then begin
+        switch (TBDErw.Item) begin
+          case kTalkBotDialogEntryItemCondition:    psname = "SetSClass";
+          case kTalkBotDialogEntryItemResponse:     psname = "";
+          case kTalkBotDialogEntryItemHansaAction:  psname = "SetSClass";
+        end;
+      end;
+    case "ItemData2":
+      if (GetActiveRow(wn,TBDErw)) then begin
+        switch (TBDErw.Item) begin
+          case kTalkBotDialogEntryItemCondition:    psname = "SetSClass";
+          case kTalkBotDialogEntryItemResponse:     psname = "";
+          case kTalkBotDialogEntryItemHansaAction:  psname = "";
+        end;
+      end;
+  end;
+  TalkBotDialogEntryDClassSpecPasteName = psname;
+  return;
+end;
+*/
+
+/*
+global
+function Integer TalkBotDialogEntryDClassSelectSetToPaste(Integer wn,string fieldname)
+begin
+  Integer res;
+  row TalkBotDialogEntryVc TBDErw;
+
+  res = -1;
+  switch (fieldname) begin
+    case "ItemData1":
+      if (GetActiveRow(wn,TBDErw)) then begin
+        switch (TBDErw.Item) begin
+          case kTalkBotDialogEntryItemCondition:    res = 674;
+          case kTalkBotDialogEntryItemResponse:     res = -1;
+          case kTalkBotDialogEntryItemHansaAction:  res = 673;
+        end;
+      end;
+    case "ItemData2":
+      if (GetActiveRow(wn,TBDErw)) then begin
+        switch (TBDErw.Item) begin
+          case kTalkBotDialogEntryItemCondition:    res = 675;
+          case kTalkBotDialogEntryItemResponse:     res = 672;
+          case kTalkBotDialogEntryItemHansaAction:  res = -1;
+        end;
+      end;
+  end;
+
+  TalkBotDialogEntryDClassSelectSetToPaste = res;
+  return;
+end;
+*/
+
+global
+function string 40 TalkBotIntentDClassSpecPasteName(Integer wn,string defpsname)
+begin
+  string 255 psname;
+  record TalkBotIntentVc TBIr;
+  row TalkBotIntentVc TBIrw;
+  Integer rownr;
+  
+  psname = defpsname;
+  switch (WindowActiveField(wn)) begin
+    case "AnnotationEntity":
+      GetWindowRecord(wn,TBIr);
+      rownr = WindowActiveRow(wn);
+      if (rownr>=0) then begin
+        MatRowGet(TBIr,rownr,TBIrw);
+        switch (TBIrw.Item) begin
+          case kTalkBotIntentItemExample:           psname = "";
+          case kTalkBotIntentItemAnnotation:        psname = "TalkBotEntitySClass";
+        end;
+      end;
+  end;
+  
+  TalkBotIntentDClassSpecPasteName = psname;
+  return;
+end;
+
+global
+function Boolean TalkBotAnnotationPosSClassOnOpenWindow(Integer wn)
+begin
+  string 255 tag,word;
+//  record RcVc RepSpec;
+  Integer mwn;
+  record TalkBotIntentVc TBIr;
+  row TalkBotIntentVc TBIrw,TBI2rw;
+  Integer rownr,idx,wordstart,wordend;
+  LongInt pos;
+
+  mwn = MotherWindow(wn);
+  GetWindowRecord(mwn,TBIr);
+  rownr = WindowActiveRow(mwn);
+  MatRowGet(TBIr,rownr,TBIrw);
+  switch (TBIrw.Item) begin
+    case kTalkBotIntentItemAnnotation:
+      if (rownr>0) then begin
+        idx = rownr;
+        while (idx!=0) begin
+          idx = idx - 1;
+          MatRowGet(TBIr,idx,TBI2rw);
+          if (TBI2rw.Item==kTalkBotIntentItemExample) then begin
+            goto LTalkBotAnnotationPosSClassOnOpenWindow_foundsample;
+          end;
+        end;
+      end;
+      goto LTalkBotAnnotationPosSClassOnOpenWindow;
+      
+LTalkBotAnnotationPosSClassOnOpenWindow_foundsample:;
+      DeSelectWindow(wn,true);
+      ClearStringList(wn);
+      while (GetNextSubString(TBI2rw.UserExample,pos," ",word)) begin
+        wordstart = pos - len(word) - 1;
+        wordend = pos - 1;
+        tag = wordstart & ":" & wordend;
+        AddListRow(wn,"words",1,tag,0);
+        AddListData(wn,"words","word",word);
+      end;
+      SetSelectedListLine(wn,0);
+  end;
+
+LTalkBotAnnotationPosSClassOnOpenWindow:;
+  TalkBotAnnotationPosSClassOnOpenWindow = false;
+  return;
+end;
+
+function Boolean DoPasteAnnotationWord(Integer wn)
+begin
+  Integer line,mwn,rownr;
+  string 255 word,indices,fldname,tstr,t2;
+  Boolean res;
+  record TalkBotIntentVc TBIr;
+  row TalkBotIntentVc TBIrw;
+  LongInt pos;
+
+  line = SelectedListLine(wn);
+  DeselectWindow(wn,false);
+  if (line>=0) then begin
+    word = GetListString(wn,line);
+    indices = GetListTag(wn,line);
+    if (nonblank(word)) then begin
+      mwn = MotherWindow(wn);
+      CloseWindow(wn);
+      PasteString(mwn,word);
+      rownr = WindowActiveRow(mwn);
+      fldname = WindowActiveField(mwn);
+      DeSelectWindow(mwn,true);
+      GetWindowRecord(mwn,TBIr);
+      MatRowGet(TBIr,rownr,TBIrw);
+      switch (fldname) begin
+        case "AnnotationStartWord":
+          if (blank(TBIrw.AnnotationEndWord)) then begin
+            TBIrw.AnnotationEndWord = TBIrw.AnnotationStartWord;
+          end else begin
+            GetNextSubString(indices,pos,":",tstr);
+            pos = -1;
+            GetNextSubString(TBIrw.AnnotationIndices,pos,":",t2);
+            GetNextSubString(TBIrw.AnnotationIndices,pos,":",t2);
+            indices = tstr & ":" & t2;
+          end;
+        case "AnnotationEndWord":
+          if (blank(TBIrw.AnnotationStartWord)) then begin
+            Beep;
+            goto LDoPasteAnnotationWord;
+          end;
+          GetNextSubString(TBIrw.AnnotationIndices,pos,":",tstr);
+          pos = -1;
+          GetNextSubString(indices,pos,":",t2);
+          GetNextSubString(indices,pos,":",t2);
+          indices = tstr & ":" & t2;
+      end;
+      TBIrw.AnnotationIndices = indices;
+      MatRowPut(TBIr,rownr,TBIrw);
+      PutWindowRecord(mwn,TBIr);
+      SelectWindow(mwn);
+      res = true;
+    end;
+  end;
+  
+LDoPasteAnnotationWord:;
+  DoPasteAnnotationWord = res;
+  return;
+end;
+
+global
+function Boolean TalkBotAnnotationPosSClassOnOKWindow(Integer wn)
+begin
+  TalkBotAnnotationPosSClassOnOKWindow = DoPasteAnnotationWord(wn);
+  return;
+end;
+
+global
+function Boolean TalkBotAnnotationPosSClassListDblClick(Integer wn)
+begin
+  DoPasteAnnotationWord(wn);
+  TalkBotAnnotationPosSClassListDblClick = true;
+  return;
+end;
+
+global
+procedure TalkBotDialogEntryDClassAddArg()
+begin
+  record TalkBotDialogEntryVc TBDEr;
+  row TalkBotDialogEntryVc TBDErw;
+  LongInt wn;
+  Integer rwcnt,idx;
+  
+  wn = CurWindow;
+  GetWindowRecord(wn,TBDEr);
+  
+  rwcnt = MatRowCnt(TBDEr);
+  for (idx = 0; idx<rwcnt; idx = idx + 1)
+  begin
+    MatRowGet(TBDEr,idx,TBDErw);
+    if (TBDErw.stp==1) then begin
+      goto LTalkBotDialogEntryDClassAddArg_add;
+    end;
+  end;
+  
+LTalkBotDialogEntryDClassAddArg_add:;
+  ClearRow(TBDEr,TBDErw,1);
+  TBDErw.stp = 2;
+  MatRowInsert(TBDEr,idx,TBDErw);
+  PutWindowRecord(wn,TBDEr);
+      
+LTalkBotDialogEntryDClassAddArg:;
+  return;
+end;
+
+global
+procedure TalkBotDialogEntryDClassButtonFlags(Integer wn,var Boolean duplOK,var Boolean newOK,var Boolean saveOK,var Boolean restOK)
+begin // Temporary fix for the RecordList
+  saveOK = true;
+  return;
+end;
+
+global
+function Boolean TalkBotDialogEntryDClassListDblClick(Integer wn)
+begin
+  Integer mwn;
+  record TalkBotDialogTextsVc TBDTr;
+  
+  if (WindowState(wn)==0) then begin
+    if (ReadMarkedRecord(wn,TBDTr)) then begin
+      mwn = OpenWindow("TalkBotDialogTextsDClass",1,0,"","",TBDTr);
+    end;
+  end;
+  TalkBotDialogEntryDClassListDblClick = true;
+  return;
+end;

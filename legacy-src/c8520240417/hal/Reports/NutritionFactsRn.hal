@@ -1,0 +1,76 @@
+global
+procedure NutritionFactsRn(record RcVc RepSpec)
+begin
+  Integer rw,rwcnt,i;
+  Boolean testf;
+  record NutritionFactsVc NFr;
+  row NutritionFactsVc NFrw; 
+  string 255 tstr;
+
+  StartReportJob(USEtStr(21660));
+  rw = 1;
+  if (nonblank(RepSpec.f1)) then begin
+    tstr = "Item:" & " " & RepSpec.f1;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f2)) then begin
+    tstr = "Item Group:" & " " & RepSpec.f2;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  EndHeader;
+
+  SetRepCol(2,40);
+  SetRepCol(3,190);
+  SetRepCol(4,240);
+  SetRepCol(5,420);
+
+
+  StartFormat(15);
+  OutString(0,0,(USEtStr(21667)),false);
+  OutString(2,0,(USEtStr(21664)),false);
+  OutString(3,0,(USEtStr(21668)),false);
+  OutString(4,0,(USEtStr(21663)),false);
+  OutString(5,0,(USEtStr(21661)),true);
+  OutString(1,0,(USEtStr(21662)),true);
+  EndFormat;
+  Black_Divider(0,1);
+
+  while (LoopMain(NFr,1,true)) begin
+    testf = true;
+    if (nonblank(RepSpec.f1)) then begin    
+      if (NFr.ArtCode!=RepSpec.f1) then begin
+        testf = false;
+      end;
+    end;
+    if (nonblank(RepSpec.f2)) then begin    
+      if (NFr.ItemGroup!=RepSpec.f2) then begin
+        testf = false;
+      end;
+    end;
+    if (testf) then begin
+      StartFormat(15);
+      OutString(0,0,NFr.ArtCode,false);
+      OutString(2,0,left(NFr.Description,40),false);
+      OutString(3,0,NFr.ItemGroup,false);
+      rwcnt = MatRowCnt(NFr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(NFr,i,NFrw);
+        OutString(4,0,NFrw.Nutrient,false);
+        OutString(5,0,NFrw.Value,true);
+        OutString(1,0,NFrw.UnitCode,true);
+        EndFormat;
+      end;  
+      if (nonblank(NFr.ServingSize)) or (nonblank(NFr.ServingSize)) then begin
+        StartFormat(15);
+        OutString(4,0,(USEtStr(21665) & ": " & NFr.ServingSize),false);
+        OutString(1,0,(USEtStr(21666) & ": " & NFr.ServingPerContainer),true);
+        EndFormat;
+      end;
+    end;
+    Gray_Divider(0,1);
+  end;
+  EndJob;
+  return;
+end;

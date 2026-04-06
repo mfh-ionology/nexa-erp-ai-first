@@ -1,0 +1,299 @@
+external function Boolean FindStringInString(string,string);
+
+procedure GlobalAccess2Rn(record RcVc RepSpec,boolean showcompanyf)
+begin
+  record SortRecord3Vc SRr;
+  row SortRecord3Vc SRrw;
+  record GlobalUserVc User;
+  row GlobalUserVc Userw;
+  boolean TrHs;
+  array string 5 person,access;
+  array string 255 name;
+  integer i,j,tot,rwcnt;
+  string 5 tacc;
+  string 255 curcomp;
+  record AccessVc Accessr;
+  
+  StartFormat(15);
+  OutString(30,0,"Global User",false);
+  OutString(70,0,USetStr(13202),false);
+  OutString(200,0,USetStr(13203),false);
+  EndFormat;
+  i = 0;
+  tacc = "*";
+  RecordClear(SRr);
+  ClearRow(SRr,SRrw,0);
+  User.Code = RepSpec.f3;
+  TrHs = true;
+  curcomp = CurrentCompany;
+  ResetLoop(User);
+  while (LoopMain(User,1,TrHs)) begin
+    if (nonblank(RepSpec.f3)) then begin
+      if (RepSpec.f3<>User.Code) then begin
+        TrHs = false;
+      end;
+    end;
+    if (TrHs==true) then begin
+      if (User.Closed==0) then begin
+        rwcnt = MatRowCnt(User);
+        if (showcompanyf) then begin
+          for (j=0;j<rwcnt;j=j+1) begin
+            MatRowGet(User,j,Userw);
+            if (Userw.CompCode==curcomp) then begin
+              if (blank(RepSpec.f1) or Userw.AccessGroup==RepSpec.f1) then begin
+                SRrw.tag  = User.AccessGroup;
+                SRrw.str1 = User.Code;
+                SRrw.str2 = User.Name;
+                MatRowInsert(SRr,MatRowCnt(SRr),SRrw);
+              end;
+              j = rwcnt;
+            end;
+          end;
+        end else begin
+          if ((blank(RepSpec.f1) or (FindStringInString(User.AccessGroup,RepSpec.f1)))) then begin
+            SRrw.tag   = User.AccessGroup;
+            SRrw.str1  = User.Code;
+            SRrw.str2  = User.Name;
+            MatRowInsert(SRr,MatRowCnt(SRr),SRrw);
+          end;
+        end;
+      end;
+    end;
+  end;
+  //SortRows(SRr,"tag",false);
+  i = 0;
+  tot = MatRowCnt(SRr);
+  for (i=0;i<tot;i=i+1) begin
+    MatRowGet(SRr,i,SRrw);
+    if (nonblank(SRrw.tag)) then begin
+      StartFormat(15);
+      OutString(30,"DblUserVc",SRrw.str1,false);
+      OutString(70,0,SRrw.str2,false);
+      
+      Accessr.Code = SRrw.tag;
+      ReadFirstMain(Accessr,1,true);
+      if (UserCanAccessRecord(Accessr,kAccessLevelFull)) then begin
+        OutString(200,"DblAccessVc",SRrw.tag,false);
+      end else begin
+        OutString(200,0,SRrw.tag,false);
+      end;
+      
+      EndFormat;
+      /*
+      if (SRrw.tag<>tacc) then begin
+        if (tacc<>"*") then begin
+          StartFormat(15);
+          EndFormat;
+          //Black_Divider(0,1);
+        end;
+        StartFormat(15);
+        
+        if (UserCanAccessRecord(Accessr,kAccessLevelFull)) then begin
+          OutString(30,"DblAccessVc",SRrw.tag,false);
+        end else begin
+          OutString(30,0,SRrw.tag,false);
+        end;
+      end;
+      tacc = SRrw.tag;
+      StartFormat(15);
+      OutString(70,0,SRrw.str1,false);
+      OutString(120,0,SRrw.str2,false);
+      EndFormat;
+      */
+    end;
+  end;
+
+  return;
+end;
+
+procedure PersAcc2Rn(record RcVc RepSpec)
+  begin
+  record SortRecord3Vc SRr;
+  row SortRecord3Vc SRrw;
+  record UserVc User;
+  record AccessVc Accessr;
+  vector string 255 comments;
+  boolean TrHs,test;
+  integer i,tot,count;
+  string 5 tacc,accright;
+  longint pos;
+  string 255 tstr;
+  
+  TrHs = true;
+  while (LoopMain(Accessr,1,TrHs)) begin
+    comments[Accessr.Code] = Accessr.Comment;
+  end;
+
+  StartFormat(15);
+  OutString(30,0,"Local User",false);
+  OutString(70,0,USetStr(13202),false);
+  OutString(200,0,USetStr(13203),false);
+  EndFormat;
+  i = 0;
+  tacc = "*";
+  RecordClear(SRr);
+  ClearRow(SRr,SRrw,0);
+  User.Code = RepSpec.f3;
+  TrHs = true;
+  ResetLoop(User);
+  while (LoopMain(User,1,TrHs)) begin
+    if (nonblank(RepSpec.f3)) then begin
+      if (RepSpec.f3<>User.Code) then begin
+        TrHs = false;
+      end;
+    end;
+    if (TrHs == true) then begin
+      if (nonblank(User.AccessGroup) and User.Closed==0) then begin
+        test = true;
+        if (nonblank(RepSpec.f1)) then begin
+          if (!FindStringInString(User.AccessGroup,RepSpec.f1)) then begin
+            test = false;
+          end;
+        end;
+        if (test) then begin
+          SRrw.tag = User.AccessGroup;
+          SRrw.str1  = User.Code;
+          SRrw.str2 = User.Name;
+          MatRowInsert(SRr,MatRowCnt(SRr),SRrw);
+        end;
+      end;
+    end;
+  end;
+  //SortRows(SRr,"tag",false);
+  i = 0;
+  tot = MatRowCnt(SRr);
+  for (i=0;i<tot;i=i+1) begin
+    MatRowGet(SRr,i,SRrw);
+    if (nonblank(SRrw.tag)) then begin
+      StartFormat(15);
+      OutString(30,"DblUserVc",SRrw.str1,false);
+      OutString(70,0,SRrw.str2,false);
+      pos = 0;
+      count = 0;
+      tstr = "";
+      while (GetNextSubstring(SRrw.tag,pos,",",accright)) begin
+        if (blank(tstr)) then begin
+          tstr = accright;
+        end else begin
+          tstr = tstr & "," & accright;
+        end;
+        
+        //if (UserCanViewRecord(...)) then begin
+        //OutString(200,"DblAccessVc",accright,false);
+        //OutString(230,0,comments[accright],false);
+        count = count + 1;
+      end;
+      
+      Accessr.Code = tstr;
+      ReadFirstMain(Accessr,1,true);
+      
+      if (UserCanAccessRecord(Accessr,kAccessLevelFull)) then begin
+        OutString(200,"DblAccessVc",tstr,false);
+      end else begin
+        OutString(200,0,tstr,false);
+      end;
+
+      EndFormat;
+      if (count>1) then begin
+        StartFormat(5);
+        EndFormat;
+      end;
+      /*
+      if (SRrw.tag<>tacc) then begin
+        if (tacc<>"*") then begin
+          StartFormat(15);
+          EndFormat;
+          //Black_Divider(0,1);
+        end;
+        StartFormat(15);
+        if (UserCanAccessRecord(Accessr,kAccessLevelFull)) then begin
+          OutString(30,"DblAccessVc",SRrw.tag,false);
+        end else begin
+          OutString(30,0,SRrw.tag,false);
+        end;
+      end;
+      tacc = SRrw.tag;
+      StartFormat(15);
+      OutString(70,0,SRrw.str1,false);
+      OutString(120,0,SRrw.str2,false);
+      EndFormat;
+      */
+    end;
+  end;
+
+  return;
+end;
+
+procedure CompAccess2Rn(record RcVc RepSpec)
+begin
+  record CompaniesBlock CompaniesRec;
+  row CompaniesBlock comprw;
+  Integer i,rwcnt;
+  Integer compnr,curcomp;
+
+  BlockLoad(CompaniesRec);
+  curcomp = CurrentCompany;
+
+  rwcnt = MatRowCnt(CompaniesRec);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(CompaniesRec,i,comprw);
+    if (SetCompanyCode(comprw.CompCode,false)) then begin
+      StartFormat(15);
+      EndFormat;
+      StartFormat(15);
+      OutString(0,0,USetStr(7661) & ":",false);
+      OutString(80,0,comprw.CompCode,false);
+      OutString(100,0,comprw.CompName,false);
+      EndFormat;
+      Black_Divider(0,1);
+      
+      GlobalAccess2Rn(RepSpec,true);
+      StartFormat(15);
+      EndFormat;
+      PersAcc2Rn(RepSpec);
+    end;
+  end;
+  ResetCompany(curcomp);
+  return;
+end;
+
+global
+procedure AccessGroupCheckRn(record RcVc RepSpec)
+begin
+  integer rw;
+  string 255 tstr;
+  
+  StartReportJob("Access Group Report");
+  rw = 1;
+  tstr = USetStr(13229);
+  tstr = tstr & USetStr(13201);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  if nonblank(RepSpec.f3) then begin
+     tstr = USetStr(13201) & ": " & RepSpec.f3;
+     Header(rw,tstr,1);
+     rw = rw + 1;
+  end;
+   if nonblank(RepSpec.f1) then begin
+     tstr = USetStr(13203) & ": " & RepSpec.f1;
+     Header(rw,tstr,1);
+     rw = rw + 1;
+  end;
+  if nonblank(RepSpec.f2) then begin
+    tstr = USetStr(13204) & ": " & RepSpec.f2;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  EndHeader;
+  
+  StartFormat(15);
+  OutString(0,0,"Global Users",false); // English hardcoded
+  EndFormat;
+  Black_Divider(0,1);
+
+  GlobalAccess2Rn(RepSpec,false);
+  CompAccess2Rn(RepSpec);
+  
+  EndJob;
+  return;
+end;

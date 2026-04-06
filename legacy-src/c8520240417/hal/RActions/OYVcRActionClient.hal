@@ -1,0 +1,89 @@
+remote function string 255 AddBranchObjectToObjectList(string,string);
+
+global
+function LongInt OYVcRecordDefaultsClient(LongInt wn,var record OYVc OYr,record OYVc OY2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  record LocalMachineBlock LMb;
+
+  BlockLoad(LMb);  
+  if (blank(OYr.Location)) then begin
+    OYr.Location = LMb.DefLocation;
+  end;
+  OYr.BranchID = LMb.BranchID;
+  OYr.Objects = AddBranchObjectToObjectList(LMb.BranchID,OYr.Objects);
+  if (blank(OYr.PriceList)) then begin
+    OYr.PriceList = LMb.PLCode;
+  end;
+  OYVcRecordDefaultsClient = res;
+  return;
+end;
+
+global
+function LongInt OYVcRecordDuplicateClient(LongInt wn,var record OYVc OYr,record OYVc OY2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  record LocalMachineBlock LMb;
+
+  BlockLoad(LMb);  
+  OYr.BranchID = LMb.BranchID;
+  OYr.Objects = AddBranchObjectToObjectList(LMb.BranchID,OYr.Objects);
+  OYVcRecordDuplicateClient = res;
+  return;
+end;
+
+global
+updating function LongInt OYVcRecordSaveClient(LongInt wn,var record OYVc OYr,record OYVc OY2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  
+  UpdateBrowses("PipelineWClass");
+  OYVcRecordSaveClient = res;
+  return;
+end;
+
+global
+updating function LongInt OYVcRecordUpdateClient(LongInt wn,var record OYVc OYr,record OYVc OY2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  
+  UpdateBrowses("PipelineWClass");
+  OYVcRecordUpdateClient = res;
+  return;
+end;
+
+global
+function LongInt OYVcRecordRemoveClient(LongInt wn,var record OYVc OYr,record OYVc OY2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+
+  UpdateBrowses("PipelineWClass");
+  OYVcRecordRemoveClient = res;
+  return;
+end;
+
+global
+function LongInt OYVcRecordProtectFields(var record OYVc OYr,record OYVc OY2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  Integer i,rwcnt;
+  row OYVc OYrw;
+  row OYVc OY2rw;
+  Integer rwcnt2;
+  
+  OYr.RegTime = OY2r.RegTime;
+  rwcnt = MatRowCnt(OYr);
+  rwcnt2 = MatRowCnt(OY2r);
+  for (i=0;i<rwcnt2;i=i+1) begin
+    if (i<rwcnt) then begin
+      MatRowGet(OYr,i,OYrw);
+      MatRowGet(OY2r,i,OY2rw);
+      OY2rw.Invd = OYrw.Invd;
+      OY2rw.Invoiced = OYrw.Invoiced;
+      OY2rw.InvDate = OYrw.InvDate;
+      MatRowPut(OY2r,i,OY2rw);
+    end;
+  end;
+  OYVcRecordProtectFields = res;
+  return;
+end;

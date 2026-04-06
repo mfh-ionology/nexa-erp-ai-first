@@ -1,0 +1,242 @@
+external function Boolean SetInSet2(string,string);
+external procedure RemoteCloudServersData(array record RemoteCloudServerVc,var array Date,var array val,var array Integer);
+external procedure GetLastServerListActivityDate(array record RemoteCloudServerVc,var array Date);
+external function string 255 FileSizeToString(Val);
+external function Boolean IsInternalVersion(string);
+
+procedure ShowCNInfo(string cncode,record RcVc RepSpec)
+begin
+  record CloudNodeVc CNr;
+
+  CNr.Code = cncode;
+  if (ReadFirstMain(CNr,1,true)) then begin
+    StartFormat(15);
+    OutString(0,0,CNr.Code,false);
+    OutString(3,0,CNr.HostName,false);
+    EndFormat;
+  end;
+  return;
+end;
+
+procedure ShowRemoteCloudServerList(array record RemoteCloudServerVc aRCSr,record RCVc RepSpec,var Integer tot)
+begin
+  record CloudNodeVc CNr;
+  record CUVc CUr;
+  record RemoteCloudServerVc RCSr;
+  record RemoteCloudServerVc tmpRCSr;
+  record HansaVersionVc HVr;
+  Longint i,cnt;
+  Boolean testf;
+  string 255 tstr,lastc;
+  val totsize;
+  Date dt;
+
+  if (aRCSr.length>0) then begin
+    cnt = 0;
+    for (i=0;i<aRCSr.length;i=i+1) begin
+      RCSr = aRCSr[i];
+      if (RCSr.Controller!=lastc) then begin
+        // if (nonblank(lastc)) then begin
+        //   StartFormat(15);
+        //   OutString(0,0,"Total folder size " & (totsize/1024) & " mb, " & (totsize/1024/1024) & " gb",false);
+        //   OutString(1,0,UsetStr(38592) & " " & cnt,true);
+        //   EndFormat;
+        //   StartFormat(1);
+        //   Gray_divider(0,1);
+        //   EndFormat;
+        // end;
+        totsize = 0;      
+        ShowCNInfo(RCSr.Controller,RepSpec);
+        lastc = RCSr.Controller;
+        tot = tot + cnt;
+        cnt = 0;
+      end;
+      testf = true;
+      if (testf) then begin
+        StartFormat(15);
+        CUr.Code = RCSr.CUCode; 
+        ReadFirstMain(Cur,1,true);
+        HVr.Code = RCSr.HansaVersion;
+        ReadFirstMain(HVr,1,true);
+        tstr = RCSr.Name;
+        // if (len(tstr)>35) then begin
+        //   tstr = left(tstr,32) & "...";
+        // end;
+        if (blank(tstr)) then begin
+          tstr = "[blank name]";
+        end;
+
+        OutStringID(0,"DblRCSVc",tstr,false,RCSr.UUID);
+        OutString(3,0,StringFromSet(367,RCSr.CurrentStatus),false);
+        OutString(4,0,RCSr.HansaVersion,false);
+        OutString(5,0,FileSizeToString(RCSr.HDBSize),false);
+        OutString(6,0,Left(RCSr.Classification,20),false);
+        OutString(7,0,RCSr.Contract,false);
+        if (RepSpec.flags[22]) then begin
+          OutString(1,0,RCSr.LastCloudBackupDate,true);
+        end;
+        EndFormat;
+        cnt = cnt + 1;
+        if (RCSr.DataFolderSize64>0) then begin
+          totsize = totsize + RCSr.DataFolderSize64;
+        end;
+      end;
+    end;
+    // StartFormat(15);
+    // EndFormat;
+    // StartFormat(15);
+    // OutString(0,0,"Total folder size " & (totsize/1024) & " mb, " & (totsize/1024/1024) & " gb",false);
+    // OutString(1,0,UsetStr(38592) & " " & cnt,true);
+    // EndFormat;
+    // StartFormat(15);
+    // EndFormat;
+    StartFormat(15);
+    Gray_divider(0,1);
+    EndFormat;
+  end;
+  return;
+end;
+
+function Boolean IsTestCC(Integer partner)
+begin
+  Boolean res;
+  
+  res = false;
+  switch (partner) begin
+    case kHostingPartnerTest:       res = true;
+    case kHostingPartnerScaleTest:  res = true;
+  end;
+  
+  IsTestCC = res;
+  return;
+end;
+
+procedure GetRemoteCloudServerList(record RcVc RepSpec,array record RemoteCloudServerVc aRCSr)
+begin
+  record RemoteCloudServerVc RCSr;
+  Boolean TrHs,testf;
+  Integer stat;
+  Date dt;
+  record HansaVersionVc HVr;
+  record CloudNodeVc CNr;
+  record CUVc CUr;
+  Integer cnt;
+  record HostingConfigurationVc HCr;
+
+  RCSr.Controller = RepSpec.f1;
+  TrHs = true;
+  stat = -1;
+  if (nonblank(RepSpec.f6)) then begin
+    stat = SetFromString(367,RepSpec.f6);
+  end;
+  while (LoopKey("Controller",RCSr,1,TrHs)) begin
+    if (nonblank(RepSpec.f1) and RCSr.Controller!=RepSpec.f1) then begin
+      TrHs = false;
+    end else begin
+      testf = true;
+      if (RepSpec.flags[12]==0 and RCSr.Closed!=0) then begin testf = false; end;
+      if (RepSpec.flags[12]==1 and RCSr.Closed==0) then begin testf = false; end;
+      switch (RepSpec.flags[18]) begin
+        case 1: if (IsInternalVersion(RCSr.HansaVersion)==false) then begin testf = false; end;
+      end;
+      if (RepSpec.flags[21]>0 and RCSr.Contract>0) then begin testf = false; end;
+      if (stat>-1 and RCSr.CurrentStatus!=stat) then begin testf = false; end;
+      if (nonblank(RepSpec.f7)) then begin
+        if (SetInSet2(RepSpec.f7,RCSr.Classification)==false) then begin testf = false; end;
+      end;
+      dt = RCSr.LastStartDate;
+      if (dt<RCSr.LastStopDate) then begin dt = RCSr.LastStopDate; end;
+      if (dt<RCSr.CreatedDate) then begin dt = RCSr.CreatedDate; end;
+      if (testf) then begin
+        CNr.Code = RCSr.Controller;
+        if (ReadFirstMain(CNr,1,true)) then begin
+          if (CNr.NodeType!=kCloudNodeTypeStandardCloudTest and RepSpec.flags[3]==1) then begin
+            testf = false;
+          end;
+          testf = false;
+          switch (RepSpec.flags[23]) begin
+            case 0 : if (!IsTestCC(CNr.HostingPartner)) then begin testf = true; end;;
+            case 1 : if (IsTestCC(CNr.HostingPartner))  then begin testf = true; end;;
+          end;
+        end else begin 
+          testf = false;
+        end;
+      end; 
+      if (testf and nonblank(RepSpec.f3)) then begin
+        HVr.Code = RCSr.HansaVersion;
+        if (ReadFirstMain(HVr,1,true)) then begin
+          if (RepSpec.f3!=left(RCSr.HansaVersion,len(RepSpec.f3))) then begin
+            if (RepSpec.f3!=left(HVr.Name,len(RepSpec.f3))) then begin
+              testf = false;
+            end;
+          end;
+        end else begin
+          testf = false;
+        end;
+      end;
+      if (testf) then begin
+        aRCSr[aRCSr.length] = RCSr;
+      end;
+    end;
+  end;
+
+  return;
+end;
+
+global
+procedure ASPInternalServerAuditRn(record RCVc RepSpec)
+begin
+  string 255 lastc;
+  Integer rw,cnt,tot;
+  string 255 tstr;
+  array record RemoteCloudServerVc aRCSr;
+  record RemoteCloudServerVc RCSr;
+
+  StartReportJob("Internal Server Audit");
+  rw = 1;
+  if (nonblank(RepSpec.f1)) then begin
+    tstr = "Cloud Node:" & RepSpec.f1;
+    Header(rw,tstr,1);
+  end;
+  if (nonblank(RepSpec.f3)) then begin
+    Header(rw,"Version:" & RepSpec.f3,1); rw = rw + 1;
+  end;
+  EndHeader;
+  
+  SetRepCol(3,80);
+  SetRepCol(4,130);
+  SetRepCol(5,260);
+  SetRepCol(6,300);
+  SetRepCol(7,380);
+  SetRepCol(8,420);
+  StartFormat(15);
+  OutString(0,0,"Server Name",false);
+  OutString(3,0,"Status",false);
+  OutString(4,0,"Version",false);
+  OutString(5,0,"DB Size",false);
+  OutString(6,0,"Classification",false);
+  OutString(7,0,"Contract",false);
+  if (RepSpec.flags[22]) then begin 
+    OutString(1,0,"Cloud Backup Date",true);
+  end;
+  EndFormat;
+  StartFormat(1);
+  Gray_divider(0,1);
+  EndFormat;
+
+  GetRemoteCloudServerList(RepSpec,aRCSr);
+  ShowRemoteCloudServerList(aRCSr,RepSpec,tot);
+
+  if (tot>0) then begin
+    StartFormat(15);
+    OutString(0,0,UsetStr(38593) & " " & tot,false);
+    EndFormat;
+  end else begin
+    StartFormat(15);
+    OutString(0,0,UsetStr(38594),false);
+    EndFormat;  
+  end;
+
+  EndJob;
+  return;
+end;

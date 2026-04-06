@@ -1,0 +1,288 @@
+external function Integer PayTermType(string);
+external function Boolean CheckPDExists(string);
+external function Integer CheckRates(string,val,val,val,val,val,var string);
+external function Boolean ReadFirstItem(string,var record INVc,Boolean,Boolean);
+external function Integer CheckObjs(string,string,var string);
+external function Boolean Date2Test(string,Date,string,Integer);
+external procedure GetFullCurncyRate(var string,Date,var val,var val,var val,var val,var val);
+external function Integer ValidateContractClass(string);
+external function Boolean VATCodeExists(string);
+external procedure COVISumup(var record COVIVc);
+external function val CalculateCOVINettVal(var record COVIVc);
+external function val CalculateCOVICalcVATVal(var record COVIVc);
+
+global
+function LongInt COVIVcRecordDefaults(var record COVIVc COVIr,record COVIVc COCOVI2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  string 10 curcode;
+  val fr,to1,to2,br1,br2;
+
+  COVIr.SerNr = -1;
+  COVIr.perType = 0;
+  COVIr.perLength = 1;
+  COVIr.invDtype = 0;
+  COVIr.invDays = 0;
+  COVIr.COVIDate = CurrentDate;
+  if (SingleUserMode) then begin
+    COVIr.SerNr = NextSerNr("COVIVc",COVIr.COVIDate,-1,false,"");
+  end;
+  COVIr.OKFlag = 0;
+  COVIr.Accepted = 0;
+  COVIr.Approved = 0;
+  COVIr.PayDeal = "";
+  COVIr.Objects = "";
+  COVIr.CurncyCode = "";
+  curcode = COVIr.CurncyCode;
+  GetFullCurncyRate(curcode,COVIr.COVIDate,fr,to1,to2,br1,br2);
+  COVIr.CurncyCode = curcode;
+  COVIr.FrRate = fr;
+  COVIr.ToRateB1 = to1; 
+  COVIr.ToRateB2 = to2;
+  COVIr.BaseRate1 = br1;
+  COVIr.BaseRate2 = br2;    
+
+  COVIVcRecordDefaults = res; 
+  return;
+end;
+
+global
+function LongInt COVIVcRecordDuplicate(var record COVIVc COVIr,record COVIVc COVI2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  string 10 curcode;
+  val fr,to1,to2,br1,br2;
+  record UserVc Userr;
+  Date blankd;
+  Integer i,rwcnt;
+  row COVIVc COVIrw;
+
+  COVIr.SerNr = -1;
+  COVIr.COVIDate = CurrentDate;
+  COVIr.lastInvDate = "";
+  COVIr.NextPriceChange = "";
+  COVIr.OKFlag = 0;
+  COVIr.Accepted = 0;
+  COVIr.Approved = 0;
+  curcode = COVIr.CurncyCode;
+  GetFullCurncyRate(curcode,COVIr.COVIDate,fr,to1,to2,br1,br2);
+  COVIr.CurncyCode = curcode;
+  COVIr.FrRate = fr;
+  COVIr.ToRateB1 = to1; 
+  COVIr.ToRateB2 = to2;
+  COVIr.BaseRate1 = br1;
+  COVIr.BaseRate2 = br2;  
+  COVIr.VATVal = blankval;
+  COVIr.PayVal = blankval;
+  COVIr.NettVal = blankval;
+  COVIr.CalcVATVal = blankval;
+  COVIr.startDate = "";
+  if (SingleUserMode) then begin
+    COVIr.SerNr = NextSerNr("COVIVc",COVIr.COVIDate,-1,false,"");
+  end;
+  rwcnt = MatRowCnt(COVIr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(COVIr,i,COVIrw);
+    COVIrw.AccNumber = "";
+    COVIrw.Comment = "";
+    COVIrw.Sum = blankval;
+    COVIrw.VATCode = "";
+    COVIrw.InvoiceNo = -1;
+    COVIrw.endDate = "";
+    COVIrw.startDate = "";
+    COVIrw.InvoiceNo = "";
+    COVIrw.InvoiceAfter = "";
+    COVIrw.lastInvDate = "";
+    MatRowPut(COVIr,i,COVIrw);
+  end;  
+  COVIVcRecordDuplicate = res;
+  return;
+end;
+
+global
+updating function LongInt COVIVcRecordCheck(var record COVIVc COVIr,record COVIVc COVI2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  record CUVc VEr;
+  row COVIVc COVIrw;
+  Integer i,rwcnt,errcode;
+  record COVIVc lCOVIr;
+  LongInt oldnr;
+  record AccVc Accr;
+  string 255 tstr,errstr;
+  Integer insertmode,updatemode;
+  val difference;
+  record VITBlock VITb;
+
+  BlockLoad(VITb);
+  oldnr = COVIr.SerNr;
+  res = 0;
+  insertmode = 1;
+  updatemode = 2;
+
+  rwcnt = MatRowCnt(COVIr);
+  if (COVIr.SerNr<=0) then begin
+    COVIr.SerNr = NextSerNr("COVIVc",COVIr.COVIDate,-1,false,"");
+  end;
+  if (stat==updatemode) then begin
+    if (COVIr.SerNr<=0) and (COVI2r.OKFlag==0) then begin
+      COVIr.SerNr = COVI2r.SerNr;
+    end;
+  end;  
+  if ((stat==insertmode) or (COVIr.SerNr!=COVI2r.SerNr)) then begin
+    lCOVIr.SerNr = COVIr.SerNr;
+    if (ReadFirstMain(lCOVIr,2,true)) then begin
+      RecordCheckError(1547,"",-1,"SerNr");      
+      res = -1; 
+      goto LCOVIVcRecordCheck;
+    end;
+  end;
+  if (Date2Test("COVIVc",COVIr.COVIDate,"COVIDate",-1)==false) then begin
+    res = -1;
+    goto LCOVIVcRecordCheck;
+  end;
+  errcode = CheckObjs("",COVIr.Objects,errstr);
+  if (errcode!=0) then begin
+    RecordCheckError(errcode,errstr,-1,"Objects");
+    res = -1; 
+    goto LCOVIVcRecordCheck;
+  end;
+  if ((COVIr.Accepted==0) and (COVIr.OKFlag!=0)) then begin
+      RecordCheckError(43500,"",-1,"SerNr");      
+    goto LCOVIVcRecordCheck;
+  end;
+  if (blank(COVIr.VECode)) then begin
+    RecordCheckError(1125,"",-1,"VECode");      
+    res = -1; 
+    goto LCOVIVcRecordCheck;
+  end;
+  if (blank(COVIr.startDate)) then begin
+    RecordCheckError(1058,"",-1,"startDate");      
+    res = -1; 
+    goto LCOVIVcRecordCheck;
+  end;
+  VEr.Code = COVIr.VECode;
+  if (ReadFirstMain(VEr,1,true)==false) then begin
+    RecordCheckError(1120,COVIr.VECode,-1,"VECode");      
+    res = -1; 
+    goto LCOVIVcRecordCheck;
+  end;
+  if (nonblank(VEr.CurncyCode)) then begin
+    if (VEr.CurncyCode!=COVIr.CurncyCode) then begin
+      RecordCheckError(1217,"",-1,"CurncyCode");      
+      res = -1;
+      goto LCOVIVcRecordCheck;
+    end;
+  end;      
+  if (CheckPDExists(COVIr.PayDeal)==false) then begin
+    RecordCheckError(1256,"",-1,"PayDeal");      
+    res = -1;
+    goto LCOVIVcRecordCheck;        
+  end; 
+  switch (PayTermType(COVIr.PayDeal)) begin
+    case kInvoiceTypeCredit:
+      RecordCheckError(1227,COVIr.PayDeal,-1,"PayDeal");      
+      res = -1;
+      goto LCOVIVcRecordCheck;
+    case kInvoiceTypeEmployee:
+      RecordCheckError(1958,"",-1,"PayDeal");      
+      res = -1;
+      goto LCOVIVcRecordCheck;
+  end;
+  errcode = CheckRates(COVIr.CurncyCode,COVIr.FrRate,COVIr.ToRateB1,COVIr.ToRateB2,COVIr.BaseRate1,COVIr.BaseRate2,errstr);
+  if (errcode!=0) then begin
+    RecordCheckError(errcode,"",-1,errstr);      
+    res = -1; 
+    goto LCOVIVcRecordCheck;
+  end;          
+  if (nonblank(COVIr.ContractClass)) then begin
+    errcode = ValidateContractClass(COVIr.ContractClass);
+    if (errcode!=0) then begin
+      RecordCheckError(errcode,"",-1,"ContractClass");      
+      res = -1;
+      goto LCOVIVcRecordCheck;
+    end;
+  end;
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(COVIr,i,COVIrw);
+    if (nonblank(COVIrw.AccNumber)) then begin
+      if (ReadFirstItem(COVIrw.AccNumber,Accr,true,true)==false) then begin
+        RecordCheckError(1120,COVIrw.AccNumber,i,"AccNumber");      
+        res = -1; 
+        goto LCOVIVcRecordCheck;
+      end;
+    end else begin
+      if (Accr.blockedFlag!=0) then begin
+        RecordCheckError(1258,COVIrw.AccNumber,i,"AccNumber");      
+        res = -1; 
+        goto LCOVIVcRecordCheck;
+      end;
+      if (Accr.GroupAcc!=0) then begin
+        RecordCheckError(1084,COVIrw.AccNumber,i,"AccNumber");      
+        res = -1; 
+        goto LCOVIVcRecordCheck;
+      end;
+    end;
+    if (nonblank(COVIrw.Objects)) then begin
+      tstr = COVIr.Objects;
+      if (nonblank(tstr)) then begin
+        tstr = tstr & ",";
+      end;
+      tstr = tstr & COVIrw.Objects;
+      errcode = CheckObjs(COVIrw.AccNumber,tstr,errstr);
+      if (errcode!=0) then begin
+        RecordCheckError(errcode,errstr,i,"Objects");      
+        res = -1; 
+        goto LCOVIVcRecordCheck;
+      end;
+    end;
+    if (COVIrw.Sum!=0) then begin
+      if (blank(COVIrw.VATCode)) then begin
+        RecordCheckError(1134,"",i,"VATCode");      
+        res = -1; 
+        goto LCOVIVcRecordCheck;
+      end;
+    end; 
+    if (nonblank(COVIrw.VATCode)) then begin
+      if (VATCodeExists(COVIrw.VATCode)==false) then begin
+        RecordCheckError(1120,COVIrw.VATCode,i,"VATCode");      
+        res = -1;
+        goto LCOVIVcRecordCheck;
+      end;
+    end;
+  end;  
+  COVISumup(COVIr);
+  if (rwcnt>0) and (blank(COVIr.PayVal)) then begin
+    RecordCheckError(1058,"",-1,"PayVal");      
+    res = -1;
+    goto LCOVIVcRecordCheck;
+   end;
+  if (rwcnt>0) and (blank(COVIr.VATVal)) then begin
+    RecordCheckError(1058,"",-1,"VATVal");      
+    res = -1;
+    goto LCOVIVcRecordCheck;
+   end;
+  if ((rwcnt>0) and (COVIr.NettVal<0) and (blank(COVIr.PayVal))) then begin
+    RecordCheckError(1058,"",-1,"PayVal");      
+    res = -1;
+    goto LCOVIVcRecordCheck;
+  end;
+  if (VITb.autoVATflag==0) then begin
+    if (CalculateCOVICalcVATVal(COVIr)!=COVIr.VATVal) then begin
+      difference = COVIr.VATVal-CalculateCOVICalcVATVal(COVIr);
+      RecordCheckError(1011," " & difference,-1,"VATVal");
+      res = -1;
+      goto LCOVIVcRecordCheck;
+    end;
+    if (COVIr.PayVal!=(CalculateCOVINettVal(COVIr) + CalculateCOVICalcVATVal(COVIr))) then begin
+      difference = (COVIr.PayVal-COVIr.VATVal) - CalculateCOVINettVal(COVIr);
+      RecordCheckError(1011," " & difference,-1,"PayVal");
+      res = -1;
+      goto LCOVIVcRecordCheck;
+    end;
+  end;  
+LCOVIVcRecordCheck:;
+  if (res!=0) then begin COVIr.SerNr = oldnr; end;
+  COVIVcRecordCheck = res;
+  return;
+end;

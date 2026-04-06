@@ -1,0 +1,36 @@
+external procedure GetVATCodeRow(string,row VATCodeBlock);
+
+function Boolean FiscalPrinterVATCodeTClassVATCodeEFAfter(Integer wn,Integer rownr,Boolean changedf)
+begin
+  record FPVATCodeBlock FPVATCodeb;
+  row FPVATCodeBlock FPVATCodebrw;
+  row VATCodeBlock VATCodebrw;
+
+  if (changedf) then begin
+    if (rownr>=0) then begin
+      GetWindowRecord(wn,FPVATCodeb);        
+      MatRowGet(FPVATCodeb,rownr,FPVATCodebrw);
+      GetVATCodeRow(FPVATCodebrw.VATCode,VATCodebrw);
+      FPVATCodebrw.Rate = VATCodebrw.ExVatpr;
+      if (blank(FPVATCodebrw.Rate)) then begin
+        FPVATCodebrw.Rate = VATCodebrw.IncVatpr;
+      end;
+      MatRowPut(FPVATCodeb,rownr,FPVATCodebrw);
+      PutWindowRecord(wn,FPVATCodeb);    
+    end;
+  end;
+  FiscalPrinterVATCodeTClassVATCodeEFAfter = true;
+  return;
+end;
+
+global
+function Boolean FiscalPrinterVATCodeTClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
+begin
+  Boolean res;
+
+  switch (fieldname) begin
+    case "VATCode": res = FiscalPrinterVATCodeTClassVATCodeEFAfter(wn,rownr,changed!=0);
+  end;
+  FiscalPrinterVATCodeTClassAfterEditField = res;
+  return;
+end;

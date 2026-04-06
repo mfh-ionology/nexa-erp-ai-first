@@ -1,0 +1,72 @@
+global
+updating function LongInt TaxonomiesBlockCheck(var record TaxonomiesBlock Taxonomiesb,record TaxonomiesBlock Taxonomies2b,LongInt stat,LongInt check)
+begin
+  LongInt res,pos,pos1;
+  Integer rwcnt,i,j,k;
+  row TaxonomiesBlock Taxonomiesrw;
+  row TaxonomiesBlock Taxonomies2rw;
+  Boolean accused,Accs,Accs1;
+  string 255 tstr,tstr1;
+  string 255 frotacc,frotacc1,tootacc,tootacc1;
+  record AccVc Accr;
+  record AccVc Acc1r;
+  
+  res = 0;
+  
+  rwcnt = MatRowCnt(Taxonomiesb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(Taxonomiesb,i,Taxonomiesrw);
+    if (SetFromString(660,Taxonomiesrw.AccountingBase)<1 or SetFromString(660,Taxonomiesrw.AccountingBase)>4) then begin
+      RecordCheckError(40601,"",i,"AccountingBase");      
+      res = -1;
+      goto LTaxonomiesBlockCheck;
+    end;
+    for (j=0;j<rwcnt;j=j+1) begin
+      accused = false;
+      MatRowGet(Taxonomiesb,j,Taxonomies2rw);
+      if (Taxonomies2rw.AccountingBase==SetFromString(660,Taxonomiesrw.AccountingBase) and Taxonomies2rw.Code==Taxonomiesrw.Code and i!=j) then begin
+        pos = 0;
+        GetNextSubstring(Taxonomiesrw.Accounts,pos,",",tstr);
+        while (nonblank(tstr)) begin
+          frotacc = FirstInRange(tstr,10);
+          tootacc = LastInRange(tstr,10);
+          Accr.AccNumber = frotacc;
+          Accs = true;
+          ResetLoop(Accr);
+          while (LoopMain(Accr,1,Accs)) begin
+            if (Accr.AccNumber>tootacc) then begin Accs = false; end;
+            if (Accs) then begin
+              pos1 = 0;
+              GetNextSubstring(Taxonomies2rw.Accounts,pos1,",",tstr1);
+              while (nonblank(tstr1)) begin
+                frotacc1 = FirstInRange(tstr1,10);
+                tootacc1 = LastInRange(tstr1,10);
+                Acc1r.AccNumber = frotacc1;
+                Accs1 = true;
+                ResetLoop(Acc1r);
+                while (LoopMain(Acc1r,1,Accs1)) begin
+                  if (Acc1r.AccNumber>tootacc1) then begin Accs1 = false; end;
+                  if (Accs1 and Acc1r.AccNumber==Accr.AccNumber) then begin
+                    accused = true;
+                    goto LFoundAcc;
+                  end;
+                  GetNextSubstring(Taxonomies2rw.Accounts,pos1,",",tstr1);
+                end;
+              end;
+            end;
+          end;
+          GetNextSubstring(Taxonomiesrw.Accounts,pos,",",tstr);
+        end;
+      end;
+LFoundAcc:;
+      if (accused) then begin
+        RecordCheckError(1547,"",j,"AccountingBase");      
+        res = -1;
+        goto LTaxonomiesBlockCheck;
+      end;
+    end;
+  end;
+LTaxonomiesBlockCheck:;
+  TaxonomiesBlockCheck = res;
+  return;
+end;

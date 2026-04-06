@@ -1,0 +1,52 @@
+external function LongInt YapilyGetAccountIds(Integer,var array string);
+// external function LongInt YapilyGetAccountStatementIds(record RcVc,Integer,array string,var array string);
+external function LongInt YapilyGetAccountStatement(record RcVc,Integer,string);
+
+global
+procedure YapilyBankTransImpMn(record RcVc RepSpec)
+begin
+  array string 255 aAccountIds;
+  LongInt err;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  Integer rwcnt,i,pmrw;
+  Boolean foundf;
+  
+  /* 
+  Error checks to add:
+  • Payment mode exists?
+  • End Date cannot be in the future
+  */
+
+  BlockLoad(PMb);
+  rwcnt = MatRowCnt(PMb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(PMb,i,PMbrw);
+    if (PMbrw.Code==RepSpec.f1) then begin
+      foundf = true;
+      rwcnt = i; 
+      pmrw = i;
+    end;
+  end;
+
+  if (foundf) then begin
+    err = YapilyGetAccountIds(pmrw,aAccountIds);
+  end else begin
+    err = 43484;
+  end;
+
+  if (err!=0) then begin
+    MessageBox(err,"");
+    goto LYapilyBankTransImpMn;
+  end;
+
+  err = YapilyGetAccountStatement(RepSpec,pmrw,aAccountIds[0]); //only one supported for now
+
+  if (err!=0) then begin
+    MessageBox(err,"");
+    goto LYapilyBankTransImpMn;
+  end;
+
+LYapilyBankTransImpMn:;
+  return;
+end;

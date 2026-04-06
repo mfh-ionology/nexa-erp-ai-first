@@ -1,0 +1,49 @@
+global
+updating function LongInt AutoERMapBlockCheck(var record AutoERMapBlock AutoERMapb,record AutoERMapBlock AutoERMap2b,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  row AutoERMapBlock AutoERMaprw;
+  row AutoERMapBlock AutoERMapr2w;
+  record CurncyCodeVc CurncyCoder;
+  Integer i,j,rwcnt;
+
+  res = 0;
+  rwcnt = MatRowCnt(AutoERMapb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(AutoERMapb,i,AutoERMaprw);
+    if (blank(AutoERMaprw.CurncyCode)) then begin
+      RecordCheckError(1028,"",i,"CurncyCode");
+      res = -1;
+      goto LAutoERMapBlockCheck;
+    end;
+    if (AutoERMaprw.Service==0) then begin
+      RecordCheckError(44170,"",i,"Service");
+      res = -1;
+      goto LAutoERMapBlockCheck;
+    end;
+    if (AutoERMaprw.Service>=kExchangeRateServiceMax) then begin
+      RecordCheckError(44170,"",i,"Service");
+      res = -1;
+      goto LAutoERMapBlockCheck;
+    end;
+    CurncyCoder.CurncyCode = AutoERMaprw.CurncyCode;
+    if (ReadFirstMain(CurncyCoder,1,true)==false) then begin
+      RecordCheckError(1260,"",i,"CurncyCode");
+      res = -1;
+      goto LAutoERMapBlockCheck;
+    end;
+    for (j=0;j<rwcnt;j=j+1) begin
+      MatRowGet(AutoERMapb,j,AutoERMapr2w);
+      if (i!=j) then begin
+        if (AutoERMaprw.CurncyCode==AutoERMapr2w.CurncyCode) then begin
+          RecordCheckError(44171,"",i,"CurncyCode");
+          res = -1;
+          goto LAutoERMapBlockCheck;
+        end;
+      end;
+    end;
+  end;
+LAutoERMapBlockCheck:;  
+  AutoERMapBlockCheck = res;
+  return;
+end;

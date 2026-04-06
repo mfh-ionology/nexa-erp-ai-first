@@ -1,0 +1,75 @@
+external function Boolean DateTimeOverlaps(Date,Time,Date,Time,Date,Time,Date,Time);
+external function Boolean DateTimeInRange(Date,Time,Date,Time,Date,Time);
+
+global
+function LongInt StudentCourseVcRecordCheck(var record StudentCourseVc StudentCourser,record StudentCourseVc StudentCourse2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  record StudentCourseVc StudentCourse3r;
+  Boolean testf;
+
+  res = 0;
+  
+  if (StudentCourser.SerNr<=0) then begin
+    StudentCourser.SerNr = NextSerNr("StudentCourseVc",CurrentDate,-1,false,"");
+  end;
+  if (blank(StudentCourser.Student)) then begin
+    RecordCheckError(1058,"",-1,"Student");   
+    res = -1; 
+    goto LStudentCourseVcRecordCheck;
+  end;
+  if (blank(StudentCourser.Course)) then begin
+    RecordCheckError(1058,"",-1,"Course");   
+    res = -1; 
+    goto LStudentCourseVcRecordCheck;
+  end;
+  if (nonblank(StudentCourser.StartDate) and nonblank(StudentCourser.EndDate)) then begin
+    if (StudentCourser.StartDate>StudentCourser.EndDate) then begin
+      RecordCheckError(19447,"",-1,"StartDate");   
+      res = -1; 
+      goto LStudentCourseVcRecordCheck;  
+    end;
+  end;
+  while (LoopMain(StudentCourse3r,1,true)) begin
+    testf = true;
+    if (StudentCourse3r.SerNr<>StudentCourser.SerNr) then begin
+      if (StudentCourse3r.Student==StudentCourser.Student and StudentCourse3r.Course==StudentCourser.Course) then begin
+        if (DateTimeInRange(StudentCourser.StartDate,StudentCourser.StartTime,StudentCourse3r.StartDate,StudentCourse3r.StartTime,StudentCourse3r.EndDate,StudentCourse3r.EndTime) or 
+            DateTimeInRange(StudentCourser.EndDate,StudentCourser.EndTime,StudentCourse3r.StartDate,StudentCourse3r.StartTime,StudentCourse3r.EndDate,StudentCourse3r.EndTime)) then begin
+          RecordCheckError(44180,"",-1,"StartDate");   
+          res = -1; 
+          goto LStudentCourseVcRecordCheck;  
+        end;
+      end;
+    end;
+  end;
+LStudentCourseVcRecordCheck:;
+  StudentCourseVcRecordCheck = res;
+  return;
+end;
+
+global
+function LongInt StudentCourseVcRecordDefaults(var record StudentCourseVc StudentCourser,record StudentCourseVc StudentCourse2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  
+  StudentCourser.SerNr = -1;
+  if (SingleUserMode) then begin
+    StudentCourser.SerNr = NextSerNr("StudentCourseVc",CurrentDate,-1,false,"");
+  end;
+  StudentCourseVcRecordDefaults = res;
+  return;
+end;
+
+global
+function LongInt StudentCourseVcRecordDuplicate(var record StudentCourseVc StudentCourser,record StudentCourseVc StudentCourse2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+
+  StudentCourser.SerNr = -1;
+  if (SingleUserMode) then begin
+    StudentCourser.SerNr = NextSerNr("StudentCourseVc",CurrentDate,-1,false,"");
+  end;
+  StudentCourseVcRecordDuplicate = res;
+  return;
+end;

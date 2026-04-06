@@ -1,0 +1,581 @@
+external procedure EstEInvBuildString2(string,string,var string);
+external procedure EstEInvEndTag(string,area);
+external procedure EstEInvStartTag(string,area);
+external procedure EstEInvStartTag2(string,var string,area);
+external procedure EstEInvTagValue(string,string,Integer,area); 
+external procedure LookupServiceAsync(string,string,Boolean);
+external procedure SendFunctionVersion(string,string,var Area);
+external procedure SendEOLParameter(var Area);
+external procedure SendTextParameter(string,var Area);
+external function string 100 CreateCompID();
+external procedure RegisterForEstEInvoicing(string);
+external function Boolean CheckInternetEnabler();
+external function boolean IsNumeric(string);
+external function Boolean FindServiceCache(string,string,var record ServiceCacheVc);
+
+global
+procedure DoSendAddrLookupRIKVer62(string regno,string namestr,var area reply,var Boolean noResult,var Boolean res,var Boolean scf) 
+begin
+  record ServiceCacheVc SCr;
+  record RIKSetBlock RIKSetb;
+  Boolean found;
+  string 60 tstr,funcName;
+  string 150 user,passwd;
+  xml xmlReply;
+  area a;
+  string 255 host;
+  Integer port;
+
+  BlockLoad(RIKSetb);
+  SCr.Code = "SENDESTADRLOOKUP";
+  SCr.Partner = "ESTADRLOOKUP";
+  
+  found = FindServiceCache("SENDESTADRLOOKUP","ESTADRLOOKUP",SCr);
+  
+  if (!found) then begin
+    found = FindServiceCache("SENDESTADRLOOKUP","",SCr);
+    
+    if (!found) then begin
+      LookupServiceAsync("SENDESTADRLOOKUP","",true);
+      LookupServiceAsync("ESTADRLOOKUP","",true);
+    end;
+  end;
+
+  if (found) then begin
+    if (SCr.ServiceHost=="ariregxml.rik.ee") then begin
+      SCr.ServiceHost = "ariregxmlv6.rik.ee";
+      SCr.FuncName = "";
+    end;
+    funcName = SCr.FuncName;
+    host = SCr.ServiceHost;
+    port = SCr.ServicePort;
+  end;
+  if (found) then begin
+    scf = true;
+    if (blank(funcName)) then begin
+      funcName = "/";
+    end;
+    user = RIKSetb.User;
+    passwd = RIKSetb.Password;
+    EstEInvBuildString2("xmlns:xsi","http://www.w3.org/2001/XMLSchema-instance",tstr);
+    EstEInvBuildString2("xmlns:xsd","http://www.w3.org/2001/XMLSchema",tstr);
+    EstEInvBuildString2("xmlns:soapenv","http://schemas.xmlsoap.org/soap/envelope/",tstr);
+    EstEInvStartTag2("soapenv:Envelope",tstr,a);
+    EstEInvTagValue("soapenv:Header","",0,a);
+    EstEInvStartTag("soapenv:Body",a);
+    tstr = "";
+    EstEInvBuildString2("soapenv:encodingStyle","http://schemas.xmlsoap.org/soap/encoding/",tstr);
+    EstEInvBuildString2("xmlns","http://arireg.x-road.eu/producer/",tstr);
+    EstEInvStartTag2("ettevotjaRekvisiidid_v1",tstr,a);
+    tstr = "";
+    EstEInvStartTag2("keha",tstr,a);
+    tstr = "";
+    EstEInvBuildString2("xsi:type","xsd:string",tstr);
+    EstEInvStartTag2("ariregister_kasutajanimi",tstr,a);
+    AddTextToArea(user,a);
+    EstEInvEndTag("ariregister_kasutajanimi",a);
+    tstr = "";
+    EstEInvBuildString2("xsi:type","xsd:string",tstr);
+    EstEInvStartTag2("ariregister_parool",tstr,a);
+    AddTextToArea(passwd,a);
+    EstEInvEndTag("ariregister_parool",a);
+    tstr = "";
+    EstEInvBuildString2("xsi:type","xsd:string",tstr);
+    EstEInvStartTag2("ariregister_valjundi_formaat",tstr,a);
+    AddTextToArea("xml",a);
+    EstEInvEndTag("ariregister_valjundi_formaat",a);
+    if (blank(regno) and nonblank(namestr)) then begin
+      tstr = "";
+      EstEInvBuildString2("xsi:type","xsd:string",tstr);
+      EstEInvStartTag2("nimi",tstr,a);
+      AddTextToArea(namestr,a);
+      EstEInvEndTag("nimi",a);
+    end;
+    if (nonblank(regno)) then begin
+      tstr = "";
+      EstEInvBuildString2("xsi:type","xsd:integer",tstr);
+      EstEInvStartTag2("ariregistri_kood",tstr,a);
+      AddTextToArea(regno,a);
+      EstEInvEndTag("ariregistri_kood",a);
+    end;
+    tstr = "";
+    EstEInvBuildString2("xsi:type","xsd:integer",tstr);
+    EstEInvStartTag2("ettevotjate_arv_valjundis",tstr,a);
+    AddTextToArea(RIKSetb.RepLimit,a);
+    EstEInvEndTag("ettevotjate_arv_valjundis",a);
+    EstEInvEndTag("keha",a);
+    EstEInvEndTag("ettevotjaRekvisiidid_v1",a);
+    EstEInvEndTag("soapenv:Body",a);
+    EstEInvEndTag("soapenv:Envelope",a);
+    res = SendWebRequest(host,port,-1,true,"POST",funcName,"","",false,a,reply,10);
+    if (res) then begin
+      xmlReply = ParseXmlArea(reply);
+      if !(XmlNodeExists(xmlReply,"SOAP-ENV:Envelope/SOAP-ENV:Body/ns1:ettevotjaRekvisiidid_v1Response/ns1:keha/ns1:ettevotjad/ns1:Item/ns1:nimi")) then begin
+        noResult = true;
+        RegisterForEstEInvoicing("ESTADRLOOKUP");
+      end;
+      if (XmlNodeExists(xmlReply,"SOAP-ENV:Envelope/SOAP-ENV:Body/SOAP-ENV:Fault/faultcode")) then begin
+        tstr = XmlGet(xmlReply,"SOAP-ENV:Envelope/SOAP-ENV:Body/SOAP-ENV:Fault/faultstring");
+        res = false;
+      end else begin
+        res = true;
+      end;
+    end else begin
+      RegisterForEstEInvoicing("ESTADRLOOKUP");
+      LogText(0,"DoSendAddrLookupRIKVer6: Sending HALTED. Check user name and password");
+    end;
+  end;
+  return;
+end;
+
+global
+procedure DoSendAddrLookupRIKVer6(string regno,string namestr,var area reply,var Boolean noResult,var Boolean res) 
+begin
+  Boolean scf;
+
+  DoSendAddrLookupRIKVer62(regno,namestr,reply,noResult,res,scf); 
+
+  return;
+end;
+
+
+global 
+updating procedure SaveRIKSet(var record RIKSetBlock RIKSetbl)
+begin
+  BlockStore(RIKSetbl);
+  return;
+end;
+
+procedure BuildRequestAreaRIK(var area request,array string regNumbers,Integer pageNum)
+begin
+  string 255 tstr;
+  string 20 regNr;
+  Integer i;
+
+  SetAreaZeroSize(request);
+  EstEInvBuildString2("xmlns:soapenv","http://schemas.xmlsoap.org/soap/envelope/",tstr);
+  EstEInvBuildString2("xmlns:xro","http://x-road.eu/xsd/xroad.xsd",tstr);
+  EstEInvBuildString2("xmlns:iden","http://x-road.eu/xsd/identifiers",tstr);
+  EstEInvBuildString2("xmlns:prod","http://arireg.x-road.eu/producer/",tstr);
+  EstEInvStartTag2("soapenv:Envelope",tstr,request);
+  EstEInvStartTag("soapenv:Body",request);
+
+  EstEInvStartTag("prod:earveRegistriParing_v1",request);
+  EstEInvStartTag("prod:keha",request);
+  EstEInvTagValue("prod:tagasta_nimed","FALSE",100,request);
+  EstEInvTagValue("prod:tulemuste_lk",pageNum,100,request);
+  EstEInvStartTag("prod:registrikoodid",request);
+  for (i=0;i<regNumbers.length;i=i+1) begin
+    EstEInvTagValue("prod:registrikood",regNumbers[i],100,request);
+  end;
+  EstEInvEndTag("prod:registrikoodid",request);
+  EstEInvEndTag("prod:keha",request);
+  EstEInvEndTag("prod:earveRegistriParing_v1",request);
+
+  EstEInvEndTag("soapenv:Body",request);
+  EstEInvEndTag("soapenv:Envelope",request);
+  //WriteAreaToFile(request,"request.xml",0); //TODO remove
+  return;
+end;
+
+procedure SendRegStatusRIK(area request,var area reply)
+begin
+  Boolean res,servCacheFound;
+  record ServiceCacheVc SCr;
+  string 20 funcName;
+
+  SetAreaZeroSize(reply);
+  funcName = "/";
+  
+  servCacheFound =  FindServiceCache("SENDESTADRLOOKUP","ESTADRLOOKUP",SCr);
+  if (servCacheFound==false) then begin
+    servCacheFound =  FindServiceCache("SENDESTADRLOOKUP","",SCr);
+  end;
+  
+  if (servCacheFound) then begin
+    if (SCr.ServiceHost=="ariregxml.rik.ee") then begin //for those who has service cache from older times
+      SCr.ServiceHost = "ariregxmlv6.rik.ee";
+    end;
+    res = SendWebRequest(SCr.ServiceHost,SCr.ServicePort,-1,true,"POST",funcName,"","",false,request,reply,10);
+    if (res==false) then begin
+      LogText(0,"E-Invoice register status: Web request failed.");
+    end;
+  end;
+  return;
+end;
+
+function Integer RIKStatusToEInvReceiverFlag(string status)
+begin
+  Integer res;
+
+  switch(status) begin
+    case "OK": res = 1;
+    case "MR": res = 0;
+    otherwise
+      res = 0;
+  end;
+  RIKStatusToEInvReceiverFlag = res;
+  return;
+end;
+
+function Integer RIKStatusToEInvPref(string status,Integer prevStatus)
+begin
+  Integer res;
+
+  switch(status) begin
+    case "OK": res = kEInvoiceRcvPreferenceElectronic;
+    case "MR": res = kEInvoiceRcvPreferenceDefault;
+    otherwise
+      res = prevStatus;
+  end;
+  RIKStatusToEInvPref = res;
+  return;
+end;
+
+global
+procedure UpdateEInvoiceRecStatus(var record CUVc CUr)
+begin
+  record RIKSetBlock RIKSetbl;
+
+  BlockLoad(RIKSetbl);
+  if (RIKSetbl.ChangeEInPrefFlag==1) then begin
+    if (CUr.EInvReceiverFlag==1) then begin
+      CUr.eInvRcvPref = kEInvoiceRcvPreferenceElectronic;
+      CUr.eInvAttachPDF = 1;
+    end else begin
+      CUr.eInvRcvPref = kEInvoiceRcvPreferenceDefault;
+    end;
+  end;
+  return;
+end;
+
+global updating //for qupdating
+procedure UpdCUEinvRecStatus(var record CUVc CUr,string status)
+begin
+  record CUVc oldCUr;
+  
+  //LogText(0,"updating CUVc " & CUr.Code); //TODO remove
+  ReadFirstMain(CUr,0,true); //refreshing the CUr in case it has changed in main thread
+  if (IsRecordLocked(CUr)==false) then begin
+    RecordCopy(oldCUr,CUr);
+    CUr.EInvReceiverFlag = RIKStatusToEInvReceiverFlag(status);
+    RecordUpdate(oldCUr,CUr,true); //to be true,there is related EInvStatRegUpdPref in RActions
+  end;
+  return;
+end;
+
+procedure ProcessOneRegStatusCU(xml xmlData,var vector string cuCodes,string nodeName)
+begin
+  string 50 regNr,partner,status;
+  record CUVc CUr;
+
+  regNr = XmlGet(xmlData,nodeName & "/ns1:registrikood");
+  partner = XmlGet(xmlData,nodeName & "/ns1:teenusepakkuja");
+  status = XmlGet(xmlData,nodeName & "/ns1:staatus");
+  if (nonblank(regNr) and nonblank(status)) then begin
+    CUr.Code = cuCodes[regNr];
+    if (ReadFirstMain(CUr,1,true) and 
+      (RIKStatusToEInvReceiverFlag(status) != CUr.EInvReceiverFlag or RIKStatusToEInvPref(status,CUr.eInvRcvPref) != CUr.eInvRcvPref)
+      ) then begin
+      qupdating.UpdCUEinvRecStatus(CUr,status);
+    end;
+  end;
+  return;
+end;
+
+function Boolean ProcessRegStatusReplyRIK(area reply,vector string cuCodes,var Boolean hasMorePages)
+begin
+  Boolean res;
+  string 5 reqPageStr,totPagesStr;
+  Integer reqPage,totPages,i;
+  string 255 nodeName,errMsg;
+  xml xmlData;
+
+  res = true;
+  hasMorePages = false; //requests are done in small chunks,so that they fit to one page, but in case not - this will be used
+  xmlData = ParseXmlArea(reply);
+  //WriteAreaToFile(reply,"reply" & GetSecond(CurrentTime) & ".xml",0); //TODO remove
+  if (GetAreaLength(reply) <= 0) then begin
+    errMsg = "Zero size reply received";
+    res = false;
+    goto LProcessRegStatusReplyRIK;
+  end;
+  if (XmlNodeExists(xmlData,"SOAP-ENV:Envelope/SOAP-ENV:Body/SOAP-ENV:Fault/faultcode")) then begin
+    errMsg = XmlGet(xmlData,"SOAP-ENV:Envelope/SOAP-ENV:Body/SOAP-ENV:Fault/faultstring");
+    res = false;
+    goto LProcessRegStatusReplyRIK;
+  end;
+  i = 0;
+  nodeName = "SOAP-ENV:Envelope/SOAP-ENV:Body/ns1:earveRegistriParing_v1Response/ns1:keha/ns1:kliendid/ns1:klient[" & i & "]";
+  while (XmlNodeExists(xmlData,nodeName)) begin
+    ProcessOneRegStatusCU(xmlData,cuCodes,nodeName);
+    i = i + 1;
+    nodeName = "SOAP-ENV:Envelope/SOAP-ENV:Body/ns1:earveRegistriParing_v1Response/ns1:keha/ns1:kliendid/ns1:klient[" & i & "]";
+  end;
+  totPagesStr = XmlGet(xmlData,"SOAP-ENV:Envelope/SOAP-ENV:Body/ns1:earveRegistriParing_v1Response/ns1:keha/ns1:lehekylgi");
+  reqPageStr = XmlGet(xmlData,"SOAP-ENV:Envelope/SOAP-ENV:Body/ns1:earveRegistriParing_v1Response/ns1:paring/ns1:tulemuste_lk");
+  if (nonblank(totPagesStr) and nonblank(reqPageStr)) then begin
+    totPages = StringToInt(totPagesStr);
+    reqPage = StringToInt(reqPageStr);
+    if (reqPage < totPages and reqPage > 0 and totPages > 0) then begin
+      hasMorePages = true;
+    end;
+  end;
+  if (res==false) then begin
+    LogText(0,"E-Invoice register status ERROR: " & errMsg);
+  end;
+LProcessRegStatusReplyRIK:;
+  ProcessRegStatusReplyRIK = res;
+  return;
+end;
+
+function Boolean FindCUToBeChecked(var array string regNumbers,var vector string cuCodes,var longint loopPos)
+begin
+  Boolean res;
+  record CUVc CUr;
+  Integer custPerReq;
+  Boolean TrHs,testf;
+
+  res = true;
+  custPerReq = 50;
+  TrHs = true;
+  if (loopPos != -1) then begin
+    SetLoopPosition(CUr,loopPos);
+  end else begin
+    CUr.RegNr1 = "ZZZZZZZZZZZZZZZZZZZZ"; //to start from the last CU with nonblank regnr
+  end;
+  while (LoopBackKey("RegNr1",CUr,1,TrHs)) begin
+    testf = true;
+    if (blank(CUr.RegNr1)) then begin
+      TrHs = false;
+      res = false; //this means all CU with regnr are found
+    end;
+    if (IsNumeric(CUr.RegNr1)==false) then begin //RIK returns 'Unparseable Integer' if not,check A123456789 for example
+      testf = false;
+    end;
+    if (CUr.CustType != 0) then begin //only companies,no requests for personal ID
+      testf = false;
+    end;
+    if (TrHs and testf) then begin
+      regNumbers[regNumbers.length] = CUr.RegNr1;
+      cuCodes[CUr.RegNr1] = CUr.Code;
+      if (regNumbers.length==custPerReq) then begin
+        TrHs = false;
+        loopPos = GetLoopPosition(CUr);
+      end;
+    end;
+  end;
+  FindCUToBeChecked = res;
+  return;
+end;
+
+//this does web request,so should be called in non-main thread only
+global
+procedure EInvReceiverStatusReqCurComp(Boolean idleTask)
+begin
+  area request,reply;
+  string 20 partner;
+  Boolean hasMorePages,hasMoreCU;
+  Integer pageNum;
+  array string 20 regNumbers;
+  vector string 20 cuCodes; //need to keep codes which were requested,as may have many CU with same reg. nr.
+  longint loopPosCU,custCount;
+  record RIKSetBlock RIKSetbl;
+
+  BlockLoad(RIKSetbl);
+  custCount = 0; //longint
+  pageNum = 1; //always request so that reply fits to one page;
+  partner = "RIK";
+  switch(partner) begin //for future in case other providers appear
+    case "RIK":
+      hasMoreCU = true;
+      while (hasMoreCU) begin //to send requests in chunks,not all customers at onces
+        hasMoreCU = FindCUToBeChecked(regNumbers,cuCodes,loopPosCU);
+        if (regNumbers.length > 0) then begin
+          BuildRequestAreaRIK(request,regNumbers,pageNum);
+          SendRegStatusRIK(request,reply);
+          RIKSetbl.LastReqDate = CurrentDate;
+          RIKSetbl.LastReqTime = CurrentTime;
+          if (ProcessRegStatusReplyRIK(reply,cuCodes,hasMorePages)) then begin
+            RIKSetbl.LastReplyDate = CurrentDate;
+            RIKSetbl.LastReplyTime = CurrentTime;
+          end;
+          //if hasMorePages - loop to repeat the same request,but increment pageNum. At the moment request limited so that reply fits to one page
+          custCount = custCount + regNumbers.length;
+          ClearArray(regNumbers);
+          ClearVector(cuCodes);
+          MilliSleep(350); //requests will have 200-250ms delay anyway,so not to spam partner API,and this should NOT be called on main thread
+        end;
+      end;
+  end;
+  if (idleTask) then begin //do not save the date and time otherwise
+    qupdating.SaveRIKSet(RIKSetbl);
+  end;
+  return;
+end;
+
+global
+procedure EInvReceiverStatusReqSingleRegNr(string regNr,var Integer status)
+begin
+  area request,reply;
+  string 20 partner;
+  string 255 nodeName;
+  array string 20 regNumbers;
+  Integer pageNum;
+  xml xmlData;
+  record RIKSetBlock RIKSetbl;
+
+  BlockLoad(RIKSetbl);
+  if (RIKSetbl.EInvRegStatusFlag==0) then begin
+    status = 0;
+    goto LEInvReceiverStatusReqSingleRegNr;
+  end;
+  pageNum = 1;
+  partner = "RIK";
+  if (nonblank(regNr)) then begin
+    regNumbers[0] = regNr;
+  end;
+  switch(partner) begin //for future in case other providers appear
+    case "RIK":
+      if (regNumbers.length > 0) then begin
+        BuildRequestAreaRIK(request,regNumbers,pageNum);
+        SendRegStatusRIK(request,reply);
+        xmlData = ParseXmlArea(reply);
+        nodeName = "SOAP-ENV:Envelope/SOAP-ENV:Body/ns1:earveRegistriParing_v1Response/ns1:keha/ns1:kliendid/ns1:klient[" & 0 & "]";
+        status = RIKStatusToEInvReceiverFlag(XmlGet(xmlData,nodeName & "/ns1:staatus"));
+      end;
+  end;
+LEInvReceiverStatusReqSingleRegNr:;
+  return;
+end;
+
+function Boolean RIKActiveInAnyComp()
+begin
+  Boolean res;
+  record EInvoiceBlock EIb;
+  record CompaniesBlock Compb;
+  row CompaniesBlock Comprw;
+  Integer oldcomp,rwcnt,i;
+
+  res = false;
+  oldcomp = CurrentCompany;  
+  BlockLoad(Compb);
+  rwcnt = MatRowCnt(Compb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(Compb,i,Comprw);
+    if (SetCompanyCode(Comprw.CompCode,false)) then begin
+      BlockLoad(EIb);
+      //if (EIb.Service5Flag==1) then begin
+      if (true) then begin //enable for all EST customers
+        res = true;
+        i = rwcnt;
+      end;
+    end;
+  end;
+  ResetCompany(oldcomp);
+  RIKActiveInAnyComp = res;
+  return;
+end;
+
+global
+procedure AddEInvRegStatTask(Integer period)
+begin
+  NewPeriodicTask2("EInvCURegStatusRequest","Send request for e-invoicing status","EInvCURegStatusRequest","",period,"");
+  return;
+end;
+
+procedure RemoveEInvRegStatTask()
+begin
+  RemoveTask("EInvCURegStatusRequest");
+  return;
+end;
+
+
+global
+procedure EInvCURegStatusRequest(string arg)
+begin
+  Boolean testf,stopidletaskf,checkEnablerFailed;
+  Integer i,rwcnt,periodDays;
+  Integer oldcomp;
+  record CompaniesBlock Compb;
+  row CompaniesBlock Comprw;
+  record EInvoiceBlock EIb;
+  record RIKSetBlock RIKSetbl;
+
+  periodDays = 7;
+  stopidletaskf = true; //stop unless some company will change it to false below
+  oldcomp = CurrentCompany;  
+  BlockLoad(Compb);
+  rwcnt = MatRowCnt(Compb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(Compb,i,Comprw);
+    if (blank(Comprw.TCPIP)) then begin
+      if (SetCompanyCode(Comprw.CompCode,false)) then begin
+        BlockLoad(EIb);
+        BlockLoad(RIKSetbl);
+        if (RIKSetbl.EInvRegStatusFlag==0) then begin
+          goto LSkipEInvCURegStatusRequestInComp;
+        end;
+        if (EIb.TestFlag==0) and (checkEnablerFailed) then begin
+          goto LSkipEInvCURegStatusRequestInComp;
+        end;
+        testf = true;
+        //if (EIb.Service5Flag==0) then begin
+        if (false) then begin //enable this for all EST customers
+          testf = false;
+        end else begin
+          stopidletaskf = false;
+          if (EIb.TestFlag==0) then begin
+            if (CheckInternetEnabler==false) then begin
+              LogText(0,"E-Invoice register status" & " " & USetStr(20242));
+              checkEnablerFailed = true;
+              goto LSkipEInvCURegStatusRequestInComp;
+            end;
+          end;
+        end;
+        if (AddDay(RIKSetbl.LastReplyDate,periodDays) > CurrentDate) then begin
+          testf = false;
+        end else begin
+          if (AddDay(RIKSetbl.LastReplyDate,periodDays)==CurrentDate and RIKSetbl.LastReplyTime > CurrentTime) then begin
+            testf = false;
+          end;
+        end;
+        if (testf) then begin
+          EInvReceiverStatusReqCurComp(true);
+        end;
+      end;
+    end;
+LSkipEInvCURegStatusRequestInComp:;
+  end;
+  ResetCompany(oldcomp);
+  //This check should happen regardless of other conditions
+  if (stopidletaskf) then begin
+    RemoveEInvRegStatTask;
+  end;
+  return;
+end;
+
+global
+procedure InitIdleTasksEInvRegStatus(Boolean forcedf)
+begin
+  Integer periodWeeks;
+  date taskDate;
+  time taskTime;
+  Integer period;
+
+  //below is not period of request, this is period of how often to check if request is needed
+  //required period is 1 week, which is too many seconds to create periodic task directly
+  if (HasLocalization("EST")) then begin
+    period = 900;
+    if (ServerMode or SingleUserMode) then begin
+      if (forcedf and TaskExists("EInvCURegStatusRequest")==false) then begin
+        AddEInvRegStatTask(period);
+      end else begin
+        if (RIKActiveInAnyComp and TaskExists("EInvCURegStatusRequest")==false) then begin
+          AddEInvRegStatTask(period);
+        end;
+      end;
+    end;
+  end;
+  return;
+end;

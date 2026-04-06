@@ -1,0 +1,167 @@
+external function Boolean FindUserInMailbox(string,var string,var LongInt);
+
+updating procedure CopyTemplateFilesToEMailQuer(record EMailQueVc EMailQuer)
+begin
+  Integer notenr;
+  record RLinkVc RLinkr;
+  record Attach2Vc Attachr;
+  record HtmlTemplateVc HtmlTemplater;
+  
+  if (EMailQuer.HtmlFlag==0) then begin goto LCopyTemplateFilesToEMailQuer; end;
+  if (blank(EMailQuer.HtmlTemplate)) then begin goto LCopyTemplateFilesToEMailQuer; end;
+  notenr = 1;
+  
+  HtmlTemplater.Code = EMailQuer.HtmlTemplate;
+  if (ReadFirstMain(HtmlTemplater,1,true)) then begin
+    while (ReadRecordLink(HtmlTemplater,notenr,Attachr,RLinkr)) begin
+      if (Attachr.FileName!="body.html") then begin
+        CreateRecordLink(EMailQuer,CurrentCompany,Attachr,CurrentCompany);
+      end;
+      notenr = notenr + 1;
+    end;
+  end;
+  
+LCopyTemplateFilesToEMailQuer:;
+  RETURN;
+end;
+
+updating procedure CopySignatureFilesToEMailr(record ConfSignVc CSr,record MailVc Mailr)
+begin
+  Integer notenr;
+  record RLinkVc RLinkr;
+  record Attach2Vc Attachr;
+  
+  if (Mailr.HtmlFlag==0) then begin goto LCopySignatureFilesToMailr; end;
+
+  notenr = 1;
+  while (ReadRecordLink(CSr,notenr,Attachr,RLinkr)) begin
+    if (Attachr.FileName!="body.html") then begin
+      CreateRecordLink(Mailr,CurrentCompany,Attachr,CurrentCompany);
+    end;
+    notenr = notenr + 1;
+  end;
+  
+LCopySignatureFilesToMailr:;
+  RETURN;
+end;
+
+
+function Boolean IsHtmlMail(var record EMailQueVc EMailQuer,var record Attach2Vc Attach2r)
+begin
+  Boolean res;
+  Integer attachnr;
+  record MailVc Mailr;
+  record RLinkVc RLr;
+  string 255 tstr;
+
+  res = false;
+  
+  if (EMailQuer.FileName!="MailVc") then begin goto LIsHtmlMail; end;
+
+  if (EMailQuer.HtmlFlag==0) then begin goto LIsHtmlMail; end;
+  
+  Mailr.SerNr = EMailQuer.OrgSerNr;
+  if (!ReadFirstMain(Mailr,1,true)) then begin goto LIsHtmlMail; end;
+    
+  attachnr = 1;
+  while (ReadRecordLink(Mailr,attachnr,Attach2r,RLr)) begin
+    if (ReadFirstMain(Attach2r,1,true)) then begin
+      if (Attach2r.FileName=="body.html") then begin
+        res = true;
+        goto LIsHtmlMail;
+      end;
+    end;
+    attachnr = attachnr + 1;
+  end;
+  
+LIsHtmlMail:;
+  IsHtmlMail = res;
+  RETURN;
+end;
+
+updating procedure AddSignature(var record EMailQueVc EMQr)
+begin
+  record ConfSignVc CSr;
+  record Attach2Vc Attach2r;
+  record MailVc Mailr;
+  row EMailQueVc emarw;
+  string 255 tstr;
+  Integer i,rwcnt,cscnt;
+  LongInt l;
+  Integer line;
+  Boolean htmlmailf;
+
+  if (EMQr.SignAddedf<>0) then begin
+    goto LAddSignature;
+  end;
+
+  rwcnt = MatRowCnt(EMQr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(EMQr,i,emarw);
+    if (emarw.RowTyp==1) then begin
+      if (FindUserInMailbox(emarw.AddrCode,tstr,l)) then begin
+        CSr.SerNr = l;
+        if (ReadFirstMain(CSr,1,true)) then begin
+          htmlmailf = IsHtmlMail(EMQr,Attach2r);
+          if (htmlmailf==false and CSr.HtmlFlag!=0) then begin
+            AddCRToText(EMQr);
+            AddHtmlRecordToText(CSr,EMQr);
+          end else begin
+            if (htmlmailf==true) then begin
+              // Different from plaintext mails - we add to the original mail body instead of the emailque body
+              Mailr.SerNr = EMQr.OrgSerNr;
+              if (ReadFirstMain(Mailr,1,true)) then begin 
+                if (CSr.HtmlFlag==0) then begin
+                  AddToHtmlRecord(CSr,false,Mailr,true,true);
+                end else begin
+                  AddToHtmlRecord(CSr,true,Mailr,true,true);
+                  CopySignatureFilesToEMailr(CSr,Mailr);
+                end;
+              end;
+            end else begin
+              cscnt = SizeTextCnt(CSr);
+              AddCRToText(EMQr);
+              while (i<cscnt) begin
+                tstr = StringFromText(CSr,i,255);
+                i = i + len(tstr);
+                if (len(tstr)==0) then begin
+                  i = i + 1;
+                end;
+                AddToText(tstr,EMQr);
+              end;
+            end;
+          end;
+        end;
+        goto LAddSignature;
+      end;          
+    end;
+  end;
+  EMQr.SignAddedf = 1;
+  
+LAddSignature:;
+  return;
+end;
+
+global
+updating function LongInt EMailQueVcRecordSave(var record EMailQueVc EMailQuer,record EMailQueVc EMailQue2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  Date blankd;
+
+  EMailQuer.SerNr = NextSerNr("EMailQueVc",CurrentDate,-1,false,"");
+  AddSignature(EMailQuer);
+  CopyTemplateFilesToEMailQuer(EMailQuer);
+  EMailQueVcRecordSave = res;
+  RETURN;
+END;
+
+global
+updating function LongInt FaxQueVcRecordRemove(var record FaxQueVc FaxQuer,record FaxQueVc FaxQue2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  
+  SegmentDelete(FaxQuer.SegNr);
+  FaxQueVcRecordRemove = res;  
+  RETURN;
+end;
+

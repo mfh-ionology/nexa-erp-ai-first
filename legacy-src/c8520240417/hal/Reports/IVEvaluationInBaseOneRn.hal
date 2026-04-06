@@ -1,0 +1,232 @@
+external function Boolean SetInSet2(string,string);
+external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
+external procedure HT2Per(Date,Date,var string);
+external procedure HTObjS(string,string,var string);
+external procedure HTObj(string,var string);
+external procedure HTProjects(string,string,var string);
+external procedure HTLocations(string,string,var string);
+external procedure HTCusts(string, string,var string);
+external procedure HTCustCat(string,var string);
+external procedure HTCustClass(string,var string);
+external procedure HTSaleMan(string, var string);
+external procedure HTITs(string,string,var string);
+external procedure HTItemClass(string,var string);
+external procedure HTArts(string, string, var string);
+external procedure ContractFindReceiptAmount(record IVVc,Date,var val);
+external procedure HTAccs(string,string,Integer, var string);
+external procedure HTArtSel(string,string,var string);
+external function Boolean ReadFirstItem(string,var record INVc,Boolean,Boolean);
+
+global
+procedure IVEvaluationInBaseOneRn(record RcVc RepSpec)
+begin
+  record IVVc IVr;
+  row IVVc IVrw;
+  record INVc INr;
+  record BaseCurBlock BCb;
+  record CUVc CUr;
+  Boolean found,testf;
+  val paid,diff,invval;  
+  string 255 tstr;
+  string 255 frit,toit,frcc,tocc,frin,toin,frdacc,todacc,frsacc,tosacc;
+  integer rw,i,rwcnt;
+
+  BlockLoad(BCb);
+  StartReportJob(USetStr(43810));
+  rw = 1;
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  if (nonblank(tstr)) then begin
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end; 
+  frcc = FirstInRange(RepSpec.f1,20);
+  tocc = LastInRange(RepSpec.f1,20);
+  HTCusts(frcc,tocc,tstr);
+  if (nonblank(tstr)) then begin
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  HTCustCat(RepSpec.f2,tstr);
+  if (nonblank(tstr)) then begin
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;  
+  HTCustClass(RepSpec.f3,tstr);
+  if (nonblank(tstr)) then begin
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end; 
+  HTSaleMan(RepSpec.f4,tstr);
+  if (nonblank(tstr)) then begin
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end; 
+  if (RepSpec.ObjStr<>"") then begin
+    HTObj(RepSpec.ObjStr,tstr);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;  
+  HTProjects(RepSpec.f5,RepSpec.f5,tstr);
+  if (nonblank(tstr)) then begin
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  HTLocations(RepSpec.f6,RepSpec.f6,tstr);
+  if (nonblank(tstr)) then begin
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f7)) then begin
+    Header(rw,USetStr(43823) & ": " & RepSpec.f7,1);
+    rw = rw + 1;
+  end;
+  frin = FirstInRange(RepSpec.f8,20);
+  toin = LastInRange(RepSpec.f8,20);
+  HTArtSel(frin,toin,tstr);//items
+  if (nonblank(tstr)) then begin
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  frit = FirstInRange(RepSpec.f9,20); 
+  toit = LastInRange(RepSpec.f9,20);
+  HTITs(frit,toit,tstr); //item groups
+  if (nonblank(tstr)) then begin
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  HTItemClass(RepSpec.f10,tstr);
+  if (nonblank(tstr)) then begin
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+
+  frsacc = FirstInRange(RepSpec.f11,10);
+  tosacc = LastInRange(RepSpec.f11,10);
+  HTAccs(frsacc,tosacc,0,tstr);
+  if (nonblank(tstr)) then begin
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  frdacc = FirstInRange(RepSpec.f12,10);
+  todacc = LastInRange(RepSpec.f12,10);
+  HTAccs(frdacc,todacc,0,tstr);
+  if (nonblank(tstr)) then begin
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (RepSpec.flags[1]!=0) then begin
+    Header(rw,USetStr(43815) & " " & USetStr(43811),1);//Paid
+    rw = rw + 1;    
+  end;
+  if (RepSpec.flags[2]!=0) then begin
+    Header(rw,USetStr(43815) & " " & USetStr(43812),1);//Not Paid
+    rw = rw + 1;    
+  end;
+  if (RepSpec.flags[3]!=0) then begin
+    Header(rw,USetStr(43816) & " " & USetStr(43813),1);//Only in Foreign Currency
+    rw = rw + 1;  
+  end;
+  if (RepSpec.flags[4]!=0) then begin
+    Header(rw,USetStr(43816) & " " & USetStr(43814),1);//Only with Difference
+    rw = rw + 1;  
+  end;
+  EndHeader;
+
+  SetRepCol(2,80);
+  SetRepCol(3,150);
+  SetRepCol(4,245);
+  SetRepCol(5,340);
+
+  StartFormat(15);
+  OutString(0,0,USetStr(43817),false);
+  OutString(2,0,USetStr(43818),false);
+  OutString(3,0,USetStr(43819),false);
+  OutString(4,0,USetStr(43820),false);
+  OutString(5,0,USetStr(43821),false);
+  OutString(1,0,USetStr(43822),true);
+  EndFormat;
+
+  Black_Divider(0,1);
+
+  found = true;
+  IVr.InvDate = RepSpec.sStartDate;
+  while (LoopKey("InvDate",IVr,1,found)) begin
+    if (DateInRange(IVr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin
+      found = false;
+    end; 
+    if (found) then begin
+      testf = true;
+      if (IVr.OKFlag==0) then begin testf = false; end;
+      if (IVr.Invalid!=0) then begin testf = false; end;
+      if (RepSpec.flags[3]!=0) then begin
+        if (IVr.CurncyCode==BCb.BaseCur1) then begin testf = false; end;
+      end; 
+      if (nonblank(RepSpec.f1)) then begin
+        if (IVr.CustCode<frcc) then begin testf = false; end;
+        if (IVr.CustCode>tocc) then begin testf = false; end;
+      end; 
+      if (nonblank(RepSpec.f2)) then begin 
+        CUr.Code = IVr.CustCode;
+        ReadFirstMain(CUr,1,true);
+        if (CUr.CustCat<>RepSpec.f3) then begin testf = false; end;
+      end;  
+      if (nonblank(RepSpec.f3)) then begin
+        if (SetInSet2(RepSpec.f3,CUr.Classification)==false) then begin testf = false; end;
+      end;  
+      if (nonblank(RepSpec.f4)) then begin
+        if (RepSpec.f4!=IVr.SalesMan) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.ObjStr)) then begin
+        if (SetInSet(RepSpec.ObjStr,IVr.Objects)==false) then begin testf = false; end;
+      end;  
+      if (nonblank(RepSpec.f5)) then begin
+        if (IVr.PRCode!=RepSpec.f5) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f6)) then begin
+        if (RepSpec.f6!=IVr.Location) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f7)) then begin
+        if (RepSpec.f7!=IVr.PayDeal) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f12)) then begin
+        if (RepSpec.f12!=IVr.ARAcc) then begin testf = false; end;
+      end;
+      rwcnt = MatRowCnt(IVr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(IVr,i,IVrw);
+        if (ReadFirstItem(IVrw.ArtCode,INr,true,false)) then begin end;
+        if (nonblank(RepSpec.f8)) then begin
+          if (INr.Code<frin) then begin testf = false; end;
+          if (INr.Code>toin) then begin testf = false; end;
+        end;
+        if (nonblank(RepSpec.f9)) then begin
+          if (INr.Group<frit) then begin testf = false; end;
+          if (INr.Group>toit) then begin testf = false; end;
+        end;
+        if (nonblank(RepSpec.f10)) then begin
+          if (SetInSet2(RepSpec.f10,INr.DispGroups)==false) then begin testf = false; end;
+        end;
+        if (nonblank(RepSpec.f11)) then begin
+          if (SetInSet2(RepSpec.f11,IVrw.SalesAcc)==false) then begin testf = false; end;
+        end;
+      end;
+      if (testf) then begin
+          invval = MulRateToBase1(IVr.CurncyCode,IVr.Sum4,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
+          ContractFindReceiptAmount(IVr,RepSpec.sEndDate,paid);
+          diff = invval - paid;
+        if ((RepSpec.flags[4]!=0) and diff>0) or (RepSpec.flags[4]==0) then begin
+          StartFormat(15);
+          OutLongInt(0,"DblIVVc",IVr.SerNr,false);
+          OutString(2,0,IVr.InvDate,false);
+          OutString(3,0,IVr.CustCode,false);
+          OutVal(4,0,invval,M4Val,false);
+          OutVal(5,0,paid,M4Val,false);
+          OutVal(1,0,diff,M4Val,true);
+          EndFormat;
+        end;  
+      end;
+    end;
+  end;
+  EndJob;
+  return;
+end;

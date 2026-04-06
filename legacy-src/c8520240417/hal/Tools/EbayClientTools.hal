@@ -1,0 +1,36 @@
+external function Boolean CheckInternetEnabler();
+remote function string 255 EbayAuthHost();
+remote function string 255 ClientId();
+remote function string 255 EbayRedirectURI();
+remote function string 255 GetEbayScopeList();
+
+global
+procedure EbayGrantApplicationAccess()
+begin
+  string 255 path,url;
+  transaction string 255 gEbayAction;
+  record InternetEnablerBlock IEb;
+
+  // https://developer.ebay.com/api-docs/static/oauth-authorization-code-grant.html
+/*
+  if (CheckInternetEnabler==false) then begin
+    MessageBox(20242,"");
+    goto LEbayGrantApplicationAccess;
+  end;
+*/
+  path = "/oauth2/authorize";
+  gEbayAction = "EbayGrantApplicationAccess";
+
+  BlockLoad(IEb);
+  url = "https://";
+  url = url & EbayAuthHost & path;
+  url = url & "?client_id"      & chr(61) & ClientId;
+  url = url & "&redirect_uri"   & chr(61) & EbayRedirectURI;
+  url = url & "&response_type"  & chr(61) & "code";
+  url = url & "&state"          & chr(61) & IEb.CustomerCode;
+  url = url & "&scope"          & chr(61) & URLEncode(GetEbayScopeList);
+  
+  OpenWebBrowser(url);
+LEbayGrantApplicationAccess:;
+  return;
+end;

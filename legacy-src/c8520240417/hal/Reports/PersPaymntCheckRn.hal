@@ -1,0 +1,105 @@
+external procedure GetAccBalance(string,string,Date,record ObjBalVc,Integer,Integer,Integer,string,Integer,var val);
+external function Boolean GetObjBal(string,string,var record ObjBalVc);
+external procedure GetAccTurnover(string,string,Date,Date,record ObjBalVc,string,Integer,Integer,Integer,var val,var val);
+external procedure HT2Per(Date,Date,var string);
+external procedure GetAcc2StartBalance(string,string,Date,Integer,Integer,var val,string,Integer);
+external procedure PersListTrans(var array string,var array val,var Integer,record RcVc ,record UserVc,var val,Boolean);
+external function Boolean CalcTrialRnForAccount(record AccVc,record RcVc,record CYBlock,record ConsolidationBlock,
+                                                Boolean,Date,Date,val,var Boolean,var string,array string,array val,array val,array val,var Integer,
+                                                var val,var val,var val,var val, var val,var val,var val,var val,var Boolean,var string,var val,var val,
+                                                var val,var val,var val);
+
+global
+procedure PersonnelPaymentsCheckingRn(record RcVc RepSpec)
+begin
+  Date ed,td;
+  Boolean Objbals,testf,printf;
+  record ObjBalVc ObjBalr;
+  val v1,v2,v3,t,totalval;
+  record RcVc PersRepSpec;
+  Integer rw,curcnt;
+  string 255 tstr;
+  record TRVc TRr;
+  record UserVc User;
+  val StartBal,TotCustBal,TotStartBal;
+  record AccVc Accr;
+  array string 20 acur;
+  array val av1;
+
+  StartReportJob(USetStr(42864));
+  rw = 1;
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  if (nonblank(RepSpec.f12)) then begin
+    tstr = USetStr(42851) & " " & RepSpec.f12;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  EndHeader;  
+
+  if (blank(RepSpec.f12)) then begin
+    OutString(0,0,USetStr(42860),false);
+    goto LPersonnelPaymentsCheckingRn;
+  end;
+
+  SetRepCol(2,300);
+  SetRepCol(3,420);
+
+  StartFormat(15);
+  OutString(0,0,USetStr(28301),false);
+  OutString(2,0,USetStr(42852),true);
+  OutString(3,0,USetstr(42859),true);
+  OutString(1,0,USetStr(42854),true);
+  EndFormat;
+  Gray_Divider(0,1);
+
+  PersRepSpec.sStartDate = RepSpec.sStartDate;
+  PersRepSpec.sEndDate = RepSpec.sEndDate;
+
+  td = RepSpec.sStartDate;
+  totalval = blankval;
+  TotCustBal = blankval;
+  while (td<=RepSpec.sEndDate) begin
+    Accr.AccNumber = RepSpec.f12;
+    Objbals = GetObjBal(RepSpec.f12,"",ObjBalr);
+    GetAccBalance(RepSpec.f12,"",td,ObjBalr,0,0,0,"",0,v1);
+    GetAccTurnover(RepSpec.f12,"",td,td,ObjBalr,"",0,0,0,t,v2);
+    totalval = v1;
+    totalval = totalval;
+    while (LoopMain(User,1,true)) begin
+      testf = true;
+      if (User.Closed!=0) then begin testf = false; end;
+      if (testf) then begin 
+        PersRepSpec.flags[1] = 1;
+        PersRepSpec.flags[2] = 0;
+        PersRepSpec.flags[3] = 0;
+        GetAcc2StartBalance(User.PersAcc,User.PersObjx,PersRepSpec.sStartDate,0,0,StartBal,"",0); 
+        StartBal = -StartBal; 
+        TotStartBal = TotStartBal + StartBal;
+        PersListTrans(acur,av1,curcnt,PersRepSpec,User,StartBal,false);
+        TotCustBal = TotCustBal + StartBal;
+      end;
+    end; 
+    printf = true;
+    if (RepSpec.flags[2]!=0) then begin
+      if ((totalval+TotCustBal)==0) then begin
+        printf = false;
+      end;
+    end;
+    if (testf and printf) then begin
+      StartFormat(15);
+      OutDate(0,"DblTrialBalanceVc",td,false);
+      OutVal(2,0,totalval,M4Val,true);
+      OutVal(3,0,TotCustBal,M4Val,true);
+      OutVal(1,0,totalval+TotCustBal,M4Val,true);
+      EndFormat;
+    end;
+    td = AddDay(td,1);
+  end;
+  EndJob;
+LPersonnelPaymentsCheckingRn:;
+  return;
+end;
+
+

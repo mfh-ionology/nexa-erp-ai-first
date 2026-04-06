@@ -1,0 +1,91 @@
+external function string 255 GetLinkToStruct(LongInt,boolean);
+external procedure ShowWebElement(string);
+external procedure ShowRedirectHtml(string,boolean);
+external function string 255 removenextnode(var string);
+
+
+function string 255 GetUniqueLinkHash(string link)
+begin
+  Longint rand,retries;
+  string 255 hash,res;
+  record WebNGFastLinkVc FLr;
+
+retry:;
+  Randomize;
+  rand = random(0,1000);
+  hash = right(MD5String(link & GetCurTick & rand),6);
+  FLr.LinkHash = hash;
+  if (ReadFirstMain(FLr,1,true)) then begin
+    if (retries<10) then begin
+      retries = retries + 1;
+      goto retry;
+    end else begin
+      LogText(0,"Failed creating fast link for " & link);
+    end;
+  end else begin
+    res = hash;
+  end;
+
+  GetUniqueLinkHash = res;
+  return;
+end;
+
+global
+updating function Boolean StoreFastLinkRecord(string hash,string link,Integer type)
+begin
+  record WebNGFastLinkVc FLr;
+  Boolean res;
+
+  RecordNew(FLr);
+  FLr.LinkHash = hash;
+  FLr.Type = type;
+  FLr.Link = link;
+  if (RecordStore(FLr,true)) then begin
+    res = true;
+  end;
+
+  StoreFastLinkRecord = res;
+  return;
+end;
+
+global
+function string 255 GetFastWebLink(string link,Integer type)
+begin
+  record WebNGStructVc WSr;
+  string 255 base,hash,res;
+
+  WSr.Type = kStructTypeFastLinkApp;
+  if (ReadFirstKey("Type",WSr,1,true)) then begin
+    base = GetLinkToStruct(WSr.SerNr,true);
+
+    hash = GetUniqueLinkHash(link);
+    if (nonblank(hash)) then begin
+      if (qupdating.StoreFastLinkRecord(hash,link,type)) then begin
+        res = base & hash;
+      end;
+    end;
+  end;
+
+  GetFastWebLink = res;
+  return;
+end;
+
+
+global
+procedure WebNGFastLinkApp(record WebNGStructVc WSr,string mpath)
+begin
+  string 255 path,node;
+  record WebNGFastLinkVc FLr;
+
+  path = mpath;
+
+  node = removenextnode(path);
+  FLr.LinkHash = node;
+  if (ReadFirstMain(FLr,1,true)) then begin
+    ShowRedirectHTML(FLr.Link,WebSecureMode);
+  end else begin
+    ShowWebElement(WSr.HALFunc);
+  end;
+
+  return;
+end;

@@ -1,0 +1,105 @@
+procedure PrintMessageRows(string msg)
+begin
+  Integer i,msglen,startIdx,endIdx,rowlen;
+
+  rowlen = 125;
+  msglen = Len(msg);
+  i = 0;
+  while (msglen>0) begin
+    startIdx = rowlen * i;
+    endIdx = startIdx + rowlen;
+
+    if (i>0 and endIdx < msglen) then begin StartFormat(15); end;
+    if (msglen < rowlen) then begin
+      endIdx = startIdx + msglen;
+    end;
+    OutString(2,0,Trim(Mid(msg,startIdx,endIdx-startIdx)),false);
+    if (i>0 and endIdx < msglen) then begin EndFormat; end;
+
+    msglen = msglen - rowlen;
+    i = i + 1;
+  end;
+
+  return;
+end;
+
+procedure PrintData(json js,string node)
+begin
+  Integer cnt,i;
+  string 255 chldnode;
+
+  cnt = JSONCountChildren(js,node);
+  for (i=0;i<cnt;i=i+1) begin
+    chldnode = node & "/[" & i & "]";
+    StartFormat(15);
+    OutString(0,0,JSONGet(js,chldnode & "/code"),false);
+    PrintMessageRows(JSONGet(js,chldnode & "/message"));
+    EndFormat;
+  end;
+
+  return;
+end;
+
+procedure PrintRowHeader(string name)
+begin
+  StartFormat(15);
+  OutString(0,0,name,false);
+  EndFormat;
+
+//   Black_Divider(0,1);
+//   StartFormat(15);
+//   OutString(0,0,USetStr(44034),false);
+//   OutString(2,0,USetStr(44035),false);
+//   EndFormat;
+  Black_Divider(0,1);
+  return;
+end;
+
+global
+procedure ZATCAPreflightReportRn(record RcVc RepSpec)
+begin
+  json js;
+  string 255 node,chldnode,msg;
+  Integer cnt,i;
+
+  StartReportJob(USetStr(44030));
+  Header(0,"",1); 
+  EndHeader;
+
+  js = ParseJSONString(RepSpec.f1);
+
+  StartFormat(15);
+  OutString(0,0,USetStr(44031) & ": ",false);
+  OutString(50,"DblIVVc",RepSpec.long1,false);
+  EndFormat;
+  StartFormat(30);
+  OutString(0,0,"Customer:",false);
+  OutStringID(50,"DblCUVc",RepSpec.f2 & " - " & RepSpec.f3,false,RepSpec.f2);
+  EndFormat;
+  StartFormat(30);
+  OutString(0,0,USetStr(44032),false);
+  EndFormat;
+  
+  SetRepCol(2,80);
+  SetRepCol(3,150);
+  
+  node = "validationResults";
+
+  if (JSONCountChildren(js,node & "/infoMessages")>0) then begin
+    PrintRowHeader("Information");
+    PrintData(js,node & "/infoMessages");
+    StartFormat(15);
+    EndFormat;
+  end;
+
+  PrintRowHeader("Errors");
+  PrintData(js,node & "/errorMessages");
+  PrintData(js,node & "/warningMessages");
+
+//   StartFormat(15);
+//   EndFormat;
+//   PrintRowHeader("Warning");
+//   PrintData(js,node & "/warningMessages");
+  EndJob;
+  return;
+end;       

@@ -1,0 +1,87 @@
+external procedure GetLangNr(string,var record LangNrVc);
+external function Boolean FindFormcode(Integer,Integer);
+external function Boolean Getformcode(Integer,Integer,string,string,string,LongInt,LongInt,string,string,Integer,string,var string);
+external function Integer NumberofDocumentPages(string,Integer);
+external procedure CommonDocumentFields(record RcVc);
+
+global
+procedure DoCCTRForm(record RcVc RepSpec,record CCTRVc CCTRr)
+begin
+  record FormDefVc FDr;
+  row FormDefVc FDrw;
+  Integer i,rwcnt;
+  Integer bi,brwcnt;
+  string 255 tstr;
+  record LangNrVc LangNrr;
+  Boolean printf,langf;
+  Integer intdocnr;
+  string 30 formcode,langcode;
+  record DocVc Docr;
+  
+  GetLangNr("",LangNrr);
+  FDr.repname = RepSpec.repname;
+  FDr.shortname = RepSpec.shortname;
+  if (ReadFirstMain(FDr,1,true)==false) then begin
+    MessageBox(1624, " " & USetStr(1623));
+    goto LDoCCTRForm;
+  end;
+  rwcnt = MatRowCnt(FDr);
+  langcode = "";
+  for (i=rwcnt-1;i>=0;i=i-1) begin
+    MatRowGet(FDr,i,FDrw);
+    if (FDrw.LangCode==langcode) then begin
+      i = -1;
+      langf = true;
+    end;
+  end;
+  if (langf==false) then begin langcode = ""; end;
+  intdocnr = 1;
+  printf = true;
+  while (printf) begin  
+    formcode = "";
+    for (i=rwcnt-1;i>=0;i=i-1) begin
+      MatRowGet(FDr,i,FDrw);
+      if (FindFormcode(0,FDrw.Typ)) then begin 
+        if (Getformcode(i,FDrw.intdocnr,FDrw.FPCode,FDrw.UserGroup,FDrw.LangCode,FDrw.SerNr,CCTRr.SerNr,FDrw.PrintGroupCode,
+                        langcode,intdocnr,"CCTRVc",formcode)) then
+        begin
+          goto LBREAK;
+        end;
+      end;
+    end;
+LBREAK:;
+    if (nonblank(formcode)) then begin
+      if (OpenForm(formcode)) then begin  
+          CommonDocumentFields(RepSpec);
+          Docr.Code = formcode;
+          if (ReadFirstMain(Docr,1,true)) then begin
+          end;
+          
+          OUTFORMFIELD("F_SERNR",CCTRr.SerNr);
+          OUTFORMFIELD("F_TRANSDATE",CCTRr.TransDate);          
+          OUTFORMFIELD("F_TRANSTID",CCTRr.TransTime);          
+          OUTFORMFIELD("F_COMMENT",CCTRr.Comment);
+          OUTFORMFIELD("F_TYPE",CCTRr.ReportType);
+  
+          brwcnt = LineTextCnt(CCTRr);
+          for (bi=0;bi<brwcnt;bi=bi+1) begin
+            tstr = LineTextGet(CCTRr,bi);
+            OUTFORMFIELD("F_NOTE",tstr);    
+          end;  
+
+          CloseForm;        
+      end else begin
+        printf = false;
+        MessageBox(1546,formcode);
+      end;
+    end else begin
+      printf = false;
+      if (intdocnr==1) then begin
+        MessageBox(1624, " " & USetStr(1623));
+      end;
+    end;
+    intdocnr = intdocnr + 1;
+  end;
+LDoCCTRForm:;  
+  return;
+end;

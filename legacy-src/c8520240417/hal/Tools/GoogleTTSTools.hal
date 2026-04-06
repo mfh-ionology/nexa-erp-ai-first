@@ -1,0 +1,168 @@
+external function string 255 CR();
+external function string 255 LF();
+external function string 255 NL();
+
+external procedure ACME_OpenDebugWindow(record ACMELogVc);
+external function string 255 MakeJWT(json,string,string);
+
+global
+procedure Google_GetToken(string grant_type,string assertion,var json accessjs,Boolean DebugFlag)
+begin
+  string 255 postdata,debugmessage;
+  record WebRequestVc WRr;
+  record ACMELogVc ALogr;
+
+  postdata = postdata & "grant_type=" & URLEncode(grant_type);
+  postdata = postdata & "&assertion=" & URLEncode(assertion);
+
+  WRr.URL = "https://oauth2.googleapis.com/token";
+  WRr.Method = "POST";
+  WRr.PostContentType = "application/x-www-form-urlencoded";
+  WRr.PostData = postdata;
+
+  SendWebRequest4(WRr);
+
+  if (DebugFlag) then begin
+    debugmessage =     WRr.URL & " " & WRr.ResultCode &
+                       NL & "-------- Postdata ----------" & NL & NL &
+                       WRr.PostData &
+                       NL & "-------- Reply Headers -----" & NL & NL &
+                       WRr.ReplyHeaders &
+                       NL & "-------- Reply Body --------" & NL & NL &
+                       WRr.ReplyData & NL;
+    
+    if (ServingClient or GuiType<>kGuiNone) then begin
+      SetTextField(ALogr,debugmessage);
+      ClientRemoteAsync.ACME_OpenDebugWindow(ALogr);
+    end else begin
+      LogText(0,NL & debugmessage & NL);
+    end;
+  end;
+  
+  if (200<=WRr.ResultCode and WRr.ResultCode<=299) then begin
+    accessjs = ParseJSONString(WRr.ReplyData);
+  end;
+end;
+
+global
+updating procedure StartTTSSm()
+begin
+  record AIChatVc AICr;
+  
+  OpenWindow("TTSWClass",0,0,"","",AICr);
+end;
+        
+global
+procedure TTS_Google(string alanguage,string attstext,string tag)
+begin
+  record WebRequestVc WRr;
+  record ACMELogVc ALogr;
+  record TTSSettingsBlock TTSb;
+  string 255 jwtstr,debugmessage;
+  //json gcloud_access;
+  json jwtclaims,accessjs,postjson,audiojs;
+  Boolean DebugFlag;
+  area audioarea;
+  string 255 ttstext;
+  Integer oldcomp;
+  
+  LogText(0,"TTS_Google");
+  
+  oldcomp = CurrentCompany;
+  SetCompany(1,false);
+
+  ttstext = "<speak>" & attstext & "</speak>";
+  //RemoveMarkupFromString(ttstext);
+  ttstext = ReplaceStringWithString(ttstext,"""","\\""");
+    
+  BlockLoad(TTSb);
+  
+  DebugFlag = TTSb.DebugFlag;
+  
+  //gcloud_access = ParseJSONFile("gcloud-access.json");
+  
+  jwtclaims.iss = TTSb.Gcloud_Email; // gcloud_access.client_email;
+  jwtclaims.aud = TTSb.Gcloud_TokenURI; //gcloud_access.token_uri;
+  jwtclaims.iat = CurrentUnixUTCTime;
+  jwtclaims.exp = CurrentUnixUTCTime + 60;
+  jwtclaims.scope = "https://www.googleapis.com/auth/cloud-platform";
+  
+  jwtstr = MakeJWT(jwtclaims,"RS256",TTSb.Gcloud_PrivateKey); // gcloud_access.private_key
+  
+  Google_GetToken("urn:ietf:params:oauth:grant-type:jwt-bearer",jwtstr,accessjs,DebugFlag);
+  
+  WRr.Authorization = accessjs.token_type & " " & accessjs.access_token;
+  WRr.PostContentType = "application/json; charset=utf-8";
+  WRr.Method = "POST";
+  
+  postjson.input.ssml = ttstext;
+  //postjson.input.text = ttstext;
+
+  postjson.voice.languageCode = TTSb.Gcloud_test_language;
+  postjson.voice.name = TTSb.Gcloud_test_voice;
+  postjson.voice.ssmlGender = TTSb.Gcloud_test_gender;
+    
+  if (TTSb.Gcloud_test_language=="") then begin postjson.voice.languageCode = "en-gb"; end;
+  if (TTSb.Gcloud_test_voice=="") then begin postjson.voice.name = "en-GB-Standard-A"; end;
+  if (TTSb.Gcloud_test_gender=="") then begin postjson.voice.ssmlGender = "FEMALE"; end;
+  
+  if (tag=="%LOCALSPEAKER%") then begin
+    postjson.audioConfig.audioEncoding = "MP3";
+  end else begin
+    postjson.audioConfig.audioEncoding = "LINEAR16";
+    postjson.audioConfig.sampleRateHertz = 8000;
+  end;
+  
+  WRr.PostData = postjson;
+  
+  WRr.URL = "https://texttospeech.googleapis.com/v1/text:synthesize";
+  
+  SendWebRequest4(WRr);
+  
+  if (DebugFlag) then begin
+    debugmessage =     WRr.URL & " " & WRr.ResultCode &
+                       NL & "-------- Authorization -----" & NL & NL &
+                       WRr.Authorization &
+                       NL & "-------- Postdata ----------" & NL & NL &
+                       WRr.PostData &
+                       NL & "-------- Reply Headers -----" & NL & NL &
+                       WRr.ReplyHeaders &
+                       NL & "-------- Reply Body --------" & NL & NL &
+                       WRr.ReplyData & NL;
+    
+    if (ServingClient or GuiType<>kGuiNone) then begin
+      SetTextField(ALogr,debugmessage);
+      ClientRemoteAsync.ACME_OpenDebugWindow(ALogr);
+    end else begin
+      LogText(0,NL & debugmessage & NL);
+    end;
+  end;
+  
+  audiojs = ParseJSONString(WRr.ReplyData);
+  
+  AddTextToArea(Base64Decode(audiojs.audioContent),audioarea);
+  ChatBotPlayAudio(tag,audioarea);
+  
+  ResetCompany(oldcomp);
+  // chattext;
+end;
+
+global
+procedure TTSWClass_TTS()
+begin
+  Integer wn;
+  record AIChatVc AICr;
+  string 255 ttstext;
+
+  LogText(0,"TTSWClass_TTS");
+  
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,AICr);
+
+  ttstext = GetTextField(AICr);
+  SetTextField(AICr,"");
+  PutWindowRecord(wn,AICr);
+
+  TTS_Google("",ttstext,"%LOCALSPEAKER%");
+end;

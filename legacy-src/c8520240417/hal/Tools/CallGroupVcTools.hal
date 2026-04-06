@@ -1,0 +1,73 @@
+
+global
+procedure AddAllUsersToCallGroup(var record CallGroupVc CGr)
+begin
+  Integer compnr,oldcomp,i,rwcnt;
+  record CompaniesBlock Compr;
+  row CompaniesBlock Comprw;
+  record UserVc Userr;
+  record GlobalUserVc GUserr;
+  array string 255 userarr;
+  row CallGroupVc CGrw;
+  string 255 usercode,username;
+  LongInt pos;
+  vector Boolean usersvec;
+  
+  oldcomp = CurrentCompany;
+  BlockLoad(Compr);
+
+  rwcnt = MatRowCnt(Compr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(Compr,i,Comprw);
+    if (Comprw.ActiveStatus==kCompanyActive) then begin
+      SetServerCompany(i+1);
+      RecordClear(Userr);
+      ResetLoop(Userr);
+      while (LoopMain(Userr,0,true)) begin
+        if (Userr.Closed!=0) then begin goto l_next_userr; end;
+        if (Userr.LinPhonef==0) then begin goto l_next_userr; end;
+        if (blank(Userr.AstPBXConnection)) then begin goto l_next_userr; end;
+        if (blank(Userr.AstUserName)) then begin goto l_next_userr; end;
+        if (blank(Userr.AstPassword)) then begin goto l_next_userr; end;
+        if (usersvec[Userr.Code]==false) then begin
+          userarr[userarr.length] = Userr.Name & chr(1) & Userr.Code;
+          usersvec[Userr.Code] = true;
+        end;
+l_next_userr:;
+      end;
+    end;
+  end;
+
+  ResetCompany(oldcomp);
+  while (LoopMain(GUserr,1,true)) begin
+    if (GUserr.Closed!=0) then begin goto l_next_guserr; end;
+    if (GUserr.LinPhonef==0) then begin goto l_next_guserr; end;
+    if (blank(GUserr.AstPBXConnection)) then begin goto l_next_guserr; end;
+    if (blank(GUserr.AstUserName)) then begin goto l_next_guserr; end;
+    if (blank(GUserr.AstPassword)) then begin goto l_next_guserr; end;
+    if (usersvec[GUserr.Code]==false) then begin
+      userarr[userarr.length] = GUserr.Name & chr(1) & GUserr.Code;
+      usersvec[GUserr.Code] = true;
+    end;
+l_next_guserr:;
+  end;
+
+  SortStringArray(userarr);
+  
+  rwcnt = MatRowCnt(CGr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowDelete(CGr,0);
+  end;
+  for (i=0;i<userarr.length;i=i+1) begin
+    pos = 0;
+    GetNextSubString(userarr[i],pos,chr(1),username);
+    GetNextSubString(userarr[i],pos,"",usercode);
+    CGrw.UserCode = usercode;
+    CGrw.UserName = username;
+    MatRowPut(CGr,MatRowCnt(CGr),CGrw);
+l_skip_user:;
+  end;
+  
+  return;
+end;
+

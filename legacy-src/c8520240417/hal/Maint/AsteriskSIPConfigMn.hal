@@ -1,0 +1,108 @@
+external function string 255 MakeTrailingSlash(string);
+external updating procedure GenerateAsteriskConfigFiles(record PBXConnectionVc,Boolean,var string);
+external procedure MoveAsteriskFileInPlace(string,string,string);
+external procedure MoveAsteriskSoundFileInPlace(record PBXConnectionVc,string,string);
+external function string 255 AsteriskConfigBaseDir(record PBXConnectionVc,Boolean);
+external procedure  MoveAsteriskDirInPlace(string,string);
+external procedure MoveAsteriskSoundDirInPlace(record PBXConnectionVc,string,string);
+external function Boolean IsLocalAsterisk(record PBXConnectionVc);
+external procedure DoUpdateRemoteAsteriskConfigurationThread(string);
+external procedure ReInitLinphoneOnClient();
+external procedure ReloadAsteriskConfiguration();
+external procedure UpdatePBXWhitelist(record PBXConnectionVc);
+external updating procedure DoReInitLinphone();
+
+updating procedure SendAsteriskFilesToServer(record PBXConnectionVc PBXCr)
+begin
+  string 255 basedir,remsounddir;
+
+  basedir = AsteriskConfigBaseDir(PBXCr,false);
+  MoveAsteriskDirInPlace(PBXCr.Code,basedir & "/etc/asterisk/");
+
+  remsounddir = MakeTrailingSlash(PBXCr.RemoteConfigDir);
+  MoveAsteriskSoundDirInPlace(PBXCr,basedir & "/var/lib/asterisk/moh/HW/",remsounddir & "/var/lib/asterisk/moh/HW/");
+  MoveAsteriskSoundDirInPlace(PBXCr,basedir & "/var/lib/asterisk/sounds/",remsounddir & "/var/lib/asterisk/sounds/");
+
+  ReloadAsteriskConfig(PBXCr.Code,"");
+  RestartAsterisk(PBXCr.Code,kAsteriskRestartModeConveniently);
+  return;
+end;
+
+global
+updating procedure AsteriskSIPConfigMn(record RcVc RepSpec)
+begin
+  record PBXConnectionVc PBXCr;
+  Time t;
+  Boolean localf;
+  record LocalAsteriskBlock LAb;
+  string 255 oldannapassword;
+
+  BlockLoad(LAb);
+
+  PBXCr.Code = RepSpec.f1;
+  if (ReadFirstMain(PBXCr,1,true)) then begin
+    localf = IsLocalAsterisk(PBXCr);
+    if (localf) then begin
+      DeleteFolder(LAb.LocalAsteriskDir & "/etc/asterisk.old");
+      RenameFile(LAb.LocalAsteriskDir & "/etc/asterisk",LAb.LocalAsteriskDir & "/etc/asterisk.old");
+      CreateFolderHierarchy(MakeTrailingSlash(LAb.LocalAsteriskDir) & "/etc/asterisk/");
+      GenerateAsteriskConfigFiles(PBXCr,localf,oldannapassword);
+      ThreadAsync.UpdatePBXWhitelist(PBXCr);
+      ReloadAsteriskConfiguration;
+      queued.DoReInitLinphone; //crash prone
+      AllClientsRemoteAsync.ReInitLinphoneOnClient;
+    end else begin
+      if (DirExists(AsteriskConfigBaseDir(PBXCr,false))) then begin
+        DeleteFolder(AsteriskConfigBaseDir(PBXCr,false));//cleaning up what ever was written there before
+      end;
+      CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,false) & "/etc/asterisk/");
+      GenerateAsteriskConfigFiles(PBXCr,localf,oldannapassword);
+      if (blank(PBXCr.AsteriskControllerKey)) then begin
+        SendAsteriskFilesToServer(PBXCr);
+      end;
+    end;
+  end;
+  return;
+end;
+
+global
+procedure AsteriskSIPConfigNSMn(record RcVc RepSpec)
+begin
+  record PBXConnectionVc PBXCr;
+  record RcVc RepSpec2;
+  Boolean reinitf;
+  
+  if (nonblank(RepSpec.f1)) then begin
+    PBXCr.Code = RepSpec.f1;
+    if (ReadFirstMain(PBXCr,1,true)) then begin
+      if (nonblank(PBXCr.AsteriskControllerKey)) then begin
+        DoUpdateRemoteAsteriskConfigurationThread(RepSpec.f1);
+        reinitf = true;
+        goto LAsteriskSIPConfigNSMn;
+      end;
+    end;
+  
+    // Local servers, old style remote servers
+    qupdating.AsteriskSIPConfigMn(RepSpec);
+  end else begin
+    while (LoopMain(PBXCr,1,true)) begin
+      if (PBXCr.Closed==0) then begin
+        RecordCopy(RepSpec2,RepSpec);
+        RepSpec2.f1 = PBXCr.Code;
+        if (nonblank(PBXCr.AsteriskControllerKey)) then begin
+          DoUpdateRemoteAsteriskConfigurationThread(RepSpec2.f1);
+          reinitf = true;
+        end else begin
+          qupdating.AsteriskSIPConfigMn(RepSpec2);
+        end;
+      end;
+    end;
+  end;
+ 
+LAsteriskSIPConfigNSMn:;
+  if (reinitf) then begin
+    queued.DoReInitLinphone;//crash prone
+    AllClientsRemoteAsync.ReInitLinphoneOnClient;
+  end;
+  return;
+end;

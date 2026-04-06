@@ -1,0 +1,122 @@
+
+global
+procedure BeginJSONRequestArrayElement(var area a_req)
+begin
+  AddTextToArea("{",a_req);
+  return;
+end;
+
+global
+procedure EndJSONRequestArrayElement(Boolean lastf,var area a_req)
+begin
+  if (lastf) then begin
+    AddTextToArea("}",a_req);
+  end else begin
+    AddTextToArea("},",a_req);
+  end;
+  return;
+end;
+
+global
+procedure BeginJSONUnqualifiedRequestArrayParameter(var area a_req)
+begin
+  AddTextToArea("[",a_req);
+  return;
+end;
+
+global
+procedure BeginJSONRequestArrayParameter(string parameter_name,var area a_req)
+begin
+  AddTextToArea("\"" & parameter_name & "\":[",a_req);
+  return;
+end;
+
+global
+procedure EndJSONRequestArrayParameter(Boolean lastf,var area a_req)
+begin
+  if (lastf) then begin
+    AddTextToArea("]",a_req);
+  end else begin
+    AddTextToArea("],",a_req);
+  end;
+  return;
+end;
+
+global
+procedure JSONRequestParameter(string parameter_name,string parameter_value,Boolean quotedf,Boolean lastf,var area a_req)
+begin
+  if (quotedf) then begin
+    AddTextToArea("\"" & parameter_name & "\":\"" & parameter_value & "\"",a_req);
+  end else begin
+    AddTextToArea("\"" & parameter_name & "\":" & parameter_value,a_req);
+  end;
+  if (!lastf) then begin
+    AddTextToArea(",",a_req);
+  end;
+  return;
+end;
+
+global
+procedure JSONUnqualifiedRequestParameter(string parameter_value,Boolean quotedf,Boolean lastf,var area a_req)
+begin
+  if (quotedf) then begin
+    AddTextToArea("\"" & parameter_value & "\"",a_req);
+  end else begin
+    AddTextToArea(parameter_value,a_req);
+  end;
+  if (!lastf) then begin
+    AddTextToArea(",",a_req);
+  end;
+  return;
+end;
+
+global
+procedure BeginJSONRequestStructParameter(string parameter_name,var area a_req)
+begin
+  AddTextToArea("\"" & parameter_name & "\":{",a_req);
+  return;
+end;
+
+global
+procedure EndJSONRequestStructParameter(Boolean lastf,var area a_req)
+begin
+  if (lastf) then begin
+    AddTextToArea("}",a_req);
+  end else begin
+    AddTextToArea("},",a_req);
+  end;
+  return;
+end;
+
+global
+function string 255 MakeJWT(json claims,string algorithm,string key)
+begin
+  json hdr;
+  string 255 hdr_string,claim_string,tosign_string,sign_string,sign,res;
+  CryptoKey ck;
+  
+  hdr.typ = "JWT";
+  hdr.alg = algorithm;
+
+  hdr_string = Base64EncodeURL(JSONGetAsJSONString(hdr,"/"));
+  claim_string = Base64EncodeURL(JSONGetAsJSONString(claims,"/"));
+  
+  hdr_string = ReplaceStringWithString(hdr_string,"=","");
+  claim_string = ReplaceStringWithString(claim_string,"=","");
+
+  tosign_string = hdr_string & "." & claim_string;
+  
+  switch (algorithm) begin
+    case "HS256":
+      sign = HMACSHA256String(key,tosign_string);
+    case "RS256":
+      ReadPrivateKeyFromString(ck,key,"");
+      sign = DigestAndSign(tosign_string,ck,kDigest_SHA256,kOutputBase64URL);
+    case "none":
+      sign = "";
+  end;
+  
+  res = tosign_string & "." & sign;
+  
+  MakeJWT = res;
+end;

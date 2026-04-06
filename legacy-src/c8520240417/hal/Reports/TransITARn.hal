@@ -1,0 +1,630 @@
+external procedure AutomatedSalesOrderly(string);
+external function Boolean HasExtraNLComment();
+external procedure FindFiscalYear(Date,var Date,var Date);
+external function Integer TypeOfCurncy(var string,var Integer);
+external procedure TransRnHeader(record RcVc);
+external procedure AddToVAT2Sum(record SMVc,string,val,val);
+external procedure AddToVATSum(record SMVc,string,val);
+external function Boolean GetAccName(string,var string,Integer);
+external procedure ListPerTrans(record RcVc);
+external procedure ToStrTRCode(var string,Integer,LongInt);
+external procedure TRExtYc(record TRVc,var string);
+external procedure GetFullCurncyRateText(Boolean,var string,val,val,val,val,val);
+external procedure PrintTrrCurrency(string,val,val,Integer,val,val,val,val,val);
+
+procedure FormTrr(record RcVc RepSpec,Integer tpos,record TRVc TRr,Integer trrow,var val transump,record SMVc SMvatr,var LongInt TransCount)
+begin
+  string 255 tstr,tstr2;
+  record AccVc Accr;
+  row AccVc Accrw;
+  row SMVc SMrw;
+  row TRVc TRrw;
+  Integer i,rwcnt;  
+  Boolean Accs;
+  val sv;
+
+  MatRowGet(TRr,trrow,TRrw);
+  StartFormat(15);
+  if (TRrw.stp==1) then begin
+    Accr.AccNumber = TRrw.AccNumber;
+    Accs = ReadFirstMain(Accr,1,true);
+    tstr = Accr.Comment;
+    if (nonblank(TRrw.Comment)) then begin
+      tstr2 = Left(Accr.Comment,len(TRrw.Comment));
+      if (TRrw.Comment<>tstr2) then begin tstr = TRrw.Comment; end;
+      if (nonblank(RepSpec.Language)) then begin           
+        rwcnt = MatRowCnt(Accr);
+        for (i=0; i<rwcnt; i=i+1) begin
+          MatRowGet(Accr,i,Accrw);
+          if (Accrw.LangCode==RepSpec.Language) then begin
+            if (nonblank(Accrw.Text)) then begin
+              tstr = Accrw.Text;
+            end;  
+            i = rwcnt;               
+          end;
+        end;  
+      end;                  
+    end;
+    if (TRrw.ovst==0) then begin
+      TransCount = TransCount + 1;
+      if (RepSpec.basecurncy==0) then begin
+        transump = TRrw.DebVal + transump;
+      end else begin
+        transump = TRrw.DebVal2 + transump;
+      end;  
+    end;
+    OutStringovst(0,0,TransCount,false,0);
+    OutStringovst(30,0,TRrw.AccNumber,false,TRrw.ovst);
+    OutStringovst(80,0,TRrw.Objects,false,TRrw.ovst);
+    OutStringovst(tpos,0,tstr,false,TRrw.ovst);
+    if (HasExtraNLComment) and (nonblank(TRrw.ExtraComment)) then begin
+      OutStringovst(tpos,0,TRrw.ExtraComment,false,TRrw.ovst);
+    end;
+    if (RepSpec.basecurncy==0) then begin
+      OutValOvstBiDi(380,0,TRrw.DebVal,M4Val,true,TRrw.ovst,430);
+      OutValOvstBiDi(5,0,TRrw.CredVal,M4Val,true,TRrw.ovst,5);
+      if (TRrw.ovst==0) then begin
+        AddToAccumulator(0,TRrw.DebVal);
+        AddToAccumulator(1,TRrw.CredVal);
+        AddToAccumulator(2,TRrw.DebVal);
+        AddToAccumulator(3,TRrw.CredVal);
+      end;
+    end else begin
+      OutValOvstBiDi(380,0,TRrw.DebVal2,M4Val,true,TRrw.ovst,430);
+      OutValOvstBiDi(5,0,TRrw.CredVal2,M4Val,true,TRrw.ovst,5);
+      if (TRrw.ovst==0) then begin
+        AddToAccumulator(0,TRrw.DebVal2);
+        AddToAccumulator(1,TRrw.CredVal2);      
+        AddToAccumulator(2,TRrw.DebVal2);
+        AddToAccumulator(3,TRrw.CredVal2);
+      end;
+    end;  
+  end;  
+  if (TRrw.stp==2) then begin
+    tstr = USetStr(3062);
+    tstr = tstr & TRrw.Sign;
+    OutString(30,0,USetStr(3063),false);
+    OutDate(150,0,TRrw.UpdDate,false);
+    OutString(280,0,tstr,true);
+    if (TRrw.OldTransDate<>TRr.TransDate) then begin
+      OutString(420,0,USetStr(3064),true);
+      OutDate(1,0,TRrw.OldTransDate,true);
+    end;
+  end;
+  if (TRrw.stp==3) then begin
+    ToStrTRCode(tstr,TRrw.CorrYc,TRrw.CorrNr);
+    OutString(30,0,USetStr(3065),false);
+    OutString(150,0,tstr,false);
+    OutString(200,0,USetStr(3066),false);
+    OutDate(280,0,TRrw.CorrDate,false);
+  end;
+  if (TRrw.stp==4) then begin
+    ToStrTRCode(tstr,TRrw.CorrYc,TRrw.CorrNr);
+    OutString(30,0,USetStr(3067),false);
+    OutString(150,0,tstr,false);
+  end;
+  EndFormat;
+  PrintTrrCurrency(Trrw.Curncy,Trrw.CurDebVal,Trrw.CurCredVal,Trrw.ovst,TRrw.FrRate,TRrw.ToRateB1,TRrw.ToRateB2,TRrw.BaseRate1,TRrw.BaseRate2);
+  return;
+end;
+
+procedure ToStrTRCode(var string rstr,Integer ycp,LongInt nrp)
+begin
+  string 255 t2;
+  
+  t2 = nrp;
+  rstr = StrTRCode(ycp);
+  if (nonblank(rstr)) then begin
+    rstr = rstr & ".";
+  end;  
+  rstr = rstr & t2;
+  return;
+end;
+
+function Boolean IsSubSytemRecordInvalidated(LongInt Number,Integer IntYc)
+begin
+  Boolean res;
+  record AT2WrofVc AT2Wrofr;
+  record CheckVc Checkr;
+  record CLInVc CLInr;
+  record CLOutVc CLOutr;
+  record ExpVc Expr;
+  record IntIVVc IntIVr;
+  record IPVc IPr;
+  record IVVc IVr;
+  record OwnCheckVc OwnCheckr;
+  record PPVc PPr;
+  record PUVc PUr;
+  record RetPUVc RetPUr;
+  record VIVc VIr;
+  record CredManVc CredManr;
+  record ForexTRVc FTRr;
+  record LoanAgreementVc LoanAgreementr;
+  
+  switch (IntYc) begin
+    case AT2WrofYc:
+      AT2Wrofr.SerNr = Number;
+      if (ReadFirstMain(AT2Wrofr,1,true)) then begin
+        if (AT2Wrofr.Invalid!=0) then begin
+          res = true;
+        end;
+      end;
+    case CheckYc:
+      Checkr.SerNr = Number;
+      if (ReadFirstMain(Checkr,1,true)) then begin
+        if (Checkr.Invalid!=0) then begin
+          res = true;
+        end;
+      end;
+    case IntIVYc:
+      IntIVr.SerNr = Number;
+      if (ReadFirstMain(IntIVr,1,true)) then begin
+        if (IntIVr.Invalid!=0) then begin
+          res = true;
+        end;
+      end;
+    case OwnCheckYc:
+      OwnCheckr.SerNr = Number;
+      if (ReadFirstMain(OwnCheckr,1,true)) then begin
+        if (OwnCheckr.Invalid!=0) then begin
+          res = true;
+        end;
+      end;
+    case PUYc:
+      PUr.SerNr = Number;
+      if (ReadFirstMain(PUr,1,true)) then begin
+        if (PUr.Invalid!=0) then begin
+          res = true;
+        end;
+      end;
+    case RetPUYc:
+      RetPUr.SerNr = Number;
+      if (ReadFirstMain(RetPUr,1,true)) then begin
+        if (RetPUr.Invalid!=0) then begin
+          res = true;
+        end;
+      end;
+    case IVYc:
+      IVr.SerNr = Number;
+      if (ReadFirstMain(IVr,1,true)) then begin
+        if (IVr.Invalid!=0) then begin
+          res = true;
+        end;
+      end;
+    case ForexTRYc:
+      FTRr.SerNr = Number;
+      if (ReadFirstMain(FTRr,1,true)) then begin
+        if (FTRr.Invalid!=0) then begin
+          res = true;
+        end;
+      end;
+    case IPYc:
+      IPr.SerNr = Number;
+      if (ReadFirstMain(IPr,1,true)) then begin
+        if (IPr.Invalid!=0) then begin
+          res = true;
+        end;
+      end;
+    case VIYc:
+      VIr.SerNr = Number;
+      if (ReadFirstMain(VIr,1,true)) then begin
+        if (VIr.Invalid!=0) then begin
+          res = true;
+        end;
+      end;
+    case CLInYc:
+      CLInr.SerNr = Number;
+      if (ReadFirstMain(CLInr,1,true)) then begin
+        if (CLInr.Invalid!=0) then begin
+          res = true;
+        end;
+      end;
+    case CLOutYc:
+      CLOutr.SerNr = Number;
+      if (ReadFirstMain(CLOutr,1,true)) then begin
+        if (CLOutr.Invalid!=0) then begin
+          res = true;
+        end;
+      end;
+    case PPYc:
+      PPr.SerNr = Number;
+      if (ReadFirstMain(PPr,1,true)) then begin
+        if (PPr.Invalid!=0) then begin
+          res = true;
+        end;
+      end;
+    case ExpYc:
+      Expr.SerNr = Number;
+      if (ReadFirstMain(Expr,1,true)) then begin
+        if (Expr.Invalid!=0) then begin
+          res = true;
+        end;
+      end;
+    case CredManYc:
+      CredManr.SerNr = Number;
+      if (ReadFirstMain(CredManr,1,true)) then begin
+        if (CredManr.Invalid!=0) then begin
+          res = true;
+        end;
+      end;
+    case LoanManYc:
+      LoanAgreementr.SerNr = Number;
+      if (ReadFirstMain(LoanAgreementr,1,true)) then begin
+        if (LoanAgreementr.Status==kLoanAgreementStatusCanceled) then begin
+          res = true;
+        end;
+      end;
+  end;
+  IsSubSytemRecordInvalidated = res;
+  return;
+end;
+
+function LongInt GetNoSer(LongInt IntYc,LongInt SerNo,var string labstr)
+begin
+  record TRSerBlock TRSerRec;
+  row TRSerBlock TRSerrw;
+  record IVSerBlock IVSerRec;
+  row IVSerBlock IVSerrw;
+  Integer rwcnt,i;
+  
+  GetNoSer = -1;
+  labstr = "";
+  if (IntYc<IVYc) then begin
+    BlockLoad(TRSerRec);
+    rwcnt = MatRowCnt(TRSerRec);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(TRSerRec,i,TRSerrw);
+      if ((SerNo>=TRSerrw.TSerStart) and (SerNo<=TRSerrw.TSerEnd)) then begin
+        labstr = TRSerrw.TSerCom;
+        GetNoSer = i;
+        i = rwcnt;
+      end;
+    end;
+  end;
+  if (IntYc==IVYc) then begin
+    BlockLoad(IVSerRec);
+    rwcnt = MatRowCnt(IVSerRec);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(IVSerRec,i,IVSerrw);
+      if ((SerNo>=IVSerrw.TSerStart) and (SerNo<=IVSerrw.TSerEnd)) then begin
+        labstr = IVSerrw.TSerCom;
+        GetNoSer = i;
+        i = rwcnt;
+      end;
+    end;
+  end;
+  return;
+end;
+
+procedure RunTransRn1(record RcVc RepSpec,var LongInt TransCount,var val TransSum,var record SMVc SMaccr,var record SMVc SMvatr,Integer type)
+begin
+  record TRVc TRr;
+  row TRVc TRrw;
+  row SMVc SMrw;
+  Integer i,j,rwcnt;
+  Boolean TrHs;
+  string 255 tstr;
+  string 40 ckey;
+  Boolean testf;
+  Integer yc1,yc2;
+  LongInt n1,n2;
+  val sv;
+  val pdsum,pcsum;
+  val totdeb,totcred;  
+  Integer keys,hit;
+  val dsum,csum;
+  LongInt oldno,newNoSer;
+  LongInt oldYc;
+  val groupdeb,groupcred;
+  string 60 groupcom;
+  string 60 newgroupcom;
+  
+  oldYc = -1;
+  groupcom = "";
+  yc1 = RepSpec.flags[0];
+  yc2 = RepSpec.flags[1];
+  n1 = RepSpec.long1;
+  n2 = RepSpec.long2;
+  
+  if (RepSpec.flags[10]==0) then begin
+    ckey = "Number";
+    TRr.Number = n1;
+    TRr.IntYc = yc1;
+    TRr.TransDate = RepSpec.sStartDate;
+    keys = 2;
+  end;
+  if (RepSpec.flags[10]==1) then begin
+    ckey = "TransDate";
+    TRr.Number = -1;
+    TRr.IntYc = 0;
+    TRr.TransDate = RepSpec.sStartDate;
+    keys = 1;
+  end;
+  TrHs = true;
+  while (LoopKey(ckey,TRr,keys,TrHs)) begin
+    if (TrHs) then begin
+      if (RepSpec.flags[10]==0) then begin
+        if (nonblank(RepSpec.f1)) then begin
+          if (TRr.IntYc>yc2) then begin TrHs = false; end;
+          if (TRr.IntYc==yc2) then begin
+            if (TRr.Number>n2) then begin TrHs = false; end;
+          end;  
+        end;
+      end;
+    end;
+    if (TrHs) then begin
+      if (RepSpec.flags[10]==1) then begin
+        if (TRr.TransDate>RepSpec.sEndDate) then begin TrHs = false; end;
+      end;
+    end;
+    if (TrHs) then begin
+      testf = true;
+      if (DateInRange(TRr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin testf = false; end;
+      if (RepSpec.flags[10]==1) then begin
+        if (nonblank(RepSpec.f1)) then begin
+          if ((yc1<TRr.IntYc) or (yc2>TRr.IntYc)) then begin testf = false; end;
+          if (testf) then begin
+            if ((n1>TRr.Number) or (n2<TRr.Number)) then begin testf = false; end;
+          end;  
+        end;
+      end;
+      if (RepSpec.flags[14]!=0) then begin
+        if (IsSubSytemRecordInvalidated(TRr.Number,TRr.IntYc)) then begin
+          testf = false;
+        end;
+      end;      
+      if (testf) and (type!=-1) then begin
+        MatRowGet(TRr,0,TRrw);
+        testf = false;
+        if (TRrw.SAFTType==kTransactionFiscalTypeYearEndStage1) and (type==kTransactionFiscalTypeYearEndStage1) then begin 
+          testf = true;
+        end;
+        if (TRrw.SAFTType==kTransactionFiscalTypeYearEndStage2) and (type==kTransactionFiscalTypeYearEndStage2) then begin 
+          testf = true;
+        end;
+        if (TRrw.SAFTType<=kTransactionFiscalTypeYearEnd) and (type!=kTransactionFiscalTypeYearEndStage1 and type!=kTransactionFiscalTypeYearEndStage2) then begin 
+          testf = true;
+        end;
+      end;  
+      if (testf) then begin
+        newNoSer = GetNoSer(TRr.IntYc,TRr.Number,newgroupcom);
+        if ((oldYc<>TRr.IntYc) or (oldNo<>newNoSer)) then begin
+/*
+          if (oldYc<>-1) then begin
+            Gray_Divider(0,1);
+            tstr = USetStr(3078) & " " & StrTRCode(oldYc) & " " & groupcom;
+            StartFormat(15);
+            OutString(0,0,tstr,false);
+            if (RepSpec.Media==mtFile) or (RepSpec.Media==mtExcel) then begin
+              OutString(260,0,"",false);
+              OutString(260,0,"",false);
+            end;
+            OutValBiDi(380,0,groupdeb,M4Val,true,430);
+            OutVal(5,0,groupcred,M4Val,true);
+            EndFormat;
+            StartFormat(15);
+            EndFormat;
+          end;
+*/          
+          oldYc = TRr.IntYc;
+          oldNo = newNoSer;
+          groupcom = newgroupcom;
+          groupdeb = 0;
+          groupcred = 0;
+        end;
+        Gray_Divider(0,1);
+        StartFormat(15);          
+        TRExtYc(TRr,tstr);
+        OutString(0,"DblTrans",tstr,false);
+        OutDate(140,0,TRr.TransDate,false);
+        OutString(200,0,TRr.RefStr,false);
+        OutString(280,0,TRr.Comment,false);
+        EndFormat;
+        dsum = 0;
+        csum = 0;
+        rwcnt = MatRowCnt(TRr);
+        for (i=0 ;i<rwcnt; i=i+1) begin
+          MatRowGet(TRr,i,TRrw);
+          FormTrr(RepSpec,160,TRr,i,TransSum,SMvatr,TransCount);
+          if (RepSpec.basecurncy==0) then begin
+            pdsum = pdsum + TRrw.DebVal;
+            pcsum = pcsum + TRrw.CredVal;
+            if (TRrw.ovst==0) and (TRrw.stp==1) then begin
+              dsum = dsum + TRrw.DebVal;
+              csum = csum + TRrw.CredVal;
+              AddToVAT2Sum(SMaccr,TRrw.AccNumber,TRrw.DebVal,TRrw.CredVal);
+              groupdeb = groupdeb + TRrw.DebVal;              
+              groupcred = groupcred + TRrw.CredVal;              
+            end;
+          end else begin
+            pdsum = pdsum + TRrw.DebVal2;
+            pcsum = pcsum + TRrw.CredVal2;
+            if (TRrw.ovst==0) and (TRrw.stp==1) then begin
+              dsum = dsum + TRrw.DebVal2;
+              csum = csum + TRrw.CredVal2;
+              AddToVAT2Sum(SMaccr,TRrw.AccNumber,TRrw.DebVal2,TRrw.CredVal2);
+              groupdeb = groupdeb + TRrw.DebVal2;              
+              groupcred = groupcred + TRrw.CredVal2;              
+            end;
+          end;
+        end;
+        Black_Divider(300,480);
+//        sv = -TRr.CSum;
+        StartFormat(15);
+        if (RepSpec.Media==mtFile) or (RepSpec.Media==mtExcel) then begin
+          OutString(260,0,"",false);
+          OutString(260,0,"",false);
+          OutString(260,0,"",false);
+        end;
+        OutValBiDi(380,0,dsum,M4Val,true,430);
+        OutValBiDi(5,0,csum,M4Val,true,5);
+        EndFormat;
+      end;
+    end;
+  end;
+/*  
+  Gray_Divider(0,1);
+  if (type==-1) or (type==-2) then begin 
+    tstr = USetStr(3078) & " " & StrTRCode(oldYc) & " " & groupcom;
+  end;  
+  if (type==kTransactionFiscalTypeYearEndStage1) then begin 
+    tstr = USetStr(8343) & " " & StrTRCode(oldYc) & " " & groupcom;
+  end;
+  if (type==kTransactionFiscalTypeYearEndStage2) then begin 
+    tstr = USetStr(8341) & " " & StrTRCode(oldYc) & " " & groupcom;
+  end;
+  StartFormat(15);
+  OutString(0,0,tstr,false);
+  OutValBiDi(380,0,groupdeb,M4Val,true,430);
+  OutVal(5,0,groupcred,M4Val,true);
+  EndFormat;
+  StartFormat(15);
+  EndFormat;
+*/  
+  return;
+end;  
+
+procedure RunTransRn(var record RcVc RepSpec)
+begin
+  record TRVc TRr;
+  row TRVc TRrw;
+  record SMVc SMaccr;
+  record SMVc SMvatr;
+  row SMVc SMrw;
+  Integer i,j,rwcnt,vatrows,prwcnt;
+  Boolean TrHs;
+  string 255 tstr;
+  string 40 ckey;
+  Boolean testf;
+  Integer yc1,yc2;
+  LongInt n1,n2;
+  val TransSum,sv;
+  val pdsum,pcsum;
+  val totdeb,totcred;  
+  Integer keys,hit;
+  record VATCodeBlock VATCodeRec;
+  row VATCodeBlock VATCoderw;
+  LongInt TransCount;
+  val dsum,csum;
+  LongInt oldno,newNoSer;
+  LongInt oldYc;
+  val groupdeb,groupcred;
+  string 60 groupcom;
+  string 60 newgroupcom;
+  
+  TransCount = 0;
+  RepSpec.long1 = FirstTransInRange(RepSpec.f1);
+  RepSpec.long2 = LastTransInRange(RepSpec.f1);
+  RepSpec.flags[0] = FirstTransTypeInRange(RepSpec.f1);
+  RepSpec.flags[1] = LastTransTypeInRange(RepSpec.f1);  
+
+  RecordNew(SMaccr);
+  RecordNew(SMvatr);
+  RunTransRn1(RepSpec,TransCount,TransSum,SMaccr,SMvatr,-1);
+  
+  if (true) then begin
+    Gray_Divider(0,1);
+    StartFormat(15);
+    OutString(0,0,USetStr(3078) & " " & USetStr(3061),false);
+    if (RepSpec.Media==mtFile) or (RepSpec.Media==mtExcel) then begin
+      OutString(260,0,"",false);
+      OutString(260,0,"",false);
+    end;
+    OutValBiDi(380,0,TransSum,M4Val,true,430);
+    OutVal(5,0,TransSum,M4Val,true);
+    EndFormat;
+    if (RepSpec.vals0<>0) then begin
+      StartFormat(15);
+      EndFormat;
+      StartFormat(15);
+      OutString(0,0,USetStr(3081),false);
+      OutValBiDi(380,0,RepSpec.vals0,M4Val,true,430);
+      OutVal(5,0,RepSpec.vals0,M4Val,true);
+      EndFormat;
+      TransSum = TransSum + RepSpec.vals0;
+      StartFormat(15);
+      OutString(0,0,USetStr(3082),false);
+      OutValBiDi(380,0,TransSum,M4Val,true,430);
+      OutVal(5,0,TransSum,M4Val,true);
+      EndFormat;
+    end;
+    StartFormat(15);
+    EndFormat;
+    StartFormat(15);
+    OutString(0,0,USetStr(3079),false);
+    OutLongInt(160,0,TransCount,false);
+    EndFormat;
+  end;
+  return;
+end;
+
+global
+procedure TransITARn(var record RcVc RepSpec)
+begin
+  Date FStartDate,FEndDate,blankd;
+  Date sd,ed;
+  string 255 tstr;
+  record CYBlock CYb;
+  Integer rw;
+
+  if (nonblank(RepSpec.f3)) then begin
+    tstr = RepSpec.f3;
+  end else begin
+    tstr = USetStr(3061);
+  end;
+  rw = 2;
+  BlockLoad(CYb);
+  StartReportNoHeaderJob(tstr);
+  StartFormat(15);
+  OutString(0,0,USetStr(16515) & ": " & CYb.VATNr,false);
+  OutString(1,0,CYb.Addr0 & " " & CYb.Addr1,true);
+  EndFormat;
+  StartFormat(15);
+  OutString(0,0,USetStr(20507) & ": " & CYb.OrgNr,false);
+  OutString(1,0,CYb.Addr2 & " " & CYb.Addr3,true);
+  EndFormat;
+  StartFormat(15);
+  OutString(1,0,CYb.Addr4,true);
+  EndFormat;
+  
+/*  
+  StartReportJob(tstr);
+  tstr = USetStr(16515) & ": " & CYb.VATNr;
+  Header(rw,tstr,0);
+  Header(rw,CYb.Addr0 & " " & CYb.Addr1,1);
+  rw = rw + 1;
+
+  tstr = USetStr(20507) & ": " & CYb.OrgNr;
+  Header(rw,tstr,0);
+  Header(rw,CYb.Addr2 & " " & CYb.Addr3,1);
+  rw = rw + 1;
+  Header(rw,CYb.Addr4,1);
+  EndHeader;
+*/  
+  StartFormat(15);
+  EndFormat;
+  SetRepCol(2,80);
+  SetRepCol(3,288);
+  SetRepCol(4,384);
+  SetRepColBiDi(5,465,515);
+  SetRepCol(8,413);
+  SetRepCol(9,221);
+  SetRepCol(6,130);
+  SetRepCol(7,140);
+  StartFormat(15);
+    OutString(0,0,USetStr(3068),false);
+    OutString(140,0,USetStr(3070),false);
+    OutString(200,0,USetStr(3080),false);
+    OutString(280,0,USetStr(3072),false);
+  EndFormat;
+  StartFormat(15);
+    OutString(30,0,USetStr(3073),false);
+    OutString(160,0,USetStr(3075),false);
+    OutStringAdjustBiDi(380,0,USetStr(3076),true,M4Val,430);
+    OutStringAdjust(5,0,USetStr(3077),true,M4Val);
+  EndFormat;
+  RunTransRn(RepSpec);
+  EndJob; 
+  AutomatedSalesOrderly("HasIntegratedNL+Run_TransITARn");
+  return;
+end;

@@ -1,0 +1,82 @@
+external function LongInt GetCurUserLastNr(string);
+remote function Boolean PasteCustInInv(var record IVVc);
+remote procedure IVVc_PasteQuant(var record IVVc,Integer,Boolean,var Boolean,string);
+remote procedure IVSumup(var record IVVc,Boolean);
+remote function Boolean IVDchrsum(var record IVVc,Integer);
+remote function Boolean IVVc_PasteArtCode(var record IVVc,Integer,var string,var string,Boolean,var Integer);
+remote function string 255 OfficialNumberReformatFromSeries(string,string,string);
+
+global
+updating procedure IVFromGlobalStockMovDsm()
+begin
+  record StockMovVc StockMovr;
+  row StockMovVc StockMovrw;
+  record RcVc RepSpec;
+  LongInt r,newnr;
+  Integer wn,nwn,err;
+  record IVVc IVr;
+  row IVVc IVrw;
+  Boolean testf,chsum;
+  record ORVc ORr;
+  integer i,rwcnt;
+  string 255 tstr;
+  Integer sernrf;
+  
+  wn = CurWindow;
+  if (WindowState(wn)==Rs_normal) then begin
+    DeselectWindow(wn,false);
+    GetWindowRecord(wn,StockMovr);
+    testf = true;
+    if (StockMovr.StockMovType!=kStockMovTypeGlobalTransport) then begin
+      testf = false;
+      MessageBox(40882,"");
+      goto LIVFromGlobalStockMovDsm;
+    end;
+    if (StockMovr.OKFlag!=1) then begin
+      testf = false;
+      MessageBox(40882,"");
+      goto LIVFromGlobalStockMovDsm;
+    end;
+    if (testf) then begin
+      newnr = GetCurUserLastNr("IVVc");
+      RecordNew(IVr);
+      IVr.SerNr = NextSerNr("IVVc",IVr.TransDate,newnr,false,IVr.LangCode);
+      IVr.GlobalTransportNr = "MOVGL" & " " & OfficialNumberReformatFromSeries(StockMovr.OfficialSerNr,StockMovr.OfficialSerNrSerie,"/");
+      IVr.GlobalTransportDate = StockMovr.TransDate;
+      IVr.Location = StockMovr.ToLocation;
+      ORr.SerNr = StockMovr.OrderNr;
+      ReadFirstMain(ORr,1,true);
+      IVr.CustCode = ORr.CustCode;
+      if (PasteCustInInv(IVr)) then begin end;
+      rwcnt = MatRowCnt(StockMovr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(StockMovr,i,StockMovrw);
+        MatRowGet(IVr,MatRowCnt(IVr),IVrw);
+        ClearRow(IVr,IVrw,kInvoiceRowTypeNormal);
+        IVrw.ArtCode = StockMovrw.ArtCode;
+        MatRowPut(IVr,MatRowCnt(IVr),IVrw);
+        if (IVVc_PasteArtCode(IVr,MatRowCnt(IVr)-1,tstr,tstr,false,sernrf)) then begin end; 
+        MatRowGet(IVr,MatRowCnt(IVr)-1,IVrw); 
+        IVrw.Quant = StockMovrw.Quant;
+        MatRowPut(IVr,MatRowCnt(IVr)-1,IVrw);
+        MatRowGet(IVr,MatRowCnt(IVr)-1,IVrw); 
+        IVVc_PasteQuant(IVr,MatRowCnt(IVr)-1,true,chsum,"");
+        IVrw.Sum = IVrw.Price*IVrw.Quant;
+        MatRowPut(IVr,MatRowCnt(IVr)-1,IVrw);
+        IVDchrsum(IVr,MatRowCnt(IVr)-1);  
+      end;
+      IVSumup(IVr,true);  
+      if (IVr.SerNr<0) then begin
+        MessageBox(1744,"");
+        goto LIVFromGlobalStockMovDsm;
+      end;
+      if (RecordStore(IVr,false)) then begin
+        CreateRecordLink(IVr,CurrentCompany,StockMovr,CurrentCompany);  
+        CreateRecordLink(StockMovr,CurrentCompany,IVr,CurrentCompany);
+      end;
+      nwn = OpenWindow("IVDClass",1,0,"","",IVr);
+    end;
+  end;
+LIVFromGlobalStockMovDsm:;
+  return;
+end;

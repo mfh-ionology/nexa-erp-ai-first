@@ -1,0 +1,141 @@
+procedure PrintConferencesWithGroup(string Group,string conference)
+begin
+  record ConfVc Confr;
+  Boolean found,firstf,testf;
+  record ConfAccVc ConfAccr;
+
+  firstf = true;
+  found = true;
+  while (LoopKey("Group:" & Group,Confr,1,found)) begin
+    testf = true;
+    if (Confr.Class==kConfClassMailbox) then begin testf = false; end;
+    if (nonblank(conference)) then begin
+      if (Confr.AddrName!=conference) then begin testf = false; end;
+    end;
+    if (testf) then begin
+      if (found) then begin
+        if (firstf) then begin
+          StartFormat(15);
+           OutString(2,0,USetStr(16113),false);
+           OutString(3,0,USetStr(16114),false);
+          EndFormat;
+          Gray_Divider(0,1);
+          ConfAccr.Code = Group;
+          if (ReadFirstMain(ConfAccr,1,true)) then begin end;
+          StartFormat(15);
+          OutString(2,0,Group,false);
+          EndFormat;
+          firstf = false;
+        end;
+        StartFormat(15);
+         OutString(3,0,Confr.AddrName,false);
+        EndFormat;
+      end;
+    end;
+  end;
+  return;
+end;
+
+procedure PrintConferencesWithMainGroup(string Group,string conference)
+begin
+  record ConfVc Confr,Conf2r;
+  row ConfVc Conf2rw;
+  Boolean found,firstf,testf;
+  record ConfAccVc ConfAccr;
+  Integer i,rwcnt;
+
+  firstf = true;
+  found = true;
+  while (LoopMain(Confr,1,found)) begin
+    if (nonblank(Confr.MotherConf)) then begin
+      Conf2r.SerNr = Confr.MotherConf;
+      if (ReadFirstMain(Conf2r,1,true)) then begin
+        rwcnt = MatRowCnt(Conf2r);
+        testf = false;
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(Conf2r,i,Conf2rw); 
+          if (Conf2rw.Group==Group) then begin 
+            testf = true;
+          end;
+        end;
+        if (!testf) then begin
+           if (nonblank(Conf2r.MotherConf)) then begin
+              if (Conf2rw.Group==Group) or (blank(Conf2rw.Group)) then begin 
+               testf = true;
+              end; 
+          end; 
+        end;
+      end;
+    end;
+    if (Confr.MotherConf==0) then begin testf = true; end;
+    if (Confr.Class==kConfClassMailbox) then begin testf = false; end;
+    if (testf) then begin
+      if (found) then begin
+        StartFormat(15);
+        OutString(3,0,Confr.AddrName,false);
+        EndFormat;
+      end;
+    end;
+  end;
+  return;
+end;
+
+global
+procedure UserConfAccessRn(record RcVc RepSpec)
+begin
+  record UserVc Userr;
+  record ConfVc Confr;
+  row ConfVc Confrw;
+  Boolean found,testf;
+  Integer i,rwcnt;
+  string 20 frus,tous;
+  
+  StartReportJob(USetStr(16110));
+  EndHeader;
+  SetRepCol(2,15);
+  SetRepCol(3,100);
+  StartFormat(15);
+   OutString(0,0,USetStr(16112),false);
+  EndFormat;
+  Gray_Divider(0,1);
+
+  frus = FirstInRange(RepSpec.f1,20);
+  tous = LastInRange(RepSpec.f1,20);
+  Userr.Code = frus;
+  found = true;
+  testf = true;
+  while (LoopMain(Userr,1,found)) begin
+    if (nonblank(RepSpec.f1)) then begin
+      if (Userr.Code>tous) then begin found = false; end;
+    end;
+    if (found) then begin
+      testf = true;
+      if (RepSpec.flags[2]==1) then begin
+        if (Userr.Closed!=0) then begin testf = false; end;
+      end;
+      if (RepSpec.flags[2]==2) then begin
+        if (Userr.Closed==0) then begin testf = false; end;
+      end;
+      if (testf) then begin
+        StartFormat(15);
+        OutString(0,"DblUserNameVc",Userr.Name,false);
+        EndFormat;
+        Gray_Divider(0,1);
+        Confr.AddrName = Userr.Name;
+        if (ReadFirstKey("AddrName",Confr,1,true)) then begin
+          rwcnt = MatRowCnt(Confr);
+          for (i=0;i<rwcnt;i=i+1) begin
+            MatRowGet(Confr,i,Confrw);
+            PrintConferencesWithGroup(Confrw.Group,RepSpec.f2);
+            PrintConferencesWithMainGroup(Confrw.Group,RepSpec.f2);
+          end;
+        end;
+        Gray_Divider(0,1);
+      end;
+    end;
+  end;
+  EndJob;
+  return;
+end;
+
+

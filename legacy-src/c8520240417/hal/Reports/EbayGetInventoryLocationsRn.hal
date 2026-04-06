@@ -1,0 +1,113 @@
+external function Boolean HasValidToken(date,time,LongInt);
+external procedure EbayRefreshAccessToken();
+external function string 255 ContentLangHeader();
+external function string 255 AuthHeader(Integer);
+external function string 255 EbayHost();
+external procedure EbayLog(string,area);
+external function Boolean ParseHTTPHeader(area,string,var Integer,var string,var string);
+
+global
+procedure PrintLocations(record RcVc RepSpec)
+begin
+  record EbayBlock EBb;
+  area areq,areply,replyheader;
+  string 255 path,tstr,root;
+  transaction string 255 gEbayAction;
+  Boolean printf,expiredtokenf;
+  json js;
+  Integer rw,cnt,i;
+  string 255 name,address,status,code;
+  string 255 comment,result;
+  Integer http_res;
+
+  //https://developer.ebay.com/api-docs/sell/inventory/resources/location/methods/getInventoryLocations
+
+  BlockLoad(EBb);
+  if (HasValidToken(EBb.AccessTokenDate,EBb.AccessTokenTime,EBb.AccessTokenLifespan)==false) then begin
+    EbayRefreshAccessToken;
+    expiredtokenf = true;
+    goto LPrintLocations;
+  end;
+
+  tstr = ContentLangHeader & chr(13) & chr(10);
+  tstr = tstr & AuthHeader(1);
+  SetWebHeaders(tstr);
+ 
+  path = "/sell/inventory/v1/location";
+  gEbayAction = "getInventoryLocations";
+
+  EbayLog("request",areq);
+  printf = true;
+  
+  if (SendWebRequest3(EbayHost,443,-1,true,"GET",path,"application/json","",false,areq,areply,replyheader,30)) then begin
+    ParseHTTPHeader(replyheader,"",http_res,comment,result);
+    EbayLog("reply",areply);
+    StartReportJob(USetStr(42780));
+    EndHeader;
+
+    switch (http_res) begin
+      case kHttpStatusBadRequest:           OutString(0,0,"Bad Request",false);             goto LPrintLocations;
+      case kHttpStatusInternalServerError:  OutString(0,0,"Internal Server Error",false);   goto LPrintLocations;
+    end;
+
+    SetRepCol(2,40);
+    SetRepCol(3,100);
+    SetRepCol(4,300);
+    SetRepCol(5,350);
+
+    StartFormat(15);
+    OutString(0,0,USetStr(42781),false);
+    OutString(2,0,USetStr(42782),false);
+    OutString(3,0,USetStr(42783),false);
+    OutString(4,0,USetStr(42784),false);
+    EndFormat;
+    Black_Divider(0,1);
+
+    js = ParseJSONArea(areply);
+    if (JSONNodeExists(js,"error")) then begin
+      OutString(0,0,JSONGet(js,"error_description"),false);
+      printf = false;
+    end;
+    if (JSONNodeExists(js,"errors")) then begin
+      OutString(0,0,JSONGet(js,"errors/[0]/message"),false);
+      printf = false;
+    end;
+
+    if (printf) then begin
+      cnt = StringToInt(JSONGet(js,"total"));
+      for (i=0;i<cnt;i=i+1) begin
+        root = "locations/[" & i & "]";  
+
+        code = JSONGet(js,root & "/merchantLocationKey");
+        name = JSONGet(js,root & "/name");
+        address = JSONGet(js,root & "/location/address/addressLine1") & ", " & JSONGet(js,root & "/location/address/city") & ", " & JSONGet(js,root & "/location/address/country");
+        status = JSONGet(js,root & "/merchantLocationStatus");
+
+        StartFormat(15);
+        OutString(0,"DblLocationVc",code,false);
+        OutString(2,0,name,false);
+        OutString(3,0,address,false);
+        OutString(4,0,status,false);
+        switch (status) begin
+          case "ENABLED":   OutStringID(5,"DblEbayDisableInventoryLocation",USetStr(42785),false,code);
+          case "DISABLED":  OutStringID(5,"DblEbayEnableInventoryLocation",USetStr(42786),false,code);
+        end;
+        OutStringID(1,"DblEbayDeleteInventoryLocation",USetStr(42787),true,code);
+        EndFormat;
+      end;
+    end;
+  end;
+LPrintLocations:;
+  if (expiredtokenf) then begin
+    MessageBox(42788,"");
+  end;
+  EndJob;
+  return;
+end;
+
+global
+procedure EbayGetInventoryLocationsRn(record RcVc RepSpec)
+begin
+  PrintLocations(RepSpec);
+  return;
+end;

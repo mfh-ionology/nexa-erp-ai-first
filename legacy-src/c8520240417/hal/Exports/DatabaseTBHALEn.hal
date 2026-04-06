@@ -1,0 +1,190 @@
+external procedure ExpBackupString(string);
+external procedure OutCompNr(Integer);
+
+procedure ExportDBBlocksLevel(LongInt level)
+begin
+  LongInt l,bcnt;
+  Boolean testf;
+  string 255 tstr;
+  
+  bcnt = CountBlocks;
+  for (l=0;l<bcnt;l=l+1) begin
+    testf = true;
+    tstr = NumberToBlockType(l);
+    if (tstr=="RepDefBlock" or tstr=="RegDefBlock" or
+        tstr=="CashierDefBlock" or tstr=="PageSetupDefBlock") then begin
+      testf = false;
+    end;
+    if (IsGlobalBlock(tstr)) then begin testf = false; end;
+    if (BlockImpExpLevelMatch(tstr,level)==false) then begin testf = false; end;
+    if (testf) then begin
+      BlockExport(tstr);
+    end;
+  end;
+end;
+
+procedure ExportExportedGlobalBlocks()
+begin
+  LongInt l,bcnt;
+  Boolean testf;
+  string 255 tstr;
+
+  bcnt = CountBlocks;
+  for (l=0;l<bcnt;l=l+1) begin
+    testf = false;
+    tstr = NumberToBlockType(l);
+    if (IsGlobalBlock(tstr)) then begin testf = true; end;
+    if (testf) then begin
+      BlockExport(tstr);
+    end;
+  end;
+  return;
+end;
+
+procedure ExportAllDBBlocks()
+begin
+//  ExportDBBlocksLevel(0);
+  ExportDBBlocksLevel(1);
+  ExportDBBlocksLevel(2);
+  ExportDBBlocksLevel(3);
+  ExportDBBlocksLevel(4);
+  return;
+end;
+
+procedure ExportDBRegsLevel(LongInt level)
+begin
+  LongInt l,rcnt;
+  Boolean testf;
+  string 255 tstr;
+  Integer actualcompnr;
+    
+  rcnt = CountRegisters;
+  for (l=1;l<=rcnt;l=l+1) begin
+    testf = true;
+    tstr = NumberToFileType(l);
+    
+    if (RegisterImpExpLevelMatch(tstr,level)==false) then begin testf = false; end;
+    if (testf) then begin
+      actualcompnr = RegisterActualCompany(tstr,CurrentCompany);
+      if (actualcompnr!=CurrentCompany) then begin testf = false; end;
+    end;
+    if (testf) then begin
+      RegisterExport(tstr);
+    end;
+  end;
+  return;
+end;
+
+procedure ExportExportedGlobalRegisters()
+begin
+  LongInt l,rcnt;
+  Boolean testf;
+  string 255 tstr;
+
+  rcnt = CountRegisters;
+  for (l=1;l<=rcnt;l=l+1) begin
+    testf = false;
+    tstr = NumberToFileType(l);
+    if (IsGlobalRegister(tstr)) then begin testf = true; end;
+    if (testf) then begin
+      RegisterExport(tstr);
+    end;
+  end;
+  return;
+end;
+
+procedure ExportAllDBRegs()
+begin
+//  ExportDBRegsLevel(0);
+  ExportDBRegsLevel(1);
+  ExportDBRegsLevel(2);
+  ExportDBRegsLevel(3);
+  ExportDBRegsLevel(4);
+  return;
+end;
+
+procedure DoCompanyTB(record RcVc RepSpec)
+begin
+//ExpTBMark
+  ExportFormat;
+  BlockExport("SysFormatBlock");
+  ExpBackupString(RepSpec.f3);
+//  ExpCheckSum
+//ClearExpFlags
+  ExportAllDBBlocks;
+//RLinkExport  
+  ExportAllDBRegs;
+  ExportAllOldRecords(CurrentCompany);
+//    if (tbmarkf) then MarkBackupCompleted();
+
+  return;
+end;
+
+procedure ExportSharedRegs()
+begin
+  record ShareVcSetBlock Shareb;
+  row ShareVcSetBlock Sharebrw;  
+  Integer rwcnt,i;
+
+  BlockLoad(Shareb);
+  rwcnt = MatRowCnt(Shareb); 
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(Shareb,i,Sharebrw);
+    RegisterExport(Sharebrw.VcName);
+  end;
+  return;
+end;
+
+procedure ExportSharedBlocks()
+begin
+  record ShareBlockSetBlock Shareb;
+  row ShareBlockSetBlock Sharebrw;  
+  Integer rwcnt,i;
+
+  BlockLoad(Shareb);
+  rwcnt = MatRowCnt(Shareb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(Shareb,i,Sharebrw);
+    BlockExport(Sharebrw.BlockName);
+  end;
+  return;
+end;
+
+procedure DoClientTB2(record RcVc RepSpec)
+begin
+  ExportExportedGlobalRegisters;
+  ExportExportedGlobalBlocks;
+  
+  ExportSharedRegs;
+  ExportSharedBlocks;
+//  if (gp->gAttachInlineInTB) then {
+//    ExportInlineAttachments();
+//  };
+  ExportAllOldRecords(0);
+
+  return;
+end;
+
+global
+procedure DatabaseTBHALEn(record RcVc RepSpec)
+begin
+  Integer oldcomp;
+  record CompaniesBlock Comp;
+  row CompaniesBlock Comprw;
+  Integer i,rwcnt;
+  
+  DoClientTB2(RepSpec);
+  oldcomp = CurrentCompany;
+  BlockLoad(Comp);
+  rwcnt = MatRowCnt(Comp);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(Comp,i,Comprw);
+    if (SetCompanyCode(Comprw.CompCode,false)) then begin
+      OutCompNr(i+1);
+      DoCompanyTB(RepSpec);
+    end;
+  end;
+  
+  ResetCompany(oldcomp);
+  return;
+end;

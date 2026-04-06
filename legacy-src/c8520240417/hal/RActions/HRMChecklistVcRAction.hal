@@ -1,0 +1,137 @@
+external function Boolean IsUnOKAllowed(string,Date);
+
+global
+updating function LongInt HRMCheckListVcRecordCheck(record HRMCheckListVc HRMCheckListr,record HRMCheckListVc HRMCheckList2r,LongInt stat,LongInt check)
+begin
+  LongInt oldnr;
+  LongInt res;
+  record CUVc CUr;
+  record UserVc Userr;
+  record CheckPointVc CheckPointr;
+  row HRMCheckListVc HRMCheckListrw;
+  Integer i,rwcnt;
+  Boolean transf,unokf;
+
+  res = 0;
+  oldnr = HRMCheckListr.SerNr;
+  transf = false;
+  if (HRMCheckListr.OKFlag==1) then begin
+    if (stat==Rs_insert) then begin transf = true; end;
+    if (stat==Rs_update) then begin
+      if (HRMCheckList2r.OKFlag==0) then begin transf = true; end;
+    end;
+  end;
+  if (HRMCheckListr.OKFlag==0) then begin//unok
+    if (stat==Rs_update) then begin
+      if (HRMCheckList2r.OKFlag==1) then begin unokf = true; end;
+    end;
+  end;
+  if (unokf) then begin
+    if (IsUnOKAllowed("HRMCheckListVc",HRMCheckListr.StartDate)==false) then begin //enddate
+      RecordCheckError(1046,"",-1,"StartDate");      
+      res = -1; 
+    end;    
+    goto LHRMCheckListVcRecordCheck;
+  end;
+
+  if (HRMCheckListr.SerNr<=0) then begin
+    HRMCheckListr.SerNr = NextSerNr("HRMCheckListVc",HRMCheckListr.StartDate,-1,false,"");//enddate
+  end;
+  CUr.Code = HRMCheckListr.Employee;
+  if (ReadFirstMain(CUr,1,true)==false) then begin
+    RecordCheckError(1120,HRMCheckListr.Employee,-1,"Employee");      
+    res = -1;
+    goto LHRMCheckListVcRecordCheck;
+  end;
+  if (CUr.blockedFlag!=0) then begin
+    RecordCheckError(1058,HRMCheckListr.Employee,-1,"Employee");      
+    res = -1;
+    goto LHRMCheckListVcRecordCheck;
+  end;
+  Userr.Code = HRMCheckListr.Superior;
+  if (ReadFirstMain(Userr,1,true)==false) then begin
+    RecordCheckError(1058,HRMCheckListr.Superior,-1,"Superior");      
+    res = -1;
+    goto LHRMCheckListVcRecordCheck;
+  end;
+  if (transf) then begin
+    if (UserCanAction("HRMSEOK",true)==false) then begin
+      RecordCheckError(1274,StringFromStringSet(3,"HRMSEOK"),-1,"SerNr");      
+      res = -1; 
+      goto LHRMCheckListVcRecordCheck;
+    end;
+  end;  
+  rwcnt = MatRowCnt(HRMCheckListr);
+  if (transf) then begin
+    if (rwcnt==0) then begin
+      RecordCheckError(1030,"",0,"ArtCode");      
+      res = -1;
+      goto LHRMCheckListVcRecordCheck;
+    end;
+  end;
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(HRMCheckListr,i,HRMCheckListrw);
+    if (blank(HRMCheckListrw.CheckPointComment)) then begin
+      RecordCheckError(1058,HRMCheckListrw.CheckPointComment,i,"CheckPointComment");      
+      res = -1;
+      goto LHRMCheckListVcRecordCheck;
+    end;
+    if (nonblank(HRMCheckListrw.CheckPoint)) then begin
+      CheckPointr.Code = HRMCheckListrw.CheckPoint;
+      if (ReadFirstMain(CheckPointr,1,true)==false) then begin
+        RecordCheckError(1120,HRMCheckListrw.CheckPoint,i,"CheckPoint");      
+        res = -1;
+        goto LHRMCheckListVcRecordCheck;
+      end;
+    end;
+  end;
+LHRMCheckListVcRecordCheck:;  
+  if (res!=0) then begin HRMCheckListr.SerNr = oldnr; end;
+  HRMCheckListVcRecordCheck = res;
+  return;
+end;
+
+global
+function LongInt HRMCheckListVcRecordDefaults(var record HRMCheckListVc HRMCheckListr,record HRMCheckListVc HRMCheckList2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  Boolean testf;
+
+  HRMCheckListr.SerNr = -1;
+  HRMCheckListr.StartDate = CurrentDate;
+  HRMCheckListr.ListType = 0;
+  HRMCheckListVcRecordDefaults = res; 
+  return;
+end;
+
+global
+function LongInt HRMCheckListVcRecordDuplicate(var record HRMCheckListVc HRMCheckListr,record HRMCheckListVc HRMCheckList2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  row HRMCheckListVc HRMCheckListrw;
+  integer rwcnt,i;
+
+  HRMCheckListr.SerNr = -1;
+  HRMCheckListr.OKFlag = 0;
+  HRMCheckListr.Employee = "";
+  HRMCheckListr.Name = "";
+  HRMCheckListr.Superior = "";
+  HRMCheckListr.SuperiorName = "";
+  HRMCheckListr.Office = "";
+  HRMCheckListr.LastWorkDay = "";
+  HRMCheckListr.LastEmplDay = "";
+  HRMCheckListr.ListType =0;
+  rwcnt = MatRowCnt(HRMCheckListr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(HRMCheckListr,i,HRMCheckListrw);
+    HRMCheckListrw.Responsible = "";
+    HRMCheckListrw.Status = kHRMCheckListStatusNONE;
+    HRMCheckListrw.DateCompleted = "";
+    MatRowPut(HRMCheckListr,i,HRMCheckListrw);
+  end;
+  if (SingleUserMode) then begin
+    HRMCheckListr.SerNr = NextSerNr("HRMCheckListVc",CurrentDate,-1,false,"");
+  end;
+  HRMCheckListVcRecordDuplicate = res; 
+  return;
+end;

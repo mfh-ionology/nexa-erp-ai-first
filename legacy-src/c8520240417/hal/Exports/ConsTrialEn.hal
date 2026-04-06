@@ -1,0 +1,734 @@
+external procedure GetConsolidationRate(string,string,Date,var val,var val,var val,var val,var val);
+external procedure MulM4OneRate(val,val,var val,roundmode,Boolean);
+external procedure GetAccDCBalance(string,string,Date,record ObjBalVc,Integer,Integer,Integer,string,var val,var val,Integer);
+external procedure GetFullCurncyPLConsolidationRate(var string,Date,var val,var val,var val,var val,var val);
+external procedure GetFullCurncyBalConsolidationRate(var string,Date,var val,var val,var val,var val,var val);
+external procedure NewLineExport();
+external procedure GetAccTurnover(string,string,Date,Date,record ObjBalVc,string,Integer,Integer,Integer,var val,var val);
+external procedure FindFiscalYear(Date,var Date,var Date);
+
+procedure AddToVector(string accno,string comment,var vector string vAccounts)
+begin
+  if (blank(vAccounts[accno])) then begin
+    vAccounts[accno] = comment;
+  end;
+  return;
+end;
+
+procedure PrintSpaces(Integer artmode)
+begin
+  ExportString("");
+  ExportString("");
+  if (artmode==1) then begin
+    ExportString("");
+    ExportString("");
+  end;
+  ExportString("");
+  return;
+end;
+
+procedure ConsTrialPerAccount_MotherCompHeader(string compname,string compcode,string bc1,Integer artmode)
+begin
+  ExportString("");
+  ExportString("");
+  ExportString(USetStr(32029) & ": " & compcode);
+  ExportString(compname);
+  if (artmode==1) then begin
+  ExportString("");
+    ExportString("");
+  end;
+    ExportString("");
+  return;
+end;
+
+procedure GetBC2Rate(Date edate,var val rate1,var val rate2)
+begin
+  record BaseERVc BaseERr;
+
+  rate1 = 1;
+  rate2 = 1;
+
+  BaseERr.Date = edate;
+  while (LoopBackKey("MainKey",BaseERr,1,true)) begin
+    if (BaseERr.Date<=edate) then begin
+    // if (DateInRange(BaseERr.Date,sdate,edate)) then begin
+      rate1 = BaseERr.Rate1;
+      rate2 = BaseERr.Rate2;
+      goto LGetBC2Rate;
+    end;
+  end;
+LGetBC2Rate:;
+  return;
+end;
+
+procedure ConsTrialPerAccount_DaughterCompHeaders(Integer artmode)
+begin
+  Integer i,rwcnt;
+  record DaughterCompBlock DCb;
+  row DaughterCompBlock DCbrw;
+  record BaseCurBlock BCb;
+
+  BlockLoad(DCb);
+
+  rwcnt = MatRowCnt(DCb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(DCb,i,DCbrw);
+    SetCompanyCode(DCbrw.CompCode,false);
+    BlockLoad(BCb);
+    ExportString(USetStr(32029) & ": " & DCbrw.CompCode);
+    ExportString(DCbrw.CompName);
+    if (artmode==1) then begin
+    ExportString("");
+    ExportString("");
+    end;
+    ExportString("");
+  end;
+  return;
+end;
+
+procedure ExportHeader()
+begin
+  ExportString(USetStr(32020));
+  ExportString(USetStr(32021));
+  ExportString(USetStr(32022));
+  ExportString(USetStr(32023));
+  ExportString(USetStr(32024));
+  ExportString(USetStr(32025));
+  NewLineExport;
+  return;
+end;
+
+function Boolean IsAccountEmpty(record RcVc RepSpec,record AccVc Accr,record SysFormatBlock SFb)
+begin
+  Boolean res;
+  record ObjBalVc ObjBalr;
+  val PerDeb,PerCred,t,accval;
+  
+  res = true;
+  ObjBalr.AccNumber = Accr.AccNumber;
+  ObjBalr.Object = RepSpec.ObjStr;
+  if (ReadFirstMain(ObjBalr,2,true)) then begin
+    if ((Accr.AccType==kAccTypeIncome) or (Accr.AccType==kAccTypeExpense)) then begin
+      accval = blankval;
+      GetAccTurnover(Accr.AccNumber,RepSpec.ObjStr,RepSpec.sStartDate,RepSpec.sEndDate,ObjBalr,RepSpec.CurncyCode,RepSpec.SimVerf,RepSpec.basecurncy,RepSpec.IncDaughter,t,accval);
+      t = accval;
+    end else begin
+      GetAccDCBalance(Accr.AccNumber,RepSpec.ObjStr,RepSpec.sEndDate,ObjBalr,RepSpec.SimVerf,RepSpec.basecurncy,0,RepSpec.CurncyCode,PerDeb,PerCred,RepSpec.flags[6]);
+      t = PerDeb - PerCred;
+    end;
+  end;
+  if (t!=0) then begin res = false; end;
+
+  IsAccountEmpty = res;
+  return;
+end;
+
+procedure PrintConsTrialRow(record AccVc Accr,record RcVc RepSpec,record SysFormatBlock SFb,vector val vTotDeb,vector val vTotCred,vector val vTotDebConsCur,
+                            vector val vTotCredConsCur,Date FYStartDate,Date FYEndDate,var Boolean printf)
+begin
+  Boolean posdebf;
+  record BaseCurBlock BCb;
+  record ConsolidationBlock Consb;
+  record ObjBalVc ObjBalr;
+  val accval;
+  val PerDeb,PerCred,t;
+  val PerDebConsCur,PerCredConsCur,tConsCur;
+  val plfrom,plto1,plto2,plbase1,plbase2;
+  val bsfrom,bsto1,bsto2,bsbase1,bsbase2;
+  val v;
+  string 255 curcode;
+  val ratefrom,rateto2;
+
+  ObjBalr.AccNumber = Accr.AccNumber;
+  ObjBalr.Object = RepSpec.ObjStr;
+  if (ReadFirstMain(ObjBalr,2,true)) then begin
+    if ((Accr.AccType==kAccTypeIncome) or (Accr.AccType==kAccTypeExpense)) then begin
+      accval = blankval;
+      GetAccTurnover(Accr.AccNumber,RepSpec.ObjStr,RepSpec.sStartDate,RepSpec.sEndDate,ObjBalr,RepSpec.CurncyCode,RepSpec.SimVerf,RepSpec.basecurncy,RepSpec.IncDaughter,t,accval);
+    end else begin
+      GetAccDCBalance(Accr.AccNumber,RepSpec.ObjStr,RepSpec.sEndDate,ObjBalr,RepSpec.SimVerf,RepSpec.basecurncy,0,RepSpec.CurncyCode,PerDeb,PerCred,RepSpec.flags[6]);
+      accval = PerDeb - PerCred;
+    end;
+  end;
+  if (Accr.AccType==kAccTypeAsset) or (Accr.AccType==kAccTypeLiability) or (Accr.AccType==kAccTypeEquity) then begin posdebf = true; end;
+  if (Accr.AccType==kAccTypeIncome) or (Accr.AccType==kAccTypeExpense) then begin posdebf = true; end;
+
+  BlockLoad(BCb);
+  BlockLoad(Consb);
+
+  if (RepSpec.ArtMode==0) then begin
+    GetBC2Rate(RepSpec.sEndDate,ratefrom,rateto2);
+    accval = (rateto2/ratefrom)*accval;
+  end;
+
+  printf = false;
+  if (accval!=0) then begin
+    printf = true;
+    if (posdebf) then begin
+      if (accval>0) then begin
+        ExportString(ValToString(accval,M4Val,"","",0));
+        // ExportString(ValToString(accval,M4Val,SFb.thousSep,SFb.decimalPt,0));
+        ExportString("");
+        if (RepSpec.ArtMode==0) then begin
+          ExportString("");
+        end;
+        vTotDeb[CurrentCompany] = vTotDeb[CurrentCompany] + accval;
+      end else begin
+        ExportString("");
+        ExportString(ValToString(accval,M4NegVal,"","",0));
+        if (RepSpec.ArtMode==0) then begin
+          ExportString("");
+        end;
+        vTotCred[CurrentCompany] = vTotCred[CurrentCompany] - accval;
+      end;
+    end else begin
+      if (accval>0) then begin
+        ExportString("");
+        ExportString(ValToString(accval,M4Val,"","",0));
+        if (RepSpec.ArtMode==0) then begin
+          ExportString("");
+        end;
+        vTotDeb[CurrentCompany] = vTotDeb[CurrentCompany] + accval;
+      end else begin
+        ExportString(ValToString(accval,M4NegVal,"","",0));
+        ExportString("");
+        if (RepSpec.ArtMode==0) then begin
+          ExportString("");
+        end;
+        vTotCred[CurrentCompany] = vTotCred[CurrentCompany] - accval;
+      end;
+    end;
+
+    if (RepSpec.ArtMode==0) then begin goto LPrintConsTrialRow; end;
+
+    if ((Accr.AccType==kAccTypeIncome or Accr.AccType==kAccTypeExpense)) then begin
+      GetFullCurncyPLConsolidationRate(BCb.BaseCur2,RepSpec.sEndDate,plfrom,plto1,plto2,plbase1,plbase2);
+      MulM4OneRate(accval,(plfrom/plto2)*100,PerDebConsCur,DefaultCurRoundOff,true);
+    end else begin
+      GetFullCurncyBalConsolidationRate(BCb.BaseCur2,RepSpec.sEndDate,bsfrom,bsto1,bsto2,bsbase1,bsbase2);
+      MulM4OneRate(PerDeb,(bsfrom/bsto2)*100,PerDebConsCur,DefaultCurRoundOff,true);
+      MulM4OneRate(PerCred,(bsfrom/bsto2)*100,PerCredConsCur,DefaultCurRoundOff,true);
+    end;
+
+    tConsCur = PerDebConsCur - PerCredConsCur;
+    if (tConsCur==0) then begin tConsCur = blankval; end;
+    if (posdebf) then begin
+      if (tConsCur>=0) then begin
+        ExportString(ValToString(tConsCur,M4Val,"","",0));
+        ExportString("");
+        ExportString("");
+        vTotDebConsCur[CurrentCompany] = vTotDebConsCur[CurrentCompany] + tConsCur;
+      end else begin
+        ExportString("");
+        ExportString(ValToString(tConsCur,M4NegVal,"","",0));
+        ExportString("");
+        vTotCredConsCur[CurrentCompany] = vTotCredConsCur[CurrentCompany] - tConsCur;
+      end;
+    end else begin
+      if (tConsCur>=0) then begin
+        ExportString("");
+        ExportString(ValToString(tConsCur,M4Val,"","",0));
+        ExportString("");
+        vTotDebConsCur[CurrentCompany] = vTotDebConsCur[CurrentCompany] + tConsCur;
+      end else begin
+        ExportString(ValToString(tConsCur,M4NegVal,"","",0));
+        ExportString("");
+        ExportString("");
+        vTotCredConsCur[CurrentCompany] = vTotCredConsCur[CurrentCompany] - tConsCur;
+      end;
+    end;
+  end;
+LPrintConsTrialRow:;
+  return;
+end;
+
+procedure ConsTrialPerAccount_CompanyPrint(record RcVc RepSpec,record SysFormatBlock SFb,Integer mothercomp,vector string vAccounts,Date FYStartDate,Date FYEndDate)
+begin
+  record AccVc Accr;
+  record DaughterCompBlock DCb;
+  record BaseCurBlock BCb;
+  row DaughterCompBlock DCbrw;
+  Integer account,printcnt;
+  LongInt pos;
+  Integer i,j,rows,rwcnt;
+  vector val vTotDeb,vTotCred,vTotDebConsCur,vTotCredConsCur;
+  string 255 tstr;
+  Boolean printf;
+  array string 255 aAccounts;
+
+  GetVectorTags(vAccounts,aAccounts);
+  SortArray(aAccounts,M4Str);
+  for (account=0;account<aAccounts.length;account=account+1) begin
+    printf = false;
+    ResetCompany(mothercomp);
+
+    ExportString(aAccounts[account]);
+    ExportString(vAccounts[aAccounts[account]]);
+    BlockLoad(DCb);
+    Accr.AccNumber = aAccounts[account];
+    if (ReadFirstMain(Accr,1,true)) then begin
+      PrintConsTrialRow(Accr,RepSpec,SFb,vTotDeb,vTotCred,vTotDebConsCur,vTotCredConsCur,FYStartDate,FYEndDate,printf);
+    end;
+
+    if (!printf) then begin 
+      PrintSpaces(RepSpec.ArtMode);
+      printf = true;
+    end;
+
+    rwcnt = MatRowCnt(DCb);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(DCb,i,DCbrw);
+      if (nonblank(DCbrw.CompCode)) then begin
+        SetCompanyCode(DCbrw.CompCode,false);
+        if (!printf) then begin PrintSpaces(RepSpec.ArtMode); end;
+        printf = false;
+        Accr.AccNumber = aAccounts[account];
+        if (ReadFirstMain(Accr,1,true)) then begin
+          PrintConsTrialRow(Accr,RepSpec,SFb,vTotDeb,vTotCred,vTotDebConsCur,vTotCredConsCur,FYStartDate,FYEndDate,printf);
+        end;
+      end;
+    end;
+    NewLineExport;
+LNextAccount:;
+  end;
+
+  ResetCompany(mothercomp);
+  BlockLoad(BCb);
+  ExportString("");
+  ExportString("");
+  ExportString(ValToString(vTotDeb[mothercomp],M4Val,"","",0));
+  ExportString(ValToString(vTotCred[mothercomp],M4Val,"","",0));
+  if (RepSpec.ArtMode==1) then begin
+    ExportString(ValToString(vTotDebConsCur[mothercomp],M4Val,"","",0));
+    ExportString(ValToString(vTotCredConsCur[mothercomp],M4Val,"","",0));
+  end;
+  ExportString("");
+  rwcnt = MatRowCnt(DCb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(DCb,i,DCbrw);
+    SetCompanyCode(DCbrw.CompCode,false);
+    ExportString(ValToString(vTotDeb[StringToInt(DCbrw.CompCode)],M4Val,"","",0));
+    ExportString(ValToString(vTotCred[StringToInt(DCbrw.CompCode)],M4Val,"","",0));
+    if (RepSpec.ArtMode==1) then begin
+      ExportString(ValToString(vTotDebConsCur[StringToInt(DCbrw.CompCode)],M4Val,"","",0));
+      ExportString(ValToString(vTotCredConsCur[StringToInt(DCbrw.CompCode)],M4Val,"","",0));
+    end;
+    ExportString("");
+  end;
+
+  return;
+end;
+            
+procedure ConsTrialPerAccount(record RcVc RepSpec)
+begin
+  record AccVc Accr,Accr2;
+  Boolean found;
+  record BaseCurBlock BCb;
+  record SysFormatBlock SFb;
+  record CompaniesBlock Cb;
+  row CompaniesBlock Cbrw;
+  record DaughterCompBlock DCb;
+  row DaughterCompBlock DCbrw;
+  Integer i,rwcnt;
+  Integer oldcomp,compcnt;
+  val plfrom,plto1,plto2,plbase1,plbase2;
+  val bsfrom,bsto1,bsto2,bsbase1,bsbase2;
+  string 255 curcode;
+  record ConsolidationBlock Consb;
+  Date FYStartDate,FYEndDate;
+  vector string 255 vAccounts;
+  val ratefrom,rate2;
+  
+  FindFiscalYear(RepSpec.sStartDate,FYStartDate,FYEndDate);
+
+  BlockLoad(SFb);
+  BlockLoad(DCb);
+  BlockLoad(Cb);
+  BlockLoad(BCb);
+
+  oldcomp = CurrentCompany;
+  
+  rwcnt = MatRowCnt(Cb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(Cb,i,Cbrw);
+    if ((i+1)==CurrentCompany) then begin
+      i = rwcnt;
+    end;
+  end;
+
+  ConsTrialPerAccount_MotherCompHeader(Cbrw.CompName,Cbrw.CompCode,BCb.BaseCur1,RepSpec.ArtMode);
+  ConsTrialPerAccount_DaughterCompHeaders(RepSpec.ArtMode);
+  NewLineExport;
+
+  ResetCompany(oldcomp);
+  BlockLoad(BCb);
+  ExportString("");
+  ExportString("");
+  switch (RepSpec.ArtMode) begin
+    case 0: curcode = BCb.BaseCur2;
+    case 1: curcode = BCb.BaseCur1;
+  end;
+  GetBC2Rate(RepSpec.sEndDate,ratefrom,rate2);
+  ExportString(USetStr(32026) & ": " & curcode);
+  if (RepSpec.ArtMode==0) then begin
+    ExportString(ratefrom & " : " & rate2);
+  end else begin
+    ExportString("");
+  end;
+  if (RepSpec.ArtMode==1) then begin
+    BlockLoad(Consb);
+    SetCompanyCode(Consb.MotherCode,false);
+    GetFullCurncyPLConsolidationRate(BCb.BaseCur2,RepSpec.sEndDate,plfrom,plto1,plto2,plbase1,plbase2);
+    ExportString(USetStr(32028) & " " & BCb.BaseCur2);
+    ExportString(plfrom & " : " & plto2);
+  end;
+  ExportString("");
+
+  rwcnt = MatRowCnt(DCb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(DCb,i,DCbrw);
+    SetCompanyCode(DCbrw.CompCode,false);
+    BlockLoad(BCb);
+    switch (RepSpec.ArtMode) begin
+      case 0: curcode = BCb.BaseCur2;
+      case 1: curcode = BCb.BaseCur1;
+    end;
+    GetBC2Rate(RepSpec.sEndDate,ratefrom,rate2);
+    ExportString(USetStr(32026) & ": " & curcode);
+    if (RepSpec.ArtMode==0) then begin
+      ExportString(ratefrom & " : " & rate2);
+    end else begin
+      ExportString("");
+    end;
+    if (RepSpec.ArtMode==1) then begin
+      BlockLoad(Consb);
+      SetCompanyCode(Consb.MotherCode,false);
+      GetFullCurncyPLConsolidationRate(BCb.BaseCur2,RepSpec.sEndDate,plfrom,plto1,plto2,plbase1,plbase2);
+      ExportString(USetStr(32028) & " " & BCb.BaseCur2);
+      ExportString(plfrom & " : " & plto2);
+    end;
+    ExportString("");
+  end;
+  NewLineExport;
+
+  ResetCompany(oldcomp);
+  BlockLoad(BCb);
+  ExportString("");
+  ExportString("");
+  ExportString("");
+  ExportString("");
+  if (RepSpec.ArtMode==1) then begin
+    BlockLoad(Consb);
+    SetCompanyCode(Consb.MotherCode,false);
+    GetFullCurncyBalConsolidationRate(BCb.BaseCur2,RepSpec.sEndDate,bsfrom,bsto1,bsto2,bsbase1,bsbase2);
+    ExportString(USetStr(32027) & " " & BCb.BaseCur2);
+    ExportString(bsfrom & " : " & bsto2);
+  end else begin
+    //todo
+  end;
+  ExportString("");
+
+  rwcnt = MatRowCnt(DCb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(DCb,i,DCbrw);
+    SetCompanyCode(DCbrw.CompCode,false);
+    BlockLoad(BCb);
+    ExportString("");
+    ExportString("");
+    if (RepSpec.ArtMode==1) then begin
+      BlockLoad(Consb);
+      SetCompanyCode(Consb.MotherCode,false);
+      GetFullCurncyBalConsolidationRate(BCb.BaseCur2,RepSpec.sEndDate,bsfrom,bsto1,bsto2,bsbase1,bsbase2);
+      ExportString(USetStr(32027) & " " & BCb.BaseCur2);
+      ExportString(bsfrom & " : " & bsto2);
+    end;
+    ExportString("");
+  end;
+  NewLineExport;
+
+  ResetCompany(oldcomp);
+  BlockLoad(BCb);
+  ExportString(USetStr(32020));
+  ExportString(USetStr(32021));
+  ExportString("Dr");
+  ExportString("Cr");
+  if (RepSpec.ArtMode==1) then begin
+    ExportString("Dr");
+    ExportString("Cr");
+  end;
+  ExportString("");
+  rwcnt = MatRowCnt(DCb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(DCb,i,DCbrw);
+    SetCompanyCode(DCbrw.CompCode,false);
+    BlockLoad(BCb);
+    ExportString("Dr");
+    ExportString("Cr");
+    if (RepSpec.ArtMode==1) then begin
+      ExportString("Dr");
+      ExportString("Cr");
+    end;
+  ExportString("");
+  end;
+  NewLineExport;
+
+  ResetCompany(oldcomp);
+  while (LoopMain(Accr,1,true)) begin
+    if (IsAccountEmpty(RepSpec,Accr,SFb)==false) then begin
+      AddToVector(Accr.AccNumber,Accr.Comment,vAccounts);
+    end;
+  end;
+
+  rwcnt = MatRowCnt(DCb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(DCb,i,DCbrw);
+    SetCompanyCode(DCbrw.CompCode,false);
+    ResetLoop(Accr);
+    RecordClear(Accr);
+    while (LoopMain(Accr,1,true)) begin
+      if (IsAccountEmpty(RepSpec,Accr,SFb)==false) then begin
+        AddToVector(Accr.AccNumber,Accr.Comment,vAccounts);
+      end;
+    end;
+  end;
+
+  ConsTrialPerAccount_CompanyPrint(RepSpec,SFb,oldcomp,vAccounts,FYStartDate,FYEndDate);
+  ResetCompany(oldcomp);
+  return;
+end;
+
+procedure CompanyTrialEn(record RcVc cRepSpec,string CompCode,string CompName,
+                        var val TotPerDeb,var val TotPerCred,var val TotAccDeb,var val TotAccCred,
+                        var val TotPerDebConsCur,var val TotPerCredConsCur,var val TotAccDebConsCur,var val TotAccCredConsCur)
+begin
+  record ConsolidationBlock Consb;
+  record BaseCurBlock BCb;
+  record SysFormatBlock SFb;
+  val plfrom,plto1,plto2,plbase1,plbase2;
+  val bsfrom,bsto1,bsto2,bsbase1,bsbase2;
+  string 255 curcode;
+  val PerDeb,PerCred,AccDeb,AccCred;
+  val PerDebConsCur,PerCredConsCur,AccDebConsCur,AccCredConsCur;
+  val CompPerDeb,CompPerCred,CompAccDeb,CompAccCred;
+  val CompPerDebConsCur,CompPerCredConsCur,CompAccDebConsCur,CompAccCredConsCur;
+  val t,tConsCur;
+  Date sbd;
+  Boolean found,posdebf;
+  record AccVc Accr;
+  record ObjBalVc ObjBalr;
+  Integer oldcomp;
+  
+  BlockLoad(Consb);
+  BlockLoad(SFb);
+  BlockLoad(BCb);
+  
+  ExportString(CompCode);
+  ExportString(CompName);
+  ExportString(USetStr(32026) & ": " & BCb.BaseCur1);
+  if (nonblank(BCb.BaseCur2)) then begin
+    ExportString("");
+    ExportString(USetStr(32026) & ": " & BCb.BaseCur2);
+
+    oldcomp = CurrentCompany;
+    SetCompanyCode(Consb.MotherCode,false);
+    curcode = BCb.BaseCur1;
+    GetFullCurncyPLConsolidationRate(curcode,cRepSpec.sEndDate,plfrom,plto1,plto2,plbase1,plbase2);
+    curcode = BCb.BaseCur1;
+    GetFullCurncyBalConsolidationRate(curcode,cRepSpec.sEndDate,bsfrom,bsto1,bsto2,bsbase1,bsbase2);
+    ResetCompany(oldcomp);
+    ExportString(USetStr(32027) & ": " & plfrom & ":" & plto1);
+    ExportString(USetStr(32028) & ": " & bsfrom & ":" & bsto1);
+  end else begin
+    ExportString("");
+    ExportString("");
+    ExportString("");
+  end;
+  NewLineExport;
+
+  found = true;
+  while (LoopMain(Accr,1,found)) begin
+    if (found) then begin
+      PerDeb = blankval;
+      PerCred = blankval;
+      AccDeb = blankval;
+      AccCred = blankval;
+      PerDebConsCur = blankval;
+      PerCredConsCur = blankval;
+      AccDebConsCur = blankval;
+      AccCredConsCur = blankval;
+      ObjBalr.AccNumber = Accr.AccNumber;
+      ObjBalr.Object = cRepSpec.ObjStr;
+      if (ReadFirstMain(ObjBalr,2,true)) then begin
+        sbd = cRepSpec.sEndDate;
+        GetAccDCBalance(Accr.AccNumber,cRepSpec.ObjStr,sbd,ObjBalr,cRepSpec.SimVerf,cRepSpec.basecurncy,0,cRepSpec.CurncyCode,PerDeb,PerCred,cRepSpec.flags[6]);
+//        GetAccDCBalance(Accr.AccNumber,cRepSpec.ObjStr,cRepSpec.sEndDate,ObjBalr,cRepSpec.SimVerf,cRepSpec.basecurncy,0,cRepSpec.CurncyCode,AccDeb,AccCred,cRepSpec.flags[6]);
+
+        t = PerDeb - PerCred;
+        switch (Consb.ConsCrncy) begin
+          case 0: curcode = BCb.BaseCur1;
+          case 1: curcode = BCb.BaseCur2;
+        end;
+        if (nonblank(BCb.BaseCur2)) then begin
+          curcode = BCb.BaseCur1;
+          GetConsolidationRate(Accr.AccNumber,curcode,cRepSpec.sStartDate,plfrom,plto1,plto2,plbase1,plbase2);
+          if (Accr.AccType==kAccTypeAsset) or (Accr.AccType==kAccTypeLiability) or (Accr.AccType==kAccTypeEquity) then begin
+            MulM4OneRate(PerDeb,(plto1/plfrom)*100,PerDebConsCur,DefaultCurRoundOff,true);
+            MulM4OneRate(PerCred,(plto1/plfrom)*100,PerCredConsCur,DefaultCurRoundOff,true);
+            MulM4OneRate(AccDeb,(plto1/plfrom)*100,AccDebConsCur,DefaultCurRoundOff,true);
+            MulM4OneRate(AccCred,(plto1/plfrom)*100,AccCredConsCur,DefaultCurRoundOff,true);
+          end;
+          if (Accr.AccType==kAccTypeIncome) or (Accr.AccType==kAccTypeExpense) then begin
+            MulM4OneRate(PerDeb,(plto1/plfrom)*100,PerDebConsCur,DefaultCurRoundOff,true);
+            MulM4OneRate(PerCred,(plto1/plfrom)*100,PerCredConsCur,DefaultCurRoundOff,true);
+            MulM4OneRate(AccDeb,(plto1/plfrom)*100,AccDebConsCur,DefaultCurRoundOff,true);
+            MulM4OneRate(AccCred,(plto1/plfrom)*100,AccCredConsCur,DefaultCurRoundOff,true);
+          end;
+        end;
+        if (Accr.AccType==kAccTypeAsset) or (Accr.AccType==kAccTypeLiability) or (Accr.AccType==kAccTypeEquity) then begin
+          posdebf = true;
+        end;
+        if (Accr.AccType==kAccTypeIncome) or (Accr.AccType==kAccTypeExpense) then begin
+          posdebf = false;
+        end;
+
+
+        ExportString(Accr.AccNumber);
+        ExportString(Accr.Comment);
+        if (posdebf) then begin
+          if (t>=0) then begin
+            ExportString(ValToString(t,M4Val,"","",0));
+            ExportString("");
+          end else begin
+            ExportString("");
+            ExportString(ValToString(t,M4NegVal,"","",0));
+          end;
+        end else begin
+          if (t>=0) then begin
+            ExportString("");
+            ExportString(ValToString(t,M4Val,"","",0));
+          end else begin
+            ExportString(ValToString(t,M4NegVal,"","",0));
+            ExportString("");
+          end;
+        end;
+        tConsCur = PerDebConsCur - PerCredConsCur;
+        if (nonblank(BCb.BaseCur2)) then begin
+          if (posdebf) then begin
+            if (tConsCur>=0) then begin
+              ExportString(ValToString(tConsCur,M4Val,"","",0));
+              ExportString("");
+            end else begin
+              ExportString("");
+              ExportString(ValToString(tConsCur,M4NegVal,"","",0));
+            end;
+          end else begin
+            if (tConsCur>=0) then begin
+              ExportString("");
+              ExportString(ValToString(tConsCur,M4Val,"","",0));
+            end else begin
+              ExportString(ValToString(tConsCur,M4NegVal,"","",0));
+              ExportString("");
+            end;
+          end;
+
+        end else begin
+          ExportString("");
+          ExportString("");
+        end;
+        NewLineExport;
+        
+        
+        CompPerDeb = CompPerDeb + PerDeb;
+        CompPerCred = CompPerCred + PerCred;
+        CompAccDeb = CompAccDeb + AccDeb;
+        CompAccCred = CompAccCred + AccCred;
+
+        CompPerDebConsCur = CompPerDebConsCur + PerDebConsCur;
+        CompPerCredConsCur = CompPerCredConsCur + PerCredConsCur;
+        CompAccDebConsCur = CompAccDebConsCur + AccDebConsCur;
+        CompAccCredConsCur = CompAccCredConsCur + AccCredConsCur;
+      end;
+    end;
+  end;
+  ExportString("");
+  ExportString("");
+  ExportString(ValToString(CompPerDeb,M4Val,"","",0));
+  ExportString(ValToString(CompPerCred,M4Val,"","",0));
+  if (nonblank(BCb.BaseCur2)) then begin
+    ExportString(ValToString(CompPerDebConsCur,M4Val,"","",0));
+    ExportString(ValToString(CompPerCredConsCur,M4Val,"","",0));
+  end;
+  NewLineExport;
+
+
+  TotPerDeb = TotPerDeb + CompPerDeb;
+  TotPerCred = TotPerCred + CompPerCred;
+  TotAccDeb = TotAccDeb + CompAccDeb;
+  TotAccCred = TotAccCred + CompAccCred;
+
+  TotPerDebConsCur = TotPerDebConsCur + CompPerDebConsCur;
+  TotPerCredConsCur = TotPerCredConsCur + CompPerCredConsCur;
+  TotAccDebConsCur = TotAccDebConsCur + CompAccDebConsCur;
+  TotAccCredConsCur = TotAccCredConsCur + CompAccCredConsCur;
+
+  return;
+end;
+
+global
+procedure ConsTrialEn(record RcVc RepSpec)
+begin
+  record RcVc cRepSpec;
+  record SysFormatBlock SFb;
+  record CompaniesBlock Cb;
+  row CompaniesBlock Cbrw;
+  record DaughterCompBlock DCb;
+  row DaughterCompBlock DCbrw;
+  Integer i,rwcnt;
+  Integer oldcomp;
+  Boolean testf;
+  val TotPerDeb,TotPerCred,TotAccDeb,TotAccCred;
+  val TotPerDebConsCur,TotPerCredConsCur,TotAccDebConsCur,TotAccCredConsCur;
+
+  ConsTrialPerAccount(RepSpec);
+    
+  // if (RepSpec.flags[0]!=0) then begin
+  //   ConsTrialPerAccount(RepSpec);
+  // end else begin
+  //   BlockLoad(SFb);
+  //   BlockLoad(Cb);
+
+  //   ExportHeader;
+  //   rwcnt = MatRowCnt(Cb);
+  //   for (i=0;i<rwcnt;i=i+1) begin
+  //     MatRowGet(Cb,i,Cbrw);
+  //     if ((i+1)==CurrentCompany) then begin
+  //       i = rwcnt;
+  //     end;
+  //   end;
+  //   CompanyTrialEn(RepSpec,Cbrw.CompCode,Cbrw.CompName,TotPerDeb,TotPerCred,TotAccDeb,TotAccCred,TotPerDebConsCur,TotPerCredConsCur,TotAccDebConsCur,TotAccCredConsCur);
+  //   NewLineExport;
+  
+  //   oldcomp = CurrentCompany;
+  //   BlockLoad(DCb);
+  //   rwcnt = MatRowCnt(DCb);
+  //   for (i=0;i<rwcnt;i=i+1) begin
+  //     MatRowGet(DCb,i,DCbrw);
+  //     testf = true;
+  //     cRepSpec = RepSpec;
+  //     if (testf) then begin
+  //       SetCompanyCode(DCbrw.CompCode,false);
+  //       CompanyTrialEn(cRepSpec,DCbrw.CompCode,DCbrw.CompName,TotPerDeb,TotPerCred,TotAccDeb,TotAccCred,TotPerDebConsCur,TotPerCredConsCur,TotAccDebConsCur,TotAccCredConsCur);
+  //       NewLineExport;
+  //     end;
+  //   end;
+  //   ExportString("");
+  //   ExportString("");
+  //   ExportString(ValToString(TotPerDeb,M4Val,"","",0));
+  //   ExportString(ValToString(TotPerCred,M4Val,"","",0));
+  //   ExportString(ValToString(TotPerDebConsCur,M4Val,"","",0));
+  //   ExportString(ValToString(TotPerCredConsCur,M4Val,"","",0));
+  //   NewLineExport;
+  //   ResetCompany(oldcomp);
+  // end;
+  return;
+end;

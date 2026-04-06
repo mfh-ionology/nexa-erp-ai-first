@@ -1,0 +1,296 @@
+remote updating function Integer CreateMailFromHRMCheckList(record QTVc,var record MailVc);
+
+
+global
+function string 255 GetJobDescFromTitle(string title)
+begin
+  string 255 res;
+  Boolean foundf,testf;
+  record JobTitleVc JobTitler;
+
+  foundf = true;
+  JobTitler.Code = title;
+  while (LoopKey("Code",JobTitler,1,foundf)) begin
+    testf = true;
+    if (JobTitler.Code!=title) then begin testf = false; end;
+    if (testf) then begin
+      res = JobTitler.Title;
+    end;
+  end;
+  GetJobDescFromTitle = res;
+  return;
+end;
+
+function Boolean HRMCheckListDClassEmployeeEFAfter(Integer wn,Boolean changedf)
+begin
+  Boolean res,found,testf;
+  record HRMCheckListVc HRMCheckListr;
+  record HRMCOChangeVc HRMCOChanger;
+  record HRMCOVc HRMCOr;
+  record CUVc CUr;
+  string 255 tstr;
+
+  res = true;
+  testf = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,HRMCheckListr);
+    CUr.Code = HRMCheckListr.Employee;
+    ReadFirstMain(CUr,1,true);
+    HRMCheckListr.Name = CUr.Name;
+    found = true;
+    HRMCOChanger.Employee = HRMCheckListr.Employee;
+    while (LoopKey("Employee",HRMCOChanger,1,found)) begin
+      if (HRMCOChanger.Employee!=HRMCheckListr.Employee) then begin found = false; end;
+      if (found) then begin
+        if (nonblank(HRMCOChanger.JobTitle)) then begin
+          testf = false;
+          tstr = HRMCOChanger.JobTitle;
+        end;
+      end;
+    end;
+    if (testf) then begin
+      HRMCOr.Employee = HRMCheckListr.Employee;
+      ReadFirstKey("Employee",HRMCOr,1,true);
+      if (nonblank(HRMCOr.JobTitle)) then begin
+        tstr = HRMCOr.JobTitle;
+      end else begin
+        tstr = CUr.JobDesc;
+      end;
+      HRMCheckListr.ListType = HRMCOr.TerminatedFlag;
+    end;
+    HRMCheckListr.JobTitle = tstr;
+    HRMCheckListr.JobTitleDesc = GetJobDescFromTitle(HRMCheckListr.JobTitle);
+    PutWindowRecord(wn,HRMCheckListr);
+  end;
+  HRMCheckListDClassEmployeeEFAfter = res;
+  return;
+end;
+
+function Boolean HRMCheckListDClassSuperiorEFAfter(Integer wn,Boolean changedf)
+begin
+  Boolean res;
+  record HRMCheckListVc HRMCheckListr;
+  record UserVc Userr;
+
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,HRMCheckListr);
+    Userr.Code = HRMCheckListr.Superior;
+    ReadFIrstMain(Userr,1,true);
+    HRMCheckListr.SuperiorName = Userr.Name;
+    PutWindowRecord(wn,HRMCheckListr);
+  end;
+  HRMCheckListDClassSuperiorEFAfter = res;
+  return;
+end;
+
+function Boolean HRMCheckListDClassJobTitleEFAfter(Integer wn,Boolean changedf)
+begin
+  Boolean res;
+  record HRMCheckListVc HRMCheckListr;
+  record JobTitleVc JobTitler;
+
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,HRMCheckListr);
+    HRMCheckListr.JobTitleDesc = GetJobDescFromTitle(HRMCheckListr.JobTitle);
+    PutWindowRecord(wn,HRMCheckListr);
+  end;
+  HRMCheckListDClassJobTitleEFAfter = res;
+  return;
+end;
+
+function Boolean HRMCheckListDClassCheckPointEFAfter(Integer wn,Integer rownr,Boolean changedf)
+begin
+  Boolean res;
+  record HRMCheckListVc HRMCheckListr;
+  row HRMCheckListVc HRMCheckListrw;
+  record CheckPointVc CheckPointr;
+
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,HRMCheckListr);
+    MatRowGet(HRMCheckListr,rownr,HRMCheckListrw);
+
+    CheckPointr.Code = HRMCheckListrw.CheckPoint;
+    ReadFirstMain(CheckPointr,1,true);
+    HRMCheckListrw.CheckPointComment = CheckPointr.Name;
+    HRMCheckListrw.Status = 3;
+    MatRowPut(HRMCheckListr,rownr,HRMCheckListrw);
+    PutWindowRecord(wn,HRMCheckListr);
+  end;
+  HRMCheckListDClassCheckPointEFAfter = res;
+  return;
+end;
+
+function Boolean HRMCheckListDClassCheckPointCommentEFAfter(Integer wn,Integer rownr,Boolean changedf)
+begin
+  Boolean res;
+  record HRMCheckListVc HRMCheckListr;
+  row HRMCheckListVc HRMCheckListrw;
+  record CheckPointVc CheckPointr;
+
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,HRMCheckListr);
+    MatRowGet(HRMCheckListr,rownr,HRMCheckListrw);
+    HRMCheckListrw.Status = 3;
+    MatRowPut(HRMCheckListr,rownr,HRMCheckListrw);
+    PutWindowRecord(wn,HRMCheckListr);
+  end;
+  HRMCheckListDClassCheckPointCommentEFAfter = res;
+  return;
+end;
+
+function Boolean HRMCheckListDClassStatusEFAfter(Integer wn,Integer rownr,Boolean changedf)
+begin
+  Boolean res;
+  record HRMCheckListVc HRMCheckListr;
+  row HRMCheckListVc HRMCheckListrw;
+  record HRMRatingVc HRMRr;
+
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,HRMCheckListr);
+    MatRowGet(HRMCheckListr,rownr,HRMCheckListrw);
+    if (HRMCheckListrw.Status==kHRMCheckListStatusDone) then begin
+      HRMCheckListrw.DateCompleted = CurrentDate;
+    end;
+    MatRowPut(HRMCheckListr,rownr,HRMCheckListrw);
+    PutWindowRecord(wn,HRMCheckListr);
+  end;
+  HRMCheckListDClassStatusEFAfter = res;
+  return;
+end;
+
+function Boolean HRMCheckListDClassResponsibleEFAfter(Integer wn,Integer rownr,Boolean changedf)
+begin
+  Boolean res;
+  record HRMCheckListVc HRMCheckListr;
+  row HRMCheckListVc HRMCheckListrw;
+  record HRMRatingVc HRMRr;
+  record CUVc CUr;
+
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,HRMCheckListr);
+    MatRowGet(HRMCheckListr,rownr,HRMCheckListrw);
+    CUr.Code = HRMCheckListrw.Responsible;
+    if (ReadFirstMain(CUr,1,true)) then begin
+      HRMCheckListrw.ResponsibleName = CUr.Name;
+    end;
+    MatRowPut(HRMCheckListr,rownr,HRMCheckListrw);
+    PutWindowRecord(wn,HRMCheckListr);
+  end;
+  HRMCheckListDClassResponsibleEFAfter = res;
+  return;
+end;
+
+global
+function Boolean HRMCheckListDClassActiveEditField(Integer wn,string fieldname,Integer fn,Integer wnst,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record HRMCheckListVc HRMCheckListr;
+  
+  res = true;
+  switch (wnst) begin
+    case Rs_update:
+      GetPrevWindowRecord(wn,HRMCheckListr);
+      if (HRMCheckListr.OKFlag!=0) then begin
+        res = false;
+      end;
+  end;
+  HRMCheckListDClassActiveEditField = res;
+  return;
+end;
+
+global
+function Boolean HRMCheckListDClassOKFlagButtonAction(Integer wn,Integer value)
+begin
+  Boolean res;
+  record HRMCheckListVc HRMCheckListr;
+  Integer err;
+ 
+  res = true;
+  switch (WindowState(wn)) begin
+    case Rs_normal:
+      GetWindowRecord(wn,HRMCheckListr);
+      if (HRMCheckListr.OKFlag!=0) then begin
+        res = UserCanAction("UnOKAll",false);
+      end;
+    case Rs_update:
+      GetPrevWindowRecord(wn,HRMCheckListr);
+      if (HRMCheckListr.OKFlag!=0) then begin
+        res = false;
+      end;
+  end;  
+  HRMCheckListDClassOKFlagButtonAction = res;
+  return;
+end;
+
+/*
+global
+function Boolean HRMCheckListLClassOnOpenWindow(Integer wn)
+begin
+  SetWindowSubset(wn,"");
+
+
+  HRMCheckListLClassOnOpenWindow = false;
+end;
+*/
+
+global
+function Boolean HRMCheckListDClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
+begin
+  Boolean res;
+
+  switch (fieldname) begin
+    case "Employee":   res = HRMCheckListDClassEmployeeEFAfter(wn,changed!=0);
+    case "Superior":   res = HRMCheckListDClassSuperiorEFAfter(wn,changed!=0);
+    case "CheckPoint": res = HRMCheckListDClassCheckPointEFAfter(wn,rownr,changed!=0);
+    case "CheckPointComment": res = HRMCheckListDClassCheckPointCommentEFAfter(wn,rownr,changed!=0);
+    case "Status":     res = HRMCheckListDClassStatusEFAfter(wn,rownr,changed!=0);
+    case "Responsible":res = HRMCheckListDClassResponsibleEFAfter(wn,rownr,changed!=0);
+    case "JobTitle":   res = HRMCheckListDClassJobTitleEFAfter(wn,changed!=0);
+  end;
+  HRMCheckListDClassAfterEditField = res;
+  return;
+end;
+
+// global
+// procedure ToggleTermCheck()
+// begin
+//   Integer wn;
+
+//   wn = CurWindow;
+//   if (wn>0) then begin
+//     if (GetWindowSubset(wn)=="0") then begin
+//       SetWindowSubset(wn,"1");
+//     end else begin
+//       SetWindowSubset(wn,"0");
+//     end;
+//   end;
+// end;
+
+global 
+updating procedure CreateMailFromHRMCheckListDsm()
+BEGIN
+  Integer wn,nwn;
+  record MailVc Mailr;
+  record HRMCheckListVc HRMCheckListr;
+  Integer err;
+
+  wn = CurWindow;
+  if (WindowState(wn)==0)then begin//Rs_normal
+    GetWindowRecord(wn,HRMCheckListr);  
+    err = CreateMailFromHRMCheckList(HRMCheckListr,Mailr);
+    if (err!=0) then begin
+      if (err>0) then begin
+        MessageBox(err,"");
+      end;
+    end else begin
+      nwn = OpenWindow("MailDClass",1,0,"","",Mailr);
+    end;
+  end;
+  return;
+end;

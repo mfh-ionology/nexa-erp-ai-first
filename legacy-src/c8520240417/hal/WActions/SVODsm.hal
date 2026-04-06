@@ -1,0 +1,36 @@
+remote updating function Integer RecordAction_raPasteSVOnIVCash(var record IVCashVc,var record SVOVc,var Integer,Boolean);
+
+global
+updating procedure IVCashFromSVOsm()
+begin
+  record IVCashVc IVCashr;
+  record SVOVc SVOr;
+  Integer nwn,wn;
+  Integer errcode;
+  LongInt r;
+
+  wn = CurWindow;
+  if (WindowState(wn)==0) then begin
+    GetWindowRecord(wn, SVOr);
+    if (UserCanAction("SVOToIVCash",true)) then begin
+      r = RecordAction_raPasteSVOnIVCash(IVCashr,SVOr,errcode,false);
+      if (r!=-1) then begin
+        PutWindowRecord(wn,SVOr);
+        WindowDoOK(wn,0);
+        nwn = OpenWindow("IVCashDClass",1,0,"","",IVCashr);
+        UpdateBrowses("IVCashVc");
+        UpdateBrowses("SVOr");
+        if (errcode>0) then begin
+          MessageBox(errcode,"");
+        end;
+      end else begin
+        Beep;
+      end;
+    end else begin
+      MessageBox(1274,StringFromStringSet(3,"SVOToIVCash"));
+    end;
+  end else begin
+    Beep;
+  end;
+  return;
+end;

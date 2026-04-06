@@ -1,0 +1,126 @@
+#ifdef hal
+
+external function Boolean HasContactClassification();
+external function Boolean HasCategories();
+external procedure HTCustCat(string,var string);
+external procedure HTCustClass(string,var string);
+external function Boolean ContactInGroupClass(string,string,string,string,string,string);
+external function string 20 FindJobCustomerCode(record JobVc);
+external procedure GetCustCredCard(String,var String,var string,var String,var string);
+external Function Val GetCustLimit(String);
+external Function Val GetDownGuest(Record JobVc);
+
+global
+procedure NoShowRn(record RcVc RepSpec)
+begin
+  Integer i,rw;
+  record JobVc Jobr;
+  Boolean TsHr,Skip;
+  Val tt;
+  String 50 tstr,InvoiceNro,OnlyStatus;
+  Val Account,Limite,Downpay,SaldoGuest;
+  String 50 CC,ValidDate,SC,Tipo,custcode;
+
+  tt = 0;
+  TsHr = true;
+  StartReportJob(USetStr(9955));
+  rw = 1;
+  if (HasCategories) then begin
+    HTCustCat(RepSpec.f4,tstr);
+    if (nonblank(tstr)) then begin
+      Header(rw,tstr,1);
+      rw = rw + 1;
+    end;
+  end;
+  if (HasContactClassification) then begin
+    HTCustClass(RepSpec.f3,tstr);
+    if (nonblank(tstr)) then begin
+      Header(rw,tstr,1);
+      rw = rw + 1;
+    end;
+  end;
+  EndHeader;
+
+  SetRepCol(2,60);
+  SetRepCol(3,200);
+  SetRepCol(4,275);
+  SetRepCol(5,350);
+  SetRepCol(6,425);
+  SetRepCol(7,480);
+  
+  if blank(RepSpec.f1) then begin
+    OutString(2,0,USetStr(9965),false);
+    goto L99;
+  end;
+
+  StartFormat(15);
+  OutString(0,0,USetStr(9956),false);
+  OutString(2,0,USetStr(9957),false);
+  OutString(3,0,USetStr(9958),false);
+  OutString(4,0,USetStr(9959),true);
+  OutString(5,0,USetStr(9960),true);
+  OutString(6,0,USetStr(9961),true);
+  OutString(7,0,USetStr(9962),true);
+  EndFormat;
+  Gray_Divider(0,1);
+   
+   Jobr.ResStatus = RepSpec.f1;
+   While (LoopKey("ResStatus",Jobr,1,TsHr)) begin
+     Skip = false;
+      If ((Jobr.TransDate>RepSpec.sEndDate) or (Jobr.TransDate<RepSpec.sStartDate)) then begin
+          Skip = false;
+      end;
+      if (Jobr.ResStatus <> RepSpec.f1) then begin
+        TsHr = false;
+        Skip = true;
+      end;
+      custcode = FindJobCustomerCode(Jobr);
+      if (nonblank(RepSpec.f2)) then begin
+        if (custcode <> RepSpec.f2) then begin
+          Skip = true;
+        end;
+      end;
+      if (Skip==false) then begin
+        Skip = (ContactInGroupClass(custcode,RepSpec.f4,RepSpec.f3,"CUST","","")==false);
+      end;
+      If (not Skip) then begin
+         StartFormat(15);
+         GetCustCredCard(FindJobCustomerCode(Jobr),CC,ValidDate,SC,Tipo);
+         Limite = GetCustLimit(FindJobCustomerCode(Jobr));
+         Downpay = GetDownGuest(Jobr);
+         SaldoGuest = Limite - Account + Downpay;
+         OutString(0,"DblJobVc",Jobr.SerNr,false);
+         OutString(2,0,Left(Jobr.CUName,25),false);
+         OutString(3,0,Jobr.Type,false);
+         OutVal(4,0,Account,M4Val,true);
+         OutVal(5,0,Limite,M4Val,true);
+         OutVal(6,0,Downpay,M4Val,true);
+         OutVal(7,0,SaldoGuest,M4Val,true);
+         EndFormat;
+         if (RepSpec.flags[3]==1) then begin
+           StartFormat(15);
+           OutString(0,0,CC,false);
+           OutDate(2,0,ValidDate,false);
+           OutString(3,0,SC,false);
+           OutString(4,0,Tipo,false);
+           EndFormat;
+         end;
+         tt = tt + Account;
+      End;
+   end;
+
+  // Footer
+  Gray_Divider(0,1);
+  StartFormat(15);
+  OutString(0,0,USetStr(9963),false);
+  OutVal(4,0,tt,M4Val,true);
+  EndFormat;
+
+L99:;
+
+  EndJob;
+  return;
+end;
+
+
+#endif

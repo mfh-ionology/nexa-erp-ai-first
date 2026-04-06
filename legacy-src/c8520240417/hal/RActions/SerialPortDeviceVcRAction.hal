@@ -1,0 +1,62 @@
+external function boolean IsNumeric(string);
+
+global
+function LongInt SerialPortDeviceVcRecordCheck(record SerialPortDeviceVc SPDr,record SerialPortDeviceVc SPD2r,LongInt stat,LongInt check)
+begin
+  LongInt res;
+  record SerialPortDeviceVc lSPDr;
+  
+  res = 0;
+  if (blank(SPDr.Code)) then begin
+    RecordCheckError(1058,"",-1,"Code");      
+    res = -1;
+    goto LSerialPortDeviceVcRecordCheck;
+  end;
+  if (blank(SPDr.LocalMachineCode)) then begin
+    RecordCheckError(1058,"",-1,"LocalMachineCode");      
+    res = -1;
+    goto LSerialPortDeviceVcRecordCheck;
+  end;
+  if (nonblank(SPDr.FailureCode)) then begin
+    if (SPDr.FailureCode==SPDr.Code) then begin
+      RecordCheckError(2246,"",-1,"FailureCode");      
+      res = -1;
+      goto LSerialPortDeviceVcRecordCheck;
+    end;
+    lSPDr.Code = SPDr.FailureCode;
+    if (ReadFirstMain(lSPDr,1,true)==false) then begin
+      RecordCheckError(1290,"",-1,"FailureCode");      
+      res = -1;
+      goto LSerialPortDeviceVcRecordCheck;
+    end;
+  end;
+  if (SPDr.Printer==kSerialPortDeviceModelFiscPrinterWKF) then begin
+    if (blank(SPDr.DeviceID)) then begin
+      RecordCheckError(1058,"",-1,"DeviceID");      
+      res = -1;
+      goto LSerialPortDeviceVcRecordCheck;
+    end;
+    if (IsNumeric(SPDr.DeviceID)==false) then begin
+      RecordCheckError(43975,"",-1,"DeviceID");      
+      res = -1;
+      goto LSerialPortDeviceVcRecordCheck;
+    end;
+  end;
+LSerialPortDeviceVcRecordCheck:;  
+  SerialPortDeviceVcRecordCheck = res;
+  return;
+end;
+
+global
+function LongInt SerialPortDeviceVcRecordDefaults(record SerialPortDeviceVc SPDr,record SerialPortDeviceVc SPD2r,LongInt stat,LongInt check)
+begin
+  LongInt res;
+  
+  SPDr.BaudRate = 9600;
+  SPDr.FlowControl = kFlowControlDefault;
+  SPDr.ByteSize = 8;
+  SPDr.StopBits = 0;
+  SPDr.Parity = -1;
+  SerialPortDeviceVcRecordDefaults = res;
+  return;
+end;

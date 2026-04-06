@@ -1,0 +1,91 @@
+external function string 255 PBXPublicSSHKeyName();
+external function string 255 PBXPrivateSSHKeyName();
+remote procedure DoUpdateRemoteAsteriskConfigurationThread(string);
+remote updating procedure AsteriskSIPConfigMn(record RcVc);
+remote procedure UpdateAllAsteriskConfigurations();
+
+
+updating procedure PBXConnectionDClassUploadKey(string fname,string keyfile)
+begin
+  record PBXConnectionVc PBXr;
+  record Attach2Vc AT2r;
+  record RLinkVc RLr;
+  Boolean res;
+  LongInt wn;
+  Integer i;
+
+  wn = CurWindow;
+  GetWindowRecord(wn,PBXr);
+
+  i = 0;
+  while (ReadRecordLink(PBXr,i,AT2r,RLr)) begin
+    if (AT2r.FileName==keyfile) then begin
+      MessageBox(0,"A key exists already. To replace it, delete the attached file (" & keyfile & ") first.");
+      goto LPBXConnectionDClassUploadKey;
+    end;
+    i = i + 1;
+  end;
+
+  RenameFile(fname,"tmp/" & keyfile);
+  RecordLinkFile("tmp/" & keyfile,0,PBXr,CurrentCompany);
+  Delete_File("tmp/" & keyfile);
+
+LPBXConnectionDClassUploadKey:;
+  return;
+end;
+
+
+global
+updating procedure PBXConnectionDClassGenerateKeypair()
+begin
+  RunShellScript("ssh-keygen -N """" -qt rsa -b 4096 -f tmp/pbx-ssh-key");
+  PBXConnectionDClassUploadKey("tmp/pbx-ssh-key",PBXPrivateSSHKeyName)
+  PBXConnectionDClassUploadKey("tmp/pbx-ssh-key.pub",PBXPublicSSHKeyName)
+  return;
+end;
+
+procedure UpdateOneAsteriskConfiguration(record PBXConnectionVc PBXCr)
+begin
+  record RcVc RepSpec;
+  
+  if (nonblank(PBXCr.AsteriskControllerKey)) then begin
+    ThreadRemote.DoUpdateRemoteAsteriskConfigurationThread(PBXCr.Code);
+  end else begin
+    RepSpec.f1 = PBXCr.Code;
+    AsyncRemote.AsteriskSIPConfigMn(RepSpec);
+  end;
+  return;
+end;
+
+global
+procedure UpdateAsteriskConfigurationLsm()
+begin
+  record PBXConnectionVc PBXCr;
+  
+  if (GetRecordFromBrowse(PBXCr,CurWindow,1)) then begin
+    UpdateOneAsteriskConfiguration(PBXCr);
+  end else begin
+    Beep;
+  end;
+  
+  return;
+end;
+
+global
+procedure UpdateAllAsteriskConfigurationsLsm()
+begin
+  asyncremote.UpdateAllAsteriskConfigurations;
+  return;
+end;
+
+global
+function Boolean PBXConnectionSClassOnOpenWindow(Integer wn)
+begin
+  Integer mwn;
+  record RcVc RepSpec;
+  string 255 region;
+  
+  SetWindowSubset(wn,0);
+  PBXConnectionSClassOnOpenWindow = false;
+  return;
+end;

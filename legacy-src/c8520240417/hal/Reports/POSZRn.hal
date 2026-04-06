@@ -1,0 +1,928 @@
+external updating procedure StorePOSJournalEntry(string,string,string,string,Integer);
+external function Boolean GetPMRow(string,var row PMBlock);
+external procedure GetVATproc(string,Integer,var val);
+external procedure MulVATIV(string,val,var val,var val,Integer,Integer);
+external procedure SetupVATBase(var record SMVc,var Integer);
+external procedure AddVATBase(var record SMVc,string,val,val,Integer,Integer,Integer);
+external procedure HT2Per(Date, Date , var string);
+external function Boolean ReadFirstItem(string,var record INVc,Boolean,Boolean);
+external function Longint GetLastZReportNumberFromPOSJ(string,string);
+
+procedure AddToTotVAT(var record SMVc VATr,string vatcode,val vbase,val vval)
+begin
+  row SMVc VATrw;
+  Integer i,rwcnt;
+  
+  rwcnt = MatRowCnt(VATr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(VATr,i,VATrw);
+    if (VATrw.VATCode==vatcode) then begin
+      VATrw.DebVal = VATrw.DebVal + vbase;
+      VATrw.DebVal2 = VATrw.DebVal2 + vval;
+      VATrw.CurCredVal = VATrw.CurCredVal + 1;
+      MatRowPut(VATr,i,VATrw);
+      goto LAddToTotVAT;
+    end;
+  end;
+  ClearRow(VATr,VATrw,1);
+  VATrw.VATCode = vatcode;
+  VATrw.DebVal = vbase;
+  VATrw.DebVal2 = vval;
+  VATrw.CurCredVal = 1;
+  MatRowPut(VATr,i,VATrw);
+LAddToTotVAT:;  
+  return;
+end;
+
+procedure AddPaymentToVector(var vector val vsn,string ind,val sum,val qty)
+begin
+
+  if (vsn[ind & "cnt"]<0) then begin
+    vsn[ind & "cnt"] = 0;
+    vsn[ind] = 0;
+  end;
+  vsn[ind] = vsn[ind] + sum;
+  vsn[ind & "cnt"] = vsn[ind & "cnt"] + qty;
+
+  return;
+end;
+
+procedure IVCashSalesNumbers(Integer pos1,Integer pos2,Boolean showinvf,LongInt sernr,var vector val vsn,var record SMVc totVATr)
+begin
+  record IVCashVc IVCr;
+  row IVCashVc IVCrw;
+  Integer i,rwcnt,vcrwcnt;
+  record SMVc VATr;
+  row SMVc VATrw;
+  val tvat,t1,t;
+  Boolean testf,rebf;
+  row PMBlock PMrw;
+  
+  SetupVATBase(VATr,vcrwcnt);  
+  IVCr.SerNr = sernr;
+  if (ReadFirstMain(IVCr,1,true)) then begin
+    testf = true;
+    if (IVCr.Invalid!=0) then begin testf = false; end;
+    if (IVCr.OKFlag==0) then begin testf = false; end;
+    if (testf) then begin
+      vsn["invoiceqty"] = vsn["invoiceqty"] + 1;
+      vsn["change"] = vsn["change"] + IVCr.RetValue;
+      if (showinvf) then begin
+        StartFormat(15);
+        OutString(pos1,0,USetStr(38671),false);
+        OutString(pos2,"DblNPTSIVCash",IVCr.SerNr,true);
+        EndFormat;
+      end;
+      if (IVCr.CashValue!=0 or IVCr.RetValue!=0) then begin
+        vsn["cashpayment"] = vsn["cashpayment"] + IVCr.CashValue - IVCr.RetValue;
+        vsn["cashpaymentcnt"] = vsn["cashpaymentcnt"] + 1;
+      end;
+      if (IVCr.RecValue!=0) then begin
+        GetPMRow(IVCr.PayDeal,PMrw);
+        switch (PMrw.CheckType) begin
+          case kPayModeTypeGiftVoucher:
+            AddPaymentToVector(vsn,"gvpayment",IVCr.RecValue,1);
+          case kPayModeTypeCreditCard:
+            AddPaymentToVector(vsn,"ccpayment",IVCr.RecValue,1);
+          case kPayModeTypeSwish:
+            AddPaymentToVector(vsn,"swishpayment",IVCr.RecValue,1);
+          case kPayModeTypeMPesa:
+            AddPaymentToVector(vsn,"mpesapayment",IVCr.RecValue,1);
+          case kPayModeTypeQR:
+            AddPaymentToVector(vsn,"qrpayment",IVCr.RecValue,1);
+          case kPayModeTypeDebitCard:
+            AddPaymentToVector(vsn,"ccpayment",IVCr.RecValue,1);
+          otherwise
+            AddPaymentToVector(vsn,"cashpayment",IVCr.RecValue,1);
+        end;
+      end;
+      if (IVCr.RecValue2!=0) then begin
+        GetPMRow(IVCr.PayDeal2,PMrw);
+        switch (PMrw.CheckType) begin
+          case kPayModeTypeGiftVoucher:
+            AddPaymentToVector(vsn,"gvpayment",IVCr.RecValue2,1);
+          case kPayModeTypeCreditCard:
+            AddPaymentToVector(vsn,"ccpayment",IVCr.RecValue2,1);
+          case kPayModeTypeSwish:
+            AddPaymentToVector(vsn,"swishpayment",IVCr.RecValue2,1);
+          case kPayModeTypeMPesa:
+            AddPaymentToVector(vsn,"mpesapayment",IVCr.RecValue2,1);
+          case kPayModeTypeQR:
+            AddPaymentToVector(vsn,"ccpayment",IVCr.RecValue2,1);
+          case kPayModeTypeDebitCard:
+            AddPaymentToVector(vsn,"dcpayment",IVCr.RecValue2,1);
+          otherwise
+            AddPaymentToVector(vsn,"cashpayment",IVCr.RecValue2,1);
+        end;
+      end;
+      rwcnt = MatRowCnt(IVCr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(IVCr,i,IVCrw);
+        testf = true;
+        if (IVCrw.ovst!=0) then begin testf = false; end;
+        if (testf) then begin
+          switch (IVCrw.stp) begin
+            case kInvoiceRowTypeNormal:
+              if (IVCr.InvType==kPOSInvoiceTypeCredit) then begin
+                IVCrw.Quant = -IVCrw.Quant;
+                IVCrw.Sum = -IVCrw.Sum;
+              end;
+              if (IVCrw.Quant>0) then begin
+                vsn["soldqty"] = vsn["soldqty"] + IVCrw.Quant;
+                vsn["soldsum"] = vsn["soldsum"] + IVCrw.Sum;
+              end else begin
+                vsn["returnedqty"] = vsn["returnedqty"] - IVCrw.Quant;
+                vsn["returnedsum"] = vsn["returnedsum"] - IVCrw.Sum;
+              end;
+              rebf = ((IVCrw.Quant*IVCrw.Price-IVCrw.Sum)>0);
+              vsn["soldreb"] = vsn["soldreb"] + (IVCrw.Quant*IVCrw.Price-IVCrw.Sum);
+              if (rebf) then begin
+                vsn["soldrebcnt"] = vsn["soldrebcnt"] + 1;
+              end;
+              AddVATBase(VATr,IVCrw.VATCode,IVCrw.Sum,blankval,MatRowCnt(VATr),IVCr.InclVAT,IVCr.NoTAXonVAT);
+            case kInvoiceRowTypeCashPayment:            
+              AddPaymentToVector(vsn,"cashpayment",IVCrw.Sum-IVCr.RetValue,1);
+            case kInvoiceRowTypeCreditCardPayment:
+              GetPMRow(IVCrw.PayMode,PMrw);
+              switch (PMrw.CheckType) begin
+                case kPayModeTypeCreditCard:
+                  AddPaymentToVector(vsn,"ccpayment",IVCrw.Sum,1);
+                case kPayModeTypeSwish:
+                  AddPaymentToVector(vsn,"swishpayment",IVCrw.Sum,1);
+                case kPayModeTypeMPesa:
+                  AddPaymentToVector(vsn,"mpesapayment",IVCrw.Sum,1);
+                case kPayModeTypeQR:
+                  AddPaymentToVector(vsn,"qrpayment",IVCrw.Sum,1);
+                case kPayModeTypeDebitCard:
+                  AddPaymentToVector(vsn,"dcpayment",IVCrw.Sum,1);
+                otherwise
+                  AddPaymentToVector(vsn,"ccpayment",IVCrw.Sum,1);
+              end;
+            case kInvoiceRowTypeGiftVoucherPayment:
+              AddPaymentToVector(vsn,"gvpayment",IVCrw.Sum,1);
+          end;
+        end;
+      end;
+    end;
+    for (i=0;i<vcrwcnt;i=i+1) begin
+      MatRowGet(VATr,i,VATrw);
+      if (VATrw.DebVal!=0) then begin
+        MulVATIV(VATrw.VATCode,VATrw.DebVal,tvat,t1,IVCr.InclVAT,IVCr.NoTAXonVAT);
+        AddToTotVAT(totVATr,VATrw.VATCode,VATrw.DebVal,tvat);
+        if (IVCr.InclVAT!=0) then begin
+          vsn["soldsum"] = vsn["soldsum"] - tvat;
+        end;
+        t = t + tvat;
+        vsn["totvat"] = vsn["totvat"] + tvat;
+      end;
+    end;
+  end;
+  return;
+end;
+
+procedure IVCashUnfinishedSalesNumbers(Boolean showinvf,string lm,string drawer,Date sd,Date ed,vector val vsn)
+begin
+  record IVCashVc IVCr;
+  Boolean found,testf;
+  
+  found = true;
+  IVCr.InvDate = sd;
+  while (LoopKey("OpenInvDate",IVCr,1,found)) begin
+    if (DateInRange(IVCr.InvDate,sd,ed)==false) then begin found = false; end;
+    if (found) then begin
+      testf = true;
+      if (IVCr.LocalMachineCode!=lm) then begin testf = false; end;
+      if (IVCr.DrawerCode!=drawer) then begin testf = false; end;
+      if (testf) then begin
+        vsn["notokinvoiceqty"] = vsn["notokinvoiceqty"] + 1;
+        vsn["notokinvoiceamt"] = vsn["notokinvoiceamt"] + IVCr.Sum4;
+      end;
+    end;
+  end;
+  return;
+end;
+
+procedure AddItemGroupToVector(var vector val vsn,string ind,string group,val price,val qty)
+begin
+  string 255 tstr,ind1,ind2;
+
+  ind1 = ind & "cnt:" & group;
+  ind2 = ind & "amt:" & group;
+
+  if (vsn[ind1]<0) then begin
+    vsn[ind1] = 0;
+    vsn[ind2] = 0;
+  end;
+  vsn[ind1] = vsn[ind1] + qty;
+  vsn[ind2] = vsn[ind2] + (price*qty);
+
+
+  if (vsn[ind & "cnttot"]<0) then begin
+    vsn[ind & "cnttot"] = 0;
+    vsn[ind & "amttot"] = 0;
+  end;
+  vsn[ind & "cnttot"] = vsn[ind & "cnttot"] + qty;
+  vsn[ind & "amttot"] = vsn[ind & "amttot"] + (price*qty);
+
+  return;
+end;
+
+function Boolean GetInvoiceRow(record IVCashVc IVCashr,record POSJournalVc POSJr,var row IVCashVc IVCashrw)
+begin
+  Integer i;
+  Boolean res;
+
+  for (i=POSJr.RowNr;i>=0;i=i-1) begin
+    MatRowGet(IVCashr,i,IVCashrw);
+    if (IVCashrw.ArtCode==POSJr.ArtCode) then begin
+      i = -1;
+      res = true;
+    end;
+  end;
+
+  GetInvoiceRow = res;
+  return;
+end;
+
+procedure IVCashEJournalNumbers(string lm,string drawer,Date sd,Date ed,vector val vsn)
+begin
+  record POSJournalVc POSJr;
+  Boolean found,testf;
+  record INVc INr;
+  record IVCashVc IVCashr;
+  row IVCashVc IVCashrw;
+
+  POSJr.DrawerCode = drawer;
+  POSJr.LocalMachineCode = lm;
+  POSJr.TransDate = sd;
+  found = true;
+
+  while (LoopKey("DrawerCode",POSJr,3,found)) begin
+    testf = true;
+    if (POSJr.LocalMachineCode!=lm) then begin found = false; end;
+    if (POSJr.DrawerCode!=drawer) then begin found = false; end;
+    if (DateInRange(POSJr.TransDate,sd,ed)==false) then begin found = false; end;
+    if ((POSJr.FileName=="IVCashVc") and (POSJr.TransNr>0) and 
+        (POSJr.Action!=kPOSActionPriceLookup)) then begin
+      IVCashr.SerNr = POSJr.TransNr;
+      if (ReadFirstMain(IVCashr,1,true)==false) then begin
+        testf = false;
+      end;
+    end;
+    if (found and testf) then begin
+      switch (POSJr.Action) begin
+        case kPOSActionOpenDrawer:
+          vsn["cashdrawerqty"] = vsn["cashdrawerqty"] + 1;
+        case kPOSActionChangeInvoiceRowPrice:
+          vsn["changeinvicerowqty"] = vsn["changeinvicerowqty"] + POSJr.Quant;
+          vsn["changeinvicerowamt"] = vsn["changeinvicerowamt"] + POSJr.Price;
+          vsn["correction_price"] = vsn["correction_price"] + 1;
+        case kPOSActionPrintInvoice:
+          vsn["prtdinvoiceqty"] = vsn["prtdinvoiceqty"] + 1;
+          vsn["prtdinvoiceamt"] = vsn["prtdinvoiceamt"] + IVCashr.Sum4;
+        case kPOSActionPrintInvoiceCopy:
+          vsn["prtdinvoicecopiesqty"] = vsn["prtdinvoicecopiesqty"] + 1;
+          vsn["prtdinvoicecopiesamt"] = vsn["prtdinvoicecopiesamt"] + IVCashr.Sum4;
+        case kPOSActionPrintProformaInvoice:
+          vsn["prtdprofinvoiceqty"] = vsn["prtdprofinvoiceqty"] + 1;
+          vsn["prtdprofinvoiceamt"] = vsn["prtdprofinvoiceamt"] + IVCashr.Sum4;
+        case kPOSActionPrintProformaInvoiceCopy:
+          vsn["prtdprofinvoicecopiesqty"] = vsn["prtdprofinvoicecopiesqty"] + 1;
+          vsn["prtdprofinvoicecopiesamt"] = vsn["prtdprofinvoicecopiesamt"] + IVCashr.Sum4;
+        case kPOSActionAddInvoiceRow:
+          if (IVCashr.OKFlag==1 and ReadFirstItem(POSJr.ArtCode,INr,false,true)) then begin
+            if (GetInvoiceRow(IVCashr,POSJr,IVCashrw)) then begin
+              AddItemGroupToVector(vsn,"salesgroup",INr.Group,IVCashrw.Price,IVCashrw.Quant);
+            end;
+          end;
+        case kPOSActionPriceLookup:
+          if (ReadFirstItem(POSJr.ArtCode,INr,false,true)) then begin
+            AddItemGroupToVector(vsn,"pricelookup",INr.Group,POSJr.Price,POSJr.Quant);
+          end;
+        case kPOSActionChangeInvoiceRowQty:
+          vsn["correction_qty"] = vsn["correction_qty"] + 1;
+        case kPOSActionDeleteInvoiceRow:
+          vsn["correction_delete"] = vsn["correction_delete"] + 1;
+      end;
+    end;
+  end;
+  return;
+end;
+
+procedure SalesNumbers(Integer pos1,Integer pos2,Boolean showinvf,string lm,string drawer,Date sd,Date ed,vector val vsn,var record SMVc VATr)
+begin
+  string 255 tstr;
+  record CashupHistVc CaHr;
+  Boolean found,testf;
+
+  found = true;
+  CaHr.LocalMachineCode = lm;
+  CaHr.DrawerCode = drawer;
+  CaHr.TransDate = sd;
+  while (LoopKey("Cashup",CaHr,3,found)) begin
+    if (CaHr.LocalMachineCode!=lm) then begin found = false; end;
+    if (CaHr.DrawerCode!=drawer) then begin found = false; end;
+    if (DateInRange(CaHr.TransDate,sd,ed)==false) then begin found = false; end;
+    if (found) then begin
+      testf = true;
+      if (testf) then begin
+        switch (CaHr.FileName) begin
+          case "IVCashVc": 
+            IVCashSalesNumbers(pos1,pos2,showinvf,CaHr.TransNr,vsn,VATr);
+        end;
+      end;
+    end;
+  end;
+  IVCashEJournalNumbers(lm,drawer,sd,ed,vsn);
+  IVCashUnfinishedSalesNumbers(showinvf,lm,drawer,sd,ed,vsn);
+  return;
+end;
+
+function val MoneyInDrawer(string lm,string drawer,Date sd,Date ed,Time st,Time et)
+begin
+  val res;
+  record CashupHistVc CaHr;
+  record CashVc Cashr;
+  Boolean found,testf;
+
+  found = true;
+  CaHr.LocalMachineCode = lm;
+  CaHr.DrawerCode = drawer;
+  CaHr.TransDate = sd;
+  while (LoopKey("Cashup",CaHr,3,found)) begin
+    if (CaHr.LocalMachineCode!=lm) then begin found = false; end;
+    if (CaHr.DrawerCode!=drawer) then begin found = false; end;
+    if (DateInRange(CaHr.TransDate,sd,ed)==false) then begin found = false; end;
+    if (found) then begin
+      testf = true;
+      if (CaHr.FileName!="CashVc") then begin testf = false; end;
+      if (testf) then begin
+        Cashr.SerNr = CaHr.TransNr;
+        testf = ReadFirstMain(Cashr,1,true);
+        if (Cashr.OKFlag==0) then begin testf = false; end;
+      end;
+      if (nonblanktime(st)) then begin
+        if (CaHr.TransDate==sd) then begin
+          if (Cashr.TransTime<st) then begin testf = false; end;
+        end;
+      end;
+      if (nonblanktime(et)) then begin
+        if (CaHr.TransDate==ed) then begin
+          if (Cashr.TransTime>et) then begin testf = false; end;
+        end;
+      end;
+      if (testf) then begin
+        switch (Cashr.Event) begin
+          case 0:
+            res = res - Cashr.Total;
+          case 1:
+            res = res + Cashr.Total;
+          case 2:
+            res = res - Cashr.Total;
+        end;
+      end;
+    end;
+  end;
+  MoneyInDrawer = res;
+  return;
+end;
+
+procedure ShowSinglePayment(vector val vsn,Integer pos1,Integer pos2,Integer pos3,string ind,string label)
+begin
+
+  if (vsn[ind & "cnt"]>0) then begin
+    StartFormat(15);
+    OutString(pos1+20,0,label,false);
+    OutVal(pos2,0,vsn[ind & "cnt"],M4Val,true);
+    OutVal(pos3,0,vsn[ind],M4Val,true);
+    EndFormat;
+  end;
+
+  return;
+end;
+
+procedure ExtractVectorData(vector val vsn,var vector val vgroupcnt,var vector val vgroupamt,var vector val prlookupcnt,var vector val prlookupamt)
+begin
+  array string 255 arr;
+  Longint pos;
+  string 255 tstr;
+  Integer i;
+
+  GetVectorTags(vsn,arr);
+  for (i=0;i<arr.length;i=i+1) begin
+    pos = -1;
+    GetNextSubstring(arr[i],pos,":",tstr);
+    if (tstr=="salesgroupcnt") then begin
+      GetNextSubstring(arr[i],pos,":",tstr);
+      vgroupcnt[tstr] = vsn[arr[i]];
+    end;
+    if (tstr=="salesgroupamt") then begin
+      GetNextSubstring(arr[i],pos,":",tstr);
+      vgroupamt[tstr] = vsn[arr[i]];
+    end;
+    if (tstr=="pricelookupcnt") then begin
+      GetNextSubstring(arr[i],pos,":",tstr);
+      prlookupcnt[tstr] = vsn[arr[i]];
+    end;
+    if (tstr=="pricelookupamt") then begin
+      GetNextSubstring(arr[i],pos,":",tstr);
+      prlookupamt[tstr] = vsn[arr[i]];
+    end;
+  end;
+
+  return;
+end;
+
+procedure ShowCorrectionLine(Integer pos1,Integer pos2,string label,val value)
+begin
+
+  if (value>0) then begin
+    StartFormat(15);
+    OutString(pos1,0,label,false);
+    OutString(pos2,0,value,true);
+    EndFormat;
+  end;
+
+  return;
+end;
+
+procedure SetupBaseVector(var vector val vsn)
+begin
+
+  vsn["soldqty"] = 0;
+  vsn["soldsum"] = 0;
+  vsn["soldreb"] = 0;
+  vsn["soldrebcnt"] = 0;
+  vsn["returnedqty"] = 0;
+  vsn["returnedsum"] = 0;
+  vsn["cashpayment"] = 0;
+  vsn["change"] = 0;
+  vsn["invoiceqty"] = 0;
+  vsn["notokinvoiceqty"] = 0;
+  vsn["notokinvoiceamt"] = 0;
+  vsn["prtdinvoiceqty"] = 0;
+  vsn["prtdinvoiceamt"] = 0;
+  vsn["prtdinvoicecopiesqty"] = 0;
+  vsn["prtdinvoicecopiesamt"] = 0;
+  vsn["prtdprofinvoiceqty"] = 0;
+  vsn["prtdprofinvoiceamt"] = 0;
+  vsn["prtdprofinvoicecopiesqty"] = 0;
+  vsn["prtdprofinvoicecopiesamt"] = 0;
+  vsn["cashdrawerqty"] = 0;
+  vsn["pricelookupcnttot"] = 0;
+  vsn["pricelookupamttot"] = 0;
+  vsn["salesgroupcnttot"] = 0;
+  vsn["salesgroupamttot"] = 0;
+  vsn["correction_qty"] = 0;
+  vsn["correction_price"] = 0;
+  vsn["correction_delete"] = 0;
+
+  return;
+end;
+
+global
+procedure POSZReport(Integer mode,Integer pos1,Integer pos2,Boolean showinvf,string lm,string drawer,Date sd,Date ed,Time st,Time et)
+begin
+  record CYBlock CYb;
+  vector val vsn;
+  record SMVc VATr;
+  row SMVc VATrw;
+  Integer i,vcrwcnt;
+  val t,totv;
+  vector val vgroupcnt,vgroupamt,prlookupcnt,prlookupamt;
+  array string 255 arr;
+
+  if (mode==1) then begin
+    BlockLoad(CYb);
+    StartFormat(15);
+    OutString(0,0,CYb.CompName,false);
+    EndFormat;
+    StartFormat(15);
+    OutDAte(0,0,CurrentDate,false);
+    EndFormat;
+    StartFormat(15);
+    OutString(0,0,CurrentTime,false);
+    EndFormat;
+    if (nonblank(lm)) then begin
+      StartFormat(15);
+      OutString(0,0,USetStr(12541) & " " & lm,false);
+      EndFormat;
+    end;
+    if (nonblank(drawer)) then begin
+      StartFormat(15);
+      OutString(0,0,USetStr(12542) & " " & drawer,false);
+      EndFormat;
+    end;
+  end;
+
+  SetupBaseVector(vsn);
+
+  SetupVATBase(VATr,vcrwcnt);
+  SalesNumbers(pos1,pos2,showinvf,lm,drawer,sd,ed,vsn,VATr);
+
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38653),false);
+  OutVal(pos2,0,vsn["soldqty"],M4Val,true);
+  EndFormat;
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38654),false);
+  OutVal(pos2,0,vsn["soldsum"],M4Val,true);
+  EndFormat;
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38655),false);
+  OutVal(pos2,0,vsn["soldreb"],M4Val,true);
+  EndFormat;
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38656),false);
+  OutVal(pos2,0,vsn["returnedqty"],M4Val,true);
+  EndFormat;
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38657),false);
+  OutVal(pos2,0,vsn["returnedsum"],M4Val,true);
+  EndFormat;
+
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38652),false);
+  OutVal(pos2,0,MoneyInDrawer(lm,drawer,sd,ed,st,et)+vsn["soldsum"]-vsn["returnedsum"],M4Val,true);
+//  OutVal(pos2,0,MoneyInDrawer(lm,drawer,sd,ed),M4Val,true);
+  EndFormat;
+  for (i=0;i<vcrwcnt;i=i+1) begin
+    MatRowGet(VATr,i,VATrw);
+    if (VATrw.DebVal2!=0) then begin
+      GetVATproc(VATrw.VATCode,0,t);
+      StartFormat(15);
+      OutString(pos1,0,USetStr(38658) & " " & t,false);
+      OutVal(pos2,0,VATrw.DebVal2,M4Val,true);
+      EndFormat;
+      totv = totv + VATrw.DebVal2;
+    end;
+  end;
+
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38659),false);
+  OutVal(pos2,0,vsn["soldsum"]-vsn["returnedsum"],M4Val,true);
+  EndFormat;
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38660),false);
+  OutVal(pos2,0,vsn["soldsum"]-vsn["returnedsum"]+totv,M4Val,true);
+  EndFormat;
+
+  StartFormat(15);
+  OutString(pos1,0,"Total",false);
+  OutVal(pos2,0,totv+vsn["soldsum"],M4Val,true);
+  EndFormat;
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38661),false);
+  OutVal(pos2,0,vsn["cashpayment"],M4Val,true);
+  EndFormat;
+  if (vsn["ccpayment"]!=0) then begin
+    StartFormat(15);
+    OutString(pos1,0,USetStr(38662),false);
+    OutVal(pos2,0,vsn["ccpayment"],M4Val,true);
+    EndFormat;
+  end;
+  if (vsn["dcpayment"]!=0) then begin
+    StartFormat(15);
+    OutString(pos1,0,USetStr(38663),false);
+    OutVal(pos2,0,vsn["dcpayment"],M4Val,true);
+    EndFormat;
+  end;
+  if (vsn["gvpayment"]!=0) then begin
+    StartFormat(15);
+    OutString(pos1,0,USetStr(38664),false);
+    OutVal(pos2,0,vsn["gvpayment"],M4Val,true);
+    EndFormat;
+  end;
+
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38665),false);
+  OutVal(pos2,0,vsn["cashpayment"]+vsn["ccpayment"]+vsn["gvpayment"],M4Val,true);
+  EndFormat;
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38672),false);
+  OutVal(pos2,0,vsn["change"],M4Val,true);
+  EndFormat;
+
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38666),false);
+  OutVal(pos2,0,vsn["invoiceqty"],M4Qty,true);
+  EndFormat;
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38667),false);
+  OutVal(pos2,0,vsn["notokinvoiceqty"],M4Qty,true);
+  EndFormat;
+
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38668),false);
+  OutVal(pos2,0,vsn["prtdinvoiceqty"],M4Qty,true);
+  EndFormat;
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38669),false);
+  OutVal(pos2,0,vsn["prtdinvoicecopiesqty"],M4Qty,true);
+  EndFormat;
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38670),false);
+  OutVal(pos2,0,vsn["cashdrawerqty"],M4Qty,true);
+  EndFormat;
+
+  return;
+end;
+
+procedure GetVATTotals(var record SMVc VATr,Integer vcrwcnt,var val t1,var val t2,var Integer cnt1,var Integer cnt2)
+begin
+  row SMVc VATrw;
+  Integer i;
+  val t;
+
+  t1 = 0;
+  t2 = 0;
+  for (i=0;i<vcrwcnt;i=i+1) begin
+    MatRowGet(VATr,i,VATrw);
+    if (VATrw.DebVal!=0) then begin
+      GetVATproc(VATrw.VATCode,0,t);
+      VATrw.CredVal = t;
+      MatRowPut(VATr,i,VATrw);
+      if (t>0) then begin
+        t1 = t1 + VATrw.DebVal + VATrw.DebVal2;
+        cnt1 = cnt1 + VATrw.CurCredVal;
+      end else begin
+        t2 = t2 + VATrw.DebVal;
+        cnt2 = cnt2 + VATrw.CurCredVal;
+      end;
+    end;
+  end;
+
+  return;
+end;
+
+global
+procedure POSZReportNOR(Integer mode,Integer pos1,Integer pos2,Integer pos3,Boolean showinvf,string lm,string drawer,Date sd,Date ed,Time st,Time et,Longint zrepno)
+begin
+  record CYBlock CYb;
+  vector val vsn;
+  record SMVc VATr;
+  row SMVc VATrw;
+  Integer i,vcrwcnt,cnt1,cnt2;
+  val t,totv,t1,t2;
+  vector val vgroupcnt,vgroupamt,prlookupcnt,prlookupamt;
+  array string 255 arr;
+  string 255 tstr;
+
+  if (showinvf) then begin
+    if (zrepno>0) then begin
+      StartFormat(15);
+      OutString(0,0,USetStr(38693) & " " & zrepno,false);
+      EndFormat;
+    end;
+  end;
+
+  if (mode==1) then begin
+    BlockLoad(CYb);
+    StartFormat(15);
+    OutString(0,0,CYb.CompName,false);
+    EndFormat;
+    StartFormat(15);
+    OutDAte(0,0,CurrentDate,false);
+    EndFormat;
+    StartFormat(15);
+    OutString(0,0,CurrentTime,false);
+    EndFormat;
+    if (nonblank(lm)) then begin
+      StartFormat(15);
+      OutString(0,0,USetStr(12541) & " " & lm,false);
+      EndFormat;
+    end;
+    if (nonblank(drawer)) then begin
+      StartFormat(15);
+      OutString(0,0,USetStr(12542) & " " & drawer,false);
+      EndFormat;
+    end;
+  end else begin
+    StartFormat(15);
+    OutString(pos2,0,USetStr(38691),true);
+    OutString(pos3,0,USetStr(38692),true);
+    EndFormat;
+    StartFormat(1);
+    Gray_Divider(0,1);
+    EndFormat;
+  end;
+  SetupBaseVector(vsn);
+
+  SetupVATBase(VATr,vcrwcnt);
+  SalesNumbers(pos1,pos2,showinvf,lm,drawer,sd,ed,vsn,VATr);
+
+  ExtractVectorData(vsn,vgroupcnt,vgroupamt,prlookupcnt,prlookupamt);
+
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38653),false);
+  OutVal(pos2,0,vsn["salesgroupcnttot"],M4Qty,true);
+  OutVal(pos3,0,vsn["salesgroupamttot"],M4Val,true);
+  EndFormat;
+  GetVectorTags(vgroupcnt,arr);
+  for (i=0;i<arr.length;i=i+1) begin
+    if (arr[i]!="") then begin
+      StartFormat(15);
+      OutString(pos1+20,0,arr[i],false);
+      OutVal(pos2,0,vgroupcnt[arr[i]],M4Qty,true);
+      OutVal(pos3,0,vgroupamt[arr[i]],M4Val,true);
+      EndFormat;
+    end;
+  end;
+
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38654),false);
+  OutVal(pos2,0,vsn["cashpaymentcnt"]+vsn["ccpaymentcnt"]+vsn["gvpaymentcnt"]+vsn["qrpayment"]+vsn["dcpayment"],M4Val,true);
+  OutVal(pos3,0,vsn["cashpayment"]+vsn["ccpayment"]+vsn["gvpayment"]+vsn["qrpayment"]+vsn["dcpayment"],M4Val,true);
+  EndFormat;
+  ShowSinglePayment(vsn,pos1,pos2,pos3,"ccpayment",USetStr(38674));
+  ShowSinglePayment(vsn,pos1,pos2,pos3,"qrpayment",USetStr(38674));
+  ShowSinglePayment(vsn,pos1,pos2,pos3,"dcpayment",USetStr(38675));
+  ShowSinglePayment(vsn,pos1,pos2,pos3,"swishpayment",USetStr(38677));
+  ShowSinglePayment(vsn,pos1,pos2,pos3,"mpesapayment",USetStr(38695));
+  ShowSinglePayment(vsn,pos1,pos2,pos3,"gvpayment",USetStr(38674));
+  ShowSinglePayment(vsn,pos1,pos2,pos3,"cashpayment",USetStr(38673));
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38655),false);
+  OutVal(pos2,0,vsn["soldrebcnt"],M4Qty,true);
+  OutVal(pos3,0,vsn["soldreb"],M4Val,true);
+  EndFormat;
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38684),false);
+  OutVal(pos2,0,vsn["returnedqty"],M4Qty,true);
+  OutVal(pos3,0,vsn["returnedsum"],M4Val,true);
+  EndFormat;
+
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38652),false);
+  OutVal(pos3,0,MoneyInDrawer(lm,drawer,sd,ed,st,et)+vsn["soldsum"]-vsn["returnedsum"]+vsn["totvat"],M4Val,true);
+//  OutVal(pos2,0,MoneyInDrawer(lm,drawer,sd,ed),M4Val,true);
+  EndFormat;
+
+  GetVATTotals(VATr,vcrwcnt,t1,t2,cnt1,cnt2);
+  SortRows(VATr,"CredVal",false);
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38689),false);
+  OutString(pos2,0,cnt1,true);
+  OutString(pos3,0,t1,true);
+  EndFormat;
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38690),false);
+  OutString(pos2,0,cnt2,true);
+  OutString(pos3,0,t2,true);
+  EndFormat;
+  for (i=0;i<vcrwcnt;i=i+1) begin
+    MatRowGet(VATr,i,VATrw);
+    if (VATrw.DebVal!=0) then begin
+      GetVATproc(VATrw.VATCode,0,t);
+//      if (t>0) then begin
+        tstr = VATrw.VATCode & " " & t & "% " & VATrw.Comment;
+        if (len(tstr)>29) then begin
+          tstr = left(tstr,27) & "...";
+        end;
+        StartFormat(15);
+        OutString(pos1+20,0,tstr,false);
+        OutVal(pos2,0,VATrw.CurCredVal,M4Qty,true);
+        OutVal(pos3,0,VATrw.DebVal2,M4Val,true);
+        EndFormat;
+        totv = totv + VATrw.DebVal2;
+      end;
+//    end;
+  end;
+
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38659),false);
+  OutVal(pos3,0,vsn["soldsum"]-vsn["returnedsum"],M4Val,true);
+  EndFormat;
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38660),false);
+  OutVal(pos3,0,vsn["soldsum"]-vsn["returnedsum"]+totv,M4Val,true);
+  EndFormat;
+
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38665),false);
+  OutVal(pos3,0,vsn["cashpayment"]+vsn["ccpayment"]+vsn["gvpayment"],M4Val,true);
+  EndFormat;
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38672),false);
+  OutVal(pos3,0,vsn["change"],M4Val,true);
+  EndFormat;
+
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38685),false);
+  OutVal(pos2,0,vsn["correction_qty"] + vsn["correction_price"] + vsn["correction_delete"],M4Qty,true);
+  EndFormat;
+  ShowCorrectionLine(pos1,pos2,USetStr(38686),vsn["correction_price"]);
+  ShowCorrectionLine(pos1,pos2,USetStr(38687),vsn["correction_qty"]);
+  ShowCorrectionLine(pos1,pos2,USetStr(38688),vsn["correction_delete"]);
+
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38681),false);
+  OutVal(pos2,0,vsn["pricelookupcnttot"],M4Qty,true);
+  OutString(pos3,0,vsn["pricelookupamttot"],true);
+  EndFormat;
+  ClearArray(arr);
+  GetVectorTags(prlookupcnt,arr);
+  for (i=0;i<arr.length;i=i+1) begin
+    if (arr[i]!="") then begin
+      StartFormat(15);
+      OutString(pos1+20,0,arr[i],false);
+      OutVal(pos2,0,prlookupcnt[arr[i]],M4Qty,true);
+      OutVal(pos3,0,prlookupamt[arr[i]],M4Val,true);
+      EndFormat;
+    end;
+  end;
+
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38666),false);
+  OutVal(pos2,0,vsn["invoiceqty"],M4Qty,true);
+  EndFormat;
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38667),false);
+  OutVal(pos2,0,vsn["notokinvoiceqty"],M4Qty,true);
+  OutVal(pos3,0,vsn["notokinvoiceamt"],M4Val,true);
+  EndFormat;
+
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38680),false);
+  OutVal(pos2,0,vsn["prtdprofinvoiceqty"],M4Qty,true);
+  OutVal(pos3,0,vsn["prtdprofinvoiceamt"],M4Val,true);
+  EndFormat;
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38694),false);
+  OutVal(pos2,0,vsn["prtdprofinvoicecopiesqty"],M4Qty,true);
+  OutVal(pos3,0,vsn["prtdprofinvoicecopiesamt"],M4Val,true);
+  EndFormat;
+
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38668),false);
+  OutVal(pos2,0,vsn["prtdinvoiceqty"],M4Qty,true);
+  OutVal(pos3,0,vsn["prtdinvoiceamt"],M4Val,true);
+  EndFormat;
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38669),false);
+  OutVal(pos2,0,vsn["prtdinvoicecopiesqty"],M4Qty,true);
+  OutVal(pos3,0,vsn["prtdinvoicecopiesamt"],M4Val,true);
+  
+  EndFormat;
+  StartFormat(15);
+  OutString(pos1,0,USetStr(38670),false);
+  OutVal(pos2,0,vsn["cashdrawerqty"],M4Qty,true);
+  EndFormat;
+
+  return;
+end;
+
+global 
+procedure POSZRn(record RcVc RepSpec)
+begin
+  Integer rw;
+  string 255 tstr;
+  record CYBlock CYb;
+  Time bt;
+  record LocalMachineSetVc LMr;
+
+  BlockLoad(CYb);
+  if (RepSpec.flags[0]==0) then begin
+    tstr = USetStr(38650);
+  end else begin
+    tstr = USetStr(38651);
+  end;
+  StartReportJob(tstr);
+  rw = 1;
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  Header(rw,CurrentDate & " " & CurrentTime,1);
+  rw = rw + 1;
+
+  if (nonblank(RepSpec.LastAcc)) then begin
+    Header(rw,USetStr(12542) & ": " & RepSpec.LastAcc,0);
+  end;
+  if (nonblank(RepSpec.FirstAcc)) then begin
+    Header(rw,USetStr(12541) & ": " & RepSpec.FirstAcc,1);
+  end;
+  rw = rw + 1;
+  if (HasLocalization("NOR")) then begin
+    Header(rw,USetStr(38679) & ": " & CYb.OrgNr,0);
+    LMr.LocalMachine = RepSpec.FirstAcc;
+    if (ReadFirstMain(LMr,1,true)) then begin
+      Header(rw,USetStr(38678) & ": " & LMr.TerminalID,1);
+    end;
+    rw = rw + 1;
+  end;
+  EndHeader;
+
+  if (HasLocalization("SWE")) then begin
+    POSZReport(0,0,140,RepSpec.flags[0]==0,RepSpec.FirstAcc,RepSpec.LastAcc,RepSpec.sStartDate,RepSpec.sEndDate,bt,bt)
+  end else begin
+    POSZReportNOR(0,0,140,250,RepSpec.flags[0]==0,RepSpec.FirstAcc,RepSpec.LastAcc,RepSpec.sStartDate,RepSpec.sEndDate,bt,bt,GetLastZReportNumberFromPOSJ(RepSpec.FirstAcc,RepSpec.LastAcc));
+  end;
+  if (RepSpec.flags[0]==0) then begin
+    queued.StorePOSJournalEntry(CurrentUser,RepSpec.FirstAcc,RepSpec.LastAcc,"",kPOSActionPrintZReport);
+  end else begin
+    queued.StorePOSJournalEntry(CurrentUser,RepSpec.FirstAcc,RepSpec.LastAcc,"",kPOSActionPrintXReport);
+  end;
+    
+  EndJob;
+  return;
+end;

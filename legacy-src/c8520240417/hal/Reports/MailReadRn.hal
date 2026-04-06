@@ -1,0 +1,140 @@
+external procedure HTNr(Integer,Integer,LongInt,LongInt,var string);
+external procedure FindMailboxName(LongInt,var string,var string);
+
+global
+function string 255 MailStatusString(Integer accode)
+begin
+  string 255 res;
+
+  switch (accode) begin
+    case kMailStatusRead:           res = USetStr(8145);
+    case kMailStatusDeleted:        res = USetStr(8146);
+    case kMailStatusCreated:        res = USetStr(8147);
+    case kMailStatusUpdated:        res = USetStr(8148);
+    case kMailStatusUnread:         res = USetStr(8139);
+    case kMailStatusQueued:         res = USetStr(8137);
+    case kMailStatusRouted:         res = USetStr(8138);
+    case kMailStatusPrinted:        res = USetStr(8136);
+    case kMailStatusReadByExternal: res = USetStr(8145);
+    case kMailStatusPostponed:      res = USetStr(38540);
+    case kMailStatusAccepted:       res = USetStr(38541);
+    case kMailStatusRejected:       res = USetStr(38542);
+    case kMailStatusSMTPError:      res = USetStr(8129);
+    otherwise                       res = USetStr(8149);
+  end;
+
+  MailStatusString = res;
+end;
+
+global
+procedure MailReadRn(record RcVc RepSpec)
+begin
+  record MailReadVc mrr;
+  string 255 username,tstr;
+  Boolean TrHs;
+  Integer rw;
+  
+  StartReportJob(USetStr(8140));
+  HTNr(16807,16807,RepSpec.long1,RepSpec.long1,tstr);
+  Header(rw,tstr,1)
+  rw = rw + 1;
+  EndHeader;
+  SetRepCol(2,20);
+  SetRepCol(3,270);
+  SetRepCol(4,370);
+  SetRepCol(5,440);
+  SetRepCol(6,80);
+  SetRepCol(7,150);
+  StartFormat(15);
+  OutString(2,0,USetStr(8141),false);
+  OutString(3,0,USetStr(8142),false);
+  OutString(4,0,USetStr(8143),false);
+  OutString(5,0,USetStr(8144),false);
+  EndFormat;
+  Gray_Divider(0,1);
+  mrr.mailSerNr = RepSpec.long1;
+  TrHs = true;
+  while (LoopMain(mrr,1,TrHs)) begin
+    if (TrHs) then begin
+      if (mrr.mailSerNr<>RepSpec.long1) then begin TrHs = false; end;
+    end;  
+    if (TrHs) then begin
+      if (mrr.mailBoxNr>=0) then begin
+        FindMailboxName(mrr.mailBoxNr,tstr,username);
+        if (mrr.mailBoxNr==0) then begin
+          if (blank(username)) then begin
+            username = USetStr(8135);
+          end;
+        end;
+      end else begin
+        tstr = "System";
+        username = "Adm";
+        if (mrr.accode==kMailStatusReadByExternal) then begin
+          username = USetStr(8125);
+        end;
+      end;
+      StartFormat(15);
+      OutLongInt(2,0,mrr.mailBoxNr,false);
+      OutString(6,0,username,false);
+      OutString(7,0,mrr.Comment,false);
+      tstr = MailStatusString(mrr.accode);
+      OutString(3,0,tstr,false);
+      OutDate(4,0,mrr.fDate,false);
+      tstr = mrr.fTime;
+      OutString(5,0,mrr.fTime,false);
+      EndFormat;
+    end;
+  end;
+  EndJob;
+  RETURN;
+END;
+
+//## this report SHOULD only run local in client!!!
+global
+procedure LocalMailReadRn(record RcVc RepSpec)
+BEGIN
+  record LocalMailReadVc mrr;
+  string 255 username,tstr;
+  Boolean TrHs;
+  
+  StartReportJob(USetStr(8140));
+  EndHeader;
+  SetRepCol(2,20);
+  SetRepCol(3,280);
+  SetRepCol(4,390);
+  SetRepCol(5,440);
+  SetRepCol(6,80);
+  StartFormat(15);
+  OutString(2,0,USetStr(8141),false);
+  OutString(3,0,USetStr(8142),false);
+  OutString(4,0,USetStr(8143),false);
+  OutString(5,0,USetStr(8144),false);
+  EndFormat;
+  Gray_Divider(0,1);
+  mrr.mailSerNr = RepSpec.long1;
+  TrHs = true;
+  while (LoopMain(mrr,1,TrHs)) begin
+    if (TrHs) then begin
+      if (mrr.mailSerNr<>RepSpec.long1) then begin TrHs = false; end;
+    end;  
+    if (TrHs) then begin
+      if (mrr.mailBoxNr>=0) then begin
+        FindMailboxName(mrr.mailBoxNr,tstr,username);
+      end else begin
+        tstr = "System";
+        username = "Adm";
+      end;
+      StartFormat(15);
+      OutLongInt(2,0,mrr.mailBoxNr,false);
+      OutString(6,0,username,false);
+      tstr = MailStatusString(mrr.accode);
+      OutString(3,0,tstr,false);
+      OutDate(4,0,mrr.fDate,false);
+      tstr = mrr.fTime;
+      OutString(5,0,mrr.fTime,false);
+      EndFormat;
+    end;
+  end;
+  EndJob;
+  RETURN;
+END;

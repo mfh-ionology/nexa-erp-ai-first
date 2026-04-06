@@ -1,0 +1,42 @@
+external function Boolean CanRegisterOnMedia(string,Integer);
+external procedure NewLineExport();
+
+procedure ExportTag(string tag,Boolean seqnrf)
+begin
+  if (right(tag,5)=="Block") then begin
+    BlockExport(tag);
+  end else begin
+    RegisterExport2(tag,seqnrf);
+  end;
+end;
+
+global
+procedure ExpRegEn(record RcVc RepSpec)
+begin
+  string 200 tstr;
+  record CompaniesBlock Cb;
+  row CompaniesBlock Cbrw;
+  LongInt compnr;
+
+  BlockLoad(Cb);
+
+  tstr = RepSpec.f1;
+  ExportFormat;
+  if (CanRegisterOnMedia(tstr,mtFile)) then begin
+    if (RepSpec.flags[1]==0) then begin
+      ExportTag(tstr,RepSpec.flags[0]!=0);
+    end else begin
+      for (compnr = 1; compnr<=MatRowCnt(Cb); compnr = compnr + 1) begin
+        if (SetCompany(compnr,false)) then begin
+          MatRowGet(Cb,compnr - 1,Cbrw);
+          ExportString("compnr");
+          ExportString(Cbrw.CompCode);
+          NewLineExport;
+          ExportFormat;
+          ExportTag(tstr,RepSpec.flags[0]!=0);
+        end;
+      end;
+    end;
+  end;
+  return;
+end;

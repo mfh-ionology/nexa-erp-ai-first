@@ -1,0 +1,659 @@
+external procedure JobVc_PasteCurncyCode(var record JobVc,string);
+external function string 255 FindHotelClassForClassTerms(string);
+external function Integer JobPasteType(var record JobVc,string);
+external function Integer JobPasteResUsage(var record JobVc,string);
+external function Boolean PasteCUCodeToJob2(var record JobVc,Integer,Boolean);
+external function Date DateFromString(string,string);
+external function Boolean AgentRoomInArray(record AgentRoomVc,array record AgentRoomVc,val);
+external function Boolean CustomerWithNameExists(string,string);
+external procedure StripSpace(var string,string);
+external function LongInt FindReservation(string,Date,Time);
+external function Boolean GetNextCustNr(var string);
+external function Boolean AgentRoomInArray(record AgentRoomVc ,array record AgentRoomVc ,val );
+external function LongInt HotelReservationExists(string,string,Date,Time,Date,Time);
+external procedure SendNightsBridgeStatusMessage(longint);
+
+//Tools
+external procedure JSONStringStart(var string);
+external procedure JSONStringAdd(var string,string,string);
+external procedure JSONStringPut(var string,string,string);
+external procedure JSONStringEnd(var string);
+external procedure JSONStringMemberStart(var string,string);
+external procedure JSONStringMemberEnd(var string);
+external procedure JSONStringArrayStart(var string);
+external procedure JSONStringArrayEnd(var string);
+external procedure JSONNotStringAdd(var string,string,string);
+external procedure JSONNotStringPut(var string,string,string);
+
+procedure NightsBridgeLog(string filename,string type,area a)
+begin
+  record NightsBrigdeBlock NBb;
+  string 255 fname;
+
+  BlockLoad(NBb);
+  if (NBb.LogCommunication!=0) then begin
+    fname = CreateTempFile("_NB-" & filename & "-" & type,".txt");  
+    WriteAreaToFile(a,fname,0);
+  end;
+  return;
+end;
+
+global
+procedure NBEnableRoomsReply(Area reply,Area replyheader,boolean timeout)
+begin
+  json js;
+  string 255 tstr;
+  longint result;
+  
+  result = 0;
+  NightsBridgeLog("NBEnableRooms","reply",reply);
+  WriteAreaToFile(reply,"NBEnableRoomsreply.txt",0);
+
+  tstr = GetStringFromArea(reply,0,255);
+  if (timeout) then begin
+    LogText2(39172," NBEnableRooms",kVerbosityDebugDetailed);
+  end else begin
+    js = ParseJSONArea(reply);
+    if (JSONNodeExists(js,"success")) then begin 
+      if (JSONGet(js,"success")=="true") then begin
+        result = 43340;
+      end else begin
+        result = 43341;
+      end;
+    end else begin
+      result = 43342;
+    end;
+  end;
+  AllClientsRemoteAsync.SendNightsBridgeStatusMessage(result);
+
+end;
+
+procedure AddRoomTypeToNightsBridgeAvailable(date sd2,date ed2,string rate2,string type2,integer qty2, var string jsr)
+begin
+  integer cnt;
+
+  jsr = jsr & "{";
+  JSONStringAdd(jsr,"roomtypeid",type2);
+  JSONStringAdd(jsr,"startdate",DateToString(sd2,"YYYY-MM-DD"));
+  JSONStringAdd(jsr,"enddate",DateToString(ed2,"YYYY-MM-DD"));
+  JSONStringPut(jsr,"roomsfree",qty2);
+  JSONStringEnd(jsr);
+  return;
+end;
+
+procedure AddToArr(string rescode,date sd,date ed, string rate,string type,integer qty, array string arescode,array date asd,array date aed, array string arate,array string atype,array integer aqty, var Integer acnt)
+begin
+  Integer i;
+
+  arescode[acnt] = rescode;
+  asd[acnt] = sd;
+  aed[acnt] = ed;
+  arate[acnt] = rate;
+  atype[acnt] = type;
+  aqty[acnt] = qty;
+  acnt = acnt + 1;
+  
+  return;
+end;
+
+procedure CreateArray( array string arescode,array date asd,array date aed, array string arate,  array string atype,  array integer aqty, integer acnt)
+begin
+  Integer i;
+  record AgentRoomVc ARr;   
+  record AgentRoomVc ptARr;   
+  record ResVc Resr;
+  record ResVc ptResr;
+  Date td,td2,ed;
+  Time tt;
+  Boolean found,testf;
+  LongInt nr;
+  record HotelBlock Hotelb;
+  val q;
+  Boolean includezeroavailf;
+  Integer ReduceAvail;
+  string 255  rescode,type,rate;
+  integer qty;
+
+  BlockLoad(Hotelb);
+  found = true;
+  while (LoopMain(ARr,1,found)) begin
+    if (found) then begin
+      testf = true;
+      if (ARr.Closed!=0) then begin testf = false; end;
+      if (blankdate(ARr.StartDate)) then begin testf = false; end;
+      if (blankdate(ARr.EndDate))   then begin testf = false; end;
+      if (blank(ARr.ResCode))       then begin testf = false; end;
+      if (blank(ARr.StdTypeID))     then begin testf = false; end;
+      if (blank(ARr.StdRateID))     then begin testf = false; end;
+      if (testf) then begin
+        td = CurrentDate;
+        if (blankdate(td))    then begin td = ARr.StartDate;end;
+        if (td<ARr.StartDate) then begin td = ARr.StartDate; end;
+        ed = ARr.EndDate;
+        if (blankdate(ed))  then begin ed = ARr.EndDate; end;
+        if (ed>ARr.EndDate) then begin ed = ARr.EndDate; end;
+        if (td<CurrentDate) then begin td = CurrentDate; end;   
+        while (td<=ed) begin
+          td2 = td;
+          nr = HotelReservationExists(ARr.ResCode,"",td2,Hotelb.CheckIn,AddDay(td2,1),Hotelb.CheckOut);
+          if (nr<=0) then begin
+            AddToArr(ARr.ResCode,td,td,ARr.StdRateID,ARr.StdTypeID,1,arescode,asd, aed, arate, atype, aqty, acnt);
+          end else begin
+            AddToArr(ARr.ResCode,td,td,ARr.StdRateID,ARr.StdTypeID,0,arescode, asd, aed,  arate, atype, aqty, acnt);
+          end;
+          td = AddDay(td,1);
+        end;
+      end;
+    end;
+  end;  
+  return;
+end;
+
+procedure SortArrayByType(var array string arescode,var array date aed,var array string arate,var array string atype,var array integer aqty)
+begin
+  Integer i;
+  Boolean swapped;
+  integer taqty;
+  string 255 tarate,tatype,tarescode;
+  date tasd,taed;
+
+  swapped = true;
+  while (swapped) begin
+    swapped = false;
+    for (i=0;i<atype.length-1;i=i+1) begin
+      if (atype[i]>atype[i+1]) then begin
+        tarescode = arescode[i];
+        tatype = atype[i];
+        taed = aed[i];
+        tarate = arate[i];
+        tatype = atype[i];
+        taqty = aqty[i];
+    
+        arescode[i] = arescode[i+1];
+        atype[i] =  atype[i+1];
+        aed[i] = aed[i+1];
+        arate[i] = arate[i+1];
+        atype[i] = atype[i+1];
+        aqty[i] =  aqty[i+1];
+   
+ 
+        arescode[i+1] = tarescode;
+        atype[i+1] = tatype;
+        aed[i+1] = taed;
+        arate[i+1] = tarate;
+        atype[i+1] = tatype;
+        aqty[i+1] =  taqty;
+
+        swapped = true;
+      end;
+    end;
+  end;
+return;
+end;
+
+procedure SortArrayByDate(var array string arescode,var array date asd,var array date aed,var array string arate,var array string atype,var array integer aqty)
+begin
+  Boolean swapped;
+  string 255 tstate,trescode,trate,ttype;
+  date ted,tsd;
+  integer tqty;
+  Integer i;
+
+  swapped = true;
+  while (swapped) begin
+    swapped = false;
+    for (i=0;i<asd.length-1;i=i+1) begin
+      if (asd[i]>asd[i+1]) then begin
+        tsd = asd[i];
+        trescode = arescode[i];
+        ted = aed[i];
+        trate = arate[i];
+        tqty = aqty[i];
+        ttype = atype[i];
+
+        asd[i] =  asd[i+1];
+        arescode[i] = arescode[i+1];
+        aed[i] = aed[i+1];
+        arate[i] = arate[i+1];
+        aqty[i] = aqty[i+1];
+        atype[i] = atype[i+1];
+
+        asd[i+1] = tsd;
+        arescode[i+1]= trescode;
+        aed[i+1] = ted;
+        arate[i+1] = trate;
+        aqty[i+1] = tqty;
+        atype[i+1] = ttype;
+
+        swapped = true;
+      end;
+    end;
+  end;
+return;
+end;
+
+procedure AddtoArray(string rescode,date sd, string rate,string type,integer qty,array string arescode,array date asd,array string arate,array string atype,array integer aqty,var Integer acnt)
+begin
+  Integer i;
+
+  arescode[acnt] = rescode;
+  asd[acnt] = sd;
+  arate[acnt] = rate;
+  atype[acnt] = type;
+  aqty[acnt] = qty;
+  acnt = acnt + 1;
+  
+  return;
+end;
+
+global
+procedure NBEnableRooms()
+begin
+  Integer i,cnt,j;
+  Area req;
+  string 255 jsr;
+  record NightsBrigdeBlock NBb;
+  array string 255 arescode;
+  array date asd,asd2;
+  array date aed,aed2;
+  array string 255 atype,arate,atype2,arate2,arescode2;
+  array integer aqty,aqty2;
+  integer acnt,acnt2;
+  date d1;
+
+  BlockLoad(NBb);
+  if (NBb.Enable==0) or (blank(NBb.LoginKey))  then begin
+    goto LNBEnableRooms;
+  end;
+
+  CreateArray(arescode,asd,aed,arate,atype,aqty,acnt);
+  SortArrayByDate(arescode,asd,aed,arate,atype,aqty);
+
+  for (i=0;i<asd.length;i=i+1) begin
+    SortArrayByType(arescode,aed,arate,atype,aqty);
+    if (arate[i]==arate[i+1] and aed[i]==aed[i+1] and atype[i]==atype[i+1]) then begin
+      AddtoArray(arescode[i],aed[i],arate[i],atype[i],aqty[i]+aqty[i+1],arescode2,aed2,arate2,atype2,aqty2,acnt2);
+    end else begin
+      if (i!=0) then begin
+        if (aed[i]==aed[i-1]) then begin
+          AddtoArray(arescode[i],aed[i],arate[i],atype[i],aqty[i]+aqty[i-1],arescode2,aed2,arate2,atype2,aqty2,acnt2);
+        end else begin
+          AddtoArray(arescode[i],aed[i],arate[i],atype[i],aqty[i],arescode2,aed2,arate2,atype2,aqty2,acnt2);
+        end;
+      end else begin
+        AddtoArray(arescode[i],aed[i],arate[i],atype[i],aqty[i],arescode2,aed2,arate2,atype2,aqty2,acnt2);
+      end;  
+    end;
+  end;
+
+  SetAreaZeroSize(req);
+  JSONStringStart(jsr); 
+  JSONStringAdd(jsr,"messagename","InventoryUpdateRQ");
+  JSONStringMemberStart(jsr,"credentials");
+  jsr = jsr & "{";
+  JSONStringPut(jsr,"loginkey",NBb.LoginKey);
+  JSONStringMemberEnd(jsr);  
+  jsr = jsr & ",";
+  JSONStringMemberStart(jsr,"inventoryupdates");
+  JSONStringArrayStart(jsr);
+  d1=aed2[0];
+
+  for (j=0;j<acnt2;j=j+1) begin
+      if (atype2[j]==atype2[j+1]) and (arate2[j]==arate2[j+1]) and (aqty2[j]!=aqty2[j+1]) then begin
+        AddRoomTypeToNightsBridgeAvailable(d1,aed2[j+1],arate2[j],atype2[j],aqty2[j],jsr);
+        d1=aed2[j+1];
+        if (j!=acnt2-1) then begin 
+          jsr = jsr & ",";
+        end; 
+      end else begin
+        if (atype2[j]!=atype2[j+1]) then begin
+          AddRoomTypeToNightsBridgeAvailable(d1,aed2[j],arate2[j],atype2[j],aqty2[j],jsr);
+          d1 = aed2[j+1];
+          if (j!=acnt2-1) then begin 
+            jsr = jsr & ",";
+          end;
+        end;
+      end;
+  end; 
+
+  JSONStringArrayEnd(jsr);
+  JSONStringEnd(jsr);
+  AddTextToArea(jsr,req);
+
+  SendAsyncWebRequest("nightsbridge.co.za",443,-1,true,"POST","/bridge/bridgeconnect","application/json","",req,"NBEnableRoomsReply",60);
+  NightsBridgeLog("NBEnableRooms","req",req);
+
+  WriteAreaToFile(req,"NBEnableRoomsreq.txt",0);
+LNBEnableRooms:;
+  return;
+end;
+
+// function longint FindCUCode(string Name,string clientid)
+// begin
+//   longint res;
+//   record CUVc CUr;
+//   Boolean TrHs;
+
+//   CUr.Name = Name;
+//   TrHs = true;
+//   while (LoopKey("Name",CUr,1,TrHs)) begin
+//     if (CUr.Name!=Name) then begin TrHs = false; end;
+//     //if (CUr.ClientId!=clientid) then begin TrHs = false; end;
+//     if (TrHs) then begin
+//         res = CUr.Code;
+//       goto LFindCUCode;
+//     end;
+//   end;
+
+// LFindCUCode:;
+//   FindCUCode = res;
+//   return;
+// end;
+
+updating function Boolean PasteReservationDetails(var record JobVc Jobr,json js,Integer type,Integer room)
+begin
+  Integer cnt;
+  string 255 key,mainkey;
+  record NightsBrigdeBlock NBb;
+  record CCatVc CCatr;
+  record AgentRoomVc AgentRoomr;
+  record CUVc CUr;
+  row JobVc Jobrw;
+  string 255 timestr,fullname,cucode,phoneno,tstr;
+  Time regtime;
+  Boolean res,found,testf;
+  record HotelBlock Hotelb;
+ 
+  BlockLoad(Hotelb);
+  BlockLoad(NBb);
+
+  res = true;
+
+  RecordNew(Jobr);
+  mainkey = "booking";
+  Jobr.CurncyCode =   JSONGet(js,"currencycode");
+  if (type!=kReservationTypeGroup) then begin
+    Jobr.TransDate =  DateFromString(Left(JSONGet(js,mainkey & "/arrivaldate"),10),"YYYY-MM-DD");
+    Jobr.EndDate =    DateFromString(Left(JSONGet(js,mainkey & "/departuredate"),10),"YYYY-MM-DD");
+  end;
+  Jobr.RegDate =      DateFromString(Left(JSONGet(js,mainkey & "/bookingdate"),10),"YYYY-MM-DD");
+  Jobr.BookDate =     Jobr.RegDate;
+  Jobr.ConfDate =     Jobr.RegDate;
+  Jobr.RefStr =       JSONGet(js,mainkey & "/bookingid");
+  Jobr.ConfComment =  JSONGet(js,mainkey & "/notes");
+  Jobr.NrOfDays =     JSONGet(js,mainkey & "/nights");
+  Jobr.ResStatus =    NBb.ResStatus;
+  Jobr.ResUsage =     "";
+  Jobr.Objects =      "";
+  JobVc_PasteCurncyCode(Jobr,""); 
+  JobPasteType(Jobr,"");
+  JobPasteResUsage(Jobr,"");
+  timestr = Right(JSONGet(js,mainkey & "bookingdate"),5);
+  regtime.hour = StringToInt(left(timestr,2));
+  regtime.minute = StringToInt(right(timestr,2));  
+  Jobr.RegTime =  regtime;
+
+  key = mainkey & "source";
+  Jobr.BookOrigin = StringToInt(JSONGet(js,key & "sourceid"));
+
+  Jobr.ReservationType = type;
+
+  if (type==kReservationTypeGroup) then begin
+    key = mainkey & "/madeby";
+  end else begin
+    key = mainkey & "/roomtypes/[" & room & "]/guest";
+  end;
+
+  fullname = JSONGet(js,key & "/firstname") & " " & JSONGet(js,key & "/surname");
+  if (CustomerWithNameExists("",fullname)==false) then begin
+    RecordNew(CUr);
+    CUr.Title = JSONGet(js,key & "/title");
+    CUr.Name = fullname;
+    CUr.eMail = JSONGet(js,key & "/email");
+    phoneno = JSONGet(js,key & "/phoneno");
+    GetNextCustNr(CUr.Code);
+    StripSpace(phoneno,CUr.Phone);
+    CUr.Phone = phoneno; 
+    if (nonblank(CUr.Code)) then begin
+      RecordStore(CUr,false);
+    end;
+  end else begin
+    // cucode = FindCUCode(fullname,"");
+    CUr.Name = fullname;
+    if (ReadFirstKey("Name",CUr,1,true)) then begin end;
+  end;
+  Jobr.CUCode = CUr.Code;
+  PasteCUCodeToJob2(Jobr,-1,false);
+
+  if (blank(Jobr.LangCode)) then begin
+    Jobr.LangCode = CUr.LangCode;
+  end;
+  Jobr.Newspapers = CUr.Newspaper;
+  Jobrw.GuestCode = Jobr.CUCode;   
+  Jobrw.CUName = CUr.Name;   
+  Jobrw.PriceList = CUr.PLCode;
+  if (blank(Jobrw.PriceList)) then begin
+    CCatr.Code = CUr.CustCat;
+    ReadFirstMain(CCatr,1,true);
+    Jobrw.PriceList = CCatr.PLCode;
+  end;
+  Jobrw.CClass = FindHotelClassForClassTerms(CUr.Classification);
+  MatRowPut(Jobr,MatRowCnt(Jobr),Jobrw);
+  AgentRoomr.StdTypeID = JSONGet(js,mainkey & "/roomtypes/[" & room & "]/roomtypeid");
+  AgentRoomr.StdRateID = JSONGet(js,mainkey & "/roomtypes/[" & room & "]/ratecode");  
+  found = true;
+  while LoopBackKey("StdTypeID",AgentRoomr,2,found) begin
+    testf =  true;
+    if (AgentRoomr.StdTypeID != JSONGet(js,mainkey & "/roomtypes/[" & room & "]/roomtypeid")) then begin testf = false; end;
+    if (AgentRoomr.StdRateID != JSONGet(js,mainkey & "/roomtypes/[" & room & "]/ratecode")) then begin testf = false; end;
+    if (testf) then begin
+      if (HotelReservationExists(AgentRoomr.ResCode,AgentRoomr.StdTypeID,Jobr.TransDate,Hotelb.CheckIn,Jobr.EndDate,Hotelb.CheckOut)==-1) then begin
+        Jobr.ResCode = AgentRoomr.ResCode;
+        res = true;
+        goto LSkip;
+      end else begin
+        res = false;
+      end;
+    end;  
+  end;
+LSkip:;
+  Jobr.Source = AgentRoomr.CUCode;
+  Jobr.SourceName = AgentRoomr.CUName;
+  Jobr.PLPrice = StringToVal(JSONGet(js,mainkey & "/roomtypes/[" & room & "]/roomrate"),M4Val);
+  Jobr.SerNr = NextSerNr("JobVc",Jobr.TransDate,-1,false,"");
+LPasteReservationDetails:;
+  PasteReservationDetails = res;
+  return;
+end;
+
+updating function Boolean CreateSubReservation(json js,record JobVc Jobp,Integer room)
+begin
+  string 255 key,mainkey;
+  record JobVc Jobr;
+  Boolean res;
+
+  mainkey = "booking";
+  key = mainkey & "/roomtypes/[" & room & "]";
+
+  res = PasteReservationDetails(Jobr,js,kReservationTypeNormal,room);
+  Jobr.Mother = Jobp.SerNr;
+  Jobr.Sum4 = StringToVal(JSONGet(js,key & "/stayrate"),M4Val);
+  Jobr.Persons = StringToInt(JSONGet(js,key & "/adults"));
+  Jobr.Children = StringToInt(JSONGet(js,key & "/child1")) + StringToInt(JSONGet(js,key & "/child2"));
+  Jobr.Type = JSONGet(js,key & "/roomtypeid");
+
+  if (res) then begin
+    res = RecordStore(Jobr,true);
+  end;
+
+  CreateSubReservation = res;
+  return;
+end;
+
+updating function Boolean CreateGroupReservation(json js,var record JobVc Jobr,Integer room)
+begin
+  Boolean res;
+
+  if (PasteReservationDetails(Jobr,js,kReservationTypeGroup,room)) then begin
+    res = RecordStore(Jobr,false);
+  end;
+  CreateGroupReservation = res;
+  return;
+end;
+
+function Boolean ReservationExists(json js)
+begin
+  string 255 mainkey,key;
+  record AgentRoomVc AgentRoomr;
+  record HotelBlock Hotelb;
+  Date transdate,departuredate;
+  Boolean res,found,testf;
+  Integer i;
+
+  res = true;
+  BlockLoad(Hotelb);
+
+  mainkey = "booking";
+  transdate = DateFromString(Left(JSONGet(js,mainkey & "/arrivaldate"),10),"YYYY-MM-DD");
+  departuredate = DateFromString(Left(JSONGet(js,mainkey & "/departuredate"),10),"YYYY-MM-DD");
+  key = mainkey & "/roomtypes/[" & i & "]";
+  while (JSONNodeExists(js,key)) begin
+    AgentRoomr.StdTypeID = JSONGet(js,key & "/roomtypeid");
+    AgentRoomr.StdRateID = JSONGet(js,key & "/ratecode");
+    found = true;
+    while LoopBackKey("StdTypeID",AgentRoomr,2,found) begin
+      testf =  true;
+      if (AgentRoomr.StdTypeID != JSONGet(js,key & "/roomtypeid")) then begin testf = false; end;
+      if (AgentRoomr.StdRateID != JSONGet(js,key & "/ratecode")) then begin testf = false; end;
+      if (testf) then begin
+        if (HotelReservationExists(AgentRoomr.ResCode,AgentRoomr.StdTypeID,transdate,Hotelb.CheckIn,departuredate,Hotelb.CheckOut)==-1) then begin
+          res = false;
+          goto LReservationExists;
+        end;
+      end;  
+    end;
+    i = i + 1;
+    key = mainkey & "/roomtypes/[" & i & "]";
+  end;
+LReservationExists:;
+  ReservationExists = res;
+  return;
+end;
+
+global
+updating function Boolean AddReservations(area abookrq)
+begin  
+  record JobVc Jobr;
+  Boolean res;
+  string 255 bookingId,tstr;
+  Integer cnt,i;
+  json js;
+
+  res = false;
+  
+  js = ParseJSONArea(abookrq);
+  tstr = GetStringFromArea(abookrq,0,255);
+  bookingId = JSONGet(js,"bbid");
+  if (blank(bookingId)) then begin goto LAddReservations; end;
+
+  cnt = JSONCountChildren(js,"booking/roomtypes");
+  if (cnt<=0) then begin goto LAddReservations; end;
+  if (ReservationExists(js)) then begin goto LAddReservations; end;
+  if (cnt>1) then begin
+    res = CreateGroupReservation(js,Jobr,0); 
+    for (i=0;i<cnt;i=i+1) begin
+      res = CreateSubReservation(js,Jobr,i);
+      if (res==false) then begin goto LAddReservations; end;
+    end;
+  end else begin
+    res = CreateSubReservation(js,Jobr,0);
+  end;
+LAddReservations:;
+  AddReservations = res;
+  return;
+end;
+
+global
+function Boolean NBRetrieveRes(area req)
+begin
+  Boolean res;
+  string 255 tstr;
+
+  NightsBridgeLog("NBRetrieveRes","req",req);
+  WriteAreaToFile(req,"NBRetrieveResreq.txt",0);
+
+  tstr = GetStringFromArea(req,0,255);
+  // if (NBb.Enable!=0) then begin //and (nonblank(NBb.HotelCode))
+    res = qupdating.AddReservations(req);
+  // end;
+
+  NBRetrieveRes = res;
+  return;
+end;
+
+global webpublic
+procedure WebNightsBridgeBookingRQUrl()
+begin
+  Boolean res;
+  area a;
+  json jsr;
+  record NightsBrigdeBlock NBb;
+  string 255 loginkey;
+  Integer oldcomp;
+  record CompaniesBlock Compb;
+  row CompaniesBlock Comprw;
+  Integer i,rwcnt;
+
+  oldcomp = CurrentCompany;  
+  BlockLoad(Compb);
+
+  WebGetPostData(a);
+  if (GetAreaLength(a)>0) then begin
+    jsr = ParseJSONArea(a);
+    loginkey = JSONGet(jsr,"loginkey");
+
+    rwcnt = MatRowCnt(Compb);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(Compb,i,Comprw);
+      if (blank(Comprw.TCPIP)) then begin
+        if (SetCompanyCode(Comprw.CompCode,false)) then begin
+          BlockLoad(NBb);
+          if (NBb.LoginKey==loginkey) then begin
+            res = NBRetrieveRes(a);
+            i = rwcnt;
+          end;
+        end;
+      end;
+    end;
+  end;
+
+  if (res) then begin
+    WebOutBegin;
+    { "success": true
+    }
+    EndWebOut;
+  end else begin
+
+      WebOutBegin;
+      {
+      "success": false,
+      "error":  "This establishment is already reserved"
+      }
+    EndWebOut;
+  end;
+  NBEnableRooms;
+
+  return;
+end;
+
+
+global 
+procedure NBRetrieveResBUTTON()
+begin
+  area req;
+  Boolean res;
+
+  AddFileToArea("WebNightsBrigdeBookingRQUrl.txt",req,false);
+  res = NBRetrieveRes(req);
+  return;
+end;

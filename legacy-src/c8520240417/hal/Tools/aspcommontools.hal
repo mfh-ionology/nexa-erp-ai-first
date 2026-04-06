@@ -1,0 +1,97 @@
+external outer function Boolean IsNonBranchedVersion(string);
+external outer function Boolean IsDevelopmentVersion(string);
+external outer function Boolean IsTestVersion(string);
+
+global
+function Boolean TreatServiceError2(LongInt stat,string url,string service,var string errtext)
+begin
+  Boolean res;
+
+  errtext = "";
+  switch (stat) begin
+    case kCallServiceOK:
+      res = false;
+    case kCallServiceCommError:
+      errtext = "communications error";
+      res = true;
+    case kCallServiceAuthError:
+      errtext = "authentication error";
+      res = true;
+    case kCallServiceParamError:
+      errtext = "parameter error";
+      res = true;
+    case kCallServiceNoFuncError:
+      errtext = "no function error";
+      res = true;
+    case kCallServiceWrongReplyError:
+      errtext = "reply didn't match request error";
+      res = true;
+    otherwise
+      errtext = "unknown error " & stat;
+      res = true;
+  end;
+  
+  if (res and !IsCloningOtherSystem) then begin
+    LogText(0,"service call: " & service & " to: " & url & " failed with: " & errtext);
+  end;
+  
+  TreatServiceError2 = res;
+  return;
+end;
+
+global
+function Boolean TreatServiceError(LongInt stat,string url,string service)
+begin
+  string 255 errtext;
+  TreatServiceError = TreatServiceError2(stat,url,service,errtext);
+  return;
+end;
+
+global
+function string 255 ReadStringFromFile(string filename)
+begin
+  string 255 res;
+  area a;
+
+  if (FileExists(filename)==false) then begin goto LReadStringFromFile; end;
+
+  AddFileToArea(filename,a,false);
+  res = Trim(GetStringFromArea(a,0,GetAreaLength(a)));
+
+LReadStringFromFile:;
+  ReadStringFromFile = res;
+  return;
+end;
+
+global
+function Boolean IsDevelopmentHansaVersion(record HansaVersionVc HVr)
+begin
+  Boolean res;
+  res = IsDevelopmentVersion(HVr.Code);
+  IsDevelopmentHansaVersion = res;
+  return;
+end;
+
+global
+function Boolean IsBranchedHansaVersion(record HansaVersionVc HVr)
+begin
+  Boolean res;
+  res = !IsNonBranchedVersion(HVr.Code);
+  IsBranchedHansaVersion = res;
+  return;
+end;
+
+global
+function Boolean IsTestHansaVersion(record HansaVersionVc HVr)
+begin
+  Boolean res;
+  res = IsTestVersion(HVr.Code);
+  IsTestHansaVersion = res;
+  return;
+end;
+global
+function LongInt HansaVersionBuildFromHansaVersion(record HansaVersionVc HVr)
+begin
+  HansaVersionBuildFromHansaVersion = (HVr.Version * 1000000) + (HVr.SubVersion * 10000) + HVr.RunningBuild;
+  return;
+end;

@@ -1,0 +1,217 @@
+function Boolean IsDateOlderThanDays(date dt,Integer curstatus,Integer days)
+begin
+  Boolean res;
+  date tdt;
+
+  if (blankdate(dt)) then begin // Important!
+    res = true;
+    goto LIsDateOlderThanDays;
+  end;
+  if (curstatus==kStatusRunning) then begin goto LIsDateOlderThanDays; end;
+  if (days==0) then begin goto LIsDateOlderThanDays; end;
+
+  tdt = AddDay(CurrentDate,-days);
+  if (dt<tdt) then begin res = true; end;
+
+LIsDateOlderThanDays:;
+  IsDateOlderThanDays = res;
+  return;
+end;
+
+// function Integer GetContractCountry(string custcode)
+// begin
+//   Integer res;
+//   record RemoteCloudServerVc RCSr;
+
+//   RCSr.CUCode = custcode;
+//   if (ReadFirstKey("CUCode",RCSr,1,true)) then begin
+//     res = RCSr.HMRegInCountry;
+//   end;
+//   GetContractCountry = res;
+//   return;
+// end;
+
+function string 255 GetCustomerName(string custcode)
+begin
+  string 255 res;
+  record CUVc CUr;
+
+  res = "** Missing Customer record **";
+  if (blank(custcode)) then begin goto LGetCustomerName; end;
+
+  CUr.Code = custcode;
+  if (ReadFirstMain(CUr,1,true)) then begin
+    res = CUr.Name;
+  end;
+LGetCustomerName:;
+  GetCustomerName = res;
+  return;
+end;
+
+function Boolean CheckReportSpecificationRCSr(record RcVc RepSpec,record RemoteCloudServerVc RCSr)
+begin
+  Boolean res;
+
+  res = true;
+  if (RCSr.Closed!=0) then begin
+    res = false;
+    goto LCheckReportSpecificationRCSr;
+  end;
+  if (nonblank(RepSpec.f1)) then begin
+    if (RepSpec.f1!=RCSr.HMCUCode) then begin
+      res = false;
+      goto LCheckReportSpecificationRCSr; 
+    end;
+  end;
+  if (IsDateOlderThanDays(RCSr.LastStartDate,RCSr.CurrentStatus,RepSpec.flags[1])) then begin
+    res = false;
+    goto LCheckReportSpecificationRCSr; 
+  end;
+
+LCheckReportSpecificationRCSr:;
+  CheckReportSpecificationRCSr = res;
+  return;
+end;
+
+function Boolean CheckReportSpecificationHMHCr(record RcVc RepSpec,record HMHostingContractVc HMHCr)
+begin
+  Boolean res;
+
+  res = true;
+  if (HMHCr.ClosedFlag==0) then begin
+    res = false;
+    goto LCheckReportSpecificationHMHCr;
+  end;
+  if (HMHCr.HostingCloudNode==0) then begin //CORRECT FOR NOW AS WE DON'T CARE ABOUT THESE CONTRACTS
+    res = false;
+    goto LCheckReportSpecificationHMHCr; 
+  end;
+  if (nonblank(RepSpec.f1)) then begin
+    if (RepSpec.f1!=HMHCr.CustCode) then begin
+      res = false;
+      goto LCheckReportSpecificationHMHCr; 
+    end;
+  end;
+  if (RepSpec.flags[2]>0) then begin
+    if (RepSpec.flags[2]!=HMHCr.HMCompNo) then begin
+      res = false;
+      goto LCheckReportSpecificationHMHCr;
+    end;
+  end;
+
+LCheckReportSpecificationHMHCr:;
+  CheckReportSpecificationHMHCr = res;
+  return;
+end;
+
+
+procedure FindContracts(var array record HMHostingContractVc contract_arr,record RcVc RepSpec)
+begin
+  record HMHostingContractVc HMHCr;
+
+  while (LoopMain(HMHCr,1,true)) begin
+    if (CheckReportSpecificationHMHCr(RepSpec,HMHCr)==false) then begin goto LNextRecord; end;
+    contract_arr[contract_arr.length] = HMHCr;
+LNextRecord:;
+  end;
+
+  return;
+end;
+
+procedure PrintContracts(array record HMHostingContractVc contract_arr,Integer days,Integer activecnf)
+begin
+  record HMHostingContractVc HMHCr;
+  record RemoteCloudServerVc RCSr;
+  Integer arr_pos,custcnt;
+  Boolean inactive;
+
+  for (arr_pos = 0; arr_pos<contract_arr.length; arr_pos = arr_pos + 1) begin
+    inactive = true;
+    HMHCr = contract_arr[arr_pos];
+
+    RCSr.HMCUCode = HMHCr.CustCode;
+    if (ReadFirstKey("HMCUCode",RCSr,1,true)) then begin 
+      if (IsDateOlderThanDays(RCSr.LastStartDate,RCSr.CurrentStatus,days)==false) then begin inactive = false; end;
+    end;
+
+    if (activecnf and inactive==false) then begin goto LNextContract; end;
+
+    StartFormat(15);
+    OutString(0,0,HMHCr.HMCompNo & " - " & StringFromSet(20030,HMHCr.HMCompNo),false);
+    OutString(2,0,HMHCr.ContractNr,false);
+    OutString(3,0,HMHCr.CustCode,false);
+    OutString(4,0,GetCustomerName(HMHCr.CustCode),false);
+    if (inactive) then begin
+      OutString(1,0,"** No active Cloud Node **",true);
+    end;
+    EndFormat;
+LNextContract:;
+  end;
+  return;
+end;
+
+global
+procedure ASPCOActiveCNRn(record RcVc RepSpec)
+begin
+  record RemoteCloudServerVc RCSr;
+  array record HMHostingContractVc contract_arr;
+  Boolean testf;
+  Integer rw;
+  string 255 tstr;
+
+  StartReportJob("Contracts with Active Cloud Node Installation");
+  rw = 1;
+
+  if (RepSpec.flags[0]) then begin
+    Header(rw,"Showing only Contracts with no Cloud Node Installed",1); rw = rw + 1;
+  end else begin
+    if (blank(RepSpec.f1)) then begin
+      Header(rw,"All",1); rw = rw + 1;
+    end else begin
+      Header(rw,"Contract: " & RepSpec.f1,1); rw = rw + 1;
+    end;
+  end;
+
+  tstr = "All";
+  if (RepSpec.flags[2]>0) then begin
+    tstr = StringFromSet(20030,RepSpec.flags[2]);
+  end;
+  Header(rw,"HansaMail Company: " & tstr,1); rw = rw + 1;
+  EndHeader;
+
+  SetRepCol(2,70);
+  SetRepCol(3,130);
+  SetRepCol(4,200);
+
+  StartFormat(15);
+  OutString(0,0,"HansaMail Company",false);
+  OutString(2,0,"Contract",false);
+  OutString(3,0,"Customer",false);
+  OutString(4,0,"Name",false);
+  EndFormat;
+  Black_Divider(0,1);
+
+  FindContracts(contract_arr,RepSpec);
+  if (contract_arr.length>0) then begin
+    PrintContracts(contract_arr,RepSpec.flags[1],RepSpec.flags[0]);
+  end else begin
+    if (nonblank(RepSpec.f1)) then begin
+      RCSr.CUCode = RepSpec.f1;
+
+      testf = ReadFirstKey("HMCUCode",RCSr,1,true);
+      if (testf) then begin
+        testf = CheckReportSpecificationRCSr(RepSpec,RCSr);
+      end;
+
+      if (testf) then begin 
+        OutString(0,0,"Contract " & RepSpec.f1 & " has active Cloud Node Installation",false);   
+      end else begin
+        OutString(0,0,"No active Cloud Node Installation found for Contract " & RepSpec.f1,false);
+      end;
+    end else begin
+      OutString(0,0,"No contracts found" & RepSpec.f1,false);
+    end;
+  end;
+  EndJob;
+  return;
+end;

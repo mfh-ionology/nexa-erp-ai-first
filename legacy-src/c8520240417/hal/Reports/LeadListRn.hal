@@ -1,0 +1,305 @@
+external procedure HT2Per(Date, Date , var string);
+external function Boolean HasModSL();
+external function Boolean FindCustomerRelation(string,string,var record CUVc);
+external procedure ExtractObj(string,var Integer,var string);
+external function Boolean WrapAndPrint(Integer,string,Integer);
+external function Boolean SetInSet2(string,string);
+
+procedure CustomersAddress(record CUVc CUr)
+begin
+  string 255 tstr;
+  record MailSettingsBlock MBr;
+
+  BlockLoad(MBr);
+  StartFormat(15);
+  OutString(2,0,CUr.InvAddr0,false);
+  tstr = USetStr(2307);
+  tstr = tstr & CUr.Phone;
+  OutString(3,0,tstr,false);
+  EndFormat;
+  StartFormat(15);
+  OutStringID(2,"DblCUMap",CUr.InvAddr1,false,CUr.Code);
+//  if (nonblank(CUr.Fax)) then begin
+    tstr = USetStr(2308);
+    tstr = tstr & CUr.Fax;
+    OutString(3,0,tstr,false);
+//  end;
+  EndFormat;
+  StartFormat(15);
+  OutString(2,0,CUr.InvAddr2,false);
+  if (nonblank(CUr.Mobile)) then begin
+    OutString(3,0,USetStr(7301) & ": " & CUr.Mobile,false);
+  end;
+  EndFormat;
+  if (nonblank(CUr.InvAddr3) or nonblank(CUr.eMail)) then begin
+    StartFormat(15);
+    OutString(2,0,CUr.InvAddr3,false);
+    if (blank(CUr.eMail)) then begin
+      OutString(3,0,USetStr(2289),false);
+    end else begin
+      if (MBr.ExclEmail==0) then begin
+        OutString(3,0,CUr.eMail,false);
+      end;
+    end;
+    EndFormat;
+  end;
+  if (nonblank(CUr.InvAddr4)) then begin
+    StartFormat(15);
+    OutString(2,0,CUr.InvAddr4,false);
+    EndFormat;
+  end;
+  if (nonblank(CUr.TheirCode)) then begin
+    StartFormat(15);
+    tstr = USetStr(4031) & CUr.TheirCode;
+    OutString(2,0,tstr,false);
+    EndFormat;
+  end;  
+  if (nonblank(CUr.DelAddr0)) then begin
+    StartFormat(15);
+    OutString(2,0,USetStr(2306),false);
+    EndFormat;
+    StartFormat(15);
+    OutString(2,0,CUr.DelAddr0,false);
+    EndFormat;
+  end;
+  if (nonblank(CUr.DelAddr1)) then begin
+    StartFormat(15);
+    OutString(2,0,CUr.DelAddr1,false);
+    EndFormat;
+  end;
+  if (nonblank(CUr.DelAddr2)) then begin
+    StartFormat(15);
+    OutString(2,0,CUr.DelAddr2,false);
+    EndFormat;
+  end;
+  if (nonblank(CUr.DelAddr3)) then begin
+    StartFormat(15);
+    OutString(2,0,CUr.DelAddr3,false);
+    EndFormat;
+  end;
+  if (nonblank(CUr.DelAddr4)) then begin
+    StartFormat(15);
+    OutString(2,0,CUr.DelAddr4,false);
+    EndFormat;
+  end;
+  return;
+end;
+
+procedure PrintCustomersData(record RcVc RepSpec)
+begin
+  record CUVc CUr;
+  Boolean testf;
+  Boolean found;
+  string 20 fromcust,tocust;
+  string 20 mykey;
+  string 255 tstr;
+  LongInt cucnt;
+  Integer keys;
+
+  cucnt = 0;
+  fromcust = FirstInRange(RepSpec.f1,20);
+  tocust = LastInRange(RepSpec.f1,20);
+
+  switch (RepSpec.flags[1]) begin
+    case 0:
+      CUr.Code = fromcust;
+      mykey = "Code";
+      keys = 1;
+    case 1:
+      mykey = "Name";
+      keys = 2;
+    case 2:
+      CUr.Phone = "";
+      mykey = "Phone";
+      keys = 2;
+    case 3:
+      CUr.CountryCode = RepSpec.FirstAcc;
+      CUr.Code = fromcust;
+      mykey = "CountryCode";
+      keys = 2;
+  end;
+  found = true;
+  while (LoopKey(mykey,CUr,keys,found)) begin
+    switch (RepSpec.flags[1]) begin
+      case 0:
+        if (nonblank(RepSpec.f1))  then begin 
+          if (CUr.Code<fromcust) then begin found = false; end;
+          if (CUr.Code>tocust) then begin found = false; end;
+        end;
+      case 3:
+        if (nonblank(RepSpec.FirstAcc))  then begin 
+          if (CUr.CountryCode!=RepSpec.FirstAcc) then begin found = false; end;
+        end;
+    end;
+    if (found) then begin
+      testf = true;
+      if (nonblank(RepSpec.AccStr))  then begin 
+        if (CUr.SalesMan!=RepSpec.AccStr) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.FirstAcc))  then begin 
+        if (CUr.CountryCode!=RepSpec.FirstAcc) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f2))  then begin 
+        if (CUr.Industry!=RepSpec.f2) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f3))  then begin 
+        if (CUr.Source!=RepSpec.f3) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f4))  then begin 
+        if (CUr.Partner!=RepSpec.f4) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f5))  then begin 
+        if (SetInSet2(RepSpec.f5,CUr.ItemClassification)==false) then begin testf = false; end;
+      end;
+      if (BuildProductCode=="StandardCRM") then begin
+        if (CUr.LeadType==0) then begin testf = false; end;
+      end;
+      if (testf) then begin
+        switch (RepSpec.ArtMode) begin
+          case 0:
+
+            StartFormat(15);
+            if (BuildProductCode=="StandardCRM") then begin
+              OutString(0,"DblCULeadVc",CUr.Code,false);
+            end else begin
+              OutString(0,"DblCUVc",CUr.Code,false);
+            end;
+            OutString(2,0,CUr.Name,false);
+            OutString(3,0,CUr.Person,false);
+            EndFormat;
+            CustomersAddress(CUr);
+            if (nonblank(CUr.Sorting)) then begin
+              StartFormat(15);
+              tstr = USetStr(7118);
+              tstr = tstr & ": " & CUr.Sorting;
+              OutString(2,0,tstr,false);
+              EndFormat;
+            end;
+            if (nonblank(CUr.Comment)) then begin
+              StartFormat(15);
+              OutString(2,0,CUr.Comment,false);
+              EndFormat;
+            end;
+            if (nonblank(CUr.WarnText1)) then begin
+              StartFormat(15);
+              tstr = USetStr(2318);
+              tstr = tstr & CUr.WarnText1;
+              OutString(2,0,tstr,false);
+              EndFormat;
+            end;
+            if (nonblank(CUr.Classification)) then begin          
+              StartFormat(15);
+              tstr = USetStr(7112);
+              tstr = tstr & ": " & CUr.Classification;
+              if (WrapAndPrint(2,tstr,85)) then begin
+                EndFormat;
+              end;
+            end;
+            Gray_Divider(0,1);          
+          case 1:
+            StartFormat(15);
+            tstr = "";
+            OutString(0,"DblCUVc",CUr.Code,false);
+            tstr = CUr.Name & tstr & ", " & CUr.Person;
+            OutString(2,0,tstr,false);
+            OutString(1,0,CUr.Phone,true);
+            EndFormat;
+          case 2:
+            StartFormat(15);
+            tstr = "";
+            OutString(0,"DblCUVc",CUr.Code,false);
+            tstr = CUr.Name & tstr & ", " & CUr.Person;
+            OutString(2,0,tstr,false);
+            OutString(1,0,CUr.Fax,true);
+            EndFormat;
+          case 3:
+            StartFormat(15);
+            tstr = "";
+            OutString(0,"DblCUVc",CUr.Code,false);
+            tstr = CUr.Name & tstr & ", " & CUr.Person;
+            OutString(2,0,tstr,false);
+            OutString(1,0,CUr.eMail,true);
+            EndFormat;
+        end;
+      end;
+    end;
+  end;
+  return;
+end;
+  
+global
+procedure LeadListRn(record RcVc RepSpec)
+begin
+  Integer rw;
+  String 255 tstr;
+  String 20 fromcust;
+  String 20 tocust;
+
+  rw = 1;
+  fromcust = FirstInRange(RepSpec.f1,20);
+  tocust = LastInRange(RepSpec.f1,20);
+  StartReportJob(USetStr(40520));
+  if ((blank(fromcust)) and (blank(tocust))) then begin
+    tstr = USetStr(1104);
+  end else begin
+    tstr = USetStr(1105);
+    tstr = tstr & fromcust;
+    if (fromcust<>tocust) then begin
+      tstr = tstr & " : " & tocust;
+    end;
+  end;
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  switch (RepSpec.ArtMode) begin
+    case 0: tstr = USetStr(40521);
+    case 1: tstr = USetStr(40522);
+    case 2: tstr = USetStr(40523);
+    case 3: tstr = USetStr(40524);
+  end;
+  Header(rw,tstr,0);
+  tstr = USetStr(40526) & ": ";
+  switch (RepSpec.flags[0]) begin
+    case 0: tstr = tstr & USetStr(40527);
+    case 1: tstr = tstr & USetStr(40528);
+    case 2: tstr = tstr & USetStr(40529);
+  end;
+  Header(rw,tstr,1);
+  rw = rw + 1;     
+  if (nonblank(RepSpec.FirstAcc)) then begin
+    tstr = USetStr(40530) & ": ";
+    tstr = tstr & RepSpec.FirstAcc;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f2)) then begin
+    tstr = USetStr(40531) & ": ";
+    tstr = tstr & RepSpec.f2;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f3)) then begin
+    tstr = USetStr(40532) & ": ";
+    tstr = tstr & RepSpec.f3;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f4)) then begin
+    tstr = USetStr(40533) & ": ";
+    tstr = tstr & RepSpec.f4;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f5)) then begin
+    tstr = USetStr(40534) & ": ";
+    tstr = tstr & RepSpec.f5;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  rw = rw + 1;
+  EndHeader;  
+  SetRepCol(2,80);
+  SetRepCol(3,320);
+  PrintCustomersData(RepSpec);
+  EndJob;
+  return;
+end;

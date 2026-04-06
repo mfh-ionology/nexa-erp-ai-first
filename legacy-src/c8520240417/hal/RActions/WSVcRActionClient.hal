@@ -1,0 +1,43 @@
+remote procedure GetCurUser(var record UserVc);
+
+global
+function LongInt WSVcRecordDefaultsClient(LongInt wn,var record WSVc WSr,record WSVc WS2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  record LocalMachineBlock LocalMachineRec;
+  record UserVc USr;
+
+  BlockLoad(LocalMachineRec);  
+  GetCurUser(USr);
+  WSr.Location = USr.Location;
+  if (blank(WSr.Location)) then begin
+    WSr.Location = LocalMachineRec.DefLocation;
+  end;
+  WSVcRecordDefaultsClient = res;
+  return;
+end;
+
+global
+function LongInt WSVcRecordProtectFields(var record WSVc WSr,record WSVc WS2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  Integer i,rwcnt;
+  row WSVc WSrw;
+  row WSVc WS2rw;
+  Integer rwcnt2;
+  
+  WS2r.InvFlag = WSr.InvFlag;
+  rwcnt = MatRowCnt(WSr);
+  rwcnt2 = MatRowCnt(WS2r);
+  for (i=0;i<rwcnt2;i=i+1) begin
+    if (i<rwcnt) then begin
+      MatRowGet(WSr,i,WSrw);
+      MatRowGet(WS2r,i,WS2rw);
+      WS2rw.Returned = WSrw.Returned;
+      WS2rw.Invd = WSrw.Invd;
+      MatRowPut(WS2r,i,WS2rw);
+    end;
+  end;
+  WSVcRecordProtectFields = res;
+  return;
+end;

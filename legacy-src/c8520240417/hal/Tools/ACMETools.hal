@@ -1,0 +1,563 @@
+// ## move R- and W-actions to separate files
+
+external procedure GetHostAndPathFromUrl(string,var string,var LongInt,var string,var Boolean);
+external procedure ACME_OpenDebugWindow(record ACMELogVc);
+
+function string 255 CR()
+begin
+  CR = chr(13);
+end;
+
+function string 255 LF()
+begin
+  LF = chr(10);
+end;
+
+function string 255 NL()
+begin
+  if (ServingClient) then begin
+    NL = LF;
+  end else begin
+    NL = CR & LF;
+  end;
+end;
+
+/*
+function string 255 ACME_Filename(record ACMEWorkspaceVc AWr,string filename)
+begin
+  ACME_Filename = "AutoCertificates/" & AWr.SerNr & "/" & filename;
+end;
+*/
+
+/*
+procedure ACME_CreateFolders(record ACMEWorkspaceVc AWr)
+begin
+  string 255 folder;
+  
+  folder = "AutoCertificates";
+  CreateFolder(folder);
+  
+  if (AWr.SerNr>0) then begin
+    folder = folder & "/" & AWr.SerNr;
+    CreateFolder(folder);
+  end;
+end;
+*/
+
+function string 255 ACME_Url(record ACMEWorkspaceVc AWr,string path)
+begin
+  string 255 res;
+  string 255 rpath;
+  record URLVc URLr;
+
+  rpath = path;
+
+  switch (path) begin
+    case "key-change": res = AWr.keyChangeURL;
+    case "new-acct": res = AWr.newAccountURL;
+    case "new-nonce": res = AWr.newNonceURL;
+    case "new-order": res = AWr.newOrderURL;
+    case "renewal-info": res = AWr.renewalInfoURL;
+    case "revoke-cert": res = AWr.revokeCertURL;
+  end;
+  
+  if (res<>"") then begin
+    goto ACME_Url_out;
+  end;
+  
+  switch (path) begin
+    case "key-change": rpath = "/acme/key-change";
+    case "new-acct": rpath = "/acme/new-acct";
+    case "new-nonce": rpath = "/acme/new-nonce";
+    case "new-order": rpath = "/acme/new-order";
+    case "renewal-info": rpath = "/acme/renewal-info";
+    case "revoke-cert": rpath = "/acme/revoke-cert";
+  end;
+  
+  URLr.URLString = AWr.BaseURL;
+  ParseURL(URLr);
+  URLr.Path = rpath;
+  CalculateURL(URLr);
+  res = URLr.URLString;
+  
+ACME_Url_out:;
+  ACME_Url = res;
+end;
+
+procedure ACME_GetDirectory(record ACMEWorkspaceVc AWr)
+begin
+  record WebRequestVc WRr;
+  json ReplyJSON;
+  
+  WRr.URL = AWr.BaseURL;
+  WRr.Method = "GET";
+
+  SendWebRequest4(WRr);
+
+  //ReplyHeaders = WRr.ReplyHeaders;
+  ReplyJSON = ParseJSONString(WRr.ReplyData);
+  //res = WRr.ResultCode;
+
+  AWr.keyChangeURL = JSONGet(ReplyJSON,"keyChange");
+  AWr.newAccountURL = JSONGet(ReplyJSON,"newAccount");
+  AWr.newNonceURL = JSONGet(ReplyJSON,"newNonce");
+  AWr.newOrderURL = JSONGet(ReplyJSON,"newOrder");
+  AWr.renewalInfoURL = JSONGet(ReplyJSON,"renewalInfo");
+  AWr.revokeCertURL = JSONGet(ReplyJSON,"revokeCert");
+end;
+
+function string 255 ACME_GetNonce(record ACMEWorkspaceVc AWr)
+begin
+  record WebRequestVc WRr;
+
+  WRr.URL = ACME_Url(AWr,"new-nonce");
+  WRr.Method = "HEAD";
+  
+  SendWebRequest4(WRr);
+  
+  ACME_GetNonce = GetHttpHeaderField(WRr.ReplyHeaders,"Replay-Nonce");
+end;
+
+function string 255 Base64ToURL(string b64s)
+begin
+  string 255 res;
+  
+  res = b64s;
+  res = ReplaceStringWithString(res,"+","-");
+  res = ReplaceStringWithString(res,"/","_");
+  res = ReplaceStringWithString(res,"=","");
+
+  Base64ToURL = res;
+end;
+
+function string 255 JWK(record ACMEWorkspaceVc AWr)
+begin
+  string 255 jwk_e,jwk_n;
+  CryptoKey AccountKey;
+  
+  ReadPrivateKeyFromString(AccountKey,NamedAttachmentToString(AWr,"account.key"),"");
+  ReadPublicKeyFromString(AccountKey,NamedAttachmentToString(AWr,"account.pub"));
+
+  jwk_e = GetPublicKeyExponent(AccountKey,kOutputBase64URL);
+  jwk_n = GetPublicKeyModulus(AccountKey,kOutputBase64URL);
+
+  // Important: no whitespaces at all. The server computes the thumbprint from our
+  // E and N values in JWK and does so with this exact JSON. The sha256 from us
+  // will not match theirs if we use a different JSON formatting.
+  // see example in https://tools.ietf.org/html/rfc7638
+
+  JWK = "{""e"":""" & jwk_e & """,""kty"":""RSA"",""n"":""" & jwk_n & """}";
+end;
+
+function string 255 JWKThumbprint(record ACMEWorkspaceVc AWr)
+begin
+  JWKThumbprint = DigestString(JWK(AWr),kDigest_SHA256,kOutputBase64URL);
+end;
+
+function string 255 JWS_Auth(record ACMEWorkspaceVc AWr)
+begin
+  string 255 res;
+
+  if (AWr.AccountURL<>"") then begin
+    res = """kid"": """ & AWr.AccountURL & """";
+  end else begin
+    res = """jwk"":" & JWK(AWr);
+  end;
+  
+  JWS_Auth = res;
+end;
+
+procedure ACME_Call(record ACMEWorkspaceVc AWr,string url,string payload,record WebRequestVc WRr)
+begin
+  string 255 nonce,acme_header,debugmessage;
+  string 255 jws_protected,jws_payload,jws_signature,jws;
+  CryptoKey AccountKey;
+  record ACMELogVc ALogr;
+  
+  ReadPrivateKeyFromString(AccountKey,NamedAttachmentToString(AWr,"account.key"),"");
+  ReadPublicKeyFromString(AccountKey,NamedAttachmentToString(AWr,"account.pub"));
+
+  nonce = ACME_GetNonce(AWr);
+  
+  acme_header = "{""alg"":""RS256""," & JWS_Auth(AWr) & ",""nonce"":""" & nonce & """,""url"": """ & url & """}";
+  
+  jws_protected = Base64EncodeURL(acme_header);  
+  jws_payload = Base64EncodeURL(payload);
+  
+  jws_signature = DigestAndSign(jws_protected & "." & jws_payload,AccountKey,kDigest_SHA256,kOutputBase64URL);
+  jws = "{""protected"":""" & jws_protected & """,""payload"":""" & jws_payload & """,""signature"":""" & jws_signature & """}";
+  
+  WRr.URL = url;
+  WRr.Method = "POST";
+  WRr.PostContentType = "application/jose+json";
+  WRr.PostData = jws;
+  SendWebRequest4(WRr);
+
+  if (AWr.DebugFlag) then begin
+		debugmessage =     WRr.URL & " " & WRr.ResultCode &
+											 NL & "-------- Payload -----------" & NL & NL &
+											 payload &
+                       NL & "-------- ACME Header -------" & NL & NL &
+											 acme_header &
+                       NL & "-------- Protected ---------" & NL & NL &
+											 jws_protected &
+                       NL & "-------- JWS Payload -------" & NL & NL &
+											 jws_payload &
+                       NL & "-------- Sign Script--------" & NL & NL &
+											 "export ACCOUNT_KEY=""account.key""" & NL & NL &
+											 "export JWS_PROTECTED=""" & jws_protected & """" & NL & NL &
+											 "export JWS_PAYLOAD=""" & jws_payload & """" & NL & NL &
+											 "$(printf ""%s"" ""${JWS_PROTECTED}.${JWS_PAYLOAD}"" | openssl dgst -sha256 -sign ""${ACCOUNT_KEY}"" | base64url)" & NL & NL &
+                       NL & "-------- Signature ---------" & NL & NL &
+											 jws_signature &
+                       NL & "-------- JWS ---------------" & NL & NL &
+											 jws &
+                       NL & "-------- Reply Headers -----" & NL & NL &
+											 WRr.ReplyHeaders & 
+                       NL & "-------- Reply Body --------" & NL & NL &
+											 WRr.ReplyData & NL;
+    
+    if (ServingClient) then begin
+      SetTextField(ALogr,debugmessage);
+      ClientRemoteAsync.ACME_OpenDebugWindow(ALogr);
+    end else begin
+      LogText(0,NL & debugmessage & NL);
+    end;
+  end;
+end;
+
+function Integer ACME_Call_JSON(record ACMEWorkspaceVc AWr,string url,string payload,var string ReplyHeaders,var json ReplyJSON)
+begin
+  record WebRequestVc WRr;
+  Integer res;
+
+  ACME_Call(AWr,url,payload,WRr);
+  
+  ReplyHeaders = WRr.ReplyHeaders;
+  ReplyJSON = ParseJSONString(WRr.ReplyData);  
+  res = WRr.ResultCode;
+  
+  ACME_Call_JSON = res;
+end;
+
+global updating
+procedure ACMERegisterAccount(var record ACMEWorkspaceVc AWr)
+begin
+  string 255 request,replyheaders;
+  json reg_reply;
+  Integer HttpStatus;
+  CryptoKey AccountKey;
+  string 255 PrivateKeyString,PublicKeyString;
+
+  RecordStore(AWr,true);
+  
+  ACME_GetDirectory(AWr);
+  
+  RecordStore(AWr,true);
+  
+  ClearCryptoKey(AccountKey);
+  GeneratePrivateAndPublicKey(AccountKey,kPubKey_RSA,4096);
+  StringToNamedAttachment(WritePrivateKeyToString(AccountKey,kCryptKeyFormatPEM),AWr,"account.key");
+  StringToNamedAttachment(WritePublicKeyToString(AccountKey,kCryptKeyFormatPEM),AWr,"account.pub");
+  
+  if (AWr.Contact<>"") then begin
+    request = "{""termsOfServiceAgreed"":true,""contact"":[""mailto"":""" & AWr.Contact & """]}";
+  end else begin
+    request = "{""termsOfServiceAgreed"":true}";
+  end;
+  
+  HttpStatus = ACME_Call_JSON(AWr,ACME_Url(AWr,"new-acct"),request,replyheaders,reg_reply);
+  AWr.AccountURL =  GetHttpHeaderField(replyheaders,"Location");
+  AWr.OrderStatus = JSONGet(reg_reply,"status");
+
+  RecordStore(AWr,true);
+  
+  ReadFirstMain(AWr,1,true);
+end;
+
+global updating
+procedure ACMECreateCertificateKey(var record ACMEWorkspaceVc AWr)
+begin
+  CryptoKey CertificateKey;
+  string 255 folder;
+  
+  ClearCryptoKey(CertificateKey);
+  GeneratePrivateAndPublicKey(CertificateKey,kPubKey_RSA,4096);
+    
+  StringToNamedAttachment(WritePrivateKeyToString(CertificateKey,kCryptKeyFormatPEM),AWr,"certificate.key");
+  StringToNamedAttachment(WritePublicKeyToString(CertificateKey,kCryptKeyFormatPEM),AWr,"certificate.pub");
+end;
+
+global updating
+procedure ACMEPlaceOrder(var record ACMEWorkspaceVc AWr)
+begin
+  LongInt rwcnt,i,j;
+  row ACMEWorkspaceVc AWrw;
+  string 255 request,replyheaders;
+  Integer HttpStatus;
+  json new_order_reply;
+  
+  rwcnt = MatRowCnt(AWr);
+
+  request = "{""identifiers"":[";
+  
+  for (i = 0; i<rwcnt; i = i + 1) begin
+    MatRowGet(AWr,i,AWrw);
+    
+    request = request & "{""type"":""dns"",""value"":""" & AWrw.Domain & """}";
+    if (i<(rwcnt-1)) then begin
+      request = request & ",";
+    end;
+  end;
+  
+  request = request & " ] }";
+  
+  HttpStatus = ACME_Call_JSON(AWr,ACME_Url(AWr,"new-order"),request,replyheaders,new_order_reply);
+  
+  AWr.OrderURL =  GetHttpHeaderField(replyheaders,"Location");
+  AWr.FinalizeURL = JSONGet(new_order_reply,"finalize");
+  AWr.OrderExpires = JSONGet(new_order_reply,"expires");
+  AWr.OrderStatus = JSONGet(new_order_reply,"status");
+  
+  for (i = 0; i<rwcnt; i = i + 1) begin
+    MatRowGet(AWr,i,AWrw);
+    
+    for (j = 0; j<rwcnt; j = j + 1) begin
+      if (JSONGet(new_order_reply,"identifiers/[" & j & "]/value")==AWrw.Domain) then begin
+        AWrw.AuthorizationURL = JSONGet(new_order_reply,"authorizations/[" & j & "]");
+        MatRowPut(AWr,i,AWrw);
+      end;
+    end;
+  end;
+  
+  RecordStore(AWr,true);
+  
+  if (AWr.OrderURL=="") then begin
+    LogText(0,"Order not created");
+  end;
+end;
+
+function Boolean ChallengeTypeMatch(string chtype,Integer chmodel)
+begin
+  Boolean res;
+  
+  switch (chmodel) begin
+     case kACMEChallengeHTTP:
+       if (chtype=="http-01") then begin res = true; end;
+     case kACMEChallengeDNS:
+       if (chtype=="dns-01") then begin res = true; end;
+  end;
+  
+  ChallengeTypeMatch = res;
+end;
+
+global updating
+procedure ACMEGetAuthTokens(var record ACMEWorkspaceVc AWr)
+begin
+  LongInt rwcnt,i,j;
+  row ACMEWorkspaceVc AWrw;
+  string 255 request,replyheaders,chtype,chtypes;
+  Integer HttpStatus;
+  json get_challenge_reply;
+  Boolean chfound;
+  
+  rwcnt = MatRowCnt(AWr);
+    
+  for (i = 0; i<rwcnt; i = i + 1) begin
+    MatRowGet(AWr,i,AWrw);
+    
+    HttpStatus = ACME_Call_JSON(AWr,AWrw.AuthorizationURL,"",replyheaders,get_challenge_reply);
+    
+    AWr.OrderStatus = JSONGet(get_challenge_reply,"status");
+    
+    for (j = 0; JSONGet(get_challenge_reply,"challenges/[" & j & "]/type")<>""; j = j + 1) begin
+      chtype = JSONGet(get_challenge_reply,"challenges/[" & j & "]/type");
+
+      if (chtypes<>"" and chtype<>"") then begin chtypes = chtypes & ","; end;
+      
+      if (ChallengeTypeMatch(chtype,AWr.ChallengeModel)) then begin
+        AWrw.ChallengeURL = JSONGet(get_challenge_reply,"challenges/[" & j & "]/url");
+        AWrw.ChallengeToken = JSONGet(get_challenge_reply,"challenges/[" & j & "]/token");
+        AWrw.ChallengeType = chtype;
+        AWrw.KeyAuth = AWrw.ChallengeToken & "." & JWKThumbprint(AWr);
+        AWrw.ChallengeStatus = JSONGet(get_challenge_reply,"challenges/[" & j & "]/status");
+        MatRowPut(AWr,i,AWrw);
+        chfound = true;
+      end;
+    end;
+  end;
+  
+  if (chfound==false) then begin
+    // ##
+  end;
+  
+  RecordStore(AWr,true);
+end;
+
+global updating
+procedure ACMERespondToChallenges(var record ACMEWorkspaceVc AWr)
+begin
+  LongInt rwcnt,i;
+  row ACMEWorkspaceVc AWrw;
+  string 255 request,replyheaders;
+  Integer HttpStatus;
+  json get_respond_reply;
+
+  rwcnt = MatRowCnt(AWr);
+
+  for (i = 0; i<rwcnt; i = i + 1) begin
+    MatRowGet(AWr,i,AWrw);
+    
+    if (AWrw.ChallengeURL<>"" and ChallengeTypeMatch(AWrw.ChallengeType,AWr.ChallengeModel)) then begin
+      HttpStatus = ACME_Call_JSON(AWr,AWrw.ChallengeURL,"{}",replyheaders,get_respond_reply);
+      AWr.OrderStatus = JSONGet(get_respond_reply,"status");
+      
+      // AWrw.ChallengeStatus = JSONGet(get_challenge_reply,"challenges/[" & j & "]/status");
+      // MatRowPut(AWr,i,AWrw);
+    end;
+  end;
+
+  RecordStore(AWr,true);
+end;
+
+global updating
+procedure ACMECheckValidationStatus(var record ACMEWorkspaceVc AWr)
+begin
+  string 255 request,replyheaders;
+  Integer HttpStatus;
+  json get_val_status_reply;
+  
+  HttpStatus = ACME_Call_JSON(AWr,AWr.OrderURL,"",replyheaders,get_val_status_reply);  
+  AWr.OrderStatus = JSONGet(get_val_status_reply,"status");
+  
+  RecordStore(AWr,true);
+end;
+
+procedure UpdateRetryAfter(var record ACMEWorkspaceVc AWr,string replyheaders)
+begin
+  string 255 retryafterstr;
+  LongInt retryafter;
+  
+  retryafterstr = GetHttpHeaderField(replyheaders,"Retry-After");
+  if (retryafterstr<>"") then begin
+    retryafter = StringToLongInt(retryafterstr);
+    if (retryafter>0) then begin
+      AWr.NextTime = CurrentUnixUTCTime + retryafter;
+    end;
+  end;
+end;
+
+global
+procedure ACMESWaitForRetry(var record ACMEWorkspaceVc AWr)
+begin
+  while (AWr.NextTime>CurrentUnixUTCTime) begin
+    Sleep(1);
+  end;
+end;
+
+global updating
+procedure ACMESubmitCSR(var record ACMEWorkspaceVc AWr)
+begin
+  CryptoKey CSR;
+  row ACMEWorkspaceVc AWrw;
+  Integer rwcnt,i;
+  string 255 derstr,pemstr,csr_string,replyheaders,request;
+  json get_finalize_status_reply;
+  Integer HttpStatus;
+  
+  ReadPrivateKeyFromString(CSR,NamedAttachmentToString(AWr,"certificate.key"),"");
+  ReadPublicKeyFromString(CSR,NamedAttachmentToString(AWr,"certificate.pub"));
+  
+  CreateCSR(CSR);
+  
+  rwcnt = MatRowCnt(AWr);
+  
+//  AddSubjectNameFieldToCSR(CSR,"C","SE");
+//  AddSubjectNameFieldToCSR(CSR,"ST","");
+//  AddSubjectNameFieldToCSR(CSR,"L","");
+//  AddSubjectNameFieldToCSR(CSR,"O","Example Company");
+//  AddSubjectNameFieldToCSR(CSR,"OU","");
+//  AddSubjectNameFieldToCSR(CSR,"CN","VNF Application");
+
+  for (i = 0; i<rwcnt; i = i + 1) begin
+    MatRowGet(AWr,i,AWrw);
+    
+    if (i==0) then begin
+      AddSubjectNameFieldToCSR(CSR,"CN",AWrw.Domain);  
+    end;
+    
+    AddAlternativeNameToCSR(CSR,"DNS:" & AWrw.Domain);
+  end;
+  
+  SignCSR(CSR,kDigest_SHA256);
+  
+  pemstr = WriteCSRToString(CSR,kSSLFormat_PEM);
+  StringToNamedAttachment(pemstr,AWr,"csr.pem");
+  
+  derstr = WriteCSRToString(CSR,kSSLFormat_DER);
+  csr_string = Base64EncodeURL(derstr);
+
+  request = "{""csr"":""" & csr_string & """}";
+  HttpStatus = ACME_Call_JSON(AWr,AWr.FinalizeURL,request,replyheaders,get_finalize_status_reply);
+
+  UpdateRetryAfter(AWr,replyheaders);
+  
+  AWr.OrderStatus = JSONGet(get_finalize_status_reply,"status");
+  AWr.CertificateURL = JSONGet(get_finalize_status_reply,"certificate");
+  
+  RecordStore(AWr,true);
+end;
+
+global updating
+procedure ACMECheckOrderStatus(var record ACMEWorkspaceVc AWr)
+begin
+  string 255 replyheaders;
+  json get_order_status_reply;
+  Integer HttpStatus;
+  
+  HttpStatus = ACME_Call_JSON(AWr,AWr.OrderURL,"",replyheaders,get_order_status_reply);
+
+  AWr.OrderStatus = JSONGet(get_order_status_reply,"status");
+  AWr.CertificateURL = JSONGet(get_order_status_reply,"certificate");
+  
+  UpdateRetryAfter(AWr,replyheaders);
+  RecordStore(AWr,true);
+end;
+
+global updating
+procedure ACMEFetchCertificate(var record ACMEWorkspaceVc AWr)
+begin
+  record WebRequestVc WRr;
+  
+  ACME_Call(AWr,AWr.CertificateURL,"",WRr);
+  StringToNamedAttachment(WRr.ReplyData,AWr,"certificate.cer");
+end;
+
+global
+function string 255 PublicHostNameRemote()
+begin
+  PublicHostNameRemote = PublicHostName;
+end;
+
+global
+procedure ACMECertificateToStringRemote(var record ACMEWorkspaceVc AWr,var string cert,var string privkey)
+begin
+  cert = NamedAttachmentToString(AWr,"certificate.cer");
+  privkey = NamedAttachmentToString(AWr,"certificate.key");
+end;
+
+global
+procedure AutoCertificate_ReadRemote(string pubhost,var string cert,var string privkey)
+begin
+  cert = ReadFileToString(pubhost & "@auto.cer");
+  privkey = ReadFileToString(pubhost & "@auto.key");
+end;
+
+global
+procedure AutoCertificate_StoreRemote(string pubhost,string cert,string privkey)
+begin
+  WriteStringToFile(cert,pubhost & "@auto.cer",0);
+  WriteStringToFile(privkey,pubhost & "@auto.key",0);
+  ReloadSSLCertificates;
+end;
+

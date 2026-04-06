@@ -1,0 +1,663 @@
+external procedure JSONNotStringPut(var string,string,string);
+external procedure JSONNotStringAdd(var string,string,string);
+external procedure JSONStringStart(var string);
+external procedure JSONStringMemberStart(var string,string);
+external procedure JSONStringMemberEnd(var string);
+external procedure JSONStringEnd(var string);
+external procedure EmSzmalAuthCodesm;
+external function val StringToValue(string,Integer,string,string);
+external procedure emSzmalGetAccountsListDsm;
+external function Boolean ParseHTTPHeader(area,string,var Integer,var string,var string);
+external procedure LogAreaToFile(string,area);
+external procedure EmSzmalAuthCode2sm;
+external function Boolean GetBankAccPMRow(record PMBlock,string,string,var row PMBlock);
+external updating procedure CreateReceipt(record SRBlock,string,record BankTRVc,boolean);
+external function Boolean FindStringInString(string,string);
+external function string 255 StripCharacter(string,string);
+remote procedure ClientDisplayErrorMessage(string,LongInt,string);
+
+procedure JSONStringPut(var string js,string argument,string value)
+begin
+    js = js & """" & argument & """: ";
+    js = js & """" & value & """";
+  return;
+end;
+
+procedure JSONStringAdd(var string js,string argument,string value)
+begin
+    JSONStringPut(js,argument,value);
+    js = js & ",";
+  return;
+end;
+
+global
+function string 255 GetProviderId(string providerId,var string providerIdCode)
+begin
+  
+  switch (providerId) begin  
+    case "biInteligo":                  providerIdCode = 4;
+    case "biSantanderInternet":         providerIdCode = 8;
+    case "biPekao24":                   providerIdCode = 13;
+    case "biVWBank":                    providerIdCode = 15;
+    case "bimBankVenezia":              providerIdCode = 24;
+    case "biToyotaBank":                providerIdCode = 25;
+    case "biGetinBank":                 providerIdCode = 27;
+    case "biPKOiPKO2":                  providerIdCode = 29;
+    case "biPekaoBiznes24":             providerIdCode = 30;
+    case "biAliorBankBusinessPro":      providerIdCode = 32;
+    case "biBNPParibasBusinessPlanet":  providerIdCode = 33;
+    case "biBNPParibasGOoptima":        providerIdCode = 34;
+    case "biBankPocztowyPocztowy24":    providerIdCode = 37;
+    case "biKompaktFinanse":            providerIdCode = 39;
+    case "biBOSiBOSS":                  providerIdCode = 40;
+    case "biAliorBankKantor":           providerIdCode = 41;
+    case "biMillenet":                  providerIdCode = 42;
+    case "biCinkciarz":                 providerIdCode = 43;
+    case "biINGMojeING":                providerIdCode = 44;
+    case "biDotPay":                    providerIdCode = 47;
+    case "biTPay":                      providerIdCode = 48;
+    case "biPrzelewy24":                providerIdCode = 49;
+    case "biPayUBiz":                   providerIdCode = 51;
+    case "biIdeaCloud":                 providerIdCode = 52;
+    case "biMillenetBiznes":            providerIdCode = 54;
+    case "biDotPayFirmowe":             providerIdCode = 56;
+    case "biGetinBankGB24":             providerIdCode = 58;
+    case "bimBankCompanyNet":           providerIdCode = 59;
+    case "biBankBPS":                   providerIdCode = 62;
+    case "biPBSBank24":                 providerIdCode = 63;
+    case "biCitiBankOnlineRWD":         providerIdCode = 64;
+    case "biINGBusinessOnlineRWD":      providerIdCode = 65;
+    case "biPayPalNVPSOAPAPI":          providerIdCode = 67;
+    case "biAliorBankAliorOnline":      providerIdCode = 68;
+    case "biPKOiPKOBiznes2":            providerIdCode = 69;
+    case "biPlusBank":                  providerIdCode = 70;
+    case "biBankPocztowyNowyPocztowy24":providerIdCode = 71;
+    case "biCashBill":                  providerIdCode = 72;
+    case "biNestBankRWD":               providerIdCode = 73;
+    case "biCA24RWD":                   providerIdCode = 74;
+    case "biFiobanka":                  providerIdCode = 75;
+    case "biBOSBank24":                 providerIdCode = 76;
+    case "biBNPParibasGOonline":        providerIdCode = 77;
+    case "biAllegroFinanseREST":        providerIdCode = 78;
+    case "biPekao24RWD":                providerIdCode = 79;
+    case "biINGiMoje":                  providerIdCode = 80;
+    case "biPayLane":                   providerIdCode = 81;
+    case "biBraintree":                 providerIdCode = 82;
+    case "biStripe":                    providerIdCode = 83;
+    case "biPayPalRESTAPI":             providerIdCode = 84;
+    case "biSantanderIBiznes24":        providerIdCode = 85;
+    case "biSGBBankSGB24":              providerIdCode = 86;
+    case "biAssecoEBP":                 providerIdCode = 87;
+    case "biSoftNeteBankNet":           providerIdCode = 88;
+    case "biIBSeBankOnline":            providerIdCode = 89;
+    case "biNovumInternetBanking":      providerIdCode = 90;
+    case "biSantanderConsumerBank":     providerIdCode = 91;
+    case "biNeoBank":                   providerIdCode = 92;
+  end;
+  return;
+end;
+
+global
+function string 255 emSzmalHost()
+begin
+  string 255 res;
+
+  res =  "web.emszmal.pl";
+
+  emSzmalHost = res;
+  return;
+end;
+
+global
+updating procedure EmSzmalStoreSessionDetails(record EmSzmalBlock EmSzmalBl)
+begin
+  BlockStore(EmSzmalBl);
+  return;
+end;
+
+function Date ParseDate(string datetime)
+begin
+  Date res;
+  string 255 d,year,month,day;
+  LongInt pos;
+
+  d = Left(datetime,10);
+  GetNextSubstring(d,pos,"-",year);
+  GetNextSubstring(d,pos,"-",month);
+  GetNextSubstring(d,pos,"-",day);
+  res.year = StringToInt(year);
+  res.month = StringToInt(month);
+  res.day = StringToInt(day);
+
+  ParseDate = res;
+  return;
+end;
+
+procedure emSzmalDestroySession()
+begin
+  string 255 res,jsr,sessionid;
+  Area a_req,a_reply;
+  json js;
+  record EmSzmalBlock EmSzmalBl;
+
+  BlockLoad(EmSzmalBl);
+
+  JSONStringStart(jsr); 
+  JSONStringAdd(jsr,"SessionId",EmSzmalBl.SessionId);
+  JSONStringMemberStart(jsr,"License");
+  jsr = jsr & "{";
+  JSONStringAdd(jsr,"APIId",EmSzmalBl.ApiId);
+  JSONStringPut(jsr,"APIKey",EmSzmalBl.ApiKey); 
+  JSONStringMemberEnd(jsr);  
+  JSONStringEnd(jsr);
+  AddTextToArea(jsr,a_req);
+  SetWebHeaders("Cookie:SessionId=" & EmSzmalBl.SessionId);
+  if (SendWebRequest(emSzmalHost,443,-1,true,"POST","api/Common/SayBye","","",false,a_req,a_reply,60)) then begin
+    EmSzmalBl.SessionId = "";
+    EmSzmalBl.SessionCreatedDate = "";
+    EmSzmalBl.SessionCreatedTime = "";
+    EmSzmalBl.AccountNumber = "";
+    qupdating.EmSzmalStoreSessionDetails(EmSzmalBl);
+  end;
+
+  return;
+end;
+
+
+function string 255 GetFullName(string description,string paydetails,string accountnr)
+begin
+  string 255 res,newlineinfo,name;
+  LongInt pos;
+
+  pos = 0;
+  while (GetNextSubstring(description,pos,chr(10),newlineinfo)) begin
+    name = StripCharacter(newlineinfo,chr(13));
+    if (paydetails!=name) and (accountnr!=name) then begin
+      res = res &  name;
+    end; 
+  end;
+  GetFullName = res;
+  return;
+end;
+
+global
+updating procedure emSzmalGetAccountHistoryReply(Area a_reply,Area replyheader,Boolean timedout)
+begin
+  json js,js2;
+  Integer i;
+  string 255 key,sum,ref,accountnr,type,description,amount;
+  string 255 tstr,partneraccountnr,paydetails;
+  record BankTRVc BankTRr,oBTRr;
+  record EmSzmalBlock EmSzmalBl;
+  Boolean found,successf;
+  area a_req,amyreply;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record SRBlock SRb;
+
+  BlockLoad(PMb);
+  BlockLoad(CYb);
+  BlockLoad(SRb);
+  BlockLoad(EmSzmalBl);
+ 
+
+  LogAreaToFile("reply.txt",a_reply);//leave for testing
+  js2 = ParseJSONArea(a_req);
+  if (JSONNodeExists(js2,"Data/AccountNumber")) then begin
+    accountnr = JSONGet(js2,"Data/AccountNumber");
+  end;
+  if (blank(accountnr)) then begin
+    GetBankAccPMRow(PMb,"",EmSzmalBl.AccountNumber,PMbrw);
+  end else begin
+    GetBankAccPMRow(PMb,"",accountnr,PMbrw);
+  end;
+  js = ParseJSONArea(a_reply);
+  if (GetAreaLength(a_reply)>=0) then begin
+    if (JSONNodeExists(js,"Error")) then begin
+      Messagebox(0,JSONGet(js,"Error/Message"));
+      goto LemSzmalGetAccountHistoryReply;
+    end;
+    i = 0;
+    while (JSONNodeExists(js,"Transactions/" & "[" & i & "]/TransactionRefNumber")) begin
+      key = "Transactions/" & "[" & i & "]";
+      sum = JSONGet(js,key & "/TransactionAmount");
+      ref = JSONGet(js,key & "/TransactionRefNumber");
+      type = JSONGet(js,key & "/TransactionType");
+      RecordClear(BankTRr);
+      BankTRr.Reference = ref;
+      if (ReadFirstKey("Reference",BankTRr,1,true)==false) then begin
+        RecordNew(BankTRr);
+        BankTRr.TRNumber = JSONGet(js,key & "/TransactionRefNumber");
+        BankTRr.Reference = ref & " " & type;
+        BankTRr.TransDate = ParseDate(JSONGet(js,key & "/TransactionBookingDate"));
+        amount = StripCharacter(sum,"-");
+        //BankTRr.Sum = StringToVal(amount,M4Val);
+        BankTRr.Sum = StringToValue(amount,M4Val,"",".");
+        tstr = JSONGet(js,key & "/TransactionPaymentDetails");
+        description = JSONGet(js,key & "/TransactionDescription");
+        paydetails = JSONGet(js,key & "/TransactionPaymentDetails");
+        partneraccountnr = JSONGet(js,key & "/TransactionPartnerAccountNo");
+        BankTRr.CurncyCode = "PLN" ;
+        switch (Left(sum,1)) begin
+          case "-":
+            BankTRr.PayName = CYb.CompName;
+            BankTRr.PayTransDate = "";
+            if (nonblank(accountnr)) then begin
+              BankTRr.PayBankAcc = accountnr;
+            end else begin
+              BankTRr.PayBankAcc = EmSzmalBl.AccountNumber;
+            end;
+            BankTRr.TypeRef = "D";
+            BankTRr.RcpTransDate = ParseDate(JSONGet(js,key & "/TransactionOperationDate"));
+            BankTRr.RcpName = GetFullName(description,paydetails,partneraccountnr);
+            if (nonblank(tstr)) then begin
+              BankTRr.RcpReference = tstr;
+              BankTRr.Comment = tstr;
+            end else begin
+              BankTRr.Comment = JSONGet(js,key & "/TransactionDescription");
+            end;
+            BankTRr.RcpBankAcc = StripNonDigits(JSONGet(js,key & "/TransactionPartnerAccountNo"));
+          otherwise
+            BankTRr.RcpName = CYb.CompName;
+            BankTRr.RcpTransDate = "";
+            if (nonblank(accountnr)) then begin
+              BankTRr.RcpBankAcc = accountnr;
+            end else begin
+              BankTRr.RcpBankAcc = EmSzmalBl.AccountNumber;
+            end;
+            BankTRr.TypeRef = "C";
+            BankTRr.PayTransDate = ParseDate(JSONGet(js,key & "/TransactionOperationDate"));
+            BankTRr.PayName = GetFullName(description,paydetails,partneraccountnr);
+            if (nonblank(tstr)) then begin
+              BankTRr.PayReference = tstr;
+              BankTRr.Comment = tstr;
+            end else begin
+              BankTRr.Comment = JSONGet(js,key & "/TransactionDescription");
+            end;
+            BankTRr.PayBankAcc = StripNonDigits(JSONGet(js,key & "/TransactionPartnerAccountNo"));  
+          end;
+
+          oBTRr.TRNumber = BankTRr.TRNumber;
+          if (ReadFirstKey("TRNumber",oBTRr,1,true)==false) then begin
+            BankTRr.SerNr = NextSerNr("BankTRVc",BankTRr.TransDate,-1,false,"");
+            if (BankTRr.SerNr>0) then begin
+              RecordStore(BankTRr,false);
+              if (nonblank(BankTRr.Comment)) then begin
+                if (FindStringInString(BankTRr.Comment,"/VAT/")) then begin
+                  CreateReceipt(SRb,PMbrw.Code,BankTRr,true);
+                end;
+              end;
+            end;
+          end;
+      end;
+      i = i + 1;
+      successf = true;
+    end;
+  end else begin
+    ClientDisplayErrorMessage("",0,USetStr(42974));
+  end;
+  if (successf) then begin
+    if (ServerMode) then begin
+      AllClientsRemoteAsync.ClientDisplayErrorMessage("",0,USetStr(15092));
+    end else begin
+      ClientDisplayErrorMessage("",0,USetStr(15092));
+    end;
+  end;
+  emSzmalDestroySession;
+  
+LemSzmalGetAccountHistoryReply:;
+  return;
+end;
+
+global
+procedure emSzmalGetAccountHistory(record RcVc RepSpec,integer bankrecon)
+begin
+  string 255 jsr,providernumber;
+  Area a_req,a_reply;
+  json js;
+  record EmSzmalBlock EmSzmalBl;
+
+  BlockLoad(EmSzmalBl);
+  JSONStringStart(jsr); 
+  JSONStringAdd(jsr,"SessionId",EmSzmalBl.SessionId);
+  GetProviderId(RepSpec.f4,providernumber);
+  JSONNotStringAdd(jsr,"ProviderId",providernumber);
+  JSONStringAdd(jsr,"ProviderConfiguration","");
+  JSONStringMemberStart(jsr,"Authentication");
+  jsr = jsr & "{";
+  JSONStringAdd(jsr,"UserLogin",RepSpec.f2);
+  JSONStringAdd(jsr,"UserPassword",RepSpec.f3);
+  JSONStringAdd(jsr,"UserContext",RepSpec.f5);
+  JSONStringPut(jsr,"TokenValue","");
+  JSONStringMemberEnd(jsr); 
+  jsr = jsr & ","; 
+  JSONStringMemberStart(jsr,"License");
+  jsr = jsr & "{";
+  JSONStringAdd(jsr,"APIId",EmSzmalBl.ApiId);
+  JSONStringPut(jsr,"APIKey",EmSzmalBl.ApiKey); 
+  JSONStringMemberEnd(jsr);  
+  jsr = jsr & ",";
+  JSONStringMemberStart(jsr,"Data");
+  jsr = jsr & "{";
+  JSONStringAdd(jsr,"AccountNumber",RepSpec.f1);
+  JSONStringAdd(jsr,"DateSince",DateToString(RepSpec.sStartDate,"YYYY-MM-DD"));
+  JSONStringPut(jsr,"DateTo",DateToString(RepSpec.sEndDate,"YYYY-MM-DD"));
+  JSONStringMemberEnd(jsr);
+  JSONStringEnd(jsr);
+
+  AddTextToArea(jsr,a_req);
+
+  SetWebHeaders("Cookie:SessionId=" & EmSzmalBl.SessionId);
+  EmSzmalBl.AccountNumber = RepSpec.f1;
+  qupdating.EmSzmalStoreSessionDetails(EmSzmalBl);
+  SendAsyncWebRequest(emSzmalHost,443,-1,true,"POST","/api/Accounts/GetAccountHistory","application/json","",a_req,"emSzmalGetAccountHistoryReply",500);
+
+  if (bankrecon==0) then begin
+    if (RepSpec.flags[0]==0) then begin
+      EmSzmalAuthCodesm;
+    end;
+  end else begin
+    if (RepSpec.flags[0]==0) then begin
+      EmSzmalAuthCode2sm;
+    end;
+  end;
+
+  //LogAreaToFile("historyreq" & ".txt",a_req);
+
+  return;
+end;
+
+global
+function boolean emSzmalDoSecondPhaseAuthenticationData(string authcode,string login,string password,string provider,string usercontext)
+begin
+  string 255 jsr,providernumber;
+  Area a_req,a_reply;
+  json js;
+  Boolean res;
+  record EmSzmalBlock EmSzmalBl;
+
+  BlockLoad(EmSzmalBl);
+  JSONStringStart(jsr); 
+  JSONStringAdd(jsr,"SessionId",EmSzmalBl.SessionId); 
+  GetProviderId(provider,providernumber);
+  JSONNotStringAdd(jsr,"ProviderId",providernumber);
+  JSONStringAdd(jsr,"ProviderConfiguration","");
+  JSONStringMemberStart(jsr,"Authentication");
+  jsr = jsr & "{";
+  JSONStringAdd(jsr,"UserLogin",login);
+  JSONStringAdd(jsr,"UserPassword",password);
+  JSONStringAdd(jsr,"UserContext",usercontext);
+  JSONStringPut(jsr,"TokenValue","");
+  JSONStringMemberEnd(jsr);  
+  jsr = jsr & ",";
+  JSONStringMemberStart(jsr,"License");
+  jsr = jsr & "{";
+  JSONStringAdd(jsr,"APIId",EmSzmalBl.ApiId);
+  JSONStringPut(jsr,"APIKey",EmSzmalBl.ApiKey);
+  JSONStringMemberEnd(jsr);  
+  jsr = jsr & ",";
+  JSONStringPut(jsr,"AuthenticationCode",authcode);
+  JSONStringEnd(jsr);
+  AddTextToArea(jsr,a_req);
+  SetWebHeaders("Cookie:SessionId=" & EmSzmalBl.SessionId);
+  res = SendWebRequest(emSzmalHost,443,-1,true,"POST","/api/SessionManager/DoSecondPhaseAuthentication","","",false,a_req,a_reply,60);
+  // LogAreaToFile("DOSECONDAUTHreply" & ".txt",a_reply);
+  // LogAreaToFile("DOSECONDAUTHreq" & ".txt",a_req);
+  if (res) then begin 
+  end else begin
+    ClientDisplayErrorMessage("",0,USetStr(42975));
+  end;
+  emSzmalDoSecondPhaseAuthenticationData = res;
+  return;
+end;
+
+global
+procedure emSzmalGetAccountsListReply(Area a_reply,Area replyheader,Boolean timedout)
+begin
+  json js;
+  Integer i,l;
+  string 255 key,accountnr,currency,accountfunds,accounbal;
+  record EmSzmalBlock EmSzmalBl;
+  array string 255 aaccountnr,acurrency,aaccounbal,aaccountfunds;
+  string 255 tstr;
+  integer rw;
+
+  //LogAreaToFile("emSzmalGetAccountsListReply" & ".txt",a_reply);
+  
+  StartReportJob(USetStr(42971));
+  EndHeader;
+
+  SetRepCol(2,250);
+  SetRepCol(3,350);
+  SetRepCol(1,450);
+
+  StartFormat(15);
+  OutString(0,0,USetStr(42967),false);
+  OutString(2,0,USetStr(42969),false);
+  OutString(3,0,USetStr(42970),false);
+  OutString(1,0,USetStr(42968),false);
+  EndFormat;
+  Gray_Divider(0,1);
+
+ //AddFileToArea("emsszmal/text.txt",a_reply,false);
+ //LogAreaToFile("emsszmal/_emSzmalGetAccountsListReply_reply" & ".txt",a_reply);
+  
+  BlockLoad(EmSzmalBl);
+  js = ParseJSONArea(a_reply);
+  if (JSONNodeExists(js,"Accounts")) then begin
+    while (JSONNodeExists(js,"Accounts/" & "[" & i & "]")) begin
+      key = "Accounts/" & "[" & i & "]";
+      aaccountnr[i] = JSONGet(js,key & "/AccountNumber");
+      acurrency[i] = JSONGet(js,key & "/AccountCurrency");
+      aaccountfunds[i] =JSONGet(js,key & "/AccountAvailableFunds");
+      aaccounbal[i] = JSONGet(js,key & "/AccountBalance");
+      i = i + 1;
+    end;
+  end else begin
+    if (JSONNodeExists(js,"Error")) then begin
+      ClientDisplayErrorMessage("",0,JSONGet(js,"Error/Message"));
+    end;
+  end;
+  for (l=0;l<i;l=l+1) begin 
+    StartFormat(15);
+    OutString(0,0,aaccountnr[l],false);
+    OutString(2,0,aaccountfunds[l],false);
+    OutString(3,0,aaccounbal[l],false);
+    OutString(1,0,acurrency[l],false);
+    EndFormat;
+  end;
+  emSzmalDestroySession;
+  EndJob;
+  return;
+end;
+
+global
+procedure emSzmalGetAccountsList(record BankVc Bankr)
+begin
+  string 255 jsr;
+  Area a_req;
+  json js;
+  record EmSzmalBlock EmSzmalBl;
+  string 255 providernumber;
+  record RcVc RepSpec;
+
+  BlockLoad(EmSzmalBl);
+  JSONStringStart(jsr); 
+  JSONStringAdd(jsr,"SessionId",EmSzmalBl.SessionId);
+  GetProviderId(Bankr.emSzmalBankProvider,providernumber);
+  JSONNotStringAdd(jsr,"ProviderId",providernumber);
+  JSONStringAdd(jsr,"ProviderConfiguration","");
+  JSONStringMemberStart(jsr,"Authentication");
+  jsr = jsr & "{";
+  JSONStringAdd(jsr,"UserLogin",Bankr.emSzmalBankLogin);
+  JSONStringAdd(jsr,"UserPassword",Bankr.emSzmalBankPassword);
+  JSONStringAdd(jsr,"UserContext",Bankr.emSzmalBankUserContext);
+  JSONStringPut(jsr,"TokenValue","");
+  JSONStringMemberEnd(jsr);  
+  jsr = jsr & ",";
+  JSONStringMemberStart(jsr,"License");
+  jsr = jsr & "{";
+  JSONStringAdd(jsr,"APIId",EmSzmalBl.ApiId);
+  JSONStringPut(jsr,"APIKey",EmSzmalBl.ApiKey); 
+  JSONStringMemberEnd(jsr);  
+  JSONStringEnd(jsr);
+  AddTextToArea(jsr,a_req);
+
+  SetWebHeaders("Cookie:SessionId=" & EmSzmalBl.SessionId);
+  //LogAreaToFile("emSzmalGetAccountsList_request" & ".txt",a_req);
+  SendAsyncWebRequest(emSzmalHost,443,-1,true,"POST","/api/Accounts/GetAccountsList","application/json","",a_req,"emSzmalGetAccountsListReply",600);
+  
+  if (Bankr.SkipSms==0) then begin
+    EmSzmalAuthCodesm;
+  end;
+  
+  return;
+end;
+
+
+global
+procedure DoEmSzmalStartSessionRemote(Integer sessiontype)
+begin
+  string 255 jsr;
+  Area a_req,a_reply;
+  json js;
+  string 255 sessionid;
+  record EmSzmalBlock EmSzmalBl;
+  Boolean res;
+
+  BlockLoad(EmSzmalBl);
+  if (blank(EmSzmalBl.ApiId)) then begin  ClientDisplayErrorMessage("",0,USetStr(42960)); goto LDoEmSzmalStartSessionRemote; end;
+  if (blank(EmSzmalBl.ApiKey)) then begin ClientDisplayErrorMessage("",0,USetStr(42961)); goto LDoEmSzmalStartSessionRemote; end;
+
+  JSONStringStart(jsr); 
+  JSONStringMemberStart(jsr,"License");
+  jsr = jsr & "{";
+  JSONStringAdd(jsr,"APIId",EmSzmalBl.ApiId);
+  JSONStringPut(jsr,"APIKey",EmSzmalBl.ApiKey); 
+  JSONStringMemberEnd(jsr);  
+  JSONStringEnd(jsr);
+  AddTextToArea(jsr,a_req);
+  //LogAreaToFile("emsszmal/_HistoryemSzmalSayHello_request" & ".txt",a_req);
+  res = SendWebRequest(emSzmalHost,443,-1,true,"POST","/api/Common/SayHello","application/json","",false,a_req,a_reply,20);
+  //LogAreaToFile("emsszmal/_HistoryemSzmalSayHello_reply" & ".txt",a_reply);
+  if (res) then begin
+    js = ParseJSONArea(a_reply);
+    if nonblank(JSONGet(js,"SessionId")) then begin
+      sessionid = JSONGet(js,"SessionId"); 
+      EmSzmalBl.SessionId = sessionid;
+      EmSzmalBl.SessionCreatedDate = CurrentDate;
+      EmSzmalBl.SessionCreatedTime = CurrentTime;
+      qupdating.EmSzmalStoreSessionDetails(EmSzmalBl);
+      if (sessiontype==1) then begin
+        emSzmalGetAccountsListDsm;
+      end;
+    end else begin
+      if (JSONNodeExists(js,"Error")) then begin
+        ClientDisplayErrorMessage("",0,JSONGet(js,"Error/Message"));
+      end;
+    end;
+  end;
+LDoEmSzmalStartSessionRemote:;
+  return;
+end;
+
+/*
+not needed
+function boolean emSzmalGetSecondPhaseAuthenticationData(record EmSzmalBlock EmSzmalBl)
+begin
+  string 255 tstr,id,key,jsr,sessionId;
+  Area a_req,a_reply;
+  json js;
+  Boolean res;
+  
+  JSONStringStart(jsr); 
+  JSONStringAdd(jsr,"SessionId",EmSzmalBl.SessionId);
+  JSONNotStringAdd(jsr,"ProviderId",65);
+  JSONStringAdd(jsr,"ProviderConfiguration","");
+  JSONStringMemberStart(jsr,"Authentication");
+  jsr = jsr & "{";
+  JSONStringAdd(jsr,"UserLogin","");
+  JSONStringAdd(jsr,"UserPassword","");
+  JSONStringAdd(jsr,"UserContext","");
+  JSONStringPut(jsr,"TokenValue","");
+  JSONStringMemberEnd(jsr);  
+  jsr = jsr & ",";
+  JSONStringMemberStart(jsr,"License");
+  jsr = jsr & "{";
+  JSONStringAdd(jsr,"APIId",EmSzmalBl.ApiId);
+  JSONStringPut(jsr,"APIKey",EmSzmalBl.ApiKey);
+  JSONStringMemberEnd(jsr);  
+  JSONStringEnd(jsr);
+  AddTextToArea(jsr,a_req);
+
+  SetWebHeaders("Cookie:SessionId=" & EmSzmalBl.SessionId);
+
+  res = SendWebRequest(emSzmalHost,443,-1,true,"POST","/api/SessionManager/GetSecondPhaseAuthenticationData","application/json","",false,a_req,a_reply,60);
+
+  if (res) then begin
+    js = ParseJSONArea(a_reply);
+    if (JSONNodeExists(js,"AuthenticationMethod")) then begin
+      LogText(0,JSONGet(js,"AuthenticationMethod"));
+      LogText(0,JSONGet(js,"AuthenticationCodeHint"));
+    end else begin
+    end;
+  end else begin
+    logtext(0,"GetSecondPhaseAuthenticationData request failed");
+  end;
+  emSzmalGetSecondPhaseAuthenticationData = res;
+  return;
+end;
+*/
+
+global
+function Longint EmSzmalHistoryAccRecon(string accountnr,string period)
+begin
+  Integer wn,nwn;
+  record RcVc RepSpec;
+  record BankVc Bankr;
+  record EmSzmalBlock EmSzmalBl;
+  Boolean testf,TrHs;
+  LongInt res;
+
+  res = 0;
+  DoEmSzmalStartSessionRemote(0);
+  BlockLoad(EmSzmalBl);
+  if (nonblank(EmSzmalBl.SessionId)) then begin
+    TrHs = true;
+    while (LoopMain(Bankr,1,TrHs)) begin
+      testf = false;
+      if (Bankr.Nr2 == accountnr) then begin
+         testf = true;
+         TrHs = false;
+      end;
+    end;
+    if (testf) then begin
+      if (blank(Bankr.emSzmalBankLogin)) then begin
+        res = 42965;
+        goto LEmSzmalHistoryAccRecon;
+      end;
+      if (blank(Bankr.emSzmalBankPassword)) then begin
+        res = 42964;
+        goto LEmSzmalHistoryAccRecon;
+      end;
+      if (blank(Bankr.emSzmalBankProvider)) then begin
+        res = 42963;
+        goto LEmSzmalHistoryAccRecon;
+      end;
+      RepSpec.f1 = Bankr.Nr2;
+      RepSpec.f2 = Bankr.emSzmalBankLogin;
+      RepSpec.f3 = Bankr.emSzmalBankPassword;
+      RepSpec.f4 = Bankr.emSzmalBankProvider;
+      RepSpec.sStartDate = Left(period,10);
+      RepSpec.sEndDate = Right(period,10);
+      RepSpec.flags[0] = Bankr.SkipSms;
+      RepSpec.f5 = Bankr.emSzmalBankUserContext;
+      emSzmalGetAccountHistory(RepSpec,1);
+    end;
+  end;
+
+LEmSzmalHistoryAccRecon:;
+  EmSzmalHistoryAccRecon = res;
+  return;
+end;

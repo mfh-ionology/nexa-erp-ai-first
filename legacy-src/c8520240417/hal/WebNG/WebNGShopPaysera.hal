@@ -1,0 +1,472 @@
+external function Boolean IsMarketplaceServer();
+external procedure MkplSetCurrentCustomerCompany(string);
+external function Boolean BuildWebNGInvoice(var record IVVc,integer,string,boolean,string);
+//tools
+external procedure ShowRedirectHtmlFromArea(area,boolean);
+external function string 255 FormatLink(string,string,boolean,boolean);
+external function boolean LoginState();
+//translation
+external function string 255 ToolWebNGTranslateText(integer);
+//shop
+external updating procedure ShopHandleCreditCardPayment(string);
+external updating procedure ShopHandlePaymentFailed(string,Integer);
+external procedure RedirectToPaymentCompletedPage(record WebNGPaySessionVc);
+external function boolean GetShoppingBasket(var record WebNGShopBasketVc,integer);
+external procedure RedirectToShoppingBasket();
+//std
+external function string 255 UrlEncodeCS(string);
+//webng
+external procedure RedirectToShopPageWithArg(string,string);
+external procedure RedirectToURL(string);
+//
+external procedure FindCCAccountID(string,string,Integer,var record CCAccountIDVc,Integer);
+external function Integer InString2(string,string);
+external procedure GetCountryName(string,string,var string);
+external procedure FindPaymentGateway(string,string,Integer,var record CCAccountIDVc,Integer,Integer);
+external function Boolean IsMarketplaceServer();
+external updating function Boolean CreateSubscriptionsFromShoppingBasket2(string,string,var Date,var LongInt,var LongInt);
+external updating function Boolean DoSubscriptionTransMn(var record RcVc);
+external updating procedure ClearShopBasket(integer);
+external updating function Boolean DoSubscriptionTransPayMn(var record RcVc);
+external function string 255 GetLinkToShop();
+external procedure LogAreaToFile(string,area);
+external procedure BitSafeBase64EncodeAnArea(var area);
+external procedure ShowRedirectHtml(string,boolean);
+
+
+function boolean GetPaySession(string id,var record WebNGPaySessionVc WPSr,Boolean ignorelogin)
+begin
+  boolean res;
+
+  res = false;
+  if (ignorelogin or LoginState) then begin
+    WPSr.UUID = id;
+    res = ReadFirstMain(WPSr,1,true);
+  end;
+  GetPaySession = res;
+  return;
+end;
+
+procedure GetCUPersonData(string custcode,var string firstname,var string lastname,var string email,var string addr1,var string addr2,var string addr3,var string postcode,var string country,var string phone)
+begin
+  record CUVc CUr;
+  string 60 tstr;
+  longint l;
+  
+  CUr.Code = custcode;
+  if (ReadFirstMain(CUr,1,true)) then begin
+    if (nonblank(CUr.Person)) then begin
+      l = InString2(CUr.Person," ");
+      if (l!=-1) then begin
+        lastname = mid(CUr.Person,l+1,255);
+        firstname = left(CUr.Person,l);
+      end else begin
+        firstname = CUr.Person;
+        lastname = "";
+      end;
+    end;
+    email = CUr.eMail;
+    addr1 = CUr.InvAddr0;
+    addr2 = CUr.InvAddr1;
+    addr3 = CUr.InvAddr2;
+    postcode = CUr.InvAddr4;
+    country = CUr.CountryCode;
+    if (nonblank(country) and len(country)<>3) then begin
+      GetCountryName(CUr.CountryCode,"",tstr);    
+    end;
+    country = tstr;
+    phone = CUr.Phone;
+  end;
+  
+  return;
+end;
+
+global
+procedure RedirectTopaysera2(string paysessionid,val datasecval)
+begin
+  record CCAccountIDVc CCAccountIDr;
+  record CYBlock CYb;
+  record WebNGPaySessionVc WPSr;
+  string 255 tourl,amount,authcode,tstr,link,link2,link3;
+  string 255 accesscode;
+  string 255 merchant;
+  string 255 returnurl;
+  string 255 custom,base,md5base64str,script,teststr;
+  string 255 firstname,lastname,addr1,addr2,addr3,email,postcode,country,phone,customer;
+  area areq,areq1,areq2,areq3;
+  record WebNGShopBasketVc WSBr;
+  record IVVc IVr;
+  record CUVc CUr;
+  Integer oldcomp;
+  LongInt fsz,lines,l;
+  record CCMerchantIDVc CCMerchantIDr;
+  val vamount;
+
+  if (IsMarketplaceServer) then begin
+    oldcomp = CurrentCompany;
+    MkplSetCurrentCustomerCompany(CurrentCust);
+  end;
+  if (GetPaySession(paysessionid,WPSr,false)==false) then begin
+    goto LRedirectTopaysera;
+  end;
+  BlockLoad(CYb);
+  CUr.Code = WPSr.CustCode;
+  ReadFirstMain(CUr,1,true);
+  if (IsMarketplaceServer) then begin
+    // tourl = "https://www.paysera.com/pay";  Live one
+//  FindCCAccountID(WPSr.Currency,"",1,CCAccountIDr,kCardHolderNotPresent);
+    FindPaymentGateway(WPSr.Currency,"",1,CCAccountIDr,kCardHolderNotPresent,16); //kCCPartnerPaysera
+    tourl = CCAccountIDr.URL;
+    if(blank(tourl)) then begin
+      RedirectToShopPageWithArg("payment/error","errmsg=" & ToolWebNGTranslateText(25061));
+      goto LRedirectTopaysera;
+    end;
+    if (GetShoppingBasket(WSBr,0)) then begin
+      if (BuildWebNGInvoice(IVr,0,CUr.PayDeal,false,"")) then begin      
+        vamount = IVr.Sum4;
+      end else begin
+        vamount = WSBr.Sum;
+      end;
+    end;
+  end else begin
+    tourl = "https://www.paysera.com/pay";
+    FindCCAccountID(WPSr.Currency,"",1,CCAccountIDr,kCardHolderNotPresent);
+    if (GetShoppingBasket(WSBr,0)) then begin
+      vamount = WPSr.InclAmount;
+      customer = WSBr.CustCode;
+    end;
+  end;
+  
+  if (datasecval>0) then begin
+    vamount = vamount + datasecval;
+  end;
+  amount = ValToString(vamount,M4Val,"","",0);
+
+  accesscode = CCAccountIDr.AccessKey;
+  merchant = CCAccountIDr.ProfileID;
+  CCMerchantIDr.Code = CCAccountIDr.MerchantID;
+  if (ReadFirstMain(CCMerchantIDr,1,true)) then begin
+    if (CCMerchantIDr.LiveFlag==0) then begin
+      teststr = "&test=1";
+    end;
+  end;
+  if (WebSecureMode) then begin
+    returnurl = "https://" & Webhost;
+  end else begin
+    returnurl = "http://" & Webhost;
+  end;
+  base = GetLinkToShop;
+  link = FormatLink("/WebUpdatingAction.hal","action=payseraproceed&session=" & paysessionid,true,true);
+  link2 = returnurl & base & "payment/cancel/" & paysessionid;
+  link3 = FormatLink("/WebUpdatingAction.hal","action=payseracallback&session=" & paysessionid,true,true);
+  custom = paysessionid;
+  GetCUPersonData(WPSr.CustCode,firstname,lastname,email,addr1,addr2,addr3,postcode,country,phone);
+  md5base64str = Base64Encode("projectid=" & UrlEncodeCS(merchant) &
+              "&orderid=" & UrlEncodeCS(left(paysessionid,40))  &
+              "&amount=" & UrlEncodeCS(amount) &
+              "&currency=" & UrlEncodeCS(WPSr.Currency) &
+              "&paytext=" & UrlEncodeCS(tstr) &
+              "&accepturl=" & UrlEncodeCS(returnurl) & UrlEncodeCS(link) &
+              "&callbackurl=" & UrlEncodeCS(returnurl) & UrlEncodeCS(link3) &
+              "&version=1.6" &
+              "&control=" & custom &
+              "&cancelurl=" & UrlEncodeCS(link2) &
+              "&p_firstname=" & UrlEncodeCS(firstname) &
+              "&p_lastname=" & UrlEncodeCS(lastname) &
+              "&p_email=" & UrlEncodeCS(email) &
+              "&p_street=" & UrlEncodeCS(addr1) &
+              "&p_city=" & UrlEncodeCS(addr2) &
+              "&p_state=" & UrlEncodeCS(addr3) &
+              "&p_zip=" & UrlEncodeCS(postcode) &
+              "&p_countrycode=" & country
+              );
+//  logtext(0,md5base64str);
+  md5base64str = md5string(md5base64str & accesscode);
+//  logtext(0,md5base64str);
+  AddTextToArea(tourl,areq);
+  AddTextToArea("projectid=" & UrlEncodeCS(merchant),areq1);
+  AddTextToArea("&orderid=" & UrlEncodeCS(left(paysessionid,40)),areq1);
+  AddTextToArea("&amount=" & UrlEncodeCS(amount),areq1);
+  AddTextToArea("&currency=" & UrlEncodeCS(WPSr.Currency),areq1);
+  tstr = CYb.BusinessName;
+  if (nonblank(tstr)) then begin
+    AddTextToArea("&paytext=" & UrlEncodeCS(tstr),areq1);
+  end;
+  AddTextToArea(teststr,areq1);
+
+  AddTextToArea("&accepturl=",areq1);
+  AddTextToArea(UrlEncodeCS(returnurl),areq1);
+  AddTextToArea(UrlEncodeCS(link),areq1);
+  
+  AddTextToArea("&callbackurl=",areq1);
+  AddTextToArea(UrlEncodeCS(returnurl),areq1);
+  AddTextToArea(UrlEncodeCS(link3),areq1);
+  //AddTextToArea("&sign_password=" & accesscode,areq1); //"5efce23c2356204e000a8a6ffc7d9bc9"
+
+  AddTextToArea("&version=1.6",areq1);
+  AddTextToArea("&control=" & custom,areq1);
+
+  AddTextToArea("&cancelurl=",areq1);
+  AddTextToArea(UrlEncodeCS(link2),areq1);
+  
+  if (nonblank(firstname)) then begin
+    AddTextToArea("&p_firstname=" & UrlEncodeCS(firstname),areq1);
+  end;
+  
+  if (nonblank(lastname)) then begin
+    AddTextToArea("&p_lastname=" & UrlEncodeCS(lastname),areq1);
+  end;
+  
+  if (nonblank(email)) then begin
+    AddTextToArea("&p_email=" & UrlEncodeCS(email),areq1);
+  end;
+  
+  if (nonblank(addr1)) then begin
+    AddTextToArea("&p_street=" & UrlEncodeCS(addr1),areq1);
+  end;
+  
+  if (nonblank(addr2)) then begin
+    AddTextToArea("&p_city=" & UrlEncodeCS(addr2),areq1);
+  end;
+  
+  if (nonblank(addr3)) then begin
+    AddTextToArea("&p_state=" & UrlEncodeCS(addr3),areq1);
+  end;
+  
+  if (nonblank(postcode)) then begin
+    AddTextToArea("&p_zip=" & UrlEncodeCS(postcode),areq1);
+  end;
+  if (nonblank(country)) then begin
+    AddTextToArea("&p_countrycode=" & UrlEncodeCS(country),areq1);
+  end else begin
+//    AddTextToArea("&p_countrycode=" & UrlEncodeCS(customer),areq1);
+  end;
+  
+  LogAreaToFile("PayseraData.txt",areq1);
+  script = "bash -c '( ";
+  script = script & "rm -r PayseraData_base64.txt ";
+  script = script & " )' ";
+  RunShellScript(script);
+  
+  script = "bash -c '( ";
+  script = script & "base64 ";
+  script = script & "PayseraData.txt >> PayseraData_base64.txt";
+  script = script & " )' ";
+  RunShellScript(script);    
+  
+//  script = "bash -c '( ";
+//  script = script & "rm -r PayseraData_base64_nonl.txt ";
+//  script = script & " )' ";
+//  RunShellScript(script);
+  
+//  script = "bash -c '( ";
+//  script = script & "tr -d '\n' < PayseraData_base64.txt >> PayseraData_base64_nonl.txt";
+//  script = script & " )' ";
+//  RunShellScript(script);
+  
+  
+//  BitSafeBase64EncodeAnArea(areq1);
+//  AreaBase64Encode(areq2,areq1);
+//  LogAreaToFile("1_areq2.txt",areq2);
+  SetAreaZeroSize(areq2);
+  fsz = FileSize("PayseraData_base64.txt");//debug Code
+  LoadFileToArea("PayseraData_base64.txt",0,fsz,areq2);
+  
+  AddTextToArea("/?data=",areq);
+  lines = CountLinesInArea(areq2);  
+  for (l=0;l<lines;l=l+1) begin
+    tstr = GetLineFromArea(areq2,l);
+    AddTextToArea(tstr,areq);
+    AddTextToArea(tstr,areq3);
+  end;
+ 
+  AddTextToArea(accesscode,areq3);
+//  LogAreaToFile("2_accesscode.txt",areq3);
+  
+  md5base64str = md5area(areq3);
+//  LogAreaToFile("3_md5area.txt",areq3);
+//  AddTextToArea("/?projectid=" & UrlEncodeCS(merchant),areq);
+  AddTextToArea("&sign=" & LowerCase(md5base64str),areq);
+//  LogAreaToFile("test1.txt",areq1);
+//  LogAreaToFile("4_result_of_paysera.txt",areq);
+  ShowRedirectHtmlFromArea(areq,true);
+LRedirectTopaysera:;
+  if (IsMarketplaceServer) then begin
+    ResetCompany(oldcomp);
+  end;
+  return;
+end;
+
+global
+procedure RedirectTopaysera(string paysessionid)
+begin
+
+  RedirectTopaysera2(paysessionid,blankval);
+
+  return;
+end;
+
+global
+updating procedure ShopPaymentPayseraRedirectAfter2(string paysessionid,string response)
+begin
+  string 255 errmsg;
+  record WebNGPaySessionVc WPSr;
+  record WebNGShopBasketVc WSBr;
+  integer err,i,rwcnt;
+  record RcVc RepSpec;
+  string 255 langcode;
+  Integer oldcomp;
+  Date payuntil;
+  
+  err = 0;
+  if (IsMarketplaceServer) then begin
+    oldcomp = CurrentCompany;
+    MkplSetCurrentCustomerCompany(CurrentCust);
+  end;
+  if (GetPaySession(paysessionid,WPSr,false)==false) then begin
+    err = err + 1;
+  end;
+  if (WPSr.AppID==1) then begin
+    if (GetShoppingBasket(WSBr,0)==false) then begin
+      err = err + 2;
+    end;
+  end;
+  if (response == "FAIL") then begin
+    err = err + 4;
+  end;
+
+  if (err == 0) then begin
+    if (WPSr.Status == 10 + kCCStatusPaymentOK) then begin
+      if (IsMarketplaceServer) then begin
+        langcode = GetCookie("langcode");
+        CreateSubscriptionsFromShoppingBasket2("paysera",langcode,payuntil,RepSpec.long1,RepSpec.FirstVer);
+//we prolonging Subscritpion in DoSubscriptionTransMn
+        RepSpec.d1 = payuntil;
+        if (blankdate(RepSpec.d1)) then begin
+          RepSpec.d1 = CurrentDate;
+        end;
+        RepSpec.f5 = CurrentCust;
+        RepSpec.OnlyUnprntd = 1;
+        RepSpec.RecordUUID = StringtoUUID(paysessionid);
+        DoSubscriptionTransMn(RepSpec);
+        if (RepSpec.LastVer>-1) then begin
+          RepSpec.RecordUUID = StringtoUUID(paysessionid);
+          DoSubscriptionTransPayMn(RepSpec);
+          ClearShopBasket(0);
+        end;
+        PutSessionString("reload_licenses","1"); 
+      end else begin
+        ShopHandleCreditCardPayment(WPSr.UUID);
+      end;
+    end;
+    if (IsMarketplaceServer) then begin
+      RedirectToURL("/subscriptions/recommended");
+    end else begin
+      RedirectToPaymentCompletedPage(WPSr);
+      ClearShopBasket(0);
+    end;
+  end else begin
+    if (BitAnd(err,1)!=0) then begin
+      errmsg = ToolWebNGTranslateText(25040); //Invalid payment session.
+    end;
+    if (BitAnd(err,2)!=0) then begin
+      errmsg = ToolWebNGTranslateText(25040); //Invalid payment session.
+    end;
+    if (BitAnd(err,4)!=0) then begin
+      errmsg = ToolWebNGTranslateText(25009); //Invalid payment session.
+    end;
+    RedirectToShopPageWithArg("payment/error","errmsg=" & errmsg);
+  end;
+  if (IsMarketplaceServer) then begin
+    ResetCompany(oldcomp);
+  end;
+  return;
+end;
+
+global
+updating procedure ShopPaymentPayseraRedirectAfter()
+begin
+  ShopPaymentPayseraRedirectAfter2("","");
+  return;
+end;
+
+global
+updating procedure ShopPaymentAfterpaysera2(string paysessionid, string response)
+begin
+  record WebNGPaySessionVc oldWPSr,WPSr;
+  integer err;
+  string 255 errmsg;
+  Integer oldcomp;
+
+  err = 0;
+  if (IsMarketplaceServer) then begin
+    oldcomp = CurrentCompany;
+    MkplSetCurrentCustomerCompany(CurrentCust);
+  end;
+  if (GetPaySession(paysessionid,WPSr,true)==false or blank(paysessionid)) then begin
+    err = err + 1;
+  end;
+  if (response == "FAIL") then begin
+    err = err + 4;
+  end;
+  if (WPSr.Status==10+kCCStatusPaymentOK) then begin//success
+    RedirectToURL(FormatLink("/WebUpdatingAction.hal","action=afterpayserament&session=" & paysessionid & "&status=" & response,true,true));
+  end else begin
+//    LogText(0,"paysera payment error: " & responseCode & " (paysession=" & paysessionid & ")");
+    ShopHandlePaymentFailed(WPSr.UUID,kCCStatusPaymentServerError);
+    errmsg = ToolWebNGTranslateText(25009);
+    RedirectToShopPageWithArg("payment/error","errmsg=" & errmsg);
+  end;
+
+LShopPaymentAfterpaysera:;
+  if (IsMarketplaceServer) then begin
+    ResetCompany(oldcomp);
+  end;
+  return;
+end;
+
+
+global
+updating procedure ShopPaymentPayseraCallback(string paysessionid, string data, string ss1, string ss2)
+begin
+  record CCAccountIDVc CCAccountIDr;
+  record WebNGPaySessionVc WPSr,oldWPSr;
+  string 255 md5base64str,substr,onestring,curncy;
+  longint pos;
+  
+  if (GetPaySession(paysessionid,WPSr,true)==false) then begin
+    goto LShopPaymentPayseraCallback;
+  end;
+  substr = base64decode(data);
+  while (GetNextSubstring(substr,pos,"&",onestring)) begin
+    if (left(onestring,9)=="currency=") then begin
+      curncy = right(onestring,3);
+      pos = len(substr);
+    end;
+  end;
+  if (blank(curncy)) then begin
+    LogText(0,"ERROR PayseraCallback; currency not found in callback!");
+  end;
+  if (IsMarketplaceServer) then begin
+    FindPaymentGateway(curncy,"",1,CCAccountIDr,kCardHolderNotPresent,16); //kCCPartnerPaysera
+  end else begin
+    FindCCAccountID(WPSr.Currency,"",1,CCAccountIDr,kCardHolderNotPresent);
+  end;
+  md5base64str = LowerCase(md5string(data & CCAccountIDr.AccessKey));
+  if (md5base64str==ss1) then begin
+    RecordCopy(oldWPSr,WPSr);
+    WPSr.Status = 10+kCCStatusPaymentOK;
+    RecordUpdate(oldWPSr,WPSr,false);
+  end;
+  WebOutString("OK");
+LShopPaymentPayseraCallback:;
+
+  return;
+end;
+
+global
+updating procedure ShopPaymentAfterpaysera()
+begin
+  ShopPaymentAfterpaysera2("","");
+  return;
+end;

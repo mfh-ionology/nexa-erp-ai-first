@@ -1,0 +1,52 @@
+remote procedure GetUserName(String,var String);
+remote procedure AddAllUsersToCallGroup(var record CallGroupVc);
+
+function Boolean CallGroupDClassUserCodeEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf)
+begin
+  Boolean res;
+  record CallGroupVc CGr;
+  row CallGroupVc CGrw;
+  record UserVc Userr;
+  string 255 username;
+  
+  res = true;
+  if (changedf!=0) then begin
+    GetWindowRecord(wn,CGr);
+    MatRowGet(CGr,rownr,CGrw);
+    GetUserName(CGrw.UserCode,username);
+    CGrw.UserName = username;
+    MatRowPut(CGr,rownr,CGrw);
+    PutWindowRecord(wn,CGr);
+  end;
+  
+  CallGroupDClassUserCodeEFAfter = res;
+  return;
+end;
+
+global
+function Boolean CallGroupDClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  
+  res = false;
+  switch (fieldname) begin
+    case "UserCode": res = CallGroupDClassUserCodeEFAfter(wn,fn,rownr,changed);
+  end;
+  
+  CallGroupDClassAfterEditField = res;
+  return;
+end;
+
+global
+procedure CallGroupDClassAddAllLsm()
+begin
+  record CallGroupVc CGr;
+  Integer wn;
+  
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,CGr);
+  AddAllUsersToCallGroup(CGr);
+  PutWindowRecord(wn,CGr);
+  return;
+end;

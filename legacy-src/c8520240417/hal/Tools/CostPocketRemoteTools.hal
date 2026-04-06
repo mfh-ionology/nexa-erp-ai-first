@@ -1,0 +1,1573 @@
+external procedure LogAreaToFile(string,Area);
+external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+external function Boolean CheckEmailStr(string);
+external procedure JSONStringStart(var string);
+external procedure JSONStringAdd(var string,string,string);
+external procedure JSONStringPut(var string,string,string);
+external procedure JSONStringEnd(var string);
+external procedure JSONStringMemberStart(var string,string);
+external procedure JSONStringMemberEnd(var string);
+external procedure JSONStringArrayStart(var string);
+external procedure JSONStringArrayEnd(var string);
+external procedure JSONNotStringAdd(var string,string,string);
+external procedure JSONNotStringPut(var string,string,string);
+external function Boolean ExpVc_PastePerson(var record ExpVc);
+external function Boolean GetNextCustNr(var string);
+external function Date DateFromString(string,string);
+external procedure ExpSumup(record ExpVc,var val);
+external procedure VISumup(record ViVc,var val);
+external function string 255 ServerDateFormat();
+external procedure PasteAccObj(string,var string);
+external procedure VICalcVals(var record VIVc);
+external function val CalculateVINettVal(record VIVc,Boolean);
+external procedure CalcExpRow(var record ExpVc,Integer);
+external function Boolean GetPD(var record PDVc);
+external procedure GetVATCodeRow(string,row VATCodeBlock);
+external function LongInt DateDiff(Date,Date);
+external function string 255 AccnNameStr(string);
+external procedure VIGetRate(var record VIVc);
+external function Boolean VATCodeExists(string);
+external procedure GetVATproc(string,Integer,var val);
+external procedure ExpGetRate(var record ExpVc);
+external procedure CalcExpRow(var record ExpVc,Integer);
+
+function string 255 CostPocketHost()
+begin
+  string 255 res;
+  record CostPocketBlock CPb;
+
+  BlockLoad(CPb);
+  switch (CPb.LiveFlag) begin
+    case 0: res = "api.costpocket.com";
+    case 1: res = "api.pre.costpocket.com";
+  end;
+  CostPocketHost = res;
+  return;
+end;
+
+function string 255 CostPocketHeader()
+begin
+  string 255 res;
+  record CostPocketBlock CPb;
+
+  BlockLoad(CPb);
+
+  res = "api-id: " & CPb.APIId;
+  res = res & chr(13) & chr(10);
+  res = res & "api-token: " & CPb.APIToken;
+  res = res & chr(13) & chr(10);
+
+  CostPocketHeader = res;
+  return;
+end;
+
+global 
+updating procedure StoreCostPocketBlock(record CostPocketBlock CPb)
+begin
+  BlockStore(CPb);
+  return;
+end;
+
+global
+updating procedure StoreAndReturnCostPocketBlock2(var record CostPocketBlock CPb)
+begin
+  BlockStore(CPb);
+  return;
+end;
+
+function string 10 FindUserCode(string name,string email)
+begin
+  string 10 res;
+  Boolean foundf;
+  record UserVc Userr;
+
+  foundf = false;
+  res = "";
+  Userr.emailAddr = email;
+  Userr.Closed = 0;
+  if (ReadFirstKey("emailAddr",Userr,2,true)) then begin
+   foundf = true;
+    if (Userr.Closed==1) then begin 
+      foundf = false;
+    end else begin
+       goto LFindUserCode;
+    end;
+  end;
+
+  if (foundf==false) then begin
+    ResetLoop(Userr);
+    Userr.Name = name;
+    while (LoopKey("Name",Userr,1,true)) begin
+      foundf = true;
+      if (Userr.Closed==1) then begin 
+        foundf = false; 
+      end else begin
+        goto LFindUserCode;
+      end;
+    end;
+  end;
+  if (foundf) then begin
+LFindUserCode:;
+    res = Userr.Code;
+  end;
+
+  FindUserCode = res;
+  return;
+end;
+
+function string 255 GenerateRandomHex(integer length)
+begin
+  string 100 ast;
+  LongInt pos;
+  LongInt i;
+  string 255 res,tstr;
+  
+  res = "";
+  Randomize;
+  ast = "0F3481ADE786F29523AAADECCBB123456FF987C2A3B4D6DD7EE8F922F33E5"; // 61 characters
+  for (i=0;i<length;i=i+1) begin
+    if (mod(i,8) == 0 and i!=0) then begin
+      res = res & "H";
+    end;
+    pos = Random(0,60);
+    tstr = Mid(ast,pos,1);
+    res = res & tstr;    
+  end;
+
+  GenerateRandomHex = res;
+  return;
+end;
+
+function string 255 GenerateCPToken()
+begin
+  string 255 res;
+  record CostPocketBlock CPb;
+
+  res = GenerateRandomHex(29);
+  GenerateCPToken = res;
+  return;
+end;
+
+function Boolean IsValidUserName(string userName)
+begin
+  boolean res;
+  string 255 firstName,lastName;
+  integer pos;
+  
+  res = false;
+  pos = 0;
+  ExtractObjWithSeparator(" ",userName,false,pos,firstName);
+  ExtractObjWithSeparator(" ",userName,false,pos,lastName);
+  if (nonblank(firstName) and nonblank(lastName)) then begin
+    res = true;
+  end;
+  IsValidUserName = res;
+  return;
+end;
+
+procedure GetUserFirstAndLastName(string userName,var string firstName,var string lastName)
+begin
+  boolean res;
+  integer pos;
+  
+  res = false;
+  pos = 0;
+  ExtractObjWithSeparator(" ",userName,false,pos,firstName);
+  ExtractObjWithSeparator(" ",userName,false,pos,lastName);
+  return;
+end;
+
+procedure ClearCostPocketBl()
+begin
+  record CostPocketBlock CPb;
+
+  BlockLoad(CPb);
+  CPb.AccessToken = "";
+  CPb.ActiveFlag = 0;
+  qupdating.StoreCostPocketBlock(CPb);
+
+  return;
+end;
+
+procedure CreateJsonAreaForSendingConfirmation(var area a_reqconf,array string adocumentid,array string areceived,array string areference,integer acnt)
+begin
+  string 255 jsr,tstr;
+  Integer i;
+
+  SetAreaZeroSize(a_reqconf);
+
+  JSONStringArrayStart(jsr);
+  for (i=0;i<acnt;i=i+1) begin
+    jsr = jsr & " " & "{";
+    JSONStringAdd(jsr,"documentId",adocumentid[i]);
+    JSONNotStringAdd(jsr,"received",areceived[i]);
+    if (areceived[i]=="true") then begin
+      JSONStringPut(jsr,"reference",areference[i]);
+    end else begin
+      JSONStringMemberStart(jsr,"error");
+      jsr = jsr & " " & "{";
+      JSONStringPut(jsr,"reasonPhrase", "Import failed because it already exists");
+      jsr = jsr & " " & "}";
+    end;
+    JSONStringEnd(jsr);
+    if (i!=acnt-1) then begin 
+      jsr = jsr & ",";
+    end;
+  end;
+  JSONStringArrayEnd(jsr);
+  AddTextToArea(jsr,a_reqconf);
+  return;
+end;
+
+procedure CreateJsonAreaForSendingReportConfirmation(var area a_reqconf,string received,string reference)
+begin
+  string 255 jsr;
+
+  SetAreaZeroSize(a_reqconf);
+  jsr = jsr & " " & "{";
+  JSONNotStringAdd(jsr,"received",received);
+  if (received=="true") then begin
+    JSONStringPut(jsr,"reference",reference);
+  end else begin
+    JSONStringMemberStart(jsr,"error");
+    jsr = jsr & " " & "{";
+    JSONStringPut(jsr,"reasonPhrase", "Import failed because it already exists");
+    jsr = jsr & " " & "}";
+  end;
+  JSONStringEnd(jsr);
+  AddTextToArea(jsr,a_reqconf);
+  return;
+end;
+
+procedure CreateJsonAreaForSending(var area a_req)
+begin
+  string 255 jsr,firstName,lastName;
+  record CostPocketBlock CPb;
+  record CYBlock CYb;
+  record CountryVc Countryr;
+  string 255 tstr;
+
+  BlockLoad(CPb);
+  BlockLoad(CYb);
+  BlockLoad(CPb);
+
+  SetAreaZeroSize(a_req);
+  JSONStringStart(jsr);
+  JSONStringMemberStart(jsr,"user");
+  jsr = jsr & " " & "{";
+  GetUserFirstAndLastName(CPb.AccountUsername,firstName,lastName);
+  JSONStringAdd(jsr,"firstName",firstName);
+  JSONStringAdd(jsr,"lastName",lastName);
+  JSONStringAdd(jsr,"email",CPb.AccountEmail);
+  JSONStringPut(jsr,"lang","ENG");
+  JSONStringMemberEnd(jsr);
+  jsr = jsr & ",";
+  JSONStringMemberStart(jsr,"company");
+  jsr = jsr & " " & "{";
+  JSONStringAdd(jsr,"bcx",CPb.AccessToken);
+  JSONStringAdd(jsr,"name",CYb.CompName);
+  JSONStringAdd(jsr,"regCode",CYb.OrgNr);
+  if (nonblank(CYb.VATNr)) then begin
+    JSONNotStringAdd(jsr,"VATAccountable", "true");
+  end else begin
+    JSONNotStringAdd(jsr,"VATAccountable", "false");
+  end;
+  JSONStringAdd(jsr,"VATNumber",CYb.VATNr);
+  if (len(CYb.CountryCode)>2) then begin
+    Countryr.Code = CYb.CountryCode;
+    ReadFirstMain(Countryr,1,true);
+    tstr = Countryr.ISOCode;
+  end else begin
+    tstr = CYb.CountryCode;
+  end;
+  JSONStringPut(jsr,"countryCode",tstr);
+  JSONStringMemberEnd(jsr);
+  JSONStringEnd(jsr);
+  AddTextToArea(jsr,a_req);
+
+return;
+end;
+
+global
+updating function Boolean CreateNewSupplier(var record CUVc VEr,string suppliername,string supplieraddress,string supplierpostcode,string suppliervatnr,string supplierreg,string suppliercountry,string supplierbankname,string supplierbankaccnr,string costacc)
+begin
+  Boolean res;
+  string 255 tstr,tstr0,tstr1,tstr2;
+  record CountryVc Countryr;
+  LongInt pos;
+
+  RecordNew(VEr);
+  GetNextCustNr(tstr);
+  VEr.Code = tstr;
+  VEr.Name = suppliername;
+  //VEr.InvAddr0 = supplieraddress;
+  pos = 0;
+  GetNextSubstring(supplieraddress,pos,",",tstr0);
+  GetNextSubstring(supplieraddress,pos,",",tstr1);
+  GetNextSubstring(supplieraddress,pos,",",tstr2);
+    
+  VEr.InvAddr0 = tstr0;
+  VEr.InvAddr1 = tstr1;
+  VEr.InvAddr2 = tstr2;
+  VEr.InvAddr3 = supplierpostcode;
+  if (suppliervatnr=="null") then begin
+    VEr.VATNr = ""; 
+  end else begin
+    VEr.VATNr = suppliervatnr;
+  end;
+
+  if (supplierreg=="null") then begin
+    VEr.RegNr1 = "";
+  end else begin
+    VEr.RegNr1 = supplierreg;
+  end;
+
+  VEr.CountryCode = suppliercountry;
+  Countryr.Code = suppliercountry;  
+  if (ReadFirstMain(Countryr,1,true)) then begin
+    VEr.ExportFlag = Countryr.ExportFlag;
+  end;
+  VEr.BankAccount = supplierbankname;
+  VEr.IBANCode = supplierbankaccnr;
+  VEr.VEType = 1;
+  VEr.CUType = 0;
+  VEr.AccCost = costacc;
+  if (RecordStore(VEr,true)) then begin
+    res = true;
+  end;
+
+  CreateNewSupplier = res;
+  return;
+end;
+
+function string 10 BooleanToString(Boolean bf)
+begin
+  string 10 res;
+
+  if (bf) then begin
+    res = "true";
+  end else begin
+    res = "false";
+  end;
+
+  BooleanToString = res;
+  return;
+end;
+
+procedure AddToReportConfirmationArray(string reportid,Array string areportid,string documentid,Array string adocumentid,boolean receivedf,Array string areceived,string reference,Array string areference,
+                                        string error,Array string aerror, var Integer acnt)
+begin
+  adocumentid[acnt] = documentid;
+  areportid[acnt] = reportid;
+  areceived[acnt] = BooleanToString(receivedf);
+  areference[acnt] = reference;
+  aerror[acnt] = error;
+  acnt = acnt + 1;
+  return;
+end;
+
+global
+updating procedure UpdateContactWithLatestCPDetails(string custcode,string suppliername,string supplieraddress,string supplierpostcode,string suppliercountry,string supplierbankaccnr,string supplierreg,string suppliervatnr,var record CUVc VEr)
+begin
+  record CUVc oldVEr;
+
+  VEr.Code = custcode;
+  if (ReadFirstMain(VEr,1,true)) then begin
+      RecordCopy(oldVEr,VEr);
+      VEr.Name = suppliername;
+      VEr.InvAddr0 = supplieraddress;
+      VEr.InvAddr3 = supplierpostcode;
+      VEr.CountryCode = suppliercountry;
+      VEr.IBANCode = supplierbankaccnr;
+      VEr.RegNr1 = supplierreg; 
+      VEr.VATNr = suppliervatnr;
+      if (RecordUpdate(oldVEr,VEr,false)) then begin end;
+  end;
+  return;
+end;
+
+global
+updating procedure UpdateContactCardAsSupplier(string custcode,integer type,var record CUVc VEr)
+begin
+  record CUVc oldVEr;
+
+  VEr.Code = custcode;
+  if (ReadFirstMain(VEr,1,true)) then begin
+    RecordCopy(oldVEr,VEr);
+    VEr.VEType = 1;
+    if (RecordUpdate(oldVEr,VEr,false)) then begin end;
+  end;
+  return;
+end;
+
+procedure FindSupplier(string suppliername,string suppliervatnr,string supplierreg,string supplieraddress, string supplierpostcode,string suppliercountry,string supplierbankname,string supplierbankaccnr,string costacc,
+                       var string code,var string name,var string bankaccnr,var string vatnr,var integer exportf)
+begin
+  Boolean TrHs,testf;
+  record CUVc VEr;
+  Boolean foundf,usecostpocketdataf;
+
+  usecostpocketdataf = false;
+  if (supplierreg!="null" and nonblank(supplierreg)) then begin
+    VEr.RegNr1 = supplierreg;
+    foundf = ReadFirstKey("RegNr1",VEr,1,true);
+  end else begin
+    goto SkipCheck1;
+  end;
+  if (foundf==false) then begin
+    SkipCheck1:;
+    if (suppliervatnr!="null" and nonblank(suppliervatnr)) then begin
+      VEr.VATNr = suppliervatnr;
+      foundf = ReadFirstKey("VATNr",VEr,1,true);
+    end else begin
+      goto SkipCheck2;
+    end;
+  end;
+  if (foundf==false) then begin
+    SkipCheck2:;
+    ResetLoop(VEr);
+    TrHs = true;
+    VEr.Name = suppliername;
+    while (LoopKey("Name",VEr,1,TrHs)) begin
+      testf = true;
+      if (VEr.VEType!=1) begin testf = false; end;
+      if (VEr.Name!=suppliername) then begin testf = false; end;
+      if (testf) then begin goto LFound; end;
+    end;
+  end;
+  if (foundf==false) then begin
+    foundf = qupdating.CreateNewSupplier(VEr,suppliername,supplieraddress,supplierpostcode,suppliervatnr,supplierreg,suppliercountry,supplierbankname,supplierbankaccnr,costacc);
+  end;
+  if (foundf) then begin
+LFound:;
+    if (VEr.VATNr!=suppliervatnr) or (VEr.Name!=suppliername) or (VEr.InvAddr0!=supplieraddress) or (VEr.InvAddr3!=supplierpostcode) or 
+       (VEr.IBANCode!=supplierbankaccnr) or (VEr.CountryCode!=suppliercountry) or (VEr.RegNr1!=supplierreg) then begin
+        usecostpocketdataf = true;
+        if   (VEr.VEType==0) then begin
+          qupdating.UpdateContactCardAsSupplier(VEr.Code,1,VEr);
+        end;
+     //   qupdating.UpdateContactWithLatestCPDetails(VEr.Code,suppliername,supplieraddress,supplierpostcode,suppliercountry,supplierbankaccnr,supplierreg,suppliervatnr,VEr);
+    end;
+
+    if (usecostpocketdataf) then begin
+      code = VEr.Code;
+      name = suppliername;
+      bankaccnr = supplierbankaccnr; 
+  //  regnr = supplierreg;
+      vatnr = suppliervatnr;
+    end else begin
+      code = VEr.Code;
+      name = VEr.Name;
+      bankaccnr = VEr.IBANCode; 
+  // regnr = VEr.RegNr1;
+      vatnr = VEr.VATNr;
+    end;
+
+    exportf = VEr.ExportFlag;
+  end;
+  LFindSupplier:;
+  return;
+end;
+
+function Date FormatDate(string datetoconvert)
+begin
+  Date res;
+  
+  res.year = StringToInt(Left(datetoconvert,4));
+  res.month = StringToInt(Mid(datetoconvert,5,2));
+  res.day = StringToInt(Right(datetoconvert,2));
+
+  FormatDate = res;
+  return;
+end;
+
+function date ConvertStringDate(string datestr)
+begin
+  Date res;
+  string 255 tstr,tstr2;
+
+  if (len(datestr)==11) then begin
+    tstr2 = Right(datestr,len(datestr)-1);
+  end else begin
+    tstr2 = datestr;
+  end;
+  res.year = StringToInt(Right(tstr2,4));
+  tstr = Left(tstr2,5);
+  res.month = StringToInt(Right(tstr,2));
+  res.day = StringToInt(Left(tstr2,2));
+  
+  ConvertStringDate = res;
+  return;
+end;
+
+procedure BreakIntoBase64Lines(Area img,var area tmpimg)
+begin
+  longint i,l,x;
+  integer colwidth;
+  string 255 line;
+  
+  SetAreaZeroSize(tmpimg);
+  i=0;
+  l = GetAreaLength(img);
+  while (i<l) begin
+    x = l-i;
+    if (x>80) then begin
+      colwidth = 80;
+    end else begin
+      colwidth = x;
+    end;
+    line = GetStringFromArea(img,i,colwidth);
+    AddTextToArea(line & chr(10),tmpimg);
+    i = i+colwidth;
+  end;
+  return;
+end;
+
+updating procedure AttachFileToExpense(record ExpVc Expr,string fname,Area a)
+begin
+  Area tmpa,bina;
+
+  BreakIntoBase64Lines(a,tmpa);
+  AreaBase64Decode(tmpa,bina);
+
+  CreateFile(fname);
+  CloseFile;
+  WriteAreaToFile(bina,fname,0);
+
+  if (RecordLinkFile(fname,0,Expr,CurrentCompany)) then begin end;
+  Delete_File(fname);
+
+  return;
+end;
+
+updating procedure AttachFileToPI(record VIVc VIr,string fname,Area a)
+begin
+  Area tmpa,bina;
+
+  BreakIntoBase64Lines(a,tmpa);
+  AreaBase64Decode(tmpa,bina);
+
+  CreateFile(fname);
+  CloseFile;
+  WriteAreaToFile(bina,fname,0);
+
+  if (RecordLinkFile(fname,0,VIr,CurrentCompany)) then begin end;
+  Delete_File(fname);
+
+  return;
+end;
+
+function Boolean CheckIfAccountExists(string accnumber)
+begin
+  record AccVc Accr;
+  Boolean res;
+  
+  Accr.AccNumber = accnumber;
+  res = ReadFirstMain(Accr,1,true);
+  if (res) then begin
+    if (Accr.blockedFlag!=0) then begin res = false; end;
+  end;
+  CheckIfAccountExists = res;
+  return;          
+end;
+
+function Boolean ExpVc_PasteVATCode(var record ExpVc Expp,Integer rownr)
+begin
+  Boolean res;
+
+  CalcExpRow(Expp,rownr);
+  res = true;
+  ExpVc_PasteVATCode = res;
+  return;
+end;
+
+function Boolean IsDuplicateReceipt(string vecode,string invoicenr)
+begin
+  Boolean res,foundf,testf;
+  record VIVc VIr;
+
+  res = false;
+  foundf = true;
+  VIr.VECode = vecode;
+  VIr.InvoiceNr = invoicenr;
+  while (LoopKey("InvoiceNr",VIr,2,foundf))  begin
+    if (foundf) then begin
+      testf = true;
+      if (VIr.VECode!=vecode) then begin testf = false; end;
+      if (VIr.InvoiceNr!=invoicenr) then begin testf = false; end;
+      if (testf) then begin res = true; goto LIsDuplicateReceipt; end;  
+    end;  
+  end;
+LIsDuplicateReceipt:;
+IsDuplicateReceipt = res;
+  return;
+end;
+
+function Boolean IsDuplicateExpense(string vecode,string expencenr)
+begin
+  record ExpVc Expr;
+  row ExpVc Exprw;
+  Boolean res,foundf,testf;
+  integer i,rwcnt;
+
+  res = false;
+  foundf = true;
+  while (LoopMain(Expr,1,foundf)) begin
+    if (foundf) then begin
+      rwcnt = MatRowCnt(Expr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(Expr,i,Exprw);
+        testf = false;
+        if (Exprw.VECode==vecode and Exprw.DocNr==expencenr) then begin testf = true; end;
+        if (testf) then begin
+          res = true; 
+          goto LIsDuplicateExpense; 
+        end;
+      end;
+    end;         
+  end;
+LIsDuplicateExpense:;
+IsDuplicateExpense = res;
+  return;
+end;
+
+function string 255 GetPayDeal(longint datedifference)
+begin
+  string 255 res;
+  Boolean found;
+  record PDVc PDr;
+
+  found = true;
+  PDr.Code = "";
+  while (LoopMain(PDr,1,found)) begin
+    if (PDr.pdays==datedifference) then begin 
+      found = false;
+      res = PDr.Code;
+    end;
+  end;  
+
+  GetPayDeal = res;
+  return;
+end;
+
+updating procedure CreatePIFromReport(json js,integer j,string reportid,var Array string areportid,var Array string adocumentid,var Array string areceived,var Array string areference,var array string aerror, var Integer acnt)
+begin
+  record VIVc VIr;
+  row VIVc VIrw;
+  record AccVc Accr;
+  integer i,k,rwcnt;
+  string 255 tstr,id,issueddate,fname,key,error,submitterfullname,submitteremail,supplierbankname,supplierbankaccnr;
+  string 255 suppliername,supplierreg,suppliervatnr,suppliercountry,supplieraddress,supplierpostcode,regnr,costacc;
+  area a;
+  val t;
+  row VATCodeBlock VATbrw;
+  record PDVc PDr;
+  LongInt pdays,datedifference;
+
+  i = 0;
+  while(JSONNodeExists(js,"[" & j & "]/documents/[" & i & "]/_type")) begin  
+    RecordNew(VIr); 
+    key = "[" & j & "]/documents/[" & i & "]"; 
+    id             = JSONGet(js,key & "/id");
+    issueddate     = JSONGet(js,key & "/information/issued");
+    VIr.TransDate  = FormatDate(Left(JSONGet(js,key & "/createdAt"),10));
+    VIr.CurncyCode = JSONGet(js,key & "/information/currency");
+    VIr.InvoiceNr  = JSONGet(js,key & "/information/identifier");
+    VIr.InvDate    = issueddate;
+    pdays = 10;
+    if (JSONGet(js,key & "/paymentInfo/dueDate")=="null") then begin  
+      VIr.DueDate = AddDay(VIr.InvDate,pdays); 
+    end else begin
+      VIr.DueDate = FormatDate(Left(JSONGet(js,key & "/paymentInfo/dueDate"),10));
+      datedifference = DateDiff(VIr.DueDate,VIr.InvDate);
+      VIr.PayDeal = GetPayDeal(datedifference);
+    end;
+    if (blank(VIr.PayDeal)) then begin VIr.PayDeal = "10"; end;
+    VIr.VECode = "" ; 
+    suppliername      = JSONGet(js,key & "/supplier/name");
+    suppliervatnr     = JSONGet(js,key & "/supplier/VATNumber");
+    supplierreg       = JSONGet(js,key & "/supplier/regCode");
+    suppliercountry   = JSONGet(js,key & "/supplier/countryCode");
+    supplieraddress   = JSONGet(js,key & "/supplier/address");
+    supplierpostcode  = JSONGet(js,key & "/supplier/postalCode");
+    supplierbankname  = JSONGet(js,key & "/supplier/bankAccounts[0]/bankName");
+    supplierbankaccnr = JSONGet(js,key & "/supplier/bankAccounts[0]/iban");
+    FindSupplier(suppliername,suppliervatnr,supplierreg,supplieraddress,supplierpostcode,suppliercountry,supplierbankname,supplierbankaccnr,costacc,VIr.VECode,VIr.VEName,VIr.BankAcc,VIr.VATNr,VIr.ExportFlag);
+    if (IsDuplicateReceipt(VIr.VECode,JSONGet(js,key & "/information/identifier"))) then begin goto LCreatePIFromReport; end;
+    k = 0;
+    while (JSONNodeExists(js,key & "/itemRows/[" & k & "]")) begin 
+      rwcnt = MatRowCnt(VIr);
+      ClearRow(VIr,VIrw,1);
+      VIrw.AccNumber = JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/accounting/accountNumber");
+      VIrw.VATCode = JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/accounting/VATCode");
+      if (blank(VIrw.AccNumber)) and (blank(VIrw.VATCode)) then begin
+        tstr = StripNonDigits(JSONGet(js,key & "/metadata/costType"));
+        if (CheckIfAccountExists(tstr)) then begin
+          VIrw.AccNumber = tstr;
+          if (nonblank(tstr)) then begin
+              Accr.AccNumber = tstr;
+              ReadFirstMain(Accr,1,true);
+              GetVATCodeRow(Accr.VATCode,VATbrw);
+              if (VATbrw.ExVatpr==StringToVal(JSONGet(js,key & "/itemRows/[" & k & "]/VATrate"),M4Val)) then begin
+                VIrw.VATCode = Accr.VATCode;
+              end;
+          end; 
+          if (blank(VIrw.Objects)) then begin
+            PasteAccObj(VIrw.AccNumber,tstr);
+            VIrw.Objects = tstr;
+          end;
+        end else begin
+          VIr.VATVal = StringToVal(JSONGet(js,key & "/summary/VATsum"),M4Val);
+          VIr.PayVal = StringToVal(JSONGet(js,key & "/summary/total"),M4Val);
+        end;
+      end;  
+      VIr.RefStr = JSONGet(js,key & "/itemRows/[" & k & "]/description");
+      VIrw.Comment = AccnNameStr(Accr.AccNumber);
+      VIrw.qty = StringToVal(JSONGet(js,key & "/itemRows/[" & k & "]/quantity"),M4Val);
+      VIrw.Sum = StringToVal(JSONGet(js,key & "/itemRows/[" & k & "]/sum"),M4Val);
+      VIrw.VATVal = StringToVal(JSONGet(js,key & "/itemRows/[" & k & "]/VATsum"),M4Val);
+
+      MatRowPut(VIr,0,VIrw);
+      submitterfullname = JSONGet(js,key & "/submitter/fullName");
+      submitteremail    = JSONGet(js,key & "/submitter/email");
+      VIr.SalesMan = FindUserCode(submitterfullname,submitteremail);
+LCreatePIFromReport:;
+      WriteStringToFile( JSONGet(js,key & "/attachment/content"),"file.txt",0);
+      AddFileToArea("file.txt",a,false);
+      Delete_File("file.txt");
+      fname = id & ".pdf";
+      VICalcVals(VIr);
+      VISumup(VIr,t);    
+      VIr.VATVal = StringToVal(JSONGet(js,key & "/summary/VATsum"),M4Val);
+      VIr.PayVal = StringToVal(JSONGet(js,key & "/summary/total"),M4Val);
+      VIr.SerNr = NextSerNr("VIVc",VIr.TransDate,-1,false,""); 
+      if (MatRowCnt(VIr)==0) then begin goto  LSkipCreatePIFromReport; end;    
+      if (VIr.SerNr>0) then begin
+        RecordStore(VIr,false);
+        AttachFileToPI(VIr,fname,a);
+        AddToReportConfirmationArray(reportid,areportid,id,adocumentid,true,areceived,VIr.SerNr,areference,error,aerror,acnt);
+      end else begin  
+LSkipCreatePIFromReport:;
+        error = "Failed to store";
+        AddToReportConfirmationArray(reportid,areportid,id,adocumentid,false,areceived,"",areference,error,aerror,acnt);
+      end;
+      k = k + 1;
+    end;
+    i = i +1; 
+  end;
+  return;
+end;
+
+updating procedure CreatePI(json js,integer i,var Array string adocumentid,var Array string areceived,var Array string areference,var array string aerror, var Integer acnt)
+begin
+  record VIVc VIr;
+  row VIVc VIrw;
+  record AccVc Accr;
+  row VATCodeBlock VATbrw;
+  record PDVc PDr;
+  record CUVc VEr;
+  record APAccBlock APb;
+  integer k,rwcnt,exportf;
+  string 255 tstr,id,issueddate,fname,costacc;
+  string 255 suppliername,supplierreg,suppliervatnr,suppliercountry,supplieraddress,supplierpostcode,attachmentcontent;
+  string 255 error,submitterfullname,submitteremail,supplierbankname,supplierbankaccnr,code,name,bankaccnr,vatnr,regnr;
+  area a;
+  val t,vatrate;
+  LongInt pdays,datedifference;
+  array string 255 areportid;
+
+  RecordNew(VIr);   
+  id            = JSONGet(js,"[" & i & "]/id");
+  //companyid   = JSONGet(js,"[" & i & "]/companyId"); 
+  //createddate = JSONGet(js,"[" & i & "]/createdAt");
+  //doctype     = JSONGet(js,"[" & i & "]/_type");
+  //reftime     = JSONGet(js,"[" & i & "]/_reftime");
+  //digitime    = JSONGet(js,"[" & i & "]/digitizedOn");
+  //queuetime   = JSONGet(js,"[" & i & "]/queuedAt");
+  issueddate  = JSONGet(js,"[" & i & "]/information/issued");
+  VIr.TransDate = StringToDateFmt(issueddate,m4_ymd);
+  VIr.CurncyCode = JSONGet(js,"[" & i & "]/information/currency");
+  VIGetRate(VIr);
+  VIr.InvoiceNr = JSONGet(js,"[" & i & "]/information/identifier");
+  VIr.InvDate = StringToDateFmt(issueddate,m4_ymd);
+  pdays = 10;
+  if (JSONGet(js,"[" & i & "]/paymentInfo/dueDate")=="null") then begin  
+    VIr.DueDate = AddDay(VIr.InvDate,pdays); 
+  end else begin
+    VIr.DueDate = FormatDate(Left(JSONGet(js,"[" & i & "]/paymentInfo/dueDate"),10)); 
+    datedifference = DateDiff(VIr.DueDate,VIr.InvDate);
+    VIr.PayDeal = GetPayDeal(datedifference);
+  end;
+  if (blank(VIr.PayDeal)) then begin VIr.PayDeal = "10"; end;
+  k = 0;
+  while (JSONNodeExists(js,"[" & i & "]/itemRows/[" & k & "]")) begin
+    rwcnt = MatRowCnt(VIr);
+    ClearRow(VIr,VIrw,1);
+    VIr.VECode = "" ; 
+    suppliername     = JSONGet(js,"[" & i & "]/supplier/name");
+    suppliervatnr    = JSONGet(js,"[" & i & "]/supplier/VATNumber");
+    supplierreg      = JSONGet(js,"[" & i & "]/supplier/regCode");
+    suppliercountry  = JSONGet(js,"[" & i & "]/supplier/countryCode");
+    supplieraddress  = JSONGet(js,"[" & i & "]/supplier/address");
+    supplierpostcode = JSONGet(js,"[" & i & "]/supplier/postalCode");
+    supplierbankname = JSONGet(js,"[" & i & "]/paymentInfo/bankAccounts/[0]/bankName");
+    supplierbankaccnr = JSONGet(js,"[" & i & "]/paymentInfo/bankAccounts/[0]/number");
+    costacc = StripNonDigits(JSONGet(js,"[" & i & "]/metadata/costType"));
+    FindSupplier(suppliername,suppliervatnr,supplierreg,supplieraddress,supplierpostcode,suppliercountry,supplierbankname,supplierbankaccnr,costacc,code,name,bankaccnr,vatnr,exportf);
+    if (IsDuplicateReceipt(VIr.VECode,JSONGet(js,"[" & i & "]/information/identifier"))) then begin goto LSkipCreatePI; end;
+      VIr.VECode = code;
+      VIr.VEName = name;
+      VIr.BankAcc = bankaccnr;
+      VIr.VATNr = vatnr;
+      VIr.ExportFlag = exportf;
+      VEr.Code = VIr.VECode;
+      if (ReadFirstMain(VEr,1,true)) then begin end;
+      VIr.Addr1 = VEr.InvAddr0;
+      VIr.Addr2 = VEr.InvAddr1;
+      VIr.Addr3 = VEr.InvAddr2;
+      VIr.InvAddr3 = VEr.InvAddr3;
+      VIr.InvAddr4 = VEr.InvAddr4;
+      VIr.InvCountry = VEr.CountryCode;
+    //VIr.RegNr = regnr;
+    //would be needed later for finding right company 
+    // customername     = JSONGet(js,"[" & i & "]/customer/name");
+    // customerreg      = JSONGet(js,"[" & i & "]/customer/regCode");
+    // customervatnr    = JSONGet(js,"[" & i & "]/customer/VATNumber");
+    // customercountry  = JSONGet(js,"[" & i & "]/customer/countryCode");
+    // customeraddress  = JSONGet(js,"[" & i & "]/customer/address");
+    // customerpostcode = JSONGet(js,"[" & i & "]/customer/postalCode");
+    //itemrowprice       = JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/price");
+    //itemrowsum         = JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/sum");
+    //itemrowVATrate     = JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate");
+    //VIrw.VATSum = StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATsum"),M4Val);
+
+    VIrw.AccNumber = JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/accounting/accountNumber");
+    if (VATCodeExists(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/accounting/VATCode"))) then begin
+      VIrw.VATCode = JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/accounting/VATCode");
+    end;
+/*
+      LogText(0,JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/accounting/accountNumber"));
+      LogText(0,JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/accounting/VATCode"));
+      LogText(0,"VIrw.AccNumber=" & VIrw.AccNumber & ", VIrw.VATCode =" & VIrw.VATCode );
+*/
+
+    if (blank(VIrw.AccNumber)) and (blank(VIrw.VATCode)) then begin
+      tstr = StripNonDigits(JSONGet(js,"[" & i & "]/metadata/costType"));
+      if (CheckIfAccountExists(tstr)) then begin
+        VIrw.AccNumber = tstr; 
+        if (nonblank(tstr)) then begin
+          Accr.AccNumber = tstr;
+          ReadFirstMain(Accr,1,true);
+          GetVATCodeRow(Accr.VATCode,VATbrw);
+          if (VATbrw.ExVatpr==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin
+            VIrw.VATCode = VATbrw.VATCode;
+          end else begin
+            VEr.Code = VIr.VECode;
+            if (ReadFirstMain(VEr,1,true)) then begin end;
+            GetVATCodeRow(VEr.VEVATCode,VATbrw);
+            if (VATbrw.ExVatpr==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin
+              VIrw.VATCode = VEr.VEVATCode;
+            end;
+            if (blank(VIrw.VATCode)) then begin
+              BlockLoad(APb);
+              switch (VIr.ExportFlag) begin
+                case 0: GetVATproc(APb.VATCodeDom,0,vatrate); if (vatrate==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin VIrw.VATCode = APb.VATCodeDom; end;
+                case 1: GetVATproc(APb.VATCodeEU,0,vatrate);  if (vatrate==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin VIrw.VATCode = APb.VATCodeEU; end;
+                case 3: GetVATproc(APb.VATCodeEU,0,vatrate);  if (vatrate==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin VIrw.VATCode = APb.VATCodeEU; end;
+                case 2: GetVATproc(APb.VATCodeExp,0,vatrate); if (vatrate==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin VIrw.VATCode = APb.VATCodeExp; end;
+                case 4: GetVATproc(APb.VATCodeExp,0,vatrate); if (vatrate==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin VIrw.VATCode = APb.VATCodeExp; end;
+              end;
+            end;
+          end; 
+        end;
+        if (blank(VIrw.Objects)) then begin
+          PasteAccObj(VIrw.AccNumber,tstr);
+          VIrw.Objects = tstr;
+        end;
+      end else begin
+        VEr.Code = VIr.VECode;
+        if (ReadFirstMain(VEr,1,true)) then begin end;
+        if (nonblank(VEr.AccCost)) then begin
+          VIrw.AccNumber = VEr.AccCost;
+          Accr.AccNumber = VEr.AccCost;;
+          ReadFirstMain(Accr,1,true);
+          if (nonblank(Accr.VATCode)) then begin
+            GetVATCodeRow(Accr.VATCode,VATbrw);
+            if (VATbrw.ExVatpr==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin
+              VIrw.VATCode = VATbrw.VATCode;
+            end else begin
+              goto LSkipCreatePI1;  
+            end;
+          end else begin
+            LSkipCreatePI1:;
+            if (nonblank(VEr.VEVATCode)) then begin
+              GetVATCodeRow(VEr.VEVATCode,VATbrw);
+              if (VATbrw.ExVatpr==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin
+                VIrw.VATCode = VEr.VEVATCode;
+              end else begin
+                goto LSkipCreatePI2;
+              end;
+            end else begin
+              LSkipCreatePI2:;
+              BlockLoad(APb);
+              switch (VIr.ExportFlag) begin
+                case 0: GetVATproc(APb.VATCodeDom,0,vatrate); if (vatrate==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin VIrw.VATCode = APb.VATCodeDom; end;
+                case 1: GetVATproc(APb.VATCodeEU,0,vatrate);  if (vatrate==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin VIrw.VATCode = APb.VATCodeEU; end;
+                case 3: GetVATproc(APb.VATCodeEU,0,vatrate);  if (vatrate==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin VIrw.VATCode = APb.VATCodeEU; end;
+                case 2: GetVATproc(APb.VATCodeExp,0,vatrate); if (vatrate==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin VIrw.VATCode = APb.VATCodeExp; end;
+                case 4: GetVATproc(APb.VATCodeExp,0,vatrate); if (vatrate==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin VIrw.VATCode = APb.VATCodeExp; end;
+              end;
+            end;
+          end;
+          VIr.VATVal = StringToVal(JSONGet(js,"[" & i & "]/summary/VATsum"),M4Val);
+          VIr.PayVal = StringToVal(JSONGet(js,"[" & i & "]/summary/total"),M4Val);
+        end;
+      end;
+    end;  
+    VIr.RefStr = JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/description");
+    VIrw.Comment = AccnNameStr(VIrw.AccNumber);
+    //VIrw.Comment = JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/description");
+    VIrw.qty = StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/quantity"),M4Val);
+    VIrw.Sum = StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/sum"),M4Val);
+    VIrw.VATVal = StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATsum"),M4Val);
+    MatRowPut(VIr,rwcnt,VIrw);
+    k = k + 1;
+  end;
+  // metadatacosttype    = JSONGet(js,"[" & i & "]/metadata/costType");
+  // metadatabillingType = JSONGet(js,"[" & i & "]/metadata/billingType");
+  // metadatapaidwith    = JSONGet(js,"[" & i & "]/metadata/paidWith");
+  // metadatacomment     = JSONGet(js,"[" & i & "]/metadata/comment");
+  // metadatatrip        = JSONGet(js,"[" & i & "]/metadata/trip");
+  // metadatanotapplic   = JSONGet(js,"[" & i & "]/metadata/notApplicableAsExpense");
+  
+  //submitterid       = JSONGet(js,"[" & i & "]/submitter/id");
+  //submitterrole     = JSONGet(js,"[" & i & "]/submitter/roleId");
+  //submittername     = JSONGet(js,"[" & i & "]/submitter/firstName");
+  //submitterlastname = JSONGet(js,"[" & i & "]/submitter/lastName");
+  //submittercode     = JSONGet(js,"[" & i & "]/submitter/personalCode");
+  //submitterextra    = JSONGet(js,"[" & i & "]/submitter/extraData");
+  //submitterlang     = JSONGet(js,"[" & i & "]/submitter/lang");
+  //submitterbankacc  = JSONGet(js,"[" & i & "]/submitter/primaryBankAccount");
+  submitterfullname = JSONGet(js,"[" & i & "]/submitter/fullName");
+  submitteremail    = JSONGet(js,"[" & i & "]/submitter/email");
+  VIr.SalesMan = FindUserCode(submitterfullname,submitteremail);
+  VEr.Code = VIr.VECode;
+  if (ReadFirstMain(VEr,1,true)) then begin 
+    VIr.Objects = VEr.VEObjects;
+  end;
+  //for the next stage of development where we neeed to attach doc to expense
+  // attachmentname = JSONGet(js,"[" & i & "]/attachment/name");
+  // attachmenttype = JSONGet(js,"[" & i & "]/attachment/type");
+  // attachmentsize = JSONGet(js,"[" & i & "]/attachment/size");
+  // attachmentcontent = JSONGet(js,"[" & i & "]/attachment/content");
+  WriteStringToFile( JSONGet(js,"[" & i & "]/attachment/content"),"file.txt",0);
+  AddFileToArea("file.txt",a,false);
+  Delete_File("file.txt");
+  fname = id & ".pdf";
+  VICalcVals(VIr);
+  VISumup(VIr,t);    
+  //VIr.VATVal = VIr.CalcVATVal;
+  //VIr.PayVal =  CalculateVINettVal(VIr,true);
+  VIr.VATVal = StringToVal(JSONGet(js,"[" & i & "]/summary/VATsum"),M4Val);
+  VIr.PayVal = StringToVal(JSONGet(js,"[" & i & "]/summary/total"),M4Val);
+  VIr.SerNr = NextSerNr("VIVc",VIr.TransDate,-1,false,"");   
+  if (VIr.SerNr>0) then begin
+    RecordStore(VIr,false);
+    AttachFileToPI(VIr,fname,a);
+    AddToReportConfirmationArray("",areportid,id,adocumentid,true,areceived,VIr.SerNr,areference,error,aerror,acnt);
+  end else begin  
+LSkipCreatePI:;
+    error = "Failed to store";
+    AddToReportConfirmationArray("",areportid,id,adocumentid,false,areceived,"",areference,error,aerror,acnt);
+  end;
+  return;
+end;
+
+updating procedure CreateExpence(json js,integer i,var Array string adocumentid,var Array string areceived,var Array string areference,var array string aerror, var Integer acnt)
+begin
+  integer k,rwcnt,exportf;
+  string 255 tstr,id,issueddate,fname;
+  string 255 suppliername,supplierreg,suppliervatnr,suppliercountry,supplieraddress,supplierpostcode,attachmentcontent;
+  string 255 error,submitterfullname,submitteremail;
+  record ExpVc Expr;
+  row ExpVc Exprw;
+  area a;
+  val t;
+  record AccVc Accr;
+  row VATCodeBlock VATbrw;
+  array string 255 areportid;
+  string 255 bankaccnr,vatnr;
+
+  RecordNew(Expr); 
+  id            = JSONGet(js,"[" & i & "]/id");
+  //companyid   = JSONGet(js,"[" & i & "]/companyId"); 
+  //createddate = JSONGet(js,"[" & i & "]/createdAt");
+  //doctype     = JSONGet(js,"[" & i & "]/_type");
+  //reftime     = JSONGet(js,"[" & i & "]/_reftime");
+  //digitime    = JSONGet(js,"[" & i & "]/digitizedOn");
+  //queuetime   = JSONGet(js,"[" & i & "]/queuedAt");
+  issueddate  = JSONGet(js,"[" & i & "]/information/issued");
+  Expr.TransDate = FormatDate(Left(JSONGet(js,"[" & i & "]/createdAt"),10));
+  Expr.CurncyCode = JSONGet(js,"[" & i & "]/information/currency");
+  k = 0;
+  while (JSONNodeExists(js,"[" & i & "]/itemRows/[" & k & "]")) begin
+    rwcnt = MatRowCnt(Expr);
+    ClearRow(Expr,Exprw,1);
+    Exprw.VECode = "" ; 
+    suppliername     = JSONGet(js,"[" & i & "]/supplier/name");
+    suppliervatnr    = JSONGet(js,"[" & i & "]/supplier/VATNumber");
+    supplierreg      = JSONGet(js,"[" & i & "]/supplier/regCode");
+    suppliercountry  = JSONGet(js,"[" & i & "]/supplier/countryCode");
+    supplieraddress  = JSONGet(js,"[" & i & "]/supplier/address");
+    supplierpostcode = JSONGet(js,"[" & i & "]/supplier/postalCode");
+
+    FindSupplier(suppliername,suppliervatnr,supplierreg,supplieraddress,supplierpostcode,suppliercountry,"","","",Exprw.VECode,Exprw.VEName,bankaccnr,vatnr,exportf);
+    //would be needed later for finding right company 
+    // customername     = JSONGet(js,"[" & i & "]/customer/name");
+    // customerreg      = JSONGet(js,"[" & i & "]/customer/regCode");
+    // customervatnr    = JSONGet(js,"[" & i & "]/customer/VATNumber");
+    // customercountry  = JSONGet(js,"[" & i & "]/customer/countryCode");
+    // customeraddress  = JSONGet(js,"[" & i & "]/customer/address");
+    // customerpostcode = JSONGet(js,"[" & i & "]/customer/postalCode");
+   
+    //itemrowprice       = JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/price");
+    //itemrowsum         = JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/sum");
+    //itemrowVATrate     = JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate");
+   
+    Exprw.AccNumber = JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/accounting/accountNumber");
+    Exprw.VATCode = JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/accounting/VATCode");
+    if (blank(Exprw.AccNumber)) and (blank(Exprw.VATCode)) then begin
+      tstr = StripNonDigits(JSONGet(js,"[" & i & "]/metadata/costType"));
+      if (CheckIfAccountExists(tstr)) then begin
+        Exprw.AccNumber = tstr;
+        if (nonblank(tstr)) then begin
+            Accr.AccNumber = tstr;
+            ReadFirstMain(Accr,1,true);
+            GetVATCodeRow(Accr.VATCode,VATbrw);
+            if (VATbrw.ExVatpr==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin
+              Exprw.VATCode = Accr.VATCode;
+              ExpVc_PasteVATCode(Expr,1)
+            end;
+        end; 
+        if (blank(Exprw.Objects)) then begin
+          PasteAccObj(Exprw.AccNumber,tstr);
+          Exprw.Objects = tstr;
+        end;
+      end;
+    end;  
+    Exprw.Comment = JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/description");
+    Exprw.qty = StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/quantity"),M4Val);
+    Exprw.Sum = StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/total"),M4Val);
+    Exprw.VATSum = StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATsum"),M4Val);
+    Exprw.BaseSum = Exprw.Sum - Exprw.VATSum;
+    Exprw.DocNr = JSONGet(js,"[" & i & "]/information/identifier");
+    Exprw.ExpDate = issueddate;
+    if (IsDuplicateExpense(Exprw.VECode,JSONGet(js,"[" & i & "]/information/identifier"))) then begin
+      goto LSkipCreateExpence; 
+    end;
+    MatRowPut(Expr,rwcnt,Exprw);
+    k = k + 1;
+  end;
+  //Exprw.ACShort =  JSONGet(js,"[" & i & "]/metadata/costType");
+  // metadatacosttype    = JSONGet(js,"[" & i & "]/metadata/costType");
+  // metadatabillingType = JSONGet(js,"[" & i & "]/metadata/billingType");
+  // metadatapaidwith    = JSONGet(js,"[" & i & "]/metadata/paidWith");
+  // metadatacomment     = JSONGet(js,"[" & i & "]/metadata/comment");
+  // metadatatrip        = JSONGet(js,"[" & i & "]/metadata/trip");
+  // metadatanotapplic   = JSONGet(js,"[" & i & "]/metadata/notApplicableAsExpense");
+  
+  //submitterid       = JSONGet(js,"[" & i & "]/submitter/id");
+  //submitterrole     = JSONGet(js,"[" & i & "]/submitter/roleId");
+  //submittername     = JSONGet(js,"[" & i & "]/submitter/firstName");
+  //submitterlastname = JSONGet(js,"[" & i & "]/submitter/lastName");
+  //submittercode     = JSONGet(js,"[" & i & "]/submitter/personalCode");
+  //submitterextra    = JSONGet(js,"[" & i & "]/submitter/extraData");
+  //submitterlang     = JSONGet(js,"[" & i & "]/submitter/lang");
+  //submitterbankacc  = JSONGet(js,"[" & i & "]/submitter/primaryBankAccount");
+  submitterfullname = JSONGet(js,"[" & i & "]/submitter/fullName");
+  submitteremail    = JSONGet(js,"[" & i & "]/submitter/email");
+  Expr.Person = FindUserCode(submitterfullname,submitteremail);
+  ExpVc_PastePerson(Expr);
+  
+  //for the next stage of development where we neeed to attach doc to expense
+  // attachmentname = JSONGet(js,"[" & i & "]/attachment/name");
+  // attachmenttype = JSONGet(js,"[" & i & "]/attachment/type");
+  // attachmentsize = JSONGet(js,"[" & i & "]/attachment/size");
+  // attachmentcontent = JSONGet(js,"[" & i & "]/attachment/content");
+  WriteStringToFile( JSONGet(js,"[" & i & "]/attachment/content"),"file.txt",0);
+  AddFileToArea("file.txt",a,false);
+  Delete_File("file.txt");
+  fname = id & ".pdf";
+  ExpSumup(Expr,t);    
+  Expr.SerNr = NextSerNr("ExpVc",Expr.TransDate,-1,false,"");    
+  if (Expr.SerNr>0) then begin
+    RecordStore(Expr,false);
+    AttachFileToExpense(Expr,fname,a);
+    AddToReportConfirmationArray("",areportid,id,adocumentid,true,areceived,Expr.SerNr,areference,error,aerror,acnt);
+  end else begin  
+LSkipCreateExpence:;
+    error = "Failed to store";
+    AddToReportConfirmationArray("",areportid,id,adocumentid,false,areceived,"",areference,error,aerror,acnt);
+  end;
+  return;
+end;
+
+global
+updating procedure CreateExpenceFromReport(json js,integer j,string reportid,var Array string areportid,var Array string adocumentid,var Array string areceived,var Array string areference,var array string aerror, var Integer acnt)
+begin
+  integer i,k,rwcnt,exportf;
+  string 255 tstr,id,issueddate,fname,key;
+  string 255 suppliername,supplierreg,suppliervatnr,suppliercountry,supplieraddress,supplierpostcode,attachmentcontent;
+  string 255 error,submitterfullname,submitteremail,whichrecord,bankaccnr,vatnr;
+  record ExpVc Expr;
+  row ExpVc Exprw;
+  area a;
+  val t,vatrate;
+  record AccVc Accr;
+  row VATCodeBlock VATbrw;
+  record CUVc VEr;
+  record APAccBlock APb;
+
+  RecordNew(Expr); 
+  i = 0;
+  id              = JSONGet(js,key & "/id");
+  Expr.TransDate  = FormatDate(Left(JSONGet(js,key & "/createdAt"),10));
+ // Expr.CurncyCode = JSONGet(js,key & "/information/currency");   
+  submitterfullname = JSONGet(js,key & "/submitter/fullName");
+  submitteremail    = JSONGet(js,key & "/submitter/email");
+  Expr.Person = FindUserCode(submitterfullname,submitteremail);
+  Expr.Person = FindUserCode(submitterfullname,submitteremail);
+  if (nonblank(Expr.Person)) then begin Expr.Name = submitterfullname; end;
+  while (JSONNodeExists(js,"[" & j & "]/documents/[" & i & "]/_type")) begin
+    key = "[" & j & "]/documents/[" & i & "]";
+    rwcnt = MatRowCnt(Expr);
+    ClearRow(Expr,Exprw,1);
+    Exprw.VECode = "" ; 
+    suppliername = "" ; suppliervatnr = "" ; supplierreg = "" ; supplieraddress = "" ; supplierpostcode  = "" ; suppliercountry  = "" ; 
+    if (JSONGet(js,key & "/supplier/name")!="null") then begin suppliername     = JSONGet(js,key & "/supplier/name"); end;
+    if (JSONGet(js,key & "/supplier/VATNumber")!="null") then begin suppliervatnr    = JSONGet(js,key & "/supplier/VATNumber");end;
+    if (JSONGet(js,key & "/supplier/regCode")!="null") then begin supplierreg      = JSONGet(js,key & "/supplier/regCode");end;
+    if (JSONGet(js,key & "/supplier/countryCode")!="null") then begin suppliercountry  = JSONGet(js,key & "/supplier/countryCode");end;
+    if (JSONGet(js,key & "/supplier/address")!="null") then begin supplieraddress  = JSONGet(js,key & "/supplier/address");end;
+    if (JSONGet(js,key & "/supplier/postalCode")!="null") then begin supplierpostcode = JSONGet(js,key & "/supplier/postalCode");end;
+    Expr.CurncyCode = JSONGet(js,key & "/information/currency");   
+    FindSupplier(suppliername,suppliervatnr,supplierreg,supplieraddress,supplierpostcode,suppliercountry,"","","",Exprw.VECode,Exprw.VEName,bankaccnr,vatnr,exportf);
+    Exprw.Comment = JSONGet(js,key & "/itemRows/[" & k & "]/description");
+    Exprw.qty = StringToVal(JSONGet(js,key & "/itemRows/[" & k & "]/quantity"),M4Val);
+    Exprw.Sum = StringToVal(JSONGet(js,key & "/itemRows/[" & k & "]/total"),M4Val);
+    Exprw.VATSum = StringToVal(JSONGet(js,key & "/itemRows/[" & k & "]/VATsum"),M4Val);
+    Exprw.BaseSum = Exprw.Sum - Exprw.VATSum;
+    Exprw.DocNr = JSONGet(js,key & "/information/identifier");
+
+    if (IsDuplicateExpense(Exprw.VECode,JSONGet(js,key & "/information/identifier"))) then begin goto LCreateExpenceFromReport3; end;
+    issueddate = JSONGet(js,key & "/information/issued");
+    Exprw.ExpDate = StringToDateFmt(issueddate,m4_ymd);
+    Exprw.AccNumber = JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/accounting/accountNumber");
+    Exprw.VATCode = JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/accounting/VATCode");
+    
+    if (blank(Exprw.AccNumber)) and (blank(Exprw.VATCode)) then begin
+      tstr = StripNonDigits(JSONGet(js,key & "/metadata/costType"));
+      if (CheckIfAccountExists(tstr)) then begin
+        Exprw.AccNumber = tstr;
+        if (nonblank(tstr)) then begin
+          Accr.AccNumber = tstr;
+          ReadFirstMain(Accr,1,true);
+          GetVATCodeRow(Accr.VATCode,VATbrw);
+          if (VATbrw.ExVatpr==StringToVal(JSONGet(js,key & "/itemRows/[" & k & "]/VATrate"),M4Val)) then begin
+            Exprw.VATCode = VATbrw.VATCode;
+          end else begin
+            VEr.Code = Exprw.VECode;
+            if (ReadFirstMain(VEr,1,true)) then begin end;
+            GetVATCodeRow(VEr.VEVATCode,VATbrw);
+            if (VATbrw.ExVatpr==StringToVal(JSONGet(js,key & "/itemRows/[" & k & "]/VATrate"),M4Val)) then begin
+              Exprw.VATCode = VEr.VEVATCode;
+            end;
+            if (blank(Exprw.VATCode)) then begin 
+              BlockLoad(APb);
+              switch (VEr.ExportFlag) begin
+                case 0: GetVATproc(APb.VATCodeDom,0,vatrate); if (vatrate==StringToVal(JSONGet(js,key & "/itemRows/[" & k & "]/VATrate"),M4Val)) then begin Exprw.VATCode = APb.VATCodeDom; end;
+                case 1: GetVATproc(APb.VATCodeEU,0,vatrate);  if (vatrate==StringToVal(JSONGet(js,key & "/itemRows/[" & k & "]/VATrate"),M4Val)) then begin Exprw.VATCode = APb.VATCodeEU; end;
+                case 3: GetVATproc(APb.VATCodeEU,0,vatrate);  if (vatrate==StringToVal(JSONGet(js,key & "/itemRows/[" & k & "]/VATrate"),M4Val)) then begin Exprw.VATCode = APb.VATCodeDom; end;
+                case 2: GetVATproc(APb.VATCodeExp,0,vatrate); if (vatrate==StringToVal(JSONGet(js,key & "/itemRows/[" & k & "]/VATrate"),M4Val)) then begin Exprw.VATCode = APb.VATCodeExp; end;
+                case 4: GetVATproc(APb.VATCodeExp,0,vatrate); if (vatrate==StringToVal(JSONGet(js,key & "/itemRows/[" & k & "]/VATrate"),M4Val)) then begin Exprw.VATCode = APb.VATCodeExp; end;
+              end;
+            end;
+          end;
+
+        end;  
+      end else begin
+        VEr.Code = Exprw.VECode;
+        if (ReadFirstMain(VEr,1,true)) then begin end;
+        if (nonblank(VEr.AccCost)) then begin
+          Exprw.AccNumber = VEr.AccCost;
+          Accr.AccNumber = VEr.AccCost;;
+          ReadFirstMain(Accr,1,true);
+          if (nonblank(Accr.VATCode)) then begin
+            GetVATCodeRow(Accr.VATCode,VATbrw);
+            if (VATbrw.ExVatpr==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin
+              Exprw.VATCode = VATbrw.VATCode;
+            end else begin
+              goto LSkipCreateExp;
+            end;
+          end else begin
+            LSkipCreateExp:;
+            if (nonblank(VEr.VEVATCode)) then begin
+              GetVATCodeRow(VEr.VEVATCode,VATbrw);
+              if (VATbrw.ExVatpr==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin
+                Exprw.VATCode = VEr.VEVATCode;
+              end else begin
+                goto LSkipCreateExp2;
+              end;
+            end else begin
+              LSkipCreateExp2:;
+              BlockLoad(APb);
+              switch (VEr.ExportFlag) begin
+                case 0: GetVATproc(APb.VATCodeDom,0,vatrate); if (vatrate==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin Exprw.VATCode = APb.VATCodeDom; end;
+                case 1: GetVATproc(APb.VATCodeEU,0,vatrate);  if (vatrate==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin Exprw.VATCode = APb.VATCodeEU; end;
+                case 3: GetVATproc(APb.VATCodeEU,0,vatrate);  if (vatrate==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin Exprw.VATCode = APb.VATCodeEU; end;
+                case 2: GetVATproc(APb.VATCodeExp,0,vatrate); if (vatrate==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin Exprw.VATCode = APb.VATCodeExp; end;
+                case 4: GetVATproc(APb.VATCodeExp,0,vatrate); if (vatrate==StringToVal(JSONGet(js,"[" & i & "]/itemRows/[" & k & "]/VATrate"),M4Val)) then begin Exprw.VATCode = APb.VATCodeExp; end;
+              end;
+            end;
+          end;
+        end;   
+      end; 
+      Exprw.Identifier = suppliervatnr;
+LCreateExpenceFromReport:;
+    end;
+    WriteStringToFile( JSONGet(js,key & "/attachment/content"),"file.txt",0);
+    AddFileToArea("file.txt",a,false);
+    Delete_File("file.txt");
+    fname = id & ".pdf";
+    AttachFileToExpense(Expr,fname,a); 
+    MatRowPut(Expr,i,Exprw); 
+    CalcExpRow(Expr,i);
+LCreateExpenceFromReport3:;
+    i = i+1;
+  end;
+  ExpGetRate(Expr);
+  ExpSumup(Expr,t);   
+  Expr.SerNr = NextSerNr("ExpVc",Expr.TransDate,-1,false,"");    
+
+ if (MatRowCnt(Expr)==0) then begin goto  LSkipCreateExpenceFromReport; end;    
+  if (Expr.SerNr>0) then begin 
+    RecordStore(Expr,false);
+    AddToReportConfirmationArray(reportid,areportid,id,adocumentid,true,areceived,Expr.SerNr,areference,error,aerror,acnt);
+  end else begin 
+LSkipCreateExpenceFromReport:; 
+    error = "Failed to store";
+    AddToReportConfirmationArray(reportid,areportid,id,adocumentid,false,areceived,"",areference,error,aerror,acnt);
+  end;
+return;
+end;
+
+global 
+updating procedure ParseCostPocketReportData(area reply,var array string areportid,var Array string adocumentid,var Array string areceived,var Array string areference,var array string aerror,var Integer acnt)
+begin
+  json js;
+  integer j;
+  string 255 reportid;
+
+  js = ParseJsonArea(reply);
+  j = 0; 
+  while (JSONNodeExists(js,"[" & j & "]/_type")) begin
+    reportid = JSONGet(js,"[" & j & "]/id");
+    CreateExpenceFromReport(js,j,reportid,areportid,adocumentid,areceived,areference,aerror,acnt);
+    j = j +1;
+  end;
+
+  return;
+end;
+
+global 
+updating procedure ParseCostPocketData(area reply,var Array string adocumentid,var Array string areceived,var Array string areference,var array string aerror, var Integer acnt)
+begin
+  json js;
+  integer i;
+
+  js = ParseJsonArea(reply);
+
+  i = 0;
+  acnt = 0;
+  while (JSONNodeExists(js,"[" & i & "]/_type")) begin
+    CreatePI(js,i,adocumentid,areceived,areference,aerror,acnt);
+    i = i +1;
+  end;
+
+  return;
+end;
+
+function LongInt DoSendConfirmation(area a_req,var string errmsg)
+begin
+  LongInt res;
+  area a_reply;
+  record CostPocketBlock CPb;
+  string 255 tstr,path;
+  json js;
+
+  BlockLoad(CPb);
+  SetWebHeaders(CostPocketHeader);
+  path = "/s2s/v1/expenses/documents/status";
+  if (SendWebRequest(CostPocketHost,443,-1,true,"PUT",path,"application/json","",false,a_req,a_reply,20)) then begin
+    WriteAreaToFile(a_req,  "DoSendConfirmationreq.txt",0);
+    WriteAreaToFile(a_reply,"DoSendConfirmationreply.txt",0);
+    js = ParseJsonArea(a_reply);
+    if (blank(JSONGet(js,"message"))) then begin
+      res = -1;
+    end else begin
+      errmsg = JSONGet(js,"message");
+    end;  
+  end else begin
+    res = 43165;
+  end;
+
+  DoSendConfirmation = res;
+  return;
+end;
+
+function LongInt DoSendConfirmationForReport(area a_req,string areportid,var string errmsg)
+begin
+  LongInt res;
+  area a_reply;
+  record CostPocketBlock CPb;
+  string 255 tstr,path,reportid;
+  json js;
+
+  BlockLoad(CPb);
+  SetWebHeaders(CostPocketHeader);
+  path = "/s2s/v1/expenses/reports/" & areportid & "/status";
+  if (SendWebRequest(CostPocketHost,443,-1,true,"PUT",path,"application/json","",false,a_req,a_reply,20)) then begin
+    WriteAreaToFile(a_req,  "DoSendConfirmationForReportreq.txt",0);
+    WriteAreaToFile(a_reply,"DoSendConfirmationForReportreply.txt",0);
+    js = ParseJsonArea(a_reply);
+    if (blank(JSONGet(js,"message"))) then begin
+      res = -1;
+    end else begin
+      errmsg = JSONGet(js,"message");
+    end;  
+  end else begin
+    res = 43165;
+  end;
+
+  DoSendConfirmationForReport = res;
+  return;
+end;
+
+global
+procedure DoCostPocketGetDataRequest(var LongInt err,var string errmsg)
+begin
+  Area a_req,a_reply,a_reqconf;
+  json js;
+  Boolean res;
+  record CostPocketBlock CPb;
+  string 255 tstr,jsr;
+  Array string 255 adocumentid,areference,aerror,areceived;
+  string 255 path;
+  Integer acnt;
+  BlockLoad(CPb);
+
+  res = false;
+  err = -1;
+  errmsg = "";
+  SetWebHeaders(CostPocketHeader);
+  path = "/s2s/v1/expenses/documents?orderby=id&status=!received&attachmentType=PDF";
+  if (SendWebRequest(CostPocketHost,443,-1,true,"GET",path,"application/json","",false,a_req,a_reply,20)) then begin
+    WriteAreaToFile(a_req,"DoCostPocketGetDataRequest_req.txt",0);
+    WriteAreaToFile(a_reply,"DoCostPocketGetDataRequest_reply.txt",0);
+    js = ParseJsonArea(a_reply);
+    if (blank(JSONGet(js,"message"))) then begin
+      if (GetAreaLength(a_reply)>2) then begin
+        qupdating.ParseCostPocketData(a_reply,adocumentid,areceived,areference,aerror,acnt);
+        res = true;
+      end else begin
+        err = 43170;//remove when idle task added
+      end;
+    end else begin 
+      err = 0;
+      errmsg = JSONGet(js,"message");
+    end;
+    if (res) then begin
+      CreateJsonAreaForSendingConfirmation(a_reqconf,adocumentid,areceived,areference,acnt);
+      err = DoSendConfirmation(a_reqconf,errmsg);
+    end;
+  end else begin 
+    err = 43165;//request failed
+  end;
+
+  return;
+end;
+
+procedure SortArrayByReportId(var array string areportid)
+begin
+  Integer i;
+  Boolean swapped;
+  string 255 tareportid;
+
+  swapped = true;
+  while (swapped) begin
+    swapped = false;
+    for (i=0;i<areportid.length-1;i=i+1) begin
+      if (areportid[i]>areportid[i+1]) then begin
+        tareportid       = areportid[i];
+        areportid[i]     = areportid[i+1];
+        areportid[i+1]   = tareportid;
+        swapped = true;
+      end;
+    end;
+  end;
+  return;
+end;
+
+global
+procedure DoCostPocketGetReportRequest(var LongInt err,var string errmsg)
+begin
+  Area a_req,a_reply,a_reqconf;
+  json js;
+  Boolean res;
+  string 255 tstr,jsr,path,companyid;
+  Array string 255 adocumentid,areference,aerror,areceived,areportid;
+  Integer acnt,i;
+
+  res = false;
+  err = -1;
+  errmsg = "";
+  SetWebHeaders(CostPocketHeader);
+  companyid = "25255";
+  path = "/s2s/v1/expenses/reports?companyId=" & companyid &  "&status=!received&attachmentType=PDF";
+  if (SendWebRequest(CostPocketHost,443,-1,true,"GET",path,"application/json","",false,a_req,a_reply,20)) then begin
+      WriteAreaToFile(a_req,"CostPocketGetReportRequestReq.txt",0);
+      WriteAreaToFile(a_reply,"CostPocketGetReportRequestReply.txt",0);
+    js = ParseJsonArea(a_reply);
+    if (blank(JSONGet(js,"message"))) then begin
+      if (GetAreaLength(a_reply)>2) then begin
+        qupdating.ParseCostPocketReportData(a_reply,areportid,adocumentid,areceived,areference,aerror,acnt);
+        res = true;
+      end else begin
+        err = 43170;//remove when idle task added
+      end;
+    end else begin 
+      err = 0;
+      errmsg = JSONGet(js,"message");
+    end;
+    if (res) then begin
+      SortArrayByReportId(areportid);
+      for (i = 0; i < acnt; i = i + 1) begin
+        CreateJsonAreaForSendingReportConfirmation(a_reqconf,areceived[i],areference[i]);
+        err = DoSendConfirmationForReport(a_reqconf,areportid[i],errmsg);
+      end;
+     
+    end;
+  end else begin 
+    err = 43165;//request failed
+  end;
+
+  return;
+end;
+
+global
+procedure CostPocketSubscribe(var record CostPocketBlock CPb,var LongInt err)
+begin
+  Area a_req,a_reply;
+  json js;
+  Boolean res;
+  string 255 apiToken,apiId,id;
+
+  res = false;
+
+  if (blank(CPb.AccessToken)) then begin
+    CPb.AccessToken = GenerateCPToken;
+    qupdating.StoreAndReturnCostPocketBlock2(CPb);
+  end;
+
+  CreateJsonAreaForSending(a_req);
+  if (SendWebRequest(CostPocketHost,443,-1,true,"POST","/integrations/v1/partner/hansaworld/subscribe","application/json","",false,a_req,a_reply,20)) then begin
+    WriteAreaToFile(a_req,"CostPocketSubscribe_req.txt",0);
+    WriteAreaToFile(a_reply,"CostPocketSubscribe_reply.txt",0);
+    if (GetAreaLength(a_reply)>0) then begin
+      js = ParseJsonArea(a_reply);
+      id =       JSONGet(js,"apiUser/id");
+      apiId =    JSONGet(js,"apiUser/apiId");
+      apiToken = JSONGet(js,"apiUser/apiToken");
+      if (nonblank(apiId) and nonblank(apiToken)) then begin
+        res = true;
+      end;
+    end;
+    if (res) then begin
+      CPb.APIId = apiId;
+      CPb.APIToken = apiToken;
+      CPb.ActiveFlag = 1;
+      qupdating.StoreCostPocketBlock(CPb);
+      err = 0;
+    end else begin
+      if (nonblank(JSONGet(js,"message"))) then begin
+        err = 43167; 
+      end else begin
+        err = 43167; 
+      end;
+      ClearCostPocketBl;
+    end;
+  end else begin 
+    err = 43165;
+    CPb.AccessToken = "";
+    qupdating.StoreCostPocketBlock(CPb);
+  end;
+  return;
+end;
+
+global
+procedure CostPocketUnSubscribe(var record CostPocketBlock CPb,var LongInt err,var string message)
+begin
+  Area a_req,a_reply;
+  json js;
+  Boolean res;
+
+  res = false;
+  CreateJsonAreaForSending(a_req);
+  if (SendWebRequest(CostPocketHost,443,-1,true,"POST","/integrations/v1/partner/hansaworld/unsubscribe","application/json","",false,a_req,a_reply,20)) then begin
+    WriteAreaToFile(a_req,  "CostPocketUnSubscribereq.txt",0);
+    WriteAreaToFile(a_reply,"CostPocketUnSubscribereply.txt",0);
+    js = ParseJsonArea(a_reply);
+    if (GetAreaLength(a_reply)==2) then begin
+      res = true;
+    end else begin
+      message = JSONGet(js,"message");
+    end;
+    if (res) then begin
+      CPb.AccessToken = "";
+      CPb.APIId = "";
+      CPb.APIToken = "";
+      CPb.ActiveFlag = 0;
+      CPb.AcceptanceFlag = 0;
+      qupdating.StoreCostPocketBlock(CPb);
+      err = 0;
+    end;
+  end else begin
+    err = 43165;
+  end;
+
+  return;
+end;
+
+global
+procedure CostPocketIdleTask(string arg)
+begin
+  Integer i,rwcnt;
+  Integer oldcomp;
+  record CompaniesBlock Compb;
+  row CompaniesBlock Comprw;
+
+  oldcomp = CurrentCompany;  
+  BlockLoad(Compb);
+  rwcnt = MatRowCnt(Compb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(Compb,i,Comprw);
+    if (blank(Comprw.TCPIP)) then begin
+      if (SetCompanyCode(Comprw.CompCode,false)) then begin
+//add here function//TRV
+      end;
+    end;
+  end;
+
+  ResetCompany(oldcomp);
+  return;
+end;

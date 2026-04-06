@@ -1,0 +1,37 @@
+external function Boolean ProductInDemoMode();
+remote updating procedure RemoteLicensesUpdateFromClient(var array record LicensesVc,Longint);
+external updating procedure UpdateLicenseStatusNow();
+external function Boolean LicenseShouldBeMovedToServer(record LicensesVc);
+
+global
+updating function Boolean MoveLicenseToServer(record LicensesVc Lr)
+begin
+  array record LicensesVc Licensesra;
+//  record LicensesVc OldLr;
+
+  Licensesra[0] = Lr;
+  RemoteLicensesUpdateFromClient(Licensesra,1);
+
+//  oldLr = Lr;
+//  Lr.Status = kLicItemTransferred;
+//  RecordUpdate(oldLr,Lr,true);
+
+  MoveLicenseToServer = true;
+  return;
+end;
+
+global
+updating function Boolean GetLicensesFromServer(array record LicensesVc Lica)
+begin
+  record LicensesVc Lr;
+
+  if (LicenseMode==kLicenseModeServer) then begin
+    UpdateLicenseStatusNow;
+  end;
+
+  while (LoopKey("ActiveFunction",Lr,1,true)) begin
+    if (LicenseShouldBeMovedToServer(Lr)) then begin
+      Lica[Lica.length] = Lr;
+    end;
+  end;
+end;

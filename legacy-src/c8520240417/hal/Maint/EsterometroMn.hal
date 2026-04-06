@@ -1,0 +1,805 @@
+external procedure AddPlainXmlToArea(area,string,Integer);
+external procedure AddXmlTagToArea(area,string,string,string,Integer);
+external procedure M4PadString(string,Integer,string,Boolean,var string);
+external function string 255 ConvertXml(string);
+external procedure MulVATIV(string,val,var val,var val,Integer,Integer);
+external procedure JSONStringStart(var string);
+external procedure JSONStringAdd(var string,string,string);
+external procedure JSONStringEnd(var string);
+external procedure BitSafeBase64EncodeAnArea(var area); 
+
+updating function Boolean DoRequestAruba(area req,string ip,LongInt port,string path,Integer typef,string error,string contenttype,string reqstr,string method,var area reply,var string errcode)
+begin
+  Boolean res;
+  json js;
+  string 255 tstr;
+  record HTSTXBlock HTSTXb;
+
+  BlockLoad(HTSTXb);
+  res = false;
+
+  SetAreaZeroSize(reply);
+  tstr = path;
+  res = SendWebRequest(ip,port,-1,true,method,tstr & reqstr,contenttype,"",false,req,reply,10);
+  if (res) then begin
+    js = ParseJsonArea(reply);
+    errcode = JSONGet(js,error);
+    if (blank(errcode)) begin
+      if (typef==1) then begin
+        tstr = JSONGet(js,"refresh_token");
+        if (nonblank(tstr)) begin
+          HTSTXb.RefreshToken = tstr;
+          tstr = JSONGet(js,"access_token");
+          HTSTXb.LoginToken = tstr;
+          BlockStore(HTSTXb);
+        end;
+      end else begin
+        tstr = JSONGet(js,"requestID");
+      end;
+      res = true;
+    end else begin
+      switch (typef) begin
+        case 2:
+          if (errcode!="0000") then begin
+            res = false;
+          end;
+          tstr = JSONGet(js,"errorDescription");
+          if (nonblank(tstr)) then begin
+            errcode = tstr;
+          end;
+        otherwise
+          res = false;
+      end;
+    end;
+  end;
+  
+  DoRequestAruba = res;
+  return;
+end;
+
+updating function Boolean AddDataToCallAruba(Boolean testf,area a_data)
+begin
+  Boolean res;
+  string 255 path,tstr,tstr2,ip,contenttype,errortext,errcode;
+  LongInt port;
+  area req,rep;
+  Integer status;
+  record HTSTXBlock HTSTXb;
+  
+  BlockLoad(HTSTXb);
+  res = false;
+  if (testf) then begin
+    ip = "demows.fatturazioneelettronica.aruba.it";
+  end else begin
+    ip = "ws.fatturazioneelettronica.aruba.it";
+  end;
+  port = 443;
+  contenttype = "application/json;charset=UTF-8";
+
+  JSONStringStart(tstr);
+  tstr = tstr & chr(10);
+  tstr = tstr & """userName"":" & """" & HTSTXb.Username & """,";
+  tstr = tstr & chr(10);
+  tstr = tstr & """password"":" & """" & HTSTXb.Password & """,";
+  tstr = tstr & chr(10);
+  tstr = tstr & """userID"":" & """" & HTSTXb.Username & """,";
+  tstr = tstr & chr(10);
+  tstr = tstr & """comunicationType"":" & """" & "DF" & """,";
+  tstr = tstr & chr(10);
+  tstr = tstr & """dataFile"":" & """";
+  AddTextToArea(tstr,req);
+  if (GetAreaLength(a_data)>0) then begin
+    BitSafeBase64EncodeAnArea(a_data);
+  end;
+  AddAreaToArea(a_data,req);
+  tstr = """";
+  tstr = tstr & chr(10);
+  JSONStringEnd(tstr);
+  AddTextToArea(tstr,req);
+
+  tstr = "Authorization: Bearer " & HTSTXb.LoginToken;
+  SetWebHeaders(tstr);
+
+  res = DoRequestAruba(req,ip,port,"/services/ClientRequest/CreateTransmissionRequest",2,"errorCode",contenttype,"","POST",rep,errcode);
+
+  AddDataToCallAruba = res;
+  return;
+end;
+
+updating function Boolean DoLoginAruba(Boolean testf)
+begin
+  Boolean res;
+  string 255 path,tstr,ip,contenttype,errcode;
+  LongInt port;
+  area req,rep;
+  record HTSTXBlock HTSTXb;
+  
+  BlockLoad(HTSTXb);
+  res = false;
+  if (testf) then begin
+    ip = "demoauth.fatturazioneelettronica.aruba.it";
+  end else begin
+    ip = "auth.fatturazioneelettronica.aruba.it";
+  end;
+  port = 443;
+  path = "/auth/signin";
+  contenttype = "application/x-www-form-urlencoded; charset=utf-8";
+
+  if (nonblank(HTSTXb.RefreshToken)) then begin
+    tstr = "grant_type=refresh_token&refresh_token=" & HTSTXb.RefreshToken;
+    AddTextToArea(tstr,req);
+    res = DoRequestAruba(req,ip,port,path,1,"error",contenttype,"","POST",rep,errcode);
+  end;
+  if (!res) then begin
+    tstr = "grant_type=password&username=" & HTSTXb.Username & "&password=" & HTSTXb.Password;
+    SetAreaZeroSize(req);
+    AddTextToArea(tstr,req);
+    res = DoRequestAruba(req,ip,port,path,1,"error",contenttype,"","POST",rep,errcode);
+  end;
+
+  DoLoginAruba = res;
+  return;
+end;
+
+global
+procedure FillEsterometroArray(var Array string astr,record RcVc RepSpec,integer mode)
+begin
+  record IVVc IVr;
+  record VIVc VIr;
+  Boolean testf;
+  vector Boolean v_addedf;
+  string 255 tstr;
+  
+  switch (RepSpec.flags[0]) begin
+    case 0:
+      switch (mode) begin
+        case 1:
+          testf = true;
+          IVr.TransDate = RepSpec.sStartDate;
+          while (LoopKey("TransDate",IVr,1,testf)) begin
+            if (IVr.TransDate>RepSpec.sEndDate) then begin
+              testf = false;
+            end else begin
+              if (!v_addedf[IVr.XMLPosition] and IVr.XMLPosition>0) then begin
+                if (blank(RepSpec.f1) or StringToLongInt(StripNonDigits(RepSpec.f1))==IVr.XMLNumber) then begin
+                  astr[astr.length] = IVr.XMLPosition;
+                  v_addedf[IVr.XMLPosition] = true;
+                end;
+              end;
+            end;
+          end;
+        case 2:
+          testf = true;
+          IVr.TransDate = RepSpec.sStartDate;
+          while (LoopKey("TransDate",IVr,1,testf)) begin
+            if (IVr.TransDate>RepSpec.sEndDate) then begin
+              testf = false;
+            end else begin
+              tstr = "SL" & IVr.XMLNumber & ".xml";
+              if (!v_addedf[tstr] and IVr.XMLNumber>0) then begin
+                astr[astr.length] = tstr;
+                v_addedf[tstr] = true;
+              end;
+            end;
+          end;
+      end;
+    case 1:
+      switch (mode) begin
+        case 1:
+          testf = true;
+          VIr.TransDate = RepSpec.sStartDate;
+          while (LoopKey("TransDate",VIr,1,testf)) begin
+            if (VIr.TransDate>RepSpec.sEndDate) then begin
+              testf = false;
+            end else begin
+              if (!v_addedf[VIr.XMLPosition] and VIr.XMLPosition>0) then begin
+                if (blank(RepSpec.f1) or StringToLongInt(StripNonDigits(RepSpec.f1))==VIr.XMLNumber) then begin
+                  astr[astr.length] = VIr.XMLPosition;
+                  v_addedf[VIr.XMLPosition] = true;
+                end;
+              end;
+            end;
+          end;
+        case 2:
+          testf = true;
+          VIr.TransDate = RepSpec.sStartDate;
+          while (LoopKey("TransDate",VIr,1,testf)) begin
+            if (VIr.TransDate>RepSpec.sEndDate) then begin
+              testf = false;
+            end else begin
+              tstr = "PL" & VIr.XMLNumber & ".xml";
+              if (!v_addedf[tstr] and VIr.XMLNumber>0) then begin
+                astr[astr.length] = tstr;
+                v_addedf[tstr] = true;
+              end;
+            end;
+          end;
+      end;
+  end;
+
+  return;
+end;
+
+function val GetVATprc(string vatcode,var string entity)
+begin
+  record VATCodeBlock VATRec;
+  row VATCodeBlock VATrw;
+  Integer i,rwcnt;
+  val res;
+  
+  BlockLoad(VATRec);
+  rwcnt = MatRowCnt(VATRec);
+  for (i=i;i<rwcnt;i=i+1) begin
+    MatRowGet(VATRec,i,VATrw);
+    if (vatcode==VATrw.VATCode) then begin
+      res = VATrw.ExVatpr;
+      if (blank(res))  then begin
+        res = VATrw.IncVatpr;
+      end;
+      entity = VATrw.VATEntity;
+      i = rwcnt;
+    end;
+  end;
+  
+  GetVATprc = res;
+  return;
+end;
+
+procedure AddCustData(record IVVc IVr,var area a_req,var Integer level,string prevcust)
+begin
+  record CountryVc Countryr;
+
+  if (nonblank(prevcust)) then begin
+    level = level - 1;
+    AddPlainXmlToArea(a_req,"</CessionarioCommittenteDTE>",level);
+  end;
+  AddPlainXmlToArea(a_req,"<CessionarioCommittenteDTE>",level);
+  level = level + 1;
+  AddPlainXmlToArea(a_req,"<IdentificativiFiscali>",level);
+  level = level + 1;
+  AddPlainXmlToArea(a_req,"<IdFiscaleIVA>",level);
+  level = level + 1;
+  Countryr.Code = IVr.InvCountry;
+  ReadFirstMain(Countryr,1,true);
+  AddXmlTagToArea(a_req,"IdPaese","",Countryr.ISOCode,level);
+  AddXmlTagToArea(a_req,"IdCodice","",IVr.RegNr1,level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</IdFiscaleIVA>",level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</IdentificativiFiscali>",level);
+  AddPlainXmlToArea(a_req,"<AltriDatiIdentificativi>",level);
+  level = level + 1;
+  AddXmlTagToArea(a_req,"Denominazione","",ConvertXml(IVr.Addr0),level);
+  AddPlainXmlToArea(a_req,"<Sede>",level);
+  level = level + 1;
+  AddXmlTagToArea(a_req,"Indirizzo","",ConvertXml(IVr.Addr1),level);
+  if (nonblank(IVr.Addr2)) then begin
+    AddXmlTagToArea(a_req,"Comune","",ConvertXml(IVr.Addr2),level);
+  end;
+  if (nonblank(IVr.InvAddr4)) then begin
+    AddXmlTagToArea(a_req,"Provincia","",ConvertXml(IVr.InvAddr4),level);
+  end;
+  AddXmlTagToArea(a_req,"Nazione","",Countryr.ISOCode,level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</Sede>",level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</AltriDatiIdentificativi>",level);
+
+  return;
+end;
+
+procedure AddVendData(record VIVc VIr,var area a_req,var Integer level,string prevcust)
+begin
+  record CountryVc Countryr;
+
+  if (nonblank(prevcust)) then begin
+    level = level - 1;
+    AddPlainXmlToArea(a_req,"</CedentePrestatoreDTR>",level);
+  end;
+  AddPlainXmlToArea(a_req,"<CedentePrestatoreDTR>",level);
+  level = level + 1;
+  AddPlainXmlToArea(a_req,"<IdentificativiFiscali>",level);
+  level = level + 1;
+  AddPlainXmlToArea(a_req,"<IdFiscaleIVA>",level);
+  level = level + 1;
+  Countryr.Code = VIr.InvCountry;
+  ReadFirstMain(Countryr,1,true);
+  AddXmlTagToArea(a_req,"IdPaese","",Countryr.ISOCode,level);
+  AddXmlTagToArea(a_req,"IdCodice","",VIr.VATNr,level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</IdFiscaleIVA>",level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</IdentificativiFiscali>",level);
+  AddPlainXmlToArea(a_req,"<AltriDatiIdentificativi>",level);
+  level = level + 1;
+  AddXmlTagToArea(a_req,"Denominazione","",ConvertXml(VIr.VEName),level);
+  AddPlainXmlToArea(a_req,"<Sede>",level);
+  level = level + 1;
+  AddXmlTagToArea(a_req,"Indirizzo","",ConvertXml(VIr.Addr1),level);
+  if (nonblank(VIr.Addr2)) then begin
+    AddXmlTagToArea(a_req,"Comune","",ConvertXml(VIr.Addr2),level);
+  end;
+  if (nonblank(VIr.InvAddr4)) then begin
+    AddXmlTagToArea(a_req,"Provincia","",ConvertXml(VIr.InvAddr4),level);
+  end;
+  AddXmlTagToArea(a_req,"Nazione","",Countryr.ISOCode,level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</Sede>",level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</AltriDatiIdentificativi>",level);
+
+  return;
+end;
+
+procedure GetVATDataIV(record IVVc IVr,var vector val v_vatval,var array string a_vatcode)
+begin
+  row IVVc IVrw;
+  Integer i,rwcnt;
+  val vatsum,taxsum,rowsum;
+  vector Boolean v_vatcodef;
+
+  rwcnt = MatRowCnt(IVr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(IVr,i,IVrw);
+    if (IVrw.ovst==0 and nonblank(IVrw.VATCode) and IVrw.Sum!=0) then begin
+      MulVATIV(IVrw.VATCode,IVrw.Sum,vatsum,taxsum,IVr.InclVAT,IVr.NoTAXonVAT);
+      if (IVr.InclVAT==0) then begin
+        rowsum = IVrw.Sum;
+      end else begin
+        rowsum = IVrw.Sum - vatsum;
+      end;
+      v_vatval["excl|" & IVrw.VATCode] = v_vatval["excl|" & IVrw.VATCode] + rowsum;
+      v_vatval["vat|" & IVrw.VATCode] = v_vatval["vat|" & IVrw.VATCode] + vatsum;
+      if (!v_vatcodef[IVrw.VATCode]) then begin
+        v_vatcodef[IVrw.VATCode] = true;
+        a_vatcode[a_vatcode.length] = IVrw.VATCode;
+      end;
+    end;
+  end;
+  
+  return;
+end;
+
+procedure GetVATDataVI(record VIVc VIr,var vector val v_vatval,var array string a_vatcode)
+begin
+  row VIVc VIrw;
+  Integer i,rwcnt;
+  val vatsum,taxsum,rowsum;
+  vector Boolean v_vatcodef;
+
+  rwcnt = MatRowCnt(VIr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(VIr,i,VIrw);
+    if (VIrw.ovst==0 and nonblank(VIrw.VATCode) and VIrw.Sum!=0) then begin
+      MulVATIV(VIrw.VATCode,VIrw.Sum,vatsum,taxsum,0,VIr.NoTAXonVAT);
+      rowsum = VIrw.Sum - vatsum;
+      v_vatval["excl|" & VIrw.VATCode] = v_vatval["excl|" & VIrw.VATCode] + rowsum;
+      v_vatval["vat|" & VIrw.VATCode] = v_vatval["vat|" & VIrw.VATCode] + vatsum;
+      if (!v_vatcodef[VIrw.VATCode]) then begin
+        v_vatcodef[VIrw.VATCode] = true;
+        a_vatcode[a_vatcode.length] = VIrw.VATCode;
+      end;
+    end;
+  end;
+  
+  return;
+end;
+
+procedure AddIVData(record IVVc IVr,var area a_req,var Integer level)
+begin
+  string 255 tstr,entity;
+  vector val v_vatval;
+  array string 255 a_vatcode;
+  Integer i;
+
+  AddPlainXmlToArea(a_req,"<DatiFatturaBodyDTE>",level);
+  level = level + 1;
+  AddPlainXmlToArea(a_req,"<DatiGenerali>",level);
+  level = level + 1;
+  switch (IVr.InvType) begin
+    case kInvoiceTypeDownpayment: tstr = "TD02";
+    case kInvoiceTypeCredit: tstr = "TD04";
+    case kInvoiceTypeDebit: tstr = "TD05";
+    otherwise tstr = "TD01";
+  end;
+  AddXmlTagToArea(a_req,"TipoDocumento","",tstr,level);
+  AddXmlTagToArea(a_req,"Data","",DateToString(IVr.InvDate,"YYYY-MM-DD"),level);
+  AddXmlTagToArea(a_req,"Numero","",IVr.OfficialSerNr,level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</DatiGenerali>",level);
+  ClearVector(v_vatval);
+  ClearArray(a_vatcode);
+  GetVATDataIV(IVr,v_vatval,a_vatcode);
+  for (i=0;i<a_vatcode.length;i=i+1) begin
+    AddPlainXmlToArea(a_req,"<DatiRiepilogo>",level);
+    level = level + 1;
+    AddXmlTagToArea(a_req,"ImponibileImporto","",ValToString(v_vatval["excl|" & a_vatcode[i]],M4Val,"",".",0),level);
+    AddPlainXmlToArea(a_req,"<DatiIVA>",level);
+    level = level + 1;
+    AddXmlTagToArea(a_req,"Imposta","",ValToString(v_vatval["vat|" & a_vatcode[i]],M4Val,"",".",0),level);
+    AddXmlTagToArea(a_req,"Aliquota","",ValToString(GetVATprc(a_vatcode[i],entity),M4Val,"",".",0),level);
+    level = level - 1;
+    AddPlainXmlToArea(a_req,"</DatiIVA>",level);
+    if (nonblank(entity)) then begin
+      AddXmlTagToArea(a_req,"Natura","",entity,level);
+    end;
+    level = level - 1;
+    AddPlainXmlToArea(a_req,"</DatiRiepilogo>",level);
+  end;
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</DatiFatturaBodyDTE>",level);
+  
+  return;
+end;
+
+procedure AddVIData(record VIVc VIr,var area a_req,var Integer level)
+begin
+  string 255 tstr,entity;
+  vector val v_vatval;
+  array string 255 a_vatcode;
+  Integer i;
+
+  AddPlainXmlToArea(a_req,"<DatiFatturaBodyDTR>",level);
+  level = level + 1;
+  AddPlainXmlToArea(a_req,"<DatiGenerali>",level);
+  level = level + 1;
+  switch (VIr.InvType) begin
+    case kInvoiceTypeDownpayment: tstr = "TD02";
+    case kInvoiceTypeCredit: tstr = "TD04";
+    case kInvoiceTypeDebit: tstr = "TD05";
+    otherwise tstr = "TD01";
+  end;
+  AddXmlTagToArea(a_req,"TipoDocumento","",tstr,level);
+  AddXmlTagToArea(a_req,"Data","",DateToString(VIr.InvDate,"YYYY-MM-DD"),level);
+  AddXmlTagToArea(a_req,"Numero","",VIr.InvoiceNr,level);
+  AddXmlTagToArea(a_req,"DataRegistrazione","",DateToString(VIr.TransDate,"YYYY-MM-DD"),level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</DatiGenerali>",level);
+  ClearVector(v_vatval);
+  ClearArray(a_vatcode);
+  GetVATDataVI(VIr,v_vatval,a_vatcode);
+  for (i=0;i<a_vatcode.length;i=i+1) begin
+    AddPlainXmlToArea(a_req,"<DatiRiepilogo>",level);
+    level = level + 1;
+    AddXmlTagToArea(a_req,"ImponibileImporto","",ValToString(v_vatval["excl|" & a_vatcode[i]],M4Val,"",".",0),level);
+    AddPlainXmlToArea(a_req,"<DatiIVA>",level);
+    level = level + 1;
+    AddXmlTagToArea(a_req,"Imposta","",ValToString(v_vatval["vat|" & a_vatcode[i]],M4Val,"",".",0),level);
+    AddXmlTagToArea(a_req,"Aliquota","",ValToString(GetVATprc(a_vatcode[i],entity),M4Val,"",".",0),level);
+    level = level - 1;
+    AddPlainXmlToArea(a_req,"</DatiIVA>",level);
+    if (nonblank(entity)) then begin
+      AddXmlTagToArea(a_req,"Natura","",entity,level);
+    end;
+    AddXmlTagToArea(a_req,"Deducibile","","SI",level);
+    AddXmlTagToArea(a_req,"EsigibilitaIVA","","I",level);
+    level = level - 1;
+    AddPlainXmlToArea(a_req,"</DatiRiepilogo>",level);
+  end;
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</DatiFatturaBodyDTR>",level);
+  
+  return;
+end;
+
+procedure AddSLHeader(var area a_req,var Integer level,Integer newnum)
+begin
+  record CYBlock CYb;
+  string 255 tstr;
+
+  BlockLoad(CYb);  
+  AddPlainXmlToArea(a_req,"<?xml version=""1.0"" encoding=""UTF-8"" standalone=""yes""?><ns2:DatiFattura versione=""DAT20"" xmlns:ns2=""http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v2.0"">",level);
+  level = level + 1;
+  AddPlainXmlToArea(a_req,"<DatiFatturaHeader>",level);
+  level = level + 1;
+  AddXmlTagToArea(a_req,"ProgressivoInvio","",newnum,level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</DatiFatturaHeader>",level);
+  AddPlainXmlToArea(a_req,"<DTE>",level);
+  level = level + 1;
+  AddPlainXmlToArea(a_req,"<CedentePrestatoreDTE>",level);
+  level = level + 1;
+  AddPlainXmlToArea(a_req,"<IdentificativiFiscali>",level);
+  level = level + 1;
+  AddPlainXmlToArea(a_req,"<IdFiscaleIVA>",level);
+  level = level + 1;
+  tstr = "";
+  if (HasLocalization("ITA")) then begin
+    tstr = "IT";
+  end;
+  AddXmlTagToArea(a_req,"IdPaese","",tstr,level);
+  AddXmlTagToArea(a_req,"IdCodice","",CYb.VATNr,level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</IdFiscaleIVA>",level);
+  if (nonblank(CYb.OrgNr)) then begin
+    AddXmlTagToArea(a_req,"CodiceFiscale","",CYb.OrgNr,level);
+  end;
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</IdentificativiFiscali>",level);
+  AddPlainXmlToArea(a_req,"<AltriDatiIdentificativi>",level);
+  level = level + 1;
+  AddXmlTagToArea(a_req,"Denominazione","",ConvertXml(CYb.CompName),level);
+  AddPlainXmlToArea(a_req,"<Sede>",level);
+  level = level + 1;
+  AddXmlTagToArea(a_req,"Indirizzo","",ConvertXml(CYb.Addr0),level);
+  M4PadString(CYb.Addr2,5,"0",true,tstr)
+  AddXmlTagToArea(a_req,"CAP","",ConvertXml(tstr),level);
+  AddXmlTagToArea(a_req,"Comune","",ConvertXml(CYb.Addr3),level);
+  if (nonblank(CYb.Addr4)) then begin
+    AddXmlTagToArea(a_req,"Provincia","",ConvertXml(CYb.Addr4),level);
+  end;
+  AddXmlTagToArea(a_req,"Nazione","","IT",level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</Sede>",level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</AltriDatiIdentificativi>",level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</CedentePrestatoreDTE>",level);
+
+  return;
+end;
+
+procedure AddPLHeader(var area a_req,var Integer level,Integer newnum)
+begin
+  record CYBlock CYb;
+  string 255 tstr;
+
+  BlockLoad(CYb);  
+  AddPlainXmlToArea(a_req,"<?xml version=""1.0"" encoding=""UTF-8"" standalone=""yes""?><ns2:DatiFattura versione=""DAT20"" xmlns:ns2=""http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v2.0"">",level);
+  level = level + 1;
+  AddPlainXmlToArea(a_req,"<DatiFatturaHeader>",level);
+  level = level + 1;
+  AddXmlTagToArea(a_req,"ProgressivoInvio","",newnum,level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</DatiFatturaHeader>",level);
+  AddPlainXmlToArea(a_req,"<DTR>",level);
+  level = level + 1;
+  AddPlainXmlToArea(a_req,"<CessionarioCommittenteDTR>",level);
+  level = level + 1;
+  AddPlainXmlToArea(a_req,"<IdentificativiFiscali>",level);
+  level = level + 1;
+  AddPlainXmlToArea(a_req,"<IdFiscaleIVA>",level);
+  level = level + 1;
+  tstr = "";
+  if (HasLocalization("ITA")) then begin
+    tstr = "IT";
+  end;
+  AddXmlTagToArea(a_req,"IdPaese","",tstr,level);
+  AddXmlTagToArea(a_req,"IdCodice","",CYb.VATNr,level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</IdFiscaleIVA>",level);
+  if (nonblank(CYb.OrgNr)) then begin
+    AddXmlTagToArea(a_req,"CodiceFiscale","",CYb.OrgNr,level);
+  end;
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</IdentificativiFiscali>",level);
+  AddPlainXmlToArea(a_req,"<AltriDatiIdentificativi>",level);
+  level = level + 1;
+  AddXmlTagToArea(a_req,"Denominazione","",ConvertXml(CYb.CompName),level);
+  AddPlainXmlToArea(a_req,"<Sede>",level);
+  level = level + 1;
+  AddXmlTagToArea(a_req,"Indirizzo","",ConvertXml(CYb.Addr0),level);
+  M4PadString(CYb.Addr2,5,"0",true,tstr)
+  AddXmlTagToArea(a_req,"CAP","",ConvertXml(tstr),level);
+  AddXmlTagToArea(a_req,"Comune","",ConvertXml(CYb.Addr3),level);
+  if (nonblank(CYb.Addr4)) then begin
+    AddXmlTagToArea(a_req,"Provincia","",ConvertXml(CYb.Addr4),level);
+  end;
+  AddXmlTagToArea(a_req,"Nazione","","IT",level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</Sede>",level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</AltriDatiIdentificativi>",level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</CessionarioCommittenteDTR>",level);
+
+  return;
+end;
+
+procedure AddSLFooter(var area a_req,var Integer level)
+begin
+
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</CessionarioCommittenteDTE>",level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</DTE>",level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</ns2:DatiFattura>",level);
+
+  return;
+end;
+
+procedure AddPLFooter(var area a_req,var Integer level)
+begin
+
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</CedentePrestatoreDTR>",level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</DTR>",level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</ns2:DatiFattura>",level);
+
+  return;
+end;
+
+procedure InvalidatePos(record RcVc RepSpec,var area a_req,var Integer level)
+begin
+
+  AddPlainXmlToArea(a_req,"<?xml version=""1.0"" encoding=""UTF-8"" standalone=""yes""?><ns2:DatiFattura versione=""DAT20"" xmlns:ns2=""http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v2.0"">",level);
+  level = level + 1;
+  AddPlainXmlToArea(a_req,"<ANN>",level);
+  level = level + 1;
+  AddXmlTagToArea(a_req,"IdFile","",RepSpec.f1,level);
+  AddXmlTagToArea(a_req,"Posizione","",RepSpec.f2,level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</ANN>",level);
+  level = level - 1;
+  AddPlainXmlToArea(a_req,"</ns3:DatiFattura>",level);
+  
+  return;
+end;
+
+global updating
+procedure EsterometroMn(record RcVc RepSpec)
+begin
+  record IVVc IVr,IV2r;
+  record VIVc VIr,VI2r;
+  Boolean TrHs,testf,firstf;
+  string 255 prevcust,fname,path;
+  LongInt cnt,newnum,tlong;
+  area a_req,a_rep;
+  Integer level;
+  record HTSTestServerBlock HTSTSb;
+  record HTSTXBlock HTSTXb;
+
+  BlockLoad(HTSTXb);
+  BlockLoad(HTSTSb);
+
+  cnt = 1;
+  switch (RepSpec.flags[2]) begin
+    case 0:
+      level = 0;
+      firstf = true;
+      switch (RepSpec.flags[0]) begin
+        case 0:
+          IVr.XMLNumber = 999999999999999;
+          ReadLastKey("XMLNumber",IVr,1,false);
+          newnum = 1;
+          if (IVr.XMLNumber>0) then begin
+            newnum = IVr.XMLNumber + 1;
+          end;
+          fname = "tmp/SL" & newnum & ".xml";
+          ResetLoop(IVr);
+          TrHs = true;
+          IVr.CustCode = "";
+          IVr.TransDate = RepSpec.sStartDate;
+          while (LoopKey("TransDateCust",IVr,2,TrHs)) begin
+            if (IVr.TransDate>RepSpec.sEndDate) then begin
+              TrHs = false;
+            end else begin
+              testf = true;
+              if (IVr.OKFlag==0) then begin
+                testf = false;
+              end;
+              if (IVr.Invalid!=0) then begin
+                testf = false;
+              end;
+              if (testf) then begin
+                if (blank(prevcust) or prevcust!=IVr.CustCode) then begin
+                  if (firstf) then begin
+                    firstf = false;
+                    AddSLHeader(a_req,level,newnum);
+                  end;
+                  AddCustData(IVr,a_req,level,prevcust);
+                  prevcust = IVr.CustCode;
+                end;
+                AddIVData(IVr,a_req,level);
+                RecordCopy(IV2r,IVr);
+                IVr.XMLPosition = cnt;
+                IVr.XMLNumber = newnum;
+                RecordUpdate(IV2r,IVr,false);
+                cnt = cnt + 1;
+              end;
+            end;
+          end;
+          if (cnt>1) then begin
+            AddSLFooter(a_req,level);
+          end;
+        case 1:
+          VIr.XMLNumber = 999999999999999;
+          ReadLastKey("XMLNumber",VIr,1,false);
+          newnum = 1;
+          if (VIr.XMLNumber>0) then begin
+            newnum = VIr.XMLNumber + 1;
+          end;
+          fname = "tmp/PL" & newnum & ".xml";
+          ResetLoop(VIr);
+          TrHs = true;
+          VIr.VECode = "";
+          VIr.TransDate = RepSpec.sStartDate;
+          while (LoopKey("TransDateVECode",VIr,2,TrHs)) begin
+            if (VIr.TransDate>RepSpec.sEndDate) then begin
+              TrHs = false;
+            end else begin
+              testf = true;
+              if (VIr.OKFlag==0) then begin
+                testf = false;
+              end;
+              if (VIr.Invalid!=0) then begin
+                testf = false;
+              end;
+              if (testf) then begin
+                if (blank(prevcust) or prevcust!=VIr.VECode) then begin
+                  if (firstf) then begin
+                    firstf = false;
+                    AddPLHeader(a_req,level,newnum);
+                  end;
+                  AddVendData(VIr,a_req,level,prevcust);
+                  prevcust = VIr.VECode;
+                end;
+                AddVIData(VIr,a_req,level);
+                RecordCopy(VI2r,VIr);
+                VIr.XMLPosition = cnt;
+                VIr.XMLNumber = newnum;
+                RecordUpdate(VI2r,VIr,false);
+                cnt = cnt + 1;
+              end;
+            end;
+          end;
+          if (cnt>1) then begin
+            AddPLFooter(a_req,level);
+          end;
+      end;
+    case 1:
+      if (nonblank(RepSpec.f1) and nonblank(RepSpec.f2)) then begin
+        tlong = StringToLongInt(StripNonDigits(RepSpec.f1));
+        switch (RepSpec.flags[0]) begin
+          case 0:
+            IVr.XMLNumber = tlong;
+            testf = true;
+            while (LoopKey("XMLNumber",IVr,1,testf)) begin
+              if (IVr.XMLNumber!=tlong) then begin
+                testf = false;
+              end else begin
+                if (IVr.XMLPosition==StringToLongInt(RepSpec.f2)) then begin
+                  fname = "tmp/SL" & IVr.XMLNumber & "-" & IVr.XMLPosition & "Invalidate.xml";
+                  InvalidatePos(RepSpec,a_req,level);
+                  cnt = cnt + 1;
+                  testf = false;
+                end;
+              end;
+            end;
+          case 1:
+            VIr.XMLNumber = tlong;
+            testf = true;
+            while (LoopKey("XMLNumber",VIr,1,testf)) begin
+              if (VIr.XMLNumber!=tlong) then begin
+                testf = false;
+              end else begin
+                if (VIr.XMLPosition==StringToLongInt(RepSpec.f2)) then begin
+                  fname = "tmp/PL" & VIr.XMLNumber & "-" & VIr.XMLPosition & "Invalidate.xml";
+                  InvalidatePos(RepSpec,a_req,level);
+                  cnt = cnt + 1;
+                  testf = false;
+                end;
+              end;
+            end;
+        end;
+      end;
+  end;
+
+  if (cnt>1) then begin
+    if (RepSpec.flags[1]==0) then begin
+      WriteAreaToFile(a_req,fname,0);
+    end else begin
+      WriteAreaToFile(a_req,fname,0);
+      if (HTSTXb.Partner==kInternalServerArubaInvoicing) then begin
+        if (DoLoginAruba(HTSTSb.ThisIsTestTX!=0)) then begin
+          AddDataToCallAruba(HTSTSb.ThisIsTestTX!=0,a_req);
+        end;
+      end;
+    end;
+  end;
+  
+  return;
+end;

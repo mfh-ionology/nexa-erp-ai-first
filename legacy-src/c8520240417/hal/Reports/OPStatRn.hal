@@ -1,0 +1,196 @@
+external function LongInt DateDiff(Date,Date);
+external procedure HT2Per(Date, Date , var string);
+
+function Date LastPaymentDate(record RcVc RepSpec,record VIVc VIr)
+begin
+  Date res;
+  record OPrsVc OPrsr;
+  Boolean found,testf;
+
+  found = true;
+  OPrsr.VINr = VIr.SerNr;
+  OPrsr.TransDate = RepSpec.sEndDate;
+  while (LoopBackKey("VIKeyTransDate",OPrsr,2,found)) begin
+    if (OPrsr.VINr!=VIr.SerNr) then begin found = false; end;
+    if (DateInRange(OPrsr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin
+      found = false;
+    end;
+    if (found) then begin
+      testf = true;
+      if (OPrsr.TransType==kOPrsTransTypeInvoice) then begin testf = false; end;
+      if (testf) then begin
+        if (OPrsr.TransType==kOPrsTransTypePayment or OPrsr.TransType==kOPrsTransTypeNLTransaction or OPrsr.TransType==kOPrsTransTypeCashOut) begin
+          res = OPrsr.TransDate;
+          goto LLastPaymentDate;
+        end;
+      end;
+    end;
+  end;
+LLastPaymentDate:;  
+  LastPaymentDate = res;
+  return;
+end;
+
+procedure AddInvoiceStatistics(record RcVc RepSpec,record VIVc VIr,var vector val vps)
+begin
+  record OPrsVc OPrsr;
+  Boolean found,testf;
+  LongInt latedays;
+  Integer ld;
+  vector Boolean vvif;
+  
+  found = true;
+  OPrsr.VINr = VIr.SerNr;
+  OPrsr.TransDate = RepSpec.sStartDate;
+  while (LoopKey("VIKeyTransDate",OPrsr,2,found)) begin
+    if (OPrsr.VINr!=VIr.SerNr) then begin found = false; end;
+    if (DateInRange(OPrsr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin
+      found = false;
+    end;
+    if (found) then begin
+      testf = true;
+      if (OPrsr.TransType==kOPrsTransTypeInvoice) then begin testf = false; end;
+      if (testf) then begin
+        if (OPrsr.TransType==kOPrsTransTypePayment or OPrsr.TransType==kOPrsTransTypeNLTransaction or OPrsr.TransType==kOPrsTransTypeCashOut) begin
+            if (vvif[VIr.SerNr & "_RcvDate"]==false) then begin
+              latedays = DateDiff(OPrsr.TransDate,VIr.RcvDate);
+              if (latedays>0) then begin
+                ld = latedays/30;
+                if (ld>2) then begin ld = 2; end;
+                vps[ld] = vps[ld] + 1;
+                vvif[VIr.SerNr & "_RcvDate"] = true;
+              end;
+            end;
+            if (vvif[VIr.SerNr & "_DueDate"]==false) then begin
+              if (OPrsr.TransDate>VIr.DueDate) then begin
+                vps[10] = vps[10] + 1;
+                vvif[VIr.SerNr & "_DueDate"] = true;
+              end;
+            end;
+        end;
+      end;
+    end;
+  end;
+  return;
+end;
+
+global
+procedure OPStatRn(record RcVc RepSpec)
+begin
+  Integer rw;
+  string 255 tstr,perstr;
+  record VIVc VIr;
+  record APVc APr;
+  Boolean found,testf;
+  LongInt latedays,paydays,payvicnt;
+  vector val vps;
+  vector val vtps;
+  val tot;
+  Date lastpd;
+  
+  StartReportJob(USetStr(41090));
+  rw = 1;
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,perstr);
+  Header(rw,perstr,1);
+  rw = rw + 1;
+  EndHeader;
+  StartFormat(15);
+   OutString(180,0,"1-30",true);
+   OutString(260,0,"31-60",true);
+   OutString(340,0,"61-",true);
+   OutString(420,0,USetStr(41091),true);
+   OutString(1,0,USetStr(41092),true);
+  EndFormat;
+  Gray_Divider(0,1);
+  found = true;
+  VIr.RcvDate = RepSpec.sStartDate;
+  while (LoopKey("RcvDate",VIr,1,found)) begin
+    if (DateInRange(VIr.RcvDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin
+      found = false;
+    end;
+    if (found) then begin
+      testf = true;
+      if (VIr.InvType==kInvoiceTypeCash) then begin testf = false; end;
+      if (VIr.InvType==kInvoiceTypeCredit) then begin testf = false; end;
+      if (VIr.Invalid!=0) then begin testf = false; end;
+      if (testf) then begin
+        latedays = DateDiff(VIr.DueDate,RepSpec.sEndDate);
+        if (latedays>0) then begin testf = false; end;        
+      end;
+      if (testf) then begin
+        ClearVector(vps);
+        AddInvoiceStatistics(RepSpec,VIr,vps);        
+        if (vps[0]==0 and vps[1]==0 and vps[2]==0) then begin testf = false; end;
+      end;
+      if (testf) then begin
+        vtps[0] = vtps[0] + vps[0];
+        vtps[1] = vtps[1] + vps[1];
+        vtps[2] = vtps[2] + vps[2];
+        vtps[10] = vtps[10] + vps[10];
+        StartFormat(15);
+         OutString(0,"DblVIVc",VIr.SerNr,false);
+         OutVal(180,0,vps[0],M40Val,true);
+         OutVal(260,0,vps[1],M40Val,true);
+         OutVal(340,0,vps[2],M40Val,true);
+         OutVal(420,0,vps[10],M40Val,true);
+        EndFormat;
+      end;
+    end;
+  end;
+  paydays = 0;
+  payvicnt = 0;
+//  Black_Divider(0,1);
+  ResetLoop(VIr);
+  found = true;
+  VIr.RcvDate = RepSpec.sStartDate;
+  while (LoopKey("RcvDate",VIr,1,found)) begin
+    if (DateInRange(VIr.RcvDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin
+      found = false;
+    end;
+    if (found) then begin
+      vtps[11] = vtps[11] + 1;
+      testf = true;
+      if (VIr.InvType==kInvoiceTypeCash) then begin testf = false; end;
+      if (VIr.InvType==kInvoiceTypeCredit) then begin testf = false; end;
+      if (VIr.Invalid!=0) then begin testf = false; end;
+      if (testf) then begin
+        APr.SerNr = VIr.SerNr;
+        if (ReadFirstMain(APr,1,true)==false) then begin
+          lastpd = LastPaymentDate(RepSpec,VIr);
+          if (nonblankdate(lastpd)) then begin
+            latedays = DateDiff(lastpd,VIr.RcvDate);
+/*          
+            StartFormat(15);
+             OutString(0,"DblVIVc",VIr.SerNr,false);
+             OutString(100,0,lastpd,false);
+             OutString(200,0,latedays,false);
+            EndFormat;
+*/            
+            if (latedays>0) then begin 
+              paydays = paydays + latedays;
+              payvicnt = payvicnt + 1;
+            end;        
+          end;
+        end;
+      end;
+    end;
+  end;
+//  Black_Divider(0,1);
+  tot = vtps[0] + vtps[1] + vtps[2];
+  //Gray_Divider(0,1);
+  StartFormat(15);
+  OutVal(180,0,vtps[0],M40Val,true);
+  OutVal(260,0,vtps[1],M40Val,true);
+  OutVal(340,0,vtps[2],M40Val,true);
+  OutVal(420,0,vtps[10],M40Val,true);
+  EndFormat;
+  StartFormat(15);
+  OutVal(180,0,vtps[0]*100/tot,M4Val,true);
+  OutVal(260,0,vtps[1]*100/tot,M4Val,true);
+  OutVal(340,0,vtps[2]*100/tot,M4Val,true);
+  OutVal(420,0,vtps[10]*100/vtps[11],M4Val,true);
+  OutVal(480,0,paydays*1.00/payvicnt,M40Val,true);
+  EndFormat;
+  EndJob;
+  return;
+end;

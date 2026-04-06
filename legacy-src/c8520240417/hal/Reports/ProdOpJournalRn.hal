@@ -1,0 +1,264 @@
+external function Boolean ReadFirstItem(string,var record INVc,Boolean,Boolean);
+external procedure HTDetailLevel(Integer, var string);
+external procedure HTNr(Integer,Integer,LongInt,LongInt,var string);
+
+function Boolean ProdOperationHasItem(string itemcode,record ProdOperationVc ProdOperationr)
+begin
+  Boolean res;
+  Integer i,rwcnt;
+  row ProdOperationVc ProdOperationrw;
+
+  rwcnt = MatRowCnt(ProdOperationr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(ProdOperationr,i,ProdOperationrw);
+    if (ProdOperationrw.Item==itemcode) then begin
+      res = true;
+      goto LProdOperationHasItem;
+    end;
+  end;
+LProdOperationHasItem:;
+  ProdOperationHasItem = res;
+  return;
+end;
+
+function Boolean ProdOperationHasItemGroup(string itemgroup,record ProdOperationVc ProdOperationr)
+begin
+  Boolean res;
+  Integer i,rwcnt;
+  row ProdOperationVc ProdOperationrw;
+  record INVc INr;
+
+  rwcnt = MatRowCnt(ProdOperationr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(ProdOperationr,i,ProdOperationrw);
+    if (ReadFirstItem(ProdOperationrw.Item,INr,false,false)) then begin
+      if (INr.Group==itemgroup) then begin
+        res = true;
+        goto LProdOperationHasItemGroup;
+      end;
+    end;
+  end;
+LProdOperationHasItemGroup:;
+  ProdOperationHasItemGroup = res;
+  return;
+end;
+
+global
+procedure ProdOpJournalRn(record RcVc RepSpec)
+begin
+  record ProdOperationVc ProdOperationr;
+  record ProdOperationVc TotalProdOperationr;
+  record INVc INr;
+  row ProdOperationVc ProdOperationrw;
+  Boolean TrHs,firstf,testf;
+  LongInt afr,ato;
+  Integer rw,rwcnt,i;
+  string 255 tstr;
+
+  afr = FirstInRange(RepSpec.f1,30);
+  ato = LastInRange(RepSpec.f1,30);
+  StartReportJob(USetStr(43424));
+  rw = 1;
+  if ((RepSpec.long1)!=-1) then begin
+    tstr = USetStr(43426);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if ((RepSpec.long2)!=-1) then begin
+    tstr = USetStr(43425);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  HTDetailLevel(RepSpec.ArtMode,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  if (nonblank(RepSpec.f4)) then begin
+    tstr = USetStr(13791) & ": ";
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f5)) then begin
+    tstr = USetStr(13792) & ": ";
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  EndHeader;
+  if (RepSpec.ArtMode!=2) then begin
+    SetRepCol(2,50);
+    SetRepCol(3,130);
+    SetRepCol(4,180);
+    SetRepCol(5,250);
+    SetRepCol(6,300);
+    SetRepCol(7,330);
+    SetRepCol(8,380);
+    StartFormat(15);
+    OutString(0,0,USetStr(43410),false);
+    OutString(2,0,USetStr(43411),false);
+    OutString(3,0,USetStr(43412),false);
+    OutString(4,0,USetStr(43400),false);
+    OutString(5,0,USetStr(43413),true);
+    OutString(6,0,USetStr(43414),true);
+    OutString(7,0,USetStr(43401),false);
+    OutString(8,0,USetStr(43402),false);
+    OutString(1,0,USetStr(43415),true);
+    EndFormat;
+    Black_Divider(1,0);
+  end else begin
+    SetRepCol(2,50);
+    SetRepCol(3,100);
+    SetRepCol(4,150);
+    SetRepCol(5,200);
+    SetRepCol(6,320);
+    SetRepCol(7,370);
+    SetRepCol(8,420);  
+  end;
+
+  TrHs = true;
+  firstf = true;
+  while (LoopMain(ProdOperationr,1,TrHs)) begin
+    if (DateInRange(ProdOperationr.ProdDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin TrHs = false; end;
+    if (TrHs) then begin
+      testf = false;
+      if (RepSpec.flags[3]!=0) then begin
+        if (ProdOperationr.PRStatusFlag==0) then begin testf = true; end;
+      end;
+      if (RepSpec.flags[4]!=0) then begin
+        if (ProdOperationr.PRStatusFlag==2) then begin testf = true; end;
+      end;
+      if (RepSpec.flags[5]!=0) then begin
+        if (ProdOperationr.PRStatusFlag==3) then begin testf = true; end;
+      end;
+      if (RepSpec.flags[6]!=0) then begin
+        if (ProdOperationr.PRStatusFlag==4) then begin testf = true; end;
+      end;
+      if (RepSpec.flags[7]!=0) then begin
+        if (ProdOperationr.PRStatusFlag==5) then begin testf = true; end;
+      end;
+      if (RepSpec.ArtMode!=3) then begin
+        if (nonblank(RepSpec.f4)) then begin
+          if (ProdOperationHasItem(RepSpec.f4,ProdOperationr)==false) then begin testf = false; end;
+        end;
+        if (nonblank(RepSpec.f5)) then begin
+          if (ProdOperationHasItemGroup(RepSpec.f5,ProdOperationr)==false) then begin testf = false; end;
+        end;
+      end;
+      if (testf) then begin
+        if ((RepSpec.long1)!=-1) then begin
+          if (RepSpec.long1!=ProdOperationr.ProdNr) then begin testf = false; end;
+        end;
+        if ((RepSpec.long2)!=-1) then begin
+          if (RepSpec.long2!=ProdOperationr.ProdOrdNr) then begin testf = false; end;
+        end;
+      end;
+      if (testf) then begin
+        if (RepSpec.ArtMode!=2) then begin
+          StartFormat(15);
+          OutLongInt(0,"DblProdOperationVc",ProdOperationr.SerNr,false);
+          OutString(2,0,ProdOperationr.Comment,false);
+          OutLongInt(3,"DblProdOrder",ProdOperationr.ProdOrdNr,false);
+          OutLongInt(4,"DblProdVcID",ProdOperationr.ProdNr,false);
+          OutString(5,0,ProdOperationr.Qty,true);
+          OutString(6,0,ProdOperationr.ActualQty,true);
+          OutDate(7,0,ProdOperationr.StartDate,false);
+          OutDate(8,0,ProdOperationr.ProdDate,false);
+          switch (ProdOperationr.PRStatusFlag) begin
+            case 0 : tstr = USetStr(43419);
+            case 1 : tstr = USetStr(43420);
+            case 2 : tstr = USetStr(43421);
+            case 3 : tstr = USetStr(43422);
+            case 4 : tstr = USetStr(43423);
+          end;
+          OutString(1,0,tstr,true);  
+          EndFormat;
+          if (RepSpec.ArtMode==1) then begin
+            firstf = true;
+            rwcnt = MatRowCnt(ProdOperationr);
+            if (rwcnt>0) then begin
+              if (firstf) then begin
+                StartFormat(15);
+                OutString(0,0,USetStr(43403),false);
+                OutString(2,0,USetStr(43416),false);
+                OutString(3,0,USetStr(43405),false);
+                OutString(4,0,USetStr(43406),false);
+                OutString(5,0,USetStr(43417),true);
+                OutString(6,0,USetStr(43418),true);
+                EndFormat;
+                firstf = false;
+                Gray_Divider(1,0);
+              end;
+              for (i=0;i<rwcnt;i=i+1) begin
+                MatRowGet(ProdOperationr,i,ProdOperationrw);
+                if (nonblank(RepSpec.f4)) then begin
+                  if (ProdOperationrw.Item!=RepSpec.f4) then begin goto LNextRow; end;
+                end;
+                if (nonblank(RepSpec.f5)) then begin
+                  if (ReadFirstItem(ProdOperationrw.Item,INr,false,false)) then begin
+                    if (INr.Group!=RepSpec.f5) then begin goto LNextRow; end;
+                  end;
+                end;
+                StartFormat(15);
+                OutString(0,"DblINVc",ProdOperationrw.Item,false);
+                OutString(2,0,ProdOperationrw.Comment,false);
+                OutVal(3,0,ProdOperationrw.InQty,M4Qty,false);
+                OutVal(4,0,ProdOperationrw.OutQty,M4Qty,false);
+                OutString(5,0,ProdOperationrw.ItemCost,true);
+                OutVal(6,0,ProdOperationrw.FIFORowVal,M4Val,true);
+                EndFormat;
+LNextRow:;    
+              end;
+               end;
+              Black_Divider(1,0);
+             
+          end;
+        end;
+    if (RepSpec.ArtMode==2) then begin  
+      if (firstf) then begin
+        StartFormat(15);
+        OutString(0,0,USetStr(43410),false);
+        OutString(2,0,USetStr(43401),false);
+        OutString(3,0,USetStr(43402),false);
+        OutString(4,0,USetStr(43403),false);
+        OutString(5,0,USetStr(43416),false);
+        OutString(6,0,USetStr(43405),true);
+        OutString(7,0,USetStr(43406),true);
+        OutString(8,0,USetStr(43417),true);
+        OutString(1,0,USetStr(43418),true);
+        EndFormat;
+        firstf = false;
+        Gray_Divider(1,0);
+      end;
+      rwcnt = MatRowCnt(ProdOperationr);
+      if (rwcnt>0) then begin
+        StartFormat(15);
+        OutLongInt(0,"DblProdOperationVc",ProdOperationr.SerNr,false);
+        OutDate(2,0,ProdOperationr.StartDate,false);
+        OutDate(3,0,ProdOperationr.ProdDate,false);
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(ProdOperationr,i,ProdOperationrw);
+          if (nonblank(RepSpec.f4)) then begin
+            if (ProdOperationrw.Item!=RepSpec.f4) then begin goto LNextRow2; end;
+          end;
+          if (nonblank(RepSpec.f5)) then begin
+            if (ReadFirstItem(ProdOperationrw.Item,INr,false,false)) then begin
+              if (INr.Group!=RepSpec.f5) then begin goto LNextRow2; end;
+            end;
+          end;
+          StartFormat(15);
+          OutString(4,"DblINVc",ProdOperationrw.Item,false);
+          OutString(5,0,ProdOperationrw.Comment,false);
+          OutVal(6,0,ProdOperationrw.InQty,M4Qty,false);
+          OutVal(7,0,ProdOperationrw.OutQty,M4Qty,false);
+          OutString(8,0,ProdOperationrw.ItemCost,true);
+          OutVal(1,0,ProdOperationrw.FIFORowVal,M4Val,true);
+          EndFormat;
+LNextRow2:;     
+            end;  
+          end;
+        end;
+      end;
+    end;
+  end;
+  Gray_Divider(0,1);
+  EndJob;
+  return;
+end;

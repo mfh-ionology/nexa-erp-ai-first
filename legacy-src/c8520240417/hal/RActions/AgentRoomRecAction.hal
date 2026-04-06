@@ -1,0 +1,161 @@
+external updating procedure SiteMinder_Save_AgentRoomVc(record AgentRoomVc);
+external updating procedure SiteMinder_Update_AgentRoomVc(record AgentRoomVc,record AgentRoomVc);
+
+global
+function Boolean FindAgentRoom(string agentroom,Date td,var record AgentRoomVc resARr)
+begin
+  record AgentRoomVc ARr;
+  Boolean found,res;
+
+  RecordNew(resARr);
+  found = true;
+  ARr.ResCode = agentroom;
+  while (LoopBackKey("ActResCode",ARr,1,found)) begin
+    if (ARr.ResCode!=agentroom) then begin found = false; end;
+    if (found) then begin
+      if (nonblankdate(ARr.EndDate)) then begin
+        if (DateInRange(td,ARr.StartDate,ARr.EndDate)) then begin
+          res = true;
+          RecordCopy(resARr,ARr);
+          goto LFindAgentRoom;
+        end;
+      end else begin
+        if (td>=ARr.StartDate) then begin
+          res = true;
+          RecordCopy(resARr,ARr);
+          goto LFindAgentRoom;
+        end;
+      end;
+    end;
+  end;
+LFindAgentRoom:;  
+  FindAgentRoom = res;
+  return;
+end;
+
+global
+function Boolean FindAgentRoomInclClosed(string agentroom,Date td,var record AgentRoomVc resARr)
+begin
+  record AgentRoomVc ARr;
+  Boolean found,res;
+
+  RecordNew(resARr);
+  found = true;
+  ARr.ResCode = agentroom;
+  while (LoopBackKey("ResCode",ARr,1,found)) begin
+    if (ARr.ResCode!=agentroom) then begin found = false; end;
+    if (found) then begin
+      if (nonblankdate(ARr.EndDate)) then begin
+        if (DateInRange(td,ARr.StartDate,ARr.EndDate)) then begin
+          res = true;
+          RecordCopy(resARr,ARr);
+          goto LFindAgentRoomInclClosed;
+        end;
+      end else begin
+        if (td>=ARr.StartDate) then begin
+          res = true;
+          RecordCopy(resARr,ARr);
+          goto LFindAgentRoomInclClosed;
+        end;
+      end;
+    end;
+  end;
+LFindAgentRoomInclClosed:;  
+  FindAgentRoomInclClosed = res;
+  return;
+end;
+
+global
+function LongInt AgentRoomVcRecordCheck(record AgentRoomVc ARr,record AgentRoomVc oARr,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  record CUVc CUr;
+  record ResVc Resr;
+  record AgentRoomVc lARr;
+  Boolean found,testf;
+
+  res = 0;
+  if blank(ARr.ResCode) then begin
+    RecordCheckError(1058,"",-1,"ResCode");      
+    res = -1; 
+    goto LAgentRoomVcRecordCheck;
+  end;
+  if blank(ARr.CUCode) then begin
+    RecordCheckError(1058,"",-1,"CUCode");      
+    res = -1; 
+    goto LAgentRoomVcRecordCheck;
+  end;
+  CUr.Code = ARr.CUCode;
+  if not readfirstmain(CUr,1,true) then begin
+    RecordCheckError(1290,"",-1,"CUCode");      
+    res = -1; 
+    goto LAgentRoomVcRecordCheck;
+  end;
+  Resr.Code = ARr.ResCode;
+  if not readfirstmain(Resr,1,true) then begin
+    RecordCheckError(1290,"",-1,"ResCode");      
+    res = -1; 
+    goto LAgentRoomVcRecordCheck;
+  end;
+
+  found = true;
+  lARr.ResCode = ARr.ResCode;
+  while (LoopKey("ActResCode",lARr,1,found)) begin
+    if (lARr.ResCode!=ARr.ResCode) then begin found = false; end;
+    if (found) then begin
+      testf = true;
+      switch (stat) begin
+        case Rs_update:
+          if ((lARr.StartDate==oARr.StartDate) and (lARr.EndDate==oARr.EndDate)) then begin 
+            testf = false; 
+          end;
+      end;
+      if (testf) then begin
+        if (DateInRange(ARr.StartDate,lARr.StartDate,lARr.EndDate)) then begin
+          RecordCheckError(40950,"",-1,"StartDate");      
+          res = -1; 
+          goto LAgentRoomVcRecordCheck;     
+        end;  
+        if (DateInRange(ARr.EndDate,lARr.StartDate,lARr.EndDate)) then begin
+          RecordCheckError(40950,"",-1,"StartDate");      
+          res = -1; 
+          goto LAgentRoomVcRecordCheck;     
+        end;  
+        if (ARr.StartDate<lARr.StartDate) and (ARr.EndDate>lARr.EndDate) then begin
+          RecordCheckError(40950,"",-1,"StartDate");      
+          res = -1; 
+          goto LAgentRoomVcRecordCheck;     
+        end;
+        if (lARr.StartDate<ARr.StartDate) and ((lARr.EndDate>ARr.EndDate) and (nonblankdate(ARr.EndDate))) then begin
+          RecordCheckError(40950,"",-1,"StartDate");      
+          res = -1; 
+          goto LAgentRoomVcRecordCheck;     
+        end;
+      end;
+    end;
+  end;    
+  
+LAgentRoomVcRecordCheck:; 
+  AgentRoomVcRecordCheck = res;
+  return;
+end;
+
+global
+updating function LongInt AgentRoomVcRecordSaveAfter(var record AgentRoomVc ARr,record AgentRoomVc AR2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  
+  SiteMinder_Save_AgentRoomVc(ARr);
+  AgentRoomVcRecordSaveAfter = res;
+  return;
+end;
+
+global
+updating function LongInt AgentRoomVcRecordUpdateAfter(var record AgentRoomVc ARr,record AgentRoomVc AR2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  
+  SiteMinder_Update_AgentRoomVc(ARr,AR2r);
+  AgentRoomVcRecordUpdateAfter = res;
+  return;
+end;

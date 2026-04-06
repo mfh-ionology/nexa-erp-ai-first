@@ -1,0 +1,2094 @@
+external function Boolean IsHansaWorldCustomer(string);
+external procedure LogAreaToFile(string,area);
+external updating function Boolean ServiceRequestAsync(string,string,Boolean,area,string);
+external procedure DisplayCountdownMessage(record TXServiceReplyVc);
+external procedure ReadTXServiceReply(var record TXServiceReplyVc,var Area,Boolean);
+external updating function Boolean SendServiceRequest(string,Boolean,area,var Area);
+external procedure SendEOLParameter(var Area);
+external procedure SendTextParameter(string,var Area);
+external function val StringToValue(string,Integer,string,string);
+external function Date DateFromString(string,string);
+external function roundmode SetRoundModeD(Integer);
+external function Boolean IsEnterprise();
+
+function Boolean StringToBool(string tstr)
+begin
+  Boolean res;
+  
+  if (tstr=="true") then begin
+    res = true;
+  end;
+
+  StringToBool = res;
+  return;
+end;
+
+global
+function Boolean RateForService(string currency)
+begin
+  Boolean res;
+  record AutoERMapBlock AERb;
+  row AutoERMapBlock AERbrw;
+  Integer i,rwcnt;
+
+  BlockLoad(AERb);
+
+  rwcnt = MatRowCnt(AERb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(AERb,i,AERbrw);
+    if (AERbrw.CurncyCode==currency) then begin
+      res = true;
+      goto LRateForService;
+    end;
+  end;
+LRateForService:;
+  RateForService = res;
+  return;
+end;
+
+global
+procedure NationalBankExchRateERLsm()
+begin
+  Integer nwn;
+  record RcVc RepSpec;
+  record ERBlock ERb;
+
+  BlockLoad(ERb);
+  nwn = OpenWindow("NatBankXRateDClass",0,CurWindow,"","",RepSpec);
+  DeselectWindow(nwn,false);
+  RepSpec.d1 = CurrentDate;
+//  RepSpec.flags[0] = 1;
+  RepSpec.flags[1] = ERb.OverwriteExistRate;
+  PutWindowRecord(nwn,RepSpec);
+  WindowFieldGoto(nwn,RepSpec,-1,"d1",true);
+  return;
+end;
+
+global
+procedure FixerExchRateERLsm()
+begin
+  Integer nwn;
+  record RcVc RepSpec;
+  record ERBlock ERb;
+
+  BlockLoad(ERb);
+  nwn = OpenWindow("FixerXRateDClass",0,CurWindow,"","",RepSpec);
+  DeselectWindow(nwn,false);
+  RepSpec.d1 = CurrentDate;
+  //  RepSpec.flags[0] = 1;
+  RepSpec.flags[1] = ERb.OverwriteExistRate;
+  PutWindowRecord(nwn,RepSpec);
+  WindowFieldGoto(nwn,RepSpec,-1,"d1",true);
+  
+  return;
+end;
+
+global
+procedure CancelXRateDClass()
+begin
+  CloseWindow(CurWindow);
+  return;
+end;
+
+global
+updating procedure AddCurencyRate(record RcVc RepSpec,record BaseCurBlock BCb,record ERBlock ERb,string curncy,string curncyname,val rate,val brate,val units,Date ratedate)
+begin
+  record CurncyCodeVc CCr;
+  record ERVc ERr;
+  record BaseERVc BaseERr;
+  Boolean treatedf,testf,updratef;
+
+  if (RateForService(curncy)) then begin
+    goto LAddCurencyRate;
+  end;
+
+  testf = true;
+  if (blank(curncy)) then begin
+    testf = false;
+  end;
+  if (len(curncy)<3) then begin
+    testf = false;
+  end;
+  if (testf) then begin
+    treatedf = false;
+    testf = true;
+    updratef = true;
+    CCr.CurncyCode = curncy;
+    if (ReadFirstMain(CCr,1,true)==false) then begin
+      if (RepSpec.flags[0]!=0) then begin
+        CCr.CurncyCode = curncy;
+        CCr.Comment = curncyname;
+        if (RecordStore(CCr,false)) then begin end;
+      end else begin
+        testf = false;
+      end;
+    end;
+    if (testf) then begin
+      if (curncy==BCb.BaseCur1) then begin
+        treatedf = true;
+        updratef = true;
+        BaseERr.Date = ratedate;
+        if (ReadFirstMain(BaseERr,2,true)) then begin
+          updratef = RepSpec.flags[1]!=0;
+        end;
+        if (ERb.BCRates==0) then begin updratef = false; end;
+        if (updratef) then begin
+          BaseERr.Date = ratedate;
+          BaseERr.Rate1 = units;
+          BaseERr.Rate2 = brate;
+          if (RecordStore(BaseERr,updratef)) then begin
+          end;
+        end;
+      end;
+      if (curncy==BCb.BaseCur2) then begin
+        treatedf = true;
+        updratef = true;
+        BaseERr.Date = ratedate;
+        if (ReadFirstMain(BaseERr,2,true)) then begin
+          updratef = RepSpec.flags[1]!=0;
+        end;
+        if (ERb.BCRates==0) then begin updratef = false; end;
+        if (updratef) then begin
+          BaseERr.Date = ratedate;
+          BaseERr.Rate1 = brate;
+          BaseERr.Rate2 = units;
+          if (RecordStore(BaseERr,updratef)) then begin
+          end;
+        end;
+      end;
+      if (curncy==BCb.BaseCur2) then begin
+        if (nonblank(ERb.B2CurCode)) then begin
+          CCr.CurncyCode = ERb.B2CurCode;
+          if (ReadFirstMain(CCr,1,true)) then begin
+            ERr.CurncyCode = ERb.B2CurCode;
+            ERr.Date = ratedate;
+            if (ReadFirstMain(ERr,2,true)) then begin
+              updratef = RepSpec.flags[1]!=0;
+            end;
+            if (updratef) then begin
+              ERr.CurncyCode = ERb.B2CurCode;
+              ERr.Date = ratedate;
+              ERr.ToRate1 = rate;
+              ERr.FrRate = units;
+              if (RecordStore(ERr,updratef)) then begin
+              end;
+            end;
+          end;
+        end;
+      end;
+      if (treatedf==false) then begin
+        updratef = true;
+        ERr.CurncyCode = curncy;
+        ERr.Date = ratedate;
+
+        if (ReadFirstMain(ERr,2,true)) then begin
+          updratef = RepSpec.flags[1]!=0;
+        end;
+        if (updratef) then begin
+          ERr.CurncyCode = curncy;
+          ERr.Date = ratedate;
+//  StopAlert("curncy " & curncy & " units " & units & " rate " & rate & " ratedate " & ratedate & " BCb.BaseCur1 " & BCb.BaseCur1 & " BCb.BaseCur2 " & BCb.BaseCur2);
+          ERr.ToRate1 = rate;
+          ERr.FrRate = units;
+          if (RecordStore(ERr,updratef)) then begin
+          end;
+        end;
+      end;
+    end;
+  end;
+LAddCurencyRate:;
+  return;
+end;
+
+global
+updating procedure AddCurencyRate_Fixer(record RcVc RepSpec,record BaseCurBlock BCb,record ERBlock ERb,string curncy,string curncyname,val rate,val brate,val units,Date ratedate)
+begin
+  record CurncyCodeVc CCr;
+  record ERVc ERr;
+  record BaseERVc BaseERr;
+  Boolean treatedf,testf,updratef;
+
+  testf = true;
+  if (blank(curncy)) then begin
+    testf = false;
+  end;
+  if (len(curncy)<3) then begin
+    testf = false;
+  end;
+
+  if (testf) then begin
+    treatedf = false;
+    testf = true;
+    updratef = true;
+    CCr.CurncyCode = curncy;
+    if (ReadFirstMain(CCr,1,true)==false) then begin
+      if (RepSpec.flags[0]!=0) then begin
+        CCr.CurncyCode = curncy;
+        CCr.Comment = curncyname;
+        if (RecordStore(CCr,false)) then begin end;
+      end else begin
+        testf = false;
+      end;
+    end;
+    if (testf) then begin
+      if (curncy==BCb.BaseCur1) then begin
+        treatedf = true;
+        updratef = true;
+        BaseERr.Date = ratedate;
+        if (ReadFirstMain(BaseERr,2,true)) then begin
+          updratef = RepSpec.flags[1]!=0;
+        end;
+        if (brate==units) then begin updratef = false; end;
+        if (ERb.BCRates==0) then begin updratef = false; end;
+        if (updratef) then begin
+          BaseERr.Date = ratedate;
+          BaseERr.Rate1 = units;
+          BaseERr.Rate2 = brate;
+          if (RecordStore(BaseERr,updratef)) then begin
+          end;
+        end;
+      end;
+      if (curncy==BCb.BaseCur2) then begin
+        treatedf = true;
+        updratef = true;
+        BaseERr.Date = ratedate;
+        if (ReadFirstMain(BaseERr,2,true)) then begin
+          updratef = RepSpec.flags[1]!=0;
+        end;
+        if (brate==units) then begin updratef = false; end;
+        if (ERb.BCRates==0) then begin updratef = false; end;
+        if (updratef) then begin
+          BaseERr.Date = ratedate;
+          BaseERr.Rate1 = brate;
+          BaseERr.Rate2 = 1.00;
+          if (RecordStore(BaseERr,updratef)) then begin
+          end;
+        end;
+      end;
+      if (curncy==BCb.BaseCur2) then begin
+        if (nonblank(ERb.B2CurCode)) then begin
+          CCr.CurncyCode = ERb.B2CurCode;
+          if (ReadFirstMain(CCr,1,true)) then begin
+            ERr.CurncyCode = ERb.B2CurCode;
+            ERr.Date = ratedate;
+
+            if (ReadFirstMain(ERr,2,true)) then begin
+              updratef = RepSpec.flags[1]!=0;
+            end;
+            if (updratef) then begin
+              ERr.CurncyCode = ERb.B2CurCode;
+              ERr.Date = ratedate;
+              ERr.ToRate1 = rate;
+              ERr.FrRate = units;
+              if (RecordStore(ERr,updratef)) then begin
+              end;
+            end;
+          end;
+        end;
+      end;
+      if (treatedf==false) then begin
+        updratef = true;
+        ERr.CurncyCode = curncy;
+        ERr.Date = ratedate;
+
+        if (ReadFirstMain(ERr,2,true)) then begin
+          updratef = RepSpec.flags[1]!=0;
+        end;
+        if (updratef) then begin
+          ERr.CurncyCode = curncy;
+          ERr.Date = ratedate;
+//  StopAlert("curncy " & curncy & " units " & units & " rate " & rate & " ratedate " & ratedate & " BCb.BaseCur1 " & BCb.BaseCur1 & " BCb.BaseCur2 " & BCb.BaseCur2);
+          ERr.ToRate1 = rate;
+          ERr.FrRate = units;
+          if (RecordStore(ERr,updratef)) then begin
+            BlockLoad(ERb);
+            ERb.RunDate = CurrentDate;
+            BlockStore(ERb);
+          end;
+        end;
+      end;
+    end;
+  end;
+  return;
+end;
+
+global
+updating procedure AddCurencyRate_Swedish(record RcVc RepSpec,record BaseCurBlock BCb,record ERBlock ERb,string curncy,string curncyname,val rate,val brate,val units,val sekrate,Date ratedate)
+begin
+  record CurncyCodeVc CCr;
+  record ERVc ERr;
+  record BaseERVc BaseERr;
+  Boolean treatedf,testf,updratef;
+
+  testf = true;
+  if (blank(curncy)) then begin
+    testf = false;
+  end;
+  if (len(curncy)<3) then begin
+    testf = false;
+  end;
+  if (testf) then begin
+    treatedf = false;
+    testf = true;
+    updratef = true;
+    CCr.CurncyCode = curncy;
+    if (ReadFirstMain(CCr,1,true)==false) then begin
+      if (RepSpec.flags[0]!=0) then begin
+        CCr.CurncyCode = curncy;
+        CCr.Comment = curncyname;
+        if (RecordStore(CCr,false)) then begin end;
+      end else begin
+        testf = false;
+      end;
+    end;
+    if (testf) then begin
+      if (curncy==BCb.BaseCur1) then begin
+//      if (BCb.BaseCur1=="SEK") then begin
+        updratef = true;
+        BaseERr.Date = ratedate;
+        if (ReadFirstMain(BaseERr,2,true)) then begin
+          updratef = RepSpec.flags[1]!=0;
+        end;
+        if (ERb.BCRates==0) then begin updratef = false; end;
+        if (updratef) then begin
+          BaseERr.Date = ratedate;
+          BaseERr.Rate1 = units;
+          BaseERr.Rate2 = brate;
+          if (RecordStore(BaseERr,updratef)) then begin
+          end;
+        end;
+      end;
+      if (curncy==BCb.BaseCur2) then begin
+//      if (BCb.BaseCur2=="SEK") then begin
+        updratef = true;
+        BaseERr.Date = ratedate;
+        if (ReadFirstMain(BaseERr,2,true)) then begin
+          updratef = RepSpec.flags[1]!=0;
+        end;
+        if (ERb.BCRates==0) then begin updratef = false; end;
+        if (updratef) then begin
+          BaseERr.Date = ratedate;
+          BaseERr.Rate1 = brate;
+          BaseERr.Rate2 = units;
+          if (RecordStore(BaseERr,updratef)) then begin
+          end;
+        end;
+      end;
+      if (curncy==BCb.BaseCur2) then begin
+//      if (true) then begin
+        if (nonblank(ERb.B2CurCode)) then begin
+          CCr.CurncyCode = ERb.B2CurCode;
+          if (ReadFirstMain(CCr,1,true)) then begin
+            ERr.CurncyCode = ERb.B2CurCode;
+            ERr.Date = ratedate;
+
+            if (ReadFirstMain(ERr,2,true)) then begin
+              updratef = RepSpec.flags[1]!=0;
+            end;
+            if (updratef) then begin
+              ERr.CurncyCode = ERb.B2CurCode;
+              ERr.Date = ratedate;
+              ERr.ToRate1 = brate;
+              ERr.FrRate = units;
+              if (RecordStore(ERr,updratef)) then begin
+              end;
+            end;
+          end;
+        end;
+      end;
+      if (treatedf==false) then begin
+        updratef = true;
+//        if (BCb.BaseCur1!="EUR") and (BCb.BaseCur2!="EUR") and (BCb.BaseCur1=="SEK") then begin
+//          if (curncy=="SEK") then begin
+        if (BCb.BaseCur1!="EUR") and (BCb.BaseCur2!="EUR") then begin
+          if (curncy==BCb.BaseCur1) then begin
+            ERr.CurncyCode = "EUR";
+            ERr.Date = ratedate;
+            if (ReadFirstMain(ERr,2,true)) then begin
+              updratef = RepSpec.flags[1]!=0;
+            end;
+            if (updratef) then begin
+              ERr.CurncyCode = "EUR";
+              ERr.Date = ratedate;
+//  StopAlert("curncy " & curncy & " units " & units & " rate " & rate & " ratedate " & ratedate & " BCb.BaseCur1 " & BCb.BaseCur1 & " BCb.BaseCur2 " & BCb.BaseCur2);
+              ERr.ToRate1 = sekrate;
+              ERr.FrRate = units;
+              if (RecordStore(ERr,updratef)) then begin
+              end;
+            end;
+          end else begin
+            ERr.CurncyCode = curncy;
+            ERr.Date = ratedate;
+            if (ReadFirstMain(ERr,2,true)) then begin
+              updratef = RepSpec.flags[1]!=0;
+            end;
+            if (updratef) then begin
+              ERr.CurncyCode = curncy;
+              ERr.Date = ratedate;
+  //  StopAlert("curncy " & curncy & " units " & units & " rate " & rate & " ratedate " & ratedate & " BCb.BaseCur1 " & BCb.BaseCur1 & " BCb.BaseCur2 " & BCb.BaseCur2);
+              ERr.ToRate1 = rate;
+              ERr.FrRate = units;
+              if (RecordStore(ERr,updratef)) then begin
+              end;
+            end;
+          end;
+        end else begin
+//  StopAlert("xx.curncy " & curncy & " units " & units & " rate " & rate & " ratedate " & ratedate & " BCb.BaseCur1 " & BCb.BaseCur1 & " BCb.BaseCur2 " & BCb.BaseCur2);
+          ERr.CurncyCode = curncy;
+          ERr.Date = ratedate;
+          if (ReadFirstMain(ERr,2,true)) then begin
+            updratef = RepSpec.flags[1]!=0;
+          end;
+          if (updratef) then begin
+            ERr.CurncyCode = curncy;
+            ERr.Date = ratedate;
+//  StopAlert("curncy " & curncy & " units " & units & " rate " & rate & " ratedate " & ratedate & " BCb.BaseCur1 " & BCb.BaseCur1 & " BCb.BaseCur2 " & BCb.BaseCur2);
+            ERr.ToRate1 = rate;
+            ERr.FrRate = units;
+            if (RecordStore(ERr,updratef)) then begin
+              BlockLoad(ERb);
+              ERb.RunDate = CurrentDate;
+              BlockStore(ERb);
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+  return;
+end;
+
+procedure ParseXRateReply_Latvia(record RcVc RepSpec,Area a_reply)
+begin
+  Area a_xmlreply;
+  xml xmlreply;
+  date ratedate;
+  Integer curnr;
+  string 255 curncy,units,rate,tstr;
+  record BaseCurBlock BCb;
+  record ERBlock ERb;
+  LongInt rerror,read;
+  val ratev,unitsv,rateb1,rateb2;
+  LongInt srvstart0,srvstart1,srvstart2;
+
+  BlockLoad(BCb);
+  BlockLoad(ERb);
+  read = GetAreaFromArea(a_reply,0,GetAreaLength(a_reply)-0,a_xmlreply);
+
+/*
+    CreateFile("ProceedXRateDClass3.txt");
+    CloseFile;
+    WriteAreaToFile(a_xmlreply,"ProceedXRateDClass3.txt",0);
+*/
+
+  srvstart0 = GetCurTick;
+
+  xmlreply = ParseXMLArea(a_xmlreply);
+  ratedate = DateFromString(XmlGet(xmlreply,"CRates/Date"),"YYYYMMDD");
+
+  rateb1 = 1;
+  rateb2 = 1;
+  curnr = 0;
+  while (XmlNodeExists(xmlreply,"CRates/Currencies/Currency[" & curnr & "]")) begin
+    curncy = XmlGet(xmlreply,"CRates/Currencies/Currency[" & curnr & "]/ID");
+    units = XmlGet(xmlreply,"CRates/Currencies/Currency[" & curnr & "]/Units");
+    rate = XmlGet(xmlreply,"CRates/Currencies/Currency[" & curnr & "]/Rate");
+
+    unitsv = StringToValue(units,M4Rate,"",".");
+    ratev = StringToValue(rate,M4Rate,"",".");
+
+    if (curncy==BCb.BaseCur1) then begin
+      rateb1 = ratev;
+    end;
+    if (curncy==BCb.BaseCur2) then begin
+      rateb2 = ratev;
+    end;
+
+    curnr = curnr + 1;
+  end;
+
+  curnr = 0;
+  while (XmlNodeExists(xmlreply,"CRates/Currencies/Currency[" & curnr & "]")) begin
+    curncy = XmlGet(xmlreply,"CRates/Currencies/Currency[" & curnr & "]/ID");
+    units = XmlGet(xmlreply,"CRates/Currencies/Currency[" & curnr & "]/Units");
+    rate = XmlGet(xmlreply,"CRates/Currencies/Currency[" & curnr & "]/Rate");
+
+    unitsv = StringToValue(units,M4Rate,"",".");
+    ratev = StringToValue(rate,M4Rate,"",".");
+    ratev = ratev/rateb1;
+
+    qupdating.AddCurencyRate(RepSpec,BCb,ERb,curncy,"",ratev,rateb1/rateb2,unitsv,ratedate);
+    curnr = curnr + 1;
+  end;
+  srvstart2 = GetCurTick;
+//StopAlert("srvstart2 - srvstart0 " & srvstart2 - srvstart0);
+  return;
+end;
+
+function Boolean ParseXRateReply_Poland(record RcVc RepSpec,Area a_reply)
+begin
+  Boolean res;
+  Area a_xmlreply;
+  xml xmlreply;
+  date ratedate;
+  Integer curnr;
+  string 255 curncy,curncyname,units,rate,tstr;
+  record BaseCurBlock BCb;
+  record ERBlock ERb;
+  LongInt rerror,xmllen,headerl,read;
+  val ratev,unitsv,rateb1,rateb2;
+
+  BlockLoad(BCb);
+  BlockLoad(ERb);
+  read = GetAreaFromArea(a_reply,0,GetAreaLength(a_reply)-0,a_xmlreply);
+
+/*
+    CreateFile("ParseXRateReply_Poland.txt");
+    CloseFile;
+    WriteAreaToFile(a_xmlreply,"ParseXRateReply_Poland.txt",0);
+*/
+
+  xmlreply = ParseXMLArea(a_xmlreply);
+  ratedate = DateFromString(XmlGet(xmlreply,"tabela_kursow/data_publikacji"),"YYYY-MM-DD");
+
+  rateb1 = 1;
+  rateb2 = 1;
+  curnr = 0;
+  while (XmlNodeExists(xmlreply,"tabela_kursow/pozycja[" & curnr & "]")) begin
+    curncyname = XmlGet(xmlreply,"tabela_kursow/pozycja[" & curnr & "]/nazwa_waluty");
+    curncyname = ConvertStringFromCodePage("ISO-8859-2",curncyname);
+    units = XmlGet(xmlreply,"tabela_kursow/pozycja[" & curnr & "]/przelicznik");
+    curncy = XmlGet(xmlreply,"tabela_kursow/pozycja[" & curnr & "]/kod_waluty");
+    rate = XmlGet(xmlreply,"tabela_kursow/pozycja[" & curnr & "]/kurs_sredni");
+
+    unitsv = StringToValue(units,M4Rate,"",",");
+    ratev = StringToValue(rate,M4Rate,"",",");
+
+    if (curncy==BCb.BaseCur1) then begin
+      rateb1 = ratev;
+    end;
+    if (curncy==BCb.BaseCur2) then begin
+      rateb2 = ratev;
+    end;
+    curnr = curnr + 1;
+  end;
+
+  curnr = 0;
+  while (XmlNodeExists(xmlreply,"tabela_kursow/pozycja[" & curnr & "]")) begin
+    curncyname = XmlGet(xmlreply,"tabela_kursow/pozycja[" & curnr & "]/nazwa_waluty");
+    curncyname = ConvertStringFromCodePage("ISO-8859-2",curncyname);
+    units = XmlGet(xmlreply,"tabela_kursow/pozycja[" & curnr & "]/przelicznik");
+    curncy = XmlGet(xmlreply,"tabela_kursow/pozycja[" & curnr & "]/kod_waluty");
+    rate = XmlGet(xmlreply,"tabela_kursow/pozycja[" & curnr & "]/kurs_sredni");
+
+    unitsv = StringToValue(units,M4Rate,"",",");
+    ratev = StringToValue(rate,M4Rate,"",",");
+    ratev = ratev/rateb1;
+    qupdating.AddCurencyRate(RepSpec,BCb,ERb,curncy,curncyname,ratev,rateb2,unitsv,ratedate);
+    res = true;
+    curnr = curnr + 1;
+  end;
+  ParseXRateReply_Poland = res;
+  return;
+end;
+
+function Boolean ParseXRateReply_Croatia(record RcVc RepSpec,Area a_reply)
+begin
+  Boolean res;
+  xml xmlreply;
+  val rateb1,rateb2,unitsv,ratev;
+  Integer curnr;
+  string 255 curncyname,units,curncy,rate,path;
+  date ratedate;
+  record BaseCurBlock BCb;
+  record ERBlock ERb;
+
+  BlockLoad(BCb);
+  BlockLoad(ERb);
+
+  xmlreply = ParseXMLArea(a_reply);
+  rateb1 = 1;
+  rateb2 = 1;
+  curnr = 0;
+
+  path = "tecajna_lista/item";
+  ratedate = DateFromString(XmlGet(xmlreply,path & "/datum_primjene"),"YYYY-MM-DD");
+
+  while (XmlNodeExists(xmlreply,path & "[" & curnr & "]")) begin
+    curncyname = XmlGet(xmlreply,path & "[" & curnr & "]/drzava");
+    curncyname = ConvertStringFromCodePage("UTF-8",curncyname);
+    units = XmlGet(xmlreply,path & "[" & curnr & "]/jedinica");
+    curncy = XmlGet(xmlreply,path & "[" & curnr & "]/valuta");
+    rate = XmlGet(xmlreply,path & "[" & curnr & "]/srednji_tecaj");
+
+    unitsv = StringToValue(units,M4Rate,"",",");
+    ratev = StringToValue(rate,M4Rate,"",",");
+
+    if (curncy==BCb.BaseCur1) then begin
+      rateb1 = ratev;
+    end;
+    if (curncy==BCb.BaseCur2) then begin
+      rateb2 = ratev;
+    end;
+    curnr = curnr + 1;
+    if (curncy!="XDR") then begin
+      qupdating.AddCurencyRate(RepSpec,BCb,ERb,curncy,curncyname,ratev,rateb2/rateb1,unitsv,ratedate);
+      res = true;
+    end;
+  end;
+  ParseXRateReply_Croatia = res;
+  return;
+end;
+
+function Boolean ParseXRateReply_ECB(record RcVc RepSpec,Area a_reply,Boolean checktimef,Boolean clientf,Boolean testf)
+begin
+  Boolean res;
+  Area a_xmlreply;
+  xml xmlreply;
+  date ratedate,newratedate;
+  Integer cubenr,curnr;
+  string 255 curncy,curncyname,units,rate,tstr;
+  string 255 cubestr,cubestrkey,curstr,curstrkey;
+  record BaseCurBlock BCb;
+  record ERBlock ERb;
+  LongInt rerror,xmllen,headerl,read;
+  val ratev,unitsv,rateb1,rateb2;
+
+  BlockLoad(BCb);
+  BlockLoad(ERb);
+  read = GetAreaFromArea(a_reply,0,GetAreaLength(a_reply)-0,a_xmlreply);
+
+/*
+    CreateFile("ParseXRateReply_ECB.txt");
+    CloseFile;
+    WriteAreaToFile(a_xmlreply,"ParseXRateReply_ECB.txt",0);
+*/
+
+  xmlreply = ParseXMLArea(a_xmlreply);
+
+  rateb1 = 1;
+  rateb2 = 1;
+  cubestr = "gesmes:Envelope/Cube/";
+  cubenr = 0;
+  while (XmlNodeExists(xmlreply,cubestr & "Cube[" & cubenr & "]")) begin
+    cubestrkey = cubestr & "Cube[" & cubenr & "]";
+    ratedate = DateFromString(XmlGetAttribute(xmlreply,cubestrkey,"time"),"YYYY-MM-DD");
+    if (ratedate==RepSpec.d1) then begin
+      curnr = 0;
+      curstr = cubestrkey & "/";
+      while (XmlNodeExists(xmlreply,curstr & "Cube[" & curnr & "]")) begin
+      
+        curstrkey = curstr & "Cube[" & curnr & "]";
+
+        curncy = XmlGetAttribute(xmlreply,curstrkey,"currency");
+        units = "1.00";
+        rate = XmlGetAttribute(xmlreply,curstrkey,"rate");
+
+        unitsv = StringToValue(units,M4Rate,"",".");
+        ratev = StringToValue(rate,M4Rate,"",".");
+        if (curncy==BCb.BaseCur1) then begin
+          rateb1 = ratev;
+        end;
+        if (curncy==BCb.BaseCur2) then begin
+          rateb2 = ratev;
+        end;
+        curnr = curnr + 1;
+      end;
+    end;
+    cubenr = cubenr + 1;
+  end;
+
+  cubestr = "gesmes:Envelope/Cube/";
+  cubenr = 0;
+  while (XmlNodeExists(xmlreply,cubestr & "Cube[" & cubenr & "]")) begin
+    cubestrkey = cubestr & "Cube[" & cubenr & "]";
+    ratedate = DateFromString(XmlGetAttribute(xmlreply,cubestrkey,"time"),"YYYY-MM-DD");
+//    qupdating.AddCurencyRate(RepSpec,BCb,ERb,curncy,curncyname,1/ratev,1/ratev,unitsv,ratedate);
+
+    if (ratedate==RepSpec.d1) then begin
+      curnr = 0;
+      curstr = cubestrkey & "/";
+
+      while (XmlNodeExists(xmlreply,curstr & "Cube[" & curnr & "]")) begin
+      
+        curstrkey = curstr & "Cube[" & curnr & "]";
+
+        curncy = XmlGetAttribute(xmlreply,curstrkey,"currency");
+        if (testf) then begin
+          rate = XmlGetAttribute(xmlreply,curstrkey,"rate");
+          ratev = StringToValue(rate,M4Rate,"",".");
+        
+          unitsv = ratev;
+          ratev = 1;
+        end else begin
+          units = "1.00";
+          rate = XmlGetAttribute(xmlreply,curstrkey,"rate");
+
+          unitsv = StringToValue(units,M4Rate,"",".");
+          ratev = StringToValue(rate,M4Rate,"",".");
+        
+          ratev = rateb1/ratev;
+        end;
+
+        newratedate = ratedate;
+        if (checktimef) then begin//this is a messed up logic in Latvia, but this is how it works..
+          newratedate = addday(ratedate,1);
+        end;
+          
+        qupdating.AddCurencyRate(RepSpec,BCb,ERb,curncy,curncyname,ratev,rateb1/rateb2,unitsv,newratedate);
+        res = true;
+        curnr = curnr + 1;
+      end;
+      
+      goto LParseXRateReply_ECB;
+    end;
+    cubenr = cubenr + 1;
+  end;
+LParseXRateReply_ECB:;
+  ParseXRateReply_ECB = res;
+  return;
+end;
+
+global
+function Boolean ParseXRateReply_BCRA(record RcVc RepSpec,Area a_reply,Boolean clientf,Boolean testf)
+begin
+  Boolean res;
+  Area a_jsonreply;
+  json jsn;
+  date ratedate;
+  LongInt read;
+  string 255 cubestr,cubestrkey,curstr,curstrkey;
+  record BaseCurBlock BCb;
+  record ERBlock ERb;
+  val ratev,unitsv,rateb1;
+  Integer rwcnt,i;
+
+  BlockLoad(BCb);
+  BlockLoad(ERb);
+  read = GetAreaFromArea(a_reply,0,GetAreaLength(a_reply)-0,a_jsonreply);
+
+
+  // CreateFile("_ParseXRateReply_BCRA.txt");
+  // CloseFile;
+  // WriteAreaToFile(a_jsonreply,"_ParseXRateReply_BCRA.txt",0);
+
+
+  jsn = ParseJSONArea(a_jsonreply);
+  rwcnt = JSONCountChildren(jsn,"");
+
+  for (i=rwcnt-1;i>=0;i=i-1) begin
+    ratedate = DateFromString(JSONGet(jsn,"[" & i & "]/d"),"YYYY-MM-DD");
+    if (ratedate==AddDay(RepSpec.d1,-1)) then begin
+      rateb1 = 1;
+      unitsv = StringToValue(JSONGet(jsn,"[" & i & "]/v"),M4Rate,"",".");
+      qupdating.AddCurencyRate(RepSpec,BCb,ERb,"USD","",unitsv,unitsv,1,ratedate);
+      res = true;
+      goto LParseXRateReply_BCRA;
+    end;
+  end;
+
+LParseXRateReply_BCRA:;
+  ParseXRateReply_BCRA = res;
+  return;
+end;
+
+function string 255 GetValue(string InLine,Integer fieldnr)
+begin
+  string 255 res;
+  Boolean testf;
+  string 1 c;
+  Integer fnr;
+  Integer i,l;
+  
+  testf = true;
+  fnr = 1;
+  l = len(InLine);
+  for (i=0;i<l;i=i+1) begin
+    c = Mid(InLine,i,1);
+    if (c==",") then begin
+      if (fnr>fieldnr) then begin
+        testf = false;
+        goto LGetValue;
+      end else begin
+        res = "";
+        testf = true;
+      end;
+      fnr = fnr + 1;
+    end;
+    if (testf) then begin
+      if (c!=",") then begin
+        res = res & c;
+      end;
+    end;
+  end;
+LGetValue:;
+  GetValue = res;
+  return;
+end;
+
+function string 255 GetValueDelim(string InLine,Integer fieldnr,string delim)
+begin
+  string 255 res;
+  Boolean testf;
+  string 1 c;
+  Integer fnr;
+  Integer i,l;
+  
+  testf = true;
+  fnr = 1;
+  l = len(InLine);
+  for (i=0;i<l;i=i+1) begin
+    c = Mid(InLine,i,1);
+    if (c==delim) then begin
+      if (fnr>fieldnr) then begin
+        testf = false;
+        goto LGetValueDelim;
+      end else begin
+        res = "";
+        testf = true;
+      end;
+      fnr = fnr + 1;
+    end;
+    if (testf) then begin
+      if (c!=delim) then begin
+        res = res & c;
+      end;
+    end;
+  end;
+LGetValueDelim:;
+  GetValueDelim = res;
+  return;
+end;
+
+procedure ParseXRateReply_Lithuania(record RcVc RepSpec,Area a_reply)
+begin
+  LongInt lines,l;
+  string 255 curncy,curncyname,units,rate,method,tstr;
+  record BaseCurBlock BCb;
+  record ERBlock ERb;
+  Date ratedate;
+  val ratev,unitsv,rateb1,rateb2;;
+
+  BlockLoad(BCb);
+  BlockLoad(ERb);
+  lines = CountLinesInArea(a_reply);
+   
+  rateb1 = 1;
+  rateb2 = 1;
+  for (l=2;l<lines;l=l+1) begin
+    tstr = GetLineFromArea(a_reply,l);
+    curncyname = ConvertStringFromCodePage("WINDOWS-1257",GetValue(tstr,0));
+    curncy = GetValue(tstr,1);
+    units = GetValue(tstr,2);
+    rate = GetValue(tstr,3);
+    ratedate = DateFromString(GetValue(tstr,4),"YYYY.MM.DD");
+
+    unitsv = StringToValue(units,M4Rate,"",",");
+    ratev = StringToValue(rate,M4Rate,"",",");
+    if (curncy==BCb.BaseCur1) then begin
+      rateb1 = ratev;
+    end;
+    if (curncy==BCb.BaseCur2) then begin
+      rateb2 = ratev;
+    end;
+  end;
+
+  for (l=2;l<lines;l=l+1) begin
+    tstr = GetLineFromArea(a_reply,l);
+    curncyname = ConvertStringFromCodePage("WINDOWS-1257",GetValue(tstr,0));
+    curncy = GetValue(tstr,1);
+    units = GetValue(tstr,2);
+    rate = GetValue(tstr,3);
+    ratedate = DateFromString(GetValue(tstr,4),"YYYY.MM.DD");
+
+    unitsv = StringToValue(units,M4Rate,"",",");
+    ratev = StringToValue(rate,M4Rate,"",",");
+
+    ratev = ratev/rateb1;
+    qupdating.AddCurencyRate(RepSpec,BCb,ERb,curncy,curncyname,ratev,rateb1/rateb2,unitsv,ratedate);
+  end;
+  return;
+end;
+
+function Boolean ParseXRateReply_Sweden(record RcVc RepSpec,Area a_reply)
+begin
+  Boolean res;
+  xml xmlreply;
+  record BaseCurBlock BCb;
+  record ERBlock ERb;
+  string 255 path,pathkey,curncy,tstr,curncyname,rate,units,rateconst;
+  Integer pathnr,i;
+  val ratev,unitsv,rateb1,rateb2,rateconstv;
+  Date ratedate;
+  LongInt pos,pos2;
+
+  BlockLoad(BCb);
+  BlockLoad(ERb);
+  
+  xmlreply = ParseXMLArea(a_reply);
+
+  rateb1 = 1;
+  rateb2 = 1;
+  path = "SOAP-ENV:Envelope/SOAP-ENV:Body/ns0:getInterestAndExchangeRatesResponse/return/groups/";
+  pathnr = 0;
+
+  while (XmlNodeExists(xmlreply,path & "series[" & pathnr & "]")) begin
+    pathkey = path & "series[" & pathnr & "]";
+    ratedate = AddDay(DateFromString(XmlGet(xmlreply,pathkey & "/resultrows/date"),"YYYY-MM-DD"),1);
+    if (ratedate==RepSpec.d1) then begin
+      
+      pos = 0;
+      pos2 = 0;
+
+      GetNextSubString(XmlGet(xmlreply,pathkey & "/seriesname"),pos," ",units);
+      GetNextSubString(XmlGet(xmlreply,pathkey & "/seriesname"),pos," ",curncy);
+
+      GetNextSubString(XmlGet(xmlreply,pathkey & "/resultrows/value"),pos2,"E",rate);
+      GetNextSubString(XmlGet(xmlreply,pathkey & "/resultrows/value"),pos2,"E",rateconst);
+
+      rateconstv = StringToValue(rateconst,M4Val,"",".");
+      ratev = StringToValue(rate,M4Rate,"",".");
+
+      if (rateconstv>0) then begin
+        switch (rateconstv) begin
+          case 1: ratev = ratev * 10;
+          case 2: ratev = ratev * 100;
+          case 3: ratev = ratev * 1000;
+        end;
+      end else begin
+        switch (-rateconstv) begin
+          case 1: ratev = ratev / 10;
+          case 2: ratev = ratev / 100;
+          case 3: ratev = ratev / 1000;
+        end;
+      end;
+
+      unitsv = StringToValue(units,M4Rate,"",".");
+
+      if (curncy==BCb.BaseCur1) then begin
+        rateb1 = ratev;
+      end;
+      if (curncy==BCb.BaseCur2) then begin
+        rateb2 = ratev;
+      end;
+    end;
+    if (nonblank(ratev)) then begin
+      qupdating.AddCurencyRate(RepSpec,BCb,ERb,curncy,curncyname,ratev,ratev,unitsv,ratedate);
+      res = true;
+    end;
+    pathnr = pathnr + 1;
+  end;
+
+LParseXRateReply_Sweden:;
+  ParseXRateReply_Sweden = res;
+  return;
+end;
+
+/*
+outdated and no longer used
+procedure ParseXRateReply_Sweden(record RcVc RepSpec,Area a_reply)
+begin
+  LongInt lines,l;
+  string 255 curncy,curncyname,units,rate,method,tstr;
+  record BaseCurBlock BCb;
+  record ERBlock ERb;
+  Date ratedate;
+  val ratev,unitsv;
+
+  BlockLoad(BCb);
+  BlockLoad(ERb);
+  lines = CountLinesInArea(a_reply);
+  for (l=4;l<lines;l=l+1) begin
+    tstr = GetLineFromArea(a_reply,l);
+    if (len(tstr)==2) then begin
+      goto LParseSweden;
+    end;
+    
+    ratedate = DateFromString(GetValueDelim(tstr,0,";"),"DD/MM/YYYY");
+    curncyname = "";
+    curncy = GetValueDelim(GetValueDelim(tstr,2,";"),1," ");
+    units = GetValueDelim(GetValueDelim(tstr,2,";"),0," ");
+    rate = GetValueDelim(GetValueDelim(tstr,3,";"),0," "); // remove trailing spaces
+
+    unitsv = StringToValue(units,M4Rate,"",",");
+    ratev = StringToValue(rate,M4Rate,"",",");
+
+    if (nonblank(ratev)) then begin
+      qupdating.AddCurencyRate(RepSpec,BCb,ERb,curncy,curncyname,ratev,ratev,unitsv,ratedate);
+    end;
+  end;
+LParseSweden:;
+  return;
+end;
+*/
+
+function Boolean ParseXRateReply_ECB_Sweden(record RcVc RepSpec,Area a_reply)
+begin
+  Boolean res;
+  Area a_xmlreply;
+  xml xmlreply;
+  date ratedate;
+  Integer cubenr,curnr;
+  string 255 curncy,curncyname,units,rate,tstr;
+  string 255 cubestr,cubestrkey,curstr,curstrkey;
+  record BaseCurBlock BCb;
+  record ERBlock ERb;
+  LongInt rerror,xmllen,headerl,read;
+  val ratev,unitsv,rateb1,rateb2;
+
+  BlockLoad(BCb);
+  BlockLoad(ERb);
+  read = GetAreaFromArea(a_reply,0,GetAreaLength(a_reply)-0,a_xmlreply);
+
+/*
+    CreateFile("ParseXRateReply_ECB_Sweden.txt");
+    CloseFile;
+    WriteAreaToFile(a_xmlreply,"ParseXRateReply_ECB_Sweden.txt",0);
+*/
+
+  xmlreply = ParseXMLArea(a_xmlreply);
+
+  rateb1 = 1;
+  rateb2 = 1;
+  cubestr = "gesmes:Envelope/Cube/";
+  cubenr = 0;
+  while (XmlNodeExists(xmlreply,cubestr & "Cube[" & cubenr & "]")) begin
+    cubestrkey = cubestr & "Cube[" & cubenr & "]";
+    ratedate = DateFromString(XmlGetAttribute(xmlreply,cubestrkey,"time"),"YYYY-MM-DD");
+
+    if (ratedate==RepSpec.d1) then begin
+      curnr = 0;
+      curstr = cubestrkey & "/";
+      while (XmlNodeExists(xmlreply,curstr & "Cube[" & curnr & "]")) begin
+      
+        curstrkey = curstr & "Cube[" & curnr & "]";
+
+        curncy = XmlGetAttribute(xmlreply,curstrkey,"currency");
+        units = "1.00";
+        rate = XmlGetAttribute(xmlreply,curstrkey,"rate");
+
+        unitsv = StringToValue(units,M4Rate,"",".");
+        ratev = StringToValue(rate,M4Rate,"",".");
+
+        if (curncy==BCb.BaseCur1) then begin
+          rateb1 = ratev;
+        end;
+        if (curncy==BCb.BaseCur2) then begin
+          rateb2 = ratev;
+        end;
+        curnr = curnr + 1;
+      end;
+    end;
+    cubenr = cubenr + 1;
+  end;
+
+//Trace("rateb2 " & rateb2 & " rateb1 " & rateb1," ratev " & ratev);
+
+  cubestr = "gesmes:Envelope/Cube/";
+  cubenr = 0;
+  while (XmlNodeExists(xmlreply,cubestr & "Cube[" & cubenr & "]")) begin
+    cubestrkey = cubestr & "Cube[" & cubenr & "]";
+    ratedate = DateFromString(XmlGetAttribute(xmlreply,cubestrkey,"time"),"YYYY-MM-DD");
+
+    if (ratedate==RepSpec.d1) then begin
+      curnr = 0;
+      curstr = cubestrkey & "/";
+      while (XmlNodeExists(xmlreply,curstr & "Cube[" & curnr & "]")) begin
+      
+        curstrkey = curstr & "Cube[" & curnr & "]";
+
+        curncy = XmlGetAttribute(xmlreply,curstrkey,"currency");
+        units = "1.00";
+        rate = XmlGetAttribute(xmlreply,curstrkey,"rate");
+
+        unitsv = StringToValue(units,M4Rate,"",".");
+        ratev = StringToValue(rate,M4Rate,"",".");
+
+//Trace("curncy " & curncy & " rateb1 " & rateb1," ratev " & ratev & " rateb1/ratev " & rateb1/ratev);
+
+        ratev = rateb1/ratev;
+
+        qupdating.AddCurencyRate_Swedish(RepSpec,BCb,ERb,curncy,curncyname,100*ratev,100*(rateb2/rateb1),100*unitsv,100*rateb1,ratedate);//sicko
+        res = true;
+        curnr = curnr + 1;
+      end;
+//        if (BCb.BaseCur1!="EUR") and (BCb.BaseCur2!="EUR") and (BCb.BaseCur1=="SEK") then begin
+      
+      goto LParseXRateReply_ECB_Sweden;
+    end;
+    cubenr = cubenr + 1;
+  end;
+  
+LParseXRateReply_ECB_Sweden:;
+  ParseXRateReply_ECB_Sweden = res;
+  return;
+end;
+
+function Boolean ParseXRateReply_Estonia(record RcVc RepSpec,Area a_reply)
+begin
+  Boolean res;
+  LongInt lines,l;
+  string 255 curncy,curncyname,units,rate,method,tstr,curstrkey;
+  record BaseCurBlock BCb;
+  record ERBlock ERb;
+  Date ratedate;
+  val ratev,unitsv,rateb1,rateb2;
+  Area a_xmlreply;
+  LongInt rerror,xmllen,headerl,read,i,cnt;
+  xml xmlreply;
+
+  BlockLoad(BCb);
+  BlockLoad(ERb);
+  read = GetAreaFromArea(a_reply,0,GetAreaLength(a_reply)-0,a_xmlreply);
+
+  xmlreply = ParseXMLArea(a_xmlreply);
+
+  if (XmlGet(xmlreply,"Report/Header/Version")=="1.0") then begin
+    ratedate = DateFromString(XmlGet(xmlreply,"Report/Body/FixingsDate"),"MM/DD/YY");
+    if (ratedate.year<=80) then begin
+      ratedate.year = ratedate.year + 2000;
+    end else begin
+      if (ratedate.year<100) then begin
+        ratedate.year = ratedate.year + 1900;
+      end;
+    end;
+    if (ratedate==RepSpec.d1) then begin
+      cnt = XmlCountChildren(xmlreply,"Report/Body/Currencies");
+      rateb1 = 1;
+      rateb2 = 1;
+      for (i=0;i<cnt;i=i+1) begin
+        curstrkey = "Report/Body/Currencies/Currency[" & i & "]";
+        curncy = XmlGetAttribute(xmlreply,curstrkey,"name");
+        curncyname = XmlGetAttribute(xmlreply,curstrkey,"text");
+        rate = XmlGetAttribute(xmlreply,curstrkey,"rate");
+        
+        unitsv = 1.00;
+        ratev = StringToValue(rate,M4Rate,"",".");
+        if (curncy==BCb.BaseCur1) then begin
+          rateb1 = ratev;
+        end;
+        if (curncy==BCb.BaseCur2) then begin
+          rateb2 = ratev;
+        end;
+      end;
+
+      for (i=0;i<cnt;i=i+1) begin
+        curstrkey = "Report/Body/Currencies/Currency[" & i & "]";
+        curncy = XmlGetAttribute(xmlreply,curstrkey,"name");
+        curncyname = XmlGetAttribute(xmlreply,curstrkey,"text");
+        rate = XmlGetAttribute(xmlreply,curstrkey,"rate");
+        
+        unitsv = 1.00;
+        ratev = StringToValue(rate,M4Rate,"",".");
+        ratev = ratev/rateb1;
+        
+        qupdating.AddCurencyRate(RepSpec,BCb,ERb,curncy,curncyname,ratev,rateb1/rateb2,unitsv,ratedate);
+        res = true;
+      end;
+    end;
+  end;
+LParseEstonia:;
+  ParseXRateReply_Estonia = res;
+  return;
+end;
+
+function Boolean ParseXRateReply_Turkey(record RcVc RepSpec,Area a_reply)
+begin
+  Boolean res;
+  LongInt lines,l;
+  string 255 curncy,curncyname,units,rate,method,tstr,curstrkey;
+  record BaseCurBlock BCb;
+  record ERBlock ERb;
+  Date ratedate;
+  val ratev,unitsv;
+  Area a_xmlreply;
+  LongInt rerror,xmllen,headerl,read,i,cnt;
+  xml xmlreply;
+
+  BlockLoad(BCb);
+  BlockLoad(ERb);
+  
+  read = GetAreaFromArea(a_reply,0,GetAreaLength(a_reply)-0,a_xmlreply);
+
+  xmlreply = ParseXMLArea(a_xmlreply);
+  if (XmlNodeExists(xmlreply,"Tarih_Date")) then begin
+    ratedate = DateFromString(XmlGetAttribute(xmlreply,"Tarih_Date","Date"),"MM/DD/YYYY");
+    if (ratedate<RepSpec.d1) then begin//for sundays and saturndays
+      ratedate = RepSpec.d1;
+    end;
+    if (ratedate<=RepSpec.d1) then begin
+      cnt = 0;
+      while (XmlNodeExists(xmlreply,"Tarih_Date/Currency[" & cnt & "]")) begin
+        curncy = XmlGetAttribute(xmlreply,"Tarih_Date/Currency[" & cnt & "]","Kod");
+        curncyname = XmlGet(xmlreply,"Tarih_Date/Currency[" & cnt & "]/Isim");
+        curncyname = ConvertStringFromCodePage("ISO-8859-9",curncyname);
+        units = XmlGet(xmlreply,"Tarih_Date/Currency[" & cnt & "]/Unit");
+        rate = XmlGet(xmlreply,"Tarih_Date/Currency[" & cnt & "]/ForexSelling");
+
+        unitsv = StringToValue(units,M4Rate,"",".");
+        ratev = StringToValue(rate,M4Rate,"",".");
+
+        if (ratev!=0) then begin
+          qupdating.AddCurencyRate(RepSpec,BCb,ERb,curncy,curncyname,ratev,ratev,unitsv,ratedate);
+          res = true;
+        end;
+        cnt = cnt + 1;
+      end;
+    end;
+  end;
+LParseTurkey:;
+  ParseXRateReply_Turkey = res;
+  return;
+end;
+
+function Boolean ParseXRateReply_Russia(record RcVc RepSpec,Area a_reply)
+begin
+  Boolean res;
+  LongInt lines,l;
+  string 255 curncy,curncyname,units,rate,method,tstr,curstrkey;
+  record BaseCurBlock BCb;
+  record ERBlock ERb;
+  Date ratedate;
+  val ratev,unitsv,rateb1,rateb2;
+  Area a_xmlreply;
+  LongInt rerror,xmllen,headerl,read,i,cnt;
+  xml xmlreply;
+
+  BlockLoad(BCb);
+  BlockLoad(ERb);
+  read = GetAreaFromArea(a_reply,0,GetAreaLength(a_reply)-0,a_xmlreply);
+  
+  xmlreply = ParseXMLArea(a_xmlreply);
+
+  if (XmlNodeExists(xmlreply,"ValCurs")) then begin
+    ratedate = DateFromString(XmlGetAttribute(xmlreply,"ValCurs","Date"),"DD.MM.YYYY");
+    if (ratedate.year<=80) then begin
+      ratedate.year = ratedate.year + 2000;
+    end else begin
+      if (ratedate.year<100) then begin
+        ratedate.year = ratedate.year + 1900;
+      end;
+    end;
+    if (ratedate==RepSpec.d1) then begin
+      rateb1 = 1;
+      rateb2 = 1;
+      i = 0;
+      curstrkey = "ValCurs/Valute[" & i & "]";
+      while (XmlNodeExists(xmlreply,curstrkey)) begin
+        curncy = ConvertStringFromCodePage("WINDOWS-1251",XmlGet(xmlreply,curstrkey & "/CharCode"));
+        curncyname = ConvertStringFromCodePage("WINDOWS-1251",XmlGet(xmlreply,curstrkey & "/Name"));
+        rate = ConvertStringFromCodePage("WINDOWS-1251",XmlGet(xmlreply,curstrkey & "/Value"));
+        units = ConvertStringFromCodePage("WINDOWS-1251",XmlGet(xmlreply,curstrkey & "/Nominal"));
+        
+        unitsv = StringToValue(units,M4Rate,"",",");
+        ratev = StringToValue(rate,M4Rate,"",",");
+
+        if (curncy==BCb.BaseCur1) then begin
+          rateb1 = ratev;
+        end;
+        if (curncy==BCb.BaseCur2) then begin
+          rateb2 = ratev;
+        end;
+        i = i+1;
+        curstrkey = "ValCurs/Valute[" & i & "]";
+      end;
+
+      i = 0;
+      curstrkey = "ValCurs/Valute[" & i & "]";
+      while (XmlNodeExists(xmlreply,curstrkey)) begin
+        curncy = ConvertStringFromCodePage("WINDOWS-1251",XmlGet(xmlreply,curstrkey & "/CharCode"));
+        curncyname = ConvertStringFromCodePage("WINDOWS-1251",XmlGet(xmlreply,curstrkey & "/Name"));
+        rate = ConvertStringFromCodePage("WINDOWS-1251",XmlGet(xmlreply,curstrkey & "/Value"));
+        units = ConvertStringFromCodePage("WINDOWS-1251",XmlGet(xmlreply,curstrkey & "/Nominal"));
+        
+        unitsv = StringToValue(units,M4Rate,"",",");
+        ratev = StringToValue(rate,M4Rate,"",",");
+        ratev = ratev/rateb1;
+        qupdating.AddCurencyRate(RepSpec,BCb,ERb,curncy,curncyname,ratev,rateb1/rateb2,unitsv,ratedate);
+        res = true;
+        i = i+1;
+        curstrkey = "ValCurs/Valute[" & i & "]";
+      end;
+    end;
+  end;
+  ParseXRateReply_Russia = res;
+  return;
+end;
+
+function string 5 TransCurrencyBOEtoISO(string curcode)
+begin
+  string 5 res;
+  
+  switch (curcode) begin
+    case "XUDLADS": res = "AUD";
+    case "XUDLCDS": res = "CAD";
+    case "XUDLBK89": res = "CNY";
+    case "XUDLBK22": res = "CYP";
+    case "XUDLBK25": res = "CZK";
+    case "XUDLDKS": res = "DKK";
+    case "XUDLBK28": res = "EEK";
+    case "XUDLERS": res = "EUR";
+    case "XUDLHDS": res = "HKD";
+    case "XUDLJYS": res = "JPY";
+    case "XUDLBK33": res = "HUF";
+    case "XUDLBK97": res = "INR";
+    case "XUDLBK39": res = "LVL";
+    case "XUDLBK78": res = "ILS";
+    case "XUDLBK36": res = "LTL";
+    case "XUDLBK83": res = "MYR";
+    case "XUDLBK44": res = "MTL";
+    case "XUDLNDS": res = "NZD";
+    case "XUDLNKS": res = "NOK";
+    case "XUDLBK47": res = "PLN";
+    case "XUDLBK85": res = "RUB";
+    case "XUDLSRS": res = "";
+    case "XUDLSGS": res = "SGD";
+    case "XUDLBK55": res = "SKK";
+    case "XUDLSKS": res = "SEK";
+    case "XUDLSFS": res = "CHF";
+    case "XUDLBK52": res = "";
+    case "XUDLZRS": res = "ZAR";
+    case "XUDLBK93": res = "KRW";
+    case "XUDLTWS": res = "TWD";
+    case "XUDLBK87": res = "THB";
+    case "XUDLBK95": res = "TRY";
+    case "XUDLUSS": res = "USD";
+  end;
+  TransCurrencyBOEtoISO = res;
+  return;
+end;
+
+function Boolean ParseXRateReply_UK(record RcVc RepSpec,Area a_reply)
+begin
+  Boolean res;
+  LongInt lines,l;
+  string 255 curncy,curncyname,units,rate,method,tstr,curstrkey,nstr;
+  record BaseCurBlock BCb;
+  record ERBlock ERb;
+  Date ratedate;
+  val ratev,unitsv,rateb1,rateb2;
+  Area a_xmlreply;
+  LongInt rerror,xmllen,headerl,read,i,cnt,j,cnt2;
+  xml xmlreply;
+  
+
+  BlockLoad(BCb);
+  BlockLoad(ERb);
+  read = GetAreaFromArea(a_reply,0,GetAreaLength(a_reply)-0,a_xmlreply);
+
+/*
+    CreateFile("ParseXRateReply_UK.txt");
+    CloseFile;
+    WriteAreaToFile(a_xmlreply,"ParseXRateReply_UK.txt",0);
+*/
+
+  xmlreply = ParseXMLArea(a_xmlreply);
+  if (XmlGetAttribute(xmlreply,"Envelope","xmlns")=="http://www.gesmes.org/xml/2002-08-01") then begin
+    cnt = XmlCountChildren(xmlreply,"Envelope");
+    rateb1 = 1;
+    rateb2 = 1;
+    for (i=0;i<cnt;i=i+1) begin
+      curstrkey = "Envelope/Cube[" & i & "]";
+      
+      curncy = TransCurrencyBOEtoISO(XmlGetAttribute(xmlreply,curstrkey,"SCODE"));
+
+      ratev = 0;
+      
+      cnt2 = XmlCountChildren(xmlreply,curstrkey);
+      for (j=0;j<cnt2;j=j+1) begin
+        nstr = curstrkey & "/Cube[" & j & "]";
+        if (XmlGetAttribute(xmlreply,nstr,"CAT_ORD")=="6") then begin
+          curncyname = XmlGetAttribute(xmlreply,nstr,"VAL_DESC");
+        end;
+        if (nonblank(XmlGetAttribute(xmlreply,nstr,"TIME"))) then begin
+          ratedate = DateFromString(XmlGetAttribute(xmlreply,nstr,"TIME"),"YYYY-MM-DD");
+          if (ratedate==AddDay(RepSpec.d1,-1)) then begin
+            unitsv = 1.00;
+            rate = XmlGetAttribute(xmlreply,nstr,"OBS_VALUE");
+            ratev = StringToValue(rate,M4Rate,"",".");
+          end;
+        end;
+      end;
+      if (curncy==BCb.BaseCur1) then begin
+        rateb1 = ratev;
+      end;
+      if (curncy==BCb.BaseCur2) then begin
+        rateb2 = ratev;
+      end;
+    end;
+
+    for (i=0;i<cnt;i=i+1) begin
+      curstrkey = "Envelope/Cube[" & i & "]";
+      
+      curncy = TransCurrencyBOEtoISO(XmlGetAttribute(xmlreply,curstrkey,"SCODE"));
+
+      ratev = 0;
+      
+      cnt2 = XmlCountChildren(xmlreply,curstrkey);
+      for (j=0;j<cnt2;j=j+1) begin
+        nstr = curstrkey & "/Cube[" & j & "]";
+        if (XmlGetAttribute(xmlreply,nstr,"CAT_ORD")=="6") then begin
+          curncyname = XmlGetAttribute(xmlreply,nstr,"VAL_DESC");
+        end;
+        if (nonblank(XmlGetAttribute(xmlreply,nstr,"TIME"))) then begin
+          ratedate = DateFromString(XmlGetAttribute(xmlreply,nstr,"TIME"),"YYYY-MM-DD");
+          if (ratedate==AddDay(RepSpec.d1,-1)) then begin
+            unitsv = 1.00;
+            rate = XmlGetAttribute(xmlreply,nstr,"OBS_VALUE");
+            ratev = StringToValue(rate,M4Rate,"",".");
+          end;
+        end;
+      end;
+      if (nonblank(curncy) and ratev!=0.0) then begin
+        ratev = ratev/rateb1;
+        qupdating.AddCurencyRate(RepSpec,BCb,ERb,curncy,curncyname,unitsv,rateb1/rateb2,ratev,AddDay(ratedate,1));
+        res = true;
+        ratev = 0;
+      end;
+    end;
+  end else begin
+    LogText(0,"Cannot exchange rate information from the Bank of England. Their XML format may have changed.");
+    res = false;
+  end;
+LParseUK:;
+  ParseXRateReply_UK = res;
+  return;
+end;
+
+global
+function Boolean ReadExchangeRateFromBank2(Area a_reply,Date td,Integer flag0,Integer flag1,var LongInt errno,var string errstr,Date od,Boolean clientf)
+begin
+  Boolean foundf;
+  LongInt rerror;
+  string 255 rerrordesc;
+  LongInt l;
+  record TXServiceReplyVc TXSrvReplyr;
+  record InternetEnablerBlock IEb;
+  record RcVc RepSpec;
+  record ERBlock ERb;
+  record CYBlock CYb;
+
+  RepSpec.d1 = td;
+  RepSpec.flags[0] = flag0;
+  RepSpec.flags[1] = flag1;
+  
+  ReadTXServiceReply(TXSrvReplyr,a_reply,true);
+  rerror = TXSrvReplyr.ErrorCode;
+  rerrordesc = TXSrvReplyr.ErrorDescription;
+  if (rerror!=0) then begin
+    if (TXSrvReplyr.HTSCUServiceErrorCode>0) then begin
+      if (errno<1000) then begin
+        errno = 0;
+      end else begin
+        errno = TXSrvReplyr.HTSCUServiceErrorCode;
+      end;
+      errstr = TXSrvReplyr.HTSCUServiceErrorDescription;
+    end else begin
+      errno = rerror;
+      errstr = rerrordesc;
+    end;
+    goto LReadExchangeRateFromBank2;
+  end;
+
+  
+  BlockLoad(ERb);
+  if (!IsEnterprise) then begin ERb.VATLawExchangeRate = 1; end;
+  if (ERb.VATLawExchangeRate!=0) then begin
+    BlockLoad(CYb);
+    switch (CYb.VATLaw) begin
+      case vatEnglish:      foundf = ParseXRateReply_UK(RepSpec,a_reply);
+      case vatNorwegian:    foundf = ParseXRateReply_ECB_Sweden(RepSpec,a_reply);
+      case vatSwedish:      foundf = ParseXRateReply_Sweden(RepSpec,a_reply);
+      case vatFinnish:      foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case vatPolish:       foundf = ParseXRateReply_Poland(RepSpec,a_reply);
+      case vatEstonian:     foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+                            //ParseXRateReply_Estonia(RepSpec,a_reply);
+      case vatLatvian:      foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case vatLithuanian:   foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+                            //ParseXRateReply_Lithuania(RepSpec,a_reply);
+      case vatRussian:      foundf = ParseXRateReply_Russia(RepSpec,a_reply);
+      case vatPortuguese:   foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case vatSlovenian:    foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      //case vatTurkish:      //foundf = ParseXRateReply_Turkey(RepSpec,a_reply);
+      case vatIrish:        foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case vatFrench:       foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case vatGerman:       foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case vatItalian:      foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case vatSpanish:      foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case vatDanish:       foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case vatMexican:      foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case vatBolivian:     foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case vatHonduran:     foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case vatUkrainian:    foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case vatKenyan:       foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case vatZimbabwean:   foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case vatCanada:       foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case vatCroation:     foundf = ParseXRateReply_Croatia(RepSpec,a_reply);
+      case vatArgentinean:  foundf = ParseXRateReply_BCRA(RepSpec,a_reply,clientf,true);
+      otherwise
+        errno = 20237;
+        goto LReadExchangeRateFromBank2;
+    end;
+  end else begin
+    BlockLoad(IEb);
+    switch (IEb.RegInCountry) begin
+      case 99:
+        if (IsHansaWorldCustomer(IEb.CustomerCode)==false) then begin
+          goto LReadExchangeRateFromBank2;
+        end;
+        switch (CurrentCompany) begin
+          case 19:  foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);  // Denmark
+          case 24:  foundf = ParseXRateReply_ECB_Sweden(RepSpec,a_reply);              // Norway
+                    //ParseXRateReply_Sweden(RepSpec,a_reply);
+          case 25:  foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);  // Estonia
+                    //ParseXRateReply_Estonia(RepSpec,a_reply);
+          case 26:  foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);  // Latvia HW
+          case 28:  foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);  // Lithuania HW
+                    //ParseXRateReply_Lithuania(RepSpec,a_reply);
+          case 29:  foundf = ParseXRateReply_Russia(RepSpec,a_reply);                  // Russia
+          case 36:  foundf = ParseXRateReply_Poland(RepSpec,a_reply);
+          case 38:  foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);  // Latvia HW
+          case 39:  foundf = ParseXRateReply_Sweden(RepSpec,a_reply);                  // Sweden
+          case 40:  foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);  // Finland
+          case 57:  foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);  // Mexico
+          case 63:  foundf = ParseXRateReply_UK(RepSpec,a_reply);                      // UK
+          case 65:  foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);  // Slovenia
+          case 68:  foundf = ParseXRateReply_Estonia(RepSpec,a_reply);                 // Estonia
+          case 71:  foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);  // Honduras
+          case 74:  foundf = ParseXRateReply_Estonia(RepSpec,a_reply);                 // Estonia
+          case 82:  foundf = ParseXRateReply_ECB_Sweden(RepSpec,a_reply);              // Norway FO
+                    //ParseXRateReply_Sweden(RepSpec,a_reply);
+          case 90:  foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);  // Portugal
+          case 96:  foundf = ParseXRateReply_Turkey(RepSpec,a_reply);                  // Turkey
+          case 105: foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);  // Zimbabwe
+          case 113: foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);  // Lithuania HW
+                    //ParseXRateReply_Lithuania(RepSpec,a_reply);
+        end;
+      case kRegInUK:                foundf = ParseXRateReply_UK(RepSpec,a_reply);                    
+      case kRegInNorway:            foundf = ParseXRateReply_ECB_Sweden(RepSpec,a_reply);            
+                                    //ParseXRateReply_Sweden(RepSpec,a_reply);
+      case kRegInSweden:            foundf = ParseXRateReply_ECB_Sweden(RepSpec,a_reply);            
+                                    //ParseXRateReply_Sweden(RepSpec,a_reply);
+      case kRegInFinland:           foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case kRegInPoland:            foundf = ParseXRateReply_Poland(RepSpec,a_reply);                
+      case kRegInEstonia:           foundf = ParseXRateReply_Estonia(RepSpec,a_reply);               
+      case kRegInLatvia:            foundf = ParseXRateReply_ECB(RepSpec,a_reply,true,clientf,true);
+      case kRegInLithuania:         foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+                                    //ParseXRateReply_Lithuania(RepSpec,a_reply);
+      case kRegInRussia:            foundf = ParseXRateReply_Russia(RepSpec,a_reply);                
+      case kRegInEstoniaEBS:        foundf = ParseXRateReply_Estonia(RepSpec,a_reply);               
+      case kRegInPortugal:          foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case kRegInSlovenia:          foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case kRegInEstoniaHansaRaama: foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+                                    //ParseXRateReply_Estonia(RepSpec,a_reply);
+      case kRegInNorway1Office:     foundf = ParseXRateReply_ECB_Sweden(RepSpec,a_reply);            
+                                    //ParseXRateReply_Sweden(RepSpec,a_reply);
+      case kRegInTurkey:            foundf = ParseXRateReply_Turkey(RepSpec,a_reply);                
+      case kRegInIreland:           foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case kRegInCroatia:           foundf = ParseXRateReply_Croatia(RepSpec,a_reply);
+      case kRegInCroatiaHWAdriatic: foundf = ParseXRateReply_Croatia(RepSpec,a_reply);
+      case kRegInGermany:           foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case kRegInFrance:            foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case kRegInItaly:             foundf = ParseXRateReply_ECB(RepSpec,a_reply,false,clientf,true);
+      case kRegInArgentina:         foundf = ParseXRateReply_BCRA(RepSpec,a_reply,clientf,true);
+      otherwise
+        errno = 20237;
+        goto LReadExchangeRateFromBank2;
+    end;
+  end;
+
+LReadExchangeRateFromBank2:;
+  if (!foundf and errno==-1) then begin
+    errno = 20238;
+  end;
+  ReadExchangeRateFromBank2 = foundf;
+  return;
+end;
+
+global
+function Boolean ReadExchangeRateFromBank(Area a_reply,Date td,Integer flag0,Integer flag1,var LongInt errno,var string errstr,Date od)
+begin
+  ReadExchangeRateFromBank = ReadExchangeRateFromBank2(a_reply,td,flag0,flag1,errno,errstr,od,false);
+  return;
+end;
+
+function Boolean ParseXRateReply_Fixer(record RcVc RepSpec,record ERBlock ERb,Boolean clientf,record BaseCurBlock BCb,Area a_reply,Boolean oldmethodf)
+begin
+  Boolean res,testf;
+  json js;
+  string 255 trans,root,curncy;
+  Date ratedate;
+  val ratev,rateb1,rateb2,unitsv;
+  Integer i,err;
+  LongInt errmsg;
+  Boolean successf;
+  
+  BlockLoad(BCb);
+
+  LogAreaToFile("_ParseXRateReply_Fixer.txt",a_reply);
+
+  res = false;
+  if (GetAreaLength(a_reply)>0) then begin
+    js = ParseJSONArea(a_reply);
+    i = 0;
+    root = "rates";
+    trans = root & "/[" & i & "]";
+    ratedate = DateFromString(JSONGet(js,"date"),"YYYY-MM-DD");
+    successf = StringToBool(JSONGet(js,"success"));
+
+    if (successf==false) then begin
+      err = StringToLongInt(JSONGet(js,"error/code"));
+      switch (err) begin
+        case 302: errmsg = 42510;
+        case 301: errmsg = 42511;
+        case 101: errmsg = 42512;
+        case 104: errmsg = 42513;
+        case 201: errmsg = 42514;
+      end;
+      if (clientf) then begin
+        MessageBox(errmsg,"");
+      end;
+      goto LParseXRateReply_Fixer;
+    end;
+    
+    while (JSONNodeExists(js,trans)) begin
+      ratev = 0;
+      rateb1 = 1;
+      rateb2 = 1;
+      curncy = JSONGetChildName(js,root,i);
+      ratev = Round(StringToValue(JSONGet(js,trans),M4Rate,"","."),SetRoundModeD(4));
+    
+      if (curncy==BCb.BaseCur1) then begin
+        rateb1 = ratev;
+      end;
+      if (curncy==BCb.BaseCur2) then begin
+        rateb2 = ratev;
+      end;
+      if (nonblank(curncy) and ratev!=0.0) then begin
+        unitsv = 1.00;
+        ratev = ratev/rateb1;
+        testf = true;
+        if (oldmethodf==false) then begin
+          if (RateForService(curncy)==false) then begin testf = false; end;
+        end;
+        if (testf) then begin
+          qupdating.AddCurencyRate_Fixer(RepSpec,BCb,ERb,curncy,"",unitsv,rateb1/rateb2,ratev,ratedate);
+        end;
+      end;
+    
+      i = i + 1;
+      trans = root & "/[" & i & "]";
+    end;
+  end;
+  
+  res = true;
+  if (clientf) then begin
+    CheckmarkBox(42515,"");
+  end;
+  
+LParseXRateReply_Fixer:;
+  ParseXRateReply_Fixer = res;
+  return;
+end;
+
+global
+function Boolean ReadExchangeRateFromService(Area a_reply,Date td,Integer flag0,Integer flag1,Integer exchangeRateService,var LongInt errno,var string errstr,Date od,Boolean clientf)
+begin
+  Boolean foundf;
+  LongInt rerror;
+  string 255 rerrordesc;
+  LongInt l;
+  record TXServiceReplyVc TXSrvReplyr;
+  record InternetEnablerBlock IEb;
+  record RcVc RepSpec;
+  record ERBlock ERb;
+  record BaseCurBlock BCb;
+
+  RepSpec.d1 = td;
+  RepSpec.flags[0] = flag0;
+  RepSpec.flags[1] = flag1;
+  
+  ReadTXServiceReply(TXSrvReplyr,a_reply,true);
+  rerror = TXSrvReplyr.ErrorCode;
+  rerrordesc = TXSrvReplyr.ErrorDescription;
+  if (rerror!=0) then begin
+    if (TXSrvReplyr.HTSCUServiceErrorCode>0) then begin
+      if (errno<1000) then begin
+        errno = 0;
+      end else begin
+        errno = TXSrvReplyr.HTSCUServiceErrorCode;
+      end;
+      errstr = TXSrvReplyr.HTSCUServiceErrorDescription;
+    end else begin
+      errno = rerror;
+      errstr = rerrordesc;
+    end;
+    goto LReadExchangeRateFromService;
+  end;
+
+  BlockLoad(ERb);
+  BlockLoad(BCb);
+  switch (exchangeRateService) begin
+    case kExchangeRateServiceFixer: foundf = ParseXRateReply_Fixer(RepSpec,ERb,false,BCb,a_reply,false);           
+    otherwise
+      errno = 20237;
+      goto LReadExchangeRateFromService;
+  end;
+
+LReadExchangeRateFromService:;
+  if (!foundf and errno==-1) then begin
+    errno = 20238;
+  end;
+  ReadExchangeRateFromService = foundf;
+  return;
+end;
+
+global
+updating procedure SetExchangeRateRequestedToday()
+begin
+  record ERBlock ERb;
+  
+  BlockLoad(ERb);
+  ERb.RunDate = CurrentDate;
+  BlockStore(ERb);
+  
+  return;
+end;
+
+global
+function Boolean GetExchangeRateFromBank(record RcVc RepSpec,Boolean clientf,var LongInt errno,var string errstr)
+begin
+  Boolean res,testf,found;
+  record InternetEnablerBlock IEb;
+  record CYBlock CYb;
+  Area a_req,a_reply,a_xmlreply;
+  record BaseCurBlock BCb;
+  record ERBlock ERb;
+  Date d1;
+  Date od;
+  transaction Date gRatedate;
+  //LongInt l;
+  //record TXServiceReplyVc TXSrvReplyr;
+  
+  // LogText(0,"DEBUG GetExchangeRateFromBank clientf=" & clientf);
+
+  d1 = RepSpec.d1;
+  BlockLoad(IEb);
+  BlockLoad(CYb);
+  BlockLoad(ERb);
+  
+  if (!IsEnterprise) then begin ERb.VATLawExchangeRate = 1; end;
+  if (ERb.VATLawExchangeRate==0) then begin
+    switch (IEb.RegInCountry) begin
+      case kRegInUK:  d1 = AddDay(RepSpec.d1,-1);
+      case kRegInNorway:  ;
+      case kRegInSweden:  ;
+      case kRegInFinland:  ;
+      case kRegInPoland:  ;
+      case kRegInEstonia:  ;
+      case kRegInLatvia:  ;
+      case kRegInLithuania:  ;
+      case kRegInRussia:  ;
+      case kRegInEstoniaEBS:  ;
+      case kRegInPortugal:  ;
+      case kRegInSlovenia:  ;
+      case kRegInEstoniaHansaRaama:  ;
+      case kRegInNorway1Office:  ;
+      case kRegInArgentina:  ;
+      otherwise
+        if (IsEnterprise) then begin
+          if (IsHansaWorldCustomer(IEb.CustomerCode)==false) then begin
+            errno = 20237;
+            goto LGetExchangeRateFromBank;
+          end;
+        end;
+        d1 = AddDay(RepSpec.d1,-1);
+    end;
+  end else begin
+    switch (CYb.VATLaw) begin
+      case vatEnglish:  d1 = AddDay(RepSpec.d1,-1);
+      case vatNorwegian:  ;
+      case vatSwedish:  ;
+      case vatFinnish:  ;
+      case vatPolish: ;
+      case vatEstonian:  ;
+      case vatLatvian:  ;
+      case vatLithuanian:  ;
+      case vatRussian:  ;
+      case vatEstonian:  ;
+      case vatPortuguese:  ;
+      case vatSlovenian:  ;
+      case vatArgentinean:  ;
+      otherwise
+        if (IsEnterprise) then begin
+          if (IsHansaWorldCustomer(IEb.CustomerCode)==false) then begin
+            errno = 20237;
+            goto LGetExchangeRateFromBank;
+          end;
+        end;
+        d1 = AddDay(RepSpec.d1,-1);
+    end;
+  end;
+
+  SendTextParameter(DateToString(d1,"YYYY-MM-DD"),a_req);
+  if (ERb.VATLawExchangeRate!=0) then begin
+    SendTextParameter(CYb.VATLaw,a_req);
+  end else begin
+    SendTextParameter("",a_req);
+  end;
+  SendEOLParameter(a_req);
+
+  BlockLoad(BCb);
+
+  if (BCb.NotBase1!=0) then begin
+    errno = 20237;
+    errstr = " " & USetStr(20805);
+    goto LGetExchangeRateFromBank;
+  end;
+  if (clientf) then begin
+    testf = qupdating.SendServiceRequest("NATIONALBANKCURRATES",false,a_req,a_reply);
+    if (testf) then begin
+      qupdating.SetExchangeRateRequestedToday;
+    end;
+/* what is this for - why treat a failed service request as a success?? */
+//    if (testf==false) then begin
+//      l = GetRecordFromArea(TXSrvReplyr,"TXServiceReplyVc",0,a_reply);
+//      testf = (GetAreaLength(a_reply) - l)>100;
+//      if (testf) then begin
+//        found = true;
+//      end;
+//    end;
+  end else begin
+    gRatedate = RepSpec.d1;
+    if (qupdating.ServiceRequestAsync("NATIONALBANKCURRATES","",true,a_req,"HTSNationalBankCurRatesReply")) then begin
+      found = true;
+    end;
+  end;
+
+  if (testf) then begin
+    found = ReadExchangeRateFromBank2(a_reply,RepSpec.d1,RepSpec.flags[0],RepSpec.flags[1],errno,errstr,od,clientf);
+  end else begin
+    if (clientf) then begin
+      errno = 20241;
+    end;
+  end;
+  
+LGetExchangeRateFromBank:;
+  GetExchangeRateFromBank = found;
+  return;
+end;
+
+global
+function Boolean GetExchangeRateFromService(record RcVc RepSpec,Boolean clientf,string currencyFrom,string currencyTo,Integer exchangeRateService,var LongInt errno,var string errstr)
+begin
+  Boolean res,testf,foundf;
+  record InternetEnablerBlock IEb;
+  Area a_req,a_reply,a_xmlreply;
+  record BaseCurBlock BCb;
+  record ERBlock ERb;
+  Date d1;
+  Date od;
+  transaction Date gRatedate;
+  //LongInt l;
+  //record TXServiceReplyVc TXSrvReplyr;
+  
+  //LogText(0,"DEBUG GetExchangeRateFromService clientf=" & clientf);
+
+  if (exchangeRateService==0 or exchangeRateService>=kExchangeRateServiceMax) then begin
+    errno = 20237;
+    goto LGetExchangeRateFromService;
+  end;
+
+  d1 = RepSpec.d1;
+  BlockLoad(IEb);
+  BlockLoad(ERb);
+  BlockLoad(BCb);
+
+  // if (IsEnterprise) then begin //doesn't work for some reason...
+  //   if (IsHansaWorldCustomer(IEb.CustomerCode)==false) then begin
+  //     errno = 20237;
+  //     goto LGetExchangeRateFromService;
+  //   end;
+  // end;
+
+  SendTextParameter(DateToString(d1,"YYYY-MM-DD"),a_req);
+  SendTextParameter("",a_req); //VATLaw
+  SendTextParameter(currencyFrom,a_req);
+  SendTextParameter(currencyTo,a_req);
+  SendTextParameter(exchangeRateService,a_req);
+  SendEOLParameter(a_req);
+
+  if (BCb.NotBase1!=0 and (currencyTo==BCb.BaseCur1 or currencyFrom==BCb.BaseCur1)) then begin
+    errno = 20237;
+    errstr = " " & USetStr(20805);
+    goto LGetExchangeRateFromService;
+  end;
+  if (clientf) then begin
+    testf = qupdating.SendServiceRequest("NATIONALBANKCURRATES",false,a_req,a_reply);
+    if (testf) then begin
+      qupdating.SetExchangeRateRequestedToday;
+    end;
+  end else begin
+    gRatedate = RepSpec.d1;
+    if (qupdating.ServiceRequestAsync("NATIONALBANKCURRATES","",true,a_req,"HTSNationalBankCurRatesReply")) then begin
+      foundf = true;
+    end;
+  end;
+
+  if (testf) then begin
+    foundf = ReadExchangeRateFromService(a_reply,RepSpec.d1,RepSpec.flags[0],RepSpec.flags[1],exchangeRateService,errno,errstr,od,clientf);
+  end else begin
+    if (clientf) then begin
+      errno = 20241;
+    end;
+  end;
+  
+LGetExchangeRateFromService:;
+  GetExchangeRateFromService = foundf;
+  return;
+end;
+
+function string 255 FixerAPIKey()
+begin
+  string 255 res;
+  
+  res = "e88192fba880850eabdc3f1fbb256e60";
+  
+  FixerAPIKey = res;
+  return;
+end;
+
+
+function string 255 GetCurrencies()
+begin
+  string 255 res;
+  record CurncyCodeVc CCr;
+  
+  while (LoopMain(CCr,1,true)) begin
+    if (nonblank(CCr.CurncyCode)) then begin
+      if (blank(res)) then begin
+        res = CCr.CurncyCode;
+      end else begin
+        res = res & "," & CCr.CurncyCode;
+      end;
+    end;
+  end;
+  
+  GetCurrencies = res;
+  return;
+end;
+
+global
+function Boolean GetExchangeRateFromFixer(record RcVc RepSpec,Boolean clientf,var LongInt errno,var string errstr)
+begin
+  Boolean res,testf;
+  record InternetEnablerBlock IEb;
+  record BaseCurBlock BCb;
+  record ERBlock ERb;
+  Area a_req,a_reply;
+  string 255 getstring,d1;
+  
+  BlockLoad(IEb);
+  BlockLoad(BCb);
+  BlockLoad(ERb);
+
+  if (blankdate(RepSpec.d1)) then begin
+    errno = 21605;
+    goto LGetExchangeRateFromFixer;
+  end;
+  // /*
+  // if (IsHansaWorldCustomer(IEb.CustomerCode)==false) then begin
+  //   errno = 20237;
+  //   goto LGetExchangeRateFromFixer;
+  // end;
+  // */
+  if (BCb.NotBase1!=0) then begin
+    errno = 20237;
+    errstr = " " & USetStr(20805);
+    goto LGetExchangeRateFromFixer;
+  end;
+  
+  d1 = DateToString(RepSpec.d1,"YYYY-MM-DD");
+  getstring = "/api/" & d1 & "?access_key=" & FixerAPIKey & "&base=" & BCb.BaseCur1 & "&symbols=" & GetCurrencies;
+  testf = SendWebRequest("data.fixer.io",443,-1,true,"POST",getstring,"text/xml","",false,a_req,a_reply,30);
+  if (testf) then begin
+    if (ParseXRateReply_Fixer(RepSpec,ERb,clientf,BCb,a_reply,true)) then begin
+      qupdating.SetExchangeRateRequestedToday;
+    end;
+  end else begin
+    errno = 20241;
+  end;
+  
+LGetExchangeRateFromFixer:;
+  GetExchangeRateFromFixer = testf;
+  return;
+end;
+
+global
+updating procedure ProceedXRateDClass()
+begin
+  Integer wn;
+  record RcVc RepSpec;
+  record AutoERMapBlock AutoERMapb;
+  row AutoERMapBlock AutoERMapbrw;
+  record BaseCurBlock BCb;
+  Boolean foundf;
+  LongInt errno;
+  string 255 errstr;
+  Area a_reply;
+  Integer err,i,rwcnt;
+  Date ratedate;
+  
+  wn = CurWindow;
+  DeselectWindow(wn,true)
+  GetWindowRecord(wn,RepSpec);
+
+  BlockLoad(AutoERMapb);
+  BlockLoad(BCb);
+
+  foundf = GetExchangeRateFromBank(RepSpec,true,errno,errstr);
+
+  //todo figure out how to handle errors with new code as well
+  rwcnt = MatRowCnt(AutoERMapb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(AutoERMapb,i,AutoERMapbrw);
+    foundf = GetExchangeRateFromService(RepSpec,true,BCb.BaseCur1,AutoERMapbrw.CurncyCode,AutoERMapbrw.Service,errno,errstr);
+  end;
+  
+  if (foundf) then begin
+    CloseWindow(wn);
+    UpdateBrowses("ERVc");
+  end else begin
+    MessageBox(errno,errstr);
+  end;
+  
+  return;
+end;
+
+global
+updating procedure ProceedFixerXRateDClass()
+begin
+  Integer wn;
+  record RcVc RepSpec;
+  Boolean found;
+  LongInt errno;
+  string 255 errstr;
+  Area a_reply;
+  Integer err;
+  Date ratedate;
+  
+  wn = CurWindow;
+  DeselectWindow(wn,true)
+  GetWindowRecord(wn,RepSpec);
+
+  found = GetExchangeRateFromFixer(RepSpec,true,errno,errstr);
+  
+  if (found) then begin
+    CloseWindow(wn);
+    UpdateBrowses("ERVc");
+  end else begin
+    MessageBox(errno,errstr);
+  end;
+  
+  return;
+end;

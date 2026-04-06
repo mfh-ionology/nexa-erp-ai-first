@@ -1,0 +1,82 @@
+global
+procedure ShareholdersListRn(Record RcVc RepSpec)
+begin
+  Integer oldcomp,rwcnt,i;
+  Boolean found,check,testf;
+  record SharesVc Sharesr;
+  record IVVc VSharesr;
+  row IVVc VSharesrw;
+  val totshares;
+  
+  oldcomp = CurrentCompany;
+  if (SetCompany(1,false)) then begin end;
+  StartReportJob(USetStr(40700));
+  
+  EndHeader;
+  
+  StartFormat(15);
+  OutString(0,0,USetStr(40701),false);
+  OutString(50,0,USetStr(40702),false);
+  OutString(350,0,USetStr(40703),true);
+  OutString(450,0,USetStr(40704),true);
+  EndFormat;
+  Gray_Divider(0,1);
+  totshares = 0;
+  
+  found = true;
+  while (LoopMain(Sharesr,1,found)) begin
+    testf = true;
+    check = false;
+    if (Sharesr.Closed==1) then begin
+      testf = false;
+    end;
+    if (testf) then begin
+      rwcnt = MatRowCnt(VSharesr);
+      if (rwcnt>0) then begin
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(VSharesr,i,VSharesrw);
+          if (Sharesr.UserCode==VSharesrw.SalesAcc) then begin
+            VSharesrw.Quant = VSharesrw.Quant + Sharesr.TotQty;
+            totshares = totshares + Sharesr.TotQty;
+            MatRowPut(VSharesr,i,VSharesrw);
+            check = true;
+            goto LNext;
+          end;
+        end;
+      end;
+      if (check==false) then begin
+        MatRowGet(VSharesr,rwcnt,VSharesrw);
+        VSharesrw.ArtCode = Sharesr.CustCode;
+        VSharesrw.SerialNr = Sharesr.Name;
+        VSharesrw.SalesAcc = Sharesr.UserCode;
+        VSharesrw.Quant = Sharesr.TotQty;
+        totshares = totshares + Sharesr.TotQty;
+        MatRowPut(VSharesr,rwcnt,VSharesrw);
+      end;
+LNext:;
+    end;
+  end;
+  
+  SortRows(VSharesr,"SalesAcc",true);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(VSharesr,i,VSharesrw);
+    StartFormat(15);
+    OutStringID(0,"DblCUVc",VSharesrw.SalesAcc,false,VSharesrw.ArtCode);
+    OutString(50,0,VSharesrw.SerialNr,false);
+    OutString(350,0,ValToString(VSharesrw.Quant,M40Val,"","",0),true);
+    OutString(450,0,(VSharesrw.Quant/totshares)*100,true);
+    EndFormat;
+  end;
+  Gray_Divider(0,1);
+  
+  StartFormat(15);
+  EndFormat;
+  StartFormat(15);
+  OutString(250,0,USetStr(40705),false);
+  OutString(350,0,ValToString(totshares,M40Val,"","",0),true);
+  EndFormat;
+  
+  EndJob;
+  ResetCompany(oldcomp);
+  return;
+end;

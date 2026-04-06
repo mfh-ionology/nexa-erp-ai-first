@@ -1,0 +1,190 @@
+procedure GlobalUserList(record RcVc RepSpec)
+begin
+  record GlobalUserVc GlobalUserr;
+  row GlobalUserVc GlobalUserrw;
+  string 255 fruser,touser,fr,to,ckey;
+  Boolean TrHs,testf;
+  Integer rw,cnt,i,keys;
+  string 255 fromcode,tocode;
+
+  fromcode = FirstInRange(RepSpec.f1,255);
+  tocode = LastInRange(RepSpec.f1,255);
+  cnt = 0;
+  GlobalUserr.Code = fruser;
+
+  if (RepSpec.flags[1]==0) then begin
+    ckey = "Code";
+    keys = 1;
+  end;
+  if (RepSpec.flags[1]==1) then begin
+    ckey = "Name";
+    keys = 1;
+  end;
+  if (RepSpec.flags[1]==2) then begin
+    ckey = "Comment";
+    keys = 1;
+  end;
+  TrHs = true;
+  while (LoopKey(ckey,GlobalUserr,keys,TrHs)) begin
+    testf = true;
+    if (TrHs) then begin
+      if (nonblank(tocode)) then begin
+          if (GlobalUserr.Code>tocode) then begin
+          if (RepSpec.flags[2]==0) then begin
+            TrHs = false;
+          end else begin
+            testf = false;
+          end;
+          end;
+        end;
+      if (nonblank(fromcode)) then begin
+        if (GlobalUserr.Code<fromcode) then begin
+          if (RepSpec.flags[2]==0) then begin
+            TrHs = false;
+          end else begin
+            testf = false;
+          end;
+        end;
+        end;
+      end;
+    if (TrHs==false) then begin testf = false; end;
+    if (testf) then begin
+    if (nonblank(touser)) then begin    
+      if (GlobalUserr.Code>touser) then begin
+        TrHs = false;
+      end;
+    end;  
+    if (RepSpec.flags[2]==0) then begin
+      cnt = cnt+1;
+      StartFormat(15);
+      OutString(0,"DblGlobalUserVc",GlobalUserr.Code,false);
+      OutString(2,0,GlobalUserr.Name,false);
+      OutString(3,0,GlobalUserr.LoginEmailAddr,false);
+      if (GlobalUserr.Closed!=0) then begin
+        OutString(4,0,USetStr(11882),false);
+      end else begin
+        OutString(4,0,USetStr(11885),false);
+      end;
+      EndFormat;
+      if (RepSpec.flags[3]==1) then begin
+        StartFormat(15);
+          OutString(2,0,GlobalUserr.Comment,false);
+        EndFormat;
+          StartFormat(15);
+          EndFormat;
+          Gray_Divider(0,1);
+      end;
+    end;
+    if (RepSpec.flags[2]==1) then begin
+      if (GlobalUserr.Closed==0) then begin 
+        cnt = cnt+1;
+        StartFormat(15);
+        OutString(0,"DblGlobalUserVc",GlobalUserr.Code,false);
+        OutString(2,0,GlobalUserr.Name,false);
+        OutString(3,0,GlobalUserr.LoginEmailAddr,false);
+        OutString(4,0,USetStr(11885),false);
+        EndFormat;
+        if (RepSpec.flags[3]==1) then begin
+          StartFormat(15);
+            OutString(2,0,GlobalUserr.Comment,false);
+            EndFormat;
+            StartFormat(15);
+          EndFormat;
+            Gray_Divider(0,1);
+        end;
+      end;
+    end;
+    if (RepSpec.flags[2]==2) then begin
+      if (GlobalUserr.Closed==1) then begin
+        cnt = cnt+1;
+        StartFormat(15);
+        OutString(0,"DblGlobalUserVc",GlobalUserr.Code,false);
+        OutString(2,0,GlobalUserr.Name,false);
+        OutString(3,0,GlobalUserr.LoginEmailAddr,false);
+        OutString(4,0,USetStr(11882),false);
+        EndFormat;
+        if (RepSpec.flags[3]==1) then begin
+          StartFormat(15);
+            OutString(2,0,GlobalUserr.Comment,false);
+            EndFormat;
+            StartFormat(15);
+          EndFormat;
+            Gray_Divider(0,1);
+          end;
+        end;
+      end;
+    end;
+  end;
+  StartFormat(15);
+  OutString(5,0,USetStr(11884) & " " ,false);
+  OutString(1,0,cnt,true);
+  EndFormat;
+  return;
+end;
+
+global
+procedure GlobalUserRn(record RcVc RepSpec)
+begin
+  string 255 tstr;
+  record GlobalUserVc GlobalUserr;
+  row GlobalUserVc GlobalUserrw;
+  Integer i,rwcnt,rw;
+
+  StartReportJob(USetStr(11883));
+
+  rw = 1;
+  tstr = USetStr(13229);
+  switch (RepSpec.flags[2]) begin 
+    case 0: tstr = USetStr(11887);
+    case 1: tstr = USetStr(11888);
+    case 2: tstr = USetStr(11889);
+  end;
+  Header(rw,tstr,1); rw = rw + 1;
+  switch (RepSpec.flags[1]) begin 
+    case 0: tstr = USetStr(11891);
+    case 1: tstr = USetStr(11892);
+    case 2: tstr = USetStr(11893);
+  end;
+  Header(rw,tstr,1); rw = rw + 1;
+  if (RepSpec.flags[3]==1) then begin 
+    tstr = USetStr(11886); 
+    Header(rw,tstr,1); rw = rw + 1;
+  end;
+  EndHeader;
+
+  if ((RepSpec.flags[3]==0) and (RepSpec.flags[1]==2)) then begin
+    StartFormat(15);
+    OutString(0,0,USetStr(11894),false);
+    EndFormat;
+    goto LGlobalUserRn;
+  end;
+
+  SetRepCol(2,50);
+  SetRepCol(3,150);
+  SetRepCol(4,270);
+  SetRepCol(5,450);
+
+  StartFormat(15);
+  OutString(0,0,USetStr(11890),false);
+  OutString(2,0,USetStr(8902),false);
+  OutString(3,0,USetStr(11880),false);
+  OutString(4,0,USetStr(11881),false);
+  StartFormat(15);
+  EndFormat;
+  Gray_Divider(0,1);
+
+  if (nonblank(GlobalUserr.Code)) then begin
+    rwcnt = MatRowCnt(GlobalUserr);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(GlobalUserr,i,GlobalUserrw);
+      GlobalUserList(RepSpec);
+    end;
+    EndFormat;
+    Gray_Divider(0,1);
+  end;
+  GlobalUserList(RepSpec);
+LGlobalUserRn:;
+  EndJob;
+  
+  return;
+end;

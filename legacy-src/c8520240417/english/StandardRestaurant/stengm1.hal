@@ -1,0 +1,1016 @@
+/* stengm1.hal */
+/* Standard Restaurant by HansaWorld */
+
+/* This is no longer an Event, make sure you don't have this in */
+// event startup
+external function Boolean HasBankImport();
+external function Boolean HasEMail();
+external function Boolean HasPrepayments();
+external function Boolean HasWithholdingTaxAdvanced();
+external function Boolean HasWithholdingTax();
+external function Boolean HasInvoiceOfficialSerNr();
+external function Boolean HasFiscalPrinter();
+external function Boolean HasPaymentGateway();
+external function Boolean HasSalesmanBonus();
+external function Boolean HasEInvoicing();
+external function Boolean HasVATZone();
+external function Boolean HasAccessGroups();
+external function Boolean HasAdvancedRestaurant();
+external function Boolean HasIntegratedNL();
+external function Boolean HasDeveloperMode();
+external function Boolean HasRestaurantBookings();
+external function Boolean HasPersons();
+external function Boolean HasReturnedGoods();
+external function Boolean HasRetGoodsToSupp();
+external function Boolean HasModQT();
+external function Boolean HasSerialNumbers();
+external function Boolean HasModAT2();
+external function Boolean HasModCL();
+external function Boolean HasStandardCRM();
+external function Boolean HasModExp();
+external function Boolean HasIncomeAndExpenseBook();
+external function Boolean HasStandardOrganizer();
+external function Boolean HasStandardCommunicator();
+external function Boolean HasModSO();
+external function Boolean HasModIN();
+external function Boolean HasModNL();
+external function Boolean HasModSL();
+external function Boolean HasModPL();
+external function Boolean HasModPO();
+external function Boolean HasModPOS();
+external function Boolean HasModRest();
+external function Boolean HasModCRM();
+external function Boolean HasPayroll();
+
+external function Boolean HasFormEditor();
+external function Boolean HasAdvancedPricing();
+external function Boolean HasBase2();
+external function Boolean HasCategories();
+external function Boolean HasContactClassification();
+external function Boolean HasItemClassification();
+external function Boolean HasItemGroups();
+external function Boolean HasKPIs();
+external function Boolean HasLanguages();
+external function Boolean HasLocalMachines();
+external function Boolean HasMultiCurrency();
+external function Boolean HasMultiLocations();
+external function Boolean HasNumberSeries();
+external function Boolean HasOfficialSerNr();
+external function Boolean HasObjects();
+external function Boolean HasPriceLists();
+external function Boolean HasVarieties();
+external function Boolean HasWorkflowOverview();
+external procedure SetProductTags();
+external procedure LoadWindowTags();
+
+begin
+  Real h,v,l,vs;
+
+  SetLangMode(LangEnglish,"ENG",2);
+
+  if (BuildProductCode=="StandardRestaurant") then begin
+
+  SetProductTags;
+  LoadWindowTags;
+
+  SetGlobalBoolean("IsEnterprise",false);
+
+  Module("System","",730,modSY);
+  Module("#Restaurant#","",730,modRest);
+  
+  if (HasModNL) then begin
+    Module("#Nominal Ledger#","",730,modNL);
+  end;
+  if (HasModCL) then begin
+    Module("Cash Book","",730,modCL);
+  end;
+  if (HasEMail) then begin
+    Module("Email","",730,modEmail);
+  end;
+  if (HasModPL) then begin
+    Module("#Purchase Ledger#","",730,modPL);  
+  end;
+  if (HasModPO) then begin
+    Module("#Purchase Orders#","",730,modPO);
+  end;
+  if (HasModSL) then begin
+    Module("#Sales Ledger#","",730,modSL);
+  end;
+  if (HasModIN) then begin
+    Module("#Stock#","",730,modIN);
+  end;
+ 
+/* modSY */
+  if (HasFormEditor) then begin
+    RegisterWS("Forms","Forms","New Form",DocVc,modSY);
+  end;
+  if (HasDeveloperMode or HasPersons) then begin
+    RegisterWS("Persons","Persons","New Person",UserVc,modSY);
+    Setting("User Feature Preference",UserFeaturePrefTClass,modSY);    
+  end;
+  
+  if (HasAccessGroups) then begin
+    Setting("Access Groups",AccessLClass,modSY);
+  end;
+  Setting("Company Info",CYWClass,modSY); 
+  Setting("Local Machine Serial Port Devices",SerialPortDeviceLClass,modSY);
+  Setting("Local Machine Serial Port Devices Cache",LSerialPortDeviceLClass,modSY);
+  Setting("Remote Devices",RemoteDeviceLClass,modSY);
+//  Setting("Local Serial Port Devices",LSerialPortDeviceLClass,modSY);
+//  if (CountRecords("UserVc")>1) then begin
+    Setting("Login Shortcuts",LocalLoginTClass,modSY);
+    Setting("Login Shortcuts per Local Machine",LocalMachineLoginLClass,modSY);
+//  end;
+  Setting("Printers",PrintGroupTClass,modSY);
+  Setting("Reporting Periods (old)",PeriodTClass,modSY);
+  Setting("Dynamic Reporting Periods",ReportingPeriodLClass,modSY);
+  if (HasFormEditor) then begin
+    Setting("Styles",StyleLClass,modSY); 
+  end;
+
+  Report("Company Info",CompInfoRClass,CompInfoRn,0,modSY);
+
+  if (GuiType!=kGuiiPhone) then begin
+    Export("Database Text Backup",TBEClass,DatabaseTBEn,modSY);
+  end;
+  //Export("Remote Backup",TBRemoteEClass,RemoteTBEn,modSY);
+  if (HasLocalization("HRV")) then begin
+    Export("Register Export",ExpRegEClass,ExpRegEn,modSY);
+  end;
+  if (GuiType!=kGuiiPhone) then begin
+    Export("Run Timed Backup",TBRunTimedEClass,RunTimedTBEn,modSY);
+  end;
+  
+  Import("Automatic",0,FullyAutIn,modSY);
+  Import("Automatic, manual file search",0,AutIn,modSY);
+  
+/* modRest */
+
+  RegisterWS("Tabs","Tabs","New Tab",RestAccVc,modRest);
+  RegisterWS("Cashier Counts","Cashier Counts","New Cashier Count",CashierBalVc,modRest);
+  if (HasIntegratedNL) then begin
+    RegisterWS("Cash Event","Cash Event","New Cash Event",CashVc,modRest);
+    RegisterWS("POS Balances","POS Balance","New POS Balance",POSBalanceVc,modRest);
+    RegisterWS("Bookings","Bookings","New Booking",RestBookingVc,modRest);
+  end;
+  RegisterWS("Items","Items","New Item",INVc,modRest);
+  if (HasFormEditor) then begin
+    RegisterWS("Forms","Forms","New Form",DocVc,modRest);
+  end;
+  if (true) then begin//HasRestaurantBookings
+    RegisterWS("#Restaurant# Bookings","#Restaurant# Bookings","New Rest. Bookings",RestBookingVc,modRest);
+  end;
+  RegisterWS("Contacts","Contacts","New Contact",CUVc,modRest);
+  
+  if (HasDeveloperMode) then begin
+    Setting("Configuration",ModulesTClass,modRest);
+    Setting("Cloud Services",EnabServerTClass,modRest);
+    Setting("Current License Flags",CurLicensesClass,modRest);
+    Setting("Internet Enablers",InternetEnablerTClass,modRest);
+    Setting("Licenses",LicensesLClass,modRest);
+    RegisterWS("Mailboxes","Mailboxes","New Mailbox",ConferenceWClass,modRest);
+    Setting("Program Mode",ProgramStatusTClass,modRest);
+    Setting("Std Registration Data",StdRegDataWClass,modRest);
+    Setting("User Feature Preference",UserFeaturePrefTClass,modRest);    
+  end;
+
+//  Setting("#Bar Tab# Classes",RestAccClassLClass,modRest);
+  if (HasIntegratedNL) then begin
+    Setting("Account Usage #Restaurant#",RestAccTClass,modRest);
+  end;
+  Setting("Bluetooth Devices",SelectBluetoothDeviceOClass,modRest);
+  if (HasAdvancedRestaurant) then begin
+    Setting("Bar Menu Types",BarMenuTypeLClass,modRest);
+    Setting("Bar Menus",BarMenuLClass,modRest);
+  end;
+  if (HasIntegratedNL) then begin
+    Setting("#Bar Tab# Classes",RestAccClassLClass,modRest);
+    Setting("Blocked Items",BranchBlockINLClass,modRest);
+    Setting("Credit Cards",CreditCardLClass,modRest);
+  end;
+//  Setting("Customer Categories",CCatLClass,modRest);
+  Setting("Daily Statistics",SalesTimeTClass,modRest); 
+  Setting("Default Payment Modes",DefCashTClass,modRest);
+  if (HasIntegratedNL) then begin
+    Setting("Drawers",DrawerLClass,modRest);
+  end;
+//  Setting("Item Classifications",DILClass,modRest);
+//  Setting("Item Groups",ITLClass,modRest);
+  if (HasLocalization("BRA")) then begin
+    Setting("Fiscal Printer #VAT# Codes (Brazil)",ZimFiscalPrinterVATCodeTClass,modPOS);
+  end;
+  if (HasLocalization("ZWE")) then begin
+    Setting("Fiscal Printer #VAT# Codes (Zimbabwe)",ZimFiscalPrinterVATCodeTClass,modRest);
+  end;
+  if (HasAdvancedRestaurant) then begin
+    Setting("Gift Voucher Types",GCTypeLClass,modRest);
+    Setting("Gift Voucher Settings",GCTClass,modRest);
+    Setting("Gift Vouchers Issued",GCLClass,modRest);
+    Setting("Gift Vouchers Received",GCRLClass,modRest);
+    Setting("Gift Vouchers Sold",GCSLClass,modRest);
+  end;
+  if (HasItemGroups) then begin
+    Setting("Item Groups",ITLClass,modRest);
+  end;
+  if (HasNumberSeries or HasLocalization("HRV,LVA")) then begin
+    Setting("Legal Invoice Numbers",LegalInvNrTClass,modRest);
+  end;
+  if (HasWorkflowOverview) then begin
+    Setting("Kitchen Departments",RestOrderDeptLClass,modRest);
+    Setting("Kitchen Orders",KitchenOrderLClass,modRest);
+    //Setting("Kitchen Order Screen",RestKItchenOrdWClass,modRest);  
+    //Setting("Kitchen Order Screen #Colours#",RestPanelColourLClass,modRest);
+    Setting("Company Workflow Overview",PipelineOverviewTClass,modRest);
+   // Setting("User Workflow Overview",UserPipelinOverviewLClass,modRest);
+  end;
+  if (true) then begin//HasRestaurantBookings
+    Setting("Local Machine",LocalMachineTClass,modRest);
+    Setting("Local Machine Payment Modes",RestPMTClass,modRest);
+  end;
+  if (HasAdvancedRestaurant) then begin
+    Setting("Loyalty Cards",LoyaltyCardLClass,modRest);
+    Setting("Loyalty Card Membership Levels",LCMemberLevelLClass,modRest);
+    Setting("Loyalty Card Membership Level Structure",LCMLevelSetTClass,modRest);
+    Setting("Loyalty Points",LoyaltyPointsLClass,modRest);
+//    Setting("Loyalty Points per Location",LocLoyaltyPointsLClass,modRest);
+    Setting("Loyalty Points Redemption",LoyPointRedeemLClass,modRest);
+//    Setting("Loyalty Points Redemption per Location",LocLoyPointRedeemLClass,modRest);
+  end;
+  if (HasIntegratedNL) then begin
+    Setting("Meal Courses",MealCourseLClass,modRest);
+    Setting("Modifiers",ModifiersLClass,modRest);
+  end;
+  if (HasNumberSeries) then begin
+    Setting("Number Series - #Bar Tabs#",RestAccSerTClass,modRest);
+    if (HasAdvancedRestaurant) then begin
+      Setting("Number Series - Gift Receipts",GiftReceiptSerTClass,modPOS); 
+      Setting("Number Series - Gift Vouchers",GCSerTClass,modPOS);
+      Setting("Number Series - Gift Vouchers Received",GCRSerTClass,modPOS);
+    end;
+    if (HasWorkflowOverview) then begin
+      Setting("Number Series - Kitchen Orders",KitchenOrderSerTClass,modRest);
+    end;
+  end;
+  Setting("Payment Modes",PMTClass,modRest); 
+  Setting("#POS Button# Groups",POSButtonGroupsLClass,modRest);
+  Setting("#POS Buttons#",POSButtonsLClass,modRest);
+  if (HasLocalMachines) then begin
+    Setting("#POS Button# Groups",POSButtonGroupsLClass,modRest);
+  end;
+  Setting("#POS Button# Pictures",POSButtonPictureLClass,modRest);
+  Setting("POS Sessions",POSEventLCLass,modRest);
+  Setting("POS Settings",CashierDefTClass,modRest);
+  if (true) then begin//HasRestaurantBookings
+    Setting("#Restaurant# Booking Types",RestBookTypeLClass,modRest);
+    Setting("#Restaurant# Open Hours",RestOpenHoursLClass,modRest);
+  end;
+  Setting("#Restaurant# Settings",RestTClass,modRest);
+  if (HasIntegratedNL) then begin
+    Setting("#Restaurant# Setup",RestSetupLClass,modRest);
+  end;
+  Setting("Service Charges",ServiceChargeLClass,modRest);
+  if (HasLocalMachines) then begin
+    Setting("Suggested Tips",SuggestedTipLClass,modRest);
+  end;
+  Setting("Tables",NeighbourHoodLClass,modRest);
+  Setting("Tables View",TableLayoutClass,modRest);
+  Setting("Units",UnitLClass,modRest);   
+  Setting("#VAT# Codes",VATCodeTClass,modRest); 
+  if (HasLocalization("HRV,SVN,SRB")) then begin
+    Setting("XML Schema Definitions",XMLExportLClass,modRest);
+  end;
+
+  Document("#Bar Tab#",RestAccRClass,RestAccForm,RestAccFClass,modRest);
+//  Document("#Bar Tab# Kitchen Order",RestAccKitchenRClass,RestAccKitchenForm,RestAccKitchenFClass,modRest);
+  Document("#Bar Tab# Receipt",RestAccReceiptRClass,RestAccReceiptForm,RestAccReceiptFClass,modRest);
+  Document("Cancel Order",RestAccRClass,RestAccCancelForm,RestAccCancelFClass,modRest);
+  Document("Fire Order",RestAccRClass,RestAccFireOrderForm,RestAccFireOrderFClass,modRest);
+  if (HasAdvancedRestaurant) then begin
+    Document("Gift Receipt",GiftReceiptRClass,GiftReceiptForm,GiftReceiptFClass,modPOS);
+    Document("Gift Vouchers",GCRClass,GCForm,GCFClass,modPOS);  
+  end;
+  Document("Guest Bill ",RestAccGuestBillRClass,RestAccGuestBillForm,RestAccGuestBillFClass,modRest);
+
+  Report("Cash Up",CashupRClass,CashupRn,0,modRest);
+  if (HasLocalization("HRV")) then begin
+    Report("Consumption Taxes Summary",ConsTaxSumRClass,ConsTaxSumRn,0,modRest);
+  end;
+  if (HasAdvancedRestaurant) then begin
+    Report("Gift Vouchers",GiftCerRClass,GiftCerRn,0,modRest);
+  end;
+  Report("GP, #Bar Tabs#", RestAccGPRClass,RestAccGPRn,0,modRest);
+  Report("Item List",ArtRClass,ArtRn,0,modRest);
+  if (HasAdvancedRestaurant) then begin
+    Report("Loyalty Card Statement",LoyaltyCardRClass,LoyaltyCardRn,0,modRest);
+  end;
+  Report("#Restaurant# Daily Statistics",DetSalesTimeRClass,DetSalesTimeRn,0,modRest);  
+  Report("#Restaurant# Item Statistics",BarItemStatRClass,BarItemStatRn,0,modRest);
+  Report("#Restaurant# Planning",RestPlanningRClass,RestPlanningRn,0,modRest);
+//  Report("#Restaurant# Planning",RestPlanningRClass,RestPlanningRn,0,modRest);
+  Report("Tabs Journal",RestAccJRClass,RestAccJRn,0,modRest);
+  Report("Void Report",VoidedRowsRClass,VoidedRowsRn,0,modRest);
+  if (HasLocalization("USA")) then begin
+    Report("Item Group #VAT#",ITVATRClass,ITVATRn,0,modRest);
+  end;
+
+  Export("#Restaurant# Daily Statistics",SalesTimeEClass,SalesTimeEn,modRest);  
+  
+  Maintenance("Cash Up",CashupVClass,CashupMn,modRest);
+  
+/* modIN */
+
+  if (HasLocalization("HRV")) then begin
+    Maintenance("Invoices without Official No.",XMLExportVClass,XMLExportMn,modRest);
+  end;
+  
+  if (HasModSO or HasLocalization("RUS") or HasLocalization("HRV")) then begin
+    Register("Deliveries","Deliveries",SHVc,modIN);
+  end;
+  RegisterWS("Goods Receipts","Goods Receipts","New Goods Receipt",PUVc,modIN);
+  RegisterWS("#Stock Depreciations#","#Stock Depreciations#","New #Stock Depreciation#",SDVc,modIN);
+  if (HasLocalization("PRT")) then begin 
+    if (HasMultiLocations) then begin
+      RegisterWS("#Stock# Movements","#Stock# Movements","New #Stock# Movement",StockMovVc,modIN);
+    end;
+    Register("Returned Goods","Returned Goods",RetVc,modIN);
+    RegisterWS("Returned Goods to #Suppliers#","Ret. Goods to #Suppliers#","New Ret. Goods to #Suppliers#",RetPUVc,modIN);
+    RegisterWS("#Stocktaking#","#Stocktaking#","New #Stocktaking#",StockTakeVc,modIN);
+  end else begin
+    RegisterWS("#Stocktaking#","#Stocktaking#","New #Stocktaking#",StockTakeVc,modIN);
+    RegisterWS("Items","Items","New Item",INVc,modIN);
+//    RegisterWS("Contacts","Contacts",CUVc,modIN);
+  end;
+  if (HasMultiLocations) then begin 
+    RegisterWS("Locations","Locations","New Location",LocationVc,modIN);
+//    RegisterWS("#Stock# Movements","#Stock# Movements","New #Stock# Movement",StockMovVc,modIN);
+  end;
+  if (HasReturnedGoods) then begin
+    RegisterWS("Returned Goods","Returned Goods","New Returned Goods",RetVc,modIN);
+  end;
+  if (HasRetGoodsToSupp) then begin
+    RegisterWS("Returned Goods to #Suppliers#","Ret. Goods to #Suppliers#","New Ret. Goods to #Suppliers#",RetPUVc,modIN);
+  end;
+
+  if (HasLocalization("HRV")) then begin 
+    Setting("Base Price Changes",BPCLClass,modIN);
+  end;
+  if (HasModNL) then begin
+    Setting("Account Usage #Stock#",INAccTClass,modIN); 
+  end;
+  if (HasModCRM) then begin
+    Setting("Contacts",CULClass,modIN);
+  end;
+  Setting("Cost Accounting",CostAccTClass,modIN);
+  if (HasItemGroups) then begin
+    Setting("Item Groups",ITLClass,modIN);
+  end;
+  if (HasLocalization("PRT")) then begin 
+    Setting("Items",INLClass,modIN);
+  end;
+  if (HasVarieties) then begin
+    Setting("Item Varieties",VARLClass,modIN);
+    Setting("Item Variety Groups",VARGLClass,modIN);
+  end;
+  if (HasNumberSeries) then begin
+    if (HasModSO) then begin
+      Setting("Number Series - Deliveries",SHSerTClass,modIN);
+    end;
+    if (HasNumberSeries and HasLocalization("PRT")) then begin 
+      Setting("Number Series - Returned Goods",RetSerTClass,modIN);
+      Setting("Number Series - Returned Goods to #Supplier#",RetPUSerTClass,modIN);
+    end;
+    Setting("Number Series - Goods Receipts",PUSerTClass,modIN);
+    Setting("Number Series - #Stock Depreciations#",SDSerTClass,modIN);
+    if (HasNumberSeries and HasLocalization("PRT")) then begin 
+      if (HasMultiLocations) then begin 
+        Setting("Number Series - #Stock# Movements",StockMovSerTClass,modIN);
+      end;
+    end;
+    Setting("Number Series - #Stocktaking#",StockTakeSerTClass,modIN);
+  end;
+  if (HasLocalization("HRV")) then begin 
+    Setting("Recipes",RecLClass,modIN);
+  end;
+  if (HasMultiLocations) then begin 
+    Setting("#Stock# Settings",MainStockTClass,modIN);
+  end;  
+  if (HasVarieties) then begin
+    Setting("Variety Masks",VARMaskTClass,modIN);
+    Setting("Variety Sets",VARMasksLClass,modIN);
+    Setting("Variety Settings",VarietyTClass,modIN);
+    Setting("Variety Subsets",VARSubsetsLClass,modIN);
+  end;
+
+  if (HasModSO) then begin
+    Document("Address Labels",AdrLabRClass,AdrLabForm,AdrLabFClass,modIN);
+    Document("Delivery Notes",Sh1RClass,Sh1Form,Sh1FClass,modIN);
+    Document("Freight Labels",SHLabRClass,SHLabForm,SHLabFClass,modIN);
+  end else begin
+    if (HasLocalization("HRV")) then begin
+      Document("Base Price Change",BasePriceChangeRClass,BPChangeForm,BasePriceChangeFClass,modIN);
+      Document("Delivery Notes",Sh1RClass,Sh1Form,Sh1FClass,modIN);
+    end;
+  end;
+  Document("Goods Receipt Labels",PULabRClass,PULabForm,PULabFClass,modIN);
+  Document("Goods Receipts",PurchaseRClass,PurchaseForm,PurchaseFClass,modIN);
+  Document("Item Labels",ItemLabelRClass,ItemLabelForm,ItemLabelFClass,modIN);
+  if (HasModSO) then begin
+    Document("Picking Lists",Sh2RClass,Sh2Form,Sh2FClass,modIN);
+  end;
+  Document("#Stock Depreciations#",SDRClass,SDForm,SDFClass,modIN);
+  if (HasLocalization("HRV") or (HasModIN and HasMultiLocations)) then begin
+    Document("#Stock# Movements",StockMovRClass,StockMovForm,StockMovFClass,modIN);
+  end;
+
+  if (HasModPO or HasModSO) then begin
+    Report("Deficiency List",PurRClass,PurRn,0,modIN);
+  end;
+  if (HasModSO) then begin
+    Report("Delivery Journal",SHJRClass,ShipRn,0,modIN);
+    Report("Delivery List",SHListRClass,ShipListRn,0,modIN);
+  end;
+  Report("Goods Receipt Journal",PUJRClass,PUJRn,0,modIN);
+  Report("Item History",INrsRClass,INrsRn,0,modIN);
+  Report("Item List",ArtRClass,ArtRn,0,modIN);
+  if (HasLocalization("HRV")) then begin 
+    Report("Recipe List (Made of)",Rec2RClass,Rec2Rn,0,modIN);
+  end;
+  Report("#Stock Depreciation# Journal",SDJRClass,StockDepRn,0,modIN);
+  Report("#Stock# In Journal",StockJInRClass,StockInRn,0,modIN);
+  Report("#Stock# List",INRClass,InvValRn,0,modIN);
+  Report("#Stock# Out Journal",StockJOutRClass,StockOutRn,0,modIN);
+  Report("#Stocktaking# Comparison",STCompRClass,STCompRn,0,modIN);
+  Report("#Stocktaking# List",StockTakeRClass,StockTakeRn,0,modIN);
+  Report("#Supplier#/Item Statistics",VeInRClass,VeInRn,0,modIN);
+
+  Maintenance("#Stocktaking# Comparison",STCompVClass,STCompMn,modIN);
+  
+/* modPL */
+
+  RegisterWS("#Purchase Invoices#","#Purchase Invoices#","New #Purchase Invoice#",VIVc,modPL);
+  RegisterWS("Payments","Payments","New Payment",OPVc,modPL);
+  RegisterWS("Contacts","Contacts","New Contact",CUVc,modPL);
+
+  if (HasModNL or HasIncomeAndExpenseBook) then begin
+    Setting("Account Usage #P/L#",APAccTClass,modPL);
+  end;
+  if (HasLocalization("AUS,ESP,FIN,GBR,NOR,SWE")) then begin
+    Setting("#Bank Files#",BankFileTClass,modPL);
+  end;
+  if (HasNumberSeries) then begin
+    Setting("Number Series - #Purchase Invoices#",VISerTClass,modPL);
+    Setting("Number Series - Payments",OPSerTClass,modPL);
+    if (HasModNL or HasIncomeAndExpenseBook) and (HasLocalization("POL,HRV")) then begin
+      Setting("Number Series - #VAT# Corrections #P/L#",VATVISerTClass,modPL);
+    end;
+  end;
+  Setting("Payment Modes",PMTClass,modPL);
+  Setting("Payment Terms",PDLClass,modPL);
+  if (HasCategories) then begin
+    Setting("#Supplier# Categories",VGLClass,modPL);
+  end;
+  if (HasModNL or HasIncomeAndExpenseBook) and (HasLocalization("POL,HRV")) then begin
+    Setting("#VAT# Corrections #P/L#",VATVILClass,modPL);
+    Setting("#VAT# Correction #P/L# Types",VATVITypeTClass,modPL);
+  end;
+  if (HasLocalization("PRT,ITA")) then begin
+    Setting("Withholding Calculation Formulae",WHCalcFormLClass,modPL);
+    Setting("Withholding Taxes",WHTaxTClass,modPL);
+  end;  
+  if (HasLocalization("ESP,FIN,RUS")) then begin
+    Setting("Banks",BankLClass,modPL);
+  end;
+  
+  if (HasLocalization("LTU,POL")) then begin
+    Document("Open Invoice #Supplier# Statement",APSRClass,APSForm,APSFClass,modPL);
+  end;
+  Document("Payment Forms",OPDRClass,OPDForm,OPDFClass,modPL);
+  Document("Payment Lists",OPRClass,OPForm,0,modPL);
+  if (HasModNL or HasIncomeAndExpenseBook) then begin
+    Document("#Purchase Invoices#",VIRClass,VIForm,VIFClass,modPL);
+  end;
+
+  if (HasLocalization("LTU")) then begin
+    Report("Open Invoice #Supplier# Statement",APS2RClass,APS2Rn,0,modPL);
+  end;
+  Report("Payments Forecast",OPProgRClass,OPProgRn,0,modPL);
+  Report("Payment Journal",OPJRClass,OPJRn,0,modPL);
+  Report("Periodic #Supplier# Statement",VePer2RClass,VePerRn,0,modPL);
+  if (HasLocalization("LVA")) then begin
+    Report("Prepayment History #P/L#",PerPayHisPLRClass,PerPayHisPLRn,0,modPL);
+  end;
+  Report("#Purchase Invoice# Journal",VIJRClass,VIJRn,0,modPL);
+  Report("#Purchase Ledger#",APRClass,APRn,0,modPL);
+  Report("#Supplier# List",VERClass,VERn,0,modPL);
+  if (HasLocalization("PRT")) then begin
+    Report("#VAT# Report Purchases",PLVATRepRClass,PLVATRepRn,0,modPL);
+  end;
+  if (HasLocalization("LVA,POL")) and (HasModNL or HasIncomeAndExpenseBook) then begin
+    Report("#VAT# Report Purchases",PLVATRepRClass,PLVATRepRn,0,modPL);
+  end;
+  if (HasLocalization("PRT")) then begin
+    Report("#VAT# #Supplier# Purchases",RealSuppRClass,RealSuppRn,0,modPL); 
+  end;
+  if (HasLocalization("HND")) then begin
+    Report("#VAT# Report Purchases (Honduras)",PLVATHonRClass,PLVATHonRn,0,modPL);
+  end;
+  if (HasLocalization("LTU")) then begin
+    Report("#VAT# Report Purchases (Lithuania)",PLVATLitRClass,PLVATLitRn,0,modPL);
+  end;
+  
+  if (HasLocalization("AUS,ESP,FIN,GBR,NOR,SWE")) then begin
+    Export("Banking File",MPEClass,MPEn,modPL);
+  end;
+  if (HasLocalization("LTU")) then begin
+    Export("#P/L# #VAT# Invoices (Lithuania)",LitVATRegVIEClass,LitVATRegVIEn,modPL);
+  end;
+  if (HasLocalization("LVA")) then begin
+    Export("#P/L# Latvian #VAT# Report",PLVAT1ExpEClass,PLVAT1En,modPL);
+    Export("#VAT# Purchases (Latvia)",LatVATPurchasesEClass,LatVATPurchasesEn,modPL);
+  end;
+    
+  if (HasModNL) and (HasLocalization("HRV")) then begin
+    Maintenance("Create #VAT# Corrections #P/L#",VATVIVClass,VATVIMn,modPL);
+  end;
+
+/* modCL */
+
+  RegisterWS("Cash In","Cash In","New Cash In",CLInVc,modCL);
+  RegisterWS("Cash Out","Cash Out","New Cash Out",CLOutVc,modCL);
+  if (HasModSL and HasLocalization("POL")==false) then begin
+    RegisterWS("Receipts","Receipts","New Receipt",IPVc,modCL);
+  end;
+  if (HasModPL and HasLocalization("POL")==false) then begin
+    RegisterWS("Payments","Payments","New Payment",OPVc,modCL);
+  end;
+  if (HasModExp) then begin
+    RegisterWS("Personnel Payments","Personnel Payments","New Personnel Payment",PPVc,modCL);
+  end;
+  
+  Setting("Cash Book Settings",MainCLTClass,modCL);
+  Setting("Expense Accounts",CLCorspLClass,modCL);
+  if (HasNumberSeries) then begin
+    Setting("Number Series - Cash In",CLInSerTClass,modCL);
+    Setting("Number Series - Cash Out",CLOutSerTClass,modCL);
+  end;
+  Setting("Payment Modes",PMTClass,modCL);
+  
+  Report("Cash Book",CLIORClass,CashBRn,0,modCL);
+  if (HasLocalization("LTU")) then begin
+    Report("Cash Book (Lithuania)",CashBookLitRClass,CashBookLitRn,0,modCL);
+  end;
+  Report("Cash In Journal",CLInJRClass,CLInJRn,0,modCL);  
+  Report("Cash Out Journal",CLOutJRClass,CLOutJRn,0,modCL);  
+  if (HasModNL or HasLocalization("POL")) then begin
+    Report("#N/L# Cash Book",CashBookLatRClass,CashBookLatRn,0,modCL);
+  end;
+
+  Document("Cash In",CLInRClass,CLInForm,CLInFClass,modCL);
+  Document("Cash Out",CLOutRClass,CLOutForm,CLOutFClass,modCL);
+
+  Maintenance("OK Cash Ins and Cash Outs",OKCLVClass,OKCLMn,modCL);
+
+/* modNL */
+  
+  if (HasModNL==false) then begin
+    if (HasIncomeAndExpenseBook) then begin
+      RegisterWS("Accounts","Accounts","New Account",AccVc,modNL);
+      RegisterWS("#Transactions#","#Transactions#","New #Transaction#",TRVc,modNL);
+
+      Setting("Fiscal Years",YearTClass,modNL);
+      Setting("Income & Expense Book",IncExpBookLClass,modNL);
+      if (HasNumberSeries) then begin
+        Setting("Number Series - Transactions",TRSerTClass,modNL);
+      end;
+      Setting("Sub Systems",TRGenTClass,modNL);
+      Setting("#VAT# Codes",VATCodeTClass,modNL);
+      
+      Report("Income & Expense Book",IncExpBookRClass,IncExpBookRn,0,modNL);
+      if (HasLocalization("POL")) then begin
+        Report("Invoice Classifications Report",VATClassRClass,VATClassRn,0,modNL);
+      end;
+    end;
+  end else begin
+    RegisterWS("Transactions","Transactions","New Transaction",TRVc,modNL);
+    if (HasLocalization("AGO,PRT")) then begin
+      RegisterWS("Simulations","Simulations","New Simulation",SMVc,modNL);  
+    end;
+    
+    if (HasLocalization("AUS")) then begin
+      Register("Account Reconciliation","Account Reconciliation",BankRecWClass,modNL);
+    end;
+    if (HasLocalization("AUS")==false) then begin
+      RegisterWS("Brought Forward Balances","Brought Fwd Balances","New Brought Fwd Balance",FBVc,modNL);
+    end;
+    RegisterWS("Accounts","Accounts","New Account",AccVc,modNL);
+
+
+    if (HasLocalization("AGO,POL,PRT")) then begin
+      Setting("Account Transfers",AccTransLClass,modNL);
+    end;
+    Setting("Fiscal Years",YearTClass,modNL);
+    if (HasIncomeAndExpenseBook) then begin
+      Setting("Income & Expense Book",IncExpBookLClass,modNL);
+    end;
+    if (HasNumberSeries) then begin
+      Setting("Number Series - Transactions",TRSerTClass,modNL);
+    end;
+    if (HasObjects) then begin
+      Setting("Tags/Objects",ObjLClass,modNL);
+      Setting("Tag/Object Types",OTLClass,modNL);
+    end;
+//    if (HasMultiCurrency or HasBase2) and (HasModNL) then begin
+//      Setting("Rate Gain/Loss",NLRateTClass,modNL);
+//    end;
+    Setting("Report Settings",Rs2WClass,modNL);
+    Setting("Sub Systems",TRGenTClass,modNL);
+    Setting("Sub-ledger Control Accounts",SLAccTClass,modNL);
+    if (HasLocalization("HRV,LVA")) then begin
+      Setting("Tax Reports",TaxRepLClass,modNL);
+    end;
+    if (HasLocalization("BRA,HRV,LVA")) then begin
+      Setting("Tax Rules",TaxRulesLClass,modNL);
+      Setting("Tax Templates",TaxTemplateLClass,modNL);
+      Setting("Transaction Settings",TrTClass,modNL);
+    end;
+    if (HasLocalization("KEN")) then begin
+      Setting("Tax Templates",TaxTemplateLClass,modNL);
+    end;
+    Setting("#VAT# Codes",VATCodeTClass,modNL);
+    if (HasLocalization("POL")) then begin
+      Setting("#VAT# Declarations",VATDeclLClass,modNL);
+    end;
+    if (HasLocalization("HRV,LVA")) then begin
+      Document("Tax Report",TaxDocRClass,TaxRepForm,TaxRepFClass,modNL);
+    end;
+    Document("Transactions",TRRClass,TRForm,TRFClass,modNL);
+
+    Report("Account Reconciliation",ACReconRClass,ACRecRn,0,modNL);
+
+    if (HasLocalization("AGO,BRA,POL,PRT")) then begin
+      Report("Analytical Balance",MBARClass,MBARn,0,modNL);
+    end;
+    Report("Balance Sheet",BalRClass,BalRn,UserDefRepDClass,modNL);
+    Report("Chart of Accounts",AccListRClass,AccListRn,0,modNL);
+    Report("Correction List",CorrRClass,CorrRn,0,modNL);
+    if (HasLocalization("LTU,LVA")) then begin
+      Report("Corresponding Accounts",CorspRClass,CorspRn,0,modNL);
+    end;
+    if (HasMultiCurrency) then begin
+      Report("Currency A/C Rate Change",NLRateRClass,NLRateRn,0,modNL);
+    end;
+    if (HasIncomeAndExpenseBook) then begin
+      Report("Income & Expense Book",IncExpBookRClass,IncExpBookRn,0,modNL);
+    end;
+    if (HasLocalization("LTU") and HasIntegratedNL) then begin
+      Report("iSAF",LitiSAFRClass,LitiSAFRn,0,modNL);
+    end;
+    if (HasLocalization("POL")) then begin
+      Report("Invoice Classifications Report",VATClassRClass,VATClassRn,0,modNL);
+    end;
+    if (HasMultiCurrency) then begin
+      Report("Multicurrency Accounts Rate Difference",MultiCurAccRClass,MultiCurAccRn,0,modNL);
+    end;
+    Report("#Nominal Ledger#",MainRClass,MainRn,0,modNL);
+    Report("Profit & Loss",ResRClass,ResRn,UserDefRepDClass,modNL);
+    if (HasLocalization("LVA")) then begin
+      Report("Tax Calculations", Tax100Class,Tax100Rn,0,modNL);
+      Report("Test Corresponding Rules",CorstRClass,CorstRn,0,modNL);
+    end;
+    Report("Transaction Journal",TransRClass,TransRn,0,modNL);
+    Report("Trial Balance",SBRClass,TrialRn,0,modNL);
+    if (HasLocalization("POL,PRT")==false) then begin
+      Report("#VAT# Listing",ALLVATRClass,ALLVATRn,0,modNL);
+    end;
+      Report("#VAT# Report",VATRClass,VAT2Rn,UserDefRepDClass,modNL);
+    if (HasLocalization("FRA")) then begin
+      Export("FEC Export",FrenchFECEClass,FrenchFECEn,modNL);
+    end;
+    if (HasLocalization("SGP")) then begin
+      Export("IRAS audit File",GenIRASEClass,IRASAuditEn,modNL);
+    end;
+    Export("Monthly Balances",MBEClass,MBEn,modNL);
+    if (HasLocalization("SWE")) then begin
+      Export("SIE (Swedish Export/Import)",SieEClass,SieEn,modNL);
+    end;
+    Export("Trial Balance",SBEClass,SBEn,modNL);
+    if (HasLocalization("PRT")) then begin
+      Export("SAFT (Portugal)",PortTaxXmlEClass,PortTaxXmlEn,modNL);
+    end;  
+    if (HasLocalization("LTU")) then begin
+      Export("#VAT# Periodic Declaration (Lithuania)",LTUVATEClass,LTUVATEn,modNL);
+    end;
+  
+    if (HasLocalization("SWE")) then begin
+      Import("SIE (Swedish Export/Import)",0,SieIn,modNL);
+    end;
+    
+    if (HasLocalization("AGO,POL,PRT")) then begin
+      Maintenance("Account Balance Transfer",AccTransVClass,AccTransMn,modNL);
+    end;
+  end;
+  
+  /*modPO*/
+
+  RegisterWS("Purchase Orders","Purchase Orders","New Purchase Order",POVc,modPO);
+  RegisterWS("Contacts","Contacts","New Contact",CUVc,modPO);
+  RegisterWS("Items","Items","New Item",INVc,modPO);
+
+  if (HasModIN) then begin
+    Setting("Delivery Terms",ShipDealLClass,modPO);
+  end;
+  if (HasCategories) then begin
+    Setting("#Supplier# Categories",VGLClass,modPO);
+  end;
+  if (HasNumberSeries) then begin
+    Setting("Number Series - Purchase Orders",POSerTClass,modPO);
+  end;
+
+  Report("Deficiency List",PurRClass,PurRn,0,modPO);
+  Report("Outstanding Purchase Orders",POOrdStockRClass,POOrdStockRn,0,modPO);  
+  Report("Purchase Order Journal",PurOrdJRClass,PurOrdJRn,0,modPO);
+
+  Document("Purchase Orders",PORClass,POForm,POFClass,modPO);
+  
+/* modSL */
+  
+  RegisterWS("Invoices","Invoices","New Invoice",IVVc,modSL);
+  RegisterWS("Receipts","Receipts","New Receipt",IPVc,modSL);
+  RegisterWS("Contacts","Contacts","New Contact",CUVc,modSL);
+  RegisterWS("Items","Items","New Item",INVc,modSL);
+  if (HasPriceLists) then begin
+    RegisterWS("Prices","Prices","New Price",PLVc,modSL);
+  end;
+  if (HasLocalization("POL") and HasVATZone) then begin
+    RegisterWS("Internal Invoices","Internal Invoices","New Internal Invoice",IntIVVc,modSL);
+  end;
+  if (HasLocalization("RUS")) then begin
+    RegisterWS("Sales Orders","Sales Orders","New Sales Order",ORVc,modSL);
+  end;
+  
+  if (HasModNL or HasIncomeAndExpenseBook) then begin
+    Setting("Account Usage #S/L#",AccTClass,modSL);
+  end;
+  if (HasLocalization("LTU")) then begin
+    Setting("Age Limits",AgedTClass,modSL);
+  end;
+  if (HasLocalization("BRA")) then begin 
+    Setting("Bank Receipt Settings",BankReceiptTClass,modSL);
+  end;
+  if (HasLocalization("FIN,LVA,RUS") or HasEInvoicing) then begin
+    Setting("Banks",BankLClass,modSL);
+  end;
+  if (HasSalesmanBonus) then begin
+    Setting("Bonus",BonusDefLClass,modSL);
+  end;
+  if (HasPaymentGateway) then begin
+    Setting("Payment Gateways",CCAccountIDLClass,modSL);
+  end;
+  if (HasContactClassification) then begin
+    Setting("Contact Classifications",CClassLClass,modSL);
+  end;
+  if (HasCategories) then begin
+    Setting("Customer Categories",CCatLClass,modSL);
+  end;
+  if (HasEInvoicing or NumberOfEInvoices>0) or (HasFiscalPrinter and HasLocalization("SVN")) then begin
+    Setting("Electronic Invoices Settings",EInvoiceTClass,modSL);
+  end;
+  if (HasEInvoicing) then begin
+    Setting("Electronic Invoices Queue",EInvoiceQueLClass,modSL);
+    Setting("Electronic Record Statuses",ERecordStatusLClass,modSL);
+  end;
+  if (HasLocalization("POL") and HasVATZone) then begin
+    Setting("Internal Invoices",IntIVLClass,modSL);
+  end;
+  if (HasLocalization("POL")) then begin
+    Setting("Invoice Classifications",VATClassLClass,modSL);
+  end;
+  if (HasEInvoicing and HasLocalization("ARG")) then begin
+    Setting("Internet Service Server",HTSEInvoiceTClass,modSL);
+  end;
+
+  if (HasModNL==false and HasIncomeAndExpenseBook==false) then begin
+    Setting("Invoice Settings",AccTClass,modSL);
+  end;
+  if (HasItemGroups or HasLocalization("BRA,ITA,PRT")) then begin
+    Setting("Item Groups",ITLClass,modSL);
+  end;
+  if (HasModSL and HasLocalization("ITA,PRT")) then begin
+    Setting("Item Group Withholdings",WHITLClass,modSL);
+  end;
+  if ((HasNumberSeries or HasLocalization("HRV,LTU,LVA")) and (HasOfficialSerNr or HasInvoiceOfficialSerNr)) or (HasEInvoicing and HasLocalization("ARG")) then begin
+    Setting("Legal Invoice Numbers",LegalInvNrTClass,modSL);
+  end;  
+  if (HasNumberSeries) then begin
+    Setting("Number Series - Invoices",IVSerTClass,modSL);
+    Setting("Number Series - Receipts",IPSerTClass,modSL);
+    if (HasModNL or HasIncomeAndExpenseBook) and (HasLocalization("POL")) then begin
+      Setting("Number Series - #VAT# Corrections #S/L#",VATIVSerTClass,modSL);
+    end;
+  end;
+  if (HasPaymentGateway) then begin
+    Setting("Payment Gateways",CCAccountIDLClass,modSL);
+    Setting("PayLink",PayLinkTClass,modSL);
+    if (HasLocalization("CAN,USA")) then begin
+      Setting("Merchant ID",CCMerchantIDLClass,modSL);
+    end;
+  end;
+  Setting("Payment Modes",PMTClass,modSL);
+  SettingWS("Payment Terms","New Payment Term",PDLClass,modSL);
+  if (HasPriceLists) then begin
+    Setting("Price Lists",PLDefLClass,modSL);
+  end;
+  if (HasLocalization("FIN")) then begin
+    Setting("Reference Number Settings",CalcRefTClass,modSL);
+  end;
+  if (HasLocalization("ARG")) then begin
+    Setting("Registration Defaults",RegDefTClass,modSL);
+  end;
+  Setting("Sales Invoice Settings",IVTTClass,modSL);  
+  if (HasLocalization("POL,PRT")) then begin
+    Setting("Standard Problems",StandProblemLClass,modSL);
+  end;
+  if (HasModNL==false) then begin
+    if (HasLocalization("BRA,HRV")) then begin
+      Setting("Tax Templates",TaxTemplateLClass,modSL);
+      Setting("Transaction Settings",TrTClass,modSL);
+    end;
+    if (HasLocalization("BRA,HRV,KEN")) then begin
+      Setting("Tax Templates",TaxTemplateLClass,modSL);
+    end;
+  end;
+  Setting("Units",UnitLClass,modSL);
+  if (HasLocalization("POL")) and (HasModNL or HasIncomeAndExpenseBook) then begin
+    Setting("#VAT# Corrections #S/L#",VATIVLClass,modSL);
+  end;
+  if (HasLocalization("HRV")) and (HasModNL or HasIncomeAndExpenseBook) then begin
+//    Setting("#VAT# Correction #S/L# Types",VATIVTypeTClass,modSL);
+  end;
+  if (HasLocalization("PRT")) then begin
+    Setting("#VAT# Codes",VATCodeTClass,modSL); 
+  end;
+  if (HasLocalization("POL")) then begin
+    Setting("#VAT# Groups",VATGroupLClass,modSL);
+  end;
+  if (HasLocalization("ARG,BRA,ITA,KEN,MEX,PRT,SGP,ZAF") and (HasModPL or HasModSL) and (HasWithholdingTax or HasWithholdingTaxAdvanced)) then begin
+    Setting("Withholding Calculation Formulae",WHCalcFormLClass,modSL);
+    Setting("Withholding Taxes",WHTaxTClass,modSL);
+  end;
+
+  if (HasLocalization("RUS")==false) then begin
+    Document("Cash Notes",KIVRClass,CashInvForm,CashFClass,modSL);
+  end;
+  
+  Document("#Credit Notes#",CIVRClass,CredInvForm,CredFClass,modSL);
+  
+  if (HasLocalization("RUS")==false) then begin
+    Document("Customer Labels",CuLabRClass,CuLabForm,CuLabFClass,modSL);
+  end;
+  
+  if (HasLocalization("POL")) then begin
+    Document("Debtors Letter",DebtLetRClass,DebtorLetForm,DebtLetFClass,modSL);
+  end;
+  if (HasLocalization("PRT")) then begin
+    Document("Interest Invoices",IIVRClass,IIInvForm,IIFClass,modSL);
+  end;
+  if (HasLocalization("POL") and HasVATZone) then begin
+    Document("Internal Invoices",IntIVRClass,IntIVForm,IntIVFClass,modSL);
+  end;
+  Document("Invoices",IVRClass,InvForm,InvFClass,modSL); 
+  if (HasLocalization("PRT")) then begin
+    Document("Invoice/Receipt's",KIVRClass,CashInvRecPRTForm,CashRecPRTFClass,modSL);
+  end;    
+  Document("Open Invoice Customer Statement",ARSRClass,ARSForm,ARSFClass,modSL);
+  Document("Periodic Customer Statement",CuPerRClass,CuPerForm,CuPerFClass,modSL);
+  if (HasLocalization("POL")) then begin
+    Document("Proforma Invoices",Inv1RClass,Inv1Form,Inv1FClass,modSL);
+  end;
+  Document("Receipt Forms",IPDRClass,IPDForm,IPDFClass,modSL);
+  if (HasLocalization("LTU,LVA,POL") or HasFormEditor) then begin
+    Document("Reminders",RemRClass,RemForm,RemFClass,modSL);
+  end;
+  if (HasLocalization("RUS")) then begin
+    Document("Orders",ORRClass,OrdForm,OrdFClass,modSL);
+  end;
+  
+  if (HasSalesmanBonus) then begin
+    Report("Bonus, #Salesman#",BonusRClass,BonusRn,0,modSL);
+  end;
+  Report("Contact List",CURClass,CustRn,0,modSL);
+  Report("Customer/Item Statistics",CuArtSTRClass,CuArtSTRn,0,modSL);
+  Report("Customer Statistics",CustSTRClass,CustSTRn,0,modSL);
+  if (HasEInvoicing) then begin
+    Report("Electronic Invoice Status",HTSStatIVRClass,HTSStatIVRn,0,modSL);
+  end;
+  if (HasVATZone) then begin
+    Report("EU #VAT# Sales",SLEUVATRClass,SLEUVATRn,0,modSL);
+  end;
+  if (HasLocalization("HRV,PRT")) then begin
+    Report("GP, Invoices",IVGPRClass,IVGPRn,0,modSL);
+  end;
+  if (HasLocalization("ITA")==false) then begin 
+    Report("Invoice Journal",IVJRClass,InvoiceRn,0,modSL);
+  end; 
+  Report("Item List",ArtRClass,ArtRn,0,modSL);
+  Report("Item Statistics",ArtSTRClass,ArtSTRn,0,modSL);
+  if (HasSalesmanBonus) then begin
+    Report("Item/Salesman Statistics",IStatRClass,IStatRn,0,modSL);
+  end;
+  if (HasLocalization("LVA")) then begin
+    Report("Legal Invoice Forms Usage",LegInvFormRClass,LegInvFormRn,0,modSL);
+  end;
+  Report("Open Invoice Customer Statement",ARS2RClass,ARS2Rn,0,modSL);
+  if (HasLocalization("RUS")) then begin
+    Report("Order Journal",ORJRClass,OrdRn,0,modSL);
+    Report("Order Payment Status",ORPayStatusRClass,ORPayStatusRn,0,modSL);
+  end;
+  Report("Periodic Customer Statement",CuPer2RClass,CuPerRn,0,modSL);
+  if (HasLocalization("LVA") or HasPrepayments) then begin
+    Report("Prepayment History #S/L#",PerPayHisSLRClass,PerPayHisSLRn,0,modSL);
+  end;
+  if (HasPriceLists) then begin
+    Report("Price List",PriceRClass,PriceRn,0,modSL);
+  end;
+  Report("Receipts Forecast",IPProgRClass,IPProgRn,0,modSL);
+  Report("Receipt Journal",IPRClass,IPRn,0,modSL);
+  Report("#Sales Ledger#",ARRClass,ARRn,0,modSL);
+  if (HasLocalization("ITA,PRT")) then begin
+    Report("#VAT Code# Statistics",SLVATRClass,SLVATRn,0,modSL);
+  end;
+  if (HasLocalization("PRT")) then begin
+    Report("#VAT# Customer Sales",RealCustRClass,RealCustRn,0,modSL);
+  end;
+  if (HasLocalization("POL")) and (HasModNL or HasIncomeAndExpenseBook) then begin
+    Report("#VAT# Report Sales",SLVATRepRClass,SLVATRepRn,0,modSL);
+  end;
+  if (HasLocalization("ARG")) then begin
+    Report("#VAT# Report Sales",SLVATArgRClass,SLVATArgRn,0,modSL);  
+  end;
+  if (HasLocalization("LTU")) then begin
+    Report("#VAT# Report Sales",SLVATLitRClass,SLVATLitRn,0,modSL);  
+  end;
+  if (HasLocalization("HND")) then begin
+    Report("#VAT# Report Sales (Honduras)",SLVATHonRClass,SLVATHonRn,0,modSL);  
+  end;
+  
+  if (HasModNL) then begin
+    if (HasLocalization("PRT")) then begin
+      Maintenance("Transfer to Bad Debtors",BadCUVClass,BadCUMn,modSL);
+    end;
+  end;
+  if (HasEMail) then begin
+    Maintenance("Create Periodic Customer Statement Email",CUPerEmailVClass,CUPerEmailMn,modSL); // We have this belowe SendPerStatVClass
+  end;
+  if (HasModNL) and (HasLocalization("HRV")) then begin
+//    Maintenance("Create #VAT# Corrections #S/L#",VATIVVClass,VATIVMn,modSL);
+  end;
+  if (HasLocalization("PRT")) then begin
+    if (HasEMail) then begin
+      Maintenance("SAFT to Email",SAFTtoEmailVClass,SAFTtoEmailMn,modSL);
+    end;
+  end;
+
+  if (HasLocalization("PRT")) then begin
+//    Export("Communication of Invoices to AT - SAFT",PortTaxXml2EClass,PortTaxXml2En,modSL);    
+  end;
+  if (HasLocalization("LVA")) then begin
+    Export("EU Sales Export (Latvia)",LatEUSalesEClass,LatEUSalesEn,modSL);
+  end;
+  if (HasLocalization("LTU")) then begin
+    Export("EU #VAT# Sales (Lithuania)",SLEUVATLitECLass,SLEUVATLitEn,modSL);
+  end;
+  if (HasLocalization("BRA")) then begin
+    Export("Fiscal Note for Services",BraFiscalNoteEClass,BraFiscalNoteEn,modSL); 
+  end;
+  if (HasLocalization("LTU")) then begin
+    Export("#S/L# #VAT# Invoices (Lithuania)",LitVATRegIVEClass,LitVATRegIVEn,modSL);
+  end;
+  if (HasLocalization("PRT")) then begin
+    Export("SAFT (Portugal)",PortTaxXmlEClass,PortTaxXmlEn,modSL);
+  end; 
+  if (HasLocalization("NOR")) then begin
+    Export("SAFT",NorTaxXmlEClass,NorTaxXmlEn,modSL);
+  end; 
+  if (HasLocalization("LTU") and HasIntegratedNL) then begin
+    Export("SAFT",LitSAFTTaxXmlEClass,LitSAFTTaxXmlEn,modSL);
+  end;
+  if (HasLocalization("LVA")) then begin
+    Export("#VAT# Declaration Annex #VAT#1-III (Latvia)",LatVATSalesEClass,LatVATSalesEn,modSL);
+  end;
+  if (HasBankImport) then begin
+    Import("Banking File",RefIPIn,RefIPIn,modSL);
+  end;
+  if (HasLocalization("BRA")) then begin
+    Import("Fiscal Note for Services Reply",0,BraFiscalNoteIn,modSL);
+  end;
+  
+/* modEmail */
+
+  Register("Email Queue","Email Queue",EMailQueVc,modEmail);
+  RegisterWS("Mailboxes","Mailboxes","New Mailbox",ConferenceWClass,modEmail);
+
+  Setting("Email SMTP Server",EmailTClass,modEmail);
+
+  end;
+  return;
+end;

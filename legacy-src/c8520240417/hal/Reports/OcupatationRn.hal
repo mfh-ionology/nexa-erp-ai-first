@@ -1,0 +1,299 @@
+external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
+external function roundmode SetRoundModeD(Integer);
+external function string 255 MonthName(Date);
+external function Boolean SkipResTest(record ReservationStatusVc,Boolean);
+external function LongInt DateDiff(Date,Date);
+external procedure HT2Per(Date,Date,var string);
+
+function
+LongInt CountResources(string type)
+BEGIN
+  LongInt res;
+  Boolean TrHs;
+  record ResVc Resr;
+   
+  res = 0; 
+  TrHs = true;
+  Resr.Type = type;
+  while (LoopKey("Type",Resr,1,TrHs)) begin
+    if (Resr.Type!=type) then begin
+      TrHs = false;
+    end;
+    if (TrHs) then begin
+      res = res + 1;
+    end;
+  end;
+  CountResources = res;
+  RETURN;
+END;
+
+procedure PrintAndAddup(string lasttype,Date startdate,Date enddate,var val ocupprc,var val availqty,var val typepers,var val typesum,var val typeqty)
+begin
+  string 255 tstr;
+  
+  ocupprc = typeqty/availqty;
+  ocupprc = Round(100 * ocupprc,SetRoundModeD(1));
+  StartFormat(15);
+  OutString(0,0,lasttype,false);
+/*
+  tstr = startdate;
+  tstr = tstr & ":";
+  tstr = tstr & enddate;
+*/
+  tstr = MonthName(startdate) & " " & GetYear(startdate);
+  OutString(2,0,tstr,false);
+  OutVal(3,0,availqty,M4UVal,true);
+  OutVal(4,0,typeqty,M4UVal,true);
+  OutVal(5,0,ocupprc,M4UVal,true);
+  OutVal(6,0,typepers,M4UVal,true);
+  OutVal(7,0,typesum,M4Val,true);
+  OutVal(1,0,typesum/typeqty,M4Val,true);
+  EndFormat;
+  typesum = 0;
+  typeqty = 0;
+  typepers = 0;
+  ocupprc = 0;
+  return;
+end;
+
+procedure PrintReportHeaderLine()
+begin
+  StartFormat(15);
+  OutString(0,0,USetStr(10216),false);
+  OutString(3,0,USetStr(10222),true);
+  OutString(4,0,USetStr(10218),true);
+  OutString(5,0,USetStr(10220),true);
+  OutString(6,0,USetStr(10223),true);
+  OutString(7,0,USetStr(10217),true);
+  OutString(1,0,USetStr(10219),true);
+  EndFormat;  
+  Gray_Divider(0,1);
+  return;
+end;
+
+procedure DoOcupatationRn(record RcVc RepSpec,var vector val vtotalavailqty,var vector val vtotaltypeqty,var vector val vtotaltypepers,var vector val vtotaltypesum)
+begin
+  record JobVc Jobr;
+  Boolean TrHs,testf,printedf;
+  string 5 frtype,totype,lasttype;
+  val sum4,typesum,typeqty,typepers,ocupprc,availqty;
+  val stypesum,stypeqty,stypepers,socupprc,savailqty;
+  Date startdate,enddate,td1,td2;
+  record  HotelBlock HotelRec;
+  record ReservationStatusVc rsr;
+
+  BlockLoad(HotelRec);
+  PrintReportHeaderLine; 
+  startdate = RepSpec.sStartDate;
+  enddate = AddDay(startdate,-GetDay(startdate) + DaysInMonth(GetYear(startdate),GetMonth(startdate)));  
+  frtype = FirstInRange(RepSpec.f1,5);
+  totype = LastInRange(RepSpec.f1,5);
+  while (enddate<=RepSpec.sEndDate) begin
+    lasttype = "";
+    printedf = false;
+    ResetLoop(Jobr);
+    TrHs = true;
+    Jobr.Type = frtype;
+    Jobr.TransDate = startdate;
+    while (LoopKey("DateType",Jobr,2,TrHs)) begin
+      testf = true;
+      if (nonblank(RepSpec.f1)) then begin
+        if (Jobr.Type>totype) then begin
+          TrHs = false;
+        end;
+      end;  
+      if (DateInRange(Jobr.TransDate,startdate,enddate)==false) then begin
+        testf = false;
+      end;
+      if (TrHs) then begin
+        rsr.Code = Jobr.ResStatus;
+        if (ReadFirstMain(rsr,1,true)) then begin
+          if (SkipResTest(rsr,true)) then begin
+            testf = false;
+          end;
+        end;
+      end;
+      if (TrHs and testf) then begin
+        if (nonblank(lasttype)) then begin
+          if ((lasttype!=Jobr.Type) and (typeqty!=0)) then begin          
+            availqty = CountResources(lasttype);
+            availqty = availqty*DaysInMonth(GetYear(startdate),GetMonth(startdate));
+            savailqty = savailqty + availqty;
+            vtotalavailqty[DateToString(startdate,"MM/YYYY") & ":" & lasttype] = vtotalavailqty[DateToString(startdate,"MM/YYYY") & ":" & lasttype] + availqty;
+            vtotaltypeqty[DateToString(startdate,"MM/YYYY") & ":" & lasttype]  = vtotaltypeqty[DateToString(startdate,"MM/YYYY")  & ":" & lasttype] + typeqty;
+            vtotaltypepers[DateToString(startdate,"MM/YYYY") & ":" & lasttype] = vtotaltypepers[DateToString(startdate,"MM/YYYY") & ":" & lasttype] + typepers;
+            vtotaltypesum[DateToString(startdate,"MM/YYYY") & ":" & lasttype]  = vtotaltypesum[DateToString(startdate,"MM/YYYY")  & ":" & lasttype] + typesum;
+            PrintAndAddup(lasttype,startdate,enddate,ocupprc,availqty,typepers,typesum,typeqty);
+            printedf = true;
+          end;
+        end;        
+        td1 = Jobr.TransDate;
+        td2 = Jobr.EndDate;
+        if (td1<RepSpec.sStartDate) then begin
+          td1 = RepSpec.sStartDate;
+        end;
+        if (td2>RepSpec.sEndDate) then begin
+          td2 = RepSpec.sEndDate;
+        end;
+        if (Jobr.Persons>0) then begin
+          typepers  = typepers + Jobr.Persons;
+          stypepers = stypepers + Jobr.Persons;
+        end;
+        sum4 = MulRateToBase1(Jobr.CurncyCode,Jobr.Sum4,Jobr.FrRate,Jobr.ToRateB1,Jobr.ToRateB2,Jobr.BaseRate1,Jobr.BaseRate2,DefaultCurRoundOff);
+        typesum   = typesum + sum4;
+        stypesum  = stypesum + sum4;
+        typeqty   = typeqty + DateDiff(td2,td1);
+        stypeqty  = stypeqty + DateDiff(td2,td1);
+        lasttype  = Jobr.Type; 
+      end;     
+    end;
+    if (typeqty!=0) then begin   
+      availqty = CountResources(lasttype);
+      availqty = availqty*DaysInMonth(GetYear(startdate),GetMonth(startdate));
+      savailqty = savailqty + availqty;      
+      vtotalavailqty[DateToString(startdate,"MM/YYYY") & ":" & lasttype] = vtotalavailqty[DateToString(startdate,"MM/YYYY") & ":" & lasttype] + availqty;
+      vtotaltypeqty[DateToString(startdate,"MM/YYYY") & ":" & lasttype]  = vtotaltypeqty[DateToString(startdate,"MM/YYYY")  & ":" & lasttype] + typeqty;
+      vtotaltypepers[DateToString(startdate,"MM/YYYY") & ":" & lasttype] = vtotaltypepers[DateToString(startdate,"MM/YYYY") & ":" & lasttype] + typepers;
+      vtotaltypesum[DateToString(startdate,"MM/YYYY") & ":" & lasttype]  = vtotaltypesum[DateToString(startdate,"MM/YYYY")  & ":" & lasttype] + typesum;
+      PrintAndAddup(lasttype,startdate,enddate,ocupprc,availqty,typepers,typesum,typeqty);
+      printedf = true;
+    end;  
+    if (printedf) then begin
+      Gray_Divider(0,1);
+      PrintAndAddup(USetStr(10221),startdate,enddate,socupprc,savailqty,stypepers,stypesum,stypeqty);
+      savailqty = 0;
+      StartFormat(15);
+      EndFormat;
+      Gray_Divider(0,1);
+    end;
+    startdate = AddMonth(startdate,1);
+    enddate = AddDay(startdate,-GetDay(startdate) + DaysInMonth(GetYear(startdate),GetMonth(startdate)));  
+  end; 
+  return;
+end;
+
+global
+procedure OcupatationRn(record RcVc RepSpec)
+begin
+  record CompaniesBlock Cb;
+  row CompaniesBlock Cbrw;
+  Integer i,rw,rwcnt,oldcomp;
+  string 255 tstr,type,sdate;
+  array string 255 atotal;
+  val ocupprc,average,totalavailqty,totaltypepers,totaltypesum,totaltypeqty,totalocupprc,totalaverage;
+  vector val vtotalavailqty,vtotaltypeqty,vtotaltypepers,vtotaltypesum;
+  Longint pos;
+  Date tempdate;
+
+  StartReportJob(USetStr(10215));
+  rw = 1;
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  if (RepSpec.IncDaughter==1) then begin
+    tstr = USetStr(19171);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f1)) then begin
+    tstr = USetStr(10224); 
+    Header(rw,tstr & ": " & RepSpec.f1,1);
+    rw = rw + 1;
+  end;
+  EndHeader;
+  SetRepCol(2,40);
+  SetRepCol(3,180); 
+  SetRepCol(4,220); 
+  SetRepCol(5,290);
+  SetRepCol(6,340); 
+  SetRepCol(7,420); 
+
+  if (blank(RepSpec.f1)) then begin goto LOcupatationRn; end;
+  if (RepSpec.IncDaughter!=0) then begin 
+    oldcomp = CurrentCompany;
+    BlockLoad(Cb);
+    rwcnt = MatRowCnt(Cb);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(Cb,i,Cbrw);
+      if (SetCompanyCode(Cbrw.CompCode,false)) then begin
+        StartFormat(15);
+        OutString(0,0,Cbrw.CompName,false);
+        EndFormat;      
+        DoOcupatationRn(RepSpec,vtotalavailqty,vtotaltypeqty,vtotaltypepers,vtotaltypesum);
+        Black_Divider(0,1);
+        StartFormat(15);
+        EndFormat;
+      end;
+    end;
+    ResetCompany(oldcomp);
+  end else begin
+    DoOcupatationRn(RepSpec,vtotalavailqty,vtotaltypeqty,vtotaltypepers,vtotaltypesum);
+  end;
+  if (RepSpec.IncDaughter!=0) then begin 
+    StartFormat(15);
+    OutString(0,0,USetStr(9990) & " " & USetStr(26462)& ": ",false);
+    EndFormat; 
+    GetVectorTags(vtotalavailqty,atotal);
+    SortStringArray(atotal);
+    PrintReportHeaderLine;
+    for (i=0;i<atotal.length;i=i+1) begin
+      pos = 0;
+      GetNextSubstring(atotal[i],pos,":",sdate);
+      GetNextSubstring(atotal[i],pos,":",type);
+      tempdate.day = 1;
+      tempdate.month = StringToInt(Left(sdate,2));
+      tempdate.year = StringToInt(Right(sdate,4));
+      tstr = MonthName(StringToDate(tempdate)) & " " & GetYear(StringToDate(tempdate));
+      ocupprc = vtotaltypeqty[sdate & ":" & type]/vtotalavailqty[sdate & ":" & type];
+      ocupprc = Round(100 * ocupprc,SetRoundModeD(1));
+      average = Round(vtotaltypesum[sdate & ":" & type]/vtotaltypeqty[sdate & ":" & type],SetRoundModeD(2));
+      StartFormat(15);
+      OutString(0,0,type,false);
+      OutString(2,0,tstr,false);
+      OutVal(3,0,vtotalavailqty[sdate & ":" & type],M4UVal,true);
+      OutVal(4,0,vtotaltypeqty[sdate  & ":" & type],M4UVal,true);
+      OutVal(5,0,ocupprc,M4UVal,true);
+      OutVal(6,0,vtotaltypepers[sdate & ":" & type],M4UVal,true);
+      OutVal(7,0,vtotaltypesum[sdate  & ":" & type],M4UVal,true);
+      OutVal(1,0,average,M4UVal,true);
+      EndFormat; 
+      if (Left(atotal[i],7) == Left(atotal[i+1],7)) then begin 
+        totalavailqty = totalavailqty + vtotalavailqty[sdate & ":" & type];
+        totaltypeqty = totaltypeqty + vtotaltypeqty[sdate & ":" & type];
+        totaltypepers = totaltypepers + vtotaltypepers[sdate & ":" & type];
+        totaltypesum = totaltypesum + vtotaltypesum[sdate & ":" & type];
+      end;
+      if (Left(atotal[i],7) != Left(atotal[i+1],7)) then begin
+        totalavailqty = totalavailqty + vtotalavailqty[sdate & ":" & type];
+        totaltypeqty = totaltypeqty + vtotaltypeqty[sdate & ":" & type];
+        totaltypepers = totaltypepers + vtotaltypepers[sdate & ":" & type];
+        totaltypesum = totaltypesum + vtotaltypesum[sdate & ":" & type];
+        totalocupprc = totaltypeqty/totalavailqty;
+        totalocupprc = Round(100 * totalocupprc,SetRoundModeD(1));
+        totalaverage = Round(totaltypesum/totaltypeqty,SetRoundModeD(2));
+        Gray_Divider(0,1);
+        StartFormat(15);
+        OutString(0,0,USetStr(10221),false);
+        OutString(2,0,tstr,false);
+        OutVal(3,0,totalavailqty,M4UVal,true);
+        OutVal(4,0,totaltypeqty,M4UVal,true);
+        OutVal(5,0,totalocupprc,M4UVal,true);
+        OutVal(6,0,totaltypepers,M4UVal,true);
+        OutVal(7,0,totaltypesum,M4UVal,true);
+        OutVal(1,0,totalaverage,M4UVal,true);
+        EndFormat; 
+        StartFormat(15);
+        EndFormat; 
+        totalavailqty = 0;
+        totaltypeqty = 0;
+        totaltypepers = 0;
+        totaltypesum = 0;
+        totalocupprc = 0;
+        totalaverage = 0;
+      end;
+    end; 
+  end;
+LOcupatationRn:;  
+  EndJob;
+  RETURN;
+END;

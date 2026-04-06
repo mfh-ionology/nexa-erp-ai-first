@@ -1,0 +1,770 @@
+//Tools
+external function string 255 LF();
+external function string 255 removenextnode(var string);
+external function string 255 FormatSimpleLink(string,boolean);
+external procedure RedirectToURL(string);
+external function string 255 FormatLink(string,string,boolean,boolean);
+external function string 255 GetWebHostAndPort3(boolean);
+external procedure AddFileAsTag(var string,string,string,string);
+//Pages
+external procedure ShowWebAppPageStart(record WebNGPageVc,string);
+external procedure ShowWebAppPageEnd(record WebNGPageVc);
+external procedure ShowWebPage(record WebNGStructVc);
+external procedure ShowErrorPage(string);
+
+function string 255 HRPortalRoot()
+begin
+  HRPortalRoot = "HRPortal";
+  return;
+end;
+
+function string 255 GetFileExtension(string fn)
+begin
+  string 255 res;
+  Integer i;
+
+  for (i=len(fn)-1;i>=0;i=i-1) begin
+    if (mid(fn,i,1)==".") then begin
+      goto Lexit;
+    end;
+    res = mid(fn,i,1) & res;
+  end;
+
+Lexit:;
+  GetFileExtension = res;
+  return;
+end;
+
+function Boolean HasAttachments(string filename,LongInt recnr)
+begin
+  Boolean res;
+  record RLinkVc RLr;
+  record Attach2Vc Attachr;
+  record HRMCOVc HRMCOr;
+  record HRMCOChangeVc HRMCOCr;
+
+  switch (filename) begin
+    case "HRMCOVc":
+      HRMCOr.SerNr = recnr;
+      if (ReadFirstMain(HRMCOr,1,true)) then begin
+        res = ReadRecordLink(HRMCOr,0,Attachr,RLr);
+      end;
+    case "HRMCOChangeVc":
+      HRMCOCr.SerNr = recnr;
+      if (ReadFirstMain(HRMCOCr,1,true)) then begin
+        res = ReadRecordLink(HRMCOCr,0,Attachr,RLr);
+      end;
+    otherwise
+      goto LHasAttachments;
+  end;
+
+LHasAttachments:;
+  HasAttachments = res;
+  return;
+end;
+
+procedure GenerateDownloadURLs(string filename,LongInt recnr,string attachname)
+begin
+  string 255 url;
+  
+  url = "/" & HRPortalRoot & "/" & GetEncryptedLink("download/" & filename & "/" & recnr & "/" & Base64EncodeURL(attachname));
+  WebOutBegin;
+  <p><a href="<?var(url)?>"><?var(attachname)?></a></p>
+  EndWebOut;
+
+  return;
+end;
+
+procedure AttachmentList(string filename,LongInt recnr)
+begin
+  record RLinkVc RLr;
+  record Attach2Vc Attachr;
+  record HRMCOVc HRMCOr;
+  record HRMCOChangeVc HRMCOCr;
+  Integer filenr;
+
+  switch (filename) begin
+    case "HRMCOVc":
+      HRMCOr.SerNr = recnr;
+      if (ReadFirstMain(HRMCOr,1,true)==false) then begin goto LAttachmentList; end;
+      filenr = 1;
+      while (ReadRecordLink(HRMCOr,filenr,Attachr,RLr)) begin
+        filenr = filenr + 1;
+        GenerateDownloadURLs(filename,HRMCOr.SerNr,Attachr.FileName);
+      end;
+    case "HRMCOChangeVc":
+      HRMCOCr.SerNr = recnr;
+      if (ReadFirstMain(HRMCOCr,1,true)==false) then begin goto LAttachmentList; end;
+      filenr = 1;
+      while (ReadRecordLink(HRMCOCr,filenr,Attachr,RLr)) begin
+        filenr = filenr + 1;
+        GenerateDownloadURLs(filename,HRMCOCr.SerNr,Attachr.FileName);
+      end;
+    otherwise
+      goto LAttachmentList;
+  end;
+
+LAttachmentList:;
+  return;
+end;
+
+function Boolean FindEmployee(var record CUVc CUr)
+begin
+  Boolean res;
+  record UserVc Userr;
+  
+  CUr.Code = CurrentCust;
+  if (ReadFirstMain(CUr,1,true)==false) then begin
+    GetCurrentUser(Userr);
+    Userr.Code = CurrentUser;
+    if (ReadFirstMain(Userr,1,true)==false) then begin
+      res = false;
+      goto LFindEmployee;
+    end;
+    CUr.Code = Userr.CustCode;
+    if (ReadFirstMain(CUr,1,true)==false) then begin
+      res = false;
+      goto LFindEmployee;
+    end;
+  end;
+  if (CUr.EmployeeType==1) then begin res = true; end;
+LFindEmployee:;
+  FindEmployee = res;
+  return;
+end;
+
+procedure DownloadsModal(string filename,LongInt recnr)
+begin
+  if (HasAttachments(filename,recnr)) then begin
+    WebOutBegin;
+    <td data-label="Downloads">
+      <label for="modal-downloads" class="button primary">Downloads</label>
+      <input type="checkbox" id="modal-downloads" class="modal">
+      <div>
+        <div class="card">
+        <label for="modal-downloads" class="modal-close"></label>
+          <h4 class="section">Downloads </h4>
+          EndWebOut;
+          AttachmentList(filename,recnr);
+          WebOutBegin;
+        </div>
+      </div>	
+    </td>
+    EndWebOut;
+  end else begin
+    WebOutBegin;
+    <td data-label="Downloads"><div class="button primary" disabled>Downloads</div></td>
+    EndWebOut;
+  end;
+  return;
+end;
+
+global
+function Boolean HRPortalUserLoggedIn()
+begin
+  Boolean res;
+
+  if (nonblank(CurrentCust) or nonblank(CurrentUser)) then begin
+    res = true;
+  end;
+
+  HRPortalUserLoggedIn = res;
+  return;
+end;
+
+function string 255 HRPortalAppHead()
+begin
+  string 255 res;
+
+  
+  res = res & "<script type='text/javascript' src='https://code.jquery.com/jquery-3.6.0.min.js'></script>" & LF;
+  AddFileAsTag(res,"HRPortalApp.js","script","text/javascript");
+  AddFileAsTag(res,"HRPortalApp.css","style","text/css");
+  
+  // res = res & "<script type='text/javascript' src='/js/HRPortalApp.js'></script>" & LF; //TEMP!!!!!!!!!!
+  // res = res & "<link type='text/css' rel='stylesheet' href='/styles/HRPortalApp.css'>" & LF; //TEMP!!!!!!!!!!
+  // res = res & "<script src='https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.12.6/js/standalone/selectize.min.js' integrity='sha256-+C0A5Ilqmu4QcSPxrlGpaZxJ04VjsRjKu+G82kl5UJk=' crossorigin='anonymous'></script>" & LF;
+  // res = res & "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/selectize.js/0.12.6/css/selectize.bootstrap3.min.css' integrity='sha256-ze/OEYGcFbPRmvCnrSeKbRTtjG4vGLHXgOqsyLFTRjg=' crossorigin='anonymous' />" & LF;
+
+  // res = res & "<script type='text/javascript'>" & LF;
+  // res = res & "  LMSCourses.UpdateCourse                      = '/" & GetEncryptedLink("lms/ajax?action=updatecourse") & "';" & LF;
+  // res = res & "  LMSCourses.CreateCourse                      = '/" & GetEncryptedLink("lms/ajax?action=createcourse") & "';" & LF;
+  // res = res & "  LMSCourses.DeleteCourse                      = '/" & GetEncryptedLink("lms/ajax?action=deletecourse") & "';" & LF;
+  // res = res & "  LMSCourses.UpdateCourseVisible               = '/" & GetEncryptedLink("lms/ajax?action=updatecoursevisible") & "';" & LF;
+  // res = res & "  LMSCourses.UpdateTopic                       = '/" & GetEncryptedLink("lms/ajax?action=updatetopic") & "';" & LF;
+  // res = res & "  LMSCourses.UpdateTopicVisible                = '/" & GetEncryptedLink("lms/ajax?action=updatetopicvisible") & "';" & LF;
+  // res = res & "  LMSCourses.UpdateTopicSortOrder              = '/" & GetEncryptedLink("lms/ajax?action=updatetopicsortorder") & "';" & LF;
+  // res = res & "  LMSCourses.UpdateCourseContent               = '/" & GetEncryptedLink("lms/ajax?action=updatecoursecontent") & "';" & LF;
+  // res = res & "  LMSCourses.UpdateCourseContentSortOrder      = '/" & GetEncryptedLink("lms/ajax?action=updatecoursecontentsortorder") & "';" & LF;
+  // res = res & "  LMSCourses.UpdateCourseContentVisible        = '/" & GetEncryptedLink("lms/ajax?action=updatecoursecontentvisible") & "';" & LF;
+  // res = res & "  LMSCourses.CreateCourseContent               = '/" & GetEncryptedLink("lms/ajax?action=createcoursecontent") & "';" & LF;
+  // res = res & "  LMSCourses.DeleteCourseContent               = '/" & GetEncryptedLink("lms/ajax?action=deletecoursecontent") & "';" & LF;
+  // res = res & "  LMSCourses.DeleteTopic                       = '/" & GetEncryptedLink("lms/ajax?action=deletetopic") & "';" & LF;
+  // res = res & "  LMSCourses.CreateTopic                       = '/" & GetEncryptedLink("lms/ajax?action=createtopic") & "';" & LF;
+  // res = res & "  LMSCourses.UpdateStudentCourse               = '/" & GetEncryptedLink("lms/ajax?action=updatestudentcourse") & "';" & LF;
+  // res = res & "  LMSCourses.DeleteStudentCourse               = '/" & GetEncryptedLink("lms/ajax?action=deletestudentcourse") & "';" & LF;
+  // res = res & "  LMSCourses.CreateStudentCourse               = '/" & GetEncryptedLink("lms/ajax?action=createstudentcourse") & "';" & LF;
+  // res = res & "  LMSCourses.DeleteAllStudentCourse            = '/" & GetEncryptedLink("lms/ajax?action=deleteallstudentcourse") & "';" & LF;
+  // res = res & "</script>" & LF;
+
+  HRPortalAppHead = res;
+end;
+
+procedure HRPortalShowPage(string page)
+begin
+  record WebNGPageVc WPr;
+  record WebNGStructVc WSr;
+
+  WPr.Code = page;
+  if (ReadFirstMain(WPr,1,true)) then begin
+    WSr.WebPage = WPr.Code;
+    ShowWebPage(WSr);
+  end;
+
+  return;
+end;
+
+global
+procedure ShowHRPortalPersonalPage()
+begin
+  record CUVc CUr;
+
+  if (FindEmployee(CUr)==false) then begin
+    ShowErrorPage("Employee not found"); //TODO IMPROVE
+    goto LShowHRPortalPersonalPage;
+  end;
+
+  WebOutBegin;
+  <div class="container">	
+    <br>
+    <h1><?var(CUr.Name)?></h1>
+    <br>
+    <div class="row">
+      <div class="col-sm-12 col-md-4 col-lg-2 hr-personal-border hr-personal-left"><strong>Address:</strong></div>
+    <div class="col-sm-12 col-md-8 col-lg-10 hr-personal-border">
+      <?var(CUr.InvAddr0)?><br>
+      <?var(CUr.InvAddr1)?><br>
+      <?var(CUr.InvAddr2)?><br>
+      <?var(CUr.InvAddr3)?><br>
+      <?var(CUr.InvAddr4)?><br>
+    </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-4 col-lg-2 hr-personal-border hr-personal-left"><strong>Private Telephone:</strong></div>
+    <div class="col-sm-12 col-md-8 col-lg-10 hr-personal-border"><?var(CUr.Phone)?></div>
+    </div>	
+    <div class="row">
+      <div class="col-sm-12 col-md-4 col-lg-2 hr-personal-border hr-personal-left"><strong>Private Mobile:</strong></div>
+    <div class="col-sm-12 col-md-8 col-lg-10 hr-personal-border"><?var(CUr.Mobile)?></div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-4 col-lg-2 hr-personal-border hr-personal-left"><strong>Private Email:</strong></div>
+    <div class="col-sm-12 col-md-8 col-lg-10 hr-personal-border"><?var(CUr.eMail)?></div>
+    </div>	
+    <div class="row">
+      <div class="col-sm-12 col-md-4 col-lg-2 hr-personal-border hr-personal-left"><strong>ID Document No.:</strong></div>
+    <div class="col-sm-12 col-md-8 col-lg-10 hr-personal-border"><?var(CUr.DocType)?></div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-4 col-lg-2 hr-personal-border hr-personal-left"><strong>ID Code:</strong></div>
+    <div class="col-sm-12 col-md-8 col-lg-10 hr-personal-border"><?var(CUr.PassportNr)?></div>
+    </div>	
+    <div class="row">
+      <div class="col-sm-12 col-md-4 col-lg-2 hr-personal-border hr-personal-left"><strong>National Insurance/Tax No.:</strong></div>
+    <div class="col-sm-12 col-md-8 col-lg-10 hr-personal-border"><?var(CUr.SocialSecurityNr)?></div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-4 col-lg-2 hr-personal-border hr-personal-left"><strong>Bank Account Number:</strong></div>
+    <div class="col-sm-12 col-md-8 col-lg-10 hr-personal-border"><?var(CUr.BankAccount)?></div>
+    </div>	
+    <div class="row">
+      <div class="col-sm-12 col-md-4 col-lg-2 hr-personal-border hr-personal-left"><strong>IBAN Code:</strong></div>
+    <div class="col-sm-12 col-md-8 col-lg-10 hr-personal-border"><?var(CUr.IBANCode)?></div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-4 col-lg-2 hr-personal-border hr-personal-left"><strong>Account Operator:</strong></div>
+    <div class="col-sm-12 col-md-8 col-lg-10 hr-personal-border"><?var(CUr.AccOperator)?></div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-4 col-lg-2 hr-personal-border hr-personal-left"><strong>Visa No.:</strong></div>
+    <div class="col-sm-12 col-md-8 col-lg-10 hr-personal-border"><?var(CUr.VisaNr)?></div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-4 col-lg-2 hr-personal-border hr-personal-left"><strong>Visa Expiry date.:</strong></div>
+    <div class="col-sm-12 col-md-8 col-lg-10 hr-personal-border"><?var(DateToString(CUr.VisaExpiry,"YYYY-MM-DD"))?></div>
+    </div>
+	</div>
+  EndWebOut;
+LShowHRPortalPersonalPage:;
+  return;
+end;
+
+procedure ContractChangesHeader()
+begin
+  WebOutBegin;
+  <th>Job Title</th>
+  <th>Start date</th>
+  <th>Trial period end date</th>
+  <th>Gross Salary</th>
+  <th>Currency</th>
+  <th>Salary Type</th>
+  <th>Downloads</th>
+  EndWebOut;
+  return;
+end;
+
+procedure ShowBenefitsHeader()
+begin
+  WebOutBegin;
+  <th>Description</th>
+  <th>Type</th>
+  <th>Terms</th>
+  <th>Amount</th>
+  <th>Currency</th>
+  <th>Frequency</th>
+  <th>Start Date</th>
+  <th>End Date</th>
+  EndWebOut;
+  return;
+end;
+
+procedure EmploymentRowHeader()
+begin
+  WebOutBegin;
+  <th>Status</th>
+  <th>Job Title</th>
+  <th>Start date</th>
+  <th>Trial period end date</th>
+  <th>Gross Salary</th>
+  <th>Currency</th>
+  <th>Salary Type</th>
+  <th>Downloads</th>
+  <th>Uploads</th>
+  <th>Benefits</th>
+  <th>Details</th>
+  EndWebOut;
+  return;
+end;
+
+procedure ShowContractChangeRow(array record HRMCOChangeVc arrHRMCOCr)
+begin
+  Integer i;
+  record HRMCOChangeVc HRMCOCr;
+
+  for (i=0;i<arrHRMCOCr.length;i=i+1) begin
+    HRMCOCr = arrHRMCOCr[i];
+    WebOutBegin;
+    <tr>
+      <td data-label="Job Title"><?var(HRMCOCr.JobTitleDesc)?></td>
+      <td data-label="Start Date"><?var(DateToString(HRMCOCr.TransDate,"YYYY-MM-DD"))?></td>
+      <td data-label="Trial period end date"><?var(DateToString(HRMCOCr.TrialEndDate,"YYYY-MM-DD"))?></td>
+      <td data-label="Gross Salary"><?var(ValToString(HRMCOCr.GrossSalary,M4Val,"",".",2))?></td>
+      <td data-label="Currency"><?var(HRMCOCr.CurncyCode)?></td>
+      <td data-label="Salary Type"><?var(StringFromSet(463,HRMCOCr.SalaryType))?></td>
+      EndWebOut;
+      DownloadsModal("HRMCOChangeVc",HRMCOCr.SerNr);
+      WebOutBegin;
+    </tr>
+    EndWebOut;
+  end;
+  return;
+end;
+
+procedure ShowContractBenefits(LongInt conr)
+begin
+  record CUVc CUr;
+  record HRMCOVc HRMCOr;
+  row HRMCOVc HRMCOrw;
+  Integer rwcnt,i;
+
+  if (FindEmployee(CUr)==false) then begin
+    ShowErrorPage("Employee not found"); //TODO IMPROVE
+    goto LShowContractBenefits;
+  end;
+
+  HRMCOr.SerNr = conr;
+  if (ReadLastMain(HRMCOr,1,true)==false) then begin
+    ShowErrorPage("Contract not found");
+    goto LShowContractBenefits;
+  end;
+
+  WebOutBegin;
+  <div class="container">
+    <br>
+    <h1><?var(CUr.Name)?></h1>
+    <br>
+    <h4>Employment Contracts - Benefits</h4>	
+    <br>
+    <table class="striped">
+      <thead>
+        <tr>
+          EndWebOut;
+          ShowBenefitsHeader;
+          WebOutBegin;
+        </tr>
+      </thead>
+      <tbody>
+      EndWebOut;
+      rwcnt = MatRowCnt(HRMCOr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(HRMCOr,i,HRMCOrw);
+        WebOutBegin;
+          <tr>
+            <td data-label="Description"><?var(HRMCOrw.Description)?></td>
+            <td data-label="Type"><?var(HRMCOrw.Type)?></td>
+            <td data-label="Terms"><?var(HRMCOrw.Terms)?></td>
+            <td data-label="Amount"><?var(ValToString(HRMCOrw.Amount,M4Val,"",".",2))?></td>
+            <td data-label="Currency"><?var(HRMCOrw.CurncyCode)?></td>
+            <td data-label="Frequency"><?var(StringFromSet(753,HRMCOrw.Frequency))?></td>
+            <td data-label="Start Date<"><?var(DateToString(HRMCOrw.StartDate,"YYYY-MM-DD"))?></td>
+            <td data-label="End Date"><?var(DateToString(HRMCOrw.EndDate,"YYYY-MM-DD"))?></td>
+          </tr>
+        EndWebOut;
+      end;
+      WebOutBegin;
+      </tbody>
+    </table>
+  </div>
+  EndWebOut;
+LShowContractBenefits:;
+  return;
+end;
+
+procedure ShowEmploymentRow(record HRMCOVc HRMCOr)
+begin
+  string 255 status,details,benefits,disabled;
+  Integer rwcnt;
+
+  status = "Active";
+  if (HRMCOr.TerminatedFlag) then begin
+    status = "Terminated";
+  end;
+  details = "employment/view/" & HRMCOr.SerNr;
+  benefits = "employment/benefits/" & HRMCOr.SerNr;
+  rwcnt = MatRowCnt(HRMCOr);
+  if (rwcnt==0) then begin
+    disabled = "disabled";
+    benefits = "";
+  end;
+
+  WebOutBegin;
+  <tr>
+    <td data-label="Status"><?var(status)?></td>
+    <td data-label="Job Title"><?var(HRMCOr.JobTitleDesc)?></td>
+    <td data-label="Start date"><?var(DateToString(HRMCOr.StartDate,"YYYY-MM-DD"))?></td>
+    <td data-label="Trial period end date"><?var(DateToString(HRMCOr.TrialEndDate,"YYYY-MM-DD"))?></td>
+    <td data-label="Gross Salary"><?var(ValToString(HRMCOr.GrossSalary,M4Val,"",".",2))?></td>
+    <td data-label="Currency"><?var(HRMCOr.CurncyCode)?></td>
+    <td data-label="Salary Type"><?var(StringFromSet(463,HRMCOr.SalaryType))?></td>
+    EndWebOut;
+    DownloadsModal("HRMCOVc",HRMCOr.SerNr);
+    WebOutBegin;
+    <td data-label="Uploads"><button class="primary">Upload</button></td>
+    <td data-label="Benefits"><a href="<?var(benefits)?>" class="button primary" <?var(disabled)?>>View</a></td>
+    <td data-label="Details"><a href="<?var(details)?>" class="button primary">View</a></td>
+  </tr>
+  EndWebOut;
+  return;
+end;
+
+procedure GetContractChanges(var record HRMCOVc HRMCOr,var array record HRMCOChangeVc arrHRMCOCr,Boolean loopbackf)
+begin
+  Boolean foundf,testf;
+  record HRMCOChangeVc HRMCOCr;
+  
+  ClearArray(arrHRMCOCr);
+  foundf = true;
+  HRMCOCr.HRMCOSerNr = HRMCOr.SerNr;
+
+  while (foundf) begin
+    if (loopbackf) then begin
+      foundf = LoopBackKey("HRMCONrDate",HRMCOCr,1,foundf);
+    end else begin
+      foundf = LoopKey("HRMCONrDate",HRMCOCr,1,foundf);
+    end;
+    if (foundf) then begin
+      testf = true;
+      if (HRMCOCr.HRMCOSerNr!=HRMCOr.SerNr) then begin testf = false; end;
+      if (HRMCOCr.OKFlag==0) then begin testf = false; end;
+      if (testf) then begin
+        testf = false;
+        if (nonblank(HRMCOCr.TrialEndDate)  and HRMCOCr.TrialEndDate!=HRMCOr.TrialEndDate)  then begin testf = true; end;
+        if (nonblank(HRMCOCr.JobTitleDesc)  and HRMCOCr.JobTitleDesc!=HRMCOr.JobTitleDesc)  then begin testf = true; end;
+        if (nonblank(HRMCOCr.JobTitle)      and HRMCOCr.JobTitle!=HRMCOr.JobTitle)          then begin testf = true; end;
+        if (nonblank(HRMCOCr.SalaryType)    and HRMCOCr.SalaryType!=HRMCOr.SalaryType)      then begin testf = true; end;
+        if (nonblank(HRMCOCr.GrossSalary)   and HRMCOCr.GrossSalary!=HRMCOr.GrossSalary)    then begin testf = true; end;
+        if (nonblank(HRMCOCr.CurncyCode)    and HRMCOCr.CurncyCode!=HRMCOr.CurncyCode)      then begin testf = true; end;
+        if (testf) then begin
+          HRMCOr.TrialEndDate = HRMCOCr.TrialEndDate;
+          HRMCOr.JobTitleDesc = HRMCOCr.JobTitleDesc;
+          HRMCOr.JobTitle = HRMCOCr.JobTitle;
+          HRMCOr.SalaryType = HRMCOCr.SalaryType;
+          HRMCOr.GrossSalary = HRMCOCr.GrossSalary;
+          HRMCOr.CurncyCode = HRMCOCr.CurncyCode;
+        end;
+        arrHRMCOCr[arrHRMCOCr.length] = HRMCOCr;
+      end;
+    end;
+  end;
+  return;
+end;
+
+procedure ShowContractChanges(LongInt conr)
+begin
+  record HRMCOVc HRMCOr,initialHRMCOr;
+  array record HRMCOChangeVc arrHRMCOCr;
+  record CUVc CUr;
+
+  if (FindEmployee(CUr)==false) then begin
+    ShowErrorPage("Employee not found"); //TODO IMPROVE
+    goto LShowContractChanges;
+  end;
+
+  HRMCOr.SerNr = conr;
+  if (ReadLastMain(HRMCOr,1,true)==false) then begin
+    ShowErrorPage("Contract not found");
+    goto LShowContractChanges;
+  end;
+
+  initialHRMCOr = HRMCOr;
+  GetContractChanges(HRMCOr,arrHRMCOCr,true);
+
+  WebOutBegin;
+  <div class="container">
+    <br>
+    <h1><?var(CUr.Name)?></h1>
+    <br>
+    <h4>Employment Contracts - Changes Overview</h4>	
+    <br>
+    <table class="striped">
+      <thead>
+        <tr>
+          EndWebOut;
+          ContractChangesHeader;
+          WebOutBegin;
+        </tr>
+      </thead>
+      <tbody>
+          EndWebOut;
+          ShowContractChangeRow(arrHRMCOCr);
+          WebOutBegin;
+          <tr>
+          <td data-label="Job Title"><?var(initialHRMCOr.JobTitleDesc)?></td>
+          <td data-label="Start Date"><?var(DateToString(initialHRMCOr.StartDate,"YYYY-MM-DD"))?></td>
+          <td data-label="Trial period end date"><?var(DateToString(initialHRMCOr.TrialEndDate,"YYYY-MM-DD"))?></td>
+          <td data-label="Gross Salary"><?var(ValToString(initialHRMCOr.GrossSalary,M4Val,"",".",2))?></td>
+          <td data-label="Currency"><?var(initialHRMCOr.CurncyCode)?></td>
+          <td data-label="Salary Type"><?var(StringFromSet(463,initialHRMCOr.SalaryType))?></td>
+          EndWebOut;
+          DownloadsModal("HRMCOr",initialHRMCOr.SerNr);
+          WebOutBegin;
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  EndWebOut;
+LShowContractChanges:;
+  return;
+end;
+
+global
+procedure ShowHRPortalEmploymentPage(string path)
+begin
+  record CUVc CUr;
+  record HRMCOVc HRMCOr;
+  array record HRMCOChangeVc arrHRMCOCr;
+  Boolean foundf,testf;
+  Integer cnt;  
+  string 255 mpath,node;
+  transaction string 255 gHRPortalPath;
+
+  mpath = path;
+  node = removenextnode(mpath);
+
+  if (FindEmployee(CUr)==false) then begin
+    ShowErrorPage("Employee not found"); //TODO IMPROVE
+    goto LShowHRPortalEmploymentPage;
+  end;
+
+  if (nonblank(mpath)) then begin
+    switch (node) begin
+      case "view":      ShowContractChanges(StringToLongInt(mpath));
+      case "edit":      ShowErrorPage("Not Implemented");
+      case "benefits":  ShowContractBenefits(StringToLongInt(mpath));
+    end;
+    goto LShowHRPortalEmploymentPage;
+  end;
+
+  WebOutBegin;
+  <div class="container">
+    <br>
+    <h1><?var(CUr.Name)?></h1>
+    <br>
+    <h4>Employment Contracts</h4>	
+    <br>
+    <table class="striped">
+      <thead>
+        <tr>
+          EndWebOut;
+          EmploymentRowHeader;
+          WebOutBegin;
+        </tr>
+      </thead>
+      <tbody>
+  EndWebOut;
+
+  foundf = true;
+  HRMCOr.Employee = CUr.Code;
+  while (LoopBackKey("EmployeeDateSerNr",HRMCOr,1,foundf)) begin
+    if (HRMCOr.Employee!=CUr.Code) then begin foundf = false; end;
+    if (foundf) then begin
+      testf = true;
+      if (HRMCOr.OKFlag!=1) then begin testf = false; end;
+      if (testf) then begin
+        cnt = cnt + 1;
+        GetContractChanges(HRMCOr,arrHRMCOCr,false);
+        ShowEmploymentRow(HRMCOr);
+      end;
+    end;
+  end;
+  if (cnt==0) then begin
+    WebOutBegin;    
+      <tr>
+        <td colspan="9">No employment contracts found</td>
+      </tr>
+    EndWebOut;
+  end;
+  WebOutBegin;
+      </tbody>
+    </table>
+  </div>
+  EndWebOut;
+LShowHRPortalEmploymentPage:;
+  return;
+end;
+
+procedure DoHandleDownloadRequest(string filename,LongInt recnr,string attachname)
+begin
+  Boolean foundf;
+  record RLinkVc RLr;
+  record Attach2Vc Attachr;
+  record HRMCOVc HRMCOr;
+  record HRMCOChangeVc HRMCOCr;
+  Integer i;
+
+  switch (filename) begin
+    case "HRMCOVc":
+      HRMCOr.SerNr = recnr;
+      if (ReadFirstMain(HRMCOr,1,true)==false) then begin goto LDoHandleDownloadRequest; end;
+      while (ReadRecordLink(HRMCOr,i,Attachr,RLr)) begin
+        if (Attachr.FileName==attachname) then begin goto LWebOut; end;
+        i = i + 1;
+      end;
+    case "HRMCOChangeVc":
+      HRMCOCr.SerNr = recnr;
+      if (ReadFirstMain(HRMCOCr,1,true)==false) then begin goto LDoHandleDownloadRequest; end;
+      while (ReadRecordLink(HRMCOCr,i,Attachr,RLr)) begin
+        if (Attachr.FileName==attachname) then begin goto LWebOut; end;
+        i = i + 1;
+      end;
+  end;
+
+  if (false) then begin //intentional
+LWebOut:;
+    WebSetContentDisposition("attachment;filename=" & Attachr.FileName);
+    WebSetContentType("application/" & GetFileExtension(Attachr.FileName));
+    WebOutAttachment(Attachr.SerNr);
+  end;
+LDoHandleDownloadRequest:;
+  return;
+end;
+
+procedure HandleDownloadRequest(string path)
+begin
+  string 255 node,mpath;
+  string 255 filename,attachname;
+  LongInt recnr;
+
+  mpath = path;
+  filename = removenextnode(mpath);
+  recnr = StringToLongInt(removenextnode(mpath));
+  attachname = Base64Decode(removenextnode(mpath));
+  
+  switch (filename) begin
+    case "HRMCOVc":       DoHandleDownloadRequest(filename,recnr,attachname);
+    case "HRMCOChangeVc": DoHandleDownloadRequest(filename,recnr,attachname);
+  end;
+LHandleDownloadRequest:;
+  return;
+end;
+
+global 
+procedure ShowHRPortalContentPage()
+begin
+  record CUVc CUr;
+  transaction string 255 gHRPortalPath;
+  string 255 mpath,node;
+
+  mpath = gHRPortalPath;
+  node = removenextnode(mpath);
+
+  switch (node) begin
+    // case "learning":    HRPortalShowPage(HRPb.PageApp);
+    case "employment":  ShowHRPortalEmploymentPage(mpath);
+    // case "leave":       HRPortalShowPage(HRPb.PageApp);
+    // case "expenses":    HRPortalShowPage(HRPb.PageApp);
+    case "personal":    ShowHRPortalPersonalPage;
+    case "download":    HandleDownloadRequest(mpath);
+  end;
+LShowHRPortalContentPage:;
+  return;
+end;
+
+global
+updating procedure HRPortalApp(record WebNGStructVc WSr,string path)
+begin
+  string 255 node,mpath,tstr;
+  record HRPortalBlock HRPb;
+  transaction string 255 gExtraHeadHTML;
+  transaction string 255 gHRPortalPath;
+
+  BlockLoad(HRPb);
+
+  if (HRPb.Active==0) then begin 
+    goto LHRPortalApp; 
+  end;
+
+  gExtraHeadHTML = HRPortalAppHead;
+
+  mpath = path;
+  gHRPortalPath = mpath;
+  node = removenextnode(mpath);
+
+  if (HRPortalUserLoggedIn==false and node!="login") then begin
+    RedirectToURL(FormatSimpleLink("/" & HRPortalRoot & "/login",true));
+  end;
+
+  switch (node) begin
+    case "login":
+      if (HRPortalUserLoggedIn) then begin
+        RedirectToURL(FormatSimpleLink("/" & HRPortalRoot & "/personal",true));
+      end else begin
+        HRPortalShowPage(HRPb.PageLogin);
+      end;
+    case "logout": 
+      WebLogOut;
+      RedirectToURL(FormatSimpleLink("/" & HRPortalRoot,true));
+    case "learning":    HRPortalShowPage(HRPb.PageApp);
+    case "employment":  HRPortalShowPage(HRPb.PageApp);
+    case "leave":       HRPortalShowPage(HRPb.PageApp);
+    case "expenses":    HRPortalShowPage(HRPb.PageApp);
+    case "personal":    HRPortalShowPage(HRPb.PageApp);
+    case "download":    HRPortalShowPage(HRPb.PageApp);
+    otherwise
+      if (HRPortalUserLoggedIn) then begin
+        RedirectToURL(FormatSimpleLink("/" & HRPortalRoot & "/personal",true));
+      end;
+  end;
+LHRPortalApp:;
+  return;
+end;

@@ -1,0 +1,178 @@
+
+procedure UpdateDueDate(var row VIBatchBlock VIBatchbrw)
+begin
+  record PDVc PDr;
+
+  if (blankdate(VIBatchbrw.InvDate)) then begin goto LUpdateDueDate; end;
+  if (blank(VIBatchbrw.PayDeal)) then begin goto LUpdateDueDate; end;
+  
+  PDr.Code = VIBatchbrw.PayDeal;
+  if (ReadFirstMain(PDr,1,true)) then begin
+    VIBatchbrw.DueDate = AddDay(VIBatchbrw.InvDate,PDr.pdays);
+  end;
+LUpdateDueDate:;
+  return;
+end;
+
+procedure VIBatchTClassVECodeEFAfterRow(var record VIBatchBlock VIBatchb,Integer rownr)
+begin
+  row VIBatchBlock VIBatchbrw;
+  record CUVc VEr;
+  record BaseCurBlock BCb;
+
+  if (rownr>=0) then begin
+    MatRowGet(VIBatchb,rownr,VIBatchbrw);
+    VEr.Code = VIBatchbrw.VECode;
+    ReadFirstMain(VEr,1,true);
+    VIBatchbrw.PayDeal = VEr.PayDeal;
+    if (blank(VEr.VECurncyCode)) then begin
+      BlockLoad(BCb);
+      VIBatchbrw.CurncyCode = BCb.BaseCur1;
+    end else begin 
+      VIBatchbrw.CurncyCode = VEr.VECurncyCode;
+    end;
+    MatRowPut(VIBatchb,rownr,VIBatchbrw);
+  end;
+  return;
+end;
+
+procedure VIBatchTClassPayDealEFAfterRow(var record VIBatchBlock VIBatchb,Integer rownr)
+begin
+  row VIBatchBlock VIBatchbrw;
+  record CUVc VEr;
+
+  if (rownr>=0) then begin
+    MatRowGet(VIBatchb,rownr,VIBatchbrw);
+    UpdateDueDate(VIBatchbrw);
+    MatRowPut(VIBatchb,rownr,VIBatchbrw);
+  end;
+  return;
+end;
+
+procedure VIBatchTClassInvDateEFAfterRow(var record VIBatchBlock VIBatchb,Integer rownr)
+begin
+  row VIBatchBlock VIBatchbrw;
+  record CUVc VEr;
+
+  if (rownr>=0) then begin
+    MatRowGet(VIBatchb,rownr,VIBatchbrw);
+    UpdateDueDate(VIBatchbrw);
+    VIBatchbrw.TransDate = VIBatchbrw.InvDate;
+    MatRowPut(VIBatchb,rownr,VIBatchbrw);
+  end;
+  return;
+end;
+
+procedure VIBatchTClassAccNumberEFAfterRow(var record VIBatchBlock VIBatchb,Integer rownr)
+begin
+  row VIBatchBlock VIBatchbrw;
+  record CUVc VEr;
+  record AccVc Accr;
+  record APAccBlock APAccb;
+  string 255 tstr;
+
+  if (rownr>=0) then begin
+    MatRowGet(VIBatchb,rownr,VIBatchbrw);
+    Accr.AccNumber = VIBatchbrw.AccNumber;
+    if (ReadFirstMain(Accr,1,true)) then begin
+      tstr = Accr.VATCode;
+    end;
+    if (blank(tstr)) then begin
+      VEr.Code = VIBatchbrw.VECode;
+      if (ReadFirstMain(VEr,1,true)) then begin
+        tstr = VEr.VEVATCode;
+        if (blank(tstr)) then begin
+          BlockLoad(APAccb);
+          switch (VEr.ExportFlag) begin
+            case 0: tstr = APAccb.VATCodeDom;
+            case 1: tstr = APAccb.VATCodeEU;
+            case 2: tstr = APAccb.VATCodeExp;
+            case 3: tstr = APAccb.VATCodeEU;
+            case 4: tstr = APAccb.VATCodeExp;
+          end;
+        end;
+      end;
+    end;
+    VIBatchbrw.VATCode = tstr;
+    MatRowPut(VIBatchb,rownr,VIBatchbrw);
+  end;
+  return;
+end;
+
+function Boolean VIBatchTClassVECodeEFAfter(Integer wn,Integer fn,Integer rownr,Boolean changedf)
+begin
+  Boolean res;
+  record VIBatchBlock VIBatchb;
+  
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,VIBatchb);
+    VIBatchTClassVECodeEFAfterRow(VIBatchb,rownr);
+    VIBatchTClassPayDealEFAfterRow(VIBatchb,rownr);
+    PutWindowRecord(wn,VIBatchb);
+  end;
+  VIBatchTClassVECodeEFAfter = res;
+  return;
+end;
+
+function Boolean VIBatchTClassPayDealEFAfter(Integer wn,Integer fn,Integer rownr,Boolean changedf)
+begin
+  Boolean res;
+  record VIBatchBlock VIBatchb;
+  
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,VIBatchb);
+    VIBatchTClassPayDealEFAfterRow(VIBatchb,rownr);
+    PutWindowRecord(wn,VIBatchb);
+  end;
+  VIBatchTClassPayDealEFAfter = res;
+  return;
+end;
+
+function Boolean VIBatchTClassInvDateEFAfter(Integer wn,Integer fn,Integer rownr,Boolean changedf)
+begin
+  Boolean res;
+  record VIBatchBlock VIBatchb;
+  
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,VIBatchb);
+    VIBatchTClassInvDateEFAfterRow(VIBatchb,rownr);
+    PutWindowRecord(wn,VIBatchb);
+  end;
+  VIBatchTClassInvDateEFAfter = res;
+  return;
+end;
+
+function Boolean VIBatchTClassAccNumberEFAfter(Integer wn,Integer fn,Integer rownr,Boolean changedf)
+begin
+  Boolean res;
+  record VIBatchBlock VIBatchb;
+  
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,VIBatchb);
+    VIBatchTClassAccNumberEFAfterRow(VIBatchb,rownr);
+    PutWindowRecord(wn,VIBatchb);
+  end;
+  VIBatchTClassAccNumberEFAfter = res;
+  return;
+end;
+
+global
+function Boolean VIBatchTClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  
+  res = false;
+  switch (fieldname) begin
+    case "VECode": res = VIBatchTClassVECodeEFAfter(wn,fn,rownr,changed!=0);
+    case "PayDeal": res = VIBatchTClassPayDealEFAfter(wn,fn,rownr,changed!=0);
+    case "InvDate": res = VIBatchTClassInvDateEFAfter(wn,fn,rownr,changed!=0);
+    case "AccNumber": res = VIBatchTClassAccNumberEFAfter(wn,fn,rownr,changed!=0);
+  end;
+
+  VIBatchTClassAfterEditField = res;
+  return;
+end;

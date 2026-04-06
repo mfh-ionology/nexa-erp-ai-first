@@ -1,0 +1,78 @@
+external updating function Integer RecordAction_raOrdDownPay(LongInt,val,val,var record IVVc,var string,integer);
+
+function Boolean OrderIsInvoiced(record ORVc ORr)
+begin
+  Boolean res;
+  Integer i,rwcnt;
+  val shipsum;
+  row ORVc ORrw;
+
+  res = true;
+  if (ORr.InvMark==0) then begin
+    res = false;
+  end else begin
+    if (ORr.InvMark==45) then begin
+      rwcnt = MatRowCnt(ORr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(ORr,i,ORrw);
+        shipsum = shipsum + ORrw.Shipd2;
+      end;
+      if (shipsum==0) then begin
+        res = false;
+      end;
+    end;
+  end;
+
+  OrderIsInvoiced = res;
+  return;
+end;
+
+global
+updating procedure DownPayFromORMn(record RcVc RepSpec)
+begin
+  record ORVc ORr;
+  Boolean found,testf;
+  LongInt fror,toor;
+  string 255 index,errstr,clientmsg;
+  LongInt err;
+  record IVVc IVr;
+  
+  fror = FirstInRange(RepSpec.f1,20);
+  toor = LastInRange(RepSpec.f1,20);
+  index = "OrdDate";
+  if (nonblank(RepSpec.f1)) then begin
+    index = "SerNr";
+    ORr.SerNr = fror;
+  end;
+  found = true;
+  while (LoopKey(index,ORr,1,found)) begin
+    if (nonblank(RepSpec.f1)) then begin
+      if (ORr.SerNr<fror or ORr.SerNr>toor) then begin
+        found = false;
+      end else begin
+        if (DateInRange(ORr.OrdDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin
+          found = false;
+        end;
+      end;
+    end;
+    if (found) then begin
+      testf = true;
+      if (ORr.Closed!=0) then begin
+        testf = false;
+      end;
+      if (OrderIsInvoiced(ORr)) then begin
+        testf = false;
+      end;
+      if (testf) then begin
+        err = RecordAction_raOrdDownPay(ORr.SerNr,blankval,blankval,IVr,errstr,0);
+        if (err!=1 and nonblank(errstr)) then begin
+          clientmsg = errstr;
+        end;
+      end;
+    end;
+  end;
+  if (nonblank(clientmsg)) then begin
+    MessageBox(0,clientmsg);
+  end;
+  return;
+end;

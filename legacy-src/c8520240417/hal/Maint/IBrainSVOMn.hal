@@ -1,0 +1,298 @@
+external function Boolean CheckIBrainConf(record IBrainSettingsBlock,var LongInt);
+external function string 255 IBrainAPIURL();
+external function string 255 IBrainRequestHeaders(record IBrainSettingsBlock);
+external function Boolean IBrainServiceOrderExists(string);
+external function Boolean IBrainCustExists(var record CUVc,string,string,string,string,string);
+external updating function Boolean CreateIBrainCust(var record CUVc,area);
+external procedure IBrainLog(string,area);
+external procedure ParseServiceOrderDateTime(var Date,var Time,string);
+external updating procedure StoreLastSVONr(string,LongInt);
+external function LongInt IBrainLastSVONr(string,var LongInt,var string);
+external function Boolean IBrainAASPExists(string,var LongInt);
+
+procedure RemoveNewLine(var string tstr)
+begin
+
+  if (Right(tstr,2)=="/n") then begin
+    tstr = Left(tstr,Len(tstr)-2);
+  end;
+
+  return;
+end;
+
+procedure AddInfoToSVO(var record SVOVc SVOr,string field,string info)
+begin
+  string 255 tstr,info2;
+
+  RemoveNewLine(info);
+
+  switch (field) begin
+    case "stateDevice":
+      if (Len(info)<=80) then begin
+        SVOr.Comment1 = info;
+      end else begin
+        SVOr.Comment1 = Left(info,100);
+        SVOr.Comment2 = Mid(info,100,100);
+        SVOr.Comment3 = Mid(info,200,100);
+        SVOr.Comment4 = Mid(info,300,100);
+      end;
+    case "problemInfo":
+      if (Len(info)<=80) then begin
+        SVOr.Note1 = info;
+      end else begin
+        SVOr.Note1 = Left(info,100);
+        SVOr.Note2 = Mid(info,100,100);
+        SVOr.Note3 = Mid(info,200,100);
+        SVOr.Note4 = Mid(info,300,100);
+      end;
+    case "importantInfo":
+      if (Len(info)<=80) then begin
+        if (blank(SVOr.Note1)) then begin
+          SVOr.Note1 = info;
+          goto L99;
+        end;
+        if (blank(SVOr.Note2)) then begin
+          SVOr.Note2 = info;
+          goto L99;
+        end;
+        if (blank(SVOr.Note3)) then begin
+          SVOr.Note3 = info;
+          goto L99;
+        end;
+        if (blank(SVOr.Note4)) then begin
+          SVOr.Note4 = info;
+          goto L99;
+        end;
+      end else begin
+        tstr = Left(info,80);
+        if (blank(SVOr.Note1)) then begin
+          SVOr.Note1 = tstr;
+          info2 = Right(tstr,Len(tstr)-80);
+        end;
+        tstr = Left(info2,80);
+        if (blank(SVOr.Note2)) then begin
+          SVOr.Note2 = tstr;
+          info2 = Right(tstr,Len(tstr)-80);
+        end;
+        tstr = Left(info2,80);
+        if (blank(SVOr.Note3)) then begin
+          SVOr.Note3 = tstr;
+          info2 = Right(tstr,Len(tstr)-80);
+        end;
+        tstr = Left(info2,80);
+        if (blank(SVOr.Note4)) then begin
+          SVOr.Note4 = tstr;
+          info2 = Right(tstr,Len(tstr)-80);
+        end;
+      end;
+L99:;
+  end;
+  return;
+end;
+
+global
+updating function Boolean IBrainCreateSO(area areply)
+begin
+  Boolean res;
+  record SVOVc SVOr;
+  row SVOVc SVOrw;
+  record CUVc CUr;
+  string 255 node,tstr;
+  string 255 custname,email,alternativeEmail,phone,additionalPhone;
+  string 255 itemname,itemconfig,serialnr,imeinr;
+  Date svodate;
+  Time svotime;
+  json js;
+
+  res = true;
+  js = ParseJSONArea(areply);
+  node = "client";
+  custname          = JSONGet(js,node & "/name");
+  email             = JSONGet(js,node & "/email");
+  alternativeEmail  = JSONGet(js,node & "/alternativeEmail");
+  phone             = JSONGet(js,node & "/phone");
+  additionalPhone   = JSONGet(js,node & "/additionalPhone");
+  if (IBrainCustExists(CUr,custname,email,alternativeEmail,phone,additionalPhone)==false) then begin
+    if (CreateIBrainCust(CUr,areply)==false) then begin
+      LogText(0,USetStr(43003) & " " & USetStr(43005));
+      res = false;
+      goto LIBrainCreateSO;
+    end;
+  end;
+
+  ParseServiceOrderDateTime(svodate,svotime,JSONGet(js,"creationDate"));
+
+  RecordNew(SVOr);
+  SVOr.CustCode = CUr.Code;
+  SVOr.Addr0 = custname;
+  SVOr.TransDate = svodate;
+  SVOr.CustOrdNr = JSONGet(js,"number");
+  SVOr.TechComment1 = JSONGet(js,"aasp");
+  SVOr.Addr1      = JSONGet(js,node & "/address");
+  SVOr.Addr3      = JSONGet(js,node & "/city");
+  SVOr.InvAddr3   = JSONGet(js,node & "/countryId");
+  SVOr.InvAddr4   = JSONGet(js,node & "/zipCode");
+
+  node = "device";
+  AddInfoToSVO(SVOr,"stateDevice",JSONGet(js,node & "/stateDevice"));
+  AddInfoToSVO(SVOr,"problemInfo",JSONGet(js,node & "/problemInfo"));
+  AddInfoToSVO(SVOr,"importantInfo",JSONGet(js,node & "/importantInfo"));
+  
+  ClearRow(SVOr,SVOrw,1);
+  SVOrw.Quant = 1;
+  SVOrw.SerialNr = JSONGet(js,node & "/serialNumber");
+  SVOrw.Spec = JSONGet(js,node & "/productDescription");
+  MatRowPut(SVOr,MatRowCnt(SVOr),SVOrw);
+
+  ClearRow(SVOr,SVOrw,1);
+  SVOrw.Spec = JSONGet(js,node & "/configDescription");
+  MatRowPut(SVOr,MatRowCnt(SVOr),SVOrw);
+
+  SVOr.SerNr = NextSerNr("SVOVc",CurrentDate,-1,false,"");
+  res = RecordStore(SVOr,false);
+LIBrainCreateSO:;
+  IBrainCreateSO = res;
+  return;
+end;
+
+procedure ParseGetServiceOrderFromIBrainReply(area areply,var LongInt err,var string errmsg,var LongInt orderno,string suffix,var Boolean foundf)
+begin
+  json js;
+  string 255 order,code;
+  LongInt pos;
+  Boolean res;
+
+  js = ParseJSONArea(areply);
+  if (JSONNodeExists(js,"message")) then begin
+    code = JSONGet(js,"code");
+    if (code=="C701") then begin
+      if (foundf) then begin
+        err = 43009;
+      end else begin
+        err = 43003;
+        errmsg = USetStr(43011);
+      end;
+    end else begin
+      errmsg = JSONGet(js,"message");
+      if (nonblank(JSONGet(js,"code"))) then begin
+        errmsg = errmsg & " (" & code & ")";
+      end;
+      err = 43003;
+    end;
+    goto LParseGetServiceOrderFromIBrainReply;
+  end;
+
+  order = JSONGet(js,"number");
+  if (blank(order)) then begin goto LParseGetServiceOrderFromIBrainReply; end;
+  if (IBrainServiceOrderExists(order)) then begin 
+    LogText(0,USetStr(43003) & " - " & USetStr(43004) & "(" & order & ")");
+    qupdating.StoreLastSVONr(suffix,orderno);
+    goto LParseGetServiceOrderFromIBrainReply; 
+  end;
+
+  if (qupdating.IBrainCreateSO(areply)==false) then begin
+    LogText(0,USetStr(43003) & " " & USetStr(43006));
+    goto LParseGetServiceOrderFromIBrainReply;
+  end else begin
+    foundf = true;
+  end;
+
+  qupdating.StoreLastSVONr(suffix,orderno);
+
+LParseGetServiceOrderFromIBrainReply:;
+  return;
+end;
+
+procedure GetServiceOrderFromIBrain(record IBrainSettingsBlock IBrainb,LongInt orderno,string tsersuffix,var LongInt err,var string errmsg,var Boolean foundf)
+begin
+  string 255 path,headers;
+  Boolean res;
+  area areq,areply,aheaders,apath;
+
+  path = "/order/status?order=" & orderno & tsersuffix;
+  headers = IBrainRequestHeaders(IBrainb);
+  SetWebHeaders(headers);
+
+  AddStringToArea(headers,aheaders);
+  IBrainLog("GetServiceOrderFromIBrain_headers_req.txt",aheaders);
+  AddStringToArea(IBrainAPIURL & path,apath);
+  IBrainLog("GetServiceOrderFromIBrain_path_req.txt",apath);
+
+  res = SendWebRequest(IBrainAPIURL,443,-1,true,"GET",path,"","",false,areq,areply,30); 
+
+  if (res) then begin
+    IBrainLog("GetServiceOrderFromIBrain_reply.txt",areply);
+    ParseGetServiceOrderFromIBrainReply(areply,err,errmsg,orderno,tsersuffix,foundf);
+  end else begin
+    MessageBox(21484,"");
+  end;
+LGetServiceOrderFromIBrain:;
+  return;
+end;
+
+procedure DoIBrainSVO(record RcVc RepSpec)
+begin
+  LongInt err,i;
+  record IBrainSettingsBlock IBrainb;
+  string 255 errmsg,tsersuffix;
+  LongInt tserstart;
+  Boolean loopf,foundf;
+
+  err = 0;
+  if (blank(RepSpec.f1)) then begin 
+    MessageBox(1058,"");
+    goto LDoIBrainSVOEnd;
+  end;
+  BlockLoad(IBrainb);
+  if (CheckIBrainConf(IBrainb,err)==false) then begin goto LDoIBrainSVO; end;
+  if (IBrainAASPExists(RepSpec.f1,err)==false) then begin goto LDoIBrainSVO; end;
+  
+  i = IBrainLastSVONr(RepSpec.f1,tserstart,tsersuffix);
+  if (i<1) then begin i = tserstart; end;
+  loopf = true;
+  foundf = false;
+  while (loopf) begin
+    i = i + 1;
+    GetServiceOrderFromIBrain(IBrainb,i,tsersuffix,err,errmsg,foundf);
+    if (err!=0) then begin 
+      loopf = false; 
+      goto LDoIBrainSVO; 
+    end;
+  end;
+
+LDoIBrainSVO:;
+  if (err!=0) then begin
+    if (err==43009) then begin
+      CheckmarkBox(err,": " & errmsg);
+      goto LDoIBrainSVOEnd;
+    end;
+    if (nonblank(errmsg)) then begin
+      MessageBox(err,": " & errmsg);
+    end else begin
+      MessageBox(err,"");
+    end;
+  end;
+LDoIBrainSVOEnd:;
+  return;
+end;
+
+global
+procedure DoIBrainSVOMn(record RcVc RepSpec)
+begin
+  DoIBrainSVO(RepSpec);
+  return;
+end;
+
+global
+updating procedure IBrainSVOMn(record RcVc RepSpec)
+begin
+  DoIBrainSVOMn(RepSpec);
+  return;
+end;
+
+global
+procedure IBrainSVONSMn(record RcVc RepSpec)
+begin
+  DoIBrainSVOMn(RepSpec);
+  return;
+end;

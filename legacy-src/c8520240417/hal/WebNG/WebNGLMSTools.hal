@@ -1,0 +1,258 @@
+external function Boolean FindTheUser(var record UserVc);
+external function Boolean SetInSet2(string,string);
+external function string 255 FormatSimpleLink(string,boolean);
+external procedure RedirectToURL(string);
+external function Boolean DateTimeInRange(Date,Time,Date,Time,Date,Time);
+
+global
+function Boolean LMSUserLoggedIn()
+begin
+  Boolean res;
+
+  if (nonblank(CurrentCust) or nonblank(CurrentUser)) then begin
+    res = true;
+  end;
+
+  LMSUserLoggedIn = res;
+  return;
+end;
+
+global
+function string 255 LMSUserName()
+begin
+  record CUVc CUr;
+  record UserVc Userr;
+  string 255 res;
+  
+  CUr.Code = CurrentCust;
+  if (ReadFirstMain(CUr,1,true)) then begin
+    res = CUr.Name;
+  end else begin
+    Userr.Code = CurrentUser;
+    if (FindTheUser(Userr)) then begin
+      res = Userr.Name;
+    end;
+  end;
+    
+  LMSUserName = res;
+  return;
+end;
+
+global
+function Boolean IsLMSAdmin()
+begin
+  Boolean res;
+
+  if (nonblank(CurrentUser)) then begin
+    res = UserCanAction("LMSWebAdmin",false);
+  end;
+  
+  IsLMSAdmin = res;
+  return;
+end;
+
+global
+function Boolean IsCourseTeacher(LongInt course)
+begin
+  record Course2Vc Courser;
+  Boolean res;
+
+  if (nonblank(CurrentCust)) then begin
+    Courser.SerNr = course;
+    if (ReadFirstMain(Courser,1,true)) then begin
+      res = SetInSet2(CurrentCust,Courser.Teachers);
+    end;
+  end;
+
+  IsCourseTeacher = res;
+  return;
+end;
+
+global 
+function Boolean IsTeacher()
+begin
+  Boolean res;
+  record CUVc CUr;
+
+  CUr.Code = CurrentCust;
+  if (ReadFirstMain(CUr,1,true)) then begin
+    if (CUr.TeacherType==1) then begin
+      res = true;
+    end;
+  end;
+
+  IsTeacher = res;
+  return;
+end;
+
+global
+function Boolean IsEnrolledStudent(LongInt course,var Boolean availablef)
+begin
+  Boolean res,foundf,testf;
+  record StudentCourseVc StudentCourser;
+
+  if (IsLMSAdmin or IsCourseTeacher(course)) then begin
+    res = true;
+    availablef = true;
+    goto LIsEnrolledStudent;
+  end;
+
+  foundf = true;
+  StudentCourser.Course = course;
+  StudentCourser.Student = CurrentCust;
+  StudentCourser.Approved = 1;
+  StudentCourser.StartDate = CurrentDate;
+  while (LoopBackKey("Course",StudentCourser,4,foundf)) begin
+    if (StudentCourser.Course!=course) then begin foundf = false; end;
+    if (StudentCourser.Student!=CurrentCust) then begin foundf = false; end;
+    if (foundf) then begin
+      if (StudentCourser.Approved==1) then begin
+        res = true;
+        availablef = true;
+        if (nonblankdate(StudentCourser.StartDate) and nonblankdate(StudentCourser.EndDate)) then begin
+          if (DateTimeInRange(CurrentDate,CurrentTime,StudentCourser.StartDate,StudentCourser.StartTime,StudentCourser.EndDate,StudentCourser.EndTime)==false) then begin
+            availablef = false;
+          end;
+        end;
+      end;
+    end;
+  end;
+LIsEnrolledStudent:;
+  IsEnrolledStudent = res;
+  return;
+end;
+
+global 
+function Boolean HasCourseAccess(LongInt course,string node,var Boolean availablef)
+begin
+  Boolean res;
+  record Course2Vc Courser;
+
+  Courser.SerNr = course;
+  if (ReadFirstMain(Courser,1,true)) then begin
+    if (Courser.Terminated==1) then begin
+      res = false;
+      availablef = false;
+      goto LHasCourseAccess;
+    end;
+    if (IsLMSAdmin) then begin
+      res = true;
+      availablef = true;
+      goto LHasCourseAccess;
+    end;
+    if (SetInSet2(CurrentCust,Courser.Teachers)) then begin 
+      res = true; 
+      availablef = true;
+      goto LHasCourseAccess;
+    end;
+    if (DateInRange(CurrentDate,Courser.StartDate,Courser.EndDate)==false) then begin 
+      res = false; 
+      availablef = false;
+      goto LHasCourseAccess;
+    end;
+    if (IsEnrolledStudent(Courser.SerNr,availablef)==false and Courser.EnableSelfEnrol==1 and node=="register") then begin
+      res = true;
+      availablef = true;
+      goto LHasCourseAccess;
+    end;
+    if (Courser.EnableSelfEnrol==0 and Courser.AllowApplications==1 and node=="register") then begin
+      res = true;
+      availablef = true;
+      goto LHasCourseAccess;
+    end;
+    if (IsEnrolledStudent(Courser.SerNr,availablef)) then begin
+      res = true;
+      goto LHasCourseAccess;
+    end;
+  end else begin
+    res = false;
+  end;
+LHasCourseAccess:;
+  HasCourseAccess = res;
+  return;
+end;
+
+global
+procedure LMS_RedirectToStartPage()
+begin
+  RedirectToURL(FormatSimpleLink("/lms/courses",true));
+  return;
+end;
+
+global
+updating procedure RefreshTopicSortOrder(LongInt course)
+begin
+  record WebNGLMSTopicVc oldWebNGLMSTopicr,WebNGLMSTopicr;
+  Integer i;
+  Boolean foundf;
+  vector Integer vTopicSortOrder;
+  array string 255 arrTopicSortOrder;
+
+  foundf = true;
+  WebNGLMSTopicr.Course = course;
+  WebNGLMSTopicr.SortOrder = 0;
+  i = 1;
+  while (LoopKey("Course",WebNGLMSTopicr,1,foundf)) begin
+    if (WebNGLMSTopicr.Course!=course) then begin foundf = false; end;
+    if (foundf) then begin
+      vTopicSortOrder[WebNGLMSTopicr.SerNr] = i;
+      i = i + 1;
+    end;
+  end;
+  
+  GetVectorTags(vTopicSortOrder,arrTopicSortOrder);
+  for (i=0;i<arrTopicSortOrder.length;i=i+1) begin
+    WebNGLMSTopicr.SerNr = arrTopicSortOrder[i];
+    if (ReadFirstMain(WebNGLMSTopicr,1,true)) then begin
+      RecordCopy(oldWebNGLMSTopicr,WebNGLMSTopicr);
+      WebNGLMSTopicr.SortOrder = vTopicSortOrder[arrTopicSortOrder[i]];
+      RecordUpdate(oldWebNGLMSTopicr,WebNGLMSTopicr,true);
+    end;
+  end;
+  return;
+end;
+
+global
+function Boolean StudentPendingApproval(string student,LongInt course)
+begin
+  Boolean res;
+  record StudentCourseVc StudentCourser;
+
+
+  StudentCourser.Course = course;
+  StudentCourser.Student = student;
+  StudentCourser.Approved = 0;
+  if (ReadFirstKey("Course",StudentCourser,3,true)) then begin
+    res = true;
+  end;
+
+  StudentPendingApproval = res;
+  return;
+end;
+
+global
+procedure WebOutClass(string classes,string extraclass)
+begin
+  string 255 res;
+
+  if (nonblank(classes)) then begin
+    res = classes & " " & extraclass;
+  end else begin
+    res = extraclass;
+  end;
+
+  if (nonblank(res)) then begin
+    WebOutString(" class='" & res & "' ");
+  end;
+
+  return;
+end;
+
+global
+procedure WebOutImage(string src,string alt,string classes,string extraclass)
+begin
+  WebOutString("<img src='" & src & "' alt='" & alt & "' onerror=\"if(this.src !== '/images/svg/unknown.svg') this.src='/images/svg/unknown.svg';\"");
+  WebOutClass(classes,extraclass);
+  WebOutString(" />");
+  return;
+end;

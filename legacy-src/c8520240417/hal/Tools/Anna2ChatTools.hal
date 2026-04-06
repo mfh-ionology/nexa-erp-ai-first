@@ -1,0 +1,2122 @@
+// ## move R- and W-actions to separate files
+
+external procedure PasteFromSysList2(Integer);
+external procedure AIChat_AddMessage(var array string,var array string,string,string);
+external procedure AIChat_StoreWn(LongInt,array string,array string,Boolean,Boolean,Boolean);
+external procedure AIChat_StoreCbctx(string,array string,array string,Boolean,Boolean,Boolean);
+external procedure AIChat_LoadWn(LongInt,var array string,var array string);
+external procedure AIChat_LoadCbctx(string,var array string,var array string);
+
+external function Boolean ORVc_PasteArtCode(var record ORVc,Integer,var string,var string,Boolean);
+external function Boolean PasteCustInOrder(var record ORVc,string,string,var string,var string);
+external updating function Integer CreateMailFromORD(record ORVc,var record MailVc,var string,string);
+
+external function Boolean QTVc_PasteArtCode(var record QTVc,Integer,var string,var string);
+external function Boolean PasteCustInQT(var record QTVc,string,string,var string,Boolean);
+external updating function Integer CreateMailFromQTD(record QTVc,var record MailVc,var string,string);
+
+external function Boolean FindCustomerAndInvoice(string,Longint,var Integer,var val,var val,var string);
+external updating function Integer CreateMailFromIVD(record IVVc,var record MailVc,var string,Boolean,string);
+
+external procedure FindLastPayments(string,Integer,date,var array date,var array val,var array string);
+external function Boolean FindPlannedDeliveryDate(string,LongInt,var date);
+external procedure FindStockLevelOfItem(string,var val);
+
+external function string 255 SayValAsCurrency(val,string);
+external function string 255 SayAsDate(date);
+external function string 255 SayNumberAsCardinal(string);
+
+external function string 255 CR();
+external function string 255 LF();
+//external function string 255 NL();
+
+external function string 255 TimeStampStr();
+
+external procedure CloudTextToSpeech(string,string,string);
+
+external procedure Anna2Chat_OpenDebugWindow(string,Integer,record OpenAILogVc);
+
+function string 255 NL()
+begin
+  NL = CR & LF;
+end;
+
+global
+procedure Anna2_AddMessage(var record Anna2ContextVc Ctxr,
+                           var array string roles,
+                           var array string messages,
+                           string role,
+                           string amessage)
+begin
+  row Anna2ContextVc Ctxrw,Ctx2rw;
+  string 255 message;
+  LongInt rwcnt,rwn;
+  
+  message = Trim(amessage);
+  if (message=="") then begin
+    goto LAnna2_AddMessage_out;
+  end;
+  
+  AIChat_AddMessage(roles,messages,role,message); // HTMLEncodeText(message)
+  
+  Ctxrw.Object = "role:" & role;
+  RemoveParenExprFromString(message,"[[","]]");
+  RemoveParenExprFromString(message,"[","]");
+  
+  Ctxrw.Value = Base64Encode(messages[messages.length - 1]); // message
+  
+  rwcnt = MatRowCnt(Ctxr);
+  for (rwn = rwcnt - 1; rwn>=0; rwn = rwn - 1) begin
+    MatRowGet(Ctxr,MatRowCnt(Ctxr),Ctx2rw);
+    if (Ctx2rw.Object==Ctxrw.Object) then begin
+      MatRowPut(Ctxr,rwn,Ctxrw);
+      goto LAnna2_AddMessage_out;
+    end;
+    if (left(Ctx2rw.Object,5)=="role:") then begin
+      goto LAnna2_AddMessage_add;
+    end;
+  end;
+  
+LAnna2_AddMessage_add:;
+  MatRowPut(Ctxr,MatRowCnt(Ctxr),Ctxrw);
+LAnna2_AddMessage_out:;
+end;
+
+global
+function LongInt Anna2StartNode()
+begin
+  Anna2StartNode = 1;
+end;
+
+global
+procedure Anna2Chat_DebugToWindow(string wclass,Integer multif,string debugmessage,Integer DebugType,var string resp_message)
+begin
+  record ACMELogVc ALogr;
+  
+  switch (DebugType) begin
+    case kDebugNone:
+      // nothing
+    case kDebugInline:
+      if (resp_message<>"") then begin
+        resp_message = resp_message & NL & NL;
+      end;
+      
+      resp_message = resp_message & "[ " & NL & debugmessage & NL & "]";
+    case kDebugWindow:
+      if (ServingClient or GuiType<>kGuiNone) then begin
+        SetTextField(ALogr,debugmessage);
+        ClientRemoteAsync.Anna2Chat_OpenDebugWindow(wclass,multif,ALogr);
+      end else begin
+      end;
+  end;
+  
+  //LogText(0,"DebugToWindow" & NL & debugmessage & NL);
+end;
+
+global
+procedure PushNode(var array record Anna2ChatNodeVc nodestack,record Anna2ChatNodeVc Noder)
+begin
+  Noder.TryCount = 0;
+  nodestack[nodestack.length] = Noder;
+end;
+
+global
+procedure PushNodeCode(var array record Anna2ChatNodeVc nodestack,string nodeser)
+begin
+  record Anna2ChatNodeVc Noder;
+  record Anna2SettingsBlock A2Sb;
+  
+  BlockLoad(A2Sb);
+
+  Noder.SerNr = StringToLongInt(nodeser);
+  ReadFirstMain(Noder,1,true);
+  
+  if (A2Sb.AnnaDebugLog<>0) then begin
+    LogText(0,"PushNodeCode " & nodeser & " found " & Noder.SerNr);
+  end;
+  
+  PushNode(nodestack,Noder);
+end;
+
+procedure PopNode(var array record Anna2ChatNodeVc nodestack)
+begin
+  SetArrayLength(nodestack,nodestack.length - 1);
+end;
+
+procedure DebugScores(array record ScoredCodeVc SCarr,string extra,var string resp_message) // var string response
+begin
+  record ScoredCodeVc SCr;
+  string 255 paramvalue,debugtext;
+  LongInt i;
+  record Anna2SettingsBlock A2Sb;
+  
+  BlockLoad(A2Sb);
+
+  debugtext = debugtext & extra & ": [" & NL;
+  for (i = 0; i<SCarr.length; i = i + 1) begin
+    SCr = SCarr[i];
+    debugtext = debugtext & SCr.TagCode & " " & SCr.Score & " '" & SCr.ExampleString & "'" & NL;
+  end;
+  debugtext = debugtext & "]" & NL;
+  
+  Anna2Chat_DebugToWindow("Anna2Chat_ScoresWClass",0,debugtext,A2Sb.CtxDebug,resp_message);
+
+  LogText(0,debugtext);
+end;
+
+global
+function Boolean FindItemFromString(string useritemdesc,var record INVc INr)
+begin
+  Boolean res;
+  array record ScoredCodeVc SCarr;
+  record ScoredCodeVc SCr;
+  string 255 dummy_resp_message;
+  record Anna2SettingsBlock A2Sb;
+  
+  BlockLoad(A2Sb);
+
+  res = false;
+  
+  AI_ScoreTaggedCodes(useritemdesc,"INVc",SCarr); //0.8
+  
+  DebugScores(SCarr,"Item Scores",dummy_resp_message);
+  
+  if (SCarr.length>0) then begin
+    SCr = SCarr[0];
+    INr.Code = SCr.TagCode;
+    if (ReadFirstKey("Code",INr,1,true)) then begin
+      res = true;
+      goto LFindItemFromString_out;
+    end;
+  end;
+  
+  /*
+  INr.Code = item;
+  if (ReadFirstKey("Code",INr,1,true)) then begin
+    res = true;
+    goto LFindItemFromString_out;
+  end;
+
+  INr.Name = item;
+  if (ReadFirstKey("ActName",INr,1,true)) then begin
+    res = true;
+    goto LFindItemFromString_out;
+  end;
+
+  //try removing trailing "s" for miltiple items
+  INr.Name = Left(item,(len(item)-1));
+  if (ReadFirstKey("ActName",INr,1,true)) then begin
+    res = true;
+    goto LFindItemFromString_out;
+  end;
+  */
+  
+  res = false;
+  
+LFindItemFromString_out:;
+  if (A2Sb.AnnaDebugLog<>0) then begin
+    LogText(0,"FindItemFromString item '" & useritemdesc & "' -> Code '" & INr.Code & "'");
+  end;
+  
+  FindItemFromString = res;
+end;
+
+procedure ValidateItem(var string itemstring,var string incode)
+begin
+  record INVc INr;
+  
+  if (FindItemFromString(itemstring,INr)) then begin
+    incode = INr.Code;
+  end else begin
+    itemstring = "";
+  end;
+end;
+
+procedure ValidateNumber(var string numstr,LongInt from,LongInt to,string defaultstr)
+begin
+  LongInt t;
+  
+  t = StringToLongInt(numstr);
+  if (t<from or to<t) then begin
+    numstr = defaultstr;
+  end else begin
+    numstr = t;
+  end;
+end;
+
+procedure ValidateQuantity(var string qtystr,LongInt from,LongInt to)
+begin
+  ValidateNumber(qtystr,from,to,"");
+end;
+
+procedure ValidateORVc(var string ornr,var string cucode)
+begin
+  record ORVc ORr;
+  
+  ORr.SerNr = ornr;
+  if (ReadFirstMain(ORr,1,true)==false) then begin
+    ornr = "";
+  end else begin
+    if ((cucode<>"") and (cucode<>ORr.CustCode)) then begin
+      ornr = "";
+    end;
+  end;
+end;
+
+procedure ValidateQTVc(var string qtnr,var string cucode)
+begin
+  record QTVc QTr;
+  
+  QTr.SerNr = qtnr;
+  if (ReadFirstMain(QTr,1,true)==false) then begin
+    qtnr = "";
+  end else begin
+    if ((cucode<>"") and (cucode<>QTr.CustCode)) then begin
+      qtnr = "";
+    end;
+  end;
+end;
+
+procedure ValidateIVVc(var string ivnr,var string cucode)
+begin
+  record IVVc IVr;
+  
+  IVr.SerNr = ivnr;
+  if (ReadFirstMain(IVr,1,true)==false) then begin
+    ivnr = "";
+  end else begin
+    if ((cucode<>"") and (cucode<>IVr.CustCode)) then begin
+      ivnr = "";
+    end;
+  end;
+end;
+
+procedure ValidateCUVc(var string cucode)
+begin
+  record CUVc CUr;
+  
+  CUr.Code = cucode;
+  if (ReadFirstMain(CUr,1,true)==false) then begin
+    cucode = "";
+  end;
+end;
+
+procedure EnsureParameter(var record Anna2ContextVc Ctxr,string parameter,string paramid,string paramq,var string response)
+begin
+  if (parameter=="") then begin
+    if (Ctxr.Status=="processing") then begin
+      Ctxr.Status = "waiting";
+      response = response & paramq;
+    end;
+  end;
+end;
+
+function string 255 LlamaModel()
+begin
+  string 255 res;
+  
+  AI_GetModel("llama-2-7b-chat/ggml-model-q4_0.gguf",res);
+  LlamaModel = res;
+end;
+
+function Boolean FindParameterInNode(record Anna2ChatNodeVc Noder,string paramid,var string paramval)
+begin
+  Boolean res;
+  row Anna2ChatNodeVc Noderw;
+  LongInt rwn,rwcnt;
+  
+  rwcnt = MatRowCnt(Noder);
+  
+  for (rwn = 0; rwn<rwcnt; rwn = rwn + 1) begin
+    MatRowGet(Noder,rwn,Noderw);
+    
+    if (Noderw.ParameterID==paramid) then begin
+      paramval = Noderw.ParameterValue;
+      res = true;
+      goto FindParameterInNode_out;
+    end;
+  end;
+  
+FindParameterInNode_out:;
+  FindParameterInNode = res;
+end;
+
+procedure StoreParameterInNode(record Anna2ChatNodeVc Noder,string paramid,string paramval)
+begin
+  row Anna2ChatNodeVc Noderw;
+  LongInt rwn,rwcnt;
+  
+  rwcnt = MatRowCnt(Noder);
+  
+  for (rwn = 0; rwn<rwcnt; rwn = rwn + 1) begin
+    MatRowGet(Noder,rwn,Noderw);
+    
+    if (Noderw.ParameterID==paramid) then begin
+      Noderw.ParameterValue = paramval;
+      MatRowPut(Noder,rwn,Noderw);
+      goto StoreParameterInNode_out;
+    end;
+  end;
+  
+  ClearRow(Noder,Noderw,1);
+  Noderw.ParameterID = paramid;
+  Noderw.ParameterValue = paramval;
+  MatRowPut(Noder,rwcnt,Noderw);
+  
+StoreParameterInNode_out:;
+end;
+
+function Boolean FindParameterInContext(record Anna2ContextVc Ctxr,string paramid,var string paramval)
+begin
+  Boolean res;
+  row Anna2ContextVc Ctxrw;
+  LongInt rwn,rwcnt;
+  
+  rwcnt = MatRowCnt(Ctxr);
+  
+  for (rwn = 0; rwn<rwcnt; rwn = rwn + 1) begin
+    MatRowGet(Ctxr,rwn,Ctxrw);
+    
+    if (Ctxrw.Object=="parameter:" & paramid) then begin
+      paramval = Base64Decode(Ctxrw.Value);
+      res = true;
+      goto FindParameterInContext_out;
+    end;
+  end;
+  
+FindParameterInContext_out:;
+  FindParameterInContext = res;
+end;
+
+procedure StoreParameterInContext(var record Anna2ContextVc Ctxr,string paramid,string paramval)
+begin
+  row Anna2ContextVc Ctxrw;
+  LongInt rwn,rwcnt;
+  
+  rwcnt = MatRowCnt(Ctxr);
+  
+  for (rwn = 0; rwn<rwcnt; rwn = rwn + 1) begin
+    MatRowGet(Ctxr,rwn,Ctxrw);
+    
+    if (Ctxrw.Object=="parameter:" & paramid) then begin
+      Ctxrw.Value = Base64Encode(paramval);
+      MatRowPut(Ctxr,rwn,Ctxrw);
+      goto StoreParameterInContext_out;
+    end;
+  end;
+  
+  ClearRow(Ctxr,Ctxrw,1);
+  Ctxrw.Object = "parameter:" & paramid;
+  Ctxrw.Value = Base64Encode(paramval);
+  MatRowPut(Ctxr,rwcnt,Ctxrw);
+  
+StoreParameterInContext_out:;
+end;
+
+function string 255 FindParameterInLastMessages(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,string paramid,string paramdesc,var string response)
+begin
+  string 255 res;
+  string 255 instruction;
+  string 255 message,conversation,llama_json;
+  row Anna2ContextVc Ctxrw;
+  LongInt pos,rwcnt,rwn;
+  json js;
+  string 255 logged_chatmessage,paramvalue;
+  Integer addedcnt;
+  record Anna2ChatNodeVc Noder;
+  string 255 debugtext;
+  record Anna2SettingsBlock A2Sb;
+  
+  BlockLoad(A2Sb);
+  
+  Noder = nodestack[nodestack.length - 1];
+  
+  rwcnt = MatRowCnt(Ctxr);
+  addedcnt = 0;
+  
+  for (rwn = rwcnt - 1;
+       (rwn>=0) and (addedcnt<Noder.TryCount);
+       rwn = rwn - 1) begin
+    MatRowGet(Ctxr,rwn,Ctxrw);
+    
+    if (left(Ctxrw.Object,5)=="role:") then begin
+      logged_chatmessage = Base64Decode(Ctxrw.Value);
+      RemoveParenExprFromString(logged_chatmessage,"[[","]]");
+      RemoveParenExprFromString(logged_chatmessage,"[","]");
+      logged_chatmessage = Trim(logged_chatmessage);
+      
+      if (conversation<>"") then begin
+        conversation = NL & NL & conversation;
+      end;
+      
+      conversation = "[" & right(Ctxrw.Object,len(Ctxrw.Object) - 5) & "]" & NL & logged_chatmessage & conversation;
+      
+      addedcnt = addedcnt + 1;
+    end;
+  end;
+  
+  // instruction = "### ...";
+  // ## only run LLM_Init once and store LLM-key in context
+  instruction = "";
+  
+  LLM_Init(LlamaModel,instruction,"grammar-json.gbnf");
+  
+  message = ReadFileToString("LLM_FindParameterInMessage.txt");
+  
+  if (message=="") then begin
+  /*
+### Instruction:
+
+You are a talkbot called 'Anna', an AI expertly trained to assist in HansaWorld's ERP system, specializing in accurately extracting key data elements such as item names, item codes, customer codes, quantities, numbers, and dates from user inputs. Your capabilities include precise Data Extraction (efficiently identify and extract specific values and entities from user phrases, ensuring high accuracy in data retrieval), Contextual Understanding (Understand the context in which these values are mentioned to accurately interpret their significance within the ERP framework), Memory and Reference (Remember key values and entities during a user session for relevant follow-up queries, enhancing the continuity and relevance of interactions), Handling Complex Queries (Skillfully manage complex phrases and multiple data points within a single query, ensuring all relevant information is captured and processed). Your role is pivotal in streamlining data handling and improving the efficiency of interactions with the ERP system. Aim for precision and contextual understanding in all data extraction tasks. It is very important for us that you do it perfectly and that you do not make up or change values.
+Analyze the below messages and answer only with a json object with the key "%param-id%".
+The [value] of "%param-id%" must be %param-desc%.
+Only use a value if the user is clear and you are sure of the user's intent, otherwise use the [value] "unknown"
+
+### Conversation:
+
+%user-conversation%
+
+### Instruction:
+1. Answer with a json object in the format {"%param-id%":"[value]"}
+2. Remember to use the [value] "unknown" if it is not clear what the user wants
+3. Do not make things up
+4. Only provide the JSON object
+
+### JSON result:
+    */
+    
+    message = message & "### Instruction:" & NL;
+    message = message & "You are a helpful AI called Anna" & NL;
+    message = message & "Analyze the below messages and answer only with a json object with the key ""%param-id%""." & NL;
+    message = message & "The [value] of ""%param-id%"" must be %param-desc%." & NL;
+    message = message & "Only use a value if the user is clear and you are sure of the user's intent, otherwise use the [value] ""unknown""" & NL & NL;
+    message = message & "### Conversation:" & NL & NL;
+    message = message & "%user-conversation%" & NL & NL;
+    message = message & "### Instruction:" & NL;
+    message = message & "1. Answer with a json object in the format {""%param-id%"":""[value]""}" & NL;
+    message = message & "2. Remember to use the [value] ""unknown"" if it is not clear what the user wants" & NL;
+    message = message & "3. Do not make things up" & NL;
+    message = message & "4. Only provide the JSON object" & NL & NL;
+    message = message & "### JSON result:" & NL & NL;
+  end;
+  
+  message =  ReplaceStringWithString(message,"%param-id%",paramid);
+  message =  ReplaceStringWithString(message,"%param-desc%",paramdesc);
+  message =  ReplaceStringWithString(message,"%user-conversation%",conversation);
+    
+  llama_json = LLM_Process(message);
+  
+  LLM_Close;
+    
+  debugtext = debugtext & "[[to LLM [ " & NL & message & NL & "]" & NL;
+  debugtext = debugtext & "from LLM [ " & NL & llama_json & NL & "] ]]" & NL;
+
+  Anna2Chat_DebugToWindow("Anna2Chat_LLMWClass",0,debugtext,A2Sb.LLMDebug,response);
+  
+  pos = InString(llama_json,"{");
+  if (pos<0) then begin goto LNoJSON; end;
+  llama_json = right(llama_json,len(llama_json) - pos + 1);
+  
+  pos = InString(llama_json,"}"); // should be last '}'
+  if (pos<0) then begin goto LNoJSON; end;
+  llama_json = left(llama_json,pos);
+  
+  //LogText(0,"LLAMA JSON " & llama_json);
+  
+  js = ParseJSONString(llama_json);
+  res = JSONGetStrict(js,paramid);
+  if (res=="") then begin
+    res = JSONGetStrict(js,paramid & "/[0]");
+  end;
+  
+LNoJSON:;
+  FindParameterInLastMessages = res;
+end;
+
+function string 255 FindParameter(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,string paramid,string paramdesc,string chatmessage,var string response)
+begin
+  string 255 res;
+  record Anna2ChatNodeVc Noder;
+
+  Noder = nodestack[nodestack.length - 1];
+  FindParameterInNode(Noder,paramid,res);
+  if (res<>"") then begin goto LFindParameter_out; end;
+
+  // ## find parameter in rest of node stack
+  
+  FindParameterInContext(Ctxr,paramid,res);
+  if (res<>"") then begin goto LFindParameter_out; end;
+  
+  res = FindParameterInLastMessages(Ctxr,nodestack,paramid,paramdesc,response);
+  if (res<>"") then begin
+    goto LFindParameter_out;
+  end;
+  
+LFindParameter_out:;
+  if (res<>"") then begin
+    Noder.TryCount = 1;
+    nodestack[nodestack.length - 1] = Noder;
+  end;
+  FindParameter = res;
+end;
+
+function string 255 FindParameterStartingInMessage(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,string paramid,string paramdesc,string chatmessage,var string response)
+begin
+  string 255 res;
+  record Anna2ChatNodeVc Noder;
+
+  res = FindParameterInLastMessages(Ctxr,nodestack,paramid,paramdesc,response);
+  if (res<>"") then begin goto LFindParameterStartingInMessage_out; end;
+  
+  Noder = nodestack[nodestack.length - 1];
+  FindParameterInNode(Noder,paramid,res);
+  if (res<>"") then begin goto LFindParameterStartingInMessage_out; end;
+
+  // ## find parameter in rest of node stack
+  
+  FindParameterInContext(Ctxr,paramid,res);
+  if (res<>"") then begin goto LFindParameterStartingInMessage_out; end;
+  
+LFindParameterStartingInMessage_out:;
+  if (res<>"") then begin
+    Noder.TryCount = 1;
+    nodestack[nodestack.length - 1] = Noder;
+  end;
+
+  FindParameterStartingInMessage = res;
+end;
+
+function string 255 StoreParameter(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,string paramid,string paramval)
+begin
+  record Anna2ChatNodeVc Noder;
+
+  Noder = nodestack[nodestack.length - 1];
+  StoreParameterInNode(Noder,paramid,paramval);
+  nodestack[nodestack.length - 1] = Noder;
+end;
+
+procedure DebugIntents(array record ScoredIntentVc Intents,string extra,var string response)
+begin
+  record ScoredIntentVc Intent;
+  string 255 debugtext;
+  LongInt i;
+  record Anna2SettingsBlock A2Sb;
+  
+  BlockLoad(A2Sb);
+
+  debugtext = debugtext & NL & "[[ ";
+  debugtext = debugtext & extra & ": [" & NL;
+  for (i = 0; i<Intents.length; i = i + 1) begin
+    Intent = Intents[i];
+    debugtext = debugtext & Intent.Intent & " " & Intent.Score & " '" & Intent.ExampleString & "'" & NL;
+  end;
+  debugtext = debugtext & "] ]]" & NL;
+  
+  Anna2Chat_DebugToWindow("Anna2Chat_ScoresWClass",0,debugtext,A2Sb.IntentDebug,response);
+end;
+
+function Boolean IntentIsCorrect(var record Anna2ContextVc Ctxr,var string chatmessage,record ScoredIntentVc SIr,var vector string validv,var string response)
+begin
+  Boolean res;
+  string 255 sres;
+  string 255 instruction;
+  string 255 chattext,llama_json,message;
+  row Anna2ContextVc Ctxrw;
+  LongInt pos,rwcnt,rwn;
+  json js;
+  string 255 logged_chatmessage;
+  record TalkBotIntentVc TBIr;
+  string 255 debugtext;
+  record Anna2SettingsBlock A2Sb;
+  
+  BlockLoad(A2Sb);
+
+  TBIr.Code = SIr.Intent;
+  if (ReadFirstKey("Code",TBIr,1,false)==false) then begin
+    LogText(0,"ANNA2: Warning, intent " & SIr.Intent & " not found");
+  end;
+  
+  if (A2Sb.AnnaDebugLog<>0) then begin
+    LogText(0,"ANNA2: intent " & TBIr.Code & " found");
+  end;
+  
+  if ((TBIr.Code<>SIr.Intent) or (TBIr.IntentLLMDescription=="")) then begin
+    res = true;
+    LogText(0,"ANNA2: Warning, intent " & SIr.Intent & " has no LLM description");
+    goto LIntentIsCorrect_out;
+  end;
+  
+  if (validv[SIr.Intent]<>"") then begin
+    sres = validv[SIr.Intent];
+    goto LIntentIsCorrect_gotstring;
+  end;
+  
+  // ## only run LLM_Init once and store LLM-key in context
+  instruction = "";
+  
+  LLM_Init(LlamaModel,instruction,"grammar-json.gbnf");
+
+  message = ReadFileToString("LLM_IntentIsCorrect.txt");
+  
+  if (message=="") then begin
+    message = message & "### Instruction" & NL;
+    message = message & "You are a helpful AI called Anna" & NL;
+    message = message & "Analyze the below message and answer with a json object with the key ""%intent-code%""." & NL;
+    message = message & "The value of ""%intent-code%"" must be true if [user] wants to ""%intent-llm-description%""." & NL;
+    message = message & "and false if [user] wants to perform some other action." & NL & NL;
+    message = message & "### Message" & NL & NL;
+    message = message & "%user-message%" & NL & NL;
+    message = message & "### Instruction" & NL;
+    message = message & "1. Answer with a json object in the format {""%intent-code%"":""[value]""}" & NL;
+    message = message & "2. [value] must be true or false" & NL;
+    message = message & "3. Provide a JSON object" & NL & NL;
+    message = message & "### JSON Result" & NL & NL;
+  end;
+  
+  message =  ReplaceStringWithString(message,"%intent-code%",SIr.Intent);
+  message =  ReplaceStringWithString(message,"%intent-llm-description%",TBIr.IntentLLMDescription);
+  message =  ReplaceStringWithString(message,"%user-message%",chatmessage);
+
+  llama_json = LLM_Process(message);
+  
+  LLM_Close;
+  
+  debugtext = debugtext & "[[to LLM [ " & NL & message & NL & "]" & NL;
+  debugtext = debugtext & "from LLM [ " & NL & llama_json & NL & "] ]]" & NL;
+  Anna2Chat_DebugToWindow("Anna2Chat_LLMWClass",0,debugtext,A2Sb.LLMDebug,response);
+
+  pos = InString(llama_json,"{");
+  if (pos<0) then begin goto LIntentIsCorrect_out; end;
+  llama_json = right(llama_json,len(llama_json) - pos + 1);
+  
+  pos = InString(llama_json,"}"); // should be last '}'
+  if (pos<0) then begin goto LIntentIsCorrect_out; end;
+  llama_json = left(llama_json,pos);
+  
+  //LogText(0,"LLAMA JSON " & llama_json);
+  
+  js = ParseJSONString(llama_json);
+  sres = JSONGetStrict(js,SIr.Intent);
+  if (sres=="") then begin
+    sres = JSONGetStrict(js,SIr.Intent & "/[0]");
+  end;
+  
+LIntentIsCorrect_gotstring:;
+
+  if (sres=="true") then begin
+    res = true;
+    validv[SIr.Intent] = "true";
+  end else begin
+    validv[SIr.Intent] = "false";
+  end;
+  
+LIntentIsCorrect_out:;
+  IntentIsCorrect = res;
+end;
+
+procedure Anna2Chat_SystemError(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,var string response)
+begin
+  response = response & "It is not possible to perform this action at the moment, returning to the main menu";
+  while (nodestack.length>1) begin
+    PopNode(nodestack);
+  end;
+  Ctxr.Status = "waiting";
+end;
+
+function real IntentCutoffLimit()
+begin
+  IntentCutoffLimit = 0.8;
+end;
+
+procedure A2CProc_Menu(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,var string chatmessage,var string response)
+begin
+  record Anna2ChatNodeVc Noder,nextNoder;
+  string 255 childkey;
+  array record ScoredIntentVc SIntents1;
+  array record ScoredIntentVc SIntents2;
+  record ScoredIntentVc Intent;
+  vector Boolean ValidIntents;
+  vector LongInt IntentToNode;
+  string 255 paramvalue;
+  LongInt intentcnt,i;
+  vector string 255 validv;
+  record Anna2SettingsBlock A2Sb;
+  
+  BlockLoad(A2Sb);
+
+  if (chatmessage=="" or chatmessage=="%HELLO%") then begin
+    Ctxr.Status = "waiting";
+    goto LA2CProc_Menu_out;
+  end;
+
+  Noder = nodestack[nodestack.length - 1];
+
+  childkey = "MainKey:" & Noder.SerNr;
+  intentcnt = 0;
+  while (LoopKey(childkey,nextNoder,1,true)) begin
+    if (nextNoder.Intent<>"") then begin
+      ValidIntents[nextNoder.Intent] = true;
+      IntentToNode[nextNoder.Intent] = nextNoder.SerNr;
+      intentcnt = intentcnt + 1;
+    end;
+  end;
+
+  Anna2Chat_DebugToWindow("Anna2Chat_ScoresWClass",0,"[[scoring " & intentcnt & " intents at node " & Noder.SerNr & "]]",A2Sb.IntentDebug,response);
+  
+  AI_ScoreIntents(chatmessage,ValidIntents,SIntents1);
+
+  DebugIntents(SIntents1,"After 1st scoring",response);
+
+  for (i = 0; i<SIntents1.length; i = i + 1) begin
+    Intent = SIntents1[i];
+
+    if (Intent.Score>IntentCutoffLimit) then begin
+      if (IntentIsCorrect(Ctxr,chatmessage,SIntents1[i],validv,response)) then begin
+        SIntents2[SIntents2.length] = SIntents1[i];
+      end;
+    end;
+  end;
+
+  DebugIntents(SIntents2,"After 2nd scoring",response);
+
+  Intent = SIntents2[0];
+
+  if (Intent.Score>IntentCutoffLimit) then begin
+    PushNodeCode(nodestack,IntentToNode[Intent.Intent]);
+    Ctxr.Status = "processing";
+  end else begin
+    response = response & "I am sorry, I don't know how to do that, can I help you with something else?";
+    Ctxr.Status = "waiting";
+  end;
+
+LA2CProc_Menu_out:;
+end;
+
+procedure A2CProc_Answer(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,var string chatmessage,var string response,Boolean randomf)
+begin
+  record Anna2ChatNodeVc Noder;
+  row Anna2ChatNodeVc Noderw;
+  LongInt rwn,rwcnt,nanswers,answerid;
+  
+  nanswers = 0;
+  
+  Noder = nodestack[nodestack.length - 1];
+  rwcnt = MatRowCnt(Noder);
+  
+  for (rwn = 0; rwn<rwcnt; rwn = rwn + 1) begin
+    MatRowGet(Noder,rwn,Noderw);
+    if (Noderw.ParameterID=="answer") then begin
+      nanswers = nanswers + 1;
+    end;
+  end;
+  
+  if (nanswers>0) then begin
+    if (randomf) then begin
+      answerid = Random(0,nanswers - 1);
+      nanswers = 0;
+    end;
+    
+    for (rwn = 0; rwn<rwcnt; rwn = rwn + 1) begin
+      MatRowGet(Noder,rwn,Noderw);
+      if (Noderw.ParameterID=="answer") then begin
+        if (randomf) then begin
+          if (answerid==nanswers) then begin
+            response = response & Noderw.ParameterQuestion;
+            goto LA2CProc_Answer_out;
+          end;
+          nanswers = nanswers + 1;
+        end else begin
+          response = response & Noderw.ParameterQuestion & " ";
+        end;
+      end;
+    end;
+  end;
+  
+LA2CProc_Answer_out:;
+  response = Trim(response);
+  PopNode(nodestack);
+  Ctxr.Status = "waiting";
+end;
+    
+procedure FindCustomerFromOrder(string ornr,var string cucode)
+begin
+  record ORVc ORr;
+  
+  ORr.SerNr = ornr;
+  if (ReadFirstMain(ORr,1,true)) then begin
+    cucode = ORr.CustCode;
+  end;
+end;
+
+procedure FindOrderFromCustomer(string cucode,var string ornr)
+begin
+  record CUVc CUr;
+  record ORVc ORr;
+
+  CUr.Code = cucode;
+  if (ReadFirstMain(CUr,1,true)) then begin
+    ORr.CustCode = CUr.Code;
+    while (LoopBackKey("CustCode",ORr,1,true)) begin
+      if (ORr.CustCode<>CUr.Code) then begin
+        goto LFindOrderFromCustomer_out;
+      end;
+      if (ORr.Closed==0 and ORr.InvFlag==0 and ORr.ShipFlag==0) then begin
+        ornr = ORr.SerNr;
+        goto LFindOrderFromCustomer_out;
+      end;
+    end;
+  end;
+LFindOrderFromCustomer_out:;
+end;
+
+procedure FindCustomerFromQuotation(string qtnr,var string cucode)
+begin
+  record QTVc QTr;
+  
+  QTr.SerNr = qtnr;
+  if (ReadFirstMain(QTr,1,true)) then begin
+    cucode = QTr.CustCode;
+  end;
+end;
+
+procedure FindQuotationFromCustomer(string cucode,var string qtnr)
+begin
+  record CUVc CUr;
+  record QTVc QTr;
+
+  CUr.Code = cucode;
+  if (ReadFirstMain(CUr,1,true)) then begin
+    QTr.CustCode = CUr.Code;
+    while (LoopBackKey("CustCode",QTr,1,true)) begin
+      if (QTr.CustCode<>CUr.Code) then begin
+        goto LFindQuotationFromCustomer_out;
+      end;
+      if (QTr.Closed==0 /*and QTr.InvFlag==0 and QTr.ShipFlag==0*/) then begin
+        qtnr = QTr.SerNr;
+        goto LFindQuotationFromCustomer_out;
+      end;
+    end;
+  end;
+LFindQuotationFromCustomer_out:;
+end;
+
+procedure FindCustomerFromInvoice(string ivnr,var string cucode)
+begin
+  record IVVc IVr;
+  
+  IVr.SerNr = ivnr;
+  if (ReadFirstMain(IVr,1,true)) then begin
+    cucode = IVr.CustCode;
+  end;
+end;
+
+procedure FindInvoiceFromCustomer(string cucode,var string ivnr)
+begin
+  record CUVc CUr;
+  record IVVc IVr;
+
+  CUr.Code = cucode;
+  if (ReadFirstMain(CUr,1,true)) then begin
+    IVr.CustCode = CUr.Code;
+    while (LoopBackKey("CustCode",IVr,1,true)) begin
+      if (IVr.CustCode<>CUr.Code) then begin
+        goto LFindInvoiceFromCustomer_out;
+      end;
+      if (true /*IVr.Closed==0 and IVr.InvFlag==0 and IVr.ShipFlag==0*/) then begin
+        ivnr = IVr.SerNr;
+        goto LFindInvoiceFromCustomer_out;
+      end;
+    end;
+  end;
+LFindInvoiceFromCustomer_out:;
+end;
+
+global
+updating function Boolean A2CProc_OR_AddItem_Do(string item,string qty,string cucode,string ornr)
+begin
+  record ORVc oldORr,ORr;
+  row ORVc ORrw;
+  LongInt rwcnt;
+  string 255 inwarning,warning;
+  record Anna2SettingsBlock A2Sb;
+
+  BlockLoad(A2Sb);
+
+  if (A2Sb.AnnaDebugLog<>0) then begin
+    LogText(0,"AddItemToOrder add " & qty & " " & item & "(s) to order " & ornr & " for " & cucode);
+  end;
+  
+  ORr.SerNr = ornr;
+  ReadFirstMain(ORr,1,true);
+  oldORr = ORr;
+  
+  rwcnt = MatRowCnt(ORr);
+  ORrw.ArtCode = item;
+  ORrw.Quant = StringToVal(qty,M4Val);
+  MatRowPut(ORr,rwcnt,ORrw);
+  ORVc_PasteArtCode(ORr,rwcnt,inwarning,warning,false);
+  
+  if (RecordUpdate(oldORr,ORr,true)==0) then begin
+    A2CProc_OR_AddItem_Do = true;
+  end else begin
+    A2CProc_OR_AddItem_Do = false;
+  end;
+end;
+
+function string 255 NameOrString(string name,string default)
+begin
+  string 255 res;
+  
+  res = Trim(name);
+  if (res=="") then begin
+    res = default;
+  end;
+  
+  NameOrString = res;
+end;
+
+function string 255 InCodeToName(string incode)
+begin
+  string 255 res;
+  record INVc INr;
+  
+  INr.Code = incode;
+  if (ReadFirstMain(INr,1,true)) then begin
+    res = INr.Name;
+  end else begin
+    res = "unknown item";
+  end;
+  
+  InCodeToName = res;
+end;
+
+procedure A2CProc_OR_AddItem(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,var string chatmessage,var string response)
+begin
+  string 255 item,qty,cucode,ornr;
+  string 255 incode;
+  Boolean retval;
+    
+  item = FindParameter(Ctxr,nodestack,"item","the next item or product that the user wanted to add to the order",chatmessage,response);
+  qty = FindParameter(Ctxr,nodestack,"qty","how many " & NameOrString(item,"[item] or products") & " the user wants to add to the order",chatmessage,response);
+  ornr = FindParameter(Ctxr,nodestack,"ORr.SerNr","which order the user wants to add items to",chatmessage,response);
+  cucode = FindParameter(Ctxr,nodestack,"CUr.Code","the customer that the user wants to add items for",chatmessage,response);
+
+  ValidateItem(item,incode);
+  ValidateQuantity(qty,1,100);
+  ValidateCUVc(cucode);
+  ValidateORVc(ornr,cucode);
+
+  if (cucode=="") then begin FindCustomerFromOrder(ornr,cucode); end;
+  if (ornr=="") then begin FindOrderFromCustomer(cucode,ornr); end;
+
+  EnsureParameter(Ctxr,incode,"item","Which item would you like to add?",response);
+  EnsureParameter(Ctxr,ornr & cucode,"ORr.SerNr","Which order would you like to add items to?",response);
+  //EnsureParameter(Ctxr,ornr,"ORr.SerNr","Which order would you like to add to?",response);
+
+  StoreParameter(Ctxr,nodestack,"item",incode);
+  
+  if (Ctxr.Status<>"processing") then begin
+    goto A2CProc_OR_AddItem_out;
+  end;
+  
+  if (ornr=="" or cucode=="" or incode=="") then begin
+    Anna2Chat_SystemError(Ctxr,nodestack,response);
+    goto A2CProc_OR_AddItem_out;
+  end;
+  
+  StoreParameterInContext(Ctxr,"CUr.Code",cucode);
+  StoreParameterInContext(Ctxr,"ORr.SerNr",ornr);
+
+  if (qty=="") then begin qty = "1"; end;
+
+  retval = qupdating.A2CProc_OR_AddItem_Do(incode,qty,cucode,ornr);
+
+  if (retval) then begin
+    response = response & "Item " & InCodeToName(incode) & " was added to order " & ornr;
+    PopNode(nodestack);
+    Ctxr.Status = "waiting";
+  end else begin
+    Anna2Chat_SystemError(Ctxr,nodestack,response);
+    response = response & "It is not possible to perform this action at the moment";
+    Ctxr.Status = "waiting";
+  end;
+  
+  A2CProc_OR_AddItem_out:;
+end;
+
+global
+updating function Boolean A2CProc_OR_Email_Do(string cucode,string ornr,var string errorstr)
+begin
+  record ORVc ORr;
+  record MailVc oldMailr,Mailr;
+  string 255 warning;
+  Integer err;
+  
+  ORr.SerNr = ornr;
+  ReadFirstMain(ORr,1,true);
+
+  err = CreateMailFromORD(ORr,Mailr,warning,"");
+  if (err!=0) then begin
+    if (err>0) then begin
+      errorstr = USetStr(err) & " " & warning;
+    end;
+    A2CProc_OR_Email_Do = false;
+  end else begin
+    oldMailr = Mailr;
+    Mailr.SendFlag = 1;
+    RecordUpdate(oldMailr,Mailr,true);
+    A2CProc_OR_Email_Do = true;
+  end;
+end;
+
+procedure A2CProc_OR_Email(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,var string chatmessage,var string response)
+begin
+  string 255 cucode,ornr,errorstr;
+  Boolean retval;
+  
+  ornr = FindParameter(Ctxr,nodestack,"ORr.SerNr","which order the user wants to e-mail",chatmessage,response);
+  cucode = FindParameter(Ctxr,nodestack,"CUr.Code","the customer that the user wants to e-mail an order to",chatmessage,response);
+
+  ValidateCUVc(cucode);
+  ValidateORVc(ornr,cucode);
+
+  if (cucode=="") then begin FindCustomerFromOrder(ornr,cucode); end;
+  if (ornr=="") then begin FindOrderFromCustomer(cucode,ornr); end;
+
+  EnsureParameter(Ctxr,ornr,"ORr.SerNr","Which order would you like to e-mail?",response);
+  
+  if (Ctxr.Status<>"processing") then begin
+    goto A2CProc_OR_Email_out;
+  end;
+  
+  if (ornr=="" or cucode=="") then begin
+    Anna2Chat_SystemError(Ctxr,nodestack,response);
+    goto A2CProc_OR_Email_out;
+  end;
+  
+  StoreParameterInContext(Ctxr,"CUr.Code",cucode);
+  StoreParameterInContext(Ctxr,"ORr.SerNr",ornr);
+
+  retval = qupdating.A2CProc_OR_Email_Do(cucode,ornr,errorstr);
+
+  if (retval) then begin
+    response = response & "Order " & ornr & " was e-mailed";
+    PopNode(nodestack);
+    Ctxr.Status = "waiting";
+  end else begin
+    Anna2Chat_SystemError(Ctxr,nodestack,response);
+    if (errorstr<>"") then begin
+      response = response & "E-mailing order failed with the error " & errorstr;
+    end else begin
+      response = response & "It is not possible to perform this action at the moment";
+    end;
+    Ctxr.Status = "waiting";
+  end;
+  
+  A2CProc_OR_Email_out:;
+end;
+
+function Boolean ORVc_IsDeliverable(record ORVc ORr)
+begin
+  Boolean res;
+  
+  if (ORr.ShipFlag==0) then begin
+    if ((ORr.InvFlag<2) or (ORr.InvBeforeShip==1)) then begin res = true; end;
+    if ((ORr.InvFlag==0) or (ORr.InvFlag==2)) then begin res = true; end;
+  end;
+  
+  ORVc_IsDeliverable = res;
+end;
+
+procedure A2CProc_OR_GetDeliverable(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,var string chatmessage,var string response)
+begin
+  string 255 cucode,errorstr,count;
+  Boolean retval;
+  record ORVc ORr;
+  Integer cnt,cnt_max;
+
+  cucode = FindParameter(Ctxr,nodestack,"CUr.Code","the customer that the user wants to get deliverable orders for",chatmessage,response);
+  count = FindParameter(Ctxr,nodestack,"count","how many orders, if any, the user wants to include in the list",chatmessage,response);
+
+  ValidateCUVc(cucode);
+  ValidateNumber(count,1,100,"5");
+
+  EnsureParameter(Ctxr,cucode,"CUr.Code","Which customer would you like to list orders for?",response);
+
+  if (Ctxr.Status<>"processing") then begin
+    LogText(0,"A2CProc_OR_GetDeliverable Ctxr.Status " & Ctxr.Status);
+    goto LA2CProc_OR_GetDeliverable_out;
+  end;
+  
+  if (cucode=="") then begin
+    LogText(0,"A2CProc_OR_GetDeliverable cucode " & cucode);
+    Anna2Chat_SystemError(Ctxr,nodestack,response);
+    goto LA2CProc_OR_GetDeliverable_out;
+  end;
+
+  StoreParameterInContext(Ctxr,"CUr.Code",cucode);
+
+  cnt_max = StringToInt(count);
+  if (cnt_max==0) then begin cnt_max = 5; end;
+
+  ORr.OSFlag = 1;
+  ORr.CustCode = cucode;
+
+  while (LoopBackKey("OSCU",ORr,2,true)) begin
+    if (ORr.OSFlag<>1) then begin goto LA2CProc_OR_GetDeliverable_done; end;
+    if (ORr.CustCode<>cucode) then begin goto LA2CProc_OR_GetDeliverable_done; end;
+    if (cnt>=cnt_max) then begin goto LA2CProc_OR_GetDeliverable_done; end;
+    
+    if (ORVc_IsDeliverable(ORr)) then begin
+      if (cnt>=1) then begin
+        response = response & ",<break strength='medium'></break> " & NL;
+      end;
+      
+      response = response & "order " & SayNumberAsCardinal(ORr.SerNr) & ", " & SayAsDate(ORr.OrdDate);
+      cnt = cnt + 1;
+    end;
+  end;
+
+LA2CProc_OR_GetDeliverable_done:;
+  if (cnt==0) then begin
+    response = response & "there are no deliverable orders for cusgtomer " & cucode;
+  end;
+  
+  PopNode(nodestack);
+  Ctxr.Status = "waiting";
+  
+LA2CProc_OR_GetDeliverable_out:;
+  return;
+end;
+
+global
+updating function Boolean A2CProc_OR_Create_Do(string cucode,var string ornr)
+begin
+  record ORVc oldORr,ORr;
+  LongInt rwcnt;
+  string 255 warning,errstr;
+
+  RecordNew(ORr);
+  if (ORr.SerNr<0) then begin
+    ORr.SerNr = NextSerNr("ORVc",ORr.OrdDate,-1,false,"");
+  end;
+  ORr.CustCode = cucode;
+  PasteCustInOrder(ORr,ORr.CustCode,"",warning,errstr);
+
+  A2CProc_OR_Create_Do = RecordStore(ORr,false);
+  ornr = ORr.SerNr;
+end;
+
+procedure A2CProc_OR_Create(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,var string chatmessage,var string response)
+begin
+  string 255 cucode,ornr;
+  string 255 incode;
+  Boolean retval;
+
+  cucode = FindParameter(Ctxr,nodestack,"CUr.Code","the customer that the user wants to create an order for",chatmessage,response);
+
+  ValidateCUVc(cucode);
+
+  EnsureParameter(Ctxr,cucode,"CUr.Code","Which customer would you like to create an order for?",response);
+
+  StoreParameterInContext(Ctxr,"CUr.Code",cucode);
+
+  if (Ctxr.Status<>"processing") then begin
+    goto A2CProc_OR_Create_out;
+  end;
+
+  retval = qupdating.A2CProc_OR_Create_Do(cucode,ornr);
+
+  StoreParameterInContext(Ctxr,"ORr.SerNr",ornr);
+
+  if (retval) then begin
+    response = response & "Order " & ornr & " was created for " & cucode;
+    PopNode(nodestack);
+    Ctxr.Status = "waiting";
+  end else begin
+    response = response & "It is not possible to perform this action at the moment";
+    Ctxr.Status = "waiting";
+  end;
+  
+A2CProc_OR_Create_out:;
+end;
+
+procedure A2CProc_OR_PlannedDelivery(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,var string chatmessage,var string response)
+begin
+  string 255 cucode,ornr,errorstr;
+  date planned_delivery_date;
+  Boolean retval;
+  
+  ornr = FindParameter(Ctxr,nodestack,"ORr.SerNr","which order the user wants to know the planned delivery date of",chatmessage,response);
+  //cucode = FindParameter(Ctxr,nodestack,"CUr.Code","the customer that the user wants to know planned delivery dates for",chatmessage,response);
+
+  //ValidateCUVc(cucode);
+  ValidateORVc(ornr,cucode);
+
+  //if (cucode=="") then begin FindCustomerFromOrder(ornr,cucode); end;
+  //if (ornr=="") then begin FindOrderFromCustomer(cucode,ornr); end;
+
+  EnsureParameter(Ctxr,ornr,"ORr.SerNr","Which order would you like know the planned delivery date of?",response);
+  
+  if (Ctxr.Status<>"processing") then begin
+    goto A2CProc_OR_PlannedDelivery_out;
+  end;
+  
+  if (ornr=="" or cucode=="") then begin
+    Anna2Chat_SystemError(Ctxr,nodestack,response);
+    goto A2CProc_OR_PlannedDelivery_out;
+  end;
+  
+  //StoreParameterInContext(Ctxr,"CUr.Code",cucode);
+  StoreParameterInContext(Ctxr,"ORr.SerNr",ornr);
+
+  /*resf =*/ FindPlannedDeliveryDate(cucode,StringToLongInt(ornr),planned_delivery_date);
+
+  response = response & "The planned delivery date for order " & ornr & " is " & SayAsDate(planned_delivery_date);
+  
+/*
+  if (resf==false) then begin
+    status_code = 3; // Order not found
+  end;
+*/
+  
+  PopNode(nodestack);
+  Ctxr.Status = "waiting";
+  
+  A2CProc_OR_PlannedDelivery_out:;
+end;
+
+global
+updating function Boolean A2CProc_QT_AddItem_Do(string item,string qty,string cucode,string qtnr)
+begin
+  record QTVc oldQTr,QTr;
+  row QTVc QTrw;
+  LongInt rwcnt;
+  string 255 inwarning,warning;
+  record Anna2SettingsBlock A2Sb;
+  
+  BlockLoad(A2Sb);
+
+  if (A2Sb.AnnaDebugLog<>0) then begin
+    LogText(0,"AddItemToQuotation add " & qty & " " & item & "(s) to order " & qtnr & " for " & cucode);
+  end;
+  
+  QTr.SerNr = qtnr;
+  ReadFirstMain(QTr,1,true);
+  oldQTr = QTr;
+  
+  rwcnt = MatRowCnt(QTr);
+  QTrw.ArtCode = item;
+  QTrw.Quant = StringToVal(qty,M4Val);
+  MatRowPut(QTr,rwcnt,QTrw);
+  QTVc_PasteArtCode(QTr,rwcnt,inwarning,warning);
+  
+  if (RecordUpdate(oldQTr,QTr,true)==0) then begin
+    A2CProc_QT_AddItem_Do = true;
+  end else begin
+    A2CProc_QT_AddItem_Do = false;
+  end;
+end;
+
+procedure A2CProc_QT_AddItem(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,var string chatmessage,var string response)
+begin
+  string 255 item,qty,cucode,qtnr;
+  string 255 incode;
+  Boolean retval;
+
+  item = FindParameter(Ctxr,nodestack,"item","the item or product that the user wants to add to the quotation",chatmessage,response);
+  qty = FindParameter(Ctxr,nodestack,"qty","how many " & NameOrString(item,"[item] or products") & " the user wants to add to the quotation",chatmessage,response);
+  qtnr = FindParameter(Ctxr,nodestack,"QTr.SerNr","which quotation the user wants to add items to",chatmessage,response);
+  cucode = FindParameter(Ctxr,nodestack,"CUr.Code","the customer that the user wants to add items for",chatmessage,response);
+
+  ValidateItem(item,incode);
+  ValidateQuantity(qty,1,100);
+  ValidateCUVc(cucode);
+  ValidateQTVc(qtnr,cucode);
+
+  if (cucode=="") then begin FindCustomerFromQuotation(qtnr,cucode); end;
+  if (qtnr=="") then begin FindQuotationFromCustomer(cucode,qtnr); end;
+
+  EnsureParameter(Ctxr,incode,"item","Which item would you like to add?",response);
+  EnsureParameter(Ctxr,qtnr & cucode,"QTr.SerNr","Which quotation would you like to add items to?",response);
+  //EnsureParameter(Ctxr,qtnr,"QTr.SerNr","Which quotation would you like to add to?",response);
+
+  StoreParameter(Ctxr,nodestack,"item",incode);
+
+  if (Ctxr.Status<>"processing") then begin
+    goto A2CProc_QT_AddItem_out;
+  end;
+
+  if (qtnr=="" or cucode=="" or incode=="") then begin
+    Anna2Chat_SystemError(Ctxr,nodestack,response);
+    goto A2CProc_QT_AddItem_out;
+  end;
+
+  StoreParameterInContext(Ctxr,"CUr.Code",cucode);
+  StoreParameterInContext(Ctxr,"QTr.SerNr",qtnr);
+
+  if (qty=="") then begin qty = "1"; end;
+
+  retval = qupdating.A2CProc_QT_AddItem_Do(incode,qty,cucode,qtnr);
+
+  if (retval) then begin
+    response = response & "Item " & item & " was added to quotation " & qtnr;
+    PopNode(nodestack);
+    Ctxr.Status = "waiting";
+  end else begin
+    Anna2Chat_SystemError(Ctxr,nodestack,response);
+    response = response & "It is not possible to perform this action at the moment";
+    Ctxr.Status = "waiting";
+  end;
+  
+A2CProc_QT_AddItem_out:;
+end;
+
+global
+updating function Boolean A2CProc_QT_Email_Do(string cucode,string qtnr,var string errorstr)
+begin
+  record QTVc QTr;
+  record MailVc oldMailr,Mailr;
+  string 255 warning;
+  Integer err;
+  
+  QTr.SerNr = qtnr;
+  ReadFirstMain(QTr,1,true);
+
+  err = CreateMailFromQTD(QTr,Mailr,warning,"");
+  if (err!=0) then begin
+    if (err>0) then begin
+      errorstr = USetStr(err) & " " & warning;
+    end;
+    A2CProc_QT_Email_Do = false;
+  end else begin
+    oldMailr = Mailr;
+    Mailr.SendFlag = 1;
+    RecordUpdate(oldMailr,Mailr,true);
+    A2CProc_QT_Email_Do = true;
+  end;
+end;
+
+procedure A2CProc_QT_Email(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,var string chatmessage,var string response)
+begin
+  string 255 cucode,qtnr,errorstr;
+  Boolean retval;
+  
+  qtnr = FindParameter(Ctxr,nodestack,"QTr.SerNr","which quotation the user wants to e-mail",chatmessage,response);
+  cucode = FindParameter(Ctxr,nodestack,"CUr.Code","the customer that the user wants to e-mail an quotation to",chatmessage,response);
+
+  ValidateCUVc(cucode);
+  ValidateQTVc(qtnr,cucode);
+
+  if (cucode=="") then begin FindCustomerFromQuotation(qtnr,cucode); end;
+  if (qtnr=="") then begin FindQuotationFromCustomer(cucode,qtnr); end;
+
+  EnsureParameter(Ctxr,qtnr,"QTr.SerNr","Which quotation would you like to e-mail?",response);
+  
+  if (Ctxr.Status<>"processing") then begin
+    goto A2CProc_QT_Email_out;
+  end;
+  
+  if (qtnr=="" or cucode=="") then begin
+    Anna2Chat_SystemError(Ctxr,nodestack,response);
+    goto A2CProc_QT_Email_out;
+  end;
+  
+  StoreParameterInContext(Ctxr,"CUr.Code",cucode);
+  StoreParameterInContext(Ctxr,"QTr.SerNr",qtnr);
+
+  retval = qupdating.A2CProc_QT_Email_Do(cucode,qtnr,errorstr);
+
+  if (retval) then begin
+    response = response & "Quotation " & qtnr & " was e-mailed";
+    PopNode(nodestack);
+    Ctxr.Status = "waiting";
+  end else begin
+    Anna2Chat_SystemError(Ctxr,nodestack,response);
+    if (errorstr<>"") then begin
+      response = response & "E-mailing Quotation failed with the error " & errorstr;
+    end else begin
+      response = response & "It is not possible to perform this action at the moment";
+    end;
+    Ctxr.Status = "waiting";
+  end;
+  
+A2CProc_QT_Email_out:;
+end;
+
+global
+updating function Boolean A2CProc_QT_Create_Do(string cucode,var string qtnr)
+begin
+  record QTVc oldQTr,QTr;
+  LongInt rwcnt;
+  string 255 warning;
+
+  RecordNew(QTr);
+  if (QTr.SerNr<0) then begin
+    QTr.SerNr = NextSerNr("QTVc",QTr.QTDate,-1,false,"");
+  end;
+  QTr.CustCode = cucode;
+  PasteCustInQT(QTr,QTr.CustCode,"",warning,true);
+
+  A2CProc_QT_Create_Do = RecordStore(QTr,false);
+  qtnr = QTr.SerNr;
+end;
+
+procedure A2CProc_QT_Create(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,var string chatmessage,var string response)
+begin
+  string 255 cucode,qtnr;
+  string 255 incode;
+  Boolean retval;
+
+  cucode = FindParameter(Ctxr,nodestack,"CUr.Code","the customer that the user wants to create an quotation for",chatmessage,response);
+
+  ValidateCUVc(cucode);
+
+  EnsureParameter(Ctxr,cucode,"CUr.Code","Which customer would you like to create an quotation for?",response);
+
+  StoreParameterInContext(Ctxr,"CUr.Code",cucode);
+
+  if (Ctxr.Status<>"processing") then begin
+    goto A2CProc_QT_Create_out;
+  end;
+
+  retval = qupdating.A2CProc_QT_Create_Do(cucode,qtnr);
+
+  StoreParameterInContext(Ctxr,"QTr.SerNr",qtnr);
+
+  if (retval) then begin
+    response = response & "Quotation " & qtnr & " was created for " & cucode;
+    PopNode(nodestack);
+    Ctxr.Status = "waiting";
+  end else begin
+    response = response & "It is not possible to perform this action at the moment";
+    Ctxr.Status = "waiting";
+  end;
+  
+A2CProc_QT_Create_out:;
+end;
+
+function string 255 SayInvoiceStatus(Integer ivstat)
+begin
+  switch (ivstat) begin
+    case 0: SayInvoiceStatus = "paid";
+    case 1: SayInvoiceStatus = "awaiting payment";
+    case 2: SayInvoiceStatus = "overdue";
+    case 3: SayInvoiceStatus = "not registered";
+    otherwise SayInvoiceStatus = "unknown";
+  end;
+end;
+
+procedure A2CProc_CheckInvoiceStatus(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,var string chatmessage,var string response)
+begin
+  string 255 cucode,ivnr,status_string,currency_code;
+  Boolean retval;
+  record CompaniesBlock CBl;
+  row CompaniesBlock CBlrw;
+  Integer oldcomp,invstat;
+  LongInt ivser,rwcnt,rwn;
+  val amount_due,amount_full;
+  Boolean foundf;
+  record Anna2SettingsBlock A2Sb;
+  
+  BlockLoad(A2Sb);
+
+  cucode = FindParameter(Ctxr,nodestack,"CUr.Code","the customer that the user wants to inquire about",chatmessage,response);
+  ivnr = FindParameterStartingInMessage(Ctxr,nodestack,"IVr.SerNr","the invoice number that the user wants inquire about",chatmessage,response);
+
+  if (A2Sb.AnnaDebugLog<>0) then begin
+    LogText(0,"A2CProc_CheckInvoiceStatus cucode " & cucode);
+    LogText(0,"A2CProc_CheckInvoiceStatus ivnr " & ivnr);
+  end;
+  
+  ValidateCUVc(cucode);
+  ValidateIVVc(ivnr,cucode);
+
+  if (A2Sb.AnnaDebugLog<>0) then begin
+    LogText(0,"A2CProc_CheckInvoiceStatus cucode >>" & cucode & "<<");
+    LogText(0,"A2CProc_CheckInvoiceStatus ivnr >>" & ivnr & "<<");
+  end;
+  
+  EnsureParameter(Ctxr,ivnr,"IVr.SerNr","Which invoice do you want to know the status of?",response);
+
+  if (cucode<>"") then begin StoreParameterInContext(Ctxr,"CUr.Code",cucode); end;
+
+  StoreParameterInContext(Ctxr,"IVr.SerNr",ivnr);
+
+  if (Ctxr.Status<>"processing") then begin
+    goto LA2CProc_CheckInvoiceStatus_out;
+  end;
+
+  ivser = StringToLongInt(ivnr);
+
+  if (FindCustomerAndInvoice(cucode,ivser,invstat,amount_due,amount_full,currency_code)) then begin
+    response = response & " invoice " & ivser & " is " & SayInvoiceStatus(invstat);
+    if (amount_due>0) then begin
+      response = response & ", the outstanding amount is " & SayValAsCurrency(amount_due,currency_code);
+    end;
+  end else begin
+    switch (invstat) begin
+      case 3:
+        response = response & " invoice " & ivser & " was not found";
+      case 4:
+        response = response & " customer " & cucode & " was not found";
+      otherwise
+        response = response & " an unknown error occured";
+    end;
+  end;
+  
+  //oldcomp = CurrentCompany;
+  //BlockLoad(CBl);
+  //rwcnt = MatRowCnt(CBl);
+  //for (rwn = 0; rwn<rwcnt; rwn = rwn + 1) begin
+  //  MatRowGet(CBl,rwn,CBlrw);
+  //  if (SetCompany(rwn + 1,false)) then begin
+  //    if (FindCustomerAndInvoice(cucode,ivser,invstat,amount_due,amount_full,currency_code)) then begin
+  //      foundf = true;
+  //      goto LA2CProc_CheckInvoiceStatus_Reply;
+  //    end;
+  //  end;
+  //end;
+  //LA2CProc_CheckInvoiceStatus_Reply:;
+  //  ResetCompany(oldcomp);
+  
+  PopNode(nodestack);
+  Ctxr.Status = "waiting";
+LA2CProc_CheckInvoiceStatus_out:;
+end;
+
+global
+updating function Boolean A2CProc_Invoice_Email_Do(string cucode,string ivnr,var string errorstr)
+begin
+  record IVVc IVr;
+  record MailVc oldMailr,Mailr;
+  string 255 warning;
+  Integer err;
+  
+  IVr.SerNr = ivnr;
+  ReadFirstMain(IVr,1,true);
+
+  err = CreateMailFromIVD(IVr,Mailr,warning,true,"");
+  if (err!=0) then begin
+    if (err>0) then begin
+      errorstr = USetStr(err) & " " & warning;
+    end;
+    A2CProc_Invoice_Email_Do = false;
+  end else begin
+    oldMailr = Mailr;
+    Mailr.SendFlag = 1;
+    RecordUpdate(oldMailr,Mailr,true);
+    A2CProc_Invoice_Email_Do = true;
+  end;
+end;
+
+procedure A2CProc_Invoice_Email(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,var string chatmessage,var string response)
+begin
+  string 255 cucode,ivnr,errorstr;
+  Boolean retval;
+  
+  ivnr = FindParameter(Ctxr,nodestack,"IVr.SerNr","which invoice the user wants to e-mail",chatmessage,response);
+  cucode = FindParameter(Ctxr,nodestack,"CUr.Code","the customer that the user wants to e-mail an invoice to",chatmessage,response);
+
+  ValidateCUVc(cucode);
+  ValidateIVVc(ivnr,cucode);
+
+  if (cucode=="") then begin FindCustomerFromInvoice(ivnr,cucode); end;
+  if (ivnr=="") then begin FindInvoiceFromCustomer(cucode,ivnr); end;
+
+  EnsureParameter(Ctxr,ivnr,"IVr.SerNr","Which invoice would you like to e-mail?",response);
+  
+  if (Ctxr.Status<>"processing") then begin
+    goto A2CProc_Invoice_Email_out;
+  end;
+  
+  if (ivnr=="" or cucode=="") then begin
+    Anna2Chat_SystemError(Ctxr,nodestack,response);
+    goto A2CProc_Invoice_Email_out;
+  end;
+  
+  StoreParameterInContext(Ctxr,"CUr.Code",cucode);
+  StoreParameterInContext(Ctxr,"IVr.SerNr",ivnr);
+
+  retval = qupdating.A2CProc_Invoice_Email_Do(cucode,ivnr,errorstr);
+
+  if (retval) then begin
+    response = response & "Invoice " & ivnr & " was e-mailed";
+    PopNode(nodestack);
+    Ctxr.Status = "waiting";
+  end else begin
+    Anna2Chat_SystemError(Ctxr,nodestack,response);
+    if (errorstr<>"") then begin
+      response = response & "E-mailing Invoice failed with the error " & errorstr;
+    end else begin
+      response = response & "It is not possible to perform this action at the moment";
+    end;
+    Ctxr.Status = "waiting";
+  end;
+  
+  A2CProc_Invoice_Email_out:;
+end;
+    
+procedure A2CProc_IN_GetStockLevel(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,var string chatmessage,var string response)
+begin
+  string 255 item;
+  string 255 incode;
+  Boolean retval;
+  val stock_level;
+
+  item = FindParameter(Ctxr,nodestack,"item","the item or product that the user wants to know the stock level for",chatmessage,response);
+
+  ValidateItem(item,incode);
+
+  EnsureParameter(Ctxr,incode,"item","Which item would you like to know the stock level of?",response);
+
+  StoreParameter(Ctxr,nodestack,"item",incode);
+  
+  if (Ctxr.Status<>"processing") then begin
+    goto A2CProc_IN_GetStockLevel_out;
+  end;
+  
+  if (incode=="") then begin
+    Anna2Chat_SystemError(Ctxr,nodestack,response);
+    goto A2CProc_IN_GetStockLevel_out;
+  end;
+  
+  FindStockLevelOfItem(incode,stock_level);
+  
+  //stock_levelstr = Trim(ValToString(stock_level,M4Val,"",".",1));
+  //if (blank(stock_levelstr)) then begin stock_levelstr = "0"; end;
+
+  if (stock_level>0) then begin
+    response = response & "There are " & Trim(ValToString(stock_level,M4Val,"",".",1)) & " " & InCodeToName(incode) & " in stock";
+  end else begin
+    response = response & InCodeToName(incode) & " is not in stock";
+  end;
+
+  PopNode(nodestack);
+  Ctxr.Status = "waiting";
+
+  A2CProc_IN_GetStockLevel_out:;
+end;
+
+procedure A2CProc_GetLastPayments(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,var string chatmessage,var string response)
+begin
+  Boolean foundf;
+  string 255 count,cucode;
+  Integer n,oldcomp;
+  LongInt i;
+  array date payment_date_arr;
+  array val payment_amount_arr;
+  array string 255 payment_currency_arr;
+  date blankdateval;
+  
+  cucode = FindParameter(Ctxr,nodestack,"CUr.Code","the customer that the user wants to inquire about",chatmessage,response);
+  count = FindParameter(Ctxr,nodestack,"count","the number of payments the user wants information about",chatmessage,response);
+  
+  ValidateCUVc(cucode);
+  ValidateNumber(count,1,10,"5");
+
+  EnsureParameter(Ctxr,cucode,"CUr.Code","Which customer would you like to list payments for?",response);
+  StoreParameterInContext(Ctxr,"CUr.Code",cucode);
+  
+  if (Ctxr.Status<>"processing") then begin
+    goto LA2CProc_GetLastPayments_out;
+  end;
+  
+  n = StringToInt(count);
+  
+  oldcomp = CurrentCompany;
+  SetCompany(1,false);
+  FindLastPayments(cucode,n,blankdateval,payment_date_arr,payment_amount_arr,payment_currency_arr);
+  ResetCompany(oldcomp);
+  
+  response = response & "The last payments are: " & NL NL;
+  
+  for (i = 0; i<payment_date_arr.length; i = i + 1) begin
+    response = response & SayValAsCurrency(payment_amount_arr[i],payment_currency_arr[i]) & ", on " & SayAsDate(payment_date_arr[i]);
+    if (i<(payment_date_arr.length-1)) then begin
+      response = response & ".<break strength='medium'></break> " & NL;
+    end;
+  end;
+  
+  response = response & NL;
+  
+  PopNode(nodestack);
+  Ctxr.Status = "waiting";
+  
+LA2CProc_GetLastPayments_out:;
+end;
+
+procedure FindLastInvoices(string customer_code,Integer maxcount,date mindate,
+                           var array string invoice_nr_arr,
+                           var array date invoice_date_arr,
+                           var array val invoice_amount_arr,
+                           var array string invoice_currency_arr)
+begin
+  record IVVc IVr;
+  Boolean addf;
+  Integer cnt,ix;
+  Integer i,rwcnt;
+  vector Boolean viprowprntdf;
+  val pay_amount;
+  string 255 pay_currency;
+  vector LongInt vfound;
+  
+  IVr.CustCode = customer_code;
+  while (LoopBackKey("CustCode",IVr,1,true)) begin
+    
+    if (IVr.CustCode<>customer_code) then begin goto LFindLastInvoices_out; end;
+    if ((maxcount>0) and (cnt>=maxcount)) then begin goto LFindLastInvoices_out; end;
+    if (nonblankDate(mindate) and (mindate>IVr.InvDate)) then begin goto LFindLastInvoices_out; end;
+    
+    ix = invoice_nr_arr.length;
+    invoice_nr_arr[ix] = IVr.SerNr;
+    invoice_date_arr[ix] = IVr.InvDate;
+    invoice_amount_arr[ix] = IVr.Sum4;
+    invoice_currency_arr[ix] = IVr.CurncyCode;
+  end;
+  
+LFindLastInvoices_out:;
+end;
+
+procedure A2CProc_GetLastInvoices(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,var string chatmessage,var string response)
+begin
+  Boolean foundf;
+  string 255 count,cucode;
+  Integer n,oldcomp;
+  LongInt i;
+  array string 255 invoice_nr_arr;
+  array date invoice_date_arr;
+  array val invoice_amount_arr;
+  array string 255 invoice_currency_arr;
+  date blankdateval;
+  
+  cucode = FindParameter(Ctxr,nodestack,"CUr.Code","the customer that the user wants to inquire about",chatmessage,response);
+  count = FindParameter(Ctxr,nodestack,"count","the number of invoices the user wants information about",chatmessage,response);
+  
+  ValidateCUVc(cucode);
+  ValidateNumber(count,1,10,"5");
+
+  EnsureParameter(Ctxr,cucode,"CUr.Code","Which customer would you like to list invoices for?",response);
+  StoreParameterInContext(Ctxr,"CUr.Code",cucode);
+  
+  if (Ctxr.Status<>"processing") then begin
+    goto LA2CProc_GetLastInvoices_out;
+  end;
+  
+  n = StringToInt(count);
+  
+  oldcomp = CurrentCompany;
+  SetCompany(1,false);
+  FindLastInvoices(cucode,n,blankdateval,invoice_nr_arr,invoice_date_arr,invoice_amount_arr,invoice_currency_arr);
+  ResetCompany(oldcomp);
+  
+  response = response & "The last invoices for customer " & cucode & " are " & NL & NL;
+  
+  for (i = 0; i<invoice_date_arr.length; i = i + 1) begin
+    response = response & SayNumberAsCardinal(invoice_nr_arr[i]) & " for " & SayValAsCurrency(invoice_amount_arr[i],invoice_currency_arr[i]) & ", on " & SayAsDate(invoice_date_arr[i])  & "." & NL;
+    //if (i<(invoice_date_arr.length-1)) then begin
+    //  response = response & "<break strength='medium'></break> ";
+    //end;
+  end;
+  
+  response = response & NL;
+  
+  PopNode(nodestack);
+  Ctxr.Status = "waiting";
+  
+LA2CProc_GetLastInvoices_out:;
+end;
+
+procedure A2CProc_GetCompanyInfo(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,var string chatmessage,var string response,string field)
+begin
+  record CYBlock CYb;
+  string 255 value;
+  
+  BlockLoad(CYb);
+  
+  switch (field) begin
+    case "accountant": value = CYb.ChiefAccountant;
+    case "address": value = CYb.Addr0 & " " & CYb.Addr1 & " " & CYb.Addr2 & " " & CYb.Addr3;
+    case "CEO": value = CYb.Manager;
+    case "e-mail": value = CYb.emailAddr;
+    case "postcode": value = CYb.Addr4;
+    case "VAT": value = CYb.VATNr;
+    case "website": value = CYb.wwwAddr;
+  end;
+  
+  if (value<>"") then begin
+    response = response & "The company " & field & " is " & value;
+  end else begin
+    response = response & "The company " & field & " is not available, is there something else I can help you with?";
+  end;
+  
+  PopNode(nodestack);
+  Ctxr.Status = "waiting";
+end;
+
+global
+procedure Anna2Chat_ProcessNode(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,var string chatmessage,var string response)
+begin
+  record Anna2ChatNodeVc Noder;
+  record Anna2SettingsBlock A2Sb;
+  
+  BlockLoad(A2Sb);
+
+  Noder = nodestack[nodestack.length - 1];
+  
+  if (A2Sb.AnnaDebugLog<>0) then begin
+    LogText(0,"Anna2, ProcessNode, " & Noder.SerNr & " stackdepth " & nodestack.length);
+  end;
+  
+  Noder.TryCount = Noder.TryCount + 1;
+  nodestack[nodestack.length - 1] = Noder;
+  
+  if (Noder.TryCount>3) then begin
+    Anna2Chat_SystemError(Ctxr,nodestack,response);
+    goto Anna2Chat_ProcessNode_out;
+  end;
+  
+  if (Noder.State==kChatNodeState_Init) then begin
+    if (Noder.Greeting<>"") then begin
+      response = response & Noder.Greeting & NL & NL;
+    end;
+    
+    Noder.State = kChatNodeState_Processing;
+    nodestack[nodestack.length - 1] = Noder;
+  end;
+  
+  if (A2Sb.AnnaDebugLog<>0) then begin
+    LogText(0,"Anna2, ProcessNode, function " & Noder.SystemFunction);
+    LogText(0,"Anna2, ProcessNode, chatmessage " & chatmessage);
+  end;
+  
+  switch (Noder.SystemFunction) begin
+    case "Menu": A2CProc_Menu(Ctxr,nodestack,chatmessage,response);
+    
+    case "Answer": A2CProc_Answer(Ctxr,nodestack,chatmessage,response,false);
+    case "RandomAnswer": A2CProc_Answer(Ctxr,nodestack,chatmessage,response,true);
+    
+    case "CreateNewOrder": A2CProc_OR_Create(Ctxr,nodestack,chatmessage,response);
+    case "AddItemToOrder": A2CProc_OR_AddItem(Ctxr,nodestack,chatmessage,response);
+    case "EmailOrder": A2CProc_OR_Email(Ctxr,nodestack,chatmessage,response);
+    case "GetOrdersPendingDelivery": A2CProc_OR_GetDeliverable(Ctxr,nodestack,chatmessage,response);
+    case "GetPlannedDelivery": A2CProc_OR_PlannedDelivery(Ctxr,nodestack,chatmessage,response);
+    
+    case "CreateNewQuotation": A2CProc_QT_Create(Ctxr,nodestack,chatmessage,response);
+    case "AddItemToQuotation": A2CProc_QT_AddItem(Ctxr,nodestack,chatmessage,response);
+    case "EmailQuotation": A2CProc_QT_Email(Ctxr,nodestack,chatmessage,response);
+
+    case "CheckInvoiceStatus": A2CProc_CheckInvoiceStatus(Ctxr,nodestack,chatmessage,response);
+    case "RequestInvoices": A2CProc_GetLastInvoices(Ctxr,nodestack,chatmessage,response);
+    case "EmailInvoice": A2CProc_Invoice_Email(Ctxr,nodestack,chatmessage,response);
+
+    case "GetLastPayments": A2CProc_GetLastPayments(Ctxr,nodestack,chatmessage,response);
+    
+    case "GetStockLevelOfItem": A2CProc_IN_GetStockLevel(Ctxr,nodestack,chatmessage,response);
+    
+    case "RequestCompanyAccountant": A2CProc_GetCompanyInfo(Ctxr,nodestack,chatmessage,response,"accountant");
+    case "RequestCompanyAddress": A2CProc_GetCompanyInfo(Ctxr,nodestack,chatmessage,response,"address");
+    case "RequestCompanyCEO": A2CProc_GetCompanyInfo(Ctxr,nodestack,chatmessage,response,"CEO");
+    case "RequestCompanyEmail": A2CProc_GetCompanyInfo(Ctxr,nodestack,chatmessage,response,"e-mail");
+    case "RequestCompanyPostcode": A2CProc_GetCompanyInfo(Ctxr,nodestack,chatmessage,response,"postcode");
+    case "RequestCompanyVAT": A2CProc_GetCompanyInfo(Ctxr,nodestack,chatmessage,response,"VAT");
+    case "RequestCompanyWebsite": A2CProc_GetCompanyInfo(Ctxr,nodestack,chatmessage,response,"website");
+    // case "TellJoke":
+    
+    // case "Hangup":
+    // case "ChangeLanguage":
+    otherwise
+      response = "unknown function '" & Noder.SystemFunction & "' for intent " & Noder.Intent & " on chat node " & Noder.SerNr;
+      PopNode(nodestack);
+      Ctxr.Status = "waiting";
+  end;
+  
+Anna2Chat_ProcessNode_out:;
+end;
+
+global
+function string 255 Anna2Chat_Process(var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,string achatmessage)
+begin
+  string 255 res,chatmessage;
+  
+  //if (Ctxr.CurrentNode<=0) then begin Ctxr.CurrentNode = Anna2StartNode; end;
+  
+  Ctxr.Status = "processing";
+  chatmessage = achatmessage;
+    
+  while (Ctxr.Status=="processing") begin
+    Anna2Chat_ProcessNode(Ctxr,nodestack,chatmessage,res);
+  end;
+    
+  Anna2Chat_Process = res;
+end;
+
+global
+function string 255 ContextToString(record Anna2ContextVc Ctxr)
+begin
+  string 255 res;
+  area ra;
+  
+  AddRecordToArea(Ctxr,"Anna2ContextVc",ra);
+  res = AreaToString(ra);
+  res = Base64Encode(res);
+  
+  ContextToString = res;
+end;
+
+global
+procedure StringToContext(string astr,var record Anna2ContextVc Ctxr)
+begin
+  area ra;
+  string 255 str;
+
+  str = astr;
+
+  if (str<>"") then begin
+    str = Base64Decode(str);
+  end;
+  
+  if (str<>"") then begin
+    AddTextToArea(str,ra);
+    GetRecordFromArea(Ctxr,"Anna2ContextVc",0,ra);
+  end;
+end;
+
+global
+function string 255 NodeToString(record Anna2ChatNodeVc Noder)
+begin
+  string 255 res;
+  area ra;
+  
+  AddRecordToArea(Noder,"Anna2ChatNodeVc",ra);
+  res = AreaToString(ra);
+  res = Base64Encode(res);
+  
+  NodeToString = res;
+end;
+
+global
+procedure StringToNode(string astr,var record Anna2ChatNodeVc Noder)
+begin
+  area ra;
+  string 255 str;
+
+  str = astr;
+
+  if (str<>"") then begin
+    str = Base64Decode(str);
+  end;
+  
+  if (str<>"") then begin
+    AddStringToArea(str,ra);
+    GetRecordFromArea(Noder,"Anna2ChatNodeVc",0,ra);
+  end;
+end;
+
+global
+procedure Anna2_LoadCbctx(string cbctx,var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,
+                     var array string roles,var array string messages)
+begin
+  string 255 nodestr,ctxstr;
+  record Anna2ChatNodeVc Noder,StartNode;
+  
+  ChatBotContext_SetRecord(cbctx,"A2Ctx",Ctxr);
+
+  ClearArray(nodestack);
+  nodestr = GetChatBotContextValue(cbctx,"Nodestack[0]");
+  while (nodestr<>"") begin
+    StringToNode(nodestr,Noder);
+    PushNode(nodestack,Noder);
+    nodestr = GetChatBotContextValue(cbctx,"Nodestack[" & nodestack.length & "]");
+  end;
+  
+  if (nodestack.length==0) then begin
+    StartNode.SerNr = Anna2StartNode;
+    ReadFirstMain(StartNode,1,true);
+    nodestack[0] = StartNode;
+  end;
+  
+  AIChat_LoadCbctx(cbctx,roles,messages);
+end;
+
+procedure AddDebugContextRows(record Anna2ContextVc Ctxr,string aprefix,var string debugstr)
+begin
+  row Anna2ContextVc Ctxrw;
+  LongInt i,rwcnt;
+  string 255 prefix,value;
+  
+  prefix = aprefix & ":";
+  
+  rwcnt = MatRowCnt(Ctxr);
+  for (i = 0; i<rwcnt; i = i + 1) begin
+    MatRowGet(Ctxr,i,Ctxrw);
+    if (left(Ctxrw.Object,len(prefix))==prefix) then begin
+      value = Base64Decode(Ctxrw.Value);
+      RemoveParenExprFromString(value,"[[","]]");
+      RemoveParenExprFromString(value,"[","]");
+
+      debugstr = debugstr & Ctxrw.Object & " = " & value & NL;
+    end;
+  end;
+
+end;
+
+global
+function string 255 Anna2_Ctx_DebugStr(record Anna2ContextVc Ctxr,array record Anna2ChatNodeVc nodestack)
+begin
+  string 255 debugstr;
+  record Anna2ChatNodeVc A2CNr;
+  LongInt i;
+  
+  debugstr = debugstr &      "----------- stack -----------" & NL;
+
+  for (i = 0; i<nodestack.length; i = i + 1) begin
+    A2CNr = nodestack[i];
+    debugstr = debugstr & A2CNr.SerNr & "   " & A2CNr.Intent & "   " & A2CNr.Comment & "   " & A2CNr.State & NL;
+  end;
+
+  debugstr = debugstr & NL & "---------- context ----------" & NL;
+  debugstr = debugstr & Ctxr.CurrentNode & " " & Ctxr.Status & NL & NL;
+  AddDebugContextRows(Ctxr,"parameter",debugstr);
+
+  //debugstr = debugstr & NL & "---------- history ----------" & NL;
+  //AddDebugContextRows(Ctxr,"role",debugstr);
+  
+  Anna2_Ctx_DebugStr = debugstr;
+end;
+
+global
+procedure Anna2_StoreCbctx(string cbctx,record Anna2ContextVc Ctxr,array record Anna2ChatNodeVc nodestack,
+                      var array string roles,var array string messages)
+begin
+  LongInt i,rwcnt;
+  string 255 ctxstr,debugstr; //,filename;
+  record Anna2SettingsBlock A2Sb;
+  
+  BlockLoad(A2Sb);
+
+  ctxstr = ContextToString(Ctxr);
+  
+  SetChatBotContextValue(cbctx,"Anna2Contextr",ctxstr);
+
+  //filename = CreateTempFile("Anna2_Context_Put_" & TimeStampStr,".txt");
+  //WriteStringToFile(ctxstr,filename,0);
+
+  for (i = 0; i<nodestack.length; i = i + 1) begin
+    SetChatBotContextValue(cbctx,"Nodestack[" & i & "]",NodeToString(nodestack[i]));
+  end;
+
+  SetChatBotContextValue(cbctx,"Nodestack[" & nodestack.length & "]","");
+
+  AIChat_StoreCbctx(cbctx,roles,messages,false,true,true);
+
+  if (A2Sb.AnnaDebugLog<>0) then begin
+    LogText(0,"Anna2_StoreCbctx" & NL & NL & Anna2_Ctx_DebugStr(Ctxr,nodestack));
+  end;
+end;
+
+global
+procedure Anna2_Init()
+begin
+  AI_InitIntents;
+end;

@@ -1,0 +1,250 @@
+remote procedure LogTaxIntegrationInfo(string,string,area,var string);
+remote function Boolean AvalaraUserWebRequest(string,area,var area,string,var area);
+external function string 255 StripCharacter(string,string);
+external updating procedure OkWindow(integer);
+remote function LongInt GetAvalaraGroupList(var string,array string,array string,array string,array string,var Integer);
+external function Boolean ParseHTTPHeader(area,string,var Integer,var string,var string);
+remote procedure BuildRegisterAvalaraUserBody(record AvalaraUserVc,var area);
+remote procedure BuildAvalaraUserToGroupBody(record AvalaraUserVc,var area);
+remote updating function Boolean StoreUserId(record AvalaraUserVc,string);
+remote function Boolean ParseAddAvalaraUserToGroupReply(json);
+remote procedure AvalaraGroupDetailsRn(record RcVc,var LongInt);
+remote procedure AvalaraUserDetailsRn(record RcVc,var LongInt);
+
+function Boolean AvalaraUserDClassUserCodeEFAfter(Integer wn,Boolean changedf)
+begin
+  Boolean res;
+  record AvalaraUserVc AvalaraUserr;
+  record UserVc Userr;
+
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,AvalaraUserr);
+    Userr.Code = AvalaraUserr.UserCode;
+    if (ReadFirstMain(Userr,1,true)) then begin
+      AvalaraUserr.UserName = Userr.Name;
+      AvalaraUserr.UserEmail = Userr.emailAddr;
+    end;
+    PutWindowRecord(wn,AvalaraUserr);
+  end;
+  AvalaraUserDClassUserCodeEFAfter = res;
+  return;
+end;
+
+function Boolean AvalaraUserDClassGroupIDEFAfter(Integer wn,Boolean changedf)
+begin
+  Boolean res;
+  Integer i,acnt;
+  string 255 errmsg;
+  record AvalaraUserVc AvalaraUserr;
+  array string 255 astr,aaccount_name,aaccount_country,agroupid,agroupname,agroupdesc,aapplicationid;
+
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,AvalaraUserr);
+    if (nonblank(AvalaraUserr.GroupID)) then begin
+      GetAvalaraGroupList(errmsg,agroupid,agroupname,agroupdesc,aapplicationid,acnt)
+      for (i=0;i<acnt;i=i+1) begin
+        if (agroupid[i]==AvalaraUserr.GroupID) then begin
+          AvalaraUserr.GroupName = agroupname[i];
+          AvalaraUserr.GroupDescription = agroupdesc[i];
+          AvalaraUserr.GroupApplID = aapplicationid[i];
+          goto LAvalaraUserDClassGroupIDEFAfter;
+        end;
+     end;
+    end;
+LAvalaraUserDClassGroupIDEFAfter:;
+    PutWindowRecord(wn,AvalaraUserr);
+  end;
+  AvalaraUserDClassGroupIDEFAfter = res;
+  return;
+end;
+
+global
+function Boolean AvalaraUserDClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
+begin
+  Boolean res;
+
+  switch (fieldname) begin
+    case "UserCode": res = AvalaraUserDClassUserCodeEFAfter(wn,changed!=0);
+    case  "GroupID": res = AvalaraUserDClassGroupIDEFAfter(wn,changed!=0);
+  end;
+  AvalaraUserDClassAfterEditField = res;
+  return;
+end;
+
+global
+updating procedure RegisterAvalaraUserDsm()
+begin
+  area a_req,a_reply,replyheader;
+  record IVVc IVr;
+  row IVVc IVrw;
+  integer wn;
+  string 255 filename,path,tstr,userid;
+  Boolean res;
+  record TaxRateIntrfcBlock TRIb;
+  record AvalaraUserVc AvalaraUserr;
+  json js;
+
+  BlockLoad(TRIb);
+  if (TRIb.Enable==0) then begin
+    MessageBox(40430,"");
+    goto LRegisterAvalaraUserDsm;
+  end;
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,AvalaraUserr);
+
+  if (blank(AvalaraUserr.UserEmail)) or (blank(AvalaraUserr.UserName)) or (blank(AvalaraUserr.UserCode)) then begin
+    MessageBox(40439,"");
+    goto LRegisterAvalaraUserDsm;
+  end;
+  BuildRegisterAvalaraUserBody(AvalaraUserr,a_req);
+
+  path = "/api/v1/users";
+  res = AvalaraUserWebRequest("POST",a_req,a_reply,path,replyheader);
+
+  LogTaxIntegrationInfo("RegisterAvalaraUser_request","",a_req,filename);
+  LogTaxIntegrationInfo("RegisterAvalaraUser_reply " ,"",a_reply,filename);
+
+  if (res) then begin
+    js = ParseJSONArea(a_reply);
+    if (GetAreaLength(a_reply)!=0) then begin
+      tstr = GetStringFromArea(a_reply,0,GetAreaLength(a_reply));
+      if (Left(tstr,1)=="\"") and (Right(tstr,1)=="\"") then begin
+        userid = StripCharacter(tstr,"\"");
+        if (qupdating.StoreUserId(AvalaraUserr,userid)) then begin
+          PutWindowRecord(wn,AvalaraUserr);
+          qupdating.OkWindow(wn);
+          CheckMarkBox(15092,"");
+        end else begin
+          MessageBox(40437,"");//TODO: better message
+        end;
+      end else begin
+        MessageBox(40437,"");
+      end;
+     end else begin
+      MessageBox(40437,"");
+    end;
+  end else begin 
+    MessageBox(42528,"");
+  end;
+LRegisterAvalaraUserDsm:;
+  return;
+end;
+
+global
+updating procedure AddAvalaraUserToGroupDsm()
+begin
+  area a_req,a_reply,replyheader;
+
+  integer wn;
+  string 255 filename,path,comment,result,tstr,userid;
+  Boolean res;
+  record TaxRateIntrfcBlock TRIb;
+  record AvalaraUserVc AvalaraUserr;
+  json jsr;
+  Integer status;
+
+  BlockLoad(TRIb);
+  if (TRIb.Enable==0) then begin
+    MessageBox(40430,"");
+    goto LAddAvalaraUserToGroupDsm;
+  end;
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,AvalaraUserr);
+
+  if (blank(AvalaraUserr.GroupID)) then begin
+    MessageBox(40440,"");
+    goto LAddAvalaraUserToGroupDsm;
+  end;
+
+  BuildAvalaraUserToGroupBody(AvalaraUserr,a_req);
+
+  path = "/api/v1/groups/" & AvalaraUserr.GroupID;
+  res = AvalaraUserWebRequest("PUT",a_req,a_reply,path,replyheader);
+
+  LogTaxIntegrationInfo("AddAvalaraUserToGroup_request","",a_req,filename);
+  LogTaxIntegrationInfo("AddAvalaraUserToGroup_reply " ,"",a_reply,filename);
+
+  if (res) then begin
+    jsr = ParseJSONArea(a_reply);
+    ParseHTTPHeader(replyheader,"",status,comment,result);
+    switch (status) begin
+      case 200:
+        jsr = ParseJSONArea(a_reply);
+        if (ParseAddAvalaraUserToGroupReply(jsr)) then begin
+          CheckMarkBox(15092,"");
+        end;
+      otherwise
+        MessageBox(40438,"");
+    end;
+  end else begin 
+    MessageBox(42528,"");
+  end;
+LAddAvalaraUserToGroupDsm:;
+  return;
+end;
+
+global
+updating procedure CheckAvalaraGroupDetailsDsm()
+begin
+  Integer wn;
+  record TaxRateIntrfcBlock TRIb;
+  record AvalaraUserVc AvalaraUserr;
+  record RcVc RepSpec;
+  LongInt errmsg;
+
+  BlockLoad(TRIb);
+  if (TRIb.Enable==0) then begin
+    MessageBox(40430,"");
+    goto LCheckAvalaraGroupDetailsDsm;
+  end;
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,AvalaraUserr);
+
+  if (blank(AvalaraUserr.GroupID)) then begin
+    MessageBox(40440,"");
+    goto LCheckAvalaraGroupDetailsDsm;
+  end;
+  RepSpec.f1 = AvalaraUserr.GroupID;
+  AvalaraGroupDetailsRn(RepSpec,errmsg);
+  if ((errmsg!=-1)) then begin
+    MessageBox(errmsg,"");
+    goto LCheckAvalaraGroupDetailsDsm;
+  end;
+
+LCheckAvalaraGroupDetailsDsm:;
+  return;
+end;
+
+global
+updating procedure CheckAvalaraUserDetailsDsm()
+begin
+  Integer wn;
+  record TaxRateIntrfcBlock TRIb;
+  record AvalaraUserVc AvalaraUserr;
+  record RcVc RepSpec;
+  LongInt errmsg;
+
+  BlockLoad(TRIb);
+  if (TRIb.Enable==0) then begin
+    MessageBox(40430,"");
+    goto LCheckAvalaraUserDetailsDsm;
+  end;
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,AvalaraUserr);
+
+  if (blank(AvalaraUserr.UserID)) then begin
+    MessageBox(40426,"");
+    goto LCheckAvalaraUserDetailsDsm;
+  end;
+  RepSpec.f1 = AvalaraUserr.UserID;
+  AvalaraUserDetailsRn(RepSpec,errmsg);
+
+LCheckAvalaraUserDetailsDsm:;
+  return;
+end;

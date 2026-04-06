@@ -1,0 +1,46 @@
+function string 255 GetPath(string expfileloc)
+begin
+  string 255 res,tstr;
+  Integer i,slen,chpos;
+
+  tstr = Right(expfileloc,Len(expfileloc)-1);
+  
+  slen = len(tstr);
+  for (i=slen;i>=0;i=i-1) begin
+    if (Mid(tstr,i,1)=="/") then begin
+       chpos = i;
+       goto LGetPath;
+    end;
+  end;
+LGetPath:;  
+  GetPath = Left(tstr,chpos+1);
+  return;
+end;
+
+global
+procedure ClientExportAttachedFile(LongInt number,record Attach2Vc Attachr)
+begin
+  area afile;
+  string 255 filename,path;
+  Integer i;
+  
+  path = GetPath(ExportFileLocation);
+
+  i = 1;
+  filename = path & number & "-" & Attachr.FileName;
+LFileExists:;
+  if (FileExists(filename)) then begin
+    if (i>1) then begin
+      filename = Left(filename,Len(filename)-(2+Len(i)));
+    end;
+    filename = filename & "(" & i & ")";
+    i = i + 1;
+    goto LFileExists;
+  end;
+
+  SetAreaZeroSize(afile);
+  AddAttachFileToArea(Attachr,afile,false);
+  WriteAreaToFile(afile,filename,0);
+
+  return;
+end;

@@ -1,0 +1,121 @@
+external updating procedure UpdateBuyBackFromSH(record SHVc);
+
+global
+updating procedure UpdateShipmentFromCashInv(LongInt orsernr,record IVCashVc IVCashr,Boolean negf)
+BEGIN
+  record SHVc SHr;
+  record SHVc oldSHr;
+  Boolean foundf,testf;
+  record OrdSettBlock OSb;
+  row IVCashVc IVCashrw;
+  Integer i,rwcnt;
+  
+  foundf = true;
+  if (IVCashr.SerNr<=0) then begin
+    goto LUpdateShipmentFromCashInv;
+  end;
+  BlockLoad(OSb);
+  if (OSb.IVBasedOnSH!=0) then begin
+/*  
+    rwcnt = MatRowCnt(IVCashr);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(IVCashr,i,IVCashrw);
+      if (IVCashrw.SHNr>0) then begin
+      end;
+    end;
+*/    
+  end else begin  
+    rwcnt = MatRowCnt(IVCashr);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(IVCashr,i,IVCashrw);
+      if (IVCashrw.SHNr>0) and (IVCashrw.SHRow>=0) then begin
+        goto LUpdateShipmentFromCashInv;
+      end;
+    end;
+  
+    if (negf) then begin
+LAgainUpdateShipmentFromCashInv:;
+      ResetLoop(SHr);
+      SHr.InvoiceNr = IVCashr.SerNr;
+      while (LoopKey("InvoiceNr",SHr,1,foundf)) begin
+        if (SHr.InvoiceNr!=IVCashr.SerNr) then begin
+          foundf = false;
+        end;
+        testf = foundf;
+        if (SHr.OrderNr!=orsernr) then begin
+          testf = false;
+        end;
+        if (testf) then begin
+          RecordCopy(oldSHr,SHr);
+          SHr.InvoiceNr = -1;
+          if (RecordUpdate(oldSHr,SHr,false)) then begin
+          end;
+          UpdateBuyBackFromSH(SHr);
+          goto LAgainUpdateShipmentFromCashInv;
+        end;
+      end;
+    end else begin
+      SHr.OrderNr = orsernr;
+      while (LoopKey("OrderKey",SHr,1,foundf)) begin
+        if (SHr.OrderNr!=orsernr) then begin
+          foundf = false;
+        end;
+        testf = foundf;
+        if (SHr.InvoiceNr>0) then begin
+          testf = false;
+        end;
+        if (testf) then begin
+          RecordCopy(oldSHr,SHr);
+          SHr.InvoiceNr = IVCashr.SerNr;
+          if (RecordUpdate(oldSHr,SHr,false)) then begin
+          end;
+          UpdateBuyBackFromSH(SHr);
+        end;
+      end;
+    end;
+  end;
+LUpdateShipmentFromCashInv:;
+  RETURN;
+END;
+
+global
+updating procedure UpdateShipmentRowsFromCashInv(record IVCashVc IVCashp,Boolean anegf)
+begin
+  record SHVc SHr;
+  record SHVc oldSHr;
+  row SHVc SHrw;
+  Boolean shfoundf;
+  row IVCashVc IVCashrw;
+  Integer i,rwcnt;
+  Boolean negf;
+
+  negf = anegf;
+  if (IVCashp.InvType==kPOSInvoiceTypeCredit) then begin
+    negf = !negf;
+  end;
+  rwcnt = MatRowCnt(IVCashp);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(IVCashp,i,IVCashrw);
+    if (IVCashrw.SHNr>0) and (IVCashrw.SHRow>=0) then begin
+      SHr.SerNr = IVCashp.SHNr; 
+      shfoundf = ReadFirstMain(SHr,1,true);
+      logtext(0,"shfoundf=" & shfoundf);
+      if (shfoundf) then begin
+        RecordCopy(oldSHr,SHr);
+        logtext(0,"IVCashrw.SHRo=" & IVCashrw.SHRow & ", MatRowCnt(SHr)=" & MatRowCnt(SHr));
+        if (IVCashrw.SHRow<MatRowCnt(SHr)) then begin
+          MatRowGet(SHr,IVCashrw.SHRow,SHrw);
+          if (negf) then begin
+            SHrw.Invd = SHrw.Invd - IVCashrw.Quant;
+          end else begin
+            SHrw.Invd = SHrw.Invd + IVCashrw.Quant;
+          end;
+          if (SHrw.Invd==0) then begin SHrw.Invd = blankval; end;
+          MatRowPut(SHr,IVCashrw.SHRow,SHrw);
+        end;
+        RecordUpdate(oldSHr,SHr,false);
+      end;
+    end;
+  end;
+  return;
+end;

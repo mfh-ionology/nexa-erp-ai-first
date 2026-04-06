@@ -1,0 +1,38 @@
+global 
+procedure NutritionFactsVc_PasteSetupNutritionFacts(var record NutritionFactsVc NFr)
+begin
+  record INVc INr;
+  row NutritionFactsVc NFrw;
+  record NutritionFactsSetVc NFSetr;
+  row NutritionFactsSetVc NFSetrw;
+  integer rwcnt,a,i;
+
+  INr.Code = NFr.ArtCode;
+  INr.Group = NFr.ItemGroup;
+  if (ReadFirstMain(INr,1,true)) then begin
+    NFSetr.ItemGroup = INr.Group; 
+    NFr.Description = INr.Name;
+    NFr.ItemGroup = INr.Group;
+    ReadFirstKey("ItemGroup",NFSetr,1,true);
+    if (NFSetr.ItemGroup==INr.Group) then begin
+      rwcnt = MatRowCnt(NFSetr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(NFSetr,i,NFSetrw);
+        NFrw.Nutrient = NFSetrw.Nutrient;
+        NFrw.UnitCode = NFSetrw.UnitCode;
+        MatRowPut(NFr,i,NFrw);
+      end;
+    end;
+    NFSetr.ItemGroup = "*";
+    if (ReadFirstKey("ItemGroup",NFSetr,1,true)) then begin 
+      rwcnt = MatRowCnt(NFSetr);
+      for (a=0;a<rwcnt;a=a+1) begin
+        MatRowGet(NFSetr,a,NFSetrw);
+        NFrw.Nutrient = NFSetrw.Nutrient;
+        NFrw.UnitCode = NFSetrw.UnitCode;
+        MatRowPut(NFr,a+i,NFrw);
+      end;
+    end;
+  end;
+  return;
+end;

@@ -1,0 +1,115 @@
+remote procedure GetJobShopBaskPrices(string,string,string,val,var string,var val,var val,var val);
+external procedure CalcSum(val,val,val,val,var val,Integer);
+
+function Boolean RepItemsDClassItemEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf)
+begin
+  Boolean res;
+  record RepItemsVc RepItemsr;
+  row RepItemsVc RepItemsrw;
+  record INVc INr;
+  string 255 comment;
+  val tsum,disc,price;
+ 
+  res = true;
+  if (changedf!=0) then begin
+    GetWindowRecord(wn,RepItemsr);
+    DeselectWindow(wn,false);
+    MatRowGet(RepItemsr,rownr,RepItemsrw);
+    INr.Code = RepItemsrw.Item;
+    GetJobShopBaskPrices(RepItemsrw.CUCode,RepItemsr.PriceList,RepItemsrw.Item,RepItemsrw.Qty,comment,tsum,disc,price);
+    if (ReadFirstmain(INr,1,true)) then begin
+      RepItemsrw.Spec = INr.Name;
+      RepItemsrw.Price = price;
+      RepItemsrw.vRebate = disc;
+      RepItemsrw.Sum = tsum;
+      MatRowPut(RepItemsr,rownr,RepItemsrw);
+      PutWindowRecord(wn,RepItemsr);
+    end;    
+  end;
+  RepItemsDClassItemEFAfter = res;
+  return;
+end;
+
+function Boolean RepItemsDClassCUCodeEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf)
+begin
+  Boolean res;
+  record RepItemsVc RepItemsr;
+  row RepItemsVc RepItemsrw;
+  record CUVc CUr;
+ 
+  res = true;
+  if (changedf!=0) then begin
+    GetWindowRecord(wn,RepItemsr);
+    DeselectWindow(wn,false);
+    MatRowGet(RepItemsr,rownr,RepItemsrw);
+    CUr.Code = RepItemsrw.CUCode;
+    if (ReadFirstMain(CUr,1,true)) then begin
+      RepItemsrw.CUName = CUr.Name;
+      MatRowPut(RepItemsr,rownr,RepItemsrw);
+      PutWindowRecord(wn,RepItemsr);
+    end;
+  end;
+  RepItemsDClassCUCodeEFAfter = res;
+  return;
+end;
+
+function Boolean RepItemsDClassQtyEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf)
+begin
+  Boolean res;
+  record RepItemsVc RepItemsr;
+  row RepItemsVc RepItemsrw;
+  record CUVc CUr;
+  record GeneralOptionBlock GenOptRec;
+  val tsum;
+ 
+  res = true;
+  if (changedf!=0) then begin
+    BlockLoad(GenOptRec);
+
+    GetWindowRecord(wn,RepItemsr);
+    MatRowGet(RepItemsr,rownr,RepItemsrw);
+    CalcSum(RepItemsrw.Qty,RepItemsrw.Price,0,RepItemsrw.vRebate,tsum,GenOptRec.UseDiscount);
+    RepItemsrw.Sum = tsum;
+    MatRowPut(RepItemsr,rownr,RepItemsrw);
+    PutWindowRecord(wn,RepItemsr);
+  end;
+
+  RepItemsDClassQtyEFAfter = res;
+  return;
+end;
+
+global
+function Boolean RepItemsDClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
+begin
+  Boolean res;
+
+  switch (fieldname) begin
+    case "Item": res = RepItemsDClassItemEFAfter(wn,fn,rownr,changed);
+    case "CUCode": res = RepItemsDClassCUCodeEFAfter(wn,fn,rownr,changed);
+    // case "Qty": res = RepItemsDClassQtyEFAfter(wn,fn,rownr,changed);
+    // case "vRebate": res = RepItemsDClassQtyEFAfter(wn,fn,rownr,changed);
+    // case "Price": res = RepItemsDClassQtyEFAfter(wn,fn,rownr,changed);
+  end;
+  RepItemsDClassAfterEditField = res;
+  return;
+end;
+
+global
+procedure JobAddRepetitivesm()
+begin
+  Integer wn;
+  Record JobVc Jobr; 
+  Record RepItemsVc RepItemsr;
+  
+  Getwindowrecord(CurWindow,Jobr);
+  //DeselectWindow(wn,false);
+  RepItemsr.SerNr = Jobr.SerNr;
+  if (ReadFirstMain(RepItemsr,1,true)==false) then begin
+    RecordNew(RepItemsr);
+    RepItemsr.SerNr = Jobr.SerNr;
+    RepItemsr.PriceList = Jobr.PriceList;
+    wn = OpenWindow("RepItemsDClass",1,0,"","",RepItemsr);
+  end;
+  wn = OpenWindow("RepItemsDClass",1,0,"","",RepItemsr);
+  return;
+end;

@@ -1,0 +1,33 @@
+external procedure CheckFlush(var Integer,Integer);
+
+global
+updating procedure DefEInvRcvPrefMn(record RcVc RepSpec)
+BEGIN
+  record CUVc CUr;
+  record CUVc oldCUr;
+  Boolean testf;
+  Integer flushcnt;
+  
+  CUr.Code = "";
+  while (LoopMain(CUr,1,true)) begin
+    testf = true;
+    if (CUr.CUType==0) then begin testf = false; end;
+    if (CUr.blockedFlag!=0) then begin
+      testf = false;
+    end;
+    if (testf) then begin
+      RecordCopy(oldCUr,CUr);
+      if (CUr.eInvRcvPref==0) or (RepSpec.flags[4]==1) then begin
+        CUr.eInvRcvPref = RepSpec.flags[0];
+      end;
+      if (CUr.eInvAltRcvPref==0) or (RepSpec.flags[5]==1) then begin
+        CUr.eInvAltRcvPref = RepSpec.flags[1];
+      end;
+      CUr.eInvAttachPDF = RepSpec.flags[2];
+      CUr.eInvStop = RepSpec.flags[3];
+      if (RecordUpdate(oldCUr,CUr,false)) then begin end;
+      CheckFlush(flushcnt,10);
+    end;
+  end;
+  RETURN;
+END;

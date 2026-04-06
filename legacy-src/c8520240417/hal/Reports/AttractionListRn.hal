@@ -1,0 +1,132 @@
+external function Boolean SetInSet2(string,string);
+external procedure HT2Per(Date, Date , var string);
+
+global
+procedure AttractionListRn(record RcVc RepSpec)
+begin
+  Integer xkey,rw,pos,textsize,i;
+  Boolean TrHs,testf;
+  string 255 tstr;
+  record AttractionVc Attractionr;
+  array record AttractionVc aAttractionr;
+
+  StartReportJob(USetStr(43580));
+  rw = 1;
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1); rw = rw + 1;
+  if (nonblank(RepSpec.f1)) then begin
+    tstr = USetStr(43581);
+    Header(rw,tstr,1); rw = rw + 1;
+  end;  
+  switch (RepSpec.flags[7]) begin 
+    case 0: tstr = USetStr(43582) & ": " & USetStr(43583);
+    case 1: tstr = USetStr(43582) & ": " & USetStr(43584);
+  end;
+  Header(rw,tstr,1); rw = rw + 1;
+  switch (RepSpec.ArtMode) begin 
+    case 0: tstr =  USetStr(1159);
+    case 1: tstr =  USetStr(1160);
+  end;
+  Header(rw,tstr,1); rw = rw + 1;
+  if (RepSpec.flags[1]==1) then begin 
+    tstr = USetStr(43592);
+    Header(rw,tstr,1); rw = rw + 1;
+  end;
+  EndHeader;
+  
+  StartFormat(15);
+  OutString(0,0,  USetStr(43583),false);
+  OutString(50,0,USetStr(43586),false);
+  OutString(200,0,USetStr(43587),false);
+  OutString(350,0,USetStr(43588),false);
+  OutString(1,0,USetStr(43589),true);
+  EndFormat;
+  Black_Divider(0,1);
+  TrHs = true;
+  Attractionr.Code = "";
+
+  while (LoopKey("Code",Attractionr,1,TrHs)) begin
+    testf = true;
+    if (TrHs) then begin
+      if (nonblank(RepSpec.f1)) then begin
+        if (Attractionr.Class!=RepSpec.f1) then begin 
+          testf = false;
+        end;
+      end;
+      if (nonblankdate(Attractionr.StartDate)) then begin
+        if (DateInRange(Attractionr.StartDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin
+          testf = false;
+        end;  
+      end;
+      if (nonblankdate(Attractionr.EndDate)) then begin
+        if (DateInRange(Attractionr.EndDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin
+          testf = false;
+        end;  
+      end;  
+      if (RepSpec.flags[1]==0) then begin
+        if (Attractionr.Closed==1) then begin testf = false; end;
+      end;
+    end;
+    if (testf) then begin
+        aAttractionr[aAttractionr.length] = Attractionr; 
+    end;
+  end;
+  if (RepSpec.flags[7]==1) then begin
+    SortRecordArray(aAttractionr,"Sorting");
+  end;
+  for (i=0;i<aAttractionr.length;i=i+1) begin
+    Attractionr = aAttractionr[i];
+    StartFormat(15);
+    OutString(0,0,  Attractionr.Code,false);
+    OutString(50,0, Attractionr.Name,false);
+    OutString(200,0,Attractionr.Class,false);
+    OutString(350,0,Attractionr.StartDate,false);
+    OutString(1,0,Attractionr.EndDate,true);
+    EndFormat;
+    Gray_Divider(0,1);
+    if (RepSpec.ArtMode==1) then begin
+      StartFormat(15);
+      OutString(0,0,USetStr(43590),false);
+      EndFormat;
+      StartFormat(15);
+      if (nonblank(Attractionr.Addr0)) then begin
+        tstr = Attractionr.Addr0;  
+      end;
+      if (nonblank(Attractionr.Addr1)) then begin
+        tstr = tstr & " " & Attractionr.Addr1;
+      end;
+      if (nonblank(Attractionr.Addr2)) then begin
+        tstr = tstr & " " & Attractionr.Addr2;
+      end;
+      if (nonblank(Attractionr.Addr3)) then begin
+        tstr = tstr & " " & Attractionr.Addr3;
+      end;
+      if (nonblank(Attractionr.Addr4)) then begin
+        tstr = tstr & " " & Attractionr.Addr4;
+      end;
+      OutString(0,0,tstr,false);
+      EndFormat;
+      Gray_Divider(0,1);
+      textsize = SizeTextCnt(Attractionr);
+      pos = 0;
+      if (textsize>0) then begin 
+        StartFormat(15);
+        OutString(0,0,USetStr(43591),false);
+        EndFormat;
+      end;
+      while (pos<textsize) begin
+        tstr = StringFromText(Attractionr,pos,255);
+        pos = pos + len(tstr);
+        if (len(tstr)==0) then begin
+          pos = pos + 1;
+        end;
+        StartFormat(15);
+        OutString(0,0,tstr,false);
+        EndFormat;
+      end;
+      Black_Divider(0,1);
+    end;    
+  end;
+  EndJob;
+  return;
+end;

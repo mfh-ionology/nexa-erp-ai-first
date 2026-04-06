@@ -1,0 +1,2561 @@
+external function Integer InString2(string,string);
+external function Date DateFromString(string,string);
+external function val ValFromString(string,string,string);
+external procedure RestAccSumup(var record RestAccVc,string);
+external updating procedure RestAccDClassTouchScreenFinishButton();
+external procedure PrintCreditCardTerminalReport(record CCTRVc);
+external procedure PrintCreditCardTerminalFailedTransaction(record NotepadVc);
+external function val AbsoluteVal(val);
+external procedure WindowFieldGotoForTouchScreen(Integer,Integer,string,Boolean);
+external procedure RestAccDClass_RefreshStringList(Integer,record RestAccVc);
+external procedure IVDClass_RefreshStringList(Integer,record IVVc);
+external updating procedure IVDClassTouchScreenFinishButton();
+external updating procedure IVCashDClassTouchScreenFinishButton();
+external procedure IVCashDClass_RefreshStringList(Integer,record IVCashVc);
+remote procedure IVCashSumup(var record IVCashVc,Boolean);
+remote updating procedure StoreCredCardSlip_VerifoneBanksys3(string,val,string,string,string,string,string,string,string,LongInt,string,Integer,string,var record NotepadVc,var record NotepadVc);
+external procedure LogAreaToFile(string,area);
+external function string 50 TimeToString(time,string,boolean); 
+external procedure M4PadString(string,Integer,string,Boolean,var string);
+external function Boolean FindLocalSerialPortDevice(Integer,LongInt,string,var record LSerialPortDeviceVc);
+forward function Integer VerifoneBanksys_ReadReply(var Area,Integer);
+forward updating procedure ProceedCCPayVerifoneCashierYesNoActionOClass();
+external updating procedure TCPIPWorldPay_Report(record LocalMachineBlock,record LSerialPortDeviceVc,string,Integer);
+remote function Integer IVCashPOSButtonAutoFinish(Integer);
+remote function Integer RestAccPOSButtonAutoFinish(Integer);
+
+function string 255 TCPIP_Verifone_CalculateLRC(string CtrlSeq)
+begin
+  string 255 res;
+  Integer i,crc;
+  
+  crc = 127;
+  for (i=0;i<len(CtrlSeq);i=i+1) begin
+    crc = BitXor(crc,asc(Mid(CtrlSeq,i,1)));
+  end;
+
+  res = res & chr(crc);
+  TCPIP_Verifone_CalculateLRC = res;
+  return;
+end;
+
+function Integer TCPIPVerifoneReplyStatus(string response)
+begin
+  Integer res;
+  
+//LogAreaToFile("Verifone/TCPIPVerifoneReplyStatus_reply" & TimeToString(CurrentTime,"HHMMSS",false) & ".txt",reply);
+  
+//  res = StringToInt(GetStringFromArea(reply,0,1));
+  res = asc(Mid(response,0,1));
+//  LogText(0," TCPIPVerifoneReplyStatus response=" & response);
+//  LogText(0," TCPIPVerifoneReplyStatus Mid(response,0,1)=" & Mid(response,0,1) & " res=" & res & " asc(Mid(response,0,1))=" & asc(Mid(response,0,1)));
+  TCPIPVerifoneReplyStatus = res;
+  return;  
+end;
+
+function Integer TCPIPVerifoneReply(string response,var vector string vreplyfields)
+begin
+  Integer res,i;
+  string 255 tstr;
+  Date td;
+ 
+  vreplyfields["authorisation"] = ""; vreplyfields["timestamp"] = ""; vreplyfields["error"] = ""; vreplyfields["result"] = "";
+ //123456780E01TRANSAZIONE ANNULLATA   00000000000000000000000000000000000 
+  if (len(response)<10) then begin
+    vreplyfields["response"] = Mid(response,1,1);
+  end else begin
+    vreplyfields["response"] = Mid(response,9,2);
+    switch (vreplyfields["response"]) begin
+      case "0S":
+      case "0E":
+        vreplyfields["result"] = Mid(response,11,2);
+        switch (vreplyfields["result"]) begin
+          case "00":
+            vreplyfields["authorisation"] = Mid(response,35,6);
+            vreplyfields["timestamp"] = Mid(response,41,7);
+
+            i = StringToInt(Left(vreplyfields["timestamp"],3)) - 1;
+            tstr = Mid(response,13,19);
+            td = CurrentDate;
+            td.day = 1; td.month = 1;
+            td = AddDay(td,i);
+            vreplyfields["timestamp"] = DateToString(td,"YYYYMMDD") & Right(vreplyfields["timestamp"],len(vreplyfields["timestamp"])-3);      
+            vreplyfields["cardnr"] = Mid(response,13,19);
+          case "01":
+            vreplyfields["error"] = Mid(response,13,24);
+        end;
+    end;
+  end;
+//LogText(0," fullresponse=" & response);
+//LogText(0," response=" & vreplyfields["response"]);
+//LogText(0," trresult=" & vreplyfields["result"]);
+//LogText(0," trauth=" & vreplyfields["authorisation"]);
+//LogText(0," trtimestamp=" & vreplyfields["timestamp"]);
+//LogText(0," trerror=" & vreplyfields["error"]);
+  TCPIPVerifoneReply = res;
+  return;  
+end;
+
+procedure TCPIPVerifone_DisplayStatus(Integer ProcessingWn,string txt,Integer sid)
+begin
+  record RcVc RepSpec;
+
+  if (ProcessingWn>0) then begin
+    GetWindowRecord(ProcessingWn,RepSpec);
+    if (nonblank(txt)) then begin
+      PutWindowString(ProcessingWn,"Status",txt);        
+    end else begin
+      PutWindowString(ProcessingWn,"Status",USetStr(sid));        
+    end;
+//      PutWindowString(ProcessingWn,"Result",txt);        
+    PutWindowRecord(ProcessingWn,RepSpec);
+  end;
+  return;
+end;
+
+updating procedure AddPaymentRow(Integer ProcessingWn,string vstr,string paymode,string label,vector string vreplyfields)
+begin
+  Integer mwn;
+  record IVCashVc IVCr;
+  row IVCashVc IVCrw;
+  Date td;
+  
+  mwn = MotherWindow(ProcessingWn);
+  switch (GetWindowFileName(mwn)) begin
+    case "IVCashVc":
+      GetWindowRecord(mwn,IVCr);
+      ClearRow(IVCr,IVCrw,kInvoiceRowTypeCreditCardPayment);  
+      IVCrw.Sum = ValFromString(vstr,"","")/100.00;
+      IVCrw.AuthorizationCode = vreplyfields["authorisation"];
+      IVCrw.PayMode = paymode;
+      IVCrw.Spec = label;
+      td = DateFromString(vreplyfields["8"],"DDMMYYYY");
+      IVCrw.CCTimestamp = vreplyfields["timestamp"];
+      IVCrw.CCTransID = vreplyfields["transid"];
+      IVCrw.CCReceiptNr = vreplyfields["receiptnr"];
+      MatRowPut(IVCr,MatRowCnt(IVCr),IVCrw);
+      IVCashSumup(IVCr,true);
+      PutWindowRecord(mwn,IVCr);
+      IVCashDClass_RefreshStringList(mwn,IVCr);
+      if (ProcessingWn>0) then begin
+        PutWindowString(ProcessingWn,"sernr",IVCr.SerNr);
+        PutWindowString(ProcessingWn,"authorisation",IVCrw.AuthorizationCode);        
+        PutWindowString(ProcessingWn,"timestamp",IVCrw.CCTimestamp);        
+        PutWindowString(ProcessingWn,"transid",IVCrw.CCTransID);        
+        PutWindowString(ProcessingWn,"receiptnr",IVCrw.CCReceiptNr);        
+        PutWindowString(ProcessingWn,"localmachine",IVCr.LocalMachineCode);        
+        PutWindowString(ProcessingWn,"sum",vstr);
+      end;
+      if (WindowDoOK(mwn,0)) then begin
+        TCPIPVerifone_DisplayStatus(ProcessingWn,"",27384);
+        if (IVCr.RetValue>=0) then begin
+          if (IVCashPOSButtonAutoFinish(mwn)==kPOSButtonAutoFinishYes) then begin
+            IVCashDClassTouchScreenFinishButton;
+          end;
+        end;
+      end;
+  end;
+  return;
+end;
+
+updating procedure TCPIPVerifone_WaitForTransactionResult(string command,Boolean waitfordataf,Integer ProcessingWn,string lm,LongInt socket,string vstr,string paymode,string label,var string merchantNote)
+begin
+  string 255 response,tstr,tstr2,CtrlSeq;
+  Time ct,t;
+  Date td;
+  Integer stat,i,lines;
+  Boolean timedf,testf,sendackf;
+  record RcVc RepSpec;
+  LongInt pos,l;
+  area a;
+  vector string 255 vreplyfields;
+  record NotepadVc merchantNoter;
+  record CCTRVc CCTRr;
+  area merchantNoteArea;
+
+  GetStringFromSocket(socket,response,100);
+
+  if (nonblank(response)) then begin
+    stat = TCPIPVerifoneReplyStatus(response);
+
+//LogText(0," fullresponse=" & response);
+//LogText(0," stat=" & stat & " command " & command);
+
+    switch (command) begin
+      otherwise
+        switch (stat) begin
+          case CC_SOH:
+            timedf = true;
+            pos = 0;
+            GetNextSubstring(response,pos,CC_EOT,tstr);
+            TCPIPVerifone_DisplayStatus(ProcessingWn,tstr,27387);
+
+          case CC_STX:
+            TCPIPVerifoneReply(response,vreplyfields);
+
+            sendackf = waitfordataf;
+//LogText(0,"vreplyfields[response] " & vreplyfields["response"]);
+            switch (vreplyfields["response"]) begin 
+              case "0S":
+                if (waitfordataf) then begin
+                  pos = 0;
+                  GetNextSubstring(response,pos,"0S",tstr);
+                  tstr = Right(response,len(response)-pos-1);
+                  pos = 0;
+                  GetNextSubstring(tstr,pos,chr(CC_ETX),tstr);
+                  merchantNote = merchantNote & tstr & chr(10);
+                  timedf = InString2(response,"}}}}}")<0;
+                end;
+              case "0T":        
+                timedf = waitfordataf;
+              case "0C":        
+                timedf = waitfordataf;
+              case "0E":        
+                timedf = waitfordataf;
+                switch (vreplyfields["result"]) begin            
+                  case "00":
+                    AddPaymentRow(ProcessingWn,vstr,paymode,label,vreplyfields);
+                    timedf = true;
+                  otherwise
+                    TCPIPVerifone_DisplayStatus(ProcessingWn,vreplyfields["error"],27385);
+                    timedf = false;
+                end;
+              otherwise
+                timedf = waitfordataf;
+            end;
+
+//LogText(0,"sendackf " & sendackf);
+            if (sendackf) then begin
+              CtrlSeq = chr(CC_ACK);
+              CtrlSeq = CtrlSeq & chr(CC_ETX);
+              CtrlSeq = CtrlSeq & TCPIP_Verifone_CalculateLRC(CtrlSeq); 
+              sendackf = SendStringOnSocket(socket,CtrlSeq);
+            end;
+
+          case CC_ACK:
+            SendStringOnSocket(socket,chr(CC_ACK));
+            timedf = true;
+          case CC_NAK:
+    //              TCPIPVerifoneReply(reply,trresult,trauth,trtimestamp,trerror);
+        end;
+    end;
+  end else begin
+    timedf = true;
+  end;
+
+//LogText(0," timedf=" & timedf);
+
+  if (timedf) then begin
+    RemoveTask("TCPIPVerifone_WaitForTransactionResult");
+    ct = CurrentTime;
+    t = ct;
+    t.second = t.second + 1;
+    td = CurrentDate;
+    if (ct>t) then begin
+      td = AddDay(td,1);
+    end;
+    NewTimedTask("TCPIPVerifone_WaitForTransactionResult","TCPIPVerifone_WaitForTransactionResult","TCPIPVerifone_WaitForTransactionResultIdleTask",command & "|" & waitfordataf & "|" & socket & "|" & ProcessingWn & "|" & lm & "|" & vstr & "|" & paymode & "|" & label & "|" & merchantNote,td,t,"","");
+  end else begin
+    SetAreaZeroSize(merchantNoteArea);
+    merchantNote = ReplaceStringWithString(merchantNote,"}",chr(10));
+    AddTextToArea(merchantNote,merchantNoteArea);
+
+    SetAreaZeroSize(a);
+    lines = CountLinesInArea(merchantNoteArea);
+    for (i=0;i<lines;i=i+1) begin
+      tstr = GetLineFromArea(merchantNoteArea,i);
+      if (len(tstr)>24) then begin
+        l = len(tstr);
+        pos = 0;
+        testf = true;
+        while (testf) begin
+          tstr2 = Mid(tstr,pos,24);
+          if (nonblank(tstr2)) then begin
+            AddTextToArea(tstr2,a);
+            AddTextToArea(chr(13) & chr(10),a);
+          end;
+          pos = pos + len(tstr2);
+          testf = (len(tstr) - pos)>0;
+        end;
+      end else begin
+        AddTextToArea(tstr,a);
+        AddTextToArea(chr(13) & chr(10),a);
+      end;
+    end;
+
+    switch (command) begin
+      case "Purchase":
+        if (GetAreaLength(a)>0) then begin
+          AddAreaToTextField(a,merchantNoter);
+          if (ProcessingWn>0) then begin
+            StoreCredCardSlip_VerifoneBanksys3("A",ValFromString(GetWindowString(ProcessingWn,"sum"),"","")/100.00,GetWindowString(ProcessingWn,"transid"),GetWindowString(ProcessingWn,"receiptnr"),GetWindowString(ProcessingWn,"authorisation"),GetWindowString(ProcessingWn,"timestamp"),"","","",GetWindowString(ProcessingWn,"sernr"),"IVCashVc",0,GetWindowString(ProcessingWn,"localmachine"),merchantNoter,merchantNoter);
+          end;
+        end;
+      case "Report":
+        if (GetAreaLength(a)>0) then begin
+          RecordNew(CCTRr);
+          CCTRr.ReportType = paymode;
+          if (blank(CCTRr.LocalMachineCode)) then begin
+            CCTRr.LocalMachineCode = lm;
+          end;          
+          if (CCTRr.SerNr<=0) then begin
+            CCTRr.SerNr = NextSerNr("CCTRVc",CCTRr.TransDate,-1,false,"");
+          end;
+          if (CCTRr.SerNr>0) then begin  
+          
+            AddAreaToTextField(a,CCTRr);
+          
+            if (RecordStore(CCTRr,false)) then begin
+  //              PrintCreditCardTerminalReport(CCTRr);
+  //              PrintDocument(CCTRr,"CCTRForm",false);
+            end;
+          end;
+        end;
+//LogText(0," merchantNote=" & merchantNote);
+    end;
+
+/*
+    SetAreaZeroSize(a);
+    GetAreaFromTextField(merchantNoter,a);
+    LogAreaToFile("Verifone/gVerfifone_merchantNoteFinal" & ".txt",a);
+*/    
+    CloseSocket(socket);
+  end;
+  return;
+end;
+
+global
+updating procedure TCPIPVerifone_WaitForTransactionResultIdleTask(string arg)
+begin
+  LongInt pos;
+  string 255 command,tstr,vstr,paymode,label,lm;
+  LongInt socket;
+  Integer ProcessingWn;
+  string 255 merchantNote;
+  Boolean waitfordataf;
+  
+  pos = 0;
+  GetNextSubstring(arg,pos,"|",command);
+  GetNextSubstring(arg,pos,"|",tstr);
+  waitfordataf = StringToInt(tstr)!=0;
+  GetNextSubstring(arg,pos,"|",tstr);
+  socket = StringToLongInt(tstr);
+  GetNextSubstring(arg,pos,"|",tstr);
+  ProcessingWn = StringToLongInt(tstr);
+  GetNextSubstring(arg,pos,"|",lm);
+  GetNextSubstring(arg,pos,"|",vstr);
+  GetNextSubstring(arg,pos,"|",paymode);
+  GetNextSubstring(arg,pos,"|",label);
+  GetNextSubstring(arg,pos,"|",merchantNote);
+
+  TCPIPVerifone_WaitForTransactionResult(command,waitfordataf,ProcessingWn,lm,socket,vstr,paymode,label,merchantNote);  
+  return;
+end;
+
+/*
+global
+function LongInt TCPIPVerifoneWX675MessageSize(var area reply)
+begin
+  LongInt res,pos;
+  string 255 response;
+
+  res = FindStringInArea(chr(CC_ETX),reply);
+  if (res>=0) then begin 
+    if (FindStringInArea(chr(CC_ACK),reply) or FindStringInArea(chr(CC_NAK),reply)) then begin
+    end else begin
+      res = res + 1; 
+    end;
+  end;
+
+  response = AreaToString(reply);
+LogText(0,"TCPIPVerifoneWX675MessageSize res " & res & " GetAreaLength(reply)=" & GetAreaLength(reply) & " response=" & response);      
+
+  TCPIPVerifoneWX675MessageSize = res;
+  return;
+end;
+*/
+
+global
+function LongInt TCPIPVerifoneWX675MessageSize(var area reply)
+begin
+  LongInt i,res,pos_etx,pos_eot,pos_ack,pos_nak,pos_soh,pos_stx;
+  string 255 response;
+
+  pos_stx = FindStringInArea(chr(CC_STX),reply);
+  pos_etx = FindStringInArea(chr(CC_ETX),reply);
+  pos_soh = FindStringInArea(chr(CC_SOH),reply);
+  pos_eot = FindStringInArea(chr(CC_EOT),reply);
+  pos_ack = FindStringInArea(chr(CC_ACK),reply);
+  pos_nak = FindStringInArea(chr(CC_NAK),reply);
+  
+//LogText(0,"TCPIPVerifoneWX675MessageSize pos_stx=" & pos_stx & " pos_etx=" & pos_etx & " pos_soh=" & pos_soh & " pos_eot=" & pos_eot & " pos_ack=" & pos_ack & " pos_nak=" & pos_nak);      
+
+/*  
+  if (pos_ack>=0 or pos_nak>=0) then begin
+    res = 3;
+    goto LTCPIPVerifoneWX675MessageSize;
+  end;
+*/
+  if (pos_eot>=0) then begin
+    res = pos_eot + 1;
+    goto LTCPIPVerifoneWX675MessageSize;
+  end;
+  if (pos_etx>=0) then begin
+    res = pos_etx + 2;
+    goto LTCPIPVerifoneWX675MessageSize;
+  end;
+
+LTCPIPVerifoneWX675MessageSize:;
+  response = AreaToString(reply);
+//LogText(0,"TCPIPVerifoneWX675MessageSize res " & res & " GetAreaLength(reply)=" & GetAreaLength(reply) & " response=" & response);      
+
+  TCPIPVerifoneWX675MessageSize = res;
+  return;
+end;
+
+updating procedure TCPIPVerifoneWX675_Purchase(record LocalMachineBlock LMb,record LSerialPortDeviceVc LSPDr,val v,string paymode,string label,Integer ProcessingWn)
+begin
+  string 255 host,CtrlSeq,tstr,response,vstr,merchantNote;
+  LongInt socket,port,pos,starttick;
+  area req,reply;
+  Boolean testf;
+  record RahaxiBlock Rahb;
+     
+  if (InString(LSPDr.Port,":")) then begin
+    pos = 0;
+    GetNextSubstring(LSPDr.Port,pos,":",host);
+    GetNextSubstring(LSPDr.Port,pos,":",tstr);
+    port = StringToLongInt(tstr);    
+
+
+//    SendTCPRequest("192.168.5.222",62600,-1,false,"","","","",false,req,reply,10,0);
+//    socket = OpenSocket("192.168.8.193",12345);
+//    socket = OpenSocket("192.168.099.003",12345);
+    socket = OpenSocket(host,port);
+    if (socket>=0) then begin
+      BlockLoad(Rahb);
+      SetSocketMessageSizeCallback(socket,"TCPIPVerifoneWX675MessageSize");
+
+      if (Rahb.PrintReceipt==0) then begin
+        tstr = LSPDr.DeviceID;
+        if (blank(tstr)) then begin
+          tstr = "12345678";
+        end;
+        CtrlSeq = chr(CC_STX);
+        CtrlSeq = CtrlSeq & tstr;
+        CtrlSeq = CtrlSeq & "0";
+        CtrlSeq = CtrlSeq & "E";
+        CtrlSeq = CtrlSeq & "1";
+        CtrlSeq = CtrlSeq & chr(CC_ETX);
+        CtrlSeq = CtrlSeq & TCPIP_Verifone_CalculateLRC(CtrlSeq); 
+        testf = SendStringOnSocket(socket,CtrlSeq);
+
+        if (testf) then begin
+          GetStringFromSocket(socket,response,100);
+          switch (TCPIPVerifoneReplyStatus(response)) begin
+            case CC_ACK:
+              testf = SendStringOnSocket(socket,chr(CC_ACK));
+            case CC_NAK:
+              SendStringOnSocket(socket,chr(CC_NAK));
+              testf = false;
+          end;
+        end;
+      end else begin
+        testf = true;
+      end;
+      if (testf) then begin
+        SetAreaZeroSize(req);
+
+        CtrlSeq = chr(CC_STX);
+        tstr = LSPDr.DeviceID;
+        if (blank(tstr)) then begin
+          tstr = "12345678";
+        end;
+        CtrlSeq = CtrlSeq & tstr;
+        CtrlSeq = CtrlSeq & "0";
+        CtrlSeq = CtrlSeq & "X";
+        tstr = LMb.TerminalID;
+        if (blank(tstr)) then begin
+          M4PadString("0",8,"0",false,tstr);
+        end;
+        CtrlSeq = CtrlSeq & tstr;
+        CtrlSeq = CtrlSeq & "0";
+        CtrlSeq = CtrlSeq & "00";
+        CtrlSeq = CtrlSeq & "0";
+        CtrlSeq = CtrlSeq & "0";
+        vstr = ValToString(v*100,M4UVal,"","",1);
+        M4PadString(vstr,8,"0",true,tstr);
+        CtrlSeq = CtrlSeq & tstr;
+        M4PadString("0",8,"0",false,tstr);
+        CtrlSeq = CtrlSeq & tstr;
+        CtrlSeq = CtrlSeq & chr(CC_ETX);
+        CtrlSeq = CtrlSeq & TCPIP_Verifone_CalculateLRC(CtrlSeq); 
+/*        
+        CtrlSeq = chr(CC_STX);
+        tstr = LSPDr.DeviceID;
+        if (blank(tstr)) then begin
+          tstr = "12345678";
+        end;
+        CtrlSeq = CtrlSeq & tstr;
+        CtrlSeq = CtrlSeq & "0";
+        CtrlSeq = CtrlSeq & "P";
+        M4PadString(" ",8," ",false,tstr);
+        CtrlSeq = CtrlSeq & tstr;
+        CtrlSeq = CtrlSeq & "0";
+        CtrlSeq = CtrlSeq & "000";
+        CtrlSeq = CtrlSeq & "0";
+        vstr = ValToString(v*100,M4UVal,"","",1);
+        M4PadString(vstr,8,"0",true,tstr);
+        CtrlSeq = CtrlSeq & tstr;
+        M4PadString("0",8,"0",false,tstr);
+        CtrlSeq = CtrlSeq & tstr;
+        CtrlSeq = CtrlSeq & chr(CC_ETX);
+        CtrlSeq = CtrlSeq & TCPIP_Verifone_CalculateLRC(CtrlSeq); 
+*/        
+        if (SendStringOnSocket(socket,CtrlSeq)) then begin
+          TCPIPVerifone_DisplayStatus(ProcessingWn,"",27420);
+          TCPIPVerifone_WaitForTransactionResult("Purchase",true,ProcessingWn,LMb.LocalMachineCode,socket,vstr,paymode,label,merchantNote);
+        end else begin
+          CloseSocket(socket);
+        end;
+      end else begin
+        CloseSocket(socket);
+      end;      
+    end;
+  end;
+  return;
+end;
+
+updating procedure TCPIPVerifoneWX675_Report(record LocalMachineBlock LMb,record LSerialPortDeviceVc LSPDr,string reportcode,Integer ProcessingWn)
+begin
+  string 255 host,CtrlSeq,tstr,response,vstr,merchantNote;
+  LongInt socket,port,pos,starttick;
+  area req,reply;
+  Boolean testf;
+  record RahaxiBlock Rahb;
+   
+  if (InString(LSPDr.Port,":")) then begin
+    pos = 0;
+    GetNextSubstring(LSPDr.Port,pos,":",host);
+    GetNextSubstring(LSPDr.Port,pos,":",tstr);
+    port = StringToLongInt(tstr);    
+
+    socket = OpenSocket(host,port);
+
+    if (socket>=0) then begin
+      SetSocketMessageSizeCallback(socket,"TCPIPVerifoneWX675MessageSize");
+
+
+      BlockLoad(Rahb);
+      if (Rahb.PrintReceipt==0) then begin
+        tstr = LSPDr.DeviceID;
+        if (blank(tstr)) then begin
+          tstr = "12345678";
+        end;
+        CtrlSeq = chr(CC_STX);
+        CtrlSeq = CtrlSeq & tstr;
+        CtrlSeq = CtrlSeq & "0";
+        CtrlSeq = CtrlSeq & "E";
+        CtrlSeq = CtrlSeq & "1";
+        CtrlSeq = CtrlSeq & chr(CC_ETX);
+        CtrlSeq = CtrlSeq & TCPIP_Verifone_CalculateLRC(CtrlSeq); 
+        testf = SendStringOnSocket(socket,CtrlSeq);
+
+        if (testf) then begin
+          GetStringFromSocket(socket,response,100);
+          switch (TCPIPVerifoneReplyStatus(response)) begin
+            case CC_ACK:
+              testf = SendStringOnSocket(socket,chr(CC_ACK));
+            case CC_NAK:
+              SendStringOnSocket(socket,chr(CC_NAK));
+              testf = false;
+          end;
+        end;
+      end else begin
+        testf = true;
+      end;
+
+      if (testf) then begin
+        CtrlSeq = chr(CC_STX);
+        tstr = LSPDr.DeviceID;
+        if (blank(tstr)) then begin
+          tstr = "12345678";
+        end;
+        CtrlSeq = CtrlSeq & tstr;
+        CtrlSeq = CtrlSeq & "0";
+        CtrlSeq = CtrlSeq & reportcode;
+        tstr = LMb.TerminalID;
+        if (blank(tstr)) then begin
+          M4PadString("0",8,"0",false,tstr);
+        end;
+        CtrlSeq = CtrlSeq & tstr;
+        CtrlSeq = CtrlSeq & "0";
+        M4PadString("0",7,"0",false,tstr);
+        CtrlSeq = CtrlSeq & tstr;
+        CtrlSeq = CtrlSeq & chr(CC_ETX);
+        CtrlSeq = CtrlSeq & TCPIP_Verifone_CalculateLRC(CtrlSeq); 
+        if (SendStringOnSocket(socket,CtrlSeq)) then begin
+          TCPIPVerifone_DisplayStatus(ProcessingWn,"",27421);
+          TCPIPVerifone_WaitForTransactionResult("Report",true,ProcessingWn,LMb.LocalMachineCode,socket,"",reportcode,"",merchantNote);
+        end else begin
+          CloseSocket(socket);
+        end;
+      end else begin
+        CloseSocket(socket);
+      end;      
+    end;
+  end;
+  return;
+end;
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------
+
+procedure LogRequest(string func,string CtrlSeq,Integer res)
+begin
+  area a;
+  record RahaxiBlock Rahb;
+  transaction Integer gVerfioneCounter; 
+  
+  BlockLoad(Rahb);
+  if (Rahb.LogComm!=0) then begin
+    LogText(0,"LogRequest " & func & " CtrlSeq " & CtrlSeq & " res " & res);
+    AddTextToArea(CtrlSeq,a);
+    gVerfioneCounter = gVerfioneCounter + 1;
+    LogAreaToFile("Verifone/" & gVerfioneCounter & "-VerifoneRequest-" & func & "." & TimeToString(CurrentTime,"HHMMSS",false) & ".txt",a);
+  end;
+  return;
+end;
+
+procedure LogReply(string func,string CtrlSeq,area reply)
+begin
+  record RahaxiBlock Rahb;
+  transaction Integer gVerfioneCounter; 
+  
+  BlockLoad(Rahb);
+  if (Rahb.LogComm!=0) then begin
+    LogText(0,"LogReply " & func & " CtrlSeq " & CtrlSeq);
+    gVerfioneCounter = gVerfioneCounter + 1;
+    LogAreaToFile("Verifone/" & gVerfioneCounter & "-VerifoneReply." & func & "." & TimeToString(CurrentTime,"HHMMSS",false) & ".txt",reply);
+  end;
+  return;
+end;
+
+function Integer VerifoneBanksys_ReadACK(Integer timeout,Integer cmdtype)
+begin
+  Integer res;
+  Boolean waitf;
+  LongInt currenttick,starttick,waitticks;
+  string 255 response,c;
+  
+  res = 1;
+  starttick = GetCurTick;
+  waitticks = timeout*1000.00;//10 seconds
+  waitf = true;
+  while (waitf) begin
+    currenttick = GetCurTick;
+
+    c = ReadComPort(0,1);
+    response = response & c;
+LogText(0,"VerifoneBanksys_ReadACK c " & c);    
+//LogText(0,"VerifoneBanksys_ReadACK response " & response);
+    switch (cmdtype) begin
+      case CC_ENQ:  
+        switch (asc(c)) begin
+          case CC_STX:
+          case CC_ETX:
+          case CC_ENQ:
+          case CC_DLE:
+          case CC_ACK:
+            waitf = false;
+            res = 0;
+          case CC_NAK:
+            waitf = false;
+            res = CC_NAK;
+          case CC_EOT:
+            waitf = false;
+            res = CC_EOT;
+//            LogText(0,"VerifoneBanksys_ReadACK CC_EOT");
+          case CC_DC1:
+//            LogText(0,"Unexpected correct packet");
+            waitf = false;
+            res = CC_DC1;
+          case CC_DC2:
+//            LogText(0,"Unexpected incorrect packet");
+            waitf = false;
+            res = CC_DC2;
+          otherwise
+            if (nonblank(c)) then begin
+//              LogText(0,"VerifoneBanksys_ReadACK unknown " & c  & " asc " & asc(c));
+              waitf = false;
+              res = asc(c);
+            end;
+        end;           
+    end;
+    if ((currenttick-starttick)>waitticks) then begin
+      waitf = false;
+    end;
+  end;
+  VerifoneBanksys_ReadACK = res;
+  return;
+end;
+
+function Integer VerifoneBanksys_SendCommand(string CtrlSeq)
+begin
+  Integer res,noErr;
+  
+  res = noErr;
+  if (OutComPort(0,CtrlSeq)==0) then begin
+    res = 1;
+  end;  
+//*LogText(0,"VerifoneBanksys_SendCommand CtrlSeq " & CtrlSeq);  
+  VerifoneBanksys_SendCommand = res;
+  return;
+end;
+
+function string 255 VerifoneBanksys_CalculateLRC(string CtrlSeq)
+begin
+  string 255 res;
+  Integer i,crc;
+  
+  crc = 0;
+  for (i=0;i<len(CtrlSeq);i=i+1) begin
+    crc = BitXor(crc,asc(Mid(CtrlSeq,i,1)));
+  end;
+  crc = BitXor(crc,255);
+
+  i = crc/(2*2*2*2);  //>>4  
+  i = BitOr(i,48);
+  res = chr(i);
+  
+  i = BitAnd(crc,15);
+  i = BitOr(i,48);
+  res = res & chr(i);
+  VerifoneBanksys_CalculateLRC = res;
+  return;
+end;
+
+function Integer VerifoneBanksys_IsTerminalActive()
+begin
+  Integer res,noErr;
+  string 255 CtrlSeq; 
+  Integer nrofmsgs;
+  Area aterminalreply;
+
+  CtrlSeq = CtrlSeq & "TR";
+  CtrlSeq = CtrlSeq & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "15";
+  CtrlSeq = CtrlSeq & uchr(CC_ETX);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & uchr(CC_ETX);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & uchr(CC_ETX);
+  CtrlSeq = CtrlSeq & VerifoneBanksys_CalculateLRC(CtrlSeq); 
+  CtrlSeq = uchr(CC_STX) & CtrlSeq;
+
+  res = VerifoneBanksys_SendCommand(CtrlSeq);
+
+  LogRequest("VerifoneBanksys_IsTerminalActive",CtrlSeq,res);
+
+  if (res!=noErr) then begin
+    goto LVerifoneBanksys_IsTerminalActive;
+  end;
+  res = VerifoneBanksys_ReadACK(10,CC_ENQ);
+  if (res!=noErr) then begin
+    goto LVerifoneBanksys_IsTerminalActive;
+  end;
+  res = VerifoneBanksys_ReadReply(aterminalreply,1);
+  LogReply("VerifoneBanksys_IsTerminalActive",CtrlSeq,aterminalreply);
+LVerifoneBanksys_IsTerminalActive:;  
+  VerifoneBanksys_IsTerminalActive = res;
+  return;
+end;
+
+function Integer VerifoneBanksys_TransactionConfirmation(string df)
+begin
+  string 255 CtrlSeq;
+  Integer res;
+  area aterminalreq;
+  
+  CtrlSeq = CtrlSeq & "8";
+  CtrlSeq = CtrlSeq & chr(CC_FS);
+  CtrlSeq = CtrlSeq & df;
+  CtrlSeq = CtrlSeq & uchr(CC_ETX);
+  CtrlSeq = CtrlSeq & VerifoneBanksys_CalculateLRC(CtrlSeq); 
+  CtrlSeq = uchr(CC_STX) & CtrlSeq;
+  
+  res = VerifoneBanksys_SendCommand(CtrlSeq);
+  LogRequest("VerifoneBanksys_TransactionConfirmation",CtrlSeq,res);
+  if (res==0) then begin
+    res = VerifoneBanksys_ReadACK(10,CC_ENQ);
+  end;
+//  LogText(0,"VerifoneBanksys_TransactionConfirmation ack res " & res );
+
+  VerifoneBanksys_TransactionConfirmation = res;
+  return;
+end;
+
+function Integer VerifoneBanksys_TransactionCancellation()
+begin
+  string 255 CtrlSeq;
+  Integer res;
+  area aterminalreq;
+  Area aterminalreply;
+  
+  CtrlSeq = CtrlSeq & "6";
+  CtrlSeq = CtrlSeq & uchr(CC_ETX);
+  CtrlSeq = CtrlSeq & VerifoneBanksys_CalculateLRC(CtrlSeq);
+  CtrlSeq = uchr(CC_STX) & CtrlSeq;
+  res = VerifoneBanksys_SendCommand(CtrlSeq);
+//  VerifoneBanksys_ReadReply(aterminalreply,1);
+//  VerifoneBanksys_SendCommand(uchr(CC_ACK));
+  
+  VerifoneBanksys_TransactionCancellation = res;
+  return;
+end;
+
+function Integer VerifoneBanksys_TransactionRequestStart(val v,string transtype,string transactionid,string timestamp,var string SentCtrlSeq)
+begin
+  Integer res,noErr;
+  string 255 CtrlSeq,tstr; 
+  area aterminalreq;
+
+//SND: L=100 [0x02]1[0x1c]0[0x1c]1[0x1c]1[0x1c]0[0x1c]6[0x1c][0x1c]978[0x1c][0x1c][0x1c]1[0x1c]
+//           [0x1c]4.5.5[0x1c]0[0x1c]1[0x1c][0x1c]UI[0x1c][0x1c][0x1c][0x1c]
+//             [0x1c][0x1c]MLOY;[0x1c][0x1c][0x1c][0x1c][0x1c]Win8 x64[0x1c][0x1c][0x1c][0x1c]ECR Simulator 2.1.0.0[0x1c]OCX 2.3.5.0[0x03]::
+
+  CtrlSeq = CtrlSeq & "1" & chr(CC_FS);  //0
+  switch (transtype) begin
+    case "Purchase":
+      CtrlSeq = CtrlSeq & "0";
+    case "Void":
+      CtrlSeq = CtrlSeq & "1";
+    case "Return":
+      CtrlSeq = CtrlSeq & "2";
+  end;
+  CtrlSeq = CtrlSeq & chr(CC_FS);
+  M4PadString(ValToString(AbsoluteVal(v)*100,M4UVal,"","",1),12,"",false,tstr);
+  CtrlSeq = CtrlSeq & tstr & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "1" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);  //0 = latvian
+  CtrlSeq = CtrlSeq & "6" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & transactionid & chr(CC_FS);  
+  CtrlSeq = CtrlSeq & "978" & chr(CC_FS);  //EUR
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "1" & chr(CC_FS);  //10  
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "4.5.5" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "2" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "1" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "UI" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);  //20
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "MLOY;" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);//Win8 x64
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+//  CtrlSeq = CtrlSeq & "PAYYAP 8.2" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & BuildProductCode & " " & HansaVersion & chr(CC_FS);//
+  CtrlSeq = CtrlSeq & "OCX 2.3.5.0";
+  CtrlSeq = CtrlSeq & uchr(CC_ETX);
+  CtrlSeq = CtrlSeq & VerifoneBanksys_CalculateLRC(CtrlSeq);  
+  CtrlSeq = uchr(CC_STX) & CtrlSeq;
+
+
+  LogRequest("VerifoneBanksys_TransactionRequestStart",CtrlSeq,res);
+
+
+  res = VerifoneBanksys_SendCommand(CtrlSeq);
+  if (res!=noErr) then begin
+    goto LVerifoneBanksys_TransactionRequestStart;
+  end;
+  res = VerifoneBanksys_ReadACK(10,CC_ENQ);
+  if (res!=noErr) then begin
+    goto LVerifoneBanksys_TransactionRequestStart;
+  end;  
+
+  SentCtrlSeq = CtrlSeq;
+LVerifoneBanksys_TransactionRequestStart:;  
+  VerifoneBanksys_TransactionRequestStart = res;
+  return;
+end;
+
+function Integer VerifoneBanksys_ReadReply(var Area aterminalreply,Integer fn)
+begin
+  Integer res,noErr;
+  string 255 CtrlSeq,tstr; 
+  Boolean waitf,testf;
+  LongInt currenttick,starttick,waitticks,s,ms;
+  string 255 c,tmpreply;
+  LongInt i,fsz,pos;
+  Area atmpterminalreply;
+
+  SetAreaZeroSize(aterminalreply);
+  res = 1;
+  starttick = GetCurTick;
+  waitticks = 120.00*1000.00;//120 seconds 120*1000 makes it to be integer.......
+   
+  waitf = true;
+  while (waitf) begin
+    currenttick = GetCurTick;
+
+    c = ReadComPort(0,1);
+
+//LogText(0,"VerifoneBanksys_ReadReply char c " & c);    
+
+    switch (asc(c)) begin
+      case CC_ACK:
+        waitf = false;
+        res = 0;
+      case CC_STX:
+        AddTextToArea(c,atmpterminalreply);
+      case CC_EOT:
+        AddTextToArea(c,atmpterminalreply);
+        waitf = false;
+        res = CC_EOT;
+//LogText(0,"VerifoneBanksys_ReadReply CC_EOT ");    
+      case CC_ETX:
+        AddTextToArea(c,atmpterminalreply);
+        waitf = false;
+        c = ReadComPort(0,1);
+        AddTextToArea(c,atmpterminalreply);
+        c = ReadComPort(0,1);
+        AddTextToArea(c,atmpterminalreply);
+        res = 0;
+        VerifoneBanksys_SendCommand(uchr(CC_ACK));
+
+  LogRequest("VerifoneReply-VerifoneBanksys_ReadReply",uchr(CC_ACK),res);
+  LogReply("VerifoneBanksys_ReadReply-ETX" & fn & "-tmp-",CtrlSeq,atmpterminalreply);
+
+//        MilliSleep(1000);
+      otherwise
+        AddTextToArea(c,atmpterminalreply);
+    end;
+    if ((currenttick-starttick)>waitticks) then begin
+      waitf = false;
+    end;
+  end;
+    
+/*
+//JJTest
+  
+  fsz = FileSize("VerifoneBanksys_reply.log");//debug Code
+  LoadFileToArea("VerifoneBanksys_reply.log",0,fsz,aterminalreply);
+*/  
+
+  for (i=0;i<GetAreaLength(atmpterminalreply);i=i+1) begin
+    c = GetStringFromArea(atmpterminalreply,i,1);
+    switch (asc(c)) begin
+      case CC_STX:
+        SetAreaZeroSize(aterminalreply);
+      case CC_ETX:
+        AddTextToArea(chr(10),aterminalreply);
+      case CC_FS:
+        AddTextToArea(chr(10),aterminalreply);
+      otherwise
+        AddTextToArea(c,aterminalreply);
+    end;
+  end;
+
+//*LogText(0,"VerifoneBanksys_ReadReply c " & GetStringFromArea(atmpterminalreply,0,GetAreaLength(atmpterminalreply)));    
+
+  LogReply("VerifoneBanksys_ReadReply-" & fn & "-tmp-",CtrlSeq,atmpterminalreply);
+  LogReply("VerifoneBanksys_ReadReply-" & fn & "-",CtrlSeq,aterminalreply);
+//  LogAreaToFile("Verifone/VerifoneReply-reply." & fn & "-" & TimeToString(CurrentTime,"HHMMSS",false) & ".txt",aterminalreply);
+//LogText(0,"END VerifoneBanksys_ReadReply res " & res);    
+  VerifoneBanksys_ReadReply = res;
+  return;
+end;
+
+function Boolean VerifoneBanksys_TransactionStatus(Integer ProcessingWn,string transtype,string replyinfo,string replystring,string replystatus,var string resultstr,var Boolean transsuccessf)
+begin
+  Boolean waitf;
+  string 255 c,result;
+  string 255 tstr,tstr2;
+  record RcVc RepSpec;
+
+  resultstr = "";
+  waitf = true;
+
+//    LogAreaToFile("Verifone/_VerifoneBanksys_TransactionStatus.txt",aterminalreply);
+
+  switch (replyinfo) begin
+    case "2": //Status
+      switch (replystatus) begin  //Phase
+        case "0": tstr = "Idle";
+        case "1": tstr = USetStr(27420);
+        case "2": tstr = USetStr(27421);
+        case "3": tstr =  USetStr(27375);
+        case "4": tstr = "Select Application";
+        case "5": tstr = USetStr(27422);
+        case "6": tstr = USetStr(27423);
+        case "7": tstr = USetStr(27378);
+        case "8": tstr = USetStr(27386);
+        case "9": tstr = USetStr(27392);
+        case "10": tstr = USetStr(27424);
+        case "11": tstr = USetStr(27393);
+        case "12": tstr = "Download info (used to indicate progress of download)";
+        case "99": tstr = "Not defined message";
+        case "1000": tstr = USetStr(27425);
+        otherwise  tstr = "Unknown status " & replystatus;
+      end;
+    case "FR": //Status
+      switch (replystatus) begin  //Phase
+        case "0": tstr = "Idle";
+        case "1": tstr = USetStr(27420);
+        case "2": tstr = USetStr(27421);
+        case "3": tstr =  USetStr(27375);
+        case "4": tstr = "Select Application";
+        case "5": tstr = USetStr(27422);
+        case "6": tstr = USetStr(27423);
+        case "7": tstr = USetStr(27378);
+        case "8": tstr = USetStr(27386);
+        case "9": tstr = USetStr(27392);
+        case "10": tstr = USetStr(27424);
+        case "11": tstr = USetStr(27393);
+        case "12": tstr = "Download info (used to indicate progress of download)";
+        case "99": tstr = "Not defined message";
+        case "1000": tstr = USetStr(27425);
+        otherwise  tstr = "Unknown status " & replystatus;
+      end;
+    case "5": //Result
+      waitf = true;//we need to print failed receipts as well
+      resultstr = replystatus;
+
+      switch (replystatus) begin  //Success
+        case "000": tstr = USetStr(27384); transsuccessf = true; waitf = true;
+        case "579": tstr = "previously completed transaction made with different amount";
+        case "580": tstr = "invalid currency code or currency not supported";
+        case "581": tstr = "transaction ID does not exist";
+
+        case "583": 
+          tstr = USetStr(27385) & " - " & USetStr(27428);
+          waitf = false;
+        case "584": 
+          tstr = USetStr(27385) & " - " & USetStr(27426);
+          waitf = false;
+
+        case "590": tstr = USetStr(27386) & " - " & "terminal parameters absent"; waitf = false;
+        case "591": tstr = USetStr(27386) & " - " & "terminal memory full(need batch sending)"; waitf = false;
+        case "592": tstr = USetStr(27386) & " - " & USetStr(27427); waitf = false;
+        case "593": tstr = USetStr(27386) & " - " & USetStr(27443); waitf = false;
+        case "594": tstr = USetStr(27386) & " - " & USetStr(27444); waitf = false;
+
+        case "887": tstr = "unknown request parameters";
+        case "888": tstr = USetStr(27386) & " - " & "undefined error";
+
+        case "943": tstr = "incorrect user input";
+
+        case "991": tstr = "incorrect card number";
+
+        case "993": 
+          tstr = "user input operation was cancelled";
+          waitf = false; transsuccessf = false;
+        case "994": 
+          tstr = "user input operation timed out";
+          waitf = false; transsuccessf = false;
+
+        case "997": tstr = USetStr(27386) & " - " & USetStr(27440);
+        case "998": tstr = USetStr(27386) & " - " & USetStr(27441);
+        case "999": tstr = USetStr(27386) & " - " & USetStr(27442);
+
+        case "1Z1": tstr = USetStr(27386) & " - " & USetStr(27445);
+        case "1Z3": tstr = USetStr(27386) & " - " & USetStr(27445);
+        case "1Z5": tstr = USetStr(27386) & " - " & USetStr(27445);
+        otherwise tstr = "other error " & replystatus;
+      end;
+      resultstr = replystatus;
+    case "7": //Cancellation
+      waitf = false;      
+      switch (replystatus) begin  //Success
+        case "0": tstr = USetStr(27385); transsuccessf = false; waitf = false; resultstr = "7";
+        case "1": tstr = USetStr(27387); transsuccessf = true; waitf = true; resultstr = "";
+      end;
+    case "9": //Slip
+      resultstr = "9";
+      switch (transtype) begin
+        case "Report":
+          transsuccessf = true;
+        otherwise
+          waitf = false;
+      end;
+    case "B": //Status
+      waitf = false; transsuccessf = false; resultstr = replystatus;
+      switch (replystatus) begin
+        case "0": tstr = ""; 
+        case "1": tstr = "terminal busy"; 
+        case "2": tstr = "out of paper"; 
+        case "3": tstr = "PIN pad off"; 
+        case "4": tstr = USetStr(27398);
+          switch (replyinfo) begin
+            case "1": tstr = USetStr(27398);
+          end;
+        case "5": tstr = "transaction file is full"; 
+        case "6": tstr = "parameters absent"; 
+        case "7": tstr = USetStr(27446); 
+      end;
+  end;
+  tstr2 = replystring;
+
+  GetWindowRecord(ProcessingWn,RepSpec);
+  PutWindowString(ProcessingWn,"ReplyInfo",replyinfo);        
+  PutWindowString(ProcessingWn,"ReplyStatus",replystatus);        
+  PutWindowString(ProcessingWn,"Status",tstr);        
+  PutWindowString(ProcessingWn,"Result",tstr2);        
+//  PutWindowString(ProcessingWn,"ExtraInfo",""); 
+  PutWindowRecord(ProcessingWn,RepSpec);
+  HandleEvents;
+
+  VerifoneBanksys_TransactionStatus = waitf;
+  return;
+end;
+
+global
+updating function Integer VerifoneBanksys_WaitForTransactionResult(Integer ProcessingWn,string paymode,string label,string transtype,string orgtransactionid,string orgtimestamp,string codepage,string fapackageindex,var string resultstr,var Boolean comportclosedf)
+begin
+  Integer res,noErr,i,rownr,nwn;
+  string 255 CtrlSeq,tstr; 
+  Boolean waitf,testf;
+  LongInt currenttick,starttick,waitticks,tick;
+  string 255 c;
+  Area amchnttransslip,acusttransslip,aterminalreply,atmp,a;
+  Boolean resultreceivedf,CC_RSfound,mchnttransslipf,transsuccessf,confirmationsentf,testreplylength;
+  Boolean finishf;
+  record NotepadVc Noter;
+  record NotepadVc merchantNoter;
+  string 255 TransactionID,AuthorisationCode,CardType,timestamp,SettlementID,receiptnr;
+  val amount;
+  record RcVc pRepSpec;
+  record RcVc RepSpec;
+  record IVVc IVr;
+  row IVVc IVrw;
+  record IVCashVc IVCashr;
+  row IVCashVc IVCashrw;
+  record RestAccVc RAr;
+  row RestAccVc RArw;
+  record CCTRVc CCTRr;
+  Integer mwn,pmwn;
+  string 255 FileName;
+  LongInt TransNr;
+  string 255 reply,replypacket,replystring,replystatus;
+  string 255 transactionstatus;
+  LongInt pos,loop,sernr;
+  Integer rwcnt,nonblankrownr,mindatalen,maxdatalen;
+  record LocalMachineBlock LMb;  
+  Boolean gVerfioneTimeOutf;
+  
+  transaction Integer gVerfioneCounter; 
+  transaction Integer gCashierActionOClassMaxDataLen;
+  transaction Integer gVerfioneTimeOut; 
+
+  resultstr = "";
+  loop = 1;
+  res = 1;
+  BlockLoad(LMb);
+  transsuccessf = false;
+  confirmationsentf = false;
+  switch (transtype) begin
+    case "Report":
+    otherwise
+      mchnttransslipf = true;
+  end;
+  pmwn = MotherWindow(ProcessingWn);
+  if (GetWindowClass(pmwn)=="NPTSPaymentOneModeTClass") then begin
+    mwn = MotherWindow(pmwn);
+  end else begin
+    mwn = mwn;
+    if (mwn<=0) then begin
+      mwn = pmwn;
+    end;
+  end;
+
+  FileName = GetWindowFileName(mwn);
+  waitticks = gVerfioneTimeOut*1000.00;
+  if (waitticks<=0) then begin
+    waitticks = 300.00*1000.00;//300 seconds
+  end;
+  if (gVerfioneTimeOut>0) then begin
+    gVerfioneTimeOutf = true;
+  end;
+  starttick = GetCurTick;
+  SetAreaZeroSize(amchnttransslip);
+  SetAreaZeroSize(acusttransslip);
+  testreplylength = false;
+  waitf = true;
+  transactionstatus = "000";
+
+LogText(0," gVerfioneTimeOut " & gVerfioneTimeOut & " ProcessingWn " & ProcessingWn & " codepage " & codepage & " fapackageindex " & fapackageindex);    
+
+  while (waitf) begin
+    SetAreaZeroSize(aterminalreply);
+    currenttick = GetCurTick;
+
+    res = VerifoneBanksys_ReadReply(aterminalreply,loop);
+    
+    switch (res) begin
+      case CC_EOT: res = 0; waitf = false;
+    end;
+
+LogText(0,"1.VerifoneBanksys_WaitForTransactionResult res  " & res & " waitf " & waitf);    
+
+    if (waitf==false) then begin goto LWaitEnd; end;
+
+LogText(0,"2.VerifoneBanksys_WaitForTransactionResult res  " & res & " waitf " & waitf);    
+
+    replypacket = GetTabTextFromArea(0,0,aterminalreply);
+LogText(0,"replypacket " & replypacket & " gVerfioneTimeOut " & gVerfioneTimeOut);    
+    switch (replypacket) begin
+      case "2": //Status
+        replystring = ConvertStringFromCodePage(codepage,GetTabTextFromArea(1,0,aterminalreply));
+        replystatus = GetTabTextFromArea(2,0,aterminalreply);      
+        waitf = VerifoneBanksys_TransactionStatus(ProcessingWn,transtype,replypacket,replystring,replystatus,resultstr,transsuccessf);
+      case "5": //Result
+        testreplylength = true;
+
+//  LogAreaToFile("Verifone/_5_aterminalreply" & TimeToString(CurrentTime,"HHMMSS",false) & ".txt",aterminalreply);
+
+        replystatus = GetTabTextFromArea(1,0,aterminalreply);
+        replystring = ConvertStringFromCodePage(codepage,GetTabTextFromArea(2,0,aterminalreply));
+
+        waitf = VerifoneBanksys_TransactionStatus(ProcessingWn,transtype,replypacket,replystring,replystatus,resultstr,transsuccessf);
+        transactionstatus = resultstr;
+
+
+        if (resultstr=="000") then begin
+          CardType = GetTabTextFromArea(3,0,aterminalreply);
+          SettlementID = "";//?
+          receiptnr = GetTabTextFromArea(6,0,aterminalreply);
+          AuthorisationCode = GetTabTextFromArea(7,0,aterminalreply);
+          TransactionID = GetTabTextFromArea(17,0,aterminalreply);
+          timestamp = GetTabTextFromArea(18,0,aterminalreply);
+          amount = StringToVal(GetTabTextFromArea(26,0,aterminalreply),M40Val)/100;
+
+          switch (transtype) begin
+            case "Report":
+            case "Void": amount = -amount;
+            case "Refund": amount = -amount;
+            case "Reversal": amount = -amount;
+          end;
+          RemoveTask("FRVerifoneTimeoutTest");
+        end;
+        gVerfioneTimeOut = 0;
+
+//LogText(0,"replystatus " & replystatus & " replystring " & replystring & " resultstr " & resultstr & " transsuccessf "  & transsuccessf);    
+
+        if (confirmationsentf==false) then begin
+          if (transsuccessf) then begin
+            switch (VerifoneBanksys_TransactionConfirmation("0")) begin
+              case CC_EOT: waitf = false;
+            end;
+//            confirmationsentf = true;  every packet 5 needs conformation
+          end else begin
+            switch (VerifoneBanksys_TransactionConfirmation("0")) begin
+              case CC_EOT: waitf = false;
+            end;
+//            confirmationsentf = true;  every packet 5 needs conformation
+//when should we send ACK and when should we send confiormation ?             
+            SetAreaZeroSize(atmp);
+            switch (VerifoneBanksys_ReadReply(atmp,1)) begin
+              case CC_EOT: res = 0; waitf = false;
+            end;
+//LogText(0,"3.VerifoneBanksys_WaitForTransactionResult res  " & res & " waitf " & waitf);    
+          end;
+        end;
+      case "7": //Cancellation
+        replystatus = GetTabTextFromArea(1,0,aterminalreply);
+        transactionstatus = "7";        
+//LogText(0,"replystatus " & replystatus);
+      case "9": //receipt
+        testreplylength = true;
+        replystring = "";
+        if (mchnttransslipf) then begin
+          GetAreaFromArea(aterminalreply,2,GetAreaLength(aterminalreply)-2-4,amchnttransslip);  
+          mchnttransslipf = false;
+        end else begin
+          GetAreaFromArea(aterminalreply,2,GetAreaLength(aterminalreply)-2-4,atmp);
+          AddAreatoArea(atmp,acusttransslip);
+          SetAreaZeroSize(atmp);
+          waitf = VerifoneBanksys_TransactionStatus(ProcessingWn,transtype,replypacket,replystring,replystatus,resultstr,transsuccessf);
+        end;
+        switch (transtype) begin
+          case "Report":
+        end;        
+        RemoveTask("FRVerifoneTimeoutTest");
+      case "FR": //Status
+        VerifoneBanksys_SendCommand(uchr(CC_ACK));
+        replystring = ConvertStringFromCodePage(codepage,GetTabTextFromArea(8,0,aterminalreply));
+        if (blank(replystring)) then begin
+          replystring = ConvertStringFromCodePage(codepage,GetTabTextFromArea(10,0,aterminalreply));
+        end;
+        replystatus = GetTabTextFromArea(1,0,aterminalreply);  
+        gVerfioneTimeOut = StringToInt(GetTabTextFromArea(4,0,aterminalreply));  
+        mindatalen = StringToInt(GetTabTextFromArea(6,0,aterminalreply));  
+        maxdatalen = StringToInt(GetTabTextFromArea(7,0,aterminalreply));  
+//LogText(0,"2.gVerfioneTimeOut " & gVerfioneTimeOut & " GetTabTextFromArea(4,0,aterminalreply) " & GetTabTextFromArea(5,0,aterminalreply));        
+        
+//  LogAreaToFile("Verifone/_aterminalreplyFR" & TimeToString(CurrentTime,"HHMMSS",false) & ".txt",aterminalreply);
+
+        VerifoneBanksys_TransactionStatus(ProcessingWn,transtype,replypacket,replystring,replystatus,resultstr,transsuccessf);
+        waitf = false;
+      case "B": //Get State
+        replystatus = GetTabTextFromArea(1,0,aterminalreply);
+        replystring = GetTabTextFromArea(2,0,aterminalreply);
+        waitf = VerifoneBanksys_TransactionStatus(ProcessingWn,transtype,replypacket,replystring,replystatus,resultstr,transsuccessf);
+      otherwise 
+        if (nonblank(replypacket)) then begin
+          if (asc(replypacket)==CC_EOT) then begin waitf = false; end;
+        end;
+    end;
+    if (testreplylength) then begin
+      if (GetAreaLength(aterminalreply)<=0) then begin waitf = false; end;
+    end;
+    loop = loop + 1;
+    if ((currenttick-starttick)>waitticks) then begin
+//LogText(0," gVerfioneTimeOut " & gVerfioneTimeOut & " pmwn " & pmwn & " GetWindowClass(pmwn) " & GetWindowClass(pmwn));    
+      replystatus = "Timeout";
+      replystring = "Timeout";
+      waitf = false;
+      if (gVerfioneTimeOut==0) then begin
+//LogText(0,"1.VerifoneBanksys_TransactionCancellation");  
+        VerifoneBanksys_TransactionCancellation;
+      end else begin
+        MessageBox(0,"Timeout");
+      end;
+      if (GetWindowClass(pmwn)=="NPTSPaymentOneModeTClass") then begin
+        CloseWindow(pmwn);
+      end;
+    end;
+LWaitEnd:;    
+  end;
+
+//LogText(0,"10. transsuccessf " & transsuccessf);  
+
+  if (GetAreaLength(acusttransslip)<=0) then begin
+    GetAreaFromArea(amchnttransslip,0,GetAreaLength(amchnttransslip),acusttransslip);  
+  end;
+
+//  LogAreaToFile("Verifone/_amchnttransslip" & TimeToString(CurrentTime,"HHMMSS",false) & ".txt",amchnttransslip);
+//  LogAreaToFile("Verifone/_acusttransslip" & TimeToString(CurrentTime,"HHMMSS",false) & ".txt",acusttransslip);
+  
+  if (GetAreaLength(amchnttransslip)>0) then begin
+    i = 0;   
+    while (i<=GetAreaLength(amchnttransslip)) begin
+      c = GetStringFromArea(amchnttransslip,i,1);
+      if (c==chr(CC_ETX) or c==chr(0)) then begin
+        i = GetAreaLength(amchnttransslip);
+      end else begin
+        if (c==chr(10)) then begin
+          AddToText(chr(13) & chr(10),merchantNoter);
+        end else begin
+          AddToText(ConvertStringFromCodePage(codepage,c),merchantNoter);
+        end;
+      end;
+      i = i + 1;
+    end;
+  end;
+  if (GetAreaLength(acusttransslip)>0) then begin
+    i = 0;   
+    while (i<=GetAreaLength(acusttransslip)) begin
+      c = GetStringFromArea(acusttransslip,i,1);
+      if (c==chr(CC_ETX) or c==chr(0)) then begin
+        i = GetAreaLength(acusttransslip);
+      end else begin
+        if (c==chr(10)) then begin
+          AddToText(chr(13) & chr(10),Noter);
+        end else begin
+          AddToText(ConvertStringFromCodePage(codepage,c),Noter);
+        end;
+      end;
+      i = i + 1;
+    end;
+  end;
+  if (transsuccessf) then begin 
+
+    if (mwn>0) then begin
+      CloseWindow(ProcessingWn);
+      SelectWindow(mwn);
+      DeselectWindow(mwn,true);
+
+      switch (transtype) begin
+        case "Report":
+          RecordNew(CCTRr);
+          CCTRr.ReportType = paymode;
+          if (blank(CCTRr.LocalMachineCode)) then begin
+            CCTRr.LocalMachineCode = LMb.LocalMachineCode;
+          end;          
+          if (CCTRr.SerNr<=0) then begin
+            CCTRr.SerNr = NextSerNr("CCTRVc",CCTRr.TransDate,-1,false,"");
+          end;
+          if (CCTRr.SerNr>0) then begin  
+            RecordClear(Noter);        
+            i = 0;   
+            while (i<=GetAreaLength(acusttransslip)) begin
+              c = GetStringFromArea(acusttransslip,i,1);
+              if (c==chr(CC_ETX) or c==chr(0)) then begin
+                i = GetAreaLength(acusttransslip);
+              end else begin
+                if (c==chr(10)) then begin
+                  AddToText(chr(13) & chr(10),Noter);
+                end else begin
+                  AddToText(ConvertStringFromCodePage(codepage,c),Noter);
+                end;
+              end;
+              i = i + 1;
+            end;
+
+            SetAreaZeroSize(atmp);
+            GetAreaFromTextField(Noter,atmp);
+            
+            nonblankrownr = 0;
+            rwcnt = CountLinesInArea(atmp);
+            for (i=rwcnt-1;i>=0;i=i-1) begin
+              tstr = GetLineFromArea(atmp,i);
+              if (Mid(tstr,0,1)==chr(13) and Mid(tstr,1,1)==chr(10)) or blank(tstr) or (Mid(tstr,0,1)==chr(13) and len(tstr)==1) or (Mid(tstr,0,1)==chr(10) and len(tstr)==1) then begin
+                nonblankrownr = nonblankrownr + 1;;
+              end else begin
+                i = -1;
+              end;
+            end;
+            SetAreaZeroSize(a);
+            for (i=0;i<(rwcnt-nonblankrownr);i=i+1) begin
+              tstr = GetLineFromArea(atmp,i);
+              AddTextToArea(tstr,a);
+            end;
+            
+            AddAreaToTextField(a,CCTRr);
+            
+            if (RecordStore(CCTRr,false)) then begin
+              PrintCreditCardTerminalReport(CCTRr);
+//              PrintDocument(CCTRr,"CCTRForm",false);
+            end;
+          end;
+        otherwise
+          switch (FileName) begin
+            case "IVVc":
+              GetWindowRecord(mwn,IVr);
+              ClearRow(IVr,IVrw,kInvoiceRowTypeCreditCardPayment);  
+              IVrw.Sum = amount;
+              IVrw.AuthorizationCode = AuthorisationCode;
+              IVrw.PayMode = paymode;
+              IVCashrw.Spec = label;
+              IVrw.CCTimestamp = timestamp;
+              IVrw.CCTransID = TransactionID;
+              IVrw.CCReceiptNr = receiptnr;
+              rownr = MatRowCnt(IVr);
+              MatRowPut(IVr,rownr,IVrw);
+              PutWindowRecord(mwn,IVr);
+              IVDClass_RefreshStringList(mwn,IVr);
+              if (WindowDoOK(mwn,0)) then begin
+              end;
+              TransNr = IVr.SerNr;
+            case "IVCashVc":
+              GetWindowRecord(mwn,IVCashr);
+              IVCashr.RecValue = blankval;
+              IVCashr.RecValue2 = blankval;
+              ClearRow(IVCashr,IVCashrw,kInvoiceRowTypeCreditCardPayment);  
+              IVCashrw.Sum = amount;
+              IVCashrw.AuthorizationCode = AuthorisationCode;
+              IVCashrw.PayMode = paymode;
+              IVCashrw.Spec = label;
+              IVCashrw.CCTimestamp = timestamp;
+              IVCashrw.CCTransID = TransactionID;
+              IVCashrw.CCReceiptNr = receiptnr;
+              rownr = MatRowCnt(IVCashr);
+              MatRowPut(IVCashr,rownr,IVCashrw);
+              IVCashSumup(IVCashr,true);
+              PutWindowRecord(mwn,IVCashr);
+              IVCashDClass_RefreshStringList(mwn,IVCashr);
+              if (WindowDoOK(mwn,0)) then begin
+                finishf = true;
+              end;
+              TransNr = IVCashr.SerNr;
+//LogText(0,"11. finishf " & finishf);  
+            case "RestAccVc":
+              GetWindowRecord(mwn,RAr);
+              ClearRow(RAr,RArw,kInvoiceRowTypeCreditCardPayment);  
+              RArw.Sum = amount;
+              RArw.AuthorizationCode = AuthorisationCode;
+              RArw.PayMode = paymode;
+              RArw.Spec = label;
+//              RArw.CCTimestamp = timestamp;
+//              RArw.CCTransID = TransactionID;
+//              RArw.CCReceiptNr = receiptnr;
+              rownr = MatRowCnt(RAr);
+              MatRowPut(RAr,rownr,RArw);
+              RestAccSumup(RAr,"");
+              PutWindowRecord(mwn,RAr);
+              RestAccDClass_RefreshStringList(mwn,RAr);
+              if (WindowDoOK(mwn,0)) then begin
+                finishf = true;
+              end;
+              TransNr = RAr.SerNr;
+          end;
+      end;
+
+//LogText(0,"12. finishf " & finishf & " transtype " & transtype);  
+      switch (transtype) begin
+        case "Report":
+        case "Void":
+          StoreCredCardSlip_VerifoneBanksys3(CardType,amount,TransactionID,receiptnr,AuthorisationCode,timestamp,SettlementID,orgtransactionid,orgtimestamp,TransNr,FileName,5,LMb.LocalMachineCode,merchantNoter,Noter);
+          switch (FileName) begin
+            case "IVVc":
+            case "IVCashVc":
+              if (finishf) then begin
+                if (IVCashr.RetValue<=0) then begin
+                  if (IVCashPOSButtonAutoFinish(mwn)==kPOSButtonAutoFinishYes) then begin
+                    IVCashDClassTouchScreenFinishButton;
+                  end;
+                  if (GetWindowClass(pmwn)=="NPTSPaymentOneModeTClass") then begin
+                    CloseWindow(pmwn);
+                  end;
+                end;
+              end;
+            case "RestAccVc":
+              if (finishf) then begin
+                if (RAr.RetValue<=0) then begin
+                  if (RestAccPOSButtonAutoFinish(mwn)==kPOSButtonAutoFinishYes) then begin
+                    RestAccDClassTouchScreenFinishButton;
+                  end;
+                  if (GetWindowClass(pmwn)=="NPTSPaymentOneModeTClass") then begin
+                    CloseWindow(pmwn);
+                  end;
+                end;
+              end;
+          end;
+        case "Reversal":
+          StoreCredCardSlip_VerifoneBanksys3(CardType,amount,TransactionID,receiptnr,AuthorisationCode,timestamp,SettlementID,orgtransactionid,orgtimestamp,TransNr,FileName,3,LMb.LocalMachineCode,merchantNoter,Noter);
+        otherwise
+          if (fapackageindex=="1004") then begin
+            RecordClear(Noter);
+          end;
+          StoreCredCardSlip_VerifoneBanksys3(CardType,amount,TransactionID,receiptnr,AuthorisationCode,timestamp,SettlementID,"","",TransNr,FileName,0,LMb.LocalMachineCode,merchantNoter,Noter);
+          switch (FileName) begin
+            case "IVVc":
+            case "IVCashVc":
+              if (finishf) then begin
+                if (IVCashr.RetValue<=0) then begin
+                  if (IVCashPOSButtonAutoFinish(mwn)==kPOSButtonAutoFinishYes) then begin
+                    IVCashDClassTouchScreenFinishButton;
+                  end;
+                  if (GetWindowClass(pmwn)=="NPTSPaymentOneModeTClass") then begin
+                    CloseWindow(pmwn);
+                  end;
+                end;
+              end;
+            case "RestAccVc":
+              if (finishf) then begin
+                if (RAr.RetValue<=0) then begin
+                  if (RestAccPOSButtonAutoFinish(mwn)==kPOSButtonAutoFinishYes) then begin
+                    RestAccDClassTouchScreenFinishButton;
+                  end;
+                  if (GetWindowClass(pmwn)=="NPTSPaymentOneModeTClass") then begin
+                    CloseWindow(pmwn);
+                  end;
+                end;
+              end;
+          end;
+      end;
+      
+      if (finishf==false or FileName!="IVCashVc") then begin
+        if (GetWindowClass(pmwn)=="NPTSPaymentOneModeTClass") then begin
+          GetWindowRecord(pmwn,pRepSpec);
+          PutWindowString(pmwn,"NPTSPaymentTClassAmount","");
+          pRepSpec.vals1 = IVCashr.Sum4;
+          amount = blankval;
+          rwcnt = MatRowCnt(IVCashr);
+          for (i=0;i<rwcnt;i=i+1) begin
+            MatRowGet(IVCashr,i,IVCashrw);
+            switch (IVCashrw.stp) begin
+              case kInvoiceRowTypeCashPayment: amount = amount + IVCashrw.Sum;
+              case kInvoiceRowTypeCreditCardPayment: amount = amount + IVCashrw.Sum;
+              case kInvoiceRowTypeSwishPayment: amount = amount + IVCashrw.Sum;
+              case kInvoiceRowTypeMPesaPayment: amount = amount + IVCashrw.Sum;
+              case kInvoiceRowTypeQRPayment: amount = amount + IVCashrw.Sum;
+              case kInvoiceRowTypeCashWithdrawal: amount = amount + IVCashrw.Sum;
+              case kInvoiceRowTypeChequePayment: amount = amount + IVCashrw.Sum;
+              case kInvoiceRowTypeGiftVoucherPayment: amount = amount + IVCashrw.Sum;
+            end;
+          end;
+
+          pRepSpec.vals1 = pRepSpec.vals1 - amount;
+          if (pRepSpec.vals1<0) then begin pRepSpec.vals1 = 0; end;
+          pRepSpec.vals2 = pRepSpec.vals1;
+          PutWindowString(pmwn,"NPTSPaymentTClassTotalDue",pRepSpec.vals2);
+          if (pRepSpec.vals0<0) then begin pRepSpec.vals0 = 0; end;
+          PutWindowString(pmwn,"NPTSPaymentTClassBase1ChangeAmount",pRepSpec.vals1);
+          WindowFieldGotoForTouchScreen(pmwn,-1,"NPTSPaymentTClassAmount",true);
+        end;
+      end;
+/*
+some people want it, some other dont       
+      switch (FileName) begin
+        case "IVVc":
+          if (IVr.RetValue>=0) then begin
+            IVDClassTouchScreenFinishButton;
+          end;
+        case "IVCashVc":
+          if (IVCashr.RetValue>=0) then begin
+            IVCashDClassTouchScreenFinishButton;
+          end;
+      end;
+*/      
+    end else begin
+      switch (transtype) begin
+        case "Report":
+          RecordNew(CCTRr);
+          CCTRr.ReportType = paymode;
+          if (blank(CCTRr.LocalMachineCode)) then begin
+            BlockLoad(LMb);
+            CCTRr.LocalMachineCode = LMb.LocalMachineCode;
+          end;          
+          if (CCTRr.SerNr>0) then begin
+            RecordClear(Noter);        
+            i = 0;   
+            while (i<=GetAreaLength(acusttransslip)) begin
+              c = GetStringFromArea(acusttransslip,i,1);
+              if (c==chr(CC_ETX) or c==chr(0)) then begin
+                i = GetAreaLength(acusttransslip);
+              end else begin
+                if (c==chr(10)) then begin
+                  AddToText(chr(13) & chr(10),Noter);
+                end else begin
+                  AddToText(ConvertStringFromCodePage(codepage,c),Noter);
+                end;
+              end;
+              i = i + 1;
+            end;
+
+            SetAreaZeroSize(atmp);
+            GetAreaFromTextField(Noter,atmp);  //  GetAreaFromTextField
+            
+            nonblankrownr = 0;
+            rwcnt = CountLinesInArea(atmp);
+            for (i=rwcnt-1;i>=0;i=i-1) begin
+              tstr = GetLineFromArea(atmp,i);
+              if (Mid(tstr,0,1)==chr(13) and Mid(tstr,1,1)==chr(10)) or blank(tstr) or (Mid(tstr,0,1)==chr(13) and len(tstr)==1) or (Mid(tstr,0,1)==chr(10) and len(tstr)==1) then begin
+                nonblankrownr = nonblankrownr + 1;;
+              end else begin
+                i = -1;
+              end;
+            end;
+            SetAreaZeroSize(a);
+            for (i=0;i<(rwcnt-nonblankrownr);i=i+1) begin
+              tstr = GetLineFromArea(atmp,i);
+              AddTextToArea(tstr,a);
+            end;
+
+            AddAreaToTextField(a,CCTRr);
+
+            if (RecordStore(CCTRr,false)) then begin
+              PrintCreditCardTerminalReport(CCTRr);
+//              PrintDocument(CCTRr,"CCTRForm",false);
+            end;
+          end;
+      end;
+    end;
+  end else begin
+//LogText(0,"1.false replypacket " & replypacket & " replystatus " & replystatus);
+    switch (replypacket) begin
+      case "FR":
+        testf = false;
+        CloseWindow(ProcessingWn);
+        switch (replystatus) begin
+          case "1001":
+            testf = true;
+          case "1002":
+            testf = true;
+          case "1003":
+            testf = true;
+            receiptnr = GetTabTextFromArea(9,0,aterminalreply);  
+          case "1004":
+            testf = true;
+          case "1031":
+            testf = true;
+        end;
+        if (testf) then begin
+          switch (FileName) begin
+            case "IVVc":
+              GetWindowRecord(mwn,IVr);
+              sernr = IVr.SerNr;
+            case "IVVc":
+              GetWindowRecord(mwn,IVCashr);
+              sernr = IVCashr.SerNr;
+          end;
+          RecordClear(RepSpec);
+
+//LogText(0,"2.false replypacket " & replypacket & " replystatus " & replystatus);
+          switch (replystatus) begin
+            case "1001":
+              gCashierActionOClassMaxDataLen = maxdatalen;
+              nwn = OpenWindow("CCPayVerifoneCashierActionOClass",0,mwn,"","",RepSpec);
+              PutWindowString(nwn,"mindatalen",mindatalen);
+              PutWindowString(nwn,"maxdatalen",maxdatalen);
+              PutWindowString(nwn,"verfionetimeout",gVerfioneTimeOut);
+              if (gVerfioneTimeOut>0) then begin
+                tick = GetCurTick;
+                PutWindowString(nwn,"verfionestarttick",tick);
+                tstr = gVerfioneTimeOut & "," & tick & "," & replystatus;
+                tstr = tstr & "," & nwn;
+                NewPeriodicTask("FRVerifoneTimeoutTest","Verifone Timeout test for FR Packet","VerifoneTimeoutIdleTask",tstr,1,"");
+              end;
+            case "1002":
+              gCashierActionOClassMaxDataLen = maxdatalen;
+              nwn = OpenWindow("CCPayVerifoneCashierActionOClass",0,mwn,"","",RepSpec);
+              PutWindowString(nwn,"mindatalen",mindatalen);
+              PutWindowString(nwn,"maxdatalen",maxdatalen);
+              PutWindowString(nwn,"verfionetimeout",gVerfioneTimeOut);
+              if (gVerfioneTimeOut>0) then begin
+                tick = GetCurTick;
+                PutWindowString(nwn,"verfionestarttick",tick);
+                tstr = gVerfioneTimeOut & "," & tick & "," & replystatus;
+                tstr = tstr & "," & nwn;
+
+//LogText(0,"3.false replypacket " & replypacket & " tstr " & tstr);
+//LogText(0,"4.false f1 " & pRepSpec.f1 & " f8 " & pRepSpec.f8  & " f9 " & pRepSpec.f9 & " f10 " & pRepSpec.f10 & " codepage " & codepage);
+//LogText(0,"5.false AccStr " & pRepSpec.AccStr & " f5 " & pRepSpec.f5);
+  
+                NewPeriodicTask("FRVerifoneTimeoutTest","Verifone Timeout test for FR Packet","VerifoneTimeoutIdleTask",tstr,1,"");
+              end;
+            case "1003":
+              gCashierActionOClassMaxDataLen = maxdatalen;
+              nwn = OpenWindow("CCPayVerifoneCashierActionOClass",0,mwn,"","",RepSpec);
+              PutWindowString(nwn,"mindatalen",mindatalen);
+              PutWindowString(nwn,"maxdatalen",maxdatalen);
+              PutWindowString(nwn,"verfionetimeout",gVerfioneTimeOut);
+              if (gVerfioneTimeOut>0) then begin
+                tick = GetCurTick;
+                PutWindowString(nwn,"verfionestarttick",tick);
+                tstr = gVerfioneTimeOut & "," & tick & "," & replystatus;
+                tstr = tstr & "," & nwn;
+                NewPeriodicTask("FRVerifoneTimeoutTest","Verifone Timeout test for FR Packet","VerifoneTimeoutIdleTask",tstr,1,"");
+              end;
+            case "1004":
+              if (GetAreaLength(amchnttransslip)>0) then begin
+                PrintCreditCardTerminalFailedTransaction(merchantNoter);//not failed here, waiting for signature
+              end;
+              nwn = OpenWindow("CCPayVerifoneCashierYesNoActionOClass",0,mwn,"","",RepSpec);
+              PutWindowString(nwn,"verfionetimeout",gVerfioneTimeOut);
+              if (gVerfioneTimeOut>0) then begin
+                tick = GetCurTick;
+                PutWindowString(nwn,"verfionestarttick",tick);
+                tstr = gVerfioneTimeOut & "," & tick & "," & replystatus;
+                tstr = tstr & "," & nwn;
+                NewPeriodicTask("FRVerifoneTimeoutTest","Verifone Timeout test for FR Packet","VerifoneTimeoutIdleTask",tstr,1,"");
+              end;
+            case "1031":
+              nwn = OpenWindow("CCPayVerifoneCashierYesNoActionOClass",0,mwn,"","",RepSpec);
+              PutWindowString(nwn,"verfionetimeout",gVerfioneTimeOut);
+              if (gVerfioneTimeOut>0) then begin
+                tick = GetCurTick;
+                PutWindowString(nwn,"verfionestarttick",tick);
+                tstr = gVerfioneTimeOut & "," & tick & "," & replystatus;
+                tstr = tstr & "," & nwn;
+                NewPeriodicTask("FRVerifoneTimeoutTest","Verifone Timeout test for FR Packet","VerifoneTimeoutIdleTask",tstr,1,"");
+              end;
+          end;
+//LogText(0,"1.replystatus " & replystatus & " nwn " & nwn & " GetWIndowClass(nwn) " & GetWIndowClass(nwn));
+//LogText(0,"2.replypacket " & replypacket & " mwn " & mwn & " GetWIndowClass(mwn) " & GetWIndowClass(mwn));
+//LogText(0,"3. pmwn " & pmwn & " GetWIndowClass(pmwn) " & GetWIndowClass(pmwn) & " gVerfioneTimeOut " & gVerfioneTimeOut);
+//LogText(0,"4. ProcessingWn " & ProcessingWn & " GetWIndowClass(ProcessingWn) " & GetWIndowClass(ProcessingWn));
+
+          if (GetWindowClass(pmwn)=="NPTSPaymentOneModeTClass") then begin
+            CloseWindow(pmwn);
+          end;
+
+          DeselectWindow(nwn,false);
+          RepSpec.CurncyCode = "";
+          RepSpec.f1 = receiptnr;
+          
+          RepSpec.f8 = transtype;
+          RepSpec.f9 = paymode;
+          RepSpec.f10 = label;
+          RepSpec.f11 = replystring; 
+          RepSpec.f12 = replystatus;
+          RepSpec.FirstVer = gVerfioneCounter;
+          RepSpec.long1 = sernr;
+          RepSpec.long2 = mwn;
+          PutWindowRecord(nwn,RepSpec);
+          WindowFieldGoto(nwn,RepSpec,-1,"f1",true);
+          
+          switch (replystatus) begin
+            case "1031"://automatic reply
+              comportclosedf = true;
+//LogText(0,"2.CloseComPort");  
+              CloseComPort(0);  
+//LogText(0,"Magic");  
+              ProceedCCPayVerifoneCashierYesNoActionOClass;
+          end;
+        end;
+      otherwise
+//LogText(0,"2.transactionstatus " & transactionstatus);  
+
+        switch (transactionstatus) begin        
+          case "000":
+          case "100":
+          case "7":
+          case "583":
+          case "584":
+          case "594":
+          case "993":
+          case "994":
+          case "997":
+          case "998":
+          case "999":
+          otherwise
+            PrintCreditCardTerminalFailedTransaction(Noter);
+//            PrintCreditCardTerminalFailedTransaction(merchantNoter);
+//LogText(0,"2.VerifoneBanksys_TransactionCancellation");  
+            VerifoneBanksys_TransactionCancellation;
+        end;  
+    end;  
+  end;
+LVerifoneBanksys_WaitForTransactionResult:;  
+//LogText(0,"JJEND ");    
+  gCashierActionOClassMaxDataLen = 0;
+  VerifoneBanksys_WaitForTransactionResult = res;
+  return;
+end;
+
+updating function Integer VerifoneBanksys_InputFormReply(Integer ProcessingWn,string codepage,string transtype,string paymode,string label,string index,string status,string data)
+begin
+  string 255 CtrlSeq;
+  Integer res,noErr;
+  string 255 results;
+  Boolean comportclosedf;
+  
+  CtrlSeq = CtrlSeq & "FA";
+  CtrlSeq = CtrlSeq & uchr(CC_FS);
+  CtrlSeq = CtrlSeq & index;
+  CtrlSeq = CtrlSeq & uchr(CC_FS);
+  CtrlSeq = CtrlSeq & status;
+  CtrlSeq = CtrlSeq & uchr(CC_FS);
+  CtrlSeq = CtrlSeq & data;
+  CtrlSeq = CtrlSeq & uchr(CC_ETX);
+  CtrlSeq = CtrlSeq & VerifoneBanksys_CalculateLRC(CtrlSeq);
+  CtrlSeq = uchr(CC_STX) & CtrlSeq;
+
+  res = VerifoneBanksys_SendCommand(CtrlSeq);
+  if (res!=noErr) then begin
+    goto LVerifoneBanksys_InputFormReply;
+  end;
+
+  res = VerifoneBanksys_ReadACK(10,CC_ENQ);
+  if (res!=noErr) then begin
+    goto LVerifoneBanksys_InputFormReply;
+  end;  
+
+  LogRequest("VerifoneBanksys_InputFormReply",CtrlSeq,res);
+
+  res = VerifoneBanksys_WaitForTransactionResult(ProcessingWn,paymode,label,transtype,"","",codepage,index,results,comportclosedf);
+  if (res!=noErr) then begin
+    goto LVerifoneBanksys_InputFormReply;
+  end;
+
+
+LVerifoneBanksys_InputFormReply:;  
+  VerifoneBanksys_InputFormReply = res;
+  return;
+end;
+
+updating function Integer VerifoneBanksys_GetState(Integer ProcessingWn,string paymode,string label,string transtype,string transactionid,string timestamp,string codepage,var string resultstr)
+begin
+  Integer res,noErr;
+  string 255 CtrlSeq; 
+  Integer nrofmsgs;
+  Boolean comportclosedf;
+
+  CtrlSeq = CtrlSeq & "A" & chr(CC_FS);
+//  CtrlSeq = CtrlSeq & "PAYYAP 8.2" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & BuildProductCode & " " & HansaVersion & chr(CC_FS);//
+  CtrlSeq = CtrlSeq & "4.5.5";
+  CtrlSeq = CtrlSeq & uchr(CC_ETX);
+  CtrlSeq = CtrlSeq & VerifoneBanksys_CalculateLRC(CtrlSeq);  
+  CtrlSeq = uchr(CC_STX) & CtrlSeq;
+  res = VerifoneBanksys_SendCommand(CtrlSeq);
+
+  LogRequest("VerifoneBanksys_GetState",CtrlSeq,res);
+
+  if (res!=noErr) then begin
+    goto LVerifoneBanksys_GetState;
+  end;
+  Sleep(1);
+  res = VerifoneBanksys_ReadACK(10,CC_ENQ);
+  if (res!=noErr) then begin
+    goto LVerifoneBanksys_GetState;
+  end;
+  res = VerifoneBanksys_WaitForTransactionResult(ProcessingWn,paymode,label,transtype,transactionid,timestamp,codepage,"",resultstr,comportclosedf);
+  if (res!=noErr) then begin
+    goto LVerifoneBanksys_GetState;
+  end;
+LVerifoneBanksys_GetState:;  
+  VerifoneBanksys_GetState = res;
+  return;
+end;
+
+procedure VerifoneAdditionalInformationRequired(string SentCtrlSeq,Integer ProcessingWn)
+begin
+  record RcVc RepSpec;
+  Integer mwn,nwn;
+  string 255 tstr,tstr2,tstr3,tstr4,tstr5;
+  
+  GetWindowRecord(ProcessingWn,RepSpec);  
+  tstr = GetWindowString(ProcessingWn,"Status");
+  tstr2 = GetWindowString(ProcessingWn,"Result");
+  tstr3 = GetWindowString(ProcessingWn,"AdditionalInfo");
+  tstr4 = GetWindowString(ProcessingWn,"ReplyInfo");
+  tstr5 = GetWindowString(ProcessingWn,"ReplyStatus");
+  mwn = MotherWindow(ProcessingWn);
+  CloseWindow(ProcessingWn);
+  RepSpec.f12 = SentCtrlSeq;
+  nwn = OpenWindow("CCPayVerifoneAddInfoOClass",0,mwn,"","",RepSpec);
+  DeselectWindow(nwn,false);
+  PutWindowString(ProcessingWn,"ReplyInfo",tstr4);        
+  PutWindowString(ProcessingWn,"ReplyStatus",tstr5);        
+  PutWindowString(ProcessingWn,"Status",tstr);        
+  PutWindowString(ProcessingWn,"Result",tstr2);        
+  PutWindowString(ProcessingWn,"AdditionalInfo",tstr3); 
+  PutWindowRecord(ProcessingWn,RepSpec);
+  return;
+end;
+
+updating function Integer VerifoneBanksys_ProcessTransaction(string transtype,val v,string paymode,string label,string transactionid,string timestamp,Integer ProcessingWn,string codepage,
+                          var string SentCtrlSeq,var string results,var Boolean comportclosedf)
+begin
+  Integer res,noErr;
+  Boolean transsuccessf;
+
+/*  
+  res = VerifoneBanksys_IsTerminalActive;
+  if (res!=noErr) then begin
+    goto LVerifoneBanksys_ProcessTransaction;
+  end;
+*/  
+/*  
+  res = VerifoneBanksys_GetState(ProcessingWn,paymode,label,"State",transactionid,timestamp,codepage,results);
+//Trace("2.VerifoneBanksys_GetState res " & res ,"");
+  if (res!=noErr) then begin
+    goto LVerifoneBanksys_ProcessTransaction;
+  end;
+*/
+  
+  res = VerifoneBanksys_TransactionRequestStart(v,transtype,transactionid,"",SentCtrlSeq);
+
+
+  if (res!=noErr) then begin
+    VerifoneBanksys_TransactionStatus(ProcessingWn,transtype,"2","Error","1000",results,transsuccessf);
+    goto LVerifoneBanksys_ProcessTransaction;
+  end;
+  res = VerifoneBanksys_WaitForTransactionResult(ProcessingWn,paymode,label,transtype,transactionid,timestamp,codepage,"",results,comportclosedf);
+
+
+  if (res!=noErr) then begin
+    goto LVerifoneBanksys_ProcessTransaction;
+  end;    
+
+LVerifoneBanksys_ProcessTransaction:;  
+  VerifoneBanksys_ProcessTransaction = res;
+  return;
+end;
+
+global
+updating procedure VerifoneBanksys_Purchase(val v,string paymode,string label,Integer ProcessingWn)
+begin
+  record LocalMachineBlock LMb;  
+  record LSerialPortDeviceVc LSPDr;
+  Integer res,noErr;
+  string 255 SentCtrlSeq,results,codepage;
+  Boolean additionalinfof,comportclosedf;
+  record RcVc RepSpec;
+  transaction Integer gVerfioneTimeOut; 
+  LongInt cBytes;
+
+  gVerfioneTimeOut = 0;
+  BlockLoad(LMb);
+  if (FindLocalSerialPortDevice(kSerialPortDeviceClassCreditCardTerminal,kSerialPortDeviceModelCreditCardTerminalVerifoneWX675,LMb.LocalMachineCode,LSPDr)) then begin  
+    TCPIPVerifoneWX675_Purchase(LMb,LSPDr,v,paymode,label,ProcessingWn);
+    goto LVerifoneBanksys_PurchaseOut;
+  end;
+
+
+  if (FindLocalSerialPortDevice(kSerialPortDeviceClassCreditCardTerminal,kSerialPortDeviceModelCreditCardTerminalVerifoneBanksys,LMb.LocalMachineCode,LSPDr)==false) then begin  
+    goto LVerifoneBanksys_PurchaseOut;
+  end;  
+
+//LogText(0,"1.OpenComPort");  
+  if (OpenComPort(0,LSPDr.Port,LSPDr.BaudRate,LSPDr.Parity,LSPDr.ByteSize,LSPDr.StopBits,LSPDr.FlowControl)==0) then begin
+    GetWindowRecord(ProcessingWn,RepSpec);
+    PutWindowString(ProcessingWn,"Status",USetStr(22123));        
+    PutWindowString(ProcessingWn,"Result",USetStr(27429));        
+    PutWindowRecord(ProcessingWn,RepSpec);
+    goto LVerifoneBanksys_PurchaseOut;
+  end;
+//  cBytes = CountInComPort(0);       
+//LogText(0,"Open cBytes " & cBytes);
+  
+  comportclosedf = false;
+  codepage = StringSetFromString(89,LSPDr.Codepage);
+  SetComPortCodepage(codepage);
+  res = VerifoneBanksys_ProcessTransaction("Purchase",v,paymode,label,"","",ProcessingWn,codepage,SentCtrlSeq,results,comportclosedf);
+//LogText(0,"Magic ");
+ 
+   
+  if (comportclosedf==false) then begin
+//    cBytes = CountInComPort(0);       
+//LogText(0,"Close cBytes " & cBytes);
+    res = CloseComPort(0);  
+//LogText(0,"Magic");  
+  end;
+LVerifoneBanksys_PurchaseOut:;  
+//LogText(0,"end.VerifoneBanksys_Purchase res " & res );
+  return;
+end;
+
+global
+updating procedure VerifoneBanksys_Return(val v,string paymode,string label,Integer ProcessingWn)
+begin
+  record LocalMachineBlock LMb;  
+  record LSerialPortDeviceVc LSPDr;
+  Integer wn,res,noErr;
+  string 255 SentCtrlSeq,results,codepage;
+  Boolean comportclosedf;
+  transaction Integer gVerfioneTimeOut; 
+
+  gVerfioneTimeOut = 0;
+  BlockLoad(LMb);
+  if (FindLocalSerialPortDevice(kSerialPortDeviceClassCreditCardTerminal,kSerialPortDeviceModelCreditCardTerminalVerifoneBanksys,LMb.LocalMachineCode,LSPDr)==false) then begin  
+    goto LVerifoneBanksys_ReturnOut;
+  end;  
+//LogText(0,"4.OpenComPort");  
+  if (OpenComPort(0,LSPDr.Port,LSPDr.BaudRate,LSPDr.Parity,LSPDr.ByteSize,LSPDr.StopBits,LSPDr.FlowControl)==0) then begin
+    goto LVerifoneBanksys_ReturnOut;
+  end;
+  codepage = StringSetFromString(89,LSPDr.Codepage);
+  SetComPortCodepage(codepage);
+
+  res = VerifoneBanksys_ProcessTransaction("Return",v,paymode,label,"","",ProcessingWn,codepage,SentCtrlSeq,results,comportclosedf);
+//LogText(0,"4.CloseComPort");  
+  res = CloseComPort(0);  
+LVerifoneBanksys_ReturnOut:;  
+//LogText(0,"Magic ");
+  return;
+end;
+
+global
+updating procedure VerifoneBanksys_Void(val v,string paymode,string label,string transactionid,string timestamp,Integer ProcessingWn)
+begin
+  record LocalMachineBlock LMb;  
+  record LSerialPortDeviceVc LSPDr;
+  Integer wn,res,noErr;
+  string 255 SentCtrlSeq,results,codepage;
+  Boolean comportclosedf;
+  transaction Integer gVerfioneTimeOut; 
+
+  gVerfioneTimeOut = 0;
+  BlockLoad(LMb);
+  if (FindLocalSerialPortDevice(kSerialPortDeviceClassCreditCardTerminal,kSerialPortDeviceModelCreditCardTerminalVerifoneBanksys,LMb.LocalMachineCode,LSPDr)==false) then begin  
+    goto LVerifoneBanksys_Void;
+  end;  
+//LogText(0,"5.OpenComPort");  
+  if (OpenComPort(0,LSPDr.Port,LSPDr.BaudRate,LSPDr.Parity,LSPDr.ByteSize,LSPDr.StopBits,LSPDr.FlowControl)==0) then begin
+    goto LVerifoneBanksys_Void;
+  end;
+  codepage = StringSetFromString(89,LSPDr.Codepage);
+  SetComPortCodepage(codepage);
+//  res = VerifoneBanksys_ProcessTransaction("Void",v,paymode,label,transactionid,timestamp,ProcessingWn,codepage,SentCtrlSeq,results);
+  res = VerifoneBanksys_ProcessTransaction("Void",v,paymode,label,"",timestamp,ProcessingWn,codepage,SentCtrlSeq,results,comportclosedf);
+LVerifoneBanksys_Reversal:;  
+//LogText(0,"5.CloseComPort");  
+  res = CloseComPort(0);  
+LVerifoneBanksys_Void:;  
+//LogText(0,"Magic ");
+  return;
+end;
+
+function Integer VerifoneBanksys_ReportRequestStart(string transtype,string optype,var string SentCtrlSeq)
+begin
+  Integer res,noErr;
+  string 255 CtrlSeq,tstr; 
+  area aterminalreq;
+  transaction Integer gVerfioneCounter; 
+
+
+  gVerfioneCounter = 0;
+//[0x02]1[0x1c]
+//100[0x1c]0[0x1c]1[0x1c]0[0x1c]6[0x1c][0x1c]978[0x1c][0x1c][0x1c]1[0x1c]
+//[0x1c]4.5.5[0x1c]0[0x1c]1[0x1c][0x1c]UI[0x1c][0x1c][0x1c][0x1c][0x1c]
+//[0x1c]MLOY;[0x1c][0x1c][0x1c][0x1c][0x1c]Win8 x64[0x1c][0x1c][0x1c][0x1c]
+//ECR Simulator 2.1.0.0[0x1c]OCX 2.3.5.0[0x03]::
+
+  CtrlSeq = CtrlSeq & "1" & chr(CC_FS);  //0
+  switch (transtype) begin
+    case "Report":
+      CtrlSeq = CtrlSeq & optype;
+  end;
+  CtrlSeq = CtrlSeq & chr(CC_FS);
+  M4PadString(ValToString(0*100,M4UVal,"","",1),12,"",false,tstr);
+  CtrlSeq = CtrlSeq & tstr & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "1" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "0" & chr(CC_FS);  //0 = latvian
+  CtrlSeq = CtrlSeq & "6" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);  
+  CtrlSeq = CtrlSeq & "978" & chr(CC_FS);  //EUR
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "1" & chr(CC_FS);  //10  
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "4.5.5" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "2" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "1" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "UI" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);  //20
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "MLOY;" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);//Win8 x64
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & "" & chr(CC_FS);
+//  CtrlSeq = CtrlSeq & "PAYYAP 8.2" & chr(CC_FS);
+  CtrlSeq = CtrlSeq & BuildProductCode & " " & HansaVersion & chr(CC_FS);//
+  CtrlSeq = CtrlSeq & "OCX 2.3.5.0";
+  CtrlSeq = CtrlSeq & uchr(CC_ETX);
+  CtrlSeq = CtrlSeq & VerifoneBanksys_CalculateLRC(CtrlSeq);  
+  CtrlSeq = uchr(CC_STX) & CtrlSeq;
+
+  LogRequest("VerifoneBanksys_ReportRequestStart",CtrlSeq,res);
+
+
+  res = VerifoneBanksys_SendCommand(CtrlSeq);
+  if (res!=noErr) then begin
+    goto LVerifoneBanksys_ReportRequestStart;
+  end;
+  res = VerifoneBanksys_ReadACK(10,CC_ENQ);
+  if (res!=noErr) then begin
+    goto LVerifoneBanksys_ReportRequestStart;
+  end;  
+
+  SentCtrlSeq = CtrlSeq;
+LVerifoneBanksys_ReportRequestStart:;  
+  VerifoneBanksys_ReportRequestStart = res;
+  return;
+end;
+
+updating function Integer VerifoneBanksys_ProcessReport(string transtype,string optype,string timestamp,Integer ProcessingWn,string codepage,
+                          var string SentCtrlSeq,var string results)
+begin
+  Integer res,noErr;
+  Boolean transsuccessf,comportclosedf;
+
+/*  
+  res = VerifoneBanksys_IsTerminalActive;
+  if (res!=noErr) then begin
+    goto LVerifoneBanksys_ProcessReport;
+  end;
+*/  
+/*  
+  res = VerifoneBanksys_GetState(ProcessingWn,paymode,label,"State",transactionid,timestamp,codepage,results);
+//Trace("2.VerifoneBanksys_GetState res " & res ,"");
+  if (res!=noErr) then begin
+    goto LVerifoneBanksys_ProcessReport;
+  end;
+*/
+  
+  res = VerifoneBanksys_ReportRequestStart(transtype,optype,SentCtrlSeq);
+
+  if (res!=noErr) then begin
+    VerifoneBanksys_TransactionStatus(ProcessingWn,transtype,"2","Error","1000",results,transsuccessf);
+    goto LVerifoneBanksys_ProcessReport;
+  end;
+
+  res = VerifoneBanksys_WaitForTransactionResult(ProcessingWn,optype,"",transtype,"","",codepage,"",results,comportclosedf);
+
+  if (res!=noErr) then begin
+    goto LVerifoneBanksys_ProcessReport;
+  end;    
+
+LVerifoneBanksys_ProcessReport:;  
+  VerifoneBanksys_ProcessReport = res;
+  return;
+end;
+
+global
+updating procedure CreditCardTerminalReports(Integer mwn,string reportcode)
+begin
+  record RahaxiBlock Rahaxib; 
+  record LocalMachineBlock LMb;  
+  record LSerialPortDeviceVc LSPDr;
+  Integer res,noErr;
+  string 255 SentCtrlSeq,results,codepage;
+  Integer wn;
+  record RcVc RepSpec;
+
+  BlockLoad(LMb);
+  BlockLoad(Rahaxib);
+
+  switch (Rahaxib.TerminalType) begin
+    case kLocalCCTerminalVerifoneBanksys:
+      if (FindLocalSerialPortDevice(kSerialPortDeviceClassCreditCardTerminal,kSerialPortDeviceModelCreditCardTerminalVerifoneWX675,LMb.LocalMachineCode,LSPDr)) then begin  
+        RepSpec.f11 = "Report";
+        RepSpec.f10 = "RcVc";
+        wn = OpenWindow("CCPayVerifoneProcessingWClass",0,mwn,"","",RepSpec);
+        DeselectWindow(wn,false);
+
+        TCPIPVerifoneWX675_Report(LMb,LSPDr,reportcode,wn);
+        goto LCreditCardTerminalReports;
+      end;
+
+      if (FindLocalSerialPortDevice(kSerialPortDeviceClassCreditCardTerminal,kSerialPortDeviceModelCreditCardTerminalVerifoneBanksys,LMb.LocalMachineCode,LSPDr)==false) then begin  
+        goto LCreditCardTerminalReports;
+      end;  
+    case kLocalCCTerminalWorldPay:
+      if (FindLocalSerialPortDevice(kSerialPortDeviceClassCreditCardTerminal,kSerialPortDeviceModelCreditCardTerminalWorldPay,LMb.LocalMachineCode,LSPDr)) then begin  
+        RepSpec.f12 = reportcode;
+        wn = OpenWindow("WorldPayTerminalReportWClass",0,mwn,"","",RepSpec);
+        DeselectWindow(wn,false);
+
+        TCPIPWorldPay_Report(LMb,LSPDr,reportcode,wn);
+        goto LCreditCardTerminalReports;
+      end;
+  end;
+//LogText(0,"8.OpenComPort");  
+  if (OpenComPort(0,LSPDr.Port,LSPDr.BaudRate,LSPDr.Parity,LSPDr.ByteSize,LSPDr.StopBits,LSPDr.FlowControl)==0) then begin
+    goto LCreditCardTerminalReports;
+  end;
+  RepSpec.f11 = "Report";
+  RepSpec.f10 = "RcVc";
+  wn = OpenWindow("CCPayVerifoneProcessingWClass",0,mwn,"","",RepSpec);
+  DeselectWindow(wn,false);
+
+  codepage = StringSetFromString(89,LSPDr.Codepage);
+  BlockLoad(Rahaxib);
+  switch (Rahaxib.TerminalType) begin
+    case kLocalCCTerminalVerifoneBanksys:
+      res = VerifoneBanksys_ProcessReport("Report",reportcode,"",wn,codepage,SentCtrlSeq,results);
+  end;
+//LogText(0,"8.CloseComPort");  
+  CloseComPort(0);  
+LCreditCardTerminalReports:;
+//LogText(0,"Magic ");
+  return;
+end;
+
+global
+procedure CancelCCPayVerifoneCashierActionOClass()
+begin
+  record RahaxiBlock Rahaxib; 
+  record LocalMachineBlock LMb;  
+  record LSerialPortDeviceVc LSPDr;
+  Integer wn;
+  record RcVc RepSpec;
+  transaction Integer gVerfioneCounter; 
+  transaction Integer gVerfioneTimeOut; 
+
+  wn = CurWindow;
+  GetWindowRecord(wn,RepSpec);
+  gVerfioneCounter = RepSpec.FirstVer;
+  BlockLoad(LMb);
+  BlockLoad(Rahaxib);
+  switch (Rahaxib.TerminalType) begin
+    case kLocalCCTerminalVerifoneBanksys:
+      if (FindLocalSerialPortDevice(kSerialPortDeviceClassCreditCardTerminal,kSerialPortDeviceModelCreditCardTerminalVerifoneBanksys,LMb.LocalMachineCode,LSPDr)==false) then begin  
+        goto LCancelCCPayVerifoneCashierActionOClass;
+      end;  
+  end;
+//LogText(0,"9.OpenComPort");  
+  if (OpenComPort(0,LSPDr.Port,LSPDr.BaudRate,LSPDr.Parity,LSPDr.ByteSize,LSPDr.StopBits,LSPDr.FlowControl)==0) then begin
+    goto LCancelCCPayVerifoneCashierActionOClass;
+  end;
+//LogText(0,"3.VerifoneBanksys_TransactionCancellation");  
+  VerifoneBanksys_TransactionCancellation;  
+
+//LogText(0,"9.CloseComPort");  
+  CloseComPort(0);  
+LCancelCCPayVerifoneCashierActionOClass:;  
+  CloseWindow(wn);
+  gVerfioneTimeOut = 0;
+//LogText(0,"Magic ");
+  return;
+end;
+
+global
+updating procedure ProceedCCPayVerifoneCashierActionOClass()
+begin
+  record RahaxiBlock Rahaxib; 
+  record LocalMachineBlock LMb;  
+  record LSerialPortDeviceVc LSPDr;
+  Integer wn,res,status,vwn;
+  record RcVc RepSpec;
+  record RcVc vRepSpec;
+  string 255 codepage,tagstr;
+  transaction Integer gVerfioneCounter; 
+  Integer mindatalen,maxdatalen;
+  transaction Integer gVerfioneTimeOut; 
+  LongInt verfionestarttick;
+  Boolean selectwnf;
+
+  tagstr = PushButtonTag;
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+  mindatalen = StringToInt(GetWindowString(wn,"mindatalen"));
+  maxdatalen = StringToInt(GetWindowString(wn,"maxdatalen"));
+  gVerfioneTimeOut = StringToInt(GetWindowString(wn,"verfionetimeout")); 
+  verfionestarttick = StringToLongInt(GetWindowString(wn,"verfionestarttick"));
+
+//LogText(0,"10.ProceedCCPayVerifoneCashierActionOClass f1 " & RepSpec.f1 & " f8 " & RepSpec.f8  & " f9 " & RepSpec.f9 & " f10 " & RepSpec.f10 & " codepage " & codepage);
+//LogText(0,"11.ProceedCCPayVerifoneCashierActionOClass AccStr " & RepSpec.AccStr & " f5 " & RepSpec.f5);
+
+  if (verfionestarttick>0 and gVerfioneTimeOut>0) then begin
+//LogText(0," GetCurTick " & GetCurTick & " verfionestarttick " & verfionestarttick & " gVerfioneTimeOut " & gVerfioneTimeOut & " tagstr " & tagstr);  
+    if ((GetCurTick-verfionestarttick)>=gVerfioneTimeOut*1000.00) then begin
+      if (tagstr=="4") then begin
+        CloseWindow(wn);
+      end else begin
+        RepSpec.f11 = "Timeout";
+        PutWindowRecord(wn,RepSpec);
+//LogText(0,"Z100. VerifoneBanksys_InputFormReply 3 ");
+      end;
+      goto LProceedCCPayVerifoneCashierActionOClass;
+    end;
+  end;
+  if (tagstr!="4") then begin
+    selectwnf = true;
+    if (blank(RepSpec.f1)) then begin
+      MessageBox(40450,"");
+      goto LProceedCCPayVerifoneCashierActionOClass;
+    end;
+    if (mindatalen>0) then begin
+      if (len(RepSpec.f1)<mindatalen) then begin
+        MessageBox(40450,"");
+        goto LProceedCCPayVerifoneCashierActionOClass;
+      end;
+    end;
+    if (maxdatalen>0) then begin
+      if (len(RepSpec.f1)>maxdatalen) then begin
+        MessageBox(40451,"");
+        goto LProceedCCPayVerifoneCashierActionOClass;
+      end;
+    end;
+  end;
+  gVerfioneCounter = RepSpec.FirstVer;
+  BlockLoad(LMb);
+  BlockLoad(Rahaxib);
+  switch (Rahaxib.TerminalType) begin
+    case kLocalCCTerminalVerifoneBanksys:
+      if (FindLocalSerialPortDevice(kSerialPortDeviceClassCreditCardTerminal,kSerialPortDeviceModelCreditCardTerminalVerifoneBanksys,LMb.LocalMachineCode,LSPDr)==false) then begin  
+        CloseWindow(wn);
+        goto LProceedCCPayVerifoneCashierActionOClass;
+      end;  
+  end;
+////LogText(0,"10.OpenComPort");  
+  if (OpenComPort(0,LSPDr.Port,LSPDr.BaudRate,LSPDr.Parity,LSPDr.ByteSize,LSPDr.StopBits,LSPDr.FlowControl)==0) then begin
+    CloseWindow(wn);
+    goto LProceedCCPayVerifoneCashierActionOClass;
+  end;
+  codepage = StringSetFromString(89,LSPDr.Codepage);
+  SetComPortCodepage(codepage);
+  vRepSpec.UsedOnly = kLocalCCTerminalVerifoneBanksys;
+  vRepSpec.ArtMode = 1;
+  vRepSpec.long1 = RepSpec.long1;
+  vRepSpec.AccStr = RepSpec.f9;
+  vRepSpec.f5 = RepSpec.f10;
+  vRepSpec.CurncyCode = RepSpec.CurncyCode;
+  vwn = OpenWindow("CCPayVerifoneProcessingWClass",0,MotherWindow(wn),"","",vRepSpec);
+  DeselectWindow(vwn,false);
+  switch (tagstr) begin
+    case "4":
+      status = 4;
+    otherwise
+      status = 0;
+      if (nonblank(RepSpec.f1)) then begin
+        status = 0;
+      end;
+  end;
+  
+  CloseWindow(wn);
+
+  res = VerifoneBanksys_InputFormReply(vwn,codepage,RepSpec.f8,RepSpec.f9,RepSpec.f10,RepSpec.f12,status,RepSpec.f1);
+  selectwnf = false;
+
+////LogText(0,"20.CloseComPort");  
+  CloseComPort(0);  
+//LogText(0,"Magic");  
+
+LProceedCCPayVerifoneCashierActionOClass:;  
+  if (selectwnf) then begin
+    SelectWindow(wn);
+    WindowFieldGoto(wn,RepSpec,-1,"f1",true);
+  end;
+  RemoveTask("FRVerifoneTimeoutTest");
+  return;
+end;
+
+global
+updating procedure ProceedCCPayVerifoneCashierYesNoActionOClass()
+begin
+  record RahaxiBlock Rahaxib; 
+  record LocalMachineBlock LMb;  
+  record LSerialPortDeviceVc LSPDr;
+  Integer wn,res,status,vwn;
+  record RcVc RepSpec;
+  record RcVc vRepSpec;
+  string 255 codepage,data;
+  transaction Integer gVerfioneCounter; 
+  transaction Integer gVerfioneTimeOut; 
+  
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+  gVerfioneCounter = RepSpec.FirstVer;
+  BlockLoad(LMb);
+  BlockLoad(Rahaxib);
+  switch (Rahaxib.TerminalType) begin
+    case kLocalCCTerminalVerifoneBanksys:
+      if (FindLocalSerialPortDevice(kSerialPortDeviceClassCreditCardTerminal,kSerialPortDeviceModelCreditCardTerminalVerifoneBanksys,LMb.LocalMachineCode,LSPDr)==false) then begin  
+        CloseWindow(wn);
+        goto LProceedCCPayVerifoneCashierActionOClass;
+      end;  
+  end;
+//LogText(0,"11.OpenComPort");  
+  if (OpenComPort(0,LSPDr.Port,LSPDr.BaudRate,LSPDr.Parity,LSPDr.ByteSize,LSPDr.StopBits,LSPDr.FlowControl)==0) then begin
+    CloseWindow(wn);
+    goto LProceedCCPayVerifoneCashierActionOClass;
+  end;
+  codepage = StringSetFromString(89,LSPDr.Codepage);
+  SetComPortCodepage(codepage);
+  vRepSpec.UsedOnly = kLocalCCTerminalVerifoneBanksys;
+  vRepSpec.ArtMode = 1;
+  vRepSpec.long1 = RepSpec.long1;
+  vRepSpec.AccStr = RepSpec.f9;
+  vRepSpec.f5 = RepSpec.f10;
+  vRepSpec.CurncyCode = RepSpec.CurncyCode;
+  gVerfioneTimeOut = StringToInt(GetWindowString(wn,"verfionetimeout")); 
+  vwn = OpenWindow("CCPayVerifoneProcessingWClass",0,RepSpec.long2,"","",vRepSpec);
+  DeselectWindow(vwn,false);
+  data = PushButtonTag;
+  switch (data) begin
+    case "1": status = 0;
+    case "2": status = 4;
+    otherwise status = 3;
+  end;
+  
+  CloseWindow(wn);
+  res = VerifoneBanksys_InputFormReply(vwn,codepage,RepSpec.f8,RepSpec.f9,RepSpec.f10,RepSpec.f12,status,data);
+
+//LogText(0,"11.CloseComPort");  
+  CloseComPort(0);  
+  RemoveTask("FRVerifoneTimeoutTest");
+
+LProceedCCPayVerifoneCashierActionOClass:;  
+//LogText(0,"Magic ");
+  return;
+end;
+
+global
+procedure CloseCCPayVerifoneProcessingWClass()
+begin
+  Integer mwn;
+  record RcVc RepSpec;
+  string 255 rinfo,rstatus;
+  Integer wn;
+  transaction Integer gVerfioneTimeOut; 
+  Boolean noclosingf;
+
+  wn = CurWindow;
+  rinfo = GetWindowString(wn,"ReplyInfo");
+  rstatus = GetWindowString(wn,"ReplyStatus");
+  noclosingf = GetWindowString(wn,"ProcessingFinished")=="false";
+  if ((rinfo=="9" or rinfo=="5" or blank(rinfo)) and (noclosingf==false)) then begin
+    GetWindowRecord(wn,RepSpec);
+    mwn =  MotherWindow(CurWindow);
+    CloseWindow(wn);
+    gVerfioneTimeOut = 0;
+    WindowFieldGotoForTouchScreen(mwn,-1,"ivcashcommand",true); 
+    if (RepSpec.UsedOnly==kLocalCCTerminalVerifoneBanksys) then begin
+      RemoveTask("FRVerifoneTimeoutTest");
+    end;
+  end;
+  return;
+end;
+
+global
+procedure VerifoneTimeoutRemoveIdleTask(string arg)
+begin
+  RemoveTask("FRVerifoneTimeoutTest");
+  return;
+end;
+
+global
+updating procedure VerifoneTimeoutIdleTask(string args)
+begin
+  string 255 replystatus,tstr,codepage;
+  LongInt pos,timeout;
+  LongInt starttick;
+  Integer res,wn,pwn,mwn;
+  record RcVc RepSpec;
+  record LocalMachineBlock LMb;  
+  record LSerialPortDeviceVc LSPDr;
+  record RahaxiBlock Rahb;
+  
+  pos = 0;
+  GetNextSubstring(args,pos,",",tstr);
+  timeout = StringToLongInt(tstr);
+  GetNextSubstring(args,pos,",",tstr);
+  starttick = StringToLongInt(tstr);
+  GetNextSubstring(args,pos,",",replystatus);
+  GetNextSubstring(args,pos,",",tstr);
+  wn = StringToInt(tstr);
+
+//LogText(0,"VerifoneTimeoutIdleTask timeout " & timeout  & " starttick " & starttick & " replystatus " & replystatus & " codepage " & codepage);  
+
+  if (timeout>0 and starttick>0) then begin
+    if ((GetCurTick-starttick)>=(timeout+1)*1000.00) then begin
+      BlockLoad(LMb);
+      BlockLoad(Rahb);
+      switch (Rahb.TerminalType) begin
+        case kLocalCCTerminalVerifoneBanksys:
+          if (FindLocalSerialPortDevice(kSerialPortDeviceClassCreditCardTerminal,kSerialPortDeviceModelCreditCardTerminalVerifoneBanksys,LMb.LocalMachineCode,LSPDr)==false) then begin  
+            goto LVerifoneTimeoutIdleTask;
+          end;  
+      end;
+    ////LogText(0,"10.OpenComPort");  
+      if (OpenComPort(0,LSPDr.Port,LSPDr.BaudRate,LSPDr.Parity,LSPDr.ByteSize,LSPDr.StopBits,LSPDr.FlowControl)==0) then begin
+        goto LVerifoneTimeoutIdleTask;
+      end;
+      codepage = StringSetFromString(89,LSPDr.Codepage);
+      SetComPortCodepage(codepage);
+  
+      pwn = OpenWindow("CCPayVerifoneProcessingWClass",0,mwn,"","",RepSpec);
+      DeselectWindow(pwn,false);
+
+      res = VerifoneBanksys_InputFormReply(pwn,codepage,"","","",replystatus,3,RepSpec.f1);
+LVerifoneTimeoutIdleTask:;
+      CloseComPort(0);  
+      if (res==0) then begin//noErr
+        CloseWindow(wn);
+      end;
+      RemoveTask("FRVerifoneTimeoutTest");
+//      tt = AddSeconds(CurrentTime,1);
+//      NewTimedTask("VerifoneTimeoutIdleTask","VerifoneTimeoutIdleTask","VerifoneTimeoutIdleTask","",CurrentDate,tt,"","");
+    end;
+  end else begin
+    RemoveTask("FRVerifoneTimeoutTest");
+  end;
+  return;
+end;

@@ -1,0 +1,59 @@
+global
+function Boolean ShopBaskDClassActiveEditField(Integer wn,string fieldname,Integer fn,Integer wnst,Integer rownr,Integer changed)
+BEGIN
+  record ShopBaskVc ShopBaskr;
+  Boolean res;
+
+  res = true;
+  GetWindowRecord(wn,ShopBaskr);
+
+  if (ShopBaskr.DestinationNr!=-1) then begin
+    res = false;
+    goto LShopBaskDClassActiveEditField;
+  end;
+
+  switch (fieldname) begin
+    case "OwnerSerNr": 
+      res = false;
+      if (UserCanAction("AllowReservationChanging",false)) then begin
+        if (ShopBaskr.Owner==kShopBaskOwnerReservation) then begin
+          res = true;
+        end;
+      end;    
+    case "Qty":
+      if (UserCanAction("ChangePrices",true)==false) then begin
+        res = false;
+      end;
+    case "Discount":
+      if (UserCanAction("ChangePrices",true)==false) then begin
+        res = false;
+      end;
+  end;
+LShopBaskDClassActiveEditField:;
+  ShopBaskDClassActiveEditField = res;
+  return;
+end;
+
+global
+function Boolean JobShopBaskDClassActiveEditField(Integer wn,string fieldname,Integer fn,Integer wnst,Integer rownr,Integer changed)
+begin
+  Boolean res;
+    
+  res = ShopBaskDClassActiveEditField(wn,fieldname,fn,wnst,rownr,changed);
+
+  JobShopBaskDClassActiveEditField = res;
+  RETURN;
+END;
+
+global
+function Boolean ShopBaskAuditDClassActiveEditField(Integer wn,string fieldname,Integer fn,Integer wnst,Integer rownr,Integer changed)
+begin
+  Boolean res;
+    
+  res = ShopBaskDClassActiveEditField(wn,fieldname,fn,wnst,rownr,changed);
+
+  ShopBaskAuditDClassActiveEditField = res;
+  RETURN;
+END;
+
+

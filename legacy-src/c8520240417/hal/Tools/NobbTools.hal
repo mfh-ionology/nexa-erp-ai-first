@@ -1,0 +1,608 @@
+external procedure JSONStringStart(var string);
+external procedure JSONStringPut(var string,string,string);
+external procedure JSONStringAdd(var string,string,string);
+external procedure JSONStringMemberStart(var string,string);
+external procedure JSONStringMemberEnd(var string);
+external procedure JSONStringArrayStart(var string);
+external procedure JSONStringArrayEnd(var string);
+external procedure JSONStringEnd(var string);
+external procedure JSONNotStringAdd(var string,string,string);
+external procedure JSONNotStringPut(var string,string,string);
+external function Boolean ParseHTTPHeader(area,string,var Integer,var string,var string);
+
+global
+procedure LogNobb(string filename,area a)
+begin
+  string 255 folder;
+  record NobbSettingsBlock NSb;
+
+  BlockLoad(NSb);
+  if (NSb.LogCommunication==0) then begin
+    goto LLogNobb;
+  end;
+
+  folder = "NobbLogs/";
+  if (DirExists(folder)==false) then begin
+    CreateFolder(folder);
+  end;
+  WriteAreaToFile(a,folder & "NobbLog_" & filename & "_" & DateToString(CurrentDate,"YYYYMMDD") & "_" & CurrentUnixUTCTime & ".txt",0);
+LLogNobb:;
+  return;
+end;
+
+function string 255 GetFileExtension(string fn)
+begin
+  string 255 res;
+  Integer i;
+
+  for (i=len(fn)-1;i>=0;i=i-1) begin
+    if (mid(fn,i,1)==".") then begin
+      goto Lexit;
+    end;
+    res = mid(fn,i,1) & res;
+  end;
+
+Lexit:;
+  GetFileExtension = res;
+  return;
+end;
+
+function string 255 NobbAuthURL()
+begin
+  record NobbSettingsBlock NSb;
+  string 255 res;
+
+  BlockLoad(NSb);
+
+  switch (NSb.TestMode) begin
+    case 0: res = "";
+    case 1: res = "bt-auth0-test-api-webapp.azurewebsites.net";
+  end;
+
+  NobbAuthURL = res;
+  return;
+end;
+
+function string 255 NobbURL()
+begin
+  record NobbSettingsBlock NSb;
+  string 255 res;
+
+  BlockLoad(NSb);
+
+  switch (NSb.TestMode) begin
+    case 0: res = "";
+    case 1: res = "bt-nnsnbconnect-test-api-webapp.azurewebsites.net";
+  end;
+
+  NobbURL = res;
+  return;
+end;
+
+global
+updating procedure DoUpdateNobbItemStatus(var record NobbItemStatusVc NISp,Integer newstatus)
+begin
+  NISp.Status = newstatus;
+  switch (NISp.Status) begin
+    case kNobbItemStatusCreateItemRejected:
+    case kNobbItemStatusCreatePackageRejected:
+    case kNobbItemStatusCreateImageRejected:
+    case kNobbItemStatusCreatePriceRejected:
+    case kNobbItemStatusRejected:
+    otherwise
+      NISp.StatusMessage = "";
+  end;
+  RecordStore(NISp,true);
+  return;
+end;
+
+global
+updating function Boolean GetAuthToken(var record NobbSettingsBlock NSb)
+begin
+  Boolean res;
+  string 255 method,js;
+  area a_req,a_reply,replyheader;
+  string 255 comment,result;
+  Integer status;
+
+  if (blank(NSb.ClientId))      then begin goto LGetAuthToken; end;
+  if (blank(NSb.ClientSecret))  then begin goto LGetAuthToken; end;
+  if (blank(NSb.Audience))      then begin goto LGetAuthToken; end;
+
+  BlockLoad(NSb);
+  JSONStringStart(js);
+  JSONStringAdd(js,"clientId",NSb.ClientId);
+  JSONStringAdd(js,"clientSecret",NSb.ClientSecret);
+  JSONStringPut(js,"audience",NSb.Audience);
+  JSONStringEnd(js);
+  AddTextToArea(js,a_req);
+
+  method = "/api/ClientAccess";
+  LogNobb("GetAuthToken_req",a_req);
+  if (SendWebRequest3(NobbAuthURL,443,-1,true,"POST",method,"application/json","",false,a_req,a_reply,replyheader,20)) then begin
+    ParseHTTPHeader(replyheader,"",status,comment,result);
+    switch (status) begin
+      case 200:
+        NSb.Token = AreaToString(a_reply);
+        BlockStore(NSb);
+        res = true;
+      otherwise
+        res = false;
+    end;
+    LogNobb("GetAuthToken_reply",a_reply);
+  end;
+  
+LGetAuthToken:;
+  GetAuthToken = res;
+  return;
+end;
+
+global
+updating procedure DoUpdateNobbModuleStatus(var record NobbModuleVc NobbModuler,Integer status)
+begin
+  record NobbModuleVc oldNobbModuler;
+
+  RecordCopy(oldNobbModuler,NobbModuler);
+  NobbModuler.Status = status;
+  RecordUpdate(oldNobbModuler,NobbModuler,true);
+
+  return;
+end;
+
+procedure NobbStatusCheck(string recordstr,string recordstatus,string statusLocationUri,var Boolean res,var string nobbnr)
+begin
+  record NobbSettingsBlock NSb;
+  record WebRequestVc WRr;
+  area a_reply;
+  json jsn;
+
+  res = true;
+
+  BlockLoad(NSb);
+  WRr.URL = "https://" & NobbURL & "/api/v1/status/" & statusLocationUri;
+  WRr.Method = "GET";
+  WRr.PostContentType = "";
+  WRr.PostData = "";
+  WRr.ExtraHeaders = "Authorization: Bearer " & NSb.Token;
+  SendWebRequest4(WRr);
+
+  
+  AddTextToArea(WRr.ReplyData,a_reply);
+  LogNobb("NobbStatusCheck" & "_reply_" & recordstr & "_" & recordstatus,a_reply);
+  jsn = ParseJSONArea(a_reply);
+  if (recordstr=="NobbModuleVc") then begin
+    if (JSONGet(jsn,"active")!="true") then begin goto LNobbStatusCheck; end;
+    if (JSONGet(jsn,"status/status")=="Underkjent") then begin res = false; goto LNobbStatusCheck; end;
+    if (JSONGet(jsn,"status/status")!="Godkjent") then begin res = false; goto LNobbStatusCheck; end;
+  end;
+
+  switch (recordstr) begin
+    case "NobbModuleVc":
+      switch (recordstatus) begin
+        case kNobbModuleStatusInApproval: nobbnr = JSONGet(jsn,"moduleno");
+      end;
+    case "NobbItemStatusVc":
+      switch (recordstatus) begin
+        case kNobbItemStatusCreateItemStarted:    nobbnr = JSONGet(jsn,"nobbNumber");
+        case kNobbItemStatusCreatePackageStarted: nobbnr = JSONGet(jsn,"packageId");
+      end;
+  end;
+LNobbStatusCheck:;
+  return;
+end;
+
+global
+procedure DoSubmitNobbModule(record NobbModuleVc NobbModuler,record NobbSettingsBlock NSb,var string err)
+begin
+  string 255 method,js,text,tstr,statusLocationUri;
+  string 255 comment,result;
+  Integer status;
+  area a_req,a_reply,a_text,replyheader;
+  json jsn;
+
+  GetAreaFromTextField(NobbModuler,a_text);
+  text = AreaToString(a_text);
+
+  JSONStringStart(js);
+  JSONStringAdd(js,"brand",NobbModuler.Brand);
+  JSONStringAdd(js,"corporateBrand",NobbModuler.CorporateBrand);
+  JSONStringAdd(js,"description",NobbModuler.Description);
+  JSONStringAdd(js,"text",text);
+  JSONStringAdd(js,"internalId",NobbModuler.Code);
+  JSONStringAdd(js,"manufacturer",NobbModuler.Manufacturer);
+  JSONStringPut(js,"productGroupNumber",NobbModuler.ProductGroupNumber);
+  JSONStringEnd(js);
+  AddTextToArea(js,a_req);
+
+LRepeatDoSubmitNobbModuleReq:;
+  tstr = "Authorization: Bearer ";
+  tstr = tstr & NSb.Token;
+  SetWebHeaders(tstr);
+
+  method = "/api/v1/modules";
+  LogNobb("DoSubmitNobbModule" & "_req_" & NobbModuler.Code,a_req);
+  if (SendWebRequest3(NobbURL,443,-1,true,"POST",method,"application/json","",false,a_req,a_reply,replyheader,20)) then begin
+    jsn = ParseJSONArea(a_reply);
+    ParseHTTPHeader(replyheader,"",status,comment,result);
+    switch (status) begin
+      case 202:
+        statusLocationUri = AreaToString(a_reply);
+        if (nonblank(statusLocationUri)) then begin
+          NobbModuler.StatusLocationUri = statusLocationUri;
+          qupdating.DoUpdateNobbModuleStatus(NobbModuler,kNobbModuleStatusInApproval);
+          NewPeriodicTask2("NobbStatusCheckTask" & NobbModuler.Code,"Nobb Status Check - Module Submission","NobbStatusCheckTask","NobbModuleVc:" & NobbModuler.Code,10,"");
+        end;
+      case 400: err = JSONGet(jsn,"errors/[0]/[0]");
+      case 401: 
+        if (qupdating.GetAuthToken(NSb)) then begin
+          goto LRepeatDoSubmitNobbModuleReq;
+        end else begin
+          err = USetStr(43840) & " " & USetStr(43843);
+        end;
+    end;
+    LogNobb("DoSubmitNobbModule" & "_reply_" & NobbModuler.Code,a_reply);
+  end;
+
+  return;
+end;
+
+global
+procedure DoSubmitNobbItem(record INVc INp,record NobbSettingsBlock NSb,var string err)
+begin
+  record NobbItemStatusVc NISr;
+  record NobbModuleVc NobbModuler;
+  string 255 method,js,tstr,statusLocationUri;
+  string 255 comment,result;
+  Integer status;
+  area a_req,a_reply,replyheader;
+  json jsn;
+
+  NobbModuler.Code = INp.NobbModule;
+  if (ReadFirstMain(NobbModuler,1,true)==false) then begin
+    err = USetStr(43850);
+    goto LDoSubmitNobbItem;
+  end;
+
+  JSONStringStart(js);
+  JSONStringAdd(js,"moduleNumber",NobbModuler.NobbNumber);
+  JSONStringAdd(js,"internalid",INp.Code);
+  JSONNotStringAdd(js,"hasDurabilityDate","false");
+  JSONStringAdd(js,"manufacturerItemNumber",INp.Code); //max 20 char
+  JSONStringAdd(js,"priceUnit",INp.Unittext);
+  JSONStringAdd(js,"primaryText",INp.Name); //max 36 char
+  JSONStringPut(js,"type","Standard"); //"Standard","Display", "Composite" or "Special". NOTE: Not part of the UPDATE method, it can only be set on create.
+  JSONStringEnd(js);
+  AddTextToArea(js,a_req);
+
+LRepeatDoSubmitNobbItemReq:;
+  tstr = "Authorization: Bearer ";
+  tstr = tstr & NSb.Token;
+  SetWebHeaders(tstr);
+
+  method = "/api/v1/items";
+  LogNobb("DoSubmitNobbItem" & "_req_" & INp.Code,a_req);
+  if (SendWebRequest3(NobbURL,443,-1,true,"POST",method,"application/json","",false,a_req,a_reply,replyheader,20)) then begin
+    jsn = ParseJSONArea(a_reply);
+    ParseHTTPHeader(replyheader,"",status,comment,result);
+    switch (status) begin
+      case 202:
+        statusLocationUri = AreaToString(a_reply);
+        if (nonblank(statusLocationUri)) then begin
+          NISr.Code = INp.Code;
+          if (ReadFirstMain(NISr,1,true)==false) then begin
+            RecordNew(NISr);
+            NISr.Code = INp.Code;
+          end;
+          NISr.StatusLocationUri = statusLocationUri;
+          qupdating.DoUpdateNobbItemStatus(NISr,kNobbItemStatusCreateItemStarted);
+          NewPeriodicTask2("NobbStatusCheckTask" & NISr.Code,"Nobb Item Status Check","NobbStatusCheckTask","NobbItemStatusVc:" & NISr.Code,10,"");
+        end;
+      case 400: err = JSONGet(jsn,"errors/[0]/[0]");
+      case 401: 
+        if (qupdating.GetAuthToken(NSb)) then begin
+          goto LRepeatDoSubmitNobbItemReq;
+        end else begin
+          err = USetStr(43840) & " " & USetStr(43843);
+        end;
+    end;
+    LogNobb("DoSubmitNobbItem" & "_reply_" & INp.Code,a_reply);
+  end;
+LDoSubmitNobbItem:;
+  if (nonblank(err)) then begin
+    NISr.Code = INp.Code;
+    if (ReadFirstMain(NISr,1,true)==false) then begin
+      RecordNew(NISr);
+      NISr.Code = INp.Code;
+    end;
+    NISr.StatusMessage = err;
+    qupdating.DoUpdateNobbItemStatus(NISr,kNobbItemStatusRejected);
+  end;
+  return;
+end;
+
+global
+procedure DoCreateNobbPackage(record NobbItemStatusVc NISr)
+begin
+  record NobbSettingsBlock NSb;
+  string 255 method,js,tstr,statusLocationUri;
+  string 255 comment,result,taskid;
+  Integer status;
+  area a_req,a_reply,replyheader;
+  json jsn;
+
+  BlockLoad(NSb);
+
+  JSONStringStart(js);
+  JSONStringAdd(js,"class","F-PAK"); //F-PAK, T-PAK, D-PAK, or UDEF - 	valid based on the reference list (code from the entry)
+  JSONNotStringAdd(js,"consistsOfCount",1); //package amount?
+  JSONStringAdd(js,"consistsOfUnit","STK"); //STK?? not sure, docs don't say, unit for contents likely
+  JSONNotStringAdd(js,"deliverable","false"); //only if package has GTIN
+  JSONStringAdd(js,"nobbNumber",NISr.NobbNumber);
+  JSONStringAdd(js,"unit","STK"); //unit for package
+  JSONNotStringPut(js,"stocked","true");
+  JSONStringEnd(js);
+  AddTextToArea(js,a_req);
+
+LRepeatDoCreateNobbPackageReq:;
+  tstr = "Authorization: Bearer ";
+  tstr = tstr & NSb.Token;
+  SetWebHeaders(tstr);
+
+  method = "/api/v1/items/" & NISr.NobbNumber & "/packages";
+  LogNobb("DoCreateNobbPackage" & "_req_" & NISr.Code,a_req);
+  if (SendWebRequest3(NobbURL,443,-1,true,"POST",method,"application/json","",false,a_req,a_reply,replyheader,20)) then begin
+    jsn = ParseJSONArea(a_reply);
+    ParseHTTPHeader(replyheader,"",status,comment,result);
+    switch (status) begin
+      case 202:
+        statusLocationUri = AreaToString(a_reply);
+        if (nonblank(statusLocationUri)) then begin
+          NISr.StatusLocationUri = statusLocationUri;
+          qupdating.DoUpdateNobbItemStatus(NISr,kNobbItemStatusCreatePackageStarted);
+          taskid = "NobbStatusCheckTask" & NISr.Code;
+          if (TaskExists(taskid)==false) then begin
+            NewPeriodicTask2(taskid,"Nobb Item Status Check","NobbStatusCheckTask","NobbItemStatusVc:" & NISr.Code,10,"");
+          end;
+        end;
+      case 400: 
+        NISr.StatusMessage = JSONGet(jsn,"errors/[0]/[0]");
+        qupdating.DoUpdateNobbItemStatus(NISr,kNobbItemStatusCreatePackageRejected);
+      case 401: 
+        if (qupdating.GetAuthToken(NSb)) then begin
+          goto LRepeatDoCreateNobbPackageReq;
+        end else begin
+          NISr.StatusMessage = USetStr(43840) & " " & USetStr(43843);
+          qupdating.DoUpdateNobbItemStatus(NISr,kNobbItemStatusCreatePackageRejected);
+        end;
+    end;
+    LogNobb("DoCreateNobbPackage" & "_reply_" & NISr.NobbNumber,a_reply);
+  end;
+
+  return;
+end;
+
+function LongInt GetImageData(string itemcode,var area binary,var string filename,var string contentType)
+begin
+  LongInt res;
+  Boolean testf;
+  record INVc INr;
+  record Attach2Vc Attachr;
+  record RLinkVc RLr;
+  Integer atts;
+  string 255 ext;
+
+  INr.Code = itemcode;
+  if (ReadFirstMain(INr,1,true)==false) then begin goto LGetImageData; end;
+
+  /*
+  Rules in short:
+  - Maximum size of image 63MB
+  - file types JPG, TIFF, PNG and GIF accepted
+  - The longest side must be at least 1200 pixels
+  - names can only be EEK LOGO MB PB PRE + ext
+  - PB is mandatory PRODUCT IMAGE
+  */
+
+  res = 43855; //Item not found by default
+  atts = 1;
+  while (ReadRecordLink(INr,atts,Attachr,RLr)) begin
+    testf = true;
+    if (Attachr.Uploading!=0) then begin testf = false; end;
+    ext = GetFileExtension(Attachr.FileName);
+    if (ext=="jpg" or ext=="tiff" or ext=="png" or ext=="gif") then begin 
+      if (Attachr.FileName!="PB." & ext) then begin 
+        testf = false; 
+      end else begin    
+        if (Attachr.FileSize>62999999) then begin  //62MB
+          res = 43856;
+          goto LGetImageData;
+        end;
+      end;
+    end else begin
+      testf = false;
+    end;
+   
+    if (testf) then begin
+      contentType = "image/" & ext;
+      filename = Attachr.FileName;
+      SetAreaZeroSize(binary);
+      AddAttachFileToArea(Attachr,binary,true);
+      res = 0;
+      goto LGetImageData; //We only support one image..for now
+    end;
+    atts = atts + 1;
+  end;
+LGetImageData:;
+  GetImageData = res;
+  return;
+end;
+
+global
+procedure DoCreateNobbImage(record NobbItemStatusVc NISr)
+begin
+  record NobbSettingsBlock NSb;
+  string 255 method,js,tstr,statusLocationUri;
+  string 255 comment,result,taskid,boundary;
+  string 255 filename,contentType;
+  Integer status;
+  area a_req,a_reply,replyheader,a_imgbinary;
+  json jsn;
+  LongInt res;
+
+  BlockLoad(NSb);
+  res = GetImageData(NISr.Code,a_imgbinary,filename,contentType);
+  if (res!=0) then begin
+    NISr.StatusMessage = USetStr(res);
+    qupdating.DoUpdateNobbItemStatus(NISr,kNobbItemStatusCreateImageRejected);
+    goto LDoCreateNobbImage;
+  end;
+
+  // curl -X 'POST' \
+  // 'https://bt-nnsnbconnect-test-api-webapp.azurewebsites.net/api/v1/images/binary' \
+  // -H 'accept: */*' \
+  // -H 'Content-Type: multipart/form-data' \
+  // -F 'image=@41FB2wy0h2S._AC_SY879_.jpg;type=image/jpeg'
+
+  boundary = "----------------------------4ebf00fbcf09";
+
+  SetAreaZeroSize(a_req);
+  AddTextToArea("--" & boundary,a_req);
+  AddTextToArea(chr(13) & chr(10),a_req);
+  //========================
+  AddTextToArea("Content-Disposition: form-data; name=\"image\" filename=\"" & filename & "\"",a_req);
+  AddTextToArea(chr(13) & chr(10),a_req);
+  AddTextToArea("Content-Type: " & contentType,a_req);
+  AddTextToArea(chr(13) & chr(10),a_req);
+  AddTextToArea(chr(13) & chr(10),a_req);
+  AddAreaToArea(a_imgbinary,a_req);
+  AddTextToArea(chr(13) & chr(10),a_req);
+  AddTextToArea("--" & boundary,a_req);
+  AddTextToArea(chr(13) & chr(10),a_req);
+  //========================
+
+LRepeatDoCreateNobbImageReq:;
+  tstr = "Authorization: Bearer ";
+  tstr = tstr & NSb.Token;
+  SetWebHeaders(tstr);
+
+  method = "/api/v1/images/binary";
+  LogNobb("DoCreateNobbImage" & "_req_" & NISr.Code,a_req);
+  if (SendWebRequest3(NobbURL,443,-1,true,"POST",method,"multipart/form-data; boundary=" & boundary,"",false,a_req,a_reply,replyheader,20)) then begin
+    jsn = ParseJSONArea(a_reply);
+    ParseHTTPHeader(replyheader,"",status,comment,result);
+    switch (status) begin
+      case 202:
+        statusLocationUri = AreaToString(a_reply);
+        if (nonblank(statusLocationUri)) then begin
+          NISr.StatusLocationUri = statusLocationUri;
+          qupdating.DoUpdateNobbItemStatus(NISr,kNobbItemStatusCreateImageStarted);
+          taskid = "NobbStatusCheckTask" & NISr.Code;
+          if (TaskExists(taskid)==false) then begin
+            NewPeriodicTask2(taskid,"Nobb Item Status Check","NobbStatusCheckTask","NobbItemStatusVc:" & NISr.Code,10,"");
+          end;
+        end;
+      case 400: 
+        NISr.StatusMessage = JSONGet(jsn,"errors/[0]/[0]");
+        qupdating.DoUpdateNobbItemStatus(NISr,kNobbItemStatusCreateImageRejected);
+      case 401: 
+        if (qupdating.GetAuthToken(NSb)) then begin
+          goto LRepeatDoCreateNobbImageReq;
+        end else begin
+          NISr.StatusMessage = USetStr(43840) & " " & USetStr(43843);
+          qupdating.DoUpdateNobbItemStatus(NISr,kNobbItemStatusCreateImageRejected);
+        end;
+    end;
+    LogNobb("DoCreateNobbImage" & "_reply_" & NISr.Code,a_reply);
+  end;
+LDoCreateNobbImage:;
+  return;
+end;
+
+global
+procedure NobbGTINCheck(string gtin,record NobbSettingsBlock NSb,var Integer status)
+begin
+  string 255 tstr,comment,result,method;
+  area replyheader,a_req,a_reply;
+
+  tstr = "Authorization: Bearer ";
+  tstr = tstr & NSb.Token;
+  SetWebHeaders(tstr);
+
+  method = "/api/v1/items/gtin/" & gtin;
+  LogNobb("NobbGTINCheck" & "_req_" & gtin,a_req);
+  if (SendWebRequest3(NobbURL,443,-1,true,"GET",method,"text/plain","",false,a_req,a_reply,replyheader,20)) then begin
+    ParseHTTPHeader(replyheader,"",status,comment,result);
+    LogNobb("NobbGTINCheck" & "_reply_" & gtin,a_reply);
+  end;
+
+  return;
+ end;
+
+global
+procedure NobbStatusCheckTask(string arg)
+begin
+  string 255 recordstr,recordno,nobbnr;
+  record NobbModuleVc NobbModuler;
+  record NobbItemStatusVc NISr;
+  LongInt pos;
+  Boolean stoptaskf,res;
+
+  pos = 0;
+  GetNextSubString(arg,pos,":",recordstr);
+  GetNextSubString(arg,pos,":",recordno);
+
+  switch (recordstr) begin
+    case "NobbModuleVc":
+      NobbModuler.Code = recordno;
+      if (ReadFirstMain(NobbModuler,1,true)==false) then begin
+        stoptaskf = true;
+        goto LNobbStatusCheckTask;
+      end;
+      switch (NobbModuler.Status) begin
+        case kNobbModuleStatusInApproval: 
+          NobbStatusCheck(recordstr,NobbModuler.Status,NobbModuler.StatusLocationUri,res,nobbnr);
+          if (nonblank(nobbnr)) then begin
+            stoptaskf = true;
+            NobbModuler.NobbNumber = nobbnr;
+            qupdating.DoUpdateNobbModuleStatus(NobbModuler,kNobbModuleStatusApproved);
+          end;
+      end;
+    case "NobbItemStatusVc":
+      NISr.Code = recordno;
+      if (ReadFirstMain(NISr,1,true)==false) then begin
+        stoptaskf = true;
+        goto LNobbStatusCheckTask;
+      end;
+      switch (NISr.Status) begin
+        case kNobbItemStatusCreateItemStarted: 
+          NobbStatusCheck(recordstr,NISr.Status,NISr.StatusLocationUri,res,nobbnr);
+          if (nonblank(nobbnr)) then begin
+            NISr.NobbNumber = nobbnr;
+            qupdating.DoUpdateNobbItemStatus(NISr,kNobbItemStatusCreateItemDone);
+            DoCreateNobbPackage(NISr);
+          end;
+        case kNobbItemStatusCreatePackageStarted: 
+          NobbStatusCheck(recordstr,NISr.Status,NISr.StatusLocationUri,res,nobbnr);
+          if (nonblank(nobbnr)) then begin
+            NISr.PackageId = nobbnr;
+            qupdating.DoUpdateNobbItemStatus(NISr,kNobbItemStatusCreatePackageDone);
+            DoCreateNobbImage(NISr);
+          end;
+      end;
+  end;
+LNobbStatusCheckTask:;
+  if (stoptaskf) then begin
+    RemoveTask("NobbStatusCheckTask" & recordno);
+    if (res==false) then begin
+      switch (recordstr) begin
+        case "NobbModuleVc": qupdating.DoUpdateNobbModuleStatus(NobbModuler,kNobbModuleStatusRejected);
+        case "NobbItemStatusVc":  
+          switch (NISr.Status) begin
+            case kNobbItemStatusCreateItemStarted:      qupdating.DoUpdateNobbItemStatus(NISr,kNobbItemStatusCreateItemRejected);
+            case kNobbItemStatusCreatePackageStarted:   qupdating.DoUpdateNobbItemStatus(NISr,kNobbItemStatusCreatePackageRejected);
+          end;
+      end;
+    end;
+  end;
+  return;
+end;

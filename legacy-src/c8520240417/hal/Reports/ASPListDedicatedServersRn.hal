@@ -1,0 +1,157 @@
+function
+Boolean ServerIsDedicated(record CloudNodeVc CNr)
+begin
+  Boolean res;
+
+  if (CNr.CustCode<>"" and CNr.CustCode<>"999999999") then begin
+    res = true;
+  end;
+  if (SetInSet("DLG",CNr.Classification)) then begin res = true; end;
+  if (SetInSet("DMD",CNr.Classification)) then begin res = true; end;
+  if (SetInSet("DSM",CNr.Classification)) then begin res = true; end;
+
+  ServerIsDedicated = res;
+end;
+
+function
+Boolean ServerIsShared(record CloudNodeVc CNr,var LongInt ncust,var LongInt nrunning)
+begin
+  Boolean res;
+  record RemoteCloudServerVc RCSr;
+
+  ncust = 0;
+  nrunning = 0;
+
+  if (SetInSet("SHR",CNr.Classification)) then begin res = true; end;
+
+  if (res) then begin
+    RCSr.Controller = CNr.Code;
+    while (LoopKey("Controller",RCSr,1,true)) begin
+      if (RCSr.Controller<>CNr.Code) then begin
+        goto LServerIsShared_Out;
+      end;
+
+      if (RCSr.Closed==0) then begin
+        if (RCSr.CUCode<>"" and RCSr.CUCode<>"999999999") then begin
+          ncust = ncust + 1;
+          if (RCSr.CurrentStatus==kStatusRunning) then begin
+            nrunning = nrunning + 1;
+          end;
+        end;
+      end;
+    end;
+  end;
+
+LServerIsShared_Out:;
+  ServerIsShared = res;
+end;
+
+function
+Boolean ServerIsInternal(record CloudNodeVc CNr)
+begin
+  Boolean res;
+  if (SetInSet("INT",CNr.Classification)) then begin res = true; end;
+  ServerIsInternal = res;
+end;
+
+procedure DedicatedServerHeader(string heading,Boolean runcount)
+begin
+  StartFormat(15);
+  OutString(0,0,heading,false);
+  EndFormat;
+
+  StartFormat(15);
+  OutString(0,0,"Server Name",false);
+  OutString(2,0,"Customer",false);
+  OutString(3,0,"Instance Type",false);
+  OutString(4,0,"Hosting #Centre#",false);
+  if (runcount) then begin
+    OutString(5,0,"Servers",true);
+    OutString(6,0,"Running",true);
+  end;
+  EndFormat;
+  Gray_Divider(0,1);
+end;
+
+procedure ListServer(record CloudNodeVc CNr,LongInt nservers,LongInt nrunning)
+begin
+  StartFormat(15);
+  OutString(0,0,CNr.Code,false);
+  OutString(2,0,CNr.CustCode,false);
+  OutString(3,0,CNr.AmazonInstanceType,false);
+  OutString(4,0,CNr.HostingConfigComment,false);
+
+  if (nservers>0) then begin
+    OutString(5,0,nservers,true);
+  end;
+  if (nrunning>0) then begin
+    OutString(6,0,nrunning,true);
+  end;
+  EndFormat;
+end;
+
+global
+procedure ASPListDedicatedServersRn(record RcVc RepSpec)
+begin
+  record CloudNodeVc CNr;
+  Boolean found,testf;
+  //Integer rw;
+  string 255 tstr;
+  LongInt nservers,nrunning;
+
+  StartReportJob("List Dedicated Servers");
+  //rw = 1;
+  //Header(rw,"",1);
+  EndHeader;
+
+  SetRepCol(2,80);
+  SetRepCol(3,160);
+  SetRepCol(4,240);
+  SetRepCol(5,370);
+  SetRepCol(6,420);
+
+  DedicatedServerHeader("Dedicated",false);
+  while (LoopMain(CNr,1,true)) begin
+    if (CNr.HostingConfig>0 and CNr.Closed==0 and ServerIsDedicated(CNr)) then begin
+      ListServer(CNr,-1,-1);
+    end;
+  end;
+  StartFormat(15);
+  EndFormat;
+
+  ResetLoop(CNr);
+  RecordClear(CNr);
+  DedicatedServerHeader("Shared",true);
+  while (LoopMain(CNr,1,true)) begin
+    if (CNr.HostingConfig>0 and CNr.Closed==0 and ServerIsShared(CNr,nservers,nrunning)) then begin
+      ListServer(CNr,nservers,nrunning);
+    end;
+  end;
+  StartFormat(15);
+  EndFormat;
+
+  ResetLoop(CNr);
+  RecordClear(CNr);
+  DedicatedServerHeader("Internal",false);
+  while (LoopMain(CNr,1,true)) begin
+    if (CNr.HostingConfig>0 and CNr.Closed==0 and ServerIsInternal(CNr)) then begin
+      ListServer(CNr,-1,-1);
+    end;
+  end;
+  StartFormat(15);
+  EndFormat;
+
+  ResetLoop(CNr);
+  RecordClear(CNr);
+  DedicatedServerHeader("Unknown",false);
+  while (LoopMain(CNr,1,true)) begin
+    if (CNr.HostingConfig>0 and CNr.Closed==0 and ServerIsDedicated(CNr)==false and ServerIsShared(CNr,nservers,nrunning)==false and ServerIsInternal(CNr)==false) then begin
+      ListServer(CNr,-1,-1);
+    end;
+  end;
+  StartFormat(15);
+  EndFormat;
+
+  EndJob;
+  return;
+end;

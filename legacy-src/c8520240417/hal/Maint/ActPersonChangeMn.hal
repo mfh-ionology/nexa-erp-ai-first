@@ -1,0 +1,108 @@
+external function Boolean CheckActTypeClass(string,string);
+external function Boolean SetInSet2(string,string);
+
+global
+updating procedure ActPersonChangeMn(record RcVc RepSpec)
+begin
+  record ActVc Actr;
+  record ActVc oldActr;
+  Boolean found,testf;
+  string 255 frcc,tocc,frpr,topr;
+  
+  if (blank(RepSpec.f4)) then begin
+    goto LActPersonChangeMn;
+  end;
+  if (blank(RepSpec.f2)) then begin
+    goto LActPersonChangeMn;
+  end;
+
+  frcc = FirstInRange(RepSpec.f1,20);   
+  tocc = LastInRange(RepSpec.f1,20);   
+  frpr = FirstInRange(RepSpec.f8,20);
+  topr = LastInRange(RepSpec.f8,20); 
+  Actr.TransDate = RepSpec.sStartDate;
+  found = true;
+  while (LoopKey("TransDate",Actr,1,found)) begin
+    if (DateInRange(Actr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin
+      found = false;
+    end;
+    LogText(0,Actr.Comment) ;
+    if (found) then begin
+      testf = true;
+      switch (RepSpec.flags[15]) begin
+        case 0: if (Actr.MainPersons!=RepSpec.f2) then begin testf = false; end;;
+        case 1: if (Actr.CCPersons!=RepSpec.f2) then begin testf = false; end;;
+        case 2: if (Actr.Supervisor!=RepSpec.f2) then begin testf = false; end;;
+      end;
+      if (Actr.OKFlag!=0) then begin testf = false; end;
+      if (Actr.Invalid!=0) then begin testf = false; end;
+      if (RepSpec.flags[7]==0) then begin 
+        if (Actr.CalTimeFlag==kCalTimeFlagTime) then begin testf = false; end;
+      end;
+      if (RepSpec.flags[8]==0) then begin 
+        if (Actr.CalTimeFlag==kCalTimeFlagProfile) then begin testf = false; end;
+      end;
+      if (RepSpec.flags[9]==0) then begin 
+        if (Actr.CalTimeFlag==kCalTimeFlagNoshow) then begin testf = false; end;
+      end;  
+      if (RepSpec.flags[3]==0) then begin 
+        if (Actr.TodoFlag==kTodoFlagCalendar) then begin testf = false; end;
+      end;
+      if (RepSpec.flags[4]==0) then begin 
+        if (Actr.TodoFlag==kTodoFlagTodo) then begin testf = false; end;
+      end;
+      if (RepSpec.flags[5]==0) then begin 
+        if (Actr.TodoFlag==kTodoFlagTimedTodo) then begin testf = false; end;
+      end;
+      if (RepSpec.flags[10]==0) then begin 
+        if (Actr.TodoFlag==kTodoFlagWorkHours) then begin testf = false; end;
+      end;
+      if (RepSpec.flags[11]==0) then begin 
+        if (Actr.TodoFlag==kTodoFlagApproval) then begin testf = false; end;
+      end;
+      if (RepSpec.flags[12]==0) then begin 
+        if (Actr.TodoFlag==kTodoFlagProject) then begin testf = false; end;
+      end;
+      if (RepSpec.flags[13]==0) then begin 
+        if (Actr.TodoFlag==kTodoFlagOther) then begin testf = false; end;
+      end;
+      if (nonblank(frcc)) then begin
+        if (Actr.CUCode<frcc) then begin testf = false; end;
+      end;  
+      if (nonblank(tocc)) then begin
+        if (Actr.CUCode>tocc) then begin testf = false; end;
+      end;  
+      if (nonblank(frpr)) then begin
+        if (Actr.PRCode<frpr) then begin testf = false; end;
+      end;  
+      if (nonblank(topr)) then begin
+        if (Actr.PRCode>topr) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.ObjStr)) then begin
+        if (SetInSet2(RepSpec.ObjStr,Actr.Objects)==false) then begin testf = false; end;
+      end;   
+      if (testf) then begin
+        if (nonblank(RepSpec.f3)) then begin
+          if (Actr.ActType<>RepSpec.f3) then begin testf = false; end;
+        end;
+      end;
+      if (nonblank(RepSpec.f5)) then begin
+        if (Actr.ActState>topr) then begin testf = false; end;
+      end;
+      if (testf) then begin
+        testf = CheckActTypeClass(RepSpec.FirstAcc,Actr.ActType);
+      end;
+      if (testf) then begin
+        RecordCopy(oldActr,Actr);
+        switch (RepSpec.flags[15]) begin
+          case 0: Actr.MainPersons = RepSpec.f4;
+          case 1: Actr.CCPersons   = RepSpec.f4;
+          case 2: Actr.Supervisor  = RepSpec.f4;
+        end;
+        RecordUpdate(oldActr,Actr,false);
+      end;
+    end;
+  end;
+LActPersonChangeMn:;  
+  return;
+end;

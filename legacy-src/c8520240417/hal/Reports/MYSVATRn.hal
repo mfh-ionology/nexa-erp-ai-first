@@ -1,0 +1,243 @@
+external  procedure HT2Per(Date,Date,var string);
+external procedure GetVATCodeRow(string,row VATCodeBlock);
+
+procedure SortArrayByItemCode(var array string aitemcommodity,var array string aitemcode,var array string aitemdesc,var array string ainvoice,var array val abaseval,var array val avatval,var array val asum,var array val acredbaseval,var array val acredvatval,var array val acredsum)
+begin
+  Integer i;
+  Boolean swapped;
+  string 255 taitemcode,taitemdesc,tainvoice,taitemcommodity;
+  val tabaseval,tavatval,tasum;
+  val tacredbaseval,tacredvatval,tacredsum;
+ 
+  swapped = true;
+  while (swapped) begin
+    swapped = false;
+    for (i=0;i<aitemcode.length-1;i=i+1) begin
+      if (aitemcode[i]>aitemcode[i+1]) then begin
+        taitemcode      = aitemcode[i];
+        taitemdesc      = aitemdesc[i];
+        tainvoice       = ainvoice[i];   
+        taitemcommodity = aitemcommodity[i];   
+        tabaseval       = abaseval[i];   
+        tavatval        = avatval[i];
+        tasum           = asum[i];
+        tacredbaseval   = acredbaseval[i];
+        tacredvatval    = acredvatval[i];    
+        tacredsum       = acredsum[i];
+
+        aitemcode[i]      = aitemcode[i+1];
+        aitemdesc[i]      = aitemdesc[i+1];
+        ainvoice[i]       = ainvoice[i+1];   
+        aitemcommodity[i] = aitemcommodity[i+1];   
+        abaseval[i]       = abaseval[i+1];   
+        avatval[i]        = avatval[i+1];
+        asum[i]           = asum[i+1];
+        acredbaseval[i]   = acredbaseval[i+1];
+        acredvatval[i]    = acredvatval[i+1];    
+        acredsum[i]       = acredsum[i+1];
+
+        aitemcode[i+1]      = taitemcode;
+        aitemdesc[i+1]      = taitemdesc;
+        ainvoice[i+1]       = tainvoice;
+        aitemcommodity[i+1] = taitemcommodity;
+        abaseval[i+1]       = tabaseval;
+        avatval[i+1]        = tavatval;
+        asum[i+1]           = tasum;
+        acredbaseval[i+1]   = tacredbaseval;
+        acredvatval[i+1]    = tacredvatval;
+        acredsum[i+1]       = tacredsum;       
+        swapped = true;
+      end;
+    end;
+  end;
+
+  return;
+end;
+
+procedure DoMYSVATRn(record RcVc RepSpec,row VATCodeBlock VATCoderw)
+begin
+  Integer rwcnt,i,acnt,k;
+  Boolean testf,TrHs;
+  record INVc INr;
+  string 255 tstr;
+  record IVVc IVr;
+  row IVVc IVrw;
+  val taxamount;
+  array string 255 aitemcode,aitemdesc,ainvoice,avatcodes,aitemcommodity;
+  array val abaseval,avatval,asum;
+  array val acredbaseval,acredvatval,acredsum;
+  val totsum,totcredsumwithtax,totcredtaxamount,totcredsum,tottaxamount,totsumwithtax;
+  val totalsum,totalcredsumwithtax,totalcredtaxamount,totalcredsum,totaltaxamount,totalsumwithtax;
+  record CommodityVc Commodityr;
+
+  ResetLoop(IVr);
+  RecordClear(IVr);
+  TrHs = true;
+  IVr.TransDate = RepSpec.sStartDate;
+  while (LoopKey("TransDate",IVr,1,TrHs)) begin
+    if (DateInRange(IVr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin TrHs = false; end;
+    testf = true;
+    if (IVr.OKFlag==0) then begin testf = false; end;
+    if (TrHs and testf) then begin
+      rwcnt = MatRowCnt(IVr);
+      for (k=0;k<rwcnt;k=k+1) begin 
+        MatRowGet(IVr,k,IVrw);
+        if (IVrw.VATCode==VATCoderw.VATCode) then begin
+          INr.Code = IVrw.ArtCode;
+          ReadFirstMain(INr,1,true);     
+          aitemcode[acnt] = INr.Code;
+          aitemdesc[acnt] = INr.Name;
+          aitemcommodity[acnt] = INr.EUCodex;
+          ainvoice[acnt] = IVr.SerNr;
+          avatcodes[acnt] = IVrw.VATCode;
+          taxamount = IVrw.Sum * VATCoderw.ExVatpr/100; //questionable calculation
+
+          if (IVr.InvType==kInvoiceTypeNormal) then begin
+          abaseval[acnt] = IVrw.Sum;
+          avatval[acnt] = taxamount;
+          asum[acnt] = IVrw.Sum+taxamount;
+          end;
+          if (IVr.InvType==kInvoiceTypeCredit) then begin
+          acredbaseval[acnt] = IVrw.Sum;
+          acredvatval[acnt] = taxamount;
+          acredsum[acnt] = IVrw.Sum+taxamount;
+          end;
+          acnt = acnt + 1;
+        end;
+      end; 
+    end;
+  end;
+
+  StartFormat(15);
+  OutString(0,0,VATCoderw.VATCode,false);
+  OutString(3,0,VATCoderw.Comment,false); 
+  EndFormat;
+
+  SortArrayByItemCode(aitemcommodity,aitemcode,aitemdesc,ainvoice,abaseval,avatval,asum,acredbaseval,acredvatval,acredsum);
+  for (i=0;i<acnt;i=i+1) begin
+    if (i==0) then begin
+      StartFormat(15);
+      OutString(0,0,USetStr(42939),false);
+      OutString(3,0,aitemcommodity[i],false);
+      Commodityr.Number = aitemcommodity[i];
+      ReadFirstMain(Commodityr,1,true);
+      OutString(4,0,Commodityr.Comment,false);
+      EndFormat;
+    end;
+    StartFormat(15);
+    OutString(15,0,i+1,false);
+    OutString(2,0,aitemcode[i],false);
+    OutString(3,0,aitemdesc[i],false);
+    OutString(4,"DblIVVc",ainvoice[i],false);
+    OutVal(5,0,abaseval[i],M4Val,true);
+    OutVal(6,0,avatval[i],M4Val,true);
+    OutVal(7,0,asum[i],M4Val,true);
+    OutVal(8,0,acredbaseval[i],M4Val,true);
+    OutVal(430,0,acredvatval[i],M4Val,true);
+    OutVal(1,0,acredsum[i],M4Val,true);
+    EndFormat;
+
+    totsum = totsum + abaseval[i];
+    tottaxamount = tottaxamount + avatval[i];
+    totsumwithtax = totsumwithtax + asum[i];
+    totcredsum = totcredsum + acredbaseval[i];
+    totcredtaxamount = totcredtaxamount + acredvatval[i];
+    totcredsumwithtax = totcredsumwithtax + acredsum[i]; 
+
+    if (aitemcode[i]!=aitemcode[i+1]) then begin
+      Gray_Divider(0,1);
+      StartFormat(15);
+      OutString(0,0,USetStr(42938),false);
+      OutVal(5,0,totsum,M4Val,true); 
+      OutVal(6,0,tottaxamount,M4Val,true);
+      OutVal(7,0,totsumwithtax,M4Val,true);
+      OutVal(8,0,totcredsum,M4Val,true);
+      OutVal(430,0,totcredtaxamount,M4Val,true);
+      OutVal(1,0,totcredsumwithtax,M4Val,true);
+      EndFormat;
+      Black_Divider(0,1);
+      totalsum = totalsum + totsum;
+      totaltaxamount = totaltaxamount + tottaxamount;
+      totalcredsum = totalcredsum + totcredsum;
+      totalsumwithtax = totalsumwithtax + totsumwithtax;
+      totalcredtaxamount = totalcredtaxamount + totcredtaxamount;
+      totalcredsumwithtax = totalcredsumwithtax + totcredsumwithtax;
+    end;
+  end;
+
+  StartFormat(15);
+  OutString(0,0,USetStr(42938),false);
+  OutVal(5,0,totalsum,M4Val,true);
+  OutVal(6,0,totaltaxamount,M4Val,true);
+  OutVal(7,0,totalsumwithtax,M4Val,true);
+  OutVal(8,0,totalcredsum,M4Val,true);
+  OutVal(430,0,totalcredtaxamount,M4Val,true);
+  OutVal(1,0,totalcredsumwithtax,M4Val,true);
+  EndFormat;
+  StartFormat(15);
+  EndFormat;   
+  return;
+end;
+
+global
+procedure MYSVATRn(record RcVc RepSpec)
+begin
+  Integer rw,rwcnt,j;
+  string 255 tstr;
+  record VATCodeBlock VATCodeBl;
+  row VATCodeBlock VATCoderw;
+  
+  StartReportJob(USetStr(42930));
+  rw = 1;
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  if (nonblank(RepSpec.f1)) then begin
+    tstr = USetStr(42931) & ": " & RepSpec.f1;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  EndHeader;
+
+  SetRepCol(2,40);
+  SetRepCol(3,80);
+  SetRepCol(4,190);
+  SetRepCol(5,260);
+  SetRepCol(6,300);
+  SetRepCol(7,350);
+  SetRepCol(8,390);
+
+  StartFormat(15);
+  OutString(250,0,USetStr(42940),false);
+  OutString(400,0,USetStr(42941),false);
+  EndFormat;
+
+  StartFormat(15);
+  OutString(15,0,USetStr(42932),false);
+  OutString(2,0,USetStr(42933),false);
+  OutString(3,0,USetStr(42934),false);
+  OutString(4,0,USetStr(42935),false);
+  OutString(230,0,USetStr(42936),false);
+  OutString(270,0,USetStr(42937),false);
+  OutString(320,0,USetStr(42938),false);
+  OutString(370,0,USetStr(42936),false);
+  OutString(410,0,USetStr(42937),false);
+  OutString(460,0,USetStr(42938),false);
+  EndFormat;
+  Black_Divider(0,1);
+
+  if (nonblank(RepSpec.f1)) then begin
+    GetVATCodeRow(RepSpec.f1,VATCoderw);
+    DoMYSVATRn(RepSpec,VATCoderw);
+  end else begin
+    BlockLoad(VATCodebl);
+    rwcnt = MatrowCnt(VATCodebl); 
+    for (j=0;j<rwcnt;j=j+1) begin
+      MatRowGet(VATCodebl,j,VATCoderw);
+      DoMYSVATRn(RepSpec,VATCoderw);
+    end; 
+  end;
+
+EndJob;
+  return;
+end;

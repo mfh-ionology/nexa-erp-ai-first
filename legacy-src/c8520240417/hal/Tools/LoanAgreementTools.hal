@@ -1,0 +1,650 @@
+external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
+external procedure GetFullCurncyRate(var string,Date,var val,var val,var val,var val,var val);
+external function Boolean GetItemPriceDiscount3(string,val,var record INVc,string,val,val,val,val,val,string,string,string,string,
+                                                var val,var string,var val,var string,var val,var string,Integer,var Boolean,Date,Time,
+                                                string,Boolean,var Boolean,string,var string,var val,string,string,var string);
+external procedure RoundRowSum(string,string,string,var val);
+external procedure CalcSum(val,val,val,val,var val,Integer);
+external procedure SendArtStat(string,string,string,val,val,val,Date,Integer);
+external function roundmode SetRoundModeD(Integer);
+external function Boolean ReadFirstItem(string,var record INVc,Boolean,Boolean);
+external procedure GetCurUser(var record UserVc);
+external procedure VISumup(record VIVc,var val);
+external function Boolean VIVc_PasteVECode(var record VIVc,Integer,Boolean,Boolean,var string);
+external procedure VICalcVals(var record VIVc);
+external procedure VIVc_PastePayDeal(var record VIVc);
+external function string 255 AccnNameStr(string);
+external procedure OPVc_PasteTransDate(var record OPVc);
+external function Boolean PasteInvIn2OPr(var record OPVc,Integer,Date,Integer,val,var string,Boolean,var Boolean);
+external procedure AddWithholdingTaxesRows_IVVc(var record IVVc);
+external procedure AddPerceptionTaxesRows_IVVc(var record IVVc);
+external procedure IVSumup(var record IVVc,Boolean);
+external function Boolean PasteCustInInv(var record IVVc);
+external procedure GetPriceList(string,Date,Time,var string,var Integer);
+external procedure GetARAcc(string,var string);
+external function Boolean IVVc_PasteArtCode(var record IVVc,Integer,var string,var string,Boolean,var Integer);
+
+global
+function Boolean LoanAgreementDchrsum(var record LoanAgreementVc LoanAgreementr,Integer rownr)
+begin
+  row LoanAgreementVc LoanAgreementrw;
+  val s;
+  Boolean res;
+  record GeneralOptionBlock GenOptRec;
+
+  BlockLoad(GenOptRec);
+  res = false;
+  MatRowGet(LoanAgreementr,rownr,LoanAgreementrw);
+  CalcSum(LoanAgreementrw.Quant,LoanAgreementrw.Price,LoanAgreementrw.PriceFactor,LoanAgreementrw.vRebate,s,GenOptRec.UseDiscount);
+  RoundRowSum(LoanAgreementr.CurncyCode,LoanAgreementr.PayDeal,"LoanAgreementVc",s);
+  if (s!=LoanAgreementrw.Sum) then begin
+    LoanAgreementrw.Sum = s;
+    MatRowPut(LoanAgreementr,rownr,LoanAgreementrw);
+    res = true;
+  end;
+  if (LoanAgreementrw.Price==0) then begin res = true; end;
+  LoanAgreementDchrsum = res;
+  return;
+end;
+
+global
+procedure LoanAgreementSchedVc_PasteCustCode(var record LoanAgreementSchedVc LoanAgreementSchedr)
+begin
+  record CUVc CUr;
+
+  CUr.Code = LoanAgreementSchedr.CustCode;
+  if (ReadFirstMain(CUr,1,true)) then begin
+    LoanAgreementSchedr.CustName = CUr.Name;
+  end;
+
+  return;
+end;
+
+global
+procedure LoanAgreementDchsum(var record LoanAgreementVc LoanAgreementr,Integer rownr)
+begin  
+  row LoanAgreementVc LoanAgreementrw;
+
+  if (rownr>=0) then begin
+    MatRowGet(LoanAgreementr,rownr,LoanAgreementrw);
+    SendArtStat(LoanAgreementrw.ArtCode,"","",0,0,0,LoanAgreementr.TransDate,0);
+  end;
+  return;
+end;
+
+global
+procedure LoanAgreementSumup(var record LoanAgreementVc LoanAgreementr)
+begin
+  //TODO
+  return;
+end;
+
+procedure LoanAgreementchsums(var record LoanAgreementVc LoanAgreementr,Integer rownr)
+begin
+  if (LoanAgreementDchrsum(LoanAgreementr,rownr)) then begin
+    LoanAgreementDchsum(LoanAgreementr,rownr);
+  end;
+  LoanAgreementSumup(LoanAgreementr);
+  return;
+end;
+
+global
+procedure LoanAgreementVc_PasteCurncyCode(var record LoanAgreementVc LoanAgreementr)
+begin
+  val from,to1,to2,base1,base2;
+  string 5 crncy;
+ 
+  crncy = LoanAgreementr.CurncyCode;
+  GetFullCurncyRate(crncy,LoanAgreementr.TransDate,from,to1,to2,base1,base2);
+  LoanAgreementr.CurncyCode = crncy;
+  LoanAgreementr.FrRate = from;
+  LoanAgreementr.ToRateB1 = to1;
+  LoanAgreementr.ToRateB2 = to2;
+  LoanAgreementr.BaseRate1 = base1;
+  LoanAgreementr.BaseRate2 = base2;
+  LoanAgreementr.BaseTotalSum = MulRateToBase1(LoanAgreementr.CurncyCode,LoanAgreementr.TotalSum,from,to1,to2,base1,base2,DefaultCurRoundOff);
+  return;
+end;
+
+global
+function Boolean LoanAgreementVc_PasteArtCode(var record LoanAgreementVc LoanAgreementr,Integer rownr)
+begin
+  Boolean res;
+  record INVc INr;
+  row LoanAgreementVc LoanAgreementrw;
+  val t,s,price,vreb,baseprice,temp,tax2prc,tax2reb;
+  string 255 curitemname,salesacc,vatcode,tstr,tax2code,taxtemplatecode;
+  Boolean calcprice;
+  val UnitFactQuant,UnitFactPrice,Quant;
+  Date resp;
+  Boolean dummyf;
+  val fr,to1,to2,br1,br2;
+  string 10 curcode;
+  Time blankt;
+
+  MatRowGet(LoanAgreementr,rownr,LoanAgreementrw);
+  if (LoanAgreementrw.Quant<=0) then begin
+    LoanAgreementrw.Quant = 1;
+  end;
+  LoanAgreementrw.Price = BlankVal;
+  LoanAgreementrw.Sum = BlankVal;
+  curcode = LoanAgreementr.CurncyCode;
+  GetFullCurncyRate(curcode,LoanAgreementr.TransDate,fr,to1,to2,br1,br2);
+  if (GetItemPriceDiscount3(LoanAgreementrw.ArtCode,LoanAgreementrw.Quant,INr,LoanAgreementr.CurncyCode,
+                            fr,to1,to2,br1,br2,
+                            LoanAgreementr.LangCode,LoanAgreementr.CustCat,"",LoanAgreementr.RebCode,
+                            price,curitemname,vreb,vatcode,baseprice,salesacc,
+                            LoanAgreementr.ExportFlag,calcprice,resp,blankt,LoanAgreementr.CustCode,true,dummyf,LoanAgreementr.PayDeal,tax2code,tax2prc,"","",taxtemplatecode)) then begin
+    if (vreb==0) then begin
+      vreb = blankval;
+    end;
+    LoanAgreementrw.Price = price;
+    LoanAgreementrw.Comment = curitemname;
+    LoanAgreementrw.vRebate = vreb;
+    LoanAgreementrw.ArtCode = INr.Code;
+    LoanAgreementrw.PriceFactor = INr.PriceFactor;
+    MatRowPut(LoanAgreementr,rownr,LoanAgreementrw);
+    LoanAgreementchsums(LoanAgreementr,rownr);
+    res = true;
+  end;
+  LoanAgreementVc_PasteArtCode = res;
+  return;
+end;
+
+global
+procedure LoanAgreementVc_PasteQuant(var record LoanAgreementVc LoanAgreementr,Integer rownr)
+begin
+  record INVc INr;
+  row LoanAgreementVc LoanAgreementrw;
+  val t,s,price,vreb,baseprice,temp,tax2prc,tax2reb;
+  string 255 curitemname,salesacc,vatcode,tstr,tax2code,taxtemplatecode;
+  Boolean calcprice;
+  val UnitFactQuant,UnitFactPrice,Quant;
+  Date resp;
+  Boolean dummyf;
+  val fr,to1,to2,br1,br2;
+  string 10 curcode;
+  Time blankt;
+
+  MatRowGet(LoanAgreementr,rownr,LoanAgreementrw);
+  curcode = LoanAgreementr.CurncyCode;
+  GetFullCurncyRate(curcode,LoanAgreementr.TransDate,fr,to1,to2,br1,br2);
+  if (GetItemPriceDiscount3(LoanAgreementrw.ArtCode,LoanAgreementrw.Quant,INr,LoanAgreementr.CurncyCode,
+                            fr,to1,to2,br1,br2,
+                            LoanAgreementr.LangCode,LoanAgreementr.CustCat,"",LoanAgreementr.RebCode,
+                            price,curitemname,vreb,vatcode,baseprice,salesacc,
+                            LoanAgreementr.ExportFlag,calcprice,resp,blankt,LoanAgreementr.CustCode,true,dummyf,LoanAgreementr.PayDeal,tax2code,tax2prc,"","",taxtemplatecode)) then begin
+    if (vreb==0) then begin
+      vreb = blankval;
+    end;
+    LoanAgreementrw.Price = price;
+    LoanAgreementrw.Comment = curitemname;
+    LoanAgreementrw.vRebate = vreb;
+    LoanAgreementrw.ArtCode = INr.Code;
+    LoanAgreementrw.PriceFactor = INr.PriceFactor;
+    MatRowPut(LoanAgreementr,rownr,LoanAgreementrw);
+    LoanAgreementchsums(LoanAgreementr,rownr);
+  end;
+  return;
+end;
+
+global
+procedure LoanAgreementVc_PastevRebate(var record LoanAgreementVc LoanAgreementr,Integer rownr)
+begin
+  LoanAgreementchsums(LoanAgreementr,rownr);
+  return;
+end;
+
+global
+procedure LoanAgreementUpdate(var record LoanAgreementVc LoanAgreementr,Integer rownr,string whichone)
+begin
+  row LoanAgreementVc LoanAgreementrw;
+  
+  switch (whichone) begin
+    case "DepositSum": LoanAgreementr.DepositPrc = BlankVal;
+    case "DepositPrc": LoanAgreementr.DepositSum = Round(LoanAgreementr.DepositPrc/100 * LoanAgreementr.InvSum4,SetRoundModeD(2));
+    case "InvSum4":
+      if (nonblank(LoanAgreementr.DepositPrc)) then begin
+        LoanAgreementr.DepositSum = Round(LoanAgreementr.DepositPrc/100 * LoanAgreementr.InvSum4,SetRoundModeD(2));
+      end;
+    case "Price":
+      if (rownr>-1 and rownr<MatRowCnt(LoanAgreementr)) then begin
+        MatRowGet(LoanAgreementr,rownr,LoanAgreementrw);
+        LoanAgreementrw.Sum = LoanAgreementrw.Price * LoanAgreementrw.Quant;
+        LoanAgreementrw.vRebate = BlankVal;
+        MatRowPut(LoanAgreementr,rownr,LoanAgreementrw);
+      end;
+    case "Sum":
+      if (rownr>-1 and rownr<MatRowCnt(LoanAgreementr)) then begin
+        MatRowGet(LoanAgreementr,rownr,LoanAgreementrw);
+        LoanAgreementrw.Price = LoanAgreementrw.Sum / LoanAgreementrw.Quant;
+        LoanAgreementrw.vRebate = BlankVal;
+        MatRowPut(LoanAgreementr,rownr,LoanAgreementrw);
+      end;
+    case "Months": LoanAgreementr.endDate = AddMonth(LoanAgreementr.startDate,LoanAgreementr.Months);
+  end;
+  return;
+end;
+
+global
+procedure LoanAgreementUpdateAndSumup(var record LoanAgreementVc LoanAgreementr,Integer rownr,string whichone)
+begin
+  LoanAgreementUpdate(LoanAgreementr,rownr,whichone);
+  LoanAgreementSumup(LoanAgreementr);
+  return;
+end;
+
+procedure AddLineToLoanAgreement(var record LoanAgreementVc LoanAgreementr,string artcode,val qty,string comment,val price,val vreb,val sum,Integer typ,Integer rw)
+begin
+  row LoanAgreementVc LoanAgreementrw;
+  record INVc INr;
+  
+  if (nonblank(artcode)) then begin
+    LoanAgreementrw.ArtCode = artcode;
+    LoanAgreementrw.Quant = qty;
+    LoanAgreementrw.ChargeType = typ;
+    MatRowPut(LoanAgreementr,rw,LoanAgreementrw);
+    if (ReadFirstItem(LoanAgreementrw.ArtCode,INr,false,false)) then begin
+      LoanAgreementrw.Comment = INr.Name;
+    end;
+    if (LoanAgreementVc_PasteArtCode(LoanAgreementr,rw)) then begin
+    end;
+    MatRowGet(LoanAgreementr,rw,LoanAgreementrw);
+    if (LoanAgreementrw.Sum!=sum) then begin
+      LoanAgreementrw.Price = sum;
+      LoanAgreementrw.vRebate = vreb;
+      LoanAgreementrw.Price = price;
+      MatRowPut(LoanAgreementr,rw,LoanAgreementrw);
+      LoanAgreementchsums(LoanAgreementr,rw);
+    end;
+  end else begin
+    if (nonblank(comment)) then begin
+      ClearRow(LoanAgreementr,LoanAgreementrw,1);
+      LoanAgreementrw.Comment = comment;
+      MatRowPut(LoanAgreementr,rw,LoanAgreementrw);
+    end;
+  end;
+  return;
+end;
+
+global
+procedure AddLoanAgreementTypeMatrix(var record LoanAgreementVc LoanAgreementr,record LoanAgreementTypeVc LoanAgreementTyper)
+begin
+  row LoanAgreementTypeVc LoanAgreementTyperw;
+  Integer i,rwcnt;
+  
+  rwcnt = MatRowCnt(LoanAgreementr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowDelete(LoanAgreementr,0);
+  end;
+  rwcnt = MatRowCnt(LoanAgreementTyper);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(LoanAgreementTyper,i,LoanAgreementTyperw);
+    AddLineToLoanAgreement(LoanAgreementr,LoanAgreementTyperw.ArtCode,LoanAgreementTyperw.Quant,LoanAgreementTyperw.Comment,LoanAgreementTyperw.Price,LoanAgreementTyperw.vRebate,LoanAgreementTyperw.Sum,LoanAgreementTyperw.ChargeType,MatRowCnt(LoanAgreementr));
+  end;
+  return;
+end;
+
+global
+procedure LoanAgreementVc_PasteType(var record LoanAgreementVc LoanAgreementr)
+begin
+  record LoanAgreementTypeVc LoanAgreementTyper;
+  
+  LoanAgreementTyper.Code = LoanAgreementr.Type;
+  if (ReadFirstMain(LoanAgreementTyper,1,true)) then begin
+    LoanAgreementr.ScheduleType = LoanAgreementTyper.ScheduleType;
+    LoanAgreementr.Months = LoanAgreementTyper.Months;
+    LoanAgreementr.PayDeal = LoanAgreementTyper.PayDeal;
+    LoanAgreementr.DepositSum = LoanAgreementTyper.DepositSum;
+    LoanAgreementr.DepositPrc = LoanAgreementTyper.DepositPrc;
+    LoanAgreementr.LateFeeDays = LoanAgreementTyper.LateFeeDays;
+    LoanAgreementr.RateType = LoanAgreementTyper.RateType;
+    LoanAgreementr.IntRate = LoanAgreementTyper.IntRate;
+    LoanAgreementr.ChargeMethod = LoanAgreementTyper.ChargeMethod;
+    LoanAgreementr.OverdueRate = LoanAgreementTyper.OverdueRate;
+    LoanAgreementr.IntRateMethod = LoanAgreementTyper.IntRateMethod;
+    AddLoanAgreementTypeMatrix(LoanAgreementr,LoanAgreementTyper);
+    if (LoanAgreementr.DepositSum==0) then begin
+      LoanAgreementr.DepositSum = Round(LoanAgreementr.DepositPrc/100 * LoanAgreementr.InvSum4,SetRoundModeD(2));
+    end;
+    LoanAgreementUpdate(LoanAgreementr,-1,"");
+    LoanAgreementSumup(LoanAgreementr);
+  end;
+  return;
+end;
+
+global
+procedure LoanAgreementSetDates(var record LoanAgreementVc LoanAgreementr)
+begin
+  record LoanAgreementAccUsageBlock LoanAgreementAccUsageb;
+  Date startd,finv,fint;
+  
+  BlockLoad(LoanAgreementAccUsageb);
+  startd = LoanAgreementr.startDate;
+  finv = AddMonth(startd,1);
+  finv = AddDay(finv,GetDay(finv));
+  fint = AddMonth(finv,-1);
+  LoanAgreementr.FirstInvDate = finv;
+  LoanAgreementr.FirstIntDate = startd;
+  LoanAgreementUpdate(LoanAgreementr,-1,"");
+  LoanAgreementSumup(LoanAgreementr);
+  return;
+end;
+
+updating procedure MakeCustomerSupplier(var record CUVc CUp)
+begin
+  record CUVc oldCUr;
+
+  RecordCopy(oldCUr,CUp);
+  CUp.VEType = 1;
+  RecordUpdate(oldCUr,CUp,false);
+  return;
+end;
+
+global
+function Boolean PasteCustInLoanAgreement(var record LoanAgreementVc LoanAgreementr)
+begin
+  record CUVc CUr;
+  record UserVc USr;
+  Boolean res;
+  
+  GetCurUser(USr);
+  CUr.Code = LoanAgreementr.CustCode;
+  if (ReadFirstMain(CUr,1,true)) then begin
+    LoanAgreementr.Addr0 = CUr.Name;
+    LoanAgreementr.CustCat = CUr.CustCat;
+    LoanAgreementr.OurContact = USr.CurOurContact;
+    LoanAgreementr.ClientContact = CUr.Person;
+    LoanAgreementr.ExportFlag = CUr.ExportFlag;
+    LoanAgreementr.RebCode = CUr.RebCode;
+    LoanAgreementr.Objects = CUr.Objects;
+    LoanAgreementr.SalesMan = USr.Code;
+    LoanAgreementr.CurncyCode = CUr.CurncyCode;
+    LoanAgreementr.LangCode = CUr.LangCode;
+    LoanAgreementr.PayDeal = CUr.PayDeal;
+    LoanAgreementUpdate(LoanAgreementr,-1,"");
+    LoanAgreementSumup(LoanAgreementr);
+    res = true;
+  end;
+  PasteCustInLoanAgreement = res;
+  return;
+end;
+
+global
+updating function LongInt CreateVIFromLoanAgreement(record LoanAgreementVc LoanAgreementp,var record VIVc VIr)
+begin
+  LongInt res;
+  row VIVc VIrw;
+  record CUVc CUr;
+  record LoanManIVSettingsBlock LoanManIVSettingsb;
+  string 255 vewarn;
+  val t;
+
+  BlockLoad(LoanManIVSettingsb);
+  if (blank(LoanManIVSettingsb.PayDeal)) then begin   res = 43945; goto LCreateVIFromLoanAgreement; end;
+  if (blank(LoanManIVSettingsb.AccNumber)) then begin res = 43945; goto LCreateVIFromLoanAgreement; end;
+  if (blank(LoanManIVSettingsb.VATCode)) then begin   res = 43945; goto LCreateVIFromLoanAgreement; end;
+  if (blank(LoanManIVSettingsb.PayMode)) then begin   res = 43945; goto LCreateVIFromLoanAgreement; end;
+
+  CUr.Code = LoanAgreementp.CustCode;
+  if (ReadFirstMain(CUr,1,true)==false) then begin
+    res = 20859;
+    goto LCreateVIFromLoanAgreement;
+  end;
+
+  MakeCustomerSupplier(CUr);
+
+  RecordNew(VIr);
+  VIr.OKFlag = 1;
+  VIr.VECode = CUr.Code;
+  VIVc_PasteVECode(VIr,0,false,true,vewarn);
+  VIr.InvDate = CurrentDate;
+  VIr.TransDate = CurrentDate;
+  VIr.Objects = LoanManIVSettingsb.Objects;
+  if (LoanManIVSettingsb.InsertAgreementInPISuppIVNr) then begin
+    VIr.InvoiceNr = LoanAgreementp.SerNr;
+  end;
+  // VIr.DueDate = StringToDate(data["DueDate"]);
+  // if (blankdate(VIr.DueDate)) then begin
+  //   VIr.DueDate = VIr.InvDate;
+  // end;
+  VIr.PayDeal = LoanManIVSettingsb.PayDeal;
+  VIVc_PastePayDeal(VIr);
+
+  VIrw.AccNumber = LoanManIVSettingsb.AccNumber;
+  VIrw.VATCode = LoanManIVSettingsb.VATCode;
+  VIrw.Comment = AccnNameStr(VIrw.AccNumber);
+  VIrw.Sum = LoanAgreementp.InvSum4;
+  MatRowPut(VIr,MatRowCnt(VIr),VIrw);
+  VICalcVals(VIr);
+  VISumup(VIr,t);
+  VIr.PayVal = -t;
+  if (RecordStore(VIr,true)) then begin
+    CreateRecordLink(LoanAgreementp,CurrentCompany,VIr,CurrentCompany);  
+    CreateRecordLink(VIr,CurrentCompany,LoanAgreementp,CurrentCompany);  
+  end;
+LCreateVIFromLoanAgreement:;
+  CreateVIFromLoanAgreement = res;
+  return;
+end;
+
+
+global
+updating function LongInt CreateOPFromLoanAgreement(record LoanAgreementVc LoanAgreementp,var record OPVc OPr,LongInt VISerNr)
+begin
+  LongInt res;
+  row OPVc OPrw;
+  record VIVc VIr;
+  record LoanManIVSettingsBlock LoanManIVSettingsb;
+  val chk;
+  Boolean instf;
+  string 255 warning;
+
+  BlockLoad(LoanManIVSettingsb);
+  if (blank(LoanManIVSettingsb.PayMode)) then begin res = 43946; goto LCreateOPFromLoanAgreement; end;
+
+  RecordNew(OPr);
+  OPr.TransDate = CurrentDate;
+  OPr.PayMode = LoanManIVSettingsb.PayMode;
+  OPr.PayDate = CurrentDate;
+  OPr.OrderedFlag = 1;
+  OPr.DoneFlag = 1;
+  OPVc_PasteTransDate(OPr);
+
+  OPrw.VISerNr = VISerNr;
+  MatRowPut(OPr,0,OPrw);
+  PasteInvIn2OPr(OPr,0,OPr.TransDate,1,chk,warning,false,instf);
+  if (RecordStore(OPr,true)) then begin
+    VIr.SerNr = VISerNr;
+    if (ReadFirstMain(VIr,1,true)) then begin
+      CreateRecordLink(OPr,CurrentCompany,VIr,CurrentCompany);  
+      CreateRecordLink(VIr,CurrentCompany,OPr,CurrentCompany);  
+    end;
+  end;
+LCreateOPFromLoanAgreement:;
+  CreateOPFromLoanAgreement = res;
+  return;
+end;
+
+global
+updating procedure StoreIV(record IVVc IVp,Boolean recordcheckf)
+begin
+  RecordStore(IVp,recordcheckf);
+  return;
+end;
+
+procedure PasteLoanAgreementToInv(record LoanAgreementVc LoanAgreementr,var record IVVc IVp)
+begin
+  val fr,to1,to2,br1,br2;
+  string 5 crncy;
+  string 255 tstr;
+
+  if (PasteCustInInv(IVp)) then begin end;
+  IVp.Addr0 = LoanAgreementr.Addr0;
+  IVp.CustCat = LoanAgreementr.CustCat;
+  IVp.PayDeal = LoanAgreementr.PayDeal;
+  IVp.ClientContact = LoanAgreementr.ClientContact;
+  IVp.Objects = LoanAgreementr.Objects;
+  IVp.CurncyCode = LoanAgreementr.CurncyCode;
+  if (nonblank(LoanAgreementr.PayDeal)) then begin
+    IVp.PayDeal = LoanAgreementr.PayDeal;
+  end;
+  crncy = IVp.CurncyCode;
+  GetFullCurncyRate(crncy,IVp.TransDate,fr,to1,to2,br1,br2);
+  IVp.CurncyCode = crncy;
+  IVp.FrRate = fr;
+  IVp.ToRateB1 = to1; 
+  IVp.ToRateB2 = to2;
+  IVp.BaseRate1 = br1;
+  IVp.BaseRate2 = br2;
+  IVp.SalesMan = LoanAgreementr.SalesMan;
+  IVp.LangCode = LoanAgreementr.LangCode;
+  IVp.RebCode = LoanAgreementr.RebCode;
+  IVp.ARAcc = LoanAgreementr.ARAcc;
+  IVp.Objects = LoanAgreementr.ARAccObject;
+  tstr = IVp.PriceList;
+  GetPriceList(IVp.CustCat,IVp.TransDate,IVp.TransTime,tstr,IVp.InclVAT);
+  IVp.PriceList = tstr;
+  IVp.ExportFlag = LoanAgreementr.ExportFlag;
+  IVp.LoanAgreementNr = LoanAgreementr.SerNr;
+//  IVp.InvComment = LoanAgreementr.InvComment;
+  IVp.UpdStockFlag = 0;
+  return;
+end;
+
+procedure SetupIVFromScratch(record LoanAgreementVc LoanAgreementr,Date invdate,var record IVVc IVp)
+begin
+  record PLDefVc PLDefR;
+  record CUVc CUr;
+  record CUVc invtoCUr;
+
+  RecordNew(IVp);
+  IVp.InvDate = invdate;
+  IVp.TransDate = CurrentDate;
+  invtoCUr.Code = "";
+  CUr.Code = LoanAgreementr.CustCode;
+  if (ReadFirstMain(CUr,1,true)) then begin
+    IVp.CustCode = CUr.Code;  
+    if (nonblank(CUr.InvoiceToCode)) then begin
+      invtoCUr.Code = CUr.InvoiceToCode;
+      if (ReadFirstMain(invtoCUr,1,true)) then begin
+        IVp.CustCode = invtoCUr.Code;
+      end;
+    end;
+  end;
+  if (nonblank(LoanAgreementr.InvoiceToCode)) then begin
+    invtoCUr.Code = LoanAgreementr.InvoiceToCode;
+    if (ReadFirstMain(invtoCUr,1,true)) then begin
+      IVp.CustCode = invtoCUr.Code;
+    end;
+  end;
+  if (blank(IVp.CustCode)) then begin
+    IVp.CustCode = LoanAgreementr.CustCode;  
+  end;
+  PasteLoanAgreementToInv(LoanAgreementr,IVp);
+  GetARAcc(IVp.CustCode,IVp.ARAcc);
+  return;
+end;
+
+procedure AddPrincipalRowToIV(row LoanAgreementSchedVc LoanAgreementSchedrw,record LoanManIVSettingsBlock LoanManIVSettingsb,var record IVVc IVp)
+begin
+  row IVVc IVrw;
+  Integer rownr,sernrf;
+  string 255 tstr;
+
+  rownr = MatRowCnt(IVp);
+
+  ClearRow(IVp,IVrw,1);
+  IVrw.ArtCode = LoanManIVSettingsb.PrincipalItem;
+  IVrw.Quant = 1;
+  MatRowPut(IVp,rownr,IVrw);
+  if (IVVc_PasteArtCode(IVp,rownr,tstr,tstr,false,sernrf)) then begin
+  end;
+  MatRowGet(IVp,rownr,IVrw);
+  IVrw.Price = LoanAgreementSchedrw.Principal;
+  IVrw.Sum = LoanAgreementSchedrw.Principal;
+//IVrw.Spec = LoanAgreementrw.Comment;
+  MatRowPut(IVp,rownr,IVrw);
+
+  return;
+end;
+
+procedure AddInterestRowToIV(row LoanAgreementSchedVc LoanAgreementSchedrw,record LoanManIVSettingsBlock LoanManIVSettingsb,var record IVVc IVp)
+begin
+  row IVVc IVrw;
+  Integer rownr,sernrf;
+  string 255 tstr;
+
+  rownr = MatRowCnt(IVp);
+
+  ClearRow(IVp,IVrw,1);
+  IVrw.ArtCode = LoanManIVSettingsb.InterestItem;
+  IVrw.Quant = 1;
+  MatRowPut(IVp,rownr,IVrw);
+  if (IVVc_PasteArtCode(IVp,rownr,tstr,tstr,false,sernrf)) then begin
+  end;
+  MatRowGet(IVp,rownr,IVrw);
+  IVrw.Price = LoanAgreementSchedrw.Interest;
+  IVrw.Sum = LoanAgreementSchedrw.Interest;
+//IVrw.Spec = LoanAgreementrw.Comment;
+  MatRowPut(IVp,rownr,IVrw);
+
+  return;
+end;
+
+function Boolean BuildIVFromLoanAgreement(record LoanAgreementVc LoanAgreementr,row LoanAgreementSchedVc LoanAgreementSchedrw,var record IVVc IVp)
+begin
+  Boolean res;
+  record LoanManIVSettingsBlock LoanManIVSettingsb;
+
+  BlockLoad(LoanManIVSettingsb);
+  SetupIVFromScratch(LoanAgreementr,LoanAgreementSchedrw.PeriodTo,IVp);
+  AddPrincipalRowToIV(LoanAgreementSchedrw,LoanManIVSettingsb,IVp); //might be smart to merge
+  AddInterestRowToIV(LoanAgreementSchedrw,LoanManIVSettingsb,IVp);  //might be smart to merge
+
+  if (MatRowCnt(IVp)>0) then begin
+    res = true;
+  end;
+
+  BuildIVFromLoanAgreement = res;
+  return;
+end;
+
+global
+function LongInt CreateIVFromLoanAgreement(record LoanAgreementVc LoanAgreementr,var record IVVc IVp)
+begin
+  LongInt res;
+  record LoanAgreementSchedVc LoanAgreementSchedr;
+  row LoanAgreementSchedVc LoanAgreementSchedrw;
+  Integer i,rwcnt;
+
+  res = 0;
+
+  LoanAgreementSchedr.LoanAgreementNr = LoanAgreementr.SerNr;
+  if (ReadFirstMain(LoanAgreementSchedr,1,true)==false) then begin
+    res = -1;
+    goto LCreateIVFromLoanAgreement;
+  end;
+
+  rwcnt = MatRowCnt(LoanAgreementSchedr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(LoanAgreementSchedr,i,LoanAgreementSchedrw);
+    if (LoanAgreementSchedrw.PeriodTo>CurrentDate) then begin goto LNext; end;
+    if (LoanAgreementSchedrw.Invoiced==1) then begin goto LNext; end;
+    if (BuildIVFromLoanAgreement(LoanAgreementr,LoanAgreementSchedrw,IVp)) then begin
+      AddPerceptionTaxesRows_IVVc(IVp);
+      AddWithholdingTaxesRows_IVVc(IVp);
+      IVSumup(IVp,true);
+    end;
+    if (MatRowCnt(IVp)>0) then begin
+      LoanAgreementSchedrw.Invoiced = 1;
+      LoanAgreementSchedrw.InvDate = LoanAgreementSchedrw.PeriodTo;
+      MatRowPut(LoanAgreementSchedr,i,LoanAgreementSchedrw);
+      qupdating.StoreIV(IVp,true);
+    end;
+LNext:;
+  end;
+LCreateIVFromLoanAgreement:;
+  CreateIVFromLoanAgreement = res;
+  return;
+end;

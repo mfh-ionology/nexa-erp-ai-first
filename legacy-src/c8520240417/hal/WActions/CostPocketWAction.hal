@@ -1,0 +1,295 @@
+external function Boolean CheckEmailStr(string);
+external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+remote procedure CostPocketSubscribe(var record CostPocketBlock,var LongInt);
+remote procedure DoCostPocketGetDataRequest(var LongInt,var string);
+remote procedure DoCostPocketGetReportRequest(var LongInt,var string);
+remote procedure CostPocketUnSubscribe(var record CostPocketBlock,var LongInt,var string);
+
+function Boolean IsValidUserName(string userName)
+begin
+  boolean res;
+  string 255 firstName,lastName;
+  integer pos;
+  
+  res = false;
+  pos = 0;
+  ExtractObjWithSeparator(" ",userName,false,pos,firstName);
+  ExtractObjWithSeparator(" ",userName,false,pos,lastName);
+  if (nonblank(firstName) and nonblank(lastName)) then begin
+    res = true;
+  end;
+  IsValidUserName = res;
+  return;
+end;
+
+global 
+procedure CostPocketGetDataDsm()
+begin
+  Integer wn;
+  Longint err;
+  record CostPocketBlock CPb;
+  string 255 errmsg;
+
+  BlockLoad(CPb);
+
+  wn = CurWindow;
+  if (blank(CPb.APIId)) or (blank(CPb.APIToken)) then begin
+    MessageBox(43169,"");
+    goto LCostPocketGetDataDsm;
+  end;
+
+  DoCostPocketGetDataRequest(err,errmsg);
+
+  if (err!=-1) then begin
+    if (nonblank(errmsg)) then begin
+      MessageBox(err,errmsg);
+    end else begin
+      MessageBox(err,"");
+    end;
+  goto LCostPocketGetDataDsm;
+  end;
+  
+  if (err==-1) then begin
+    CheckmarkBox(43168,"");
+  end;
+
+LCostPocketGetDataDsm:;
+  return;
+end;
+
+global 
+procedure CostPocketGetReportDataDsm()
+begin
+  Integer wn;
+  Longint err;
+  record CostPocketBlock CPb;
+  string 255 errmsg;
+
+  BlockLoad(CPb);
+
+  wn = CurWindow;
+  if (blank(CPb.APIId)) or (blank(CPb.APIToken)) then begin
+    MessageBox(43169,"");
+    goto LCostPocketGetReportDataDsm;
+  end;
+
+  DoCostPocketGetReportRequest(err,errmsg);
+
+  if (err!=-1) then begin
+    if (nonblank(errmsg)) then begin
+      MessageBox(err,errmsg);
+    end else begin
+      MessageBox(err,"");
+    end;
+  goto LCostPocketGetReportDataDsm;
+  end;
+  
+  if (err==-1) then begin
+    CheckmarkBox(43168,"");
+  end;
+
+LCostPocketGetReportDataDsm:;
+  return;
+end;
+
+function Longint ValidCostPocketSubscriptionSetUp()
+begin
+  Longint res;
+  record CostPocketBlock CPb;
+  record CYBlock CYb;
+  record CountryVc Countryr;
+
+  res = 0;
+
+  BlockLoad(CYb);
+  BlockLoad(CPb);
+
+  if (blank(CPb.AccountEmail)) then begin
+    res = 43160;
+    goto LValidCostPocketSubscriptionSetUp;
+  end;
+  if (CheckEmailStr(CPb.AccountEmail)==false) then begin
+    res = 31337;
+    goto LValidCostPocketSubscriptionSetUp;
+  end;
+  if (blank(CPb.AccountUsername)) then begin
+    res = 43161;
+    goto LValidCostPocketSubscriptionSetUp;
+  end else begin
+    if (IsValidUserName(CPb.AccountUsername)==false) then begin
+      res = 43162;
+      goto LValidCostPocketSubscriptionSetUp;
+    end;
+  end;
+  if (CPb.AcceptanceFlag==0) then begin
+    res = 43166;
+    goto LValidCostPocketSubscriptionSetUp;
+  end;
+  if (blank(CYb.CountryCode)) then begin
+    res = 43163;
+    goto LValidCostPocketSubscriptionSetUp;
+  end else begin
+    if (len(CYb.CountryCode)>2) then begin
+      Countryr.Code = CYb.CountryCode;
+      if (ReadFirstMain(Countryr,1,true)) then begin
+        if (blank(Countryr.ISOCode) or Len(Countryr.ISOCode)>2) then begin
+          res = 43173;
+          goto LValidCostPocketSubscriptionSetUp;
+        end;
+      end;
+    end;
+  end;
+  if (blank(CYb.OrgNr)) then begin
+    res = 34593;
+    goto LValidCostPocketSubscriptionSetUp;
+  end; 
+
+LValidCostPocketSubscriptionSetUp:;  
+  ValidCostPocketSubscriptionSetUp = res;
+  return;
+end;
+
+global
+procedure SubscribeCostPocketDsm()
+begin
+  Integer wn;
+  LongInt err;
+  record CostPocketBlock CPb;
+  record CYBlock CYb;
+
+  wn = CurWindow;
+  if (WindowState(wn)!=Rs_normal) then begin
+    err = 30225;
+    goto LSubscribeCostPocketDsm;
+  end;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,CPb);
+  BlockLoad(CPb);
+
+  err = ValidCostPocketSubscriptionSetUp;
+  if (err!=0) then begin goto LSubscribeCostPocketDsm; end;
+
+  CostPocketSubscribe(CPb,err);
+  if (err!=0) then begin goto LSubscribeCostPocketDsm; end;
+
+  PutWindowRecord(wn,CPb);
+  SetWindowState(wn,Rs_normal);
+  ReRunWindowDef(wn);
+LSubscribeCostPocketDsm:; 
+  if (err!=0) then begin
+    MessageBox(err,"");
+  end else begin
+    CheckmarkBox(43172,"");
+  end;
+  return;
+end;
+
+global
+procedure UnSubscribeCostPocketDsm()
+begin
+  Integer wn;
+  LongInt err;
+  record CostPocketBlock CPb;
+  record CYBlock CYb;
+  string 255 message;
+
+  wn = CurWindow;
+  
+  if (WindowState(wn)!=Rs_normal) then begin
+    err = 30225;
+    goto LUnSubscribeCostPocketDsm;
+  end;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,CPb);
+  BlockLoad(CPb);
+
+  err = ValidCostPocketSubscriptionSetUp;
+  if (err!=0) then begin goto LUnSubscribeCostPocketDsm; end;
+
+  CostPocketUnSubscribe(CPb,err,message);
+  if (err!=0) then begin goto LUnSubscribeCostPocketDsm; end;
+
+  PutWindowRecord(wn,CPb);
+  SetWindowState(wn,Rs_normal);
+  ReRunWindowDef(wn);
+LUnSubscribeCostPocketDsm:; 
+  if (err!=0) then begin
+    MessageBox(err,"");
+  end else begin
+    CheckmarkBox(43171,"");
+  end;
+  return;
+end;
+
+global
+updating procedure CostPocketGetDataLsm()
+begin
+  Integer wn;
+  Longint err;
+  record CostPocketBlock CPb;
+  string 255 errmsg;
+
+  BlockLoad(CPb);
+
+  wn = CurWindow;
+  if (blank(CPb.APIId)) or (blank(CPb.APIToken)) then begin
+    MessageBox(43169,"");
+    goto LCostPocketGetDataLsm;
+  end;
+
+  DoCostPocketGetDataRequest(err,errmsg);
+
+  if (err!=-1) then begin
+    if (nonblank(errmsg)) then begin
+      MessageBox(err,errmsg);
+    end else begin
+      MessageBox(err,"");
+    end;
+  goto LCostPocketGetDataLsm;
+  end;
+ 
+  if (err==-1) then begin
+    UpdateBrowses("VIVc");   
+    CheckmarkBox(43168,"");
+  end;
+
+  LCostPocketGetDataLsm:;
+  return;
+end;
+
+global 
+procedure CostPocketGetReportDataLsm()
+begin
+  Integer wn;
+  Longint err;
+  record CostPocketBlock CPb;
+  string 255 errmsg;
+
+  BlockLoad(CPb);
+
+  wn = CurWindow;
+  if (blank(CPb.APIId)) or (blank(CPb.APIToken)) then begin
+    MessageBox(43169,"");
+    goto LCostPocketGetReportDataLsm;
+  end;
+
+  DoCostPocketGetReportRequest(err,errmsg);
+
+  if (err!=-1) then begin
+    if (nonblank(errmsg)) then begin
+      MessageBox(err,errmsg);
+    end else begin
+      MessageBox(err,"");
+    end;
+  goto LCostPocketGetReportDataLsm;
+  end;
+  
+  if (err==-1) then begin
+    UpdateBrowses("ExpVc");   
+    CheckmarkBox(43168,"");
+  end;
+
+LCostPocketGetReportDataLsm:;
+  return;
+end;
+

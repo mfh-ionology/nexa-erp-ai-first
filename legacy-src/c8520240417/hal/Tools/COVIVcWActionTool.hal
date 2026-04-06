@@ -1,0 +1,423 @@
+external function roundmode DefaultRoundMode();
+external procedure GetVAT2Code(string,var val,var val);
+external procedure RoundVATSum(string,string,string,var val);
+external procedure AutoObj(var string);
+external procedure ATransVal(val,val,string,string,var val,var val,Boolean);
+external procedure GetAccountDescription2(string,string,var string);
+external procedure PasteAccObj(string,var string);
+external procedure GetACShortAccount(string,var string,var string);
+external procedure MulM4ProcVal(val,val,var val);
+external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
+external procedure GetFullCurncyRate(var string,Date,var val,var val,var val,var val,var val);
+
+global
+function Boolean PasteVEInCOVI(var record COVIVc COVIp)
+begin
+  record CUVc VEr;
+  Boolean found;
+
+  VEr.Code = COVIp.VECode;
+  found = ReadFirstMain(VEr,1,true);
+  if (found) then begin
+    if (VEr.blockedFlag!=0) then begin found = false; end;
+  end;
+  if (found) then begin
+    COVIp.Addr0 = VEr.Name;
+    COVIp.Department= VEr.Department;
+    COVIp.BankAcc = VEr.BankAccount;
+    COVIp.BankName = VEr.AccOperator;
+    COVIp.LangCode = VEr.LangCode;
+    COVIp.PayDeal = VEr.VEPayDeal;
+    if (nonblank(VEr.VECurncyCode)) then begin
+      COVIp.CurncyCode = VEr.VECurncyCode;
+    end;
+  end;
+  PasteVEInCOVI = found;
+  return;
+end;
+
+global
+procedure COVIAccName(record COVIVc COVIp,Integer rownr,Boolean fulldataf)
+begin
+  row COVIVc COVIrw;
+  record AccVc Accr;
+  record APAccBlock APAccRec;
+  Boolean Accs;
+  string 255 tstr;
+  string 255 vatcode;
+  string 10 accnr;
+  Integer row1;
+  string 255 taxtemplatecode;
+  record TaxMatrixVc TMr;
+
+  MatRowGet(COVIp,rownr,COVIrw);
+  accnr = COVIrw.AccNumber;
+  if (blank(accnr)) then begin
+    COVIrw.Comment = "";
+    MatRowPut(COVIp,rownr,COVIrw);
+    goto LCOVIAccName;
+  end;
+  Accr.AccNumber = accnr;
+  Accs = ReadFirstKey("AccNumber",Accr,1,true);
+  if (Accs==false) then begin
+    COVIrw.Comment = USetStr(1023);
+    MatRowPut(COVIp,rownr,COVIrw);
+  end else begin
+    BlockLoad(APAccRec);
+    if (fulldataf) or (blank(COVIrw.Comment)) then begin
+      GetAccountDescription2(Accr.AccNumber,COVIp.LangCode,tstr);
+      COVIrw.Comment = tstr;
+    end;
+    COVIrw.PeriodCode = Accr.PeriodCode;
+    if (blank(vatcode)) then begin
+      vatcode = Accr.VATCode;
+    end;
+    if (nonblank(vatcode)) then begin
+      COVIrw.VATCode = vatcode;
+    end;
+    MatRowPut(COVIp,rownr,COVIrw);
+    if (fulldataf==false) then begin
+      if (nonblank(Accr.AutCode)) then begin
+        row1 = rownr + 1;
+        ClearRow(COVIp,COVIrw,1);
+        COVIrw.AccNumber = Accr.AutCode;
+        MatRowPut(COVIp,row1,COVIrw);
+      end;
+    end;
+  end;
+LCOVIAccName:;
+  return;
+end;
+
+global
+function Boolean COVIVc_PasteVECode(var record COVIVc COVIp)
+begin
+  Boolean res;
+
+  res = PasteVEInCOVI(COVIp);
+
+  COVIVc_PasteVECode = res;
+  return;
+end;
+
+global 
+procedure COVIVc_PasteDepartment(var record COVIVc COVIr)
+begin
+  record DepVc Depr;
+  Boolean found;
+
+  Depr.Code = COVIr.Department;
+  if (ReadFirstMain(Depr,1,true)) then begin
+    COVIr.Department = Depr.Description; 
+  end;
+  return;
+end;  
+
+global
+procedure COVIGetRate(var record COVIVc COVIr)
+begin
+  val from,to1,to2,base1,base2;
+  string 10 curncy;
+ 
+  curncy = COVIr.CurncyCode;
+  GetFullCurncyRate(curncy,COVIr.COVIDate,from,to1,to2,base1,base2);
+  COVIr.CurncyCode = curncy;
+  COVIr.FrRate = from;
+  COVIr.ToRateB1 = to1;
+  COVIr.ToRateB2 = to2;
+  COVIr.BaseRate1 = base1;
+  COVIr.BaseRate2 = base2;
+  return;
+end;
+
+global
+procedure COVIVc_PasteCurncyCode(var record COVIVc COVIr)
+begin
+  COVIGetRate(COVIr);
+  return;
+end;
+
+global
+procedure COVISumup(var record COVIVc COVIp)
+begin
+  row COVIVc COVIrw;
+  Integer i,rwcnt;
+  val totval,totvat,rval,vval,t;
+  record VITBlock VITb;
+
+  BlockLoad(VITb);
+  rwcnt = MatRowCnt(COVIp);
+  if (VITb.autoVATflag!=0 and rwcnt>0) then begin
+    if (nonblank(VITb.autoVATVal) and (nonblank(COVIp.PayVal))) then begin
+      MulM4ProcVal(StringToVal(VITb.autoVATVal,M4Rate),COVIp.PayVal,t);
+      RoundVATSum(COVIp.CurncyCode,COVIp.PayDeal,"COVIVc",t);      
+      COVIp.VATVal = t;
+    end;
+  end;
+LCOVISumup:;
+  return;
+end;    
+
+global
+procedure CalcCOVIRow(var record COVIVc COVIp,Integer rownr)
+begin
+  row COVIVc COVIrw;
+  val rval,vval,t;
+
+  MatRowGet(COVIp,rownr,COVIrw);
+  if (COVIrw.Sum!=0) then begin
+    GetVAT2Code(COVIrw.VATCode,rval,vval);
+    COVIrw.VATVal = COVIrw.Sum * vval;
+    COVIrw.VATVal = COVIrw.VATVal/100;
+    COVIrw.VATVal = Round(COVIrw.VATVal,DefaultRoundMode);
+    RoundVATSum(COVIp.CurncyCode,"","COVIVc",COVIrw.VATVal);
+  end;
+  MatRowPut(COVIp,rownr,COVIrw);
+  COVISumup(COVIp);
+  return;
+end;
+
+global
+function Boolean COVIAutoTrans(record COVIVc COVIp,Integer rownr)
+begin
+  row COVIVc COVIrw;
+  row AutVc Autrw;
+  record AutVc Autr;
+  Boolean res,Auts;
+  LongInt i,anrows,blnkl;
+  row COVIVc OrgRow;
+  Integer trow,sf,nfr,iv;
+  Boolean backstep;
+  string 255 tstr,tstrvat;
+  val t,od,oc,dval,crval,tval;
+  record AccVc Accr;
+
+  ClearRow(COVIp,OrgRow,1);
+  MatRowGet(COVIp,rownr,COVIrw);
+  Autr.Code = COVIrw.AccNumber;
+  if (rownr>=1) then begin
+    MatRowGet(COVIp,rownr-1,COVIrw);
+    if (COVIrw.stp==1) then begin
+      CopyRow(COVIp,COVIrw,OrgRow);
+    end;
+  end;
+  if (blank(Autr.Code)) then begin goto LCOVIAutoTrans; end;
+  Auts = ReadFirstMain(Autr,1,true);
+  if (Auts==false) then begin goto LCOVIAutoTrans; end;
+  res = true;
+  anrows = MatRowCnt(Autr);
+  if (anrows==0) then begin goto LCOVIAutoTrans; end;
+  res = true;
+  trow = rownr-1;
+  for (i=0;i<anrows; i=i+1) begin
+    MatRowGet(Autr,i,Autrw);
+    trow = trow + 1;
+    if (i==0) then begin
+      if (trow>0) then begin
+        if (Autrw.AccNumber=="!") then begin
+          backstep = true;
+          trow = trow - 1;
+        end;
+      end;
+    end;
+    if (trow>195) then begin goto LCOVIAutoTrans; end;
+    if (trow>=MatRowCnt(COVIp)) then begin
+      ClearRow(COVIp,COVIrw,1);
+    end;
+      COVIrw.stp = 1;
+      COVIrw.ovst = 0;
+      blnkl = -1;
+      tstr = Autrw.AccNumber;
+      tstrvat = Autrw.VATCode;
+      if (tstr=="#") then begin
+        tstr = OrgRow.AccNumber;
+        tstrvat = OrgRow.VATCode;
+      end;
+      if ((i==0) and (backstep==true)) then begin
+        tstr = OrgRow.AccNumber;
+        tstrvat = OrgRow.VATCode;
+      end;
+      COVIrw.AccNumber = tstr;
+      COVIrw.VATCode = tstrvat;
+      tstr = Autrw.objstr;
+      if (tstr=="#") then begin
+        tstr = OrgRow.Objects;
+      end;
+      if ((i==0) and (backstep==true)) then begin
+        if (blank(tstr)) then begin
+          tstr = OrgRow.Objects;
+        end;
+      end;
+      AutoObj(tstr);
+      COVIrw.Objects = tstr;
+      tstr = Autrw.comstr;
+      if (tstr=="#") then begin
+        tstr = OrgRow.Comment;
+      end;
+      if ((i==0) and (backstep==true)) then begin
+        if (blank(tstr)) then begin
+          tstr = OrgRow.Comment;
+        end;
+      end;
+      if (blank(tstr)) then begin
+        MatRowPut(COVIp,trow,COVIrw);
+        COVIAccName(COVIp,trow,Auts);
+        MatRowGet(COVIp,trow,COVIrw);
+      end else begin
+        COVIrw.Comment = tstr;
+      end;      
+      tstr = Autrw.VATCode;
+      if (tstr=="#") or (tstr=="!") then begin
+        tstr = OrgRow.VATCode;
+      end;
+      COVIrw.VATCode = tstr;            
+      if ((Autrw.dstr=="=") or (Autrw.cstr=="=")) then begin
+        tval = 0;
+        COVIrw.Sum = 0;
+        COVISumup(COVIp);
+        tval = -tval;
+        COVIrw.Sum = tval;
+      end else begin
+        od = blankval;
+        oc = blankval;
+        if (OrgRow.Sum>=0) then begin
+          od = OrgRow.Sum;
+        end else begin
+          oc = -OrgRow.Sum;
+        end;
+        ATransVal(od,oc,Autrw.dstr,Autrw.cstr,dval,crval,Autr.DontSwap!=0);
+        tval = dval - crval;
+        COVIrw.Sum = tval;
+      end;
+      if (blank(COVIrw.VATCode)) then begin
+        Accr.AccNumber = COVIrw.AccNumber;
+        ReadFirstMain(Accr,1,true);
+        COVIrw.VATCode = Accr.VATCode;
+      end;
+      MatRowPut(COVIp,trow,COVIrw);      
+     CalcCOVIRow(COVIp,trow); 
+  end;
+  COVISumup(COVIp); 
+LCOVIAutoTrans:;
+  COVIAutoTrans = res;
+  return;
+end;
+
+global
+function Boolean COVIVc_PasteAccNumber(var record COVIVc COVIp,string prevaccnumber,Integer changedf,Integer rownr)
+begin
+  Boolean res,autodonef,fulldataf;
+  row COVIVc COVIrw;
+  string 255 tstr;
+  record AccVc pAccr;
+
+  res = false;
+  MatRowGet(COVIp,rownr,COVIrw);   
+  if (nonblank(prevaccnumber)) then begin
+    pAccr.AccNumber = prevaccnumber;
+    ReadFirstMain(pAccr,1,true);
+  end; 
+  if (COVIrw.AccNumber!=prevaccnumber) and (nonblank(prevaccnumber)) then begin
+    fulldataf = true; 
+  end;
+  if ((changedf!=0) or ((blank(COVIrw.Comment)) and (nonblank(COVIrw.AccNumber)))) then begin
+    if (COVIAutoTrans(COVIp,rownr)) then begin 
+      autodonef = true; 
+    end;
+    MatRowGet(COVIp,rownr,COVIrw);   
+    res = true;
+  end;
+  if (changedf!=0) then begin
+    if (blank(COVIrw.Objects)) then begin
+      PasteAccObj(COVIrw.AccNumber,tstr);
+      COVIrw.Objects = tstr;
+      MatRowPut(COVIp,rownr,COVIrw);  
+      res = true;
+    end;
+  end;
+  MatRowGet(COVIp,rownr,COVIrw);  
+  if ((changedf!=0 and autodonef==false) or (COVIrw.Comment==USetStr(1023)) or ((blank(COVIrw.Comment)) and (nonblank(COVIrw.AccNumber)))) then begin
+    MatRowPut(COVIp,rownr,COVIrw);
+    COVIAccName(COVIp,rownr,fulldataf);
+    MatRowGet(COVIp,rownr,COVIrw);
+    res = true;
+  end;
+  if (changedf!=0) then begin
+    COVISumup(COVIp);
+  end;  
+  COVIVc_PasteAccNumber = res;
+  return;
+end;
+
+global
+procedure COVIVc_PasteACShort(var record COVIVc COVIp,Integer rownr,Integer changedf)
+BEGIN
+  row COVIVc COVIrw;
+  string 255 tstr,obj;
+  Boolean autof;
+
+  MatRowGet(COVIp,rownr,COVIrw);
+  GetACShortAccount(COVIrw.ACShort,tstr,obj);
+  COVIrw.AccNumber = tstr;
+  COVIrw.Objects = obj;
+  MatRowPut(COVIp,rownr,COVIrw);
+  tstr = USetStr(1023);
+  if ((blank(COVIrw.Comment)) or (COVIrw.Comment==tstr)) then begin
+    if (COVIAutoTrans(COVIp,rownr)) then begin 
+      autof = true;
+    end;
+    MatRowGet(COVIp,rownr,COVIrw);   
+  end;
+  if (blank(COVIrw.Objects)) then begin
+    PasteAccObj(COVIrw.AccNumber,obj);
+    COVIrw.Objects = obj;
+  end;
+  if ((changedf!=0) or (COVIrw.Comment==tstr)) then begin  
+    COVIAccName(COVIp,rownr,autof==false);
+  end;
+  COVISumup(COVIp);
+  return;
+end;
+
+global
+function val CalculateCOVINettVal(var record COVIVc COVIr)
+begin
+  val res;
+  row COVIVc COVIrw;
+  Integer i,rwcnt;  
+  
+  rwcnt = MatRowCnt(COVIr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(COVIr,i,COVIrw);
+    if (COVIrw.ovst==0) then begin
+      res = res + Round(COVIrw.Sum,DefaultRoundMode);
+    end;
+  end;
+  CalculateCOVINettVal = res;
+  return;
+end;
+global
+function val CalculateCOVICalcVATVal(var record COVIVc COVIr)
+begin
+  val res;
+  row COVIVc COVIrw;
+  Integer i,rwcnt;  
+  val rval,vval;
+  rwcnt = MatRowCnt(COVIr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(COVIr,i,COVIrw);
+    if (COVIrw.ovst==0) then begin
+      if (COVIrw.Sum!=0) then begin
+        GetVAT2Code(COVIrw.VATCode,rval,vval);
+        COVIrw.VATVal = COVIrw.Sum * rval;
+        COVIrw.VATVal = COVIrw.VATVal/100;
+        COVIrw.VATVal = Round(COVIrw.VATVal,DefaultRoundMode);
+        COVIrw.Sum = MulRateToBase1(COVIr.CurncyCode,COVIrw.Sum,COVIr.FrRate,COVIr.ToRateB1,COVIr.ToRateB2,COVIr.BaseRate1,COVIr.BaseRate2,DefaultCurRoundOff);
+        COVIrw.VATVal = MulRateToBase1(COVIr.CurncyCode,COVIrw.VATVal,COVIr.FrRate,COVIr.ToRateB1,COVIr.ToRateB2,COVIr.BaseRate1,COVIr.BaseRate2,DefaultCurRoundOff);
+        res = res + COVIrw.VATVal;
+      end;
+    end;
+  end;
+  CalculateCOVICalcVATVal = res;
+  return;
+end;

@@ -1,0 +1,65 @@
+external procedure HT2Per(Date, Date , var string);
+external function Boolean TRInvalid(record TRVc);
+
+global
+procedure TRVcInvestigateRn(record RcVc RepSpec)
+begin
+  Integer rw;
+  string 255 reason,tstr;
+  Boolean foundf,testf;
+  record TRVc TRr;
+  Boolean stdtxtf;
+
+  rw = 1;
+  
+  StartReportJob(USetStr(43300));
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1); rw = rw + 1;
+  if (nonblank(RepSpec.f1)) then begin
+    Header(rw,USetStr(43303) & ": " & RepSpec.f1,1); 
+    rw = rw + 1; 
+  end;
+  EndHeader;
+  
+  SetRepCol(3,70);
+  SetRepCol(4,135);
+  SetRepCol(5,210);
+  SetRepCol(6,250);
+  SetRepCol(7,320);
+  SetRepCol(8,460);
+  
+  StartFormat(15);
+  OutString(0,0,USetStr(43301),false);
+  OutString(3,0,USetStr(43302),false);
+  OutString(4,0,USetStr(43303),false);
+  OutString(1,0,USetStr(43304),true);
+  EndFormat;
+
+  foundf = true;
+  TRr.TransDate = RepSpec.sStartDate;
+  while (LoopKey("TransDate",TRr,1,foundf)) begin
+    stdtxtf = false;
+    if (DateInRange(TRr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin foundf = false; end;
+    if (foundf) then begin
+      testf = true;
+      if (TRInvalid(TRr)) then begin testf = false; end;
+      if (TRr.InvestigateFlag!=1) then begin testf = false; end;
+      if (testf) then begin
+        StartFormat(15);
+        OutStringID(0,"DblTRVc",TRr.Number,false,TRr.IntYc);
+        OutString(3,0,TRr.TransDate,false);
+        OutString(4,0,TRr.InvestigateReason,false);
+        OutString(1,0,TRr.Comment,true);
+        EndFormat;
+      end;
+    end;
+  end;
+    
+  StartFormat(1);
+  Gray_divider(0,1);
+  EndFormat;
+  
+  EndJob;
+  
+  return;
+end;

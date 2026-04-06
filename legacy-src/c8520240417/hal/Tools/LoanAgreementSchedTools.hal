@@ -1,0 +1,427 @@
+external function LongInt DaysInYear(Integer);
+external function roundmode SetRoundModeD(Integer);
+external function LongInt DateDiff(Date,Date);
+external procedure LoanAgreementSchedVc_PasteCustCode(var record LoanAgreementSchedVc);
+
+
+function val LoanAgreementDaysInYear(record LoanAgreementTypeVc LoanAgreementTyper,Integer year)
+begin
+  val res;
+  
+  switch (LoanAgreementTyper.DaysInMnth) begin
+    case 0: res = 360;
+    case 1: res = DaysInYear(year);
+  end;
+
+  LoanAgreementDaysInYear = res;
+  return;
+end;
+
+function Integer CalculateDailyInterest(val principal,val interestRate,Integer daysdiff,Integer year,Integer IntRateMethod,string agreementType)
+begin
+  record LoanAgreementTypeVc LoanAgreementTyper;
+  Integer res;
+  val interest,daysInYear;
+
+  LoanAgreementTyper.Code = agreementType;
+  ReadFirstMain(LoanAgreementTyper,1,true);
+
+  daysInYear = LoanAgreementDaysInYear(LoanAgreementTyper,year);
+
+  switch (IntRateMethod) begin
+    case 0: interest = (principal * (interestRate/100)) * 12;
+    case 1: interest = principal * (interestRate/100);
+  end;
+
+  res = interest / daysInYear;
+
+  CalculateDailyInterest = res;
+  return;
+end;
+
+procedure AddScheduleRow(var row LoanAgreementSchedVc LoanAgreementSchedrw,Integer type,Date startDate,Date periodFrom,date periodTo,val interest,val fees,val principal,val total,val balance)
+begin
+  LoanAgreementSchedrw.Type = type;
+  LoanAgreementSchedrw.PeriodFrom = periodFrom;
+  LoanAgreementSchedrw.PeriodTo = periodTo;
+  LoanAgreementSchedrw.Interest = interest;
+  LoanAgreementSchedrw.Fees = fees;
+  LoanAgreementSchedrw.Principal = principal;
+  LoanAgreementSchedrw.Balance = balance;
+  LoanAgreementSchedrw.Total = total;
+  return;
+end;
+
+function val GetMonthlyInterestRate(val interestRate,Integer interestRateMethod)
+begin
+  val res;
+
+  switch (interestRateMethod) begin
+    case 0: res = interestRate / 100;
+    case 1: res = (interestRate / 100) / 12;
+  end;
+
+  GetMonthlyInterestRate = res;
+  return;
+end;
+
+procedure RoundPayments(var val interestPayment,var val feesPayment,var val principalPayment,record LoanAgreementAccUsageBlock LoanAgreementAccUsageb)
+begin
+
+  interestPayment = Round(interestPayment,SetRoundModeD(LoanAgreementAccUsageb.InterestRoundOff));
+  feesPayment = Round(feesPayment,SetRoundModeD(LoanAgreementAccUsageb.InterestRoundOff));
+  principalPayment = Round(principalPayment,SetRoundModeD(LoanAgreementAccUsageb.PrincipalRoundOff));
+  
+  return;
+end;
+
+procedure BuildBulletSchedule(record LoanAgreementVc LoanAgreementr,var record LoanAgreementSchedVc LoanAgreementSchedr)
+begin
+  row LoanAgreementSchedVc LoanAgreementSchedrw;
+  record LoanAgreementTypeVc LoanAgreementTyper;
+  record LoanAgreementAccUsageBlock LoanAgreementAccUsageb;
+  record LoanManSettingsBlock LoanManSetb;
+  val monthlyInterestRate,interestPayment,firstPayment,principalPayment,partialMonthInterest;
+  val principal,interest,feesPayment,totalPayment,balance;
+  Integer interestOnlyMonths,months,day,monthDays,daysdiff;
+  Integer i;
+  Date startperiod,endperiod;
+
+  BlockLoad(LoanAgreementAccUsageb);
+  BlockLoad(LoanManSetb);
+  LoanAgreementTyper.Code = LoanAgreementr.Type;
+  ReadFirstMain(LoanAgreementTyper,1,true);
+
+  months = LoanAgreementr.Months;
+  principal = LoanAgreementr.InvSum4;
+  monthlyInterestRate = GetMonthlyInterestRate(LoanAgreementr.IntRate,LoanAgreementr.IntRateMethod);
+  daysdiff = DateDiff(LoanAgreementr.FirstInvDate,LoanAgreementr.startDate);
+  if (LoanManSetb.InterestInclFirstDay) then begin
+    daysdiff = daysdiff + 1;
+  end;
+
+  for (i=0;i<months;i=i+1) begin
+    if (i==0) then begin
+      startperiod = LoanAgreementr.startDate;
+    end else begin
+      startperiod = AddMonth(LoanAgreementr.FirstInvDate,i);
+    end;
+    endperiod = AddMonth(LoanAgreementr.FirstInvDate,i+1);
+    endperiod = AddDay(endperiod,-1);
+    
+    interestPayment = principal * monthlyInterestRate;
+    balance = principal;
+    feesPayment = 0;
+    principalPayment = 0;
+    if (i==0 and daysdiff>0) then begin
+      switch (LoanAgreementTyper.DaysInMnth) begin
+        case 0: monthDays = 30;
+        case 0: monthDays = DaysInMonth(GetYear(LoanAgreementr.startDate),GetMonth(LoanAgreementr.startDate));
+      end;
+      partialMonthInterest = (interestPayment / monthDays) * daysdiff; 
+      interestPayment = interestPayment + partialMonthInterest;
+    end;
+    if (i+1==months) then begin
+      principalPayment = principal;
+      balance = 0;
+    end;
+
+    RoundPayments(interestPayment,feesPayment,principalPayment,LoanAgreementAccUsageb);
+
+    totalPayment = principalPayment + feesPayment + interestPayment;
+    AddScheduleRow(LoanAgreementSchedrw,kLoanAgreementScheduleRowTypeIV,LoanAgreementr.startDate,startperiod,endperiod,interestPayment,feesPayment,principalPayment,totalPayment,balance)
+    MatRowPut(LoanAgreementSchedr,MatRowCnt(LoanAgreementSchedr),LoanAgreementSchedrw);
+  end;
+  return;
+end;
+
+procedure BuildLinearSchedule(record LoanAgreementVc LoanAgreementr,var record LoanAgreementSchedVc LoanAgreementSchedr)
+begin  
+  row LoanAgreementSchedVc LoanAgreementSchedrw;
+  record LoanAgreementTypeVc LoanAgreementTyper;
+  record LoanAgreementAccUsageBlock LoanAgreementAccUsageb;
+  record LoanManSettingsBlock LoanManSetb;
+  val monthlyInterestRate,monthlyPrincipalPayment,interestPayment;
+  val feesPayment,balance,totalPayment,partialMonthInterest;
+  val totInterest,totTotal,roundOffDiff;
+  Integer months,i,daysdiff,monthDays;
+  Date startperiod,endperiod;
+
+  BlockLoad(LoanAgreementAccUsageb);
+  BlockLoad(LoanManSetb);
+  LoanAgreementTyper.Code = LoanAgreementr.Type;
+  ReadFirstMain(LoanAgreementTyper,1,true);
+
+  months = LoanAgreementr.Months;
+  monthlyInterestRate = GetMonthlyInterestRate(LoanAgreementr.IntRate,LoanAgreementr.IntRateMethod);
+  monthlyPrincipalPayment = LoanAgreementr.InvSum4 / months;
+  daysdiff = DateDiff(LoanAgreementr.FirstInvDate,LoanAgreementr.startDate);
+  if (LoanManSetb.InterestInclFirstDay) then begin
+    daysdiff = daysdiff + 1;
+  end;
+
+  balance = LoanAgreementr.InvSum4;
+  for (i=0;i<months;i=i+1) begin
+    if (i==0) then begin
+      startperiod = LoanAgreementr.startDate;
+    end else begin
+      startperiod = AddMonth(LoanAgreementr.FirstInvDate,i);
+    end;
+    endperiod = AddMonth(LoanAgreementr.FirstInvDate,i+1);
+    endperiod = AddDay(endperiod,-1);
+
+    interestPayment = balance * monthlyInterestRate;
+    feesPayment = 0;
+    if (i==0 and daysdiff>0) then begin
+      switch (LoanAgreementTyper.DaysInMnth) begin
+        case 0: monthDays = 30;
+        case 0: monthDays = DaysInMonth(GetYear(LoanAgreementr.startDate),GetMonth(LoanAgreementr.startDate));
+      end;
+      partialMonthInterest = (interestPayment / monthDays) * daysdiff; 
+      interestPayment = interestPayment + partialMonthInterest;
+    end;
+
+    RoundPayments(interestPayment,feesPayment,monthlyPrincipalPayment,LoanAgreementAccUsageb);
+
+    totalPayment = interestPayment + monthlyPrincipalPayment + feesPayment;
+    balance = balance - monthlyPrincipalPayment;
+
+    totInterest = totInterest + interestPayment;
+    totTotal = totTotal + totalPayment;
+
+    if ((i+1)==months) then begin
+      roundOffDiff = (LoanAgreementr.InvSum4 + totInterest) - totTotal;
+      if (roundOffDiff!=0) then begin
+        totalPayment = totalPayment + roundOffDiff;
+      end;
+      if (balance!=0) then begin
+        monthlyPrincipalPayment = monthlyPrincipalPayment + balance;
+        balance = 0;
+      end;
+    end;
+   
+    AddScheduleRow(LoanAgreementSchedrw,kLoanAgreementScheduleRowTypeIV,LoanAgreementr.startDate,startperiod,endperiod,interestPayment,feesPayment,monthlyPrincipalPayment,totalPayment,balance)
+    MatRowPut(LoanAgreementSchedr,MatRowCnt(LoanAgreementSchedr),LoanAgreementSchedrw);
+  end;
+
+  return;
+end;
+
+procedure BuildLinearEqualSchedule(record LoanAgreementVc LoanAgreementr,var record LoanAgreementSchedVc LoanAgreementSchedr)
+begin  
+  row LoanAgreementSchedVc LoanAgreementSchedrw;
+  record LoanAgreementTypeVc LoanAgreementTyper;
+  record LoanAgreementAccUsageBlock LoanAgreementAccUsageb;
+  record LoanManSettingsBlock LoanManSetb;
+  val monthlyInterestRate,monthlyPrincipalPayment,interestPayment;
+  val feesPayment,balance,totalPayment,partialMonthInterest,totInterest,totTotal;
+  val roundOffDiff;
+  Integer months,i,daysdiff,monthDays;
+  Date startperiod,endperiod;
+  val totalPrecalculatedInterest;
+  Boolean interestCalcf;
+
+  BlockLoad(LoanManSetb);
+  BlockLoad(LoanAgreementAccUsageb);
+  LoanAgreementTyper.Code = LoanAgreementr.Type;
+  ReadFirstMain(LoanAgreementTyper,1,true);
+
+  months = LoanAgreementr.Months;
+  monthlyInterestRate = GetMonthlyInterestRate(LoanAgreementr.IntRate,LoanAgreementr.IntRateMethod);
+  daysdiff = DateDiff(LoanAgreementr.FirstInvDate,LoanAgreementr.startDate);
+  if (LoanManSetb.InterestInclFirstDay) then begin
+    daysdiff = daysdiff + 1;
+  end;
+
+  interestCalcf = true;
+  
+LRepeatFunc:;
+  balance = LoanAgreementr.InvSum4;
+  monthlyPrincipalPayment = LoanAgreementr.InvSum4 / months;
+  for (i=0;i<months;i=i+1) begin
+    if (i==0) then begin
+      startperiod = LoanAgreementr.startDate;
+    end else begin
+      startperiod = AddMonth(LoanAgreementr.FirstInvDate,i);
+    end;
+    endperiod = AddMonth(LoanAgreementr.FirstInvDate,i+1);
+    endperiod = AddDay(endperiod,-1);
+
+    feesPayment = 0;
+
+    if (interestCalcf) then begin
+      interestPayment = balance * monthlyInterestRate;
+      if (i==0 and daysdiff>0) then begin
+        switch (LoanAgreementTyper.DaysInMnth) begin
+          case 0: monthDays = 30;
+          case 0: monthDays = DaysInMonth(GetYear(LoanAgreementr.startDate),GetMonth(LoanAgreementr.startDate));
+        end;
+        partialMonthInterest = (interestPayment / monthDays) * daysdiff; 
+        interestPayment = interestPayment + partialMonthInterest;
+      end;
+    end else begin
+      interestPayment = totalPrecalculatedInterest / months;
+    end;
+
+    RoundPayments(interestPayment,feesPayment,monthlyPrincipalPayment,LoanAgreementAccUsageb);
+
+    totalPayment = interestPayment + monthlyPrincipalPayment + feesPayment;
+    if (interestCalcf) then begin
+      totalPrecalculatedInterest = totalPrecalculatedInterest + interestPayment;
+    end;
+    balance = balance - monthlyPrincipalPayment;
+
+    if (interestCalcf==false) then begin
+      //for roundoff not for initial interest dividing
+      totInterest = totInterest + interestPayment;
+      totTotal = totTotal + totalPayment;
+    end;
+
+    if ((i+1)==months) then begin
+      if (interestCalcf==false) then begin
+        roundOffDiff = (LoanAgreementr.InvSum4 + totInterest) - totTotal;
+        if (roundOffDiff!=0) then begin
+          totalPayment = totalPayment + roundOffDiff;
+        end;
+      end;
+      if (balance!=0) then begin
+        monthlyPrincipalPayment = monthlyPrincipalPayment + balance;
+        balance = 0;
+      end;
+    end;
+    if (interestCalcf==false) then begin
+      AddScheduleRow(LoanAgreementSchedrw,kLoanAgreementScheduleRowTypeIV,LoanAgreementr.startDate,startperiod,endperiod,interestPayment,feesPayment,monthlyPrincipalPayment,totalPayment,balance)
+      MatRowPut(LoanAgreementSchedr,MatRowCnt(LoanAgreementSchedr),LoanAgreementSchedrw);
+    end;
+  end;
+
+  if (interestCalcf) then begin
+    interestCalcf = false;
+    goto LRepeatFunc;
+  end;
+  return;
+end;
+
+procedure BuildAnnuitySchedule(record LoanAgreementVc LoanAgreementr,var record LoanAgreementSchedVc LoanAgreementSchedr)
+begin
+  row LoanAgreementSchedVc LoanAgreementSchedrw;
+  record LoanAgreementTypeVc LoanAgreementTyper;
+  record LoanAgreementAccUsageBlock LoanAgreementAccUsageb;
+  record LoanManSettingsBlock LoanManSetb;
+  val monthlyInterestRate,equalMonthlyPayment,interestPayment,correctedInterest;
+  val feesPayment,balance,totalPayment,partialMonthInterest,principalPayment,roundOffDiff;
+  Integer months,i,daysdiff,monthDays;
+  Date startperiod,endperiod;
+
+  BlockLoad(LoanAgreementAccUsageb);
+  BlockLoad(LoanManSetb);
+  LoanAgreementTyper.Code = LoanAgreementr.Type;
+  ReadFirstMain(LoanAgreementTyper,1,true);
+
+  months = LoanAgreementr.Months;
+  monthlyInterestRate = GetMonthlyInterestRate(LoanAgreementr.IntRate,LoanAgreementr.IntRateMethod);
+  equalMonthlyPayment = LoanAgreementr.InvSum4 * (monthlyInterestRate + (monthlyInterestRate / (Power((1 + monthlyInterestRate), months) - 1)));
+  daysdiff = DateDiff(LoanAgreementr.FirstInvDate,LoanAgreementr.startDate);
+
+  if (LoanManSetb.InterestInclFirstDay) then begin
+    daysdiff = daysdiff + 1;
+  end;
+
+  balance = LoanAgreementr.InvSum4;
+  if (daysdiff>0) then begin
+    switch (LoanAgreementTyper.DaysInMnth) begin
+      case 0: monthDays = 30;
+      case 0: monthDays = DaysInMonth(GetYear(LoanAgreementr.startDate),GetMonth(LoanAgreementr.startDate));
+    end;
+    interestPayment = balance * monthlyInterestRate;
+    partialMonthInterest = (interestPayment / monthDays) * daysdiff; 
+    equalMonthlyPayment = equalMonthlyPayment + (partialMonthInterest / months);
+  end;
+
+  if (LoanAgreementr.MaxMonthlyPayment>0 and LoanAgreementr.MaxMonthlyPayment<equalMonthlyPayment) then begin
+    equalMonthlyPayment = LoanAgreementr.MaxMonthlyPayment;
+  end;
+  
+  for (i=0;i<months;i=i+1) begin
+    if (i==0) then begin
+      startperiod = LoanAgreementr.startDate;
+    end else begin
+      startperiod = AddMonth(LoanAgreementr.FirstInvDate,i);
+    end;
+    endperiod = AddMonth(LoanAgreementr.FirstInvDate,i+1);
+    endperiod = AddDay(endperiod,-1);
+
+    interestPayment = (balance * monthlyInterestRate) + (partialMonthInterest / months);
+    feesPayment = 0;
+    principalPayment = equalMonthlyPayment - interestPayment;
+
+    RoundPayments(interestPayment,feesPayment,principalPayment,LoanAgreementAccUsageb);
+
+    totalPayment = interestPayment + principalPayment + feesPayment;
+    roundOffDiff = Round(equalMonthlyPayment-totalPayment,SetRoundModeD(LoanAgreementAccUsageb.PrincipalRoundOff));
+
+    if (roundOffDiff!=0) then begin
+      interestPayment = interestPayment + roundOffDiff;
+      totalPayment = interestPayment + principalPayment + feesPayment;
+    end;
+    balance = balance - principalPayment;
+
+    if ((i+1)==months) then begin
+      if (balance!=0) then begin
+        principalPayment = principalPayment + balance;
+        balance = 0;
+      end;
+      correctedInterest = principalPayment * monthlyInterestRate + (partialMonthInterest / months);
+      if (interestPayment<>correctedInterest) then begin
+        interestPayment = correctedInterest;
+        RoundPayments(interestPayment,feesPayment,principalPayment,LoanAgreementAccUsageb);
+        totalPayment = principalPayment + interestPayment + feesPayment;
+      end;
+    end;
+    AddScheduleRow(LoanAgreementSchedrw,kLoanAgreementScheduleRowTypeIV,LoanAgreementr.startDate,startperiod,endperiod,interestPayment,feesPayment,principalPayment,totalPayment,balance)
+    MatRowPut(LoanAgreementSchedr,MatRowCnt(LoanAgreementSchedr),LoanAgreementSchedrw);
+  end;
+
+  return;
+end;
+
+global 
+procedure BuildLoanAgreementSchedule(record LoanAgreementVc LoanAgreementr,var record LoanAgreementSchedVc LoanAgreementSchedr)
+begin
+
+  LoanAgreementSchedr.LoanAgreementNr = LoanAgreementr.SerNr;
+  if (ReadFirstMain(LoanAgreementSchedr,1,true)) then begin
+    goto LBuildLoanAgreementSchedule;
+  end;
+
+  RecordNew(LoanAgreementSchedr);
+  switch (LoanAgreementr.ScheduleType) begin
+    case kLoanAgreementScheduleTypeAnnuity:       BuildAnnuitySchedule(LoanAgreementr,LoanAgreementSchedr);
+    case kLoanAgreementScheduleTypeLinear:        BuildLinearSchedule(LoanAgreementr,LoanAgreementSchedr);
+    case kLoanAgreementScheduleTypeLinearEqual:   BuildLinearEqualSchedule(LoanAgreementr,LoanAgreementSchedr);
+    case kLoanAgreementScheduleTypeBullet:        BuildBulletSchedule(LoanAgreementr,LoanAgreementSchedr);
+  end;
+LBuildLoanAgreementSchedule:;
+  return;
+end;
+
+global
+updating procedure GenerateLoanAgreementSchedule(record LoanAgreementVc LoanAgreementr)
+begin
+  record LoanAgreementSchedVc LoanAgreementSchedr,LoanAgreementSched2r;
+
+  LoanAgreementSched2r.LoanAgreementNr = LoanAgreementr.SerNr;
+  if (ReadFirstMain(LoanAgreementSched2r,1,true)) then begin
+    goto LGenerateLoanAgreementSchedule;
+  end;
+
+  BuildLoanAgreementSchedule(LoanAgreementr,LoanAgreementSchedr);
+  LoanAgreementSchedr.LoanAgreementNr = LoanAgreementr.SerNr;
+  LoanAgreementSchedr.CustCode = LoanAgreementr.CustCode;
+  LoanAgreementSchedVc_PasteCustCode(LoanAgreementSchedr);
+  LoanAgreementSchedr.TransDate = CurrentDate;
+  LoanAgreementSchedr.TransTime = CurrentTime;
+  RecordStore(LoanAgreementSchedr,false);
+LGenerateLoanAgreementSchedule:;
+  return;
+end;

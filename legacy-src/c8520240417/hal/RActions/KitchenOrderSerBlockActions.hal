@@ -1,0 +1,45 @@
+external function Integer SerBlockCheckOverlap(LongInt,LongInt,LongInt,LongInt);
+
+global
+updating function LongInt KitchenOrderSerBlockCheck(var record KitchenOrderSerBlock KitchenOrderSerr,record KitchenOrderSerBlock KitchenOrderSer2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  Integer j,i,rwcnt,pmrwcnt;
+  row KitchenOrderSerBlock KitchenOrderSerrw;
+  row KitchenOrderSerBlock KitchenOrderSer2rw;
+  
+  res = 0;
+  rwcnt = MatRowCnt(KitchenOrderSerr);
+  for (i=0; i<rwcnt;i=i+1) begin
+    MatRowGet(KitchenOrderSerr,i,KitchenOrderSerrw);
+    if (KitchenOrderSerrw.TSerStart<=0) then begin
+      RecordCheckError(2210,"",i,"TSerStart");   
+      res = -1;
+      goto LKitchenOrderSerBlockCheck;        
+    end;
+    if (KitchenOrderSerrw.TSerEnd<=0) then begin
+      RecordCheckError(2210,"",i,"TSerEnd");   
+      res = -1;
+      goto LKitchenOrderSerBlockCheck;        
+    end;
+    if ((nonblankdate(KitchenOrderSerrw.StartDate)) and (nonblankdate(KitchenOrderSerrw.EndDate))) then begin
+      if (KitchenOrderSerrw.StartDate>KitchenOrderSerrw.EndDate) then begin
+        RecordCheckError(20851,"",i,"EndDate");   
+        res = -1;
+        goto LKitchenOrderSerBlockCheck;        
+      end;
+    end;
+    for (j=0;j<i;j=j+1) begin
+      MatRowGet(KitchenOrderSerr,j,KitchenOrderSer2rw);
+      res = SerBlockCheckOverlap(KitchenOrderSerrw.TSerStart,KitchenOrderSerrw.TSerEnd,KitchenOrderSer2rw.TSerStart,KitchenOrderSer2rw.TSerEnd);      
+      if (res!=0) then begin
+        RecordCheckError(res,"",i,"TSerStart");   
+        res = -1;
+        goto LKitchenOrderSerBlockCheck;        
+      end;
+    end;        
+  end;  
+LKitchenOrderSerBlockCheck:;  
+  KitchenOrderSerBlockCheck = res;
+  return;
+end;

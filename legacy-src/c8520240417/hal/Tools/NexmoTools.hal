@@ -1,0 +1,157 @@
+external function Boolean ParseHTTPHeader2(area,string,var Integer,var string,var string,var area,var area);
+
+global
+updating procedure UpdateNexmoCredentials(string key,string secret)
+begin
+  record NexmoCredBlock NCb;
+
+  BlockLoad(NCb);
+  NCb.Key = key;
+  NCb.Secret = secret;
+  BlockStore(NCb);
+end;
+
+global
+function Boolean NexmoSendRequest(string api_key,string api_secret,string method,string inpath,string params,area a_req,
+                                  Boolean logareas/*,Integer expectedstatus*/,string funcname/*,var Integer httpstatus*/,
+                                  var string error_code,var string error_str,var json js)
+begin
+  Boolean res;
+  string 255 path,server,comment,result,tstr;
+  area a_request/*,a_reply,a_headers*/,a_message,a_tmp;
+
+  //AddTextToArea(chr(13) & chr(10) & chr(13) & chr(10),a_tmp);
+  //InsertAreaBeforeArea(a_tmp,a_req);
+
+  server = "rest.nexmo.com";
+  path = inpath & "?api_key=" & api_key;
+  path = path & "&api_secret=" & api_secret;
+  if (nonblank(params)) then begin
+    path = path & "&" & params;
+  end;
+
+  res = SendWebRequest(server,443,-1,true,method,path,"application/json","",false,a_request,a_message,60);
+  //res = SendRawWebRequest(server,443,true,method,path,"application/json","",true,a_request,a_reply,60);
+  //ParseHTTPHeader2(a_reply,"",httpstatus,comment,result,a_headers,a_message);
+  if (logareas/* and (httpstatus!=expectedstatus)*/) then begin
+    LogText(0,"Error: nexmo-" & funcname & " reqest failed (" & /*httpstatus & " - " & StringFromSet(458,httpstatus) &*/ "): " & path);
+    WriteAreaToFile(a_request,"nexmo-" & funcname & "-request.txt",0);
+    //WriteAreaToFile(a_headers,"nexmo-" & funcname & "-headers.txt",0);
+    WriteAreaToFile(a_message,"nexmo-" & funcname & "-message.json",0);
+  end;
+  tstr = GetStringFromArea(a_message,0,1);
+  if ((tstr=="{") or (tstr=="[")) then begin
+    js = ParseJSONArea(a_message);
+    error_str = JSONGet(js,"error-code-label");
+    error_code = JSONGet(js,"error-code");
+  end;
+
+  if (res and blank(error_str)) then begin
+    queued.UpdateNexmoCredentials(api_key,api_secret);
+  end;
+
+  NexmoSendRequest = res;
+  return;
+end;
+
+global
+procedure LoadNexmoPhoneNumbers(record RcVc RepSpec,var array string numbersarr)
+begin
+  string 255 path,params,error_str,error_code,number,cost,type,errmsg,searchstr;
+  Boolean res;
+  area a_req;
+  Integer /*httpstatus,*/i;
+  json js;
+
+  path = "/number/search";
+  searchstr = RepSpec.f7;
+  
+  params = "country=" & StringSetFromString(627,StringFromSet(534,RepSpec.flags[0]));
+  params = params & "&size=100";
+  params = params & "&features=VOICE";
+  if (nonblank(searchstr)) then begin
+    searchstr = StripNonDigits(searchstr);
+    params = params & "&pattern=" & searchstr;
+  end;
+
+  res = NexmoSendRequest(RepSpec.f5,RepSpec.f6,"GET",path,params,a_req,false/*,kHttpStatusOK*/,"searchnumbers"/*,httpstatus*/,error_code,error_str,js);
+  if (/*httpstatus!=kHttpStatusOK or */nonblank(error_str)) then begin
+    errmsg = "Vonage API failed to give available phone numbers ";
+    errmsg = errmsg & " (" & error_str & " [" & error_code & "])";
+    LogText(0,"Error: " & errmsg);
+    res = false;
+    goto LLoadNexmoPhoneNumbers;
+  end;
+
+  i = 0;
+  number = JSONGet(js,"numbers/[" & i & "]/msisdn");
+  cost = JSONGet(js,"numbers/[" & i & "]/cost");
+  type = JSONGet(js,"numbers/[" & i & "]/type");
+  while (nonblank(number)) begin
+    numbersarr[numbersarr.length] = number & ";" & cost & ";" & type;
+    i = i + 1;
+    number = JSONGet(js,"numbers/[" & i & "]/msisdn");
+    cost = JSONGet(js,"numbers/[" & i & "]/cost");
+    type = JSONGet(js,"numbers/[" & i & "]/type");
+  end;
+
+LLoadNexmoPhoneNumbers:;
+end;
+
+global
+procedure DoOrderNexmoPhoneNumberWClassOrder(string api_key,string api_secret,string number,Integer country,var string msg)
+begin
+  string 255 path,params,error_str,error_code,errmsg,ipaddr;
+  Boolean res;
+  area a_req;
+  Integer /*httpstatus,*/i;
+  json js;
+  LongInt line;
+  record PBXConnectionVc PBXCr;
+
+  path = "/number/buy";
+
+  params = "country=" & StringSetFromString(627,StringFromSet(534,country));
+  params = params & "&msisdn=" & number;
+
+  res = NexmoSendRequest(api_key,api_secret,"POST",path,params,a_req,false/*,kHttpStatusOK*/,"numberbuy"/*,httpstatus*/,error_code,error_str,js);
+  if (/*httpstatus!=kHttpStatusOK or */nonblank(error_str)) then begin
+    if (error_code!="200") then begin
+      msg = "Vonage API failed to order the number ";
+      msg = msg & " (" & error_str & " [" & error_code & "])";
+      LogText(0,"Error: " & msg);
+      msg = error_str;
+      goto LDoOrderNexmoPhoneNumberWClassOrder;
+    end;
+  end;
+
+  path = "/number/update";
+
+  PBXCr.Code = "REMOTE";
+  if (ReadFirstMain(PBXCr,1,true)) then begin
+    if (PBXCr.Closed==0) then begin
+      ipaddr = PBXCr.PBXHost;
+    end;
+  end;
+  if (blank(ipaddr)) then begin
+    ipaddr = PublicHostName;
+  end;
+  params = "country=" & StringSetFromString(627,StringFromSet(534,country));
+  params = params & "&msisdn=" & number;
+  params = params & "&voiceCallbackType=sip";
+  params = params & "&voiceCallbackValue=" & number & "@" & ipaddr;
+
+  res = NexmoSendRequest(api_key,api_secret,"POST",path,params,a_req,false/*,kHttpStatusOK*/,"numberupdate"/*,httpstatus*/,error_code,error_str,js);
+  if (/*httpstatus!=kHttpStatusOK or */nonblank(error_str)) then begin
+    if (error_code!="200") then begin
+      msg = "Vonage API failed to configure the number for SIP ";
+      msg = msg & " (" & error_str & " [" & error_code & "])";
+      LogText(0,"Error: " & msg);
+      msg = error_str;
+      goto LDoOrderNexmoPhoneNumberWClassOrder;
+    end;
+  end;
+LDoOrderNexmoPhoneNumberWClassOrder:;
+  return;
+end;
+

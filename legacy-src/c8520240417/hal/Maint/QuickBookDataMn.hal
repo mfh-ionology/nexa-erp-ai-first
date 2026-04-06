@@ -1,0 +1,93 @@
+
+updating procedure ImportQuickBookData(string folder,string filename)
+begin
+  string 255 instr,tstr,c;
+  LongInt i;  
+  Integer fieldcnt,line;
+  Boolean importf;
+  record CUVc CUr;
+  
+  OpenFile(folder & filename);
+
+  instr = ImportField;
+  
+  for (i=0;i<len(instr);i=i+1) begin
+    c = Mid(instr,i,1);
+    if (c==",") then begin
+      fieldcnt = fieldcnt + 1;
+    end;
+  end;
+  
+  NextImportLine(true);
+  NextImportLine(true);
+  NextImportLine(true);
+  NextImportLine(true);
+  NextImportLine(true);
+  
+  importf = true;
+  while (importf) begin
+    for (i=0;i<=fieldcnt;i=i+1) begin
+      tstr = ImportCSVField(",");
+      if (nonblank(tstr)) then begin
+        switch (i) begin
+          case 1: CUr.Code = tstr;
+          case 2: CUr.Phone = tstr;
+//          case 3: CUr.Email = tstr;
+          case 4: CUr.Name = tstr;
+//          case 5: CUr.InvAddr0 = tstr;
+//          case 6: CUr.DelAddr0 = tstr;
+        end;
+      end;
+    end;
+    importf = NextImportLine(true);
+    line = line + 1;;
+  end;
+
+  CloseFile;
+  return;
+end;
+
+global
+updating procedure QuickBookDataMn(record RcVc RepSpec)
+begin
+  Integer filecnt,i;
+  string 255 script,filename,resfilename,tstr;
+  LongInt pos;
+  
+
+  filecnt = CountFilesInDir(RepSpec.f1);
+LogText(0," filecnt " & filecnt);  
+  for (i=0;i<filecnt;i=i+1) begin
+    filename = "./" & RepSpec.f1 & "/" & GetFileNameInDir(RepSpec.f1,i);
+    if (Right(filename,3)=="xls" or Right(filename,4)=="xlsx") then begin
+      pos = 0;
+      GetNextSubstring(filename,pos,".",tstr);
+      GetNextSubstring(filename,pos,".",resfilename);
+      resfilename = "." & resfilename & ".csv";
+      
+      script = "";
+//      script = "bash -c '( ";
+      script = script & "ssconvert " & filename & " " & resfilename;
+//      script = script & " )' ";  
+
+LogText(0," script=" & script);  
+
+      RunShellScript(script);    
+//      MilliSleep(3000);
+    end;
+  end;
+
+  filecnt = CountFilesInDir(RepSpec.f1);
+  for (i=0;i<filecnt;i=i+1) begin
+    if (Right(filename,3)=="csv") then begin
+      ImportQuickBookData(RepSpec.f1,filename);
+    end;
+  end;
+  
+/*
+  while (testf) begin  
+    filename = FileNameFromFolder(RepSpec.f1,"csv");
+  end;
+*/  
+  return;
+end;

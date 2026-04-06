@@ -1,0 +1,337 @@
+remote procedure IVCashVc_StoreEInvoice(record IVCashVc,record IVCashVc,LongInt);
+remote procedure IVCashVcRecordDefaultsClientRemote(var record IVCashVc,record LocalMachineBlock);
+external procedure ResetDisplayDsm();
+external procedure SetPOSWindowDisplayChange(val);
+external procedure SetPOSWindowDisplayAmount(string,val);
+external function Boolean NPTSIVCashDClassOnOpenWindowExecute(Integer);
+external function Boolean FindLocalSerialPortDevice(Integer,LongInt,string,var record LSerialPortDeviceVc);
+external function Integer TestCleanCashIdentity(Boolean,record LSerialPortDeviceVc,string,var string);
+external updating function Integer IVCashVc_SendToSerialPortDevices2(Integer,LongInt,record IVCashVc,record IVCashVc);
+remote updating procedure RecordActionIVCash_Print2(var record IVCashVc,string,string,Boolean);
+external procedure RemoveOldCustObjects(string,var string);
+remote updating procedure IVCashVc_Invalidate(var record IVCashVc);
+remote procedure WKFServerLog(string);
+
+updating procedure SaveOffLineLastIVCashNr(LongInt sernr)
+begin
+  record OffLineSetBlock OffLineSetRec;
+  record LocalOffLineNrBlock LastRecNr;
+  Integer offlinecomp;
+  
+  BlockLoad(OffLineSetRec);
+  offlinecomp = StringToInt(OffLineSetRec.OffLineComp);
+  if (offlinecomp>0) or (ServingClient==false) then begin
+    BlockLoad(LastRecNr);    
+    LastRecNr.LastIVCashNr = sernr;
+    BlockStore(LastRecNr);  
+  end;
+  return;
+end;
+
+global
+procedure OpenQRCodeWindow(Integer wn,record IVCashVc IVCashp)
+begin
+  record WKFBlock WKFb;
+  record RcVc RepSpec;
+  string 255 qrwnclass;
+  Integer nwn;
+
+  BlockLoad(WKFb);
+  
+  /*
+  StopAlert("OpenQRCodeWindow wn " & wn &
+                        " enable " & WKFb.Enable &
+                        " qr len " & len(IVCashp.QRCodeURL) &
+                   " esc/pos len " & len(GetWindowString(wn,"wkf_escpos_command")) &
+                    " print type " & WKFb.ReceiptPrint);
+  */
+  
+  if (WKFb.Enable and nonblank(IVCashp.QRCodeURL)) then begin
+    switch (WKFb.ReceiptPrint) begin
+      case 0: qrwnclass = "NPTSReceiptQRCodeWClass";
+      case 1: qrwnclass = "NPTSReceiptQRCodeWClass";
+    end;
+    RepSpec.f1 = IVCashp.QRCodeURL;
+    RepSpec.f2 = GetWindowString(wn,"wkf_escpos_command");
+    if (nonblank(RepSpec.f1)) then begin
+      nwn = OpenWindow(qrwnclass,0,wn,"","",RepSpec);
+      WKFServerLog("WKF QR Code window opened");
+    end;
+  end;
+  return;
+end;
+
+/*
+This is Dollarstores Defaults, which I belive is better (once translated).
+global
+function LongInt IVCashVcRecordDefaultsClient(LongInt wn,var record IVCashVc IVCashr,record IVCashVc IVCash2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  record UserVc Userr;
+
+  SetupIVCashRecord(IVCashr);
+  if (blank(IVCashr.Location)) then begin
+    MessageBox(0,"Lagerstﾊlle saknas, kontrollera instﾊllningen Lokal Maskin!");
+  end else begin
+    Userr.Code = CurrentUser;
+    if (ReadFirstMain(Userr,1,true)) then begin end;
+    if (Userr.Location!=IVCashr.Location) then begin
+      MessageBox(0,"Denna anvﾊndaren ﾊr instﾊlld pﾌ ett annat lagerstﾊlle ﾊn denna kassa, kontrollera instﾊllningarna!");
+      res = -1;
+    end else begin
+      if (IVCashr.InclVAT!=1) then begin
+        MessageBox(0,"Defaultkunden mﾌste vara instﾊlld med en prislista inklusive moms. ﾀndra instﾊllningar!");
+        res = -1;    
+      end;
+    end;
+  end;
+  
+  IVCashVcRecordDefaultsClient = res;
+  RETURN;
+END;
+*/
+
+global
+function LongInt IVCashVcRecordDefaultsClient(LongInt wn,var record IVCashVc IVCashr,record IVCashVc IVCash2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  record LocalMachineBlock LMb;
+
+  BlockLoad(LMb);
+
+  IVCashVcRecordDefaultsClientRemote(IVCashr,LMb);
+  switch (GetWindowClass(wn)) begin
+    case "NPTSIVCashDClass":
+      NPTSIVCashDClassOnOpenWindowExecute(wn);
+      ResetDisplayDsm;
+//      ReRunWindowDef(wn);//in NPTSIVCashDClassOnOpenWindowExecute
+  end;
+  IVCashVcRecordDefaultsClient = res;
+  return;
+end;
+
+global
+function LongInt IVCashVcRecordDuplicateClient(LongInt wn,var record IVCashVc IVCashr,record IVCashVc IVCash2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  record LocalMachineBlock LMb;
+
+  BlockLoad(LMb);
+  IVCashVcRecordDefaultsClientRemote(IVCashr,LMb);
+  IVCashVcRecordDuplicateClient = res;
+  return;
+end;
+
+global
+updating function LongInt IVCashVcRecordUpdateClient(LongInt wn,var record IVCashVc IVCashp,record IVCashVc IVCash2p,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  record AutoActionBlock AutoActionRec;
+  record CashierDefBlock CDb;
+  record LocalMachineBlock LMb;
+  Integer oldprogmode;
+  string 255 docname;
+  Integer receiptres,noErr;
+
+  noErr = 0;
+  BlockLoad(CDb);
+
+  if ((IVCash2p.OKFlag==0) and (IVCashp.OKFlag==1)) then begin
+    BlockLoad(AutoActionRec);
+    if (AutoActionRec.CashInvoicePrinting!=0) then begin
+      if (CDb.CashSalesToFiscalControlUnit==0) then begin
+        switch (IVCashp.InvType) begin
+          case kPOSInvoiceTypeCredit: docname = "InvCashRetForm";
+          otherwise docname = "InvCashForm";
+        end;
+        RecordActionIVCash_Print2(IVCashp,docname,"",false);
+        // if (HasLocalization("POL")) then begin
+        //   OpenQRCodeWindow(wn,IVCashp);
+        // end;
+      end;
+    end;
+    /*
+    if (ProgramType==typOffLine)then begin
+      wn = FindWindow("IVCashDClass");
+      RecordNew(IVCashr);
+      nwn = OpenWindow("IVCashDClass",1,0,"","",IVCashr);
+      CloseWindow(wn);
+it should close the window but if it does there is a crash on PC
+if we don't close the window soon we will have more then 100 windows open
+    end;
+*/
+  end;
+  BlockLoad(LMb);
+  LMb.Bagger = IVCashp.Bagger;
+  BlockStore(LMb);
+  receiptres = IVCashVc_SendToSerialPortDevices2(kSerialPortDeviceClassFiscalPrinter,stat,IVCashp,IVCash2p);
+  if (receiptres<>noErr and CDb.InvalIVCashOnPrtErr<>0) then begin
+    if ((IVCash2p.OKFlag==0) and (IVCashp.OKFlag==1)) then begin
+      IVCashVc_Invalidate(IVCashp);
+      PutWindowRecord(wn,IVCashp);
+      goto LIVCashVcRecordUpdateClient80;
+    end;
+  end;
+  receiptres = IVCashVc_SendToSerialPortDevices2(kSerialPortDeviceClassFiscalControlUnit,stat,IVCashp,IVCash2p);
+  if (receiptres<>noErr and CDb.InvalIVCashOnPrtErr<>0) then begin
+    if ((IVCash2p.OKFlag==0) and (IVCashp.OKFlag==1)) then begin
+      IVCashVc_Invalidate(IVCashp);
+      PutWindowRecord(wn,IVCashp);
+      goto LIVCashVcRecordUpdateClient80;
+    end;
+  end;
+LIVCashVcRecordUpdateClient80:;
+  ResetDisplayDsm;
+  if (HasLocalization("MEX")) then begin
+    oldprogmode = SetCompanyProgramMode(kProgramModeClient);
+    IVCashVc_StoreEInvoice(IVCashp,IVCash2p,stat);
+    ResetCompanyProgramMode(oldprogmode);
+  end;
+  res = 1;
+  ReRunWindowDef(wn);
+  IVCashVcRecordUpdateClient = res;
+  return;
+end;
+
+global
+updating function LongInt IVCashVcRecordSaveClient(LongInt wn,var record IVCashVc IVCashp,record IVCashVc IVCash2p,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  record IVCashVc IVCashr;
+  record AutoActionBlock AutoActionRec;
+//  record LocalMachineBlock LocalMachineRec;
+  record CashierDefBlock CDb;
+  record LocalMachineBlock LMb;
+  Integer oldprogmode,receiptres,noErr;
+  string 255 docname;
+
+  noErr = 0;
+  BlockLoad(CDb);
+
+  if (IVCashp.OKFlag!=0) then begin
+    BlockLoad(AutoActionRec);
+    if (AutoActionRec.CashInvoicePrinting!=0) then begin
+      if (CDb.CashSalesToFiscalControlUnit==0) then begin
+        switch (IVCashp.InvType) begin
+          case kPOSInvoiceTypeCredit: docname = "InvCashRetForm";
+          otherwise docname = "InvCashForm";
+        end;
+        RecordActionIVCash_Print2(IVCashp,docname,"",false);
+        // if (HasLocalization("POL")) then begin
+        //   OpenQRCodeWindow(wn,IVCashp);
+        // end;
+      end;
+    end;
+  end;
+//  BlockLoad(LocalMachineRec); //done on default and duplicate
+//  IVCashp.LocalMachineCode = LocalMachineRec.LocalMachineCode;
+  SaveOffLineLastIVCashNr(IVCashp.SerNr);//on save only
+  BlockLoad(LMb);
+  LMb.Bagger = IVCashp.Bagger;
+  BlockStore(LMb);
+  receiptres = IVCashVc_SendToSerialPortDevices2(kSerialPortDeviceClassFiscalPrinter,Rs_insert,IVCashp,IVCash2p);
+  if (receiptres<>noErr and CDb.InvalIVCashOnPrtErr<>0) then begin
+    if (IVCashp.OKFlag==1) then begin
+      IVCashVc_Invalidate(IVCashp);
+      PutWindowRecord(wn,IVCashp);
+      goto LIVCashVcRecordSaveClient80;
+    end;
+  end;
+  receiptres = IVCashVc_SendToSerialPortDevices2(kSerialPortDeviceClassFiscalControlUnit,Rs_insert,IVCashp,IVCash2p);
+  if (receiptres<>noErr and CDb.InvalIVCashOnPrtErr<>0) then begin
+    if (IVCashp.OKFlag==1) then begin
+      IVCashVc_Invalidate(IVCashp);
+      PutWindowRecord(wn,IVCashp);
+      goto LIVCashVcRecordSaveClient80;
+    end;
+  end;
+LIVCashVcRecordSaveClient80:;
+  SetPOSWindowDisplayChange(IVCashp.RetValue);
+  if (HasLocalization("MEX")) then begin
+    oldprogmode = SetCompanyProgramMode(kProgramModeClient);
+    IVCashVc_StoreEInvoice(IVCashp,IVCash2p,stat);
+    ResetCompanyProgramMode(oldprogmode);
+  end;
+  res = 1;
+  IVCashVcRecordSaveClient = res;
+  return;
+end;
+
+global
+function LongInt IVCashVcRecordCheckClient(Longint wn,record IVCashVc IVCashr,record IVCashVc IVCash2r,LongInt stat,LongInt errorcheck)
+begin
+  LongInt res;
+  Boolean checkf,testf,testfcleancashf;
+  record IVCashVc credIVr;
+  record LocalMachineBlock LMb;
+  record LSerialPortDeviceVc LSPDr;
+  string 255 errstr;
+  Integer err;
+  record CashierDefBlock CDb;
+  
+//no client-server calls pls
+  res = 0;
+  checkf = errorcheck>0;
+  BlockLoad(LMb); 
+  BlockLoad(CDb); 
+  if (HasLocalization("SWE")) then begin
+    if (FindLocalSerialPortDevice(kSerialPortDeviceClassFiscalControlUnit,kSerialPortDeviceModelFiscPrinterCLEANCASHTypeA,LMb.LocalMachineCode,LSPDr)) then begin  
+      testfcleancashf = false;
+      switch (stat) begin
+        case Rs_normal:
+          testf = true;
+          if (testf) then begin
+            testfcleancashf = true;
+          end;
+        case Rs_insert:
+          testf = true;
+          if (testf) then begin
+            testfcleancashf = true;
+          end;
+        case Rs_update:
+          testf = true;
+          if ((IVCash2r.Invalid!=0) or (IVCashr.Invalid!=0)) then begin
+            testf = false;
+          end;          
+          if (testf) then begin
+            testfcleancashf = true;
+          end;
+      end;
+      if (testfcleancashf) then begin
+        if (blank(LMb.LocalMachineCode)) then begin
+          RecordCheckError(1770,"",-1,"SerNr");      
+          res = -1;
+          goto LIVCashVcRecordCheckClient;        
+        end;
+        err = TestCleanCashIdentity(true,LSPDr,LMb.TerminalID,errstr);
+        if (err!=0) then begin
+          RecordCheckError(err,": " & errstr,-1,"SerNr");      
+          res = -1;
+          goto LIVCashVcRecordCheckClient;        
+        end;
+      end;
+    end else begin
+      if (CDb.CashSalesToFiscalControlUnit!=0) then begin
+        if (FindLocalSerialPortDevice(kSerialPortDeviceClassFiscalControlUnit,kSerialPortDeviceModelFiscPrinterCLEANCASHTypeC,LMb.LocalMachineCode,LSPDr)==false) then begin
+          RecordCheckError(22123,"",-1,"SerNr");      
+          res = -1;
+          goto LIVCashVcRecordCheckClient;        
+        end;
+      end;
+    end;
+  end;
+LIVCashVcRecordCheckClient:;  
+  IVCashVcRecordCheckClient = res;
+  return;
+end;
+
+global
+function LongInt IVCashVcRecordProtectFields(var record IVCashVc IVCashr,record IVCashVc IVCash2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  
+  IVCash2r.Prntdf = IVCashr.Prntdf;
+  //IVCash2r.TaxAdminServSeal = IVCashr.TaxAdminServSeal;//why did we need this?? this broke fiscalization procedure cause WindowDoOK didn't see this field
+  IVCashVcRecordProtectFields = res;
+  RETURN;
+END;

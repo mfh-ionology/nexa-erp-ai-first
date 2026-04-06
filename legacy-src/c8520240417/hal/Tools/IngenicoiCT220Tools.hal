@@ -1,0 +1,542 @@
+external updating procedure IVCashDClassTouchScreenFinishButton();
+external function val ValFromString(string,string,string);
+external procedure M4PadString(string,Integer,string,Boolean,var string);
+external function val AbsoluteVal(val);
+remote updating procedure StoreCredCardSlip_VerifoneBanksys3(string,val,string,string,string,string,string,string,string,LongInt,string,Integer,string,var record NotepadVc,var record NotepadVc);
+remote updating procedure StoreCredCardSlip_EFTPOS(integer,val,string,string,string,LongInt,integer,string,Integer,area,area,boolean);
+remote procedure IVCashSumup(var record IVCashVc,Boolean);
+external procedure IVCashDClass_RefreshStringList(Integer,record IVCashVc);
+external function Date DateFromString(string,string);
+external procedure LogAreaToFile(string,Area);
+external function Boolean FindLocalSerialPortDevice(Integer,LongInt,string,var record LSerialPortDeviceVc);
+external function string 255 StripCharacter(string,string);
+remote function Integer IVCashPOSButtonAutoFinish(Integer);
+
+procedure LogRequest(string text)
+begin
+  record RahaxiBlock Rahb;
+  
+  BlockLoad(Rahb);
+  if (Rahb.LogComm!=0) then begin
+    LogText(0,text);
+  end;
+  return;
+end;
+
+procedure LogReply(string text)
+begin
+  record RahaxiBlock Rahb;
+  
+  BlockLoad(Rahb);
+  if (Rahb.LogComm!=0) then begin
+    LogText(0,text);
+  end;
+  return;
+end;
+
+global
+function LongInt TCPIPIngenicoiCT220MessageSize(var area reply)
+begin
+  LongInt i,res,pos_etx,pos_eot,pos_ack,pos_nak,pos_soh,pos_stx;
+  string 255 response;
+
+  response = AreaToString(reply);
+
+  pos_ack = FindStringInArea(chr(CC_ACK),reply);
+  pos_nak = FindStringInArea(chr(CC_NAK),reply);
+  pos_etx = FindStringInArea(chr(CC_ETX),reply);
+  pos_eot = FindStringInArea(chr(CC_EOT),reply);
+
+  if (pos_ack>=0) then begin
+    res = pos_ack + 1;
+    goto LTCPIPIngenicoiCT220MessageSize;
+  end;
+  if (pos_nak>=0) then begin
+    res = pos_nak + 1;
+    goto LTCPIPIngenicoiCT220MessageSize;
+  end;
+  if (pos_eot>=0) then begin
+    res = pos_eot + 1;
+    goto LTCPIPIngenicoiCT220MessageSize;
+  end;
+  if (pos_etx>=0) then begin
+    res = pos_etx + 2;
+    goto LTCPIPIngenicoiCT220MessageSize;
+  end;
+LTCPIPIngenicoiCT220MessageSize:;
+//  LogText(0,"TCPIPIngenicoiCT220MessageSize response=" & response);
+//  LogText(0,"TCPIPIngenicoiCT220MessageSize msgsize=" & res & " ack " & pos_ack  & " nak " & pos_nak  & " etx " & pos_etx  & " eot " & pos_eot);
+  TCPIPIngenicoiCT220MessageSize = res;
+  return;
+end;
+
+function string 255 TCPIP_Ingenico1CT220_CalculateLRC(string CtrlSeq)
+begin
+  string 255 res;
+  Integer i,crc;
+  
+  for (i=0;i<len(CtrlSeq);i=i+1) begin
+    crc = BitXor(crc,asc(Mid(CtrlSeq,i,1)));
+  end;
+
+  res = res & chr(crc);
+  TCPIP_Ingenico1CT220_CalculateLRC = res;
+  return;
+end;
+
+procedure TCPIPIngenicoiCT220_DisplayStatus(Integer ProcessingWn,string txt,Integer sid)
+begin
+  record RcVc RepSpec;
+
+  if (ProcessingWn>0) then begin
+    GetWindowRecord(ProcessingWn,RepSpec);
+    if (nonblank(txt)) then begin
+      PutWindowString(ProcessingWn,"Status",txt);        
+    end else begin
+      PutWindowString(ProcessingWn,"Status",USetStr(sid));        
+    end;
+//      PutWindowString(ProcessingWn,"Result",txt);        
+    PutWindowRecord(ProcessingWn,RepSpec);
+  end;
+  return;
+end;
+
+updating procedure AddPaymentRow(Integer ProcessingWn,val v,string paymode,string label,date trdate,string trtime,string trid,string trauth,string trctype,area mreceiptdata,area creceiptdata)
+begin
+  Integer mwn,pwn,rownr;
+  record IVCashVc IVCr;
+  row IVCashVc IVCrw;
+  Date td;
+  record NotepadVc merchantNoter,customerNoter;
+  Integer cardtype;
+  
+  pwn = MotherWindow(ProcessingWn);
+  switch (GetWindowFileName(pwn)) begin
+    case "RcVc":
+      mwn = MotherWindow(pwn);
+    case "IVCashVc":
+      mwn = pwn;
+      pwn = ProcessingWn;
+  end;
+  switch (GetWindowFileName(mwn)) begin
+    case "IVCashVc":
+      GetWindowRecord(mwn,IVCr);
+      ClearRow(IVCr,IVCrw,kInvoiceRowTypeCreditCardPayment);  
+      IVCrw.Sum = v;
+      IVCrw.AuthorizationCode = trauth;
+      IVCrw.PayMode = paymode;
+      IVCrw.Spec = label;
+      IVCrw.CCTimestamp = DateToString(trdate,"YYYYMMDD") & trtime;
+      IVCrw.CCTransID = trid;
+//      IVCrw.CCReceiptNr = vreplyfields["36"];
+      rownr = MatRowCnt(IVCr);
+      MatRowPut(IVCr,rownr,IVCrw);
+      IVCashSumup(IVCr,true);
+      PutWindowRecord(mwn,IVCr);
+      IVCashDClass_RefreshStringList(mwn,IVCr);
+      if (WindowDoOK(mwn,0)) then begin
+        TCPIPIngenicoiCT220_DisplayStatus(ProcessingWn,"",27384);
+
+        cardtype = SetFromString(37,StripCharacter(trctype," "));
+
+/*
+        if (GetAreaLength(mreceiptdata)>0) then begin
+          AddAreaToTextField(mreceiptdata,merchantNoter);
+          AddAreaToTextField(creceiptdata,customerNoter);
+          if (v>0) then begin
+//            StoreCredCardSlip_VerifoneBanksys3("?",IVCrw.Sum,IVCrw.CCTransID,"",IVCrw.AuthorizationCode,IVCrw.CCTimestamp,"","","",IVCr.SerNr,"IVCashVc",0,IVCr.LocalMachineCode,merchantNoter,customerNoter)
+          end else begin
+//            StoreCredCardSlip_VerifoneBanksys3("?",IVCrw.Sum,IVCrw.CCTransID,"",IVCrw.AuthorizationCode,IVCrw.CCTimestamp,"","","",IVCr.SerNr,"IVCashVc",3,IVCr.LocalMachineCode,merchantNoter,customerNoter)
+          end;
+        end;
+*/
+
+    LogAreaToFile("wsreplies/mreceiptdataP2.txt",mreceiptdata);
+
+        if (v>0) then begin
+          StoreCredCardSlip_EFTPOS(cardtype,v,"",trauth,trid,IVCr.SerNr,rownr,"IVCashVc",0,mreceiptdata,creceiptdata,false);
+        end else begin
+          StoreCredCardSlip_EFTPOS(cardtype,v,"",trauth,trid,IVCr.SerNr,rownr,"IVCashVc",3,mreceiptdata,creceiptdata,false);
+        end;
+        if (IVCr.RetValue>=0) then begin
+          if (IVCashPOSButtonAutoFinish(mwn)==kPOSButtonAutoFinishYes) then begin
+            IVCashDClassTouchScreenFinishButton;
+          end;
+          CloseWindow(pwn);
+        end;        
+      end;
+  end;
+  return;
+end;
+
+updating procedure TCPIPIngenicoiCT220TransactionDeclined(Integer ProcessingWn,val v,string paymode,string label,string receipt,vector string vreplyfields, Integer DisplayStat)
+begin
+  record IVCashVc IVCr;
+  row IVCashVc IVCrw;
+  Date td;
+  record NotepadVc merchantNoter,customerNoter;
+  area a;
+
+  td = DateFromString(vreplyfields["8"],"DDMMYYYY");
+  IVCrw.CCTimestamp = DateToString(td,"YYYYMMDD") & vreplyfields["9"];
+  if (len(receipt)>0) then begin
+    AddTextToArea(receipt,a);
+//?    StoreCredCardSlip_VerifoneBanksys3("V",v,vreplyfields["28"],vreplyfields["36"],vreplyfields["4"],IVCrw.CCTimestamp,"","","",IVCr.SerNr,"IVCashVc",0,IVCr.LocalMachineCode,merchantNoter,customerNoter);
+  end;
+  TCPIPIngenicoiCT220_DisplayStatus(ProcessingWn,"",DisplayStat);
+  return;
+end;
+
+procedure AddReceiptLine(string title,string txt,Integer aligment,var area receiptdata)
+begin
+  string 255 tstr,tstr2;
+  Integer a;
+
+  switch (aligment) begin
+    case 0://left
+      M4PadString(txt,48," ",false,tstr);
+    case 1://middle
+      a = (48-len(txt))/2;
+      M4PadString("",a," ",true,tstr2);
+      tstr = tstr2 & txt;
+      M4PadString("",a," ",false,tstr2);
+      tstr = tstr & tstr2;
+    case 2://Right
+      tstr = title;
+      M4PadString("",(48-len(txt)-len(tstr))," ",true,tstr2);
+      tstr = tstr & tstr2;
+      tstr = tstr & txt;
+  end;
+  AddTextToArea(tstr,receiptdata);
+  AddTextToArea(chr(13) & chr(10),receiptdata);
+  return;
+end;
+
+function Boolean ParseTransactionAnswer(string responsecontent,var Integer trflag,var string auth,var val amount,var Date trdate,var string trtime,var string dsplmsg,var Boolean signature,var string trctype,var area mreceiptdata,var area creceiptdata)
+begin
+  Boolean morereplies;
+  LongInt pos,epos,epos2;
+  Integer a,i;
+  string 255 type,times,number,batchnr,exponent,crncy,tids,mids,emvs,ccnumber,resp,ccname;
+  string 255 aid,apn,tvr,tsi,cvmr,arqc,arqc2;
+  string 255 c,tstr;
+  record CYBlock CYb;
+  time tt;
+  
+  BlockLoad(CYb);
+
+  pos = 0;
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+  type = Mid(tstr,10,2);
+  trflag = StringToInt(Mid(tstr,12,2));
+  number = Mid(tstr,14,6);
+  batchnr = Mid(tstr,20,4);
+  trdate = DateFromString(Mid(tstr,24,6),"DDMMYY");
+  times = Mid(tstr,30,6);
+  trtime = times;
+  tt.hour = StringToInt(Mid(trtime,0,2));
+  tt.minute = StringToInt(Mid(trtime,2,2));
+  tt.second = StringToInt(Mid(trtime,4,2));
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+  amount = ValFromString(tstr,"","");
+  amount = amount/100;
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),exponent);
+  if (exponent!="+0") then begin
+    amount = -amount;
+  end;
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),crncy);
+  switch (crncy) begin //ISO 4217
+    case "978": crncy = "EUR";
+  end;
+//LogText(0,"crncy " & crncy);  
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+//LogText(0,"magnetic " & tstr);  
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),ccnumber);
+//LogText(0,"number " & tstr);  
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+//LogText(0,"expiration " & tstr);  
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),auth);
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tids);
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),mids);
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),trctype);
+//LogText(0,"card " & tstr);  
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),dsplmsg);
+//  StripTrailingSpaces(dsplmsg);
+  dsplmsg = Trim(dsplmsg);
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),emvs);  
+//LogText(0,"emvs "& emvs);  
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+  signature = Left(tstr,1)=="0";
+//LogText(0,"tstr "& tstr & " signature " & signature);  
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+//LogText(0,"tstr "& tstr & " morereplies " & morereplies);  
+  morereplies = tstr=="1";
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),resp);
+  GetNextSubstring(responsecontent,pos,chr(CC_FS),tstr);
+  
+//LogText(0,"resp "& resp);  
+
+  aid = Mid(emvs,4,14);
+  
+  epos = InString(emvs,"95");
+  tvr = Mid(emvs,epos+3,10);
+  tsi = "0000";//??
+  epos = InString(emvs,"9F34");
+  cvmr = Mid(emvs,epos+5,6);
+
+  epos = InString(emvs,"9F12");
+  epos2 = InString(emvs,"9F26");
+  tstr = Mid(emvs,epos+5,epos2-epos-6);
+  for (i=0;i<len(tstr);i=i+2) begin
+    c = Mid(tstr,i,2);
+    a = StringToInt(HexStringToDecimalString(c));    
+    apn = apn & chr(a);
+  end;
+  epos = InString(emvs,"9F27");
+  arqc = Mid(emvs,epos+5,2);
+
+  epos = InString(emvs,"9F26");
+  arqc2 = Mid(emvs,epos+5,16);
+  
+  SetAreaZeroSize(creceiptdata);
+  SetAreaZeroSize(mreceiptdata);
+  AddReceiptLine("",CYb.CompName,1,mreceiptdata);
+  AddReceiptLine("",CYb.Addr0,1,mreceiptdata);
+  AddReceiptLine("",CYb.Addr1,1,mreceiptdata);
+  AddReceiptLine("",CYb.Addr2,1,mreceiptdata);
+  AddReceiptLine(USetStr(42220),tids,2,mreceiptdata);
+  AddReceiptLine(USetStr(42221),tids,2,mreceiptdata);
+  AddReceiptLine(USetStr(42222),mids,2,mreceiptdata);
+  AddReceiptLine("",trctype,0,mreceiptdata);
+  AddReceiptLine(USetStr(42223) & " " & aid,USetStr(42224) & " " & apn,2,mreceiptdata);
+    
+  tstr = USetStr(42225) & " " & tvr;
+  tstr = tstr & "      ";
+  tstr = tstr & USetStr(42226) & " " & tsi;
+  AddReceiptLine(tstr,USetStr(42227) & " " & cvmr,2,mreceiptdata);
+
+  M4PadString("",len(ccnumber)-4,"*",true,tstr);
+  tstr = tstr & Right(ccnumber,4);
+  AddReceiptLine("",tstr,0,mreceiptdata);
+  
+  AddReceiptLine("",USetStr(42228),0,mreceiptdata);
+  AddReceiptLine(USetStr(42230) & " " & batchnr,USetStr(42231) & " " & number,2,mreceiptdata);
+  AddReceiptLine(USetStr(42232) & " " & trdate,USetStr(42233) & " " & tt,2,mreceiptdata);
+  AddReceiptLine(USetStr(42234) & " " & "?????????",USetStr(42235) & " " & auth,2,mreceiptdata);
+  AddReceiptLine(USetStr(42236) & " " & resp,dsplmsg & " : " & auth,2,mreceiptdata);
+  AddTextToArea(chr(13) & chr(10),mreceiptdata);
+  AddReceiptLine(USetStr(42238),ValToString(amount,M4Val,"",".",0) & " " & crncy,2,mreceiptdata);
+  AddReceiptLine("",USetStr(42240),1,mreceiptdata);
+  AddReceiptLine("",USetStr(42241),1,mreceiptdata);
+
+  AddAreatoArea(mreceiptdata,creceiptdata);
+  AddReceiptLine("",USetStr(42243),1,mreceiptdata);
+  AddReceiptLine("",USetStr(42229) & " " & arqc & " (" & arqc2 & ")",0,mreceiptdata);
+
+  AddReceiptLine("",USetStr(42242),1,creceiptdata);
+  AddReceiptLine("",USetStr(42229) & " " & arqc & " (" & arqc2 & ")",0,creceiptdata);
+
+//    LogAreaToFile("wsreplies/mreceiptdataP.txt",mreceiptdata);
+
+  ParseTransactionAnswer = morereplies;
+  return;
+end;
+
+updating procedure TCPIIngenico1CT220_WaitForTransactionResult(LongInt socket,val v,string paymode,string label,Integer ProcessingWn)
+begin
+  LongInt starttick;
+  string 255 response,response2,tstr,responsecontent,responselrc,trtime;
+  LongInt pos;
+  Boolean testf,signature;
+  string 255 auth,dsplmsg,trctype;
+  Integer trflag;
+  Date trdate;
+  val amount;
+  area mreceiptdata,creceiptdata;
+
+  TCPIPIngenicoiCT220_DisplayStatus(ProcessingWn,"",27389);
+  testf = true;
+  starttick = GetCurTick;
+  while (testf) begin
+    GetStringFromSocket(socket,response,300);
+    LogReply("response=" & response);
+
+    if (len(response)==1) then begin
+      switch (asc(Left(response,1))) begin
+        case CC_ACK:
+          testf = true;
+        otherwise
+          SendStringOnSocket(socket,chr(CC_NAK));
+          testf = false;
+      end;
+    end else begin
+      tstr = Mid(response,len(response)-2,2);
+      switch (asc(Mid(tstr,0,1))) begin
+        case CC_ETX:
+          tstr = Mid(response,0,len(response)-1);
+          tstr = Mid(tstr,1,len(tstr)-1);
+          responsecontent = Mid(tstr,0,len(tstr)-1);
+          responselrc = Mid(response,len(response)-1,1);
+          if (TCPIP_Ingenico1CT220_CalculateLRC(tstr)==responselrc) then begin
+            switch (Left(responsecontent,2)) begin
+              case "10":
+                SendStringOnSocket(socket,chr(CC_ACK));
+                testf = ParseTransactionAnswer(responsecontent,trflag,auth,amount,trdate,trtime,dsplmsg,signature,trctype,mreceiptdata,creceiptdata);
+                switch (trflag) begin
+                  case 0:
+                    TCPIPIngenicoiCT220_DisplayStatus(ProcessingWn,"",27388);
+                  case 1:
+                    AddPaymentRow(ProcessingWn,v,paymode,label,trdate,trtime,"","",trctype,mreceiptdata,creceiptdata);
+                  case 2:
+                    AddPaymentRow(ProcessingWn,v,paymode,label,trdate,trtime,"",auth,trctype,mreceiptdata,creceiptdata);
+                  case 3://?
+                  case 4:
+//                    TCPIPIngenicoiCT220TransactionDeclined(ProcessingWn,v,paymode,label,response2,vreplyfields,27386);
+                    TCPIPIngenicoiCT220_DisplayStatus(ProcessingWn,"",27386);
+                  case 5://?
+                  case 6:
+                    testf = SendStringOnSocket(socket,chr(CC_NAK));
+                    TCPIPIngenicoiCT220_DisplayStatus(ProcessingWn,"",27427);
+                  case 7:
+                    testf = SendStringOnSocket(socket,chr(CC_NAK));
+                    TCPIPIngenicoiCT220_DisplayStatus(ProcessingWn,"",27397);
+                end;
+              case "20":  // wait 120 seconds
+                testf = SendStringOnSocket(socket,chr(CC_ACK));
+                dsplmsg = Mid(responsecontent,8,len(responsecontent)-8);
+                TCPIPIngenicoiCT220_DisplayStatus(ProcessingWn,dsplmsg,27389);
+              case "22":
+                SendStringOnSocket(socket,chr(CC_ACK));
+                testf = false;
+                dsplmsg = Mid(responsecontent,8,len(responsecontent)-8);
+                TCPIPIngenicoiCT220_DisplayStatus(ProcessingWn,dsplmsg,27388);
+              otherwise
+                testf = SendStringOnSocket(socket,chr(CC_ACK));
+            end;
+          end else begin
+            testf = SendStringOnSocket(socket,chr(CC_NAK));
+          end;
+        otherwise 
+          testf = SendStringOnSocket(socket,chr(CC_NAK));
+      end;
+    end;
+
+    if ((GetCurTick-starttick)>30000) then begin
+      testf = false;
+    end;
+    MilliSleep(1);
+  end;
+  
+  return;
+end;
+
+global
+updating procedure IngenicoiCT220CreditCard_Purchase(LongInt transnr,Integer invtype,val v,string paymode,string label,Integer ProcessingWn)
+begin
+  record LocalMachineBlock LMb;  
+  record LSerialPortDeviceVc LSPDr;
+  Integer res,noErr;
+  string 255 SentCtrlSeq,results,codepage;
+  Boolean additionalinfof,comportclosedf;
+  string 255 host,CtrlSeq,tstr,response;
+  LongInt socket,receiptsocket,port,receiptport,pos,starttick;
+  Integer seqnr;
+
+  BlockLoad(LMb);
+  if (FindLocalSerialPortDevice(kSerialPortDeviceClassCreditCardTerminal,kSerialPortDeviceModelCreditCardTerminalIngenicoiCT220,LMb.LocalMachineCode,LSPDr)==false) then begin  
+    goto LIngenicoiCT220CreditCard_Purchase;
+  end;
+
+  if (InString(LSPDr.Port,":")) then begin
+    pos = 0;
+    GetNextSubstring(LSPDr.Port,pos,":",host);
+    GetNextSubstring(LSPDr.Port,pos,":",tstr);
+    port = StringToLongInt(tstr);    
+    GetNextSubstring(LSPDr.Port,pos,":",tstr);
+    receiptport = StringToLongInt(tstr); 
+  end;  
+
+  if (nonblank(host)) then begin
+    socket = OpenSocket(host,port);
+    if (socket>=0) then begin
+      SetSocketMessageSizeCallback(socket,"TCPIPIngenicoiCT220MessageSize");
+        
+      CtrlSeq = CtrlSeq & "00";
+      CtrlSeq = CtrlSeq & "00";
+      CtrlSeq = CtrlSeq & "00";
+      M4PadString(seqnr,4,"0",true,tstr);
+      CtrlSeq = CtrlSeq & tstr;
+      if (v<0 or invtype==kPOSInvoiceTypeCredit) then begin
+        CtrlSeq = CtrlSeq & "05";
+      end else begin
+        CtrlSeq = CtrlSeq & "01";
+      end;
+      CtrlSeq = CtrlSeq & "0";//Terminal printing merchant receipt
+//      CtrlSeq = CtrlSeq & "1";//Terminal printing merchant receipt and customer receipt
+      CtrlSeq = CtrlSeq & "00";
+      if (v<0 or invtype==kPOSInvoiceTypeCredit) then begin
+//      CtrlSeq = CtrlSeq & "000000"; // Transcation number for refund
+      end;
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+      CtrlSeq = CtrlSeq & ValToString(v,M4UVal,"","",0);//amount    
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+      if (v<0 or invtype==kPOSInvoiceTypeCredit) then begin
+        CtrlSeq = CtrlSeq & "+1";// 1 ?  
+      end else begin
+        CtrlSeq = CtrlSeq & "+0";        
+      end;
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+      CtrlSeq = CtrlSeq & "978";//EUR
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+//      CtrlSeq = CtrlSeq & "00";// label for display ?
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+      CtrlSeq = CtrlSeq & "00";//default terminal languages
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+      CtrlSeq = CtrlSeq & chr(CC_FS);
+      CtrlSeq = CtrlSeq & chr(CC_ETX);
+      CtrlSeq = CtrlSeq & TCPIP_Ingenico1CT220_CalculateLRC(CtrlSeq);
+      CtrlSeq = chr(CC_STX) & chr(CC_STX) & CtrlSeq;
+      LogRequest("CtrlSeq=" & CtrlSeq);
+        
+      if (SendStringOnSocket(socket,CtrlSeq)) then begin
+        TCPIIngenico1CT220_WaitForTransactionResult(socket,v,paymode,label,ProcessingWn);
+        CloseSocket(socket);
+      end else begin
+        TCPIPIngenicoiCT220_DisplayStatus(ProcessingWn,"",27427);
+        CloseSocket(socket);
+      end;
+    end else begin
+      TCPIPIngenicoiCT220_DisplayStatus(ProcessingWn,"",27427);
+      CloseSocket(socket);
+    end;
+  end;
+  
+LIngenicoiCT220CreditCard_Purchase:;  
+  return;
+end;

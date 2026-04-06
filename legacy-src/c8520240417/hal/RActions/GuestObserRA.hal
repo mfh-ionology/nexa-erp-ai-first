@@ -1,0 +1,121 @@
+
+global
+function LongInt GuestObserVcRecordDefaults(var record GuestObserVc GuestObserr,record GuestObserVc GuestObser2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  Time blankt;
+  
+  GuestObserr.Person = CurrentUser;
+  GuestObserr.TransTime = blankt;
+  GuestObserr.SerNr = -1;
+//  GuestObserr.Type = 3;
+
+  GuestObserVcRecordDefaults = res;
+  return;
+end;
+
+global
+function LongInt GuestObserVcRecordDuplicate(var record GuestObserVc GuestObserr,record GuestObserVc GuestObser2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+
+  GuestObserr.SerNr = res;
+  return;
+end;
+
+global
+function LongInt GuestObserVcRecordSave(var record GuestObserVc GuestObserr,record GuestObserVc GuestObser2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+
+  if (GuestObserr.SerNr==-1) then begin
+    GuestObserr.SerNr = NextSerNr("GuestObserVc",GuestObserr.TransDate,-1,false,"");
+  end;
+
+  GuestObserVcRecordSave = res;
+  return;
+end;
+
+global
+function LongInt GuestObserVcRecordUpdate(var record GuestObserVc GuestObserr,record GuestObserVc GuestObser2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+
+  if (GuestObserr.SerNr==-1) then begin
+    GuestObserr.SerNr = NextSerNr("GuestObserVc",GuestObserr.TransDate,-1,false,"");
+  end;
+
+  GuestObserVcRecordUpdate = res;
+  return;
+end;
+
+global
+function LongInt GuestObserVcRecordRemove(var record GuestObserVc GuestObserr,record GuestObserVc GuestObser2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  
+  if (true) then begin
+    res = 1;  // cant remove
+  end else begin
+    res = -1;
+  end;
+
+  GuestObserVcRecordRemove = res;
+  return;
+end;
+
+global
+function LongInt GuestObserVcRecordCheck(var record GuestObserVc GuestObserr,record GuestObserVc GuestObser2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+
+  res = 0;
+  if (blank(GuestObserr.Guest)) then begin
+    RecordCheckError(1058,"",-1,"Guest");
+    res = 1;
+    goto LGuestObserVcRecordCheck;
+  end;
+  if (nonblankdate(GuestObserr.StartDate)) and (nonblankdate(GuestObserr.EndDate)) then begin
+    if (GuestObserr.StartDate>GuestObserr.EndDate) then begin
+      RecordCheckError(20851,"",-1,"EndDate");      
+      res = -1;
+      goto LGuestObserVcRecordCheck;
+    end;
+  end;
+  if ((GuestObserr.Type==0) or (GuestObserr.Type==2) or (GuestObserr.Type==4)) then begin
+    if (nonblankdate(GuestObserr.TransDate)) then begin
+      RecordCheckError(2010,"",-1,"TransDate");
+      res = 1;
+      goto LGuestObserVcRecordCheck;
+    end;
+    if (nonblanktime(GuestObserr.TransTime)) then begin
+      RecordCheckError(2010,"",-1,"TransTime");
+      res = 1;
+      goto LGuestObserVcRecordCheck;
+    end;
+    if (blankdate(GuestObserr.StartDate)) then begin
+      RecordCheckError(1058,"",-1,"StartDate");
+      res = 1;
+      goto LGuestObserVcRecordCheck;
+    end;
+    if (blankdate(GuestObserr.EndDate)) then begin
+      RecordCheckError(1058,"",-1,"EndDate");
+      res = 1;
+      goto LGuestObserVcRecordCheck;
+    end;
+  end else begin
+    if (blankdate(GuestObserr.TransDate)) then begin
+      RecordCheckError(1058,"",-1,"TransDate");
+      res = 1;
+      goto LGuestObserVcRecordCheck;
+    end;
+    if (blanktime(GuestObserr.TransTime)) then begin
+      RecordCheckError(1058,"",-1,"TransTime");
+      res = 1;
+      goto LGuestObserVcRecordCheck;
+    end;
+  end;
+LGuestObserVcRecordCheck:;  
+  GuestObserVcRecordCheck = res;
+  return;
+end;

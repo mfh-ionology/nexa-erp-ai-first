@@ -1,0 +1,34 @@
+function Boolean TrainingPackDClassTrainingTopicEFAfter(Integer wn,Integer rownr,Boolean changedf)
+begin
+  Boolean res;
+  record TrainingPackVc TrainingPackr;
+  row TrainingPackVc TrainingPackrw;
+  record HRMSkillVc HRMSr;
+
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,TrainingPackr);
+    MatRowGet(TrainingPackr,rownr,TrainingPackrw);
+    HRMSr.Code = TrainingPackrw.TrainingTopic;
+    ReadFIrstMain(HRMSr,1,true);
+    TrainingPackrw.Comment = HRMSr.Name;
+    TrainingPackrw.PlannedDuration = HRMSr.PlannedDuration;
+    MatRowPut(TrainingPackr,rownr,TrainingPackrw);
+    PutWindowRecord(wn,TrainingPackr);
+  end;
+  TrainingPackDClassTrainingTopicEFAfter = res;
+  return;
+end;
+
+global
+function Boolean TrainingPackDClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
+begin
+  Boolean res;
+
+  switch (fieldname) begin
+     case "TrainingTopic": res = TrainingPackDClassTrainingTopicEFAfter(wn,rownr,changed!=0);
+  end;
+  TrainingPackDClassAfterEditField = res;
+  return;
+end;
+

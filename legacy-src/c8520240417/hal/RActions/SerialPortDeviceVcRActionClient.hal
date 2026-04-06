@@ -1,0 +1,105 @@
+procedure CopySerialPortDevice(record SerialPortDeviceVc SPDr,var record LSerialPortDeviceVc LSPDr)
+begin
+  LSPDr.Code = SPDr.Code;
+  LSPDr.DeviceType = SPDr.DeviceType;
+  LSPDr.LocalMachineCode = SPDr.LocalMachineCode;
+  LSPDr.Printer = SPDr.Printer;
+  LSPDr.Port = SPDr.Port;
+  LSPDr.BaudRate = SPDr.BaudRate;
+  LSPDr.ByteSize = SPDr.ByteSize;
+  LSPDr.Parity = SPDr.Parity;
+  LSPDr.StopBits = SPDr.StopBits;
+  LSPDr.Codepage = SPDr.Codepage;
+  LSPDr.FlowControl = SPDr.FlowControl;
+  LSPDr.EscSeqBefore = SPDr.EscSeqBefore;
+  LSPDr.EscSeqAfter = SPDr.EscSeqAfter;
+  LSPDr.FailureCode = SPDr.FailureCode;
+  LSPDr.LogCommunication = SPDr.LogCommunication;
+  LSPDr.DeviceID = SPDr.DeviceID;
+  return;
+end;
+
+global
+updating function LongInt SerialPortDeviceVcRecordSaveClient(LongInt wn,record SerialPortDeviceVc SPDr,record SerialPortDeviceVc SPD2r,LongInt stat,LongInt check)
+begin
+  LongInt res;
+  record LSerialPortDeviceVc LSPDr;
+  
+  if (SPDr.LocalMachineCode==CurMachineName) then begin
+    CopySerialPortDevice(SPDr,LSPDr);
+    RecordStore(LSPDr,false);
+  end;
+  SerialPortDeviceVcRecordSaveClient = res;
+  return;
+end;
+
+global
+updating function LongInt SerialPortDeviceVcRecordUpdateClient(LongInt wn,record SerialPortDeviceVc SPDr,record SerialPortDeviceVc SPD2r,LongInt stat,LongInt check)
+begin
+  LongInt res;
+  record LSerialPortDeviceVc LSPDr;
+  record LSerialPortDeviceVc oldLSPDr;
+  
+  if (SPD2r.LocalMachineCode==CurMachineName) then begin
+    LSPDr.Code = SPD2r.Code;
+    if (ReadFirstMain(LSPDr,1,true)) then begin
+      RecordCopy(oldLSPDr,LSPDr);
+      CopySerialPortDevice(SPDr,LSPDr);
+      RecordUpdate(oldLSPDr,LSPDr,false);
+    end else begin
+      CopySerialPortDevice(SPDr,LSPDr);
+      RecordStore(LSPDr,false);
+    end;
+  end;
+  SerialPortDeviceVcRecordUpdateClient = res;
+  return;
+end;
+
+global
+function LongInt LSerialPortDeviceVcRecordCheck(record LSerialPortDeviceVc SPDr,record LSerialPortDeviceVc SPD2r,LongInt stat,LongInt check)
+begin
+  LongInt res;
+  record SerialPortDeviceVc lSPDr;
+  
+  res = 0;
+  if (blank(SPDr.Code)) then begin
+    RecordCheckError(1058,"",-1,"Code");      
+    res = -1;
+    goto LLSerialPortDeviceVcRecordCheck;
+  end;
+  if (blank(SPDr.LocalMachineCode)) then begin
+    RecordCheckError(1058,"",-1,"LocalMachineCode");      
+    res = -1;
+    goto LLSerialPortDeviceVcRecordCheck;
+  end;
+  if (nonblank(SPDr.FailureCode)) then begin
+    if (SPDr.FailureCode==SPDr.Code) then begin
+      RecordCheckError(2246,"",-1,"FailureCode");      
+      res = -1;
+      goto LLSerialPortDeviceVcRecordCheck;
+    end;
+    lSPDr.Code = SPDr.FailureCode;
+    if (ReadFirstMain(lSPDr,1,true)==false) then begin
+      RecordCheckError(1290,"",-1,"FailureCode");      
+      res = -1;
+      goto LLSerialPortDeviceVcRecordCheck;
+    end;
+  end;
+LLSerialPortDeviceVcRecordCheck:;  
+  LSerialPortDeviceVcRecordCheck = res;
+  return;
+end;
+
+global
+function LongInt LSerialPortDeviceVcRecordDefaults(record LSerialPortDeviceVc LSPDr,record LSerialPortDeviceVc LSPD2r,LongInt stat,LongInt check)
+begin
+  LongInt res;
+  
+  LSPDr.BaudRate = 9600;
+  LSPDr.FlowControl = kFlowControlDefault;
+  LSPDr.ByteSize = 8;
+  LSPDr.StopBits = 0;
+  LSPDr.Parity = -1;
+  LSerialPortDeviceVcRecordDefaults = res;
+  return;
+end;

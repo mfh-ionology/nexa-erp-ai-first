@@ -1,0 +1,267 @@
+external procedure HT2Per(Date,Date,var string);
+external procedure GetUserName(string,var string);
+external function Boolean FindStringInString(string,string);
+
+procedure SortArrayByState( var array string astate,var array string atype,var array string acomment,var array longint asernr)
+begin
+  Boolean swapped;
+  string 255 tsupervisor,tstate,ttype,tcomment;
+  LongInt tsernr;
+  Integer i;
+
+  swapped = true;
+  while (swapped) begin
+    swapped = false;
+    for (i=0;i<astate.length-1;i=i+1) begin
+      if (astate[i]>astate[i+1]) then begin
+        tstate = astate[i];
+        ttype = atype[i];
+        tcomment = acomment[i];
+        tsernr = asernr[i];
+
+        astate[i] =  astate[i+1];
+        atype[i] = atype[i+1];
+        acomment[i] = acomment[i+1];
+        asernr[i] = asernr[i+1];
+
+        astate[i+1] = tstate;
+        atype[i+1]= ttype;
+        acomment[i+1] = tcomment;
+        asernr[i+1] = tsernr;
+
+        swapped = true;
+      end;
+    end;
+  end;
+return;
+end;
+
+procedure SortArrayBySupervisor(var array string asupervisor, var array string astate,var array string atype,var array string acomment,var array longint asernr)
+begin
+  Boolean swapped;
+  string 255 tsupervisor,tstate,ttype,tcomment;
+  LongInt tsernr;
+  Integer i;
+
+  swapped = true;
+  while (swapped) begin
+    swapped = false;
+    for (i=0;i<asupervisor.length-1;i=i+1) begin
+      if (asupervisor[i]>asupervisor[i+1]) then begin
+        tsupervisor = asupervisor[i];
+        tstate = astate[i];
+        ttype = atype[i];
+        tcomment = acomment[i];
+        tsernr = asernr[i];
+
+        asupervisor[i] =  asupervisor[i+1];
+        astate[i] =  astate[i+1];
+        atype[i] = atype[i+1];
+        acomment[i] = acomment[i+1];
+        asernr[i] = asernr[i+1];
+
+        asupervisor[i+1] = tsupervisor;
+        astate[i+1] = tstate;
+        atype[i+1]= ttype;
+        acomment[i+1] = tcomment;
+        asernr[i+1] = tsernr;
+
+        swapped = true;
+      end;
+
+    end;
+  end;
+return;
+end;
+
+function string 255 GetStateDesc(string code)
+begin
+  string 255 res;
+  record ActStateVc ASr;
+
+  ASr.Code = code;
+  ReadFirstMain(ASr,1,true);
+  res = ASr.Comment;
+  GetStateDesc = res;
+  return;
+end;
+
+global
+procedure ActProjListRn(record RcVc RepSpec)
+begin
+  record ActVc Actr;
+  record CalDispGroupBlock DispGroupRec;
+	row CalDispGroupBlock DispGrouprw;
+  Boolean foundf,testf;
+  string 255 index,tstr,namecodes;
+  Integer i,rw,acnt,totactcnt,statecnt,supercnt,rwcnt;
+  array string 255 asupervisor,astate,atype,acomment;
+  string 20 frsup,tosup,frstate,tostate,frtype,totype;
+  array longint asernr;
+
+  StartReportJob(USetStr(43240));
+  rw = 1;
+  frsup = FirstInRange(RepSpec.f1,20);
+  tosup = LastInRange(RepSpec.f1,20);
+  frstate = FirstInRange(RepSpec.f2,20);
+  tostate = LastInRange(RepSpec.f2,20);
+  frtype = FirstInRange(RepSpec.f3,10);
+  totype = LastInRange(RepSpec.f3,10);
+
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1); 
+  rw = rw + 1;
+
+  if (nonblank(RepSpec.f1)) then begin
+    tstr = USetStr(43241) & ": " & RepSpec.f1;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;  
+  if (nonblank(RepSpec.f2)) then begin
+    tstr = USetStr(43242) & ": " & RepSpec.f2;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;  
+  if (nonblank(RepSpec.f3)) then begin
+    tstr = USetStr(43243) & tstr & ": " & RepSpec.f3;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;  
+  if (nonblank(RepSpec.f4)) then begin
+    tstr = USetStr(43246) & ": " & RepSpec.f4;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+
+  EndHeader;
+
+  SetRepCol(2,0);
+  SetRepCol(3,100);
+  SetRepCol(4,130);
+  SetRepCol(5,170);
+  SetRepCol(6,250);
+  SetRepCol(7,300);
+  SetRepCol(8,450);
+
+  StartFormat(15);
+  OutString(2,0,USetStr(43241),false);
+  OutString(3,0,USetStr(43242),false);
+  OutString(4,0,USetStr(43243),false);
+  EndFormat;
+  Black_Divider(0,1);
+
+  BlockLoad(DispGroupRec);
+	rwcnt = MatRowCnt(DispGroupRec);
+
+	if (rwcnt>0) then begin
+	  for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(DispGroupRec,i,DispGrouprw);
+      if (RepSpec.f4==DispGrouprw.Code) then begin
+        namecodes = DispGrouprw.DefStr;
+      end;   
+    end;
+	end;
+
+  index = "TodoFlag";
+  if (nonblank(RepSpec.f3)) then begin
+    index = "ActType";
+  end;
+  foundf = true;
+  Actr.SerNr = "";
+  Actr.TodoFlag = kTodoFlagProject;
+  switch (RepSpec.flags[1]) begin
+    case 0 : Actr.TransDate    = RepSpec.sStartDate;;
+    case 1 : Actr.EndDate      = RepSpec.sStartDate;;
+    case 2 : Actr.CreationDate = RepSpec.sStartDate;;
+  end;
+  while (LoopKey(index,Actr,2,foundf)) begin
+    if (foundf) then begin
+      testf = true;
+      switch (RepSpec.flags[1]) begin
+        case 0 : if (DateInRange(Actr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin    testf = false; end;;
+        case 1 : if (DateInRange(Actr.EndDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin      testf = false; end;;
+        case 2 : if (DateInRange(Actr.CreationDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin testf = false; end;;
+      end;
+      if (nonblank(RepSpec.f4)) then begin
+        if (FindStringInString(namecodes,Actr.Supervisor)==false) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f1)) then begin
+        if (FindStringInString(RepSpec.f1,",")) then begin
+          if (!FindStringInString(RepSpec.f1,Actr.Supervisor)) then begin
+            testf = false;
+          end;
+        end else begin
+          if (Actr.Supervisor>tosup) then begin testf = false; end;
+          if (Actr.Supervisor<frsup) then begin testf = false; end;
+        end;
+      end;
+      if (nonblank(RepSpec.f2)) then begin
+        if (FindStringInString(RepSpec.f2,",")) then begin
+          if (!FindStringInString(RepSpec.f2,Actr.ActState)) then begin
+            testf = false;
+          end;
+        end else begin
+          if (Actr.ActState<frstate) then begin testf = false; end;
+          if (Actr.ActState>tostate) then begin testf = false; end;
+        end;
+      end;
+      if (nonblank(RepSpec.f3)) then begin
+        if (Actr.ActType>totype) then begin testf = false; end;
+        if (Actr.ActType<frtype) then begin testf = false; end;
+      end;
+
+      if (testf) then begin
+        asupervisor[acnt] = Actr.Supervisor;
+        astate[acnt] = Actr.ActState;
+        atype[acnt] = Actr.ActType;
+        acomment[acnt] = Actr.Comment;
+        asernr[acnt] = Actr.SerNr;
+        acnt = acnt + 1;
+      end;
+    end;
+  end;
+  SortArrayBySupervisor(asupervisor,astate,atype,acomment,asernr);
+  for (i=0;i<asupervisor.length;i=i+1) begin
+    totactcnt = totactcnt +1;
+    SortArrayByState(astate,atype,acomment,asernr);
+    StartFormat(15);
+    OutString(2,0,asupervisor[i],false);
+    GetUserName(asupervisor[i],tstr);
+    OutString(20,0," - " & tstr,false);
+    OutString(3,0,astate[i],false);
+    OutString(4,0,atype[i],false);
+    OutStringID(5,"DblActVc",acomment[i],false,asernr[i]);
+    EndFormat;
+    statecnt = statecnt+1;
+    if (astate[i]!= astate[i+1]) and ((asupervisor[i]== asupervisor[i+1])) or (asupervisor[i]!= asupervisor[i+1]) then begin
+      Gray_Divider(0,1);
+      StartFormat(15);
+      OutString(8,0,USetStr(43245) & ": " &  GetStateDesc(astate[i]),true);
+      OutString(1,0,statecnt,true);
+      EndFormat;
+      supercnt = supercnt + statecnt;
+      statecnt = 0;
+    end;
+    if (asupervisor[i]!= asupervisor[i+1]) then begin
+      StartFormat(15);
+      GetUserName(asupervisor[i],tstr);
+      OutString(8,0,USetStr(43244) & " " & tstr ,true);
+      OutString(1,0,supercnt,true);
+      EndFormat;
+      Black_Divider(0,1);
+      supercnt = 0;
+    end;
+  end;
+  Gray_Divider(0,1);
+  if (totactcnt>=0) then begin
+    StartFormat(15);
+    OutString(0,0,USetStr(38468),false);
+    OutLongInt(1,0,totactcnt,true);
+    EndFormat;
+  end;
+  StartFormat(15);
+  EndFormat;
+  LActProjListRn:;  
+  EndJob;
+  return;
+end;

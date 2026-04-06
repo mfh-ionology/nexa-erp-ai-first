@@ -1,0 +1,897 @@
+external function LongInt DateDiff(Date,Date);
+external function Date AddWorkingDays(Date,LongInt,string,string);
+external function LongInt DateDiff2(Date,Date);
+external function roundmode SetRoundModeD(Integer);
+
+procedure PrintHeader(string pos0,string pos2,string pos3,string pos4,
+                    string pos5,string pos6,string pos7,string pos8,string pos1)
+begin
+    Black_Divider(0,1);
+    StartFormat(15);
+    if (nonblank(pos0)) then begin OutString(0,0,pos0,false); end;
+    if (nonblank(pos2)) then begin OutString(2,0,pos2,false); end;
+    if (nonblank(pos3)) then begin OutString(3,0,pos3,false); end;
+    if (nonblank(pos4)) then begin OutString(4,0,pos4,false); end;
+    if (nonblank(pos5)) then begin OutString(5,0,pos5,false); end;
+    if (nonblank(pos6)) then begin OutString(6,0,pos6,false); end;
+    if (nonblank(pos7)) then begin OutString(7,0,pos7,false); end;
+    if (nonblank(pos8)) then begin OutString(8,0,pos8,false); end;
+    if (nonblank(pos1)) then begin OutString(1,0,pos1,true); end;
+    EndFormat;
+  return;
+end;
+
+global
+function Boolean IsBatchedItem(string code)
+begin
+  record INVc INr;
+  Boolean res;
+
+  INr.Code = code;
+  if (ReadFirstMain(INr,1,true)) then begin end;
+  if (INr.SerNrf==2) then begin res = true; end;
+
+  IsBatchedItem = res;
+return;
+end;
+
+procedure PrintInternMovRow(record RentINVc RentINr,Boolean batchf)
+begin
+  Boolean TrHs,testf,foundf;
+  record InternMovVc InternMovr,InternMovrr;
+  row InternMovVc InternMovrw,InternMovrrw;
+  Integer rwcnt,rwcnt2,i,l;
+  array record InternMovVc aInternMovr;
+  val qty;
+
+  TrHs = true;
+  while (LoopMain(InternMovr,1,TrHs)) begin
+    testf = true;
+    if (TrHs and testf) then begin
+      rwcnt = MatRowCnt(InternMovr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(InternMovr,i,InternMovrw);
+        if (InternMovrw.ArtCode==RentINr.Code and InternMovrw.SerialNr==RentINr.SerialNr) then begin
+          aInternMovr[aInternMovr.length] = InternMovr; 
+          goto LPrintInternMovRow;
+        end;
+      end; 
+LPrintInternMovRow:;
+    end;
+  end;
+
+  SortRecordArray(aInternMovr,"TransDate");
+  for (i=aInternMovr.length-1;i>=0;i=i-1) begin
+    InternMovrr = aInternMovr[i];
+    StartFormat(15);
+    OutString(0,"DblInternMov",InternMovrr.SerNr,false);
+    OutDate(2,0,InternMovrr.TransDate,false);
+    OutString(3,0,InternMovrr.FrLocation,false);
+    OutString(4,0,InternMovrr.ToLocation,false);
+    OutString(5,0,InternMovrr.Comment,false);
+    if (InternMovrr.OKFlag!=1) then begin
+      OutString(8,0,"Open",false);
+    end;
+
+    if (batchf) then begin
+      qty = blankval;
+      rwcnt2 = MatRowCnt(InternMovrr);
+      for (l=0;l<rwcnt2;l=l+1) begin
+        MatRowGet(InternMovrr,l,InternMovrrw);
+        if (InternMovrrw.ArtCode==RentINr.Code and InternMovrrw.SerialNr==RentINr.SerialNr) then begin
+          qty = qty + InternMovrrw.Quant;               
+        end;
+      end;
+      OutVal(1,0,Round(qty,SetRoundModed(0)),M4UVal,true);  
+    end;
+    EndFormat;  
+  end;
+  StartFormat(15);
+  EndFormat;  
+end;
+
+procedure PrintINTransferRow(record RentINVc RentINr,Boolean batchf)
+begin
+  Boolean TrHs,testf,foundf;
+  record INTransferVc INTransferr;
+  row INTransferVc INTransferrw;
+  Integer rwcnt,rwcnt2,i,l;
+  array record INTransferVc aINTransferr;
+  val qty;
+
+  TrHs = true;
+  while (LoopMain(INTransferr,1,TrHs)) begin
+    testf = true;
+    if (INTransferr.OKFlag==0) then begin testf = false; end;
+    if (TrHs and testf) then begin
+      rwcnt = MatRowCnt(INTransferr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(INTransferr,i,INTransferrw);
+        if (INTransferrw.ArtCode==RentINr.Code and INTransferrw.SerialNr==RentINr.SerialNr) then begin
+          aINTransferr[aINTransferr.length] = INTransferr;
+        goto LPrintINTransferRow;
+        end;
+      end; 
+LPrintINTransferRow:;
+    end;
+  end;
+  SortRecordArray(aINTransferr,"TransDate");
+  for (i=aINTransferr.length-1;i>=0;i=i-1) begin
+    INTransferr = aINTransferr[i];
+    StartFormat(15);
+    OutString(0,"DblINTransferVc",INTransferr.SerNr,false);
+    OutDate(2,0,INTransferr.TransDate,false);
+    OutString(3,0,INTransferr.FrLocation,false);
+    OutString(4,0,INTransferr.Location,false);
+    OutString(5,0,INTransferr.Comment,false);
+    if (batchf) then begin
+      qty = blankval;
+      rwcnt2 = MatRowCnt(INTransferr);
+      for (l=0;l<rwcnt2;l=l+1) begin
+        MatRowGet(INTransferr,l,INTransferrw);
+        if (INTransferrw.ArtCode==RentINr.Code and INTransferrw.SerialNr==RentINr.SerialNr) then begin
+          qty = qty + INTransferrw.Quant;               
+        end;
+      end;
+      OutVal(1,0,Round(qty,SetRoundModed(0)),M4UVal,true);  
+    end;  
+    EndFormat;  
+  end;  
+end;
+
+procedure PrintWorkSheetRow(longint sernr,record RentINVc RentINr,record RentPSVc RentPSr,var val wstotal)
+begin
+  Boolean TrHs,testf,firstf;
+  record WSVc WSr;
+  row WSVc WSrw;
+  Integer rwcnt,i;
+
+  TrHs = true;
+  WSr.SVONr = sernr;
+  while (LoopKey("SVONr",WSr,1,TrHs)) begin
+    if (TrHs) then begin 
+      if (WSr.SVONr!=sernr) then begin
+        TrHs = false;
+      end;
+    end;
+    if (TrHs) then begin
+    rwcnt = MatRowCnt(WSr);
+    firstf = true;
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(WSr,i,WSrw);
+        if (WSrw.MotherNr==RentINr.SerialNr) then begin
+          if (firstf) then begin 
+            OutString(4,"DblWSVc",WSr.SerNr,false);
+            firstf = false;
+          end;
+          OutString(5,"DblINVc",WSrw.ArtCode,false);
+          //OutString(6,0,WSrw.Spec,false);
+          OutString(7,0,StringFromSet(31,WSrw.ItemType),false);
+          OutVal(8,0,Round(WSrw.Quant,SetRoundModed(0)),M4UVal,false);
+          if (RentPSr.ServiceOrderVal==1) then begin
+            OutVal(1,0,WSrw.Sum,M4Val,true);
+          end;
+          EndFormat;   
+          wstotal = wstotal + WSrw.Sum;
+        end;
+      end; 
+    end;
+  end;
+end;
+
+procedure PrintSVO(record RentINVc RentINr,record RentPSVc RentPSr,var val wstotal)
+begin
+  Boolean TrHs;
+  record SVOVc SVOr;
+  row SVOVc SVOrw;
+  Integer rwcnt,i;
+  array record SVOVc aSVOr;
+
+  TrHs = true;
+  while (LoopMain(SVOr,1,TrHs)) begin
+    if (TrHs) then begin
+      rwcnt = MatRowCnt(SVOr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(SVOr,i,SVOrw);
+        if (SVOrw.ArtCode==RentINr.Code and SVOrw.SerialNr==RentINr.SerialNr) then begin
+          aSVOr[aSVOr.length] = SVOr; 
+        end;
+      end; 
+    end;
+  end;
+  SortRecordArray(aSVOr,"TransDate");
+  for (i=aSVOr.length-1;i>=0;i=i-1) begin
+    SVOr = aSVOr[i];
+    StartFormat(15);
+    OutLongInt(0,"DblSVOVc",SVOr.SerNr,false);
+    OutString(2,0,SVOr.PlanShip,false);
+    if (blankdate(SVOr.PlanShip)) then begin
+      OutString(2,0,SVOr.TransDate,false);
+    end;
+    OutString(3,0,SVOr.OrderClass,false); 
+    PrintWorkSheetRow(SVOr.SerNr,RentINr,RentPSr,wstotal);
+  end;
+end;
+
+function Boolean FindAdvPriceRow(record AdvPriceRecVc AdvPricer,Date thefrdate,var row AdvPriceRecVc AdvPricerw)
+begin
+  Boolean res;
+  Integer i,rwcnt;
+  
+  res = false;
+  rwcnt = MatRowCnt(AdvPricer);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(AdvPricer,i,AdvPricerw);
+    if (DateInRange(thefrdate,AdvPricerw.StartDate,AdvPricerw.EndDate)) then begin
+      res = true;
+      goto LFindAdvPriceRow;
+    end;
+    if ((thefrdate>=AdvPricerw.StartDate) and (blankdate(AdvPricerw.EndDate))) then begin
+      res = true;
+      goto LFindAdvPriceRow;
+    end;
+  end;
+  res = true;
+LFindAdvPriceRow:;
+  FindAdvPriceRow = res;
+  return;
+end;
+
+function val RISChargeRentRes(LongInt agreenr,string custcode,string curcode,string defsite,var record RentResVc RentResr,record AdvPriceRecVc AdvPricer,var Date todat,Boolean writef,
+                          var date frdat,var Longint countednrday,var Longint perdays,var date thefrdat)
+begin
+  val res;
+  record AgreementVc Agreementr;
+  record AgreeTypeVc AgreeTyper;
+  record RentResVc oldRentResr;
+  row AdvPriceRecVc AdvPricerw;
+  record CUVc Cur;
+  LongInt perlength,minqty,nrofdays;
+  Boolean testf,firstdayofrental;
+  Date thetodat,chargestart,chargeend,lastdayofmonth;
+  record RentControlBlock RCBr;
+  string 20 lcustcode;
+
+  res = 0;
+  testf = true;
+  
+  BlockLoad(RCBr);
+  if (nonblankdate(RentResr.StartInvoicing)) then begin
+    chargestart = RentResr.StartInvoicing;
+  end else begin
+    chargestart = RentResr.TransDate;
+  end;
+  if (nonblankdate(RentResr.EndInvoicing)) then begin
+    chargeend = RentResr.EndInvoicing;
+  end else begin
+    chargeend = RentResr.EndDate;
+  end;
+  firstdayofrental = false;
+  frdat = AddDay(RentResr.LastChargeDate,1);
+  if (blankdate(frdat)) then begin
+    frdat = chargestart;
+    firstdayofrental = true;
+  end;
+  if (blank(RentResr.InvItem)) then begin
+    testf = false;
+  end;
+  if (RentResr.InvQuant==0) then begin
+    testf = false;
+  end;
+  if (nonblankdate(chargeend)) then begin
+    if (chargeend<frdat) then begin
+      testf = false;
+    end;
+  end else begin
+    lastdayofmonth = CurrentDate;
+    lastdayofmonth.day = DaysInMonth(GetYear(CurrentDate),GetMonth(CurrentDate));
+    chargeend = lastdayofmonth;
+  end;
+  AgreeTyper.Code = RentResr.AgreeType;
+  if (ReadFirstMain(AgreeTyper,1,true)==false) then begin
+    testf = false;
+  end;
+  if (RentResr.AdvPrActive==0) then begin
+    if (AgreeTyper.perType==3) then begin
+      //if (RentResr.Done==0) then begin testf = false; end;
+    end;
+    minqty = 0;
+    if (AgreeTyper.MinChargeQty>0) then begin
+      minqty = AgreeTyper.MinChargeQty;
+    end;
+  end;
+  if (testf) then begin
+    lastdayofmonth = CurrentDate;
+    lastdayofmonth.day = DaysInMonth(GetYear(CurrentDate),GetMonth(CurrentDate));
+    if (blankdate(todat)) then begin 
+      Agreementr.SerNr = agreenr;
+      if (ReadFirstMain(Agreementr,1,true)) then begin end;
+        if (nonblankdate(Agreementr.endDate) )then begin
+          todat = Agreementr.endDate;
+        end else begin
+            todat = lastdayofmonth;
+        end;
+    end;
+    if (todat>lastdayofmonth) then begin 
+      todat = lastdayofmonth; 
+    end;
+   if (chargeend>lastdayofmonth) then begin 
+      chargeend = lastdayofmonth; 
+    end;
+    nrofdays = DateDiff2(todat,frdat);
+    if (RentResr.AdvPrActive==0) then begin
+      if (nonblankdate(chargeend)) then begin
+        if ((minqty>0) and (minqty>DateDiff2(chargeend,chargestart))) then begin
+          if (RentResr.Done==0) then begin
+            //testf = false;
+          end else begin
+            nrofdays = minqty;
+            if (AgreeTyper.ChargeBankHol==2) then begin
+              lcustcode = CUr.Code;
+            end else begin
+              lcustcode = "";
+            end;
+            chargeend = AddWorkingDays(chargestart,nrofdays,lcustcode,CUr.CountryCode);
+            if (RCBr.ChargeForFirstDay!=0) then begin
+              chargeend = AddWorkingDays(chargeend,-1,lcustcode,CUr.CountryCode);
+            end;
+            nrofdays = DateDiff2(chargeend,chargestart);
+          end;
+        end else begin
+          if (RCBr.ChargeForFirstDay!=0) then begin
+            chargeend = AddDay(chargeend,1);
+          end;
+        end;
+      end;
+    end;
+      if (AgreeTyper.ChargeBankHol==2) then begin
+        lcustcode = CUr.Code;
+      end else begin
+        lcustcode = "";
+      end;
+      if (RCBr.ChargeForFirstDay!=0) then begin
+        chargeend = AddWorkingDays(chargeend,-1,lcustcode,CUr.CountryCode);
+        nrofdays = DateDiff2(chargeend,chargestart);
+      end else begin
+        nrofdays = DateDiff2(chargeend,AddDay(chargestart,1));
+      end; 
+    if (testf) then begin
+      if (RentResr.AdvPrActive==0) then begin
+        perlength = AgreeTyper.perLength;
+        if (perlength<1) then begin
+          perlength = 1;
+        end;
+        if (AgreeTyper.perType==0) then begin // Days
+          perdays = perlength;
+        end;
+        if (AgreeTyper.perType==1) then begin // Months
+          thetodat = AddDay(todat,1);
+          perdays = DateDiff2(thetodat,frdat);
+        end;
+        if (AgreeTyper.perType==3) then begin // Fixed price
+          thetodat = chargeend;
+          perdays = DateDiff2(thetodat,frdat);
+        end;
+      end else begin
+        if (FindAdvPriceRow(AdvPricer,frdat,AdvPricerw)) then begin
+          if (AdvPricerw.PeriodType==0) then begin // Fixed
+             perdays = DateDiff2(AdvPricerw.EndDate,AdvPricerw.StartDate);
+             if (perdays>nrofdays) then begin
+               nrofdays = perdays;
+             end;
+          end else begin // Running
+             perdays = 1;
+          end;
+        end;
+      end;
+      thefrdat = frdat;
+      Cur.Code = custcode;
+      if (ReadFirstMain(CUr,1,true)==false) then begin
+        CUr.CountryCode = "";
+      end;
+      if (nrofdays>0) then begin
+      countednrday = nrofdays;
+        while ((perdays>0) and (thefrdat<=todat)) begin
+          if ((blankdate(chargeend)) or (thefrdat<chargeend)) then begin
+            if (AgreeTyper.perType==1) then begin
+              thefrdat = AddDay(thefrdat,nrofdays);
+            end else begin
+              thefrdat = AddDay(thefrdat,perdays);
+            end;
+            RentResr.LastChargeDate = AddDay(thefrdat,-1);
+            nrofdays = nrofdays - perdays;
+            if (RentResr.AdvPrActive==0) then begin
+              if (AgreeTyper.perType==1) then begin
+                thetodat = AddDay(AddMonth(thefrdat,perlength),-1);
+                perdays = DateDiff2(thetodat,thefrdat);
+              end;
+            end else begin
+              if (FindAdvPriceRow(AdvPricer,thefrdat,AdvPricerw)) then begin
+                if (AdvPricerw.PeriodType==0) then begin // Fixed
+                  perdays = DateDiff2(AdvPricerw.EndDate,AdvPricerw.StartDate);
+                  if (perdays>nrofdays) then begin
+                    nrofdays = perdays;
+                  end;
+                end else begin // Running
+                  if (AdvPricerw.PeriodUnit==0) then begin // day
+                    perdays = 1;
+                  end else begin // month
+                    perdays = DateDiff2(AdvPricerw.EndDate,AdvPricerw.StartDate);
+                    if (perdays>nrofdays) then begin
+                      nrofdays = perdays;
+                    end;
+                  end;
+                end;
+              end;
+            end;
+          end else begin
+            perdays = 0;
+          end;
+        end;
+      end;
+    end;
+  end;
+  RISChargeRentRes = res;
+  return;
+end;
+
+function string 255 DateToDateStr(integer month,integer year)
+begin
+  string 255 res,monthstr;
+
+  switch (month) begin
+    case 1: monthstr = USetStr(2781);
+    case 2: monthstr = USetStr(2782);
+    case 3: monthstr = USetStr(2783);
+    case 4: monthstr = USetStr(2784);
+    case 5: monthstr = USetStr(2785);
+    case 6: monthstr = USetStr(2786);
+    case 7: monthstr = USetStr(2787);
+    case 8: monthstr = USetStr(2788);
+    case 9: monthstr = USetStr(2789);
+    case 10: monthstr = USetStr(2790);
+    case 11: monthstr = USetStr(2791);
+    case 12: monthstr = USetStr(2792);
+  end;
+
+  res = monthstr & " " & year;
+
+  DateToDateStr = res;
+  return;
+end;
+
+procedure AddToArray(integer year, array integer ayear, integer month, array integer amonth, val amount, array val aamount,
+integer countdays,array integer acountdays,val rentqty,array val arentqty,string sernr,array string asernr,var array integer arescount,var integer acnt)
+begin
+   Integer i;
+   for (i=0;i<acnt;i=i+1) begin
+    if (amonth[i]==month and ayear[i]==year) then begin
+      aamount[i] = aamount[i] + amount;
+      acountdays[i] =  acountdays[i] + countdays;
+      arentqty[i] = arentqty[i] + rentqty;
+      arescount[i] = arescount[i] + 1;
+      //if (asernr[i] != asernr) then begin rescount =rescount +1; end;
+      goto LAddToArray;
+    end;
+  end;
+  ayear[acnt] = year;
+  amonth[acnt] = month;
+  aamount[acnt] = amount;
+  acountdays[acnt] = countdays;
+  arentqty[acnt] = rentqty;
+  arescount[i] =  1;
+  acnt = acnt + 1;
+LAddToArray:;  
+  return;
+end;
+
+procedure SortArrayByDate(var array integer amonth, var array integer ayear, var array integer arescount,var array integer acountdays,var array val aamount, var array val arentqty)
+begin
+  Boolean swapped;
+  integer tmonth,tyear,trescount,tcountdays;
+  val tamount,trentqty;
+  Integer i;
+
+  swapped = true;
+  while (swapped) begin
+    swapped = false;
+    for (i=0;i<amonth.length-1;i=i+1) begin
+      if (amonth[i]>amonth[i+1])  then begin
+        tmonth = amonth[i];
+        tyear = ayear[i];
+        trescount = arescount[i];
+        tcountdays = acountdays[i];
+        tamount = aamount[i];
+        trentqty = arentqty[i];
+        
+        amonth[i] =  amonth[i+1];
+        ayear[i] =  ayear[i+1];
+        arescount[i] = arescount[i+1];
+        acountdays[i] = acountdays[i+1];
+        aamount[i] = aamount[i+1];
+        arentqty[i] = arentqty[i+1];
+
+        amonth[i+1] = tmonth;
+        ayear[i+1] = tyear;
+        arescount[i+1]= trescount;
+        acountdays[i+1] = tcountdays;
+        aamount[i+1] = tamount;
+        arentqty[i+1] = trentqty;
+
+        swapped = true;
+      end;
+    end;
+  end;
+return;
+end;
+
+
+procedure PrintRentalRes(record RentINVc RentINr,record RentPSVc RentPSr,var Boolean batchf)
+begin
+  record RentResVc RentResr;
+  record AgreementVc Agreementr;
+  record AgreeTypeVc AgreeTyper;
+  record AdvPriceRecVc AdvPriceRecr;
+  Boolean TrHs,testf,firstf;
+  Integer count,startmonth,td,i,acnt,rentcount,daysadded;
+  Integer monthslen,countdays,rescount,ChargeForFirstDay;
+  val v,monthstot;
+  date frdat,thefrdat,endperiod; 
+  Longint nrofdays, perdays,countednrday;
+  array val aamount;
+  array integer amonth,ayear,acountdays,arescount;
+  string 255 tstr;
+  array record RentResVc aRentResr;
+  val rentqty;
+  array val arentqty;
+  array string 255 asernr;
+  record RentControlBlock RCBr;
+  
+  BlockLoad(RCBr);
+  StartFormat(15);
+  OutString(0,0,USetStr(43681),false);
+  EndFormat;
+  
+  RentResr.SerialNr = RentINr.SerialNr;
+  RentResr.Code = RentINr.Code;
+  TrHs = true;
+  count = 0;
+  while LoopBackKey("SerialNr",RentResr,2,TrHs) begin
+    if (TrHs) then begin
+      if (RentResr.SerialNr!=RentINr.SerialNr) then begin
+        TrHs = false;
+      end;
+      if (RentPSr.NrOfRentRes!=0) and (count!=0)  then begin 
+        if (count>=RentPSr.NrOfRentRes) then begin
+          TrHs = false;
+        end; 
+      end;
+    end;
+    if (TrHs) then begin
+      testf = true;        
+      // if (RentResr.Done!=0) then begin  testf = false; end;
+      // if (nonblank(RentResr.EndDate)) then begin
+      //   if (RentResr.EndDate<CurrentDate) then begin testf = false; end;
+      // end;
+      // if (RentResr.TransDate>CurrentDate) then begin testf = false; end;
+      if (testf) then begin
+        aRentResr[aRentResr.length] = RentResr; 
+      end;
+    end;
+  end;
+  SortRecordArray(aRentResr,"TransDate");
+  firstf = true;
+  for (i=aRentResr.length-1;i>=0;i=i-1) begin
+    RentResr = aRentResr[i];
+    if (RentResr.Done!=0) then begin
+      count = count + 1;
+    end; 
+   // rentcount = rentcount + RentResr.RentQuant;
+    batchf = IsBatchedItem(RentResr.Code);
+    if (firstf) then begin
+      StartFormat(15);
+      OutString(0,0,USetStr(43682),false);
+      OutString(2,0,USetStr(43683),false);
+      OutString(3,0,USetStr(43684),false);
+      OutString(4,0,USetStr(43685),false);
+      OutString(5,0,USetStr(43686),false);
+      OutString(6,0,USetStr(43687),false);
+      OutString(7,0,USetStr(43688),false);
+      if (batchf) then begin
+        OutString(8,0,USetStr(43689),false);
+        OutString(1,0,USetStr(43708),true);
+      end else begin
+        OutString(1,0,USetStr(43689),true);
+      end;
+      EndFormat;
+      firstf = false;
+      Black_Divider(0,1);
+    end;
+    StartFormat(15);
+    OutString(0,0,RentResr.TransDate,false);
+    OutString(2,0,RentResr.EndDate,false);
+    Agreementr.SerNr = RentResr.AgreementNr;
+    if (ReadFirstMain(Agreementr,1,true)) then begin end;
+    OutString(3,0,Agreementr.CustCode,false);
+    OutString(4,0,Agreementr.Addr0,false);
+    OutString(5,0,RentResr.AgreeStatus,false);
+    OutString(6,"DblAgreementVc",RentResr.AgreementNr,false);
+    OutStringID(7,"DblRentResVc",RentResr.SerNr,false,RentResr.SerNr);
+    if (batchf) then begin
+      OutString(8,0,RentResr.Location,false);
+      OutVal(1,0,Round(RentResr.RentQuant,SetRoundModed(0)),M4UVal,true);
+    end else begin
+      OutString(1,0,RentResr.Location,true);
+    end;
+    EndFormat;
+    ChargeForFirstDay = 0;
+    if (RCBr.ChargeForFirstDay!=0) then begin ChargeForFirstDay = ChargeForFirstDay+1; end;
+    if (RentPSr.RentalSum==1) then begin 
+      v = RISChargeRentRes(Agreementr.SerNr,Agreementr.CustCode,Agreementr.CurncyCode,Agreementr.Site,RentResr,AdvPriceRecr,RentResr.EndDate,false,
+                        frdat,countednrday,perdays,thefrdat);
+      endperiod = Addday(frdat,countednrday);
+      if (GetYear(frdat))==(GetYear(endperiod)) then begin
+        monthslen = GetMonth(endperiod)-GetMonth(frdat);
+        if (monthslen==0) then begin 
+          countdays = endperiod.day - GetDay(frdat);
+          AddToArray(GetYear(frdat),ayear,GetMonth(frdat),amonth,countdays*RentResr.Sum *RentResr.RentQuant ,aamount,countednrday,acountdays,RentResr.RentQuant,arentqty,RentResr.SerNr,asernr,arescount,acnt);
+        end else begin
+          if (monthslen==1) then begin 
+            countdays = (DaysInMonth(frdat.year,frdat.month)-GetDay(frdat))+ChargeForFirstDay;//if counting first day  
+            AddToArray(GetYear(frdat),ayear,GetMonth(frdat),amonth,countdays*RentResr.Sum *RentResr.RentQuant ,aamount,countdays,acountdays,RentResr.RentQuant,arentqty,RentResr.SerNr,asernr,arescount,acnt);
+            if (countdays!=countednrday) then begin
+              countdays = countednrday-countdays;
+              frdat.day = 1;
+              frdat=AddMonth(frdat,1);                                                                     //countdays* RentResr.Sum
+              AddToArray(GetYear(frdat),ayear,GetMonth(frdat),amonth,countdays*RentResr.Sum *RentResr.RentQuant ,aamount,countdays,acountdays,RentResr.RentQuant,arentqty,RentResr.SerNr,asernr,arescount,acnt);
+            end;                                                  
+          end;
+          if (monthslen>1) then begin
+            while (countednrday>daysadded) begin
+              countdays = (DaysInMonth(frdat.year,frdat.month)-GetDay(frdat))+ChargeForFirstDay;
+              if (frdat.month==endperiod.month)then begin
+                countdays = endperiod.day - GetDay(frdat);
+              end;
+              AddToArray(GetYear(frdat),ayear,GetMonth(frdat),amonth,countdays*RentResr.Sum *RentResr.RentQuant ,aamount,countdays,acountdays,RentResr.RentQuant,arentqty,RentResr.SerNr,asernr,arescount,acnt);
+              daysadded = daysadded + countdays;
+              frdat.day = 1;
+              frdat = AddMonth(frdat,1);
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+  if (RentPSr.RentalSum==1) then begin 
+    StartFormat(15);
+    EndFormat;
+    StartFormat(15);
+    OutString(0,0,USetStr(43690),false);
+    EndFormat;
+    if (RentPSr.RentalVal==1) then begin 
+      tstr = USetStr(43694);
+    end else begin 
+      tstr = ""; 
+    end;
+    firstf = true;
+    if (firstf) then begin
+      StartFormat(15);
+      OutString(0,0,USetStr(43691),false);
+      OutString(2,0,USetStr(43692),false);
+      OutString(3,0,USetStr(43693),false);
+      OutString(185,0,tstr,true);
+      if (batchf) then begin
+        OutString(260,0,USetStr(43708),true);
+      end;
+      EndFormat;
+      firstf = false;
+      Black_Divider(0,1);
+    end;
+   // SortArray(amonth,M4Int);
+    SortArrayByDate(amonth,ayear,arescount,acountdays,aamount,arentqty);
+    for (i=0;i<acnt;i=i+1) begin  
+      if (acountdays[i]>0) then begin
+        StartFormat(15);
+        OutString(0,0,DateToDateStr(amonth[i],ayear[i]),false);
+        OutString(2,0,arescount[i],false);
+        OutString(3,0,acountdays[i],false);
+        if (RentPSr.RentalVal==1) then begin 
+          OutVal(185,0,aamount[i],M4Val,true);
+        end;
+        if (batchf) then begin
+        //  OutVal(260,0,Round(rentcount,SetRoundModed(0)),M4UVal,true);
+          OutVal(260,0,arentqty[i],M4Val,true);
+        end;
+        EndFormat;
+      end;
+    end;
+  end;
+  StartFormat(15);
+  EndFormat;
+  return;
+end;
+
+procedure ArrItemsInInternalStock(string item,string ser,array string alocation,array val aquant,var integer acnt)
+begin
+  record IntSerBalVc SBr;
+  record MainStockBlock MainStockRec;
+
+  SBr.Item = item;
+  SBr.Serial = ser;
+  while (LoopKey("ItemSerial",SBr,2,true)) begin
+    if (SBr.Serial==ser) and (SBr.Item==item) then begin
+      aquant[acnt] = SBr.Quant;
+      alocation[acnt] = SBr.Location;
+      acnt = acnt+1;
+    end;
+  end;
+  return;
+end;
+
+global
+procedure RentItemStatRn(record RcVc RepSpec)
+begin
+  string 255 tstr;
+  Integer rw,acnt,i;
+  val wstotal,v;
+  Boolean foundf,TrHs,testf,firstf,batchf;
+  record RentINVc RentINr;
+  record RentResVc RentResr;
+  record InternMovVc InternMovr;
+  record INTransferVc INTransferr;
+  record SVOVc SVOr;
+  record RentPSVc RentPSr;
+  record AgreementVc Agreementr;
+  record INVc INr;
+  array string 255 alocation;
+  array val aquant;
+  
+  RentPSr.Signature = CurrentUser;
+  if (ReadFirstMain(RentPSr,1,true)) then begin end;
+  StartReportJob(USetStr(43680));
+  rw = 1;
+  Header(rw,USetStr(43715) & ": " &  RepSpec.f2,1);
+  rw = rw + 1;  
+  Header(rw,USetStr(43716) & ": " &  RepSpec.f1,1);
+  rw = rw + 1; 
+  EndHeader;
+
+  SetRepCol(2,50);
+  SetRepCol(3,110);
+  SetRepCol(4,150);
+  SetRepCol(5,250);
+  SetRepCol(6,300);
+  SetRepCol(7,355);
+  SetRepCol(8,420);
+  SetRepCol(9,470);
+
+  StartFormat(15);
+  OutString(0,0,USetStr(43712),false);
+  OutString(2,0,USetStr(43711),false);
+  OutString(3,0,USetStr(43713),false);
+  OutString(4,0,USetStr(43706),false);
+  OutString(5,0,USetStr(43689),false);
+  OutString(310,0,USetStr(43708),true);
+  
+  EndFormat;
+  Black_Divider(0,1);
+  foundf = true;
+
+  RentINr.SerialNr = RepSpec.f1;
+  RentINr.Code = RepSpec.f2;
+  while (LoopKey("SerialNr",RentINr,2,foundf)) begin
+    if (nonblank(RepSpec.f1)) then begin
+      if (RentINr.SerialNr!= RepSpec.f1) then begin foundf = false; end;
+    end;
+    if (nonblank( RepSpec.f2)) then begin
+      RentINr.Code = RepSpec.f2;
+      if (RentINr.Code!= RepSpec.f2) then begin foundf = false; end;
+    end;
+    if (foundf) then begin 
+      StartFormat(15);
+      OutStringID(0,"DblSerRentINVc",RentINr.SerialNr,false,RentINr.Code);
+      OutStringID(2,"DblINVc",RentINr.Code,false,RentINr.Code);
+      OutString(3,"DblAT2UnitVc",RentINr.InventoryNr,false);
+      OutString(4,0,RentINr.Name,false);
+      INr.Code = RentINr.Code;
+      if (ReadFirstMain(INr,1,true)) then begin
+        if (INr.SerNrf==2) then begin
+          ArrItemsInInternalStock(RentINr.Code,RentINr.SerialNr,alocation,aquant,acnt);
+          for (i=0;i<acnt;i=i+1) begin
+            if (aquant[i]>0) then begin
+              OutString(5,0,alocation[i],false);
+              OutVal(310,0,Round(aquant[i],SetRoundModed(0)),M4UVal,true);
+            end else begin
+              //OutString(6,0,USetStr(43719),false);
+            end;
+          end;
+        end;
+        if (INr.SerNrf==1) then begin 
+          ArrItemsInInternalStock(RentINr.Code,RentINr.SerialNr,alocation,aquant,acnt);
+          for (i=0;i<acnt;i=i+1) begin
+            if (aquant[i]>0) then begin
+              OutString(5,0,alocation[i],false);
+              OutVal(310,0,Round(aquant[i],SetRoundModed(0)),M4UVal,true);
+            end else begin
+             // OutString(6,0,USetStr(43720),false);
+            end;
+          end;
+        end;
+      end;
+      EndFormat;
+      StartFormat(15);
+      EndFormat;
+      if (RentPSr.RentalReservations==1) then begin
+        PrintRentalRes(RentINr,RentPSr,batchf);
+      end;
+      batchf = IsBatchedItem(RentINr.Code);
+
+      if (RentPSr.IntStockMov==1) then begin
+        StartFormat(15);
+        OutString(0,0,USetStr(43695),false);
+        EndFormat;
+        firstf = true;
+        if (firstf) then begin
+          StartFormat(15);
+          OutString(0,0,USetStr(43696),false);
+          OutString(2,0,USetStr(43697),false);
+          OutString(3,0,USetStr(43698),false);
+          OutString(4,0,USetStr(43699),false);
+          OutString(5,0,USetStr(43700),false);
+          OutString(8,0,USetStr(43717),false);
+          if (batchf) then begin
+            OutString(1,0,USetStr(43708),true);
+          end;
+          EndFormat;
+          firstf = false;
+          Black_Divider(0,1);
+        end;
+        PrintInternMovRow(RentINr,batchf);
+      end;  
+      if (RentPSr.StockTrans==1) then begin
+        StartFormat(15);
+        OutString(0,0,USetStr(43718),false);
+        EndFormat;
+        firstf = true;
+        if (firstf) then begin
+          StartFormat(15);
+          OutString(0,0,USetStr(43696),false);
+          OutString(2,0,USetStr(43697),false);
+          OutString(3,0,USetStr(43698),false);
+          OutString(4,0,USetStr(43699),false);
+          OutString(5,0,USetStr(43700),false);
+          if (batchf) then begin
+            OutString(1,0,USetStr(43708),true);
+          end;
+          EndFormat;
+          firstf = false;
+          Black_Divider(0,1);
+        end;
+        PrintINTransferRow(RentINr,batchf);
+      end;  
+      StartFormat(15);
+      EndFormat;
+      if (RentPSr.ServiceOrders==1) then begin
+        StartFormat(15);
+        OutString(0,0,USetStr(43701),false);
+        EndFormat;
+        if (RentPSr.ServiceOrderVal==1) then begin 
+          tstr = USetStr(43709);
+        end else begin 
+          tstr = ""; 
+        end;
+        PrintHeader(USetStr(43696),USetStr(43702),USetStr(43703),USetStr(43704),USetStr(43705),"",USetStr(43707),USetStr(43708),USetStr(43709));
+        StartFormat(15);
+        PrintSVO(RentINr,RentPSr,wstotal);
+        if (RentPSr.ServiceOrderVal==1) then begin
+          StartFormat(15);
+          OutString(0,0,USetStr(43710),false);
+          OutVal(1,0,wstotal,M4Val,true);
+          EndFormat;
+        end;
+      end;
+    end;
+  end;
+  EndJob;
+  return;
+end;

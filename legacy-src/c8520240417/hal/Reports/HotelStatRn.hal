@@ -1,0 +1,672 @@
+external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
+external function val NumberOfStayDays(Date,Date,Time,Time,Integer);
+external function Boolean IsCancelState(String);
+external procedure HT2Per(Date, Date , var string);
+external function boolean IsTDBefore(date,time,date,time);
+external function LongInt DaysInYear(Integer);
+external function LongInt CurrentDaysInYear(Date);
+external function LongInt DateDiff(Date,Date);
+
+function Integer GetRoomCapacity(string incltypes,string excltypes,var Integer closedcnt) 
+begin
+  record ResVc Resr;
+  Integer res;
+  Boolean testf;
+
+  closedcnt = 0;
+  while (Loopmain(Resr,1,true)) begin
+    testf = true;
+    if (nonblank(incltypes)) then begin
+      if (SetInSet(Resr.Type,incltypes)==false) then begin testf = false; end;
+    end;
+    if (nonblank(excltypes)) then begin
+      if (SetInSet(Resr.Type,excltypes)) then begin testf = false; end;
+    end;
+    if (testf) then begin res = res + 1; end;
+    if (testf and Resr.Terminated) then begin 
+      closedcnt = closedcnt + 1; 
+    end;
+  end;
+
+  GetRoomCapacity = res;
+  return;
+end;
+
+function LongInt DaysSince2000(date gdate)
+begin
+  LongInt res,m;
+  Integer i;
+  
+  res = 0;
+  m = GetYear(gdate);
+  for (i=2000;i<m;i=i+1) begin
+    res = res + DaysInYear(i);
+  end;
+  res = res + CurrentDaysInYear(gdate);
+  DaysSince2000 = res;
+  return;
+end;
+
+function integer day2number(date gdate,integer start)
+begin
+  integer res;
+  
+  res = DaysSince2000(gdate);
+  res = res - start; 
+  day2number = res;
+  return;
+end;
+
+function LongInt GetRoomBudgetedOccupancy(date tsd,string incltypes,string excltypes)
+begin
+  record OccupancyVc Occupancyr;
+  Boolean testf;
+  LongInt res;
+
+  res = -1;
+  while (LoopMain(Occupancyr,1,true)) begin
+   testf = true; 
+    if (DateInRange(tsd,Occupancyr.StartDate,Occupancyr.EndDate)==false) then begin testf = false; end;
+    if (blank(incltypes) and blank(excltypes)) then begin 
+      if (nonblank(Occupancyr.ResType)) then begin
+        testf = false; 
+      end; 
+    end else begin 
+      if (nonblank(incltypes)) then begin
+        if (!SetInSet(Occupancyr.ResType,incltypes)) or (blank(Occupancyr.ResType)) then begin testf = false; end;
+      end;
+      if (nonblank(excltypes)) then begin
+        if (SetInSet(Occupancyr.ResType,excltypes)) then begin testf = false; end;
+      end;  
+    end;
+    if (testf) then begin
+      res = Occupancyr.OccupResNr;
+    end;
+  end;
+  GetRoomBudgetedOccupancy = res;
+  return;
+end;
+
+procedure PrintReportHeaderLine(Integer budget,Integer ArtMode,Boolean dogreydivs)
+begin
+  record HotelBlock Hotelb;
+
+  BlockLoad(Hotelb);
+  if (ArtMode==0) then begin
+    SetRepCol(2,100);
+    SetRepCol(3,240);
+    SetRepCol(4,400);
+    StartFormat(15);
+    OutString(70,0,USetStr(12031),true);
+    OutString(2,0,USetStr(12031),true);
+    OutString(3,0,USetStr(12033),true);
+    EndFormat;
+    StartFormat(15);
+    OutString(70,0,USetStr(43217),true);
+    OutString(2,0,USetStr(12037),true);
+    OutString(3,0,USetStr(12041),true);
+    OutString(4,0,USetStr(12048),true);
+    EndFormat;
+  end else begin
+    if (budget) then begin 
+      SetRepCol(2,100);
+      SetRepCol(3,190);
+    end else begin
+      SetRepCol(2,120);
+      SetRepCol(3,180);
+    end;
+    SetRepCol(4,225);
+    SetRepCol(5,300);
+    SetRepCol(6,360);
+    SetRepCol(7,420);
+    SetRepCol(8,480);
+
+    StartFormat(15);
+    OutString(70,0,USetStr(12031),true);
+    OutString(2,0,USetStr(12031),true);
+    if (budget) then begin 
+      OutString(150,0,USetStr(43218),true);
+    end;
+    OutString(3,0,USetStr(12032),true);
+    OutString(4,0,USetStr(12033),true);
+    if (Hotelb.StatusTrack==1) then begin 
+      OutString(250,0,USetStr(43214),true);
+    end;
+    OutString(5,0,USetStr(12034),true);
+    OutString(6,0,USetStr(12035),true);
+    OutString(7,0,USetStr(12031),true);
+    OutString(8,0,USetStr(12032),true);
+    EndFormat;
+    StartFormat(15);
+    OutString(0,0,USetStr(12036),false);
+    OutString(70,0,USetStr(43217),true);
+    OutString(2,0,USetStr(12037),true);
+    if (budget) then begin 
+      OutString(150,0,USetStr(43219),true);
+    end;
+    OutString(3,0,USetStr(12040),true);
+    OutString(4,0,USetStr(12041),true);
+    OutString(5,0,USetStr(12039),true);
+    OutString(6,0,USetStr(12031),true);
+    OutString(7,0,USetStr(12038),true);
+    OutString(8,0,USetStr(12038),true);
+    EndFormat;
+  end;
+  if (dogreydivs) then begin
+    Gray_Divider(0,1);
+  end else begin
+    Black_Divider(0,1);
+  end;
+  return;
+end;
+
+procedure FindCheckInResHistRecord(record JobVc Jobr,var date checkedindate)
+begin
+  record ResHistVc ResHistr;
+  record ReservationStatusVc RSr,RS2r;
+  Boolean TrHs,soldtodayf,soldnextdayf;
+  date confirmeddate;
+  integer day,lenghtday,i;
+  TrHs = true;
+  ResHistr.ResNumber = Jobr.SerNr;
+  while (LoopKey("ResNumber",ResHistr,1,TrHs)) begin
+    if (ResHistr.ResNumber!=Jobr.SerNr) then begin TrHs = false; end;
+    if (TrHs) then begin
+      soldtodayf = false;
+      soldnextdayf = false;
+      RSr.Code = ResHistr.ResStatus;
+      if (ReadFirstMain(RSr,1,true)) then begin end;
+      switch (RSr.StatType) begin
+        case 3: 
+          RS2r.Code = ResHistr.PrevResStatus;
+          if (ReadFirstMain(RS2r,1,true)) then begin
+            if (RS2r.StatType==4) then begin soldnextdayf = true; 
+            checkedindate = ResHistr.TransDate;
+            end;  
+          end;
+      end;
+    end;      
+  end;
+  return;
+end;
+
+procedure CalculateRoomsSold(record JobVc Jobr,var vector LongInt vRoomsSold)
+begin
+  record ResHistVc ResHistr;
+  record ReservationStatusVc RSr,RS2r;
+  Boolean TrHs,soldtodayf,soldnextdayf;
+  date confirmeddate,checkedindate,checkedind;
+  integer day,lenghtday,i;
+
+  TrHs = true;
+  ResHistr.ResNumber = Jobr.SerNr;
+  while (LoopKey("ResNumber",ResHistr,1,TrHs)) begin   
+    if (ResHistr.ResNumber!=Jobr.SerNr) then begin TrHs = false; end;
+    if (TrHs) then begin
+    soldtodayf = false;
+    soldnextdayf = false;
+    RSr.Code = ResHistr.ResStatus;
+    if (ReadFirstMain(RSr,1,true)) then begin end;
+    switch (RSr.StatType) begin
+      case 4: soldtodayf = true; 
+      case 3: 
+        RS2r.Code = ResHistr.PrevResStatus;
+        if (ReadFirstMain(RS2r,1,true)) then begin
+          if (RS2r.StatType==4) then begin 
+            soldnextdayf = true; 
+            checkedindate = ResHistr.TransDate;
+          end;  
+       end;
+    end;
+      if (soldtodayf) then begin 
+        FindCheckInResHistRecord(Jobr,checkedind);
+        confirmeddate = ResHistr.TransDate;
+        lenghtday =  DateDiff(checkedind,confirmeddate);
+        if (vRoomsSold[confirmeddate]==-1) then begin vRoomsSold[confirmeddate]=0; end;
+        vRoomsSold[confirmeddate] = vRoomsSold[confirmeddate] + 1;
+        for (i=0;i<lenghtday;i=i+1) begin
+          day = day +1;
+          if (vRoomsSold[AddDay(ResHistr.TransDate,day)]==-1) then begin vRoomsSold[AddDay(ResHistr.TransDate,day)]= 0; end;
+          vRoomsSold[AddDay(ResHistr.TransDate,day)] = vRoomsSold[AddDay(ResHistr.TransDate,day)] + 1;
+        end;  
+      end;
+      if (soldnextdayf) then begin
+        if (vRoomsSold[AddDay(ResHistr.TransDate,1)]==-1) then begin  vRoomsSold[AddDay(ResHistr.TransDate,1)]=0;end;
+        vRoomsSold[AddDay(ResHistr.TransDate,1)] = vRoomsSold[AddDay(ResHistr.TransDate,1)] - 1;
+      end;
+    end;
+  end;
+return;
+end;
+
+global
+procedure DoHotelStatRn4(Integer budget,Integer ArtMode,date sd,date ed,string incltypes,string excltypes,boolean dogreydivs,
+                         var vector integer vtotalroomsav,var vector integer vtotalroomtaken,var vector integer vtotalguestinh,var vector integer vtotalclosedcnt,var vector integer vtotalbudocc,
+                         var vector val vtotalocc,var vector integer vtotalavgroomprice,var vector integer vtotalIncpRoom,var vector integer vtotalCumRoomsTaken,var vector integer vtotalCumOcc,
+                         var vector integer vtotalCumGuests,var vector integer vtotalrcap,var vector integer vtotalds,var vector integer vtotalCumavgprice,Boolean printf,var vector LongInt vtotalRoomsSold,integer rcap)
+begin
+  record JobVc Jobr;
+  record ResTypeVc RoomType;
+  record HotelBlock Hotelb;
+  record ResHistVc ResHistr;
+  Date blankd,tsd,ted,vDate;
+  Boolean foundf,testf;
+  String 255 tstr,tsdstr;
+  Time endofday,startofday;
+  Array integer PeopleInHouse,RoomsTaken;
+  Array val avgprice;
+  Integer DaysStay,i,j,maxstay,startpoint,ds,lenclass,closedcnt;
+  Integer roomsav,roomtaken,guestinh,budocc,rw;
+  LongInt roomssold;
+  Val Occ,CumGuests,CumRoomsTaken,avgroomprice,CumOcc,Cumavgprice,IncpRoom;
+  vector integer vPeopleInHouse,vRoomsTaken,vRoomsAvail,totalroomsav;
+  vector LongInt vRoomsSold;
+  vector val vavgprice;
+
+  BlockLoad(Hotelb);  
+  endofday = Hotelb.EndOfDay;
+  if (blanktime(endofday)) then begin
+    endofday = Hotelb.CheckOut;
+  end;
+  startofday = Hotelb.StartNewDay;
+  if (blanktime(startofday)) then begin
+    startofday = Hotelb.CheckIn;
+  end;
+  for (j=1;j<2000;j=j+1) begin
+    avgprice[j] = 0;
+    RoomsTaken[j] = 0;
+    PeopleInHouse[j] = 0;
+  end;
+  Cumavgprice = 0;
+  CumGuests = 0;
+  startpoint = DaysSince2000(sd) - 100;
+
+  if (printf) then begin
+    PrintReportHeaderLine(budget,ArtMode,dogreydivs);
+  end;
+  lenclass = 4;
+  while (lenclass>=0) begin
+    ResetLoop(Jobr);
+    Jobr.LengthClass = lenclass;
+    Jobr.TransDate = sd;
+    switch (lenclass) begin
+      case 4: Jobr.TransDate = blankd;
+      case 3: Jobr.TransDate = AddDay(Jobr.TransDate,-366);
+      case 2: Jobr.TransDate = AddDay(Jobr.TransDate,-31);
+      case 1: Jobr.TransDate = AddDay(Jobr.TransDate,-7);
+      case 0: ;
+    end;
+    foundf = true;
+    while (LoopKey("LengthClass",Jobr,2,foundf)) begin
+      if (Jobr.LengthClass!=lenclass) then begin foundf = false; end;
+      if (Jobr.TransDate>ed) then begin foundf = false; end;
+      if (foundf) then begin      
+        testf = true;
+        if (testf) then begin      
+          if (IsCancelState(Jobr.ResStatus)) then begin
+            testf = false;
+          end;
+        end;
+        if (nonblank(incltypes)) then begin
+          if (SetInSet(Jobr.Type,incltypes)==false) then begin
+            testf = false;
+          end;
+        end;
+        if (nonblank(excltypes)) then begin
+          if (SetInSet(Jobr.Type,excltypes)) then begin
+            testf = false;
+          end;
+        end;
+        if (testf) then begin   
+          CalculateRoomsSold(Jobr,vRoomsSold);
+          RoomType.Code = Jobr.Type;
+          if (ReadFirstMain(RoomType,1,true)==false) then begin
+            if (IsStandardProduct) then begin
+              RoomType.InvoiceBy = 1;
+            end else begin
+              RoomType.InvoiceBy = 0;
+            end;
+          end;
+//          DaysStay = NumberOfStayDays(Jobr.TransDate,Jobr.EndDate,Jobr.StartTime,Jobr.EndTime,RoomType.InvoiceBy);
+          DaysStay = NumberOfStayDays(Jobr.TransDate,Jobr.EndDate,Jobr.StartTime,Jobr.EndTime,1) - 1;
+          tsd = Jobr.TransDate;
+          if (Jobr.StartTime<startofday) then begin
+            tsd = AddDay(tsd,-1);
+          end;
+
+          ted = AddDay(tsd,DaysStay);
+          // if (Jobr.EndTime>endofday) then begin
+          //   ted = AddDay(ted,1);
+          // end;
+          if (tsd<sd) then begin tsd = sd; end;
+          if (ted>ed) then begin ted = ed; end;
+
+          if (tsd>ed) then begin testf = false; end;
+          if (ted<sd) then begin testf = false; end;          
+          if (testf) then begin 
+            vRoomsAvail[tsd] = vRoomsAvail[tsd] + 1;  
+            while (tsd<=ted) begin
+              vPeopleInHouse[tsd] = vPeopleInHouse[tsd] + MatRowCnt(Jobr);
+              vRoomsTaken[tsd] = vRoomsTaken[tsd] + 1;
+              vavgprice[tsd] = vavgprice[tsd] + (MulRateToBase1(Jobr.CurncyCode,Jobr.Sum4,Jobr.FrRate,Jobr.ToRateB1,Jobr.ToRateB2,Jobr.BaseRate1,Jobr.BaseRate2,DefaultCurRoundOff)/DaysStay);
+              tsd = AddDay(tsd,1);
+            end;
+          end;
+/*          
+          i = day2number(Jobr.TransDate,startpoint);
+          if (Jobr.StartTime<=startofday) then begin
+            i = i - 1;
+          end;
+          for (j=0;j<DaysStay;j=j+1) begin
+            PeopleInHouse[i] = PeopleInHouse[i] + MatRowCnt(Jobr);
+            RoomsTaken[i] = RoomsTaken[i] + 1;
+            avgprice[i] = avgprice[i] + (MulRateToBase1(Jobr.CurncyCode,Jobr.Sum4,Jobr.FrRate,Jobr.ToRateB1,Jobr.ToRateB2,Jobr.BaseRate1,Jobr.BaseRate2,DefaultCurRoundOff)/DaysStay);
+            i = i + 1;
+          end;        
+*/          
+        end;
+      end;
+    end;
+    lenclass = lenclass - 1;
+  end;  
+/*
+  maxstay = 90;
+  foundf = true; 
+  Jobr.TransDate = AddDay(sd,-maxstay);
+  while LoopKey("TransDate",Jobr,1,foundf) begin
+    if (Jobr.TransDate>ed) then begin
+      foundf = false;
+    end else begin
+      if (not IsCancelState(Jobr.ResStatus)) then begin
+        if ((incltypes<>Jobr.Type) or blank(incltypes)) then begin
+          if ((excltypes==Jobr.Type) or blank(excltypes)) then begin
+            RoomType.Code = Jobr.Type;
+            if (ReadFirstMain(RoomType,1,true)==false) then begin
+              RoomType.InvoiceBy = 0;
+            end;
+            DaysStay = NumberOfStayDays(Jobr.TransDate,Jobr.EndDate,Jobr.StartTime,Jobr.EndTime,RoomType.InvoiceBy);
+            i = day2number(Jobr.TransDate,startpoint);
+            if (Jobr.StartTime<=startofday) then begin
+              i = i - 1;
+            end;
+            for (j=0;j<DaysStay;j=j+1) begin
+              PeopleInHouse[i] = PeopleInHouse[i] + MatRowCnt(Jobr);
+              RoomsTaken[i] = RoomsTaken[i] + 1;
+              avgprice[i] = avgprice[i] + (MulRateToBase1(Jobr.CurncyCode,Jobr.Sum4,Jobr.FrRate,Jobr.ToRateB1,Jobr.ToRateB2,Jobr.BaseRate1,Jobr.BaseRate2,DefaultCurRoundOff)/DaysStay);
+              i = i + 1;
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+  i = day2number(sd,startpoint);
+  ds = 0;
+  vDate = sd;
+  while (vDate<=ed) begin
+    ds = ds + 1;
+    Occ = (100 * RoomsTaken[i]);  Occ = (Occ/rcap);
+    CumRoomsTaken = CumRoomsTaken + RoomsTaken[i];
+    avgroomprice = avgprice[i]; avgroomprice = (avgroomprice / RoomsTaken[i]);
+    Cumavgprice = Cumavgprice + avgprice[i];
+    CumOcc = 100 * CumRoomsTaken;  CumOcc = CumOcc/(rcap*ds);
+    CumGuests = CumGuests + PeopleInHouse[i];
+    IncpRoom = avgprice[i] / rcap;
+    StartFormat(15);
+    OutDate(0,0,vDate,false);
+    OutLongInt(2,0,RoomsTaken[i],true);
+    OutVal(3,0,Occ,M4Val,true);
+    OutLongInt(4,0,PeopleInHouse[i],true);
+    OutVal(5,0,avgroomprice,M4Val,true);
+    OutVal(6,0,IncpRoom,M4Val,true);
+    OutVal(7,0,CumRoomsTaken,M40Val,true);
+    OutVal(8,0,CumOcc,M4Val,true);
+    EndFormat;
+    vDate = AddDay(vDate,1);
+    i = i + 1;
+  end;  
+*/ 
+  tsd = sd;
+  while (tsd<=ed) begin
+    ds = ds + 1;
+    Occ = (100 * vRoomsTaken[tsd]);  Occ = (Occ/rcap); 
+    CumRoomsTaken = CumRoomsTaken + vRoomsTaken[tsd];
+    avgroomprice = vavgprice[tsd]; avgroomprice = (avgroomprice / vRoomsTaken[tsd]);
+    Cumavgprice = Cumavgprice + vavgprice[tsd];
+    CumOcc = 100 * CumRoomsTaken;  CumOcc = CumOcc/(rcap*ds);
+    CumGuests = CumGuests + vPeopleInHouse[tsd];
+    IncpRoom = vavgprice[tsd] / rcap;
+    roomsav = rcap-vRoomsTaken[tsd];
+    roomtaken = vRoomsTaken[tsd];
+    budocc = GetRoomBudgetedOccupancy(tsd,incltypes,excltypes);
+    guestinh = vPeopleInHouse[tsd];
+    roomssold = vRoomsSold[tsd];
+    tsdstr = DateToString(tsd,"YYYY/MM/DD");
+
+    vtotalroomsav[tsdstr] =  roomsav;
+    vtotalroomtaken[tsdstr] = vtotalroomtaken[tsdstr] + roomtaken;
+    vtotalguestinh[tsdstr] = vtotalguestinh[tsdstr] + guestinh;
+    vtotalclosedcnt[tsdstr]= vtotalclosedcnt[tsdstr] + closedcnt;
+    vtotalbudocc[tsdstr] = vtotalclosedcnt[tsdstr] + budocc;
+    vtotalocc[tsdstr] = vtotalocc[tsdstr] + Occ;
+    vtotalavgroomprice[tsdstr] = vtotalavgroomprice[tsdstr]+ avgroomprice;
+    vtotalIncpRoom[tsdstr ]= vtotalIncpRoom[tsdstr] + IncpRoom;
+    vtotalCumRoomsTaken[tsdstr] = vtotalCumRoomsTaken[tsdstr] + CumRoomsTaken;
+    vtotalCumOcc[tsdstr] = vtotalCumOcc[tsdstr] + CumOcc;
+    vtotalCumGuests[tsdstr]= vtotalCumGuests[tsdstr] + CumGuests;
+    vtotalrcap[tsdstr]= vtotalrcap[tsdstr] + rcap;
+    vtotalds[tsdstr] = vtotalds[tsdstr] + ds;
+    vtotalCumavgprice[tsdstr] = vtotalCumavgprice[tsdstr] + Cumavgprice;
+    vtotalRoomsSold[tsdstr] = vtotalRoomsSold[tsdstr] + roomssold;
+
+    if (printf) then begin
+      StartFormat(15);
+      OutDate(0,0,tsd,false);
+      OutLongInt(70,0,roomsav,true);
+      OutLongInt(2,0,vRoomsTaken[tsd],true);
+      if (ArtMode==0) then begin
+        OutLongInt(3,0,vPeopleInHouse[tsd],true);
+        OutString(4,0,closedcnt,true); 
+      end else begin
+        if (budget) then begin
+          OutLongInt(150,0,budocc,true);
+        end;
+        OutVal(3,0,Occ,M4Val,true);
+        OutLongInt(4,0,vPeopleInHouse[tsd],true);
+        if (Hotelb.StatusTrack==1) then begin 
+          OutLongInt(250,0,roomssold,true);
+        end;
+        OutVal(5,0,avgroomprice,M4Val,true);
+        OutVal(6,0,IncpRoom,M4Val,true);
+        OutVal(7,0,CumRoomsTaken,M40Val,true);
+        OutVal(8,0,CumOcc,M4Val,true);
+      end;
+      EndFormat;
+    end;
+    tsd = AddDay(tsd,1);
+  end;
+  if (printf) then begin
+    if (dogreydivs) then begin
+      Gray_Divider(0,1);
+    end else begin
+      Black_Divider(0,1);
+    end;
+    if (ArtMode==0) then begin
+      StartFormat(15);
+      OutString(2,0,CumRoomsTaken,true); 
+      OutString(3,0,CumGuests,true);
+      EndFormat;
+    end else begin
+      StartFormat(15);
+      tstr = CumGuests;
+      OutString(0,0,USetStr(12042) & tstr,false);
+      OutString(0,0,USetStr(12043) & CumRoomsTaken,false);
+      tstr = Cumavgprice / (rcap*ds);
+      OutString(0,0,USetStr(12044) & tstr,false);
+      tstr = CumOcc;
+      OutString(0,0,USetStr(12045) & tstr,false);
+      tstr = (CumGuests/ds);
+      OutString(0,0,USetStr(12046) & tstr,false); 
+      OutString(0,0,USetStr(12047) & rcap,false); 
+      EndFormat;
+    end;
+  end;  
+  return;
+end;
+
+global
+procedure DoHotelStatRn3(Integer budget,Integer ArtMode,date sd,date ed,string incltypes,string excltypes,boolean dogreydivs)
+begin
+  vector integer vtotalroomsav,vtotalroomtaken,vtotalguestinh,vtotalclosedcnt,vtotalbudocc;
+  vector val vtotalocc;
+  vector integer vtotalavgroomprice,vtotalIncpRoom,vtotalCumRoomsTaken,vtotalCumOcc;
+  vector integer vtotalCumGuests,vtotalrcap,vtotalds,vtotalCumavgprice;
+  vector LongInt vtotalRoomsSold;
+  integer rcap;
+
+  DoHotelStatRn4(budget,1,sd,ed,incltypes,excltypes,dogreydivs,vtotalroomsav,vtotalroomtaken,vtotalguestinh,vtotalclosedcnt,vtotalbudocc,
+                 vtotalocc,vtotalavgroomprice,vtotalIncpRoom,vtotalCumRoomsTaken,vtotalCumOcc,vtotalCumGuests,vtotalrcap,vtotalds,vtotalCumavgprice,true,vtotalRoomsSold,rcap);
+return;
+end;
+
+global
+procedure DoHotelStatRn2(Integer artmode,date sd,date ed,string incltypes,string excltypes,boolean dogreydivs)
+begin
+  Integer budget;
+
+  DoHotelStatRn3(budget,1,sd,ed,incltypes,excltypes,dogreydivs);
+  
+  return;
+end;
+
+global
+procedure DoHotelStatRn(date sd,date ed,string incltypes,string excltypes,boolean dogreydivs)
+begin
+  DoHotelStatRn2(1,sd,ed,incltypes,excltypes,dogreydivs);
+  return;
+end;
+
+global
+procedure HotelStatRn(Record RcVc RepSpec)
+begin
+  Integer i,rw,rwcnt,oldcomp,totrcap,closedcnt,rcap;
+  string 255 tstr,sdate;
+  record CompaniesBlock Cb;
+  row CompaniesBlock Cbrw;
+  record HotelBlock Hotelb;
+  vector integer vtotalroomsav,vtotalroomtaken,vtotalguestinh,vtotalclosedcnt,vtotalbudocc;
+  vector val vtotalocc;
+  vector integer vtotalavgroomprice,vtotalIncpRoom,vtotalCumRoomsTaken,vtotalCumOcc,vtotalCumGuests;
+  vector integer vtotalrcap,vtotalds,vtotalCumavgprice;
+  vector LongInt vtotalRoomsSold;
+  array string 255 atotal;
+  Longint pos;
+  string 255 incltypes,excltypes;
+
+  StartReportJob(USetStr(12030));
+  rw = 1;
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  if (nonblank(RepSpec.f1)) then begin
+    Header(rw,USetStr(43215) & ": " & RepSpec.f1,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f2)) then begin
+    Header(rw,USetStr(43216) & ": " & RepSpec.f2,1);
+    rw = rw + 1;
+  end;
+  if (RepSpec.IncDaughter==1) then begin
+    tstr = USetStr(19171);
+    Header(rw,tstr,0);
+    rw = rw + 1;
+  end;
+  if (RepSpec.ArtMode==1) then begin
+    tstr = USetStr(4129);
+  end else begin
+    tstr = USetStr(6671);
+  end;
+
+  Header(rw,tstr,1);
+  EndHeader;
+  if (RepSpec.IncDaughter!=0) then begin 
+    oldcomp = CurrentCompany;
+    BlockLoad(Cb);
+    rwcnt = MatRowCnt(Cb);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(Cb,i,Cbrw);
+      if (SetCompanyCode(Cbrw.CompCode,false)) then begin     
+        rcap = rcap + GetRoomCapacity(incltypes,excltypes,closedcnt); // actually should be called for every day
+        rcap = rcap - closedcnt;        
+      end;
+    end;
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(Cb,i,Cbrw);
+      if (SetCompanyCode(Cbrw.CompCode,false)) then begin     
+        DoHotelStatRn4(RepSpec.flags[1],RepSpec.ArtMode,RepSpec.sStartDate,RepSpec.sEndDate,RepSpec.f2,RepSpec.f1,false,vtotalroomsav,vtotalroomtaken,vtotalguestinh,vtotalclosedcnt,vtotalbudocc,vtotalocc,vtotalavgroomprice,vtotalIncpRoom,vtotalCumRoomsTaken,vtotalCumOcc,vtotalCumGuests,vtotalrcap,vtotalds,vtotalCumavgprice,false,vtotalRoomsSold,rcap);
+      end;
+    end;
+    ResetCompany(oldcomp);
+  end else begin
+    rcap = rcap + GetRoomCapacity(incltypes,excltypes,closedcnt); // actually should be called for every day
+    rcap = rcap - closedcnt;
+    DoHotelStatRn4(RepSpec.flags[1],RepSpec.ArtMode,RepSpec.sStartDate,RepSpec.sEndDate,RepSpec.f2,RepSpec.f1,false,vtotalroomsav,vtotalroomtaken,vtotalguestinh,vtotalclosedcnt,vtotalbudocc,vtotalocc,vtotalavgroomprice,vtotalIncpRoom,vtotalCumRoomsTaken,vtotalCumOcc,vtotalCumGuests,vtotalrcap,vtotalds,vtotalCumavgprice,true,vtotalRoomsSold,rcap);
+  end;
+  if (RepSpec.IncDaughter!=0) then begin
+    StartFormat(15);
+    OutString(0,0,USetStr(9990) & " " & USetStr(26462)& ": ",false);
+    EndFormat; 
+    GetVectorTags(vtotalroomsav,atotal);
+    SortStringArray(atotal);
+
+    PrintReportHeaderLine(RepSpec.flags[1],RepSpec.ArtMode,false);
+    for (i=0;i<atotal.length;i=i+1) begin
+      pos = 0;
+      GetNextSubstring(atotal[i],pos,":",sdate);
+      StartFormat(15);
+      OutString(0,0,sdate,false);
+      OutLongInt(70,0,vtotalroomsav[sdate],true);
+      OutLongInt(2,0,vtotalroomtaken[sdate],true);
+      if (RepSpec.ArtMode==0) then begin
+        OutLongInt(3,0,vtotalguestinh[sdate],true);
+        OutLongInt(4,0,vtotalclosedcnt[sdate],true);
+      end else begin
+        if (RepSpec.flags[1]) then begin
+          OutLongInt(150,0,vtotalbudocc[sdate],true);
+        end;
+        OutVal(3,0,vtotalocc[sdate],M4Val,true);
+        OutLongInt(4,0,vtotalguestinh[sdate],true);
+        if (Hotelb.StatusTrack==1) then begin 
+          OutLongInt(250,0,vtotalRoomsSold[sdate],true);
+        end;
+        OutVal(5,0,vtotalavgroomprice[sdate],M4Val,true);
+        OutVal(6,0,vtotalIncpRoom[sdate],M4Val,true);
+        OutVal(7,0,vtotalCumRoomsTaken[sdate],M40Val,true);
+        OutVal(8,0,vtotalCumOcc[sdate],M4Val,true);
+      end;
+      EndFormat; 
+    end;
+    Black_Divider(0,1);
+    if (RepSpec.ArtMode==0) then begin
+      StartFormat(15);
+      OutString(2,0,vtotalCumRoomsTaken[sdate],true); 
+      OutString(3,0,vtotalCumGuests[sdate],true);
+      EndFormat;
+    end else begin
+      StartFormat(15);
+      tstr = vtotalCumGuests[sdate];
+      OutString(0,0,USetStr(12042) & tstr,false);
+      OutString(0,0,USetStr(12043) & vtotalCumRoomsTaken[sdate],false);
+      tstr = vtotalCumavgprice[sdate]/(vtotalrcap[sdate]*vtotalds[sdate]);
+      OutString(0,0,USetStr(12044) & tstr,false);
+      tstr = vtotalCumOcc[sdate];
+      OutString(0,0,USetStr(12045) & tstr,false);
+      tstr = (vtotalCumGuests[sdate]/vtotalds[sdate]);
+      OutString(0,0,USetStr(12046) & tstr,false); 
+      OutString(0,0,USetStr(12047) & vtotalrcap[sdate],false); 
+      EndFormat;
+    end;
+  end;
+  EndJob;
+  return;
+end;

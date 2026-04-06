@@ -1,0 +1,50 @@
+remote procedure NutritionFactsVc_PasteSetupNutritionFacts(var record NutritionFactsVc);
+
+global
+function Boolean NutritionFactsDClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record NutritionFactsVc NFr;
+
+  switch (fieldname) begin
+    case "ArtCode": 
+      if (changed!=0) then begin
+        GetWindowRecord(wn,NFr);
+        DeselectWindow(wn,false);
+        NutritionFactsVc_PasteSetupNutritionFacts(NFr);
+        PutWindowRecord(wn,NFr);
+      end;
+  end;
+  NutritionFactsDClassAfterEditField = res;
+  return;
+end;
+
+
+global
+function boolean NutritionFactsVcEFActiveCheck(string fieldname,Integer wn,Integer wnst,Integer rownr)
+BEGIN
+  Boolean res;
+  record NutritionFactsVc NFr;
+  row NutritionFactsVc NFrw;
+
+  res = true;
+  GetWindowRecord(wn,NFr);
+  if (rownr>=0) then begin
+    MatRowGet(NFr,rownr,NFrw);
+    if ((NonBlank(NFrw.UnitCode)) and NonBlank(NFrw.Nutrient) and (NonBlank(NFrw.Value))) then begin
+      //res = false;
+    end;
+  end;
+  NutritionFactsVcEFActiveCheck = res;
+end;
+
+
+global
+function Boolean NutritionFactsDClassActiveEditField(Integer wn,string fieldname,Integer fn,Integer wnst,Integer rownr,Integer ef)
+BEGIN
+  Boolean res;
+  
+  res = NutritionFactsVcEFActiveCheck(fieldname,wn,wnst,rownr);
+  NutritionFactsDClassActiveEditField = res;
+  return;
+end;

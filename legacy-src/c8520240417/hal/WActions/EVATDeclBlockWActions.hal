@@ -1,0 +1,49 @@
+external updating procedure HRMCTaxAuthorize(string,var Integer,var string,var string,var string,var string,var string);
+external function Boolean IsEnterprise();
+
+global
+updating function Boolean EVATDeclTClassOnOKWindow(Integer wn)
+begin
+  record EVATDeclBlock EVATDb;
+  record EVATDeclBlock oEVATDb;
+  string 255 comment,result,errortext,authtoken,refreshtoken;
+  Integer status;
+
+  GetWindowRecord(wn,EVATDb);  
+  BlockLoad(oEVATDb);
+  if (nonblank(EVATDb.AuthorisationCode) and blank(oEVATDb.OAuthToken)) then begin
+    HRMCTaxAuthorize(EVATDb.AuthorisationCode,status,comment,result,errortext,authtoken,refreshtoken);
+    if (nonblank(errortext)) then begin
+      MessageBox(41954,"");
+      goto LEVATDeclTClassOnOKWindow;
+    end;
+    EVATDb.OAuthToken = authtoken;
+    EVATDb.OAuthRefreshToken = refreshtoken;
+    PutWindowRecord(wn,EVATDb);  
+    if (nonblank(EVATDb.OAuthToken)) then begin
+      CheckmarkBox(41961,"");
+    end;        
+  end;  
+LEVATDeclTClassOnOKWindow:;  
+  EVATDeclTClassOnOKWindow = true;
+  return;
+end;
+
+global
+function Boolean EVATDeclTClassActiveEditField(Integer wn,string fieldname,Integer fn,Integer wnst,Integer rownr,Integer ef)
+begin
+  Boolean res;  
+  record EVATDeclBlock EVATDb;
+  
+  res = true;
+  if (wnst==Rs_update) then begin
+    GetWindowRecord(wn,EVATDb);  
+    switch (fieldname) begin
+      case "AuthorisationCode": if (IsEnterprise) then begin res = UserCanAction("AmendHRMCToken",false); end;
+      case "OAuthToken":        if (IsEnterprise) then begin res = UserCanAction("AmendHRMCToken",false); end;
+      case "OAuthRefreshToken": if (IsEnterprise) then begin res = UserCanAction("AmendHRMCToken",false); end;
+    end;
+  end;
+  EVATDeclTClassActiveEditField = res;
+  return;
+end;

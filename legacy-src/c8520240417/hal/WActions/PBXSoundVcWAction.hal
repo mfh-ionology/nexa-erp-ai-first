@@ -1,0 +1,64 @@
+global
+function string 40 PBXQueueSClassPasteSpecialWindowClass(string defpsname)
+begin
+  record PBXSoundVc PBXSoundr;
+  Integer wn;
+  string 40 res;
+
+  wn = CurWindow;
+  res = defpsname;
+  if (GetWindowClass(wn)=="PBXSoundDClass") then begin
+    GetWindowRecord(wn,PBXSoundr);
+    switch (PBXSoundr.Event) begin
+      case kAsteriskEventSoundQueueStart:
+        res = "PBXQueueSClass";
+      case kAsteriskEventSoundIVRStart:
+        res = "PBXIVRTreeSClass";
+      case kAsteriskEventSoundIVRClosed:
+        res = "PBXIVRTreeSClass";
+      case kAsteriskEventSoundLineClosed:
+        res = "PBXQueueSClass";
+    end;
+  end;
+  PBXQueueSClassPasteSpecialWindowClass = res;
+end;
+
+global
+procedure PBXSoundDClassRecordSoundButton()
+begin
+  if (IsAudioRecordingActive()) then begin goto LPBXSoundDClassRecordSoundButton; end;
+  
+  StartAudioRecording(kAudioProfileAsterisk,42720,false,"AudioRecordingFromPBXSoundDClassCompleted");
+
+LPBXSoundDClassRecordSoundButton:;
+  return;
+end;
+
+global
+procedure AudioRecordingFromPBXSoundDClassCompleted(string audiofile)
+begin
+  Integer wn;
+  record PBXSoundVc PBXSoundr;
+
+  wn = CurWindow;
+  if (wn<=0) then begin goto LAudioRecordingFromPBXSoundDClassCompleted; end;
+  GetWindowRecord(wn,PBXSoundr);
+  RecordLinkAndDeleteFile(audiofile,0,PBXSoundr,CurrentCompany);
+  
+LAudioRecordingFromPBXSoundDClassCompleted:;
+  return;
+end;
+
+global
+updating procedure ShowToLinksArchiveWsm()
+begin
+  Integer wn;
+  record RcVc RepSpec;
+  
+  wn = CurWindow;
+  GetWindowRecord(wn,RepSpec);
+  RepSpec.f2 = "-";
+  PutWindowRecord(wn,RepSpec);
+  UpdateArchive(wn);
+  return;
+end;

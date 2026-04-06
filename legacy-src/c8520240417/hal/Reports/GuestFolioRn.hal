@@ -1,0 +1,132 @@
+external function Boolean ContactInGroupClass(string,string,string,string,string,string);
+external procedure CalcSum(val,val,val,val,var val,Integer);
+external procedure HT2Per(Date, Date , var string);
+external procedure HTCusts(string, string, var string);
+external procedure HTCustClass(string,var string);
+external function Boolean HasContactClassification();
+
+global
+procedure GuestFolioRn(record RcVc RepSpec)
+begin
+  Integer rw;
+  string 255 tstr,index;
+  string 255 frcu,tocu,lastcu;
+  record ShopBaskVc SBr;
+  record CUVc CUr;
+  record INVc INr;
+  Boolean found,testf,cuheaderf;
+  val s,cus,cuq,tots,totq;
+  
+  frcu = FirstInRange(RepSpec.f1,10);
+  tocu = LastInRange(RepSpec.f1,10);
+  StartReportJob(USetStr(40820));
+  rw = 1;
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  HTCusts(frcu,tocu,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  if (HasContactClassification) then begin
+    HTCustClass(RepSpec.f2,tstr);
+    if (nonblank(tstr)) then begin
+      Header(rw,tstr,1);
+      rw = rw + 1;
+    end;
+  end;  
+  EndHeader;
+  StartFormat(15);
+   OutString(0,0,USetStr(40821),false);
+   OutString(100,0,USetStr(40822),false);
+  EndFormat;
+  StartFormat(15);
+   OutString(20,0,USetStr(40823),false);
+   OutString(109,0,USetStr(40824),true);
+   OutString(115,0,USetStr(40825),false);
+   OutString(380,0,USetStr(40826),true);
+   OutString(415,0,USetStr(40827),true);
+   OutString(465,0,USetStr(40828),true);
+  EndFormat;
+  Gray_Divider(0,1);
+  cuheaderf = true;
+  switch (RepSpec.flags[0]) begin
+    case 1:
+//      index = "Owner"; 8.5
+      index = "CUCode";
+    otherwise
+      index = "CUCode";
+  end;
+  SBr.CUCode = frcu;
+  found = true;
+  while (LoopKey(index,SBr,1,found)) begin
+    if (nonblank(RepSpec.f1)) then begin
+      if (SBr.CUCode!=tocu) then begin found = false; end;
+    end;
+    if (found) then begin
+      testf = true; 
+      if (SBr.Owner!=kShopBaskOwnerReservation) then begin testf = false; end;
+      if (SBr.Destination!=kShopBaskDestinationInvoice) then begin testf = false; end;
+      if (SBr.DestinationNr>0) then begin testf = false; end;
+      if (blank(SBr.CUCode)) then begin testf = false; end;
+      if (testf) then begin
+        CUr.Code = SBr.CUCode;
+        ReadFirstMain(CUr,1,true);
+        if (nonblank(RepSpec.f2)) then begin
+          testf = ContactInGroupClass(SBr.CUCode,"",RepSpec.f2,"CUST","","");
+        end;
+      end;
+      if (testf) then begin
+        if (nonblank(lastcu) and lastcu!=SBr.CUCode) then begin
+          Gray_Divider(0,1);
+          StartFormat(15);
+           OutVal(109,0,cuq,M4UVal,true);
+           OutVal(465,0,cus,M4Val,true);
+          EndFormat;
+          Gray_Divider(0,1);
+          cuheaderf = true;
+        end;
+        if (cuheaderf) then begin
+          StartFormat(15);
+           OutString(0,0,CUr.Code,false);
+           OutString(100,0,CUr.Name,false);
+          EndFormat;
+          Gray_Divider(0,200);
+          cuheaderf = false;
+          cus = blankval; cuq = blankval;
+        end;
+        INr.Code = SBr.ItemCode;
+        ReadFirstMain(INr,1,true);
+        CalcSum(SBr.Qty,SBr.Price,0,SBr.Discount,s,0);
+        StartFormat(15);
+        OutStringID(20,"DblShopJobBask",SBr.ItemCode,false,SBr.SerNr);
+        OutVal(109,0,SBr.Qty,M4UVal,true);
+        OutString(115,0,SBr.Comment,false);
+        OutVal(380,0,SBr.Price,M423Val,true);
+        OutVal(415,0,SBr.Discount,M41Val,true);
+        OutVal(465,0,s,M4Val,true);
+//        OutString(480,0,IVrw.VATCode,true);
+        EndFormat;
+        cuq = cuq + SBr.Qty;
+        cus = cus + s;
+        totq = totq + SBr.Qty;
+        tots = tots + s;
+        lastcu = SBr.CUCode;
+      end;
+    end;
+  end;
+  if (cus!=0) then begin
+    Gray_Divider(0,1);
+    StartFormat(15);
+     OutVal(109,0,cuq,M4UVal,true);
+     OutVal(465,0,cus,M4Val,true);
+    EndFormat;
+  end;
+  Gray_Divider(0,1);
+  StartFormat(15);
+   OutString(20,0,USetStr(40829),false);
+   OutVal(109,0,totq,M4UVal,true);
+   OutVal(465,0,tots,M4Val,true);
+  EndFormat;
+  EndJob;
+  return;
+end;

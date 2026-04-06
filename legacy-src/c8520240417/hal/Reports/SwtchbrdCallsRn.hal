@@ -1,0 +1,277 @@
+external procedure HT2Per(Date, Date , var string);
+external procedure GetUserDefActTypes(string,string,var string,var Integer,var Integer);
+external procedure GetUserName(string,var string);
+external remote procedure ActPers1CompanyRn(record RcVc ,string , string ,var LongInt ,var val );
+//external remote procedure ActPersAllCompRn(record RcVc ,string ,string ,var LongInt ,var val );
+//external inner procedure ActivitiesPerPerson(record RcVc ,Integer ,record UserVc ,string ,string ,string ,string ,var LongInt ,var LongInt ,var LongInt );
+
+procedure AddToArray(string signature,var Array string aSignature,var Array Integer aSignatureCount,var Integer cnt)
+begin
+  Integer i;
+  
+  for (i=0;i<cnt;i=i+1) begin
+    if (aSignature[i]==signature) then begin
+      aSignatureCount[i] = aSignatureCount[i] + 1;
+      goto LAddToArray;
+    end;
+  end;
+  aSignature[cnt] = signature;
+  aSignatureCount[cnt] = 1;
+  cnt = cnt + 1;
+LAddToArray:;
+  return;
+end;
+
+procedure PrintActivitiesSummary(record RcVc RepSpec,Integer t,string acttype)
+begin
+  record ActVc Actr;
+  Boolean found,testf,printedf;
+  Integer cnt,cnt2,i;
+  array string 255 aSignature;
+  array Integer aSignatureCount;
+  array integer sort_array;  
+  string 255 tstr;
+
+  found = true;
+  Actr.ActType = acttype;
+  Actr.TransDate = RepSpec.sStartDate;
+  while (LoopKey("ActType",Actr,2,found)) begin
+    if (Actr.ActType!=acttype) then begin found = false; end;
+    if (DateInRange(Actr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin found = false; end;
+    if (found) then begin
+      testf = true;
+      if (nonblank(RepSpec.AccStr)) then begin
+        if (Actr.PBXQueues!=RepSpec.AccStr) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f1)) then begin
+        if (Actr.MainPersons!=RepSpec.f1) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f2)) then begin
+        if (Actr.ActType!=RepSpec.f2) then begin testf = false; end;
+      end;
+      if (testf) then begin
+        if (printedf==false) then begin
+          StartFormat(15);
+          OutString(0,0,USetStr(38370+t),false);
+          EndFormat;
+           StartFormat(15);
+           OutString(0,0,USetStr(38386),false);
+           OutString(2,0,USetStr(38387),false);
+           OutString(4,0,USetStr(38388),false);
+           EndFormat;
+          Gray_Divider(0,1);
+          printedf = true;
+        end;
+        AddToArray(Actr.MainPersons,aSignature,aSignatureCount,cnt);
+      end;
+    end;
+  end;
+  if (printedf) then begin
+    Gray_Divider(0,1);
+    for (i=0;i<cnt;i=i+1) begin
+      GetUserName(aSignature[i],tstr);
+      StartFormat(15);
+      OutString(0,0,aSignature[i],false);
+      OutString(2,0,tstr,false);
+      OutString(4,0,aSignatureCount[i],true);
+      EndFormat; 
+    end;
+    StartFormat(5);
+    EndFormat;
+  end;
+  Gray_Divider(0,1);
+  return;
+end;
+
+procedure PrintActivities(record RcVc RepSpec,Integer t,string acttype)
+begin
+  record ActVc Actr;
+  Boolean found,testf,printedf;
+  val cnt;
+  
+  found = true;
+  Actr.ActType = acttype;
+  Actr.TransDate = RepSpec.sStartDate;
+  while (LoopKey("ActType",Actr,2,found)) begin
+    if (Actr.ActType!=acttype) then begin found = false; end;
+    if (DateInRange(Actr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin found = false; end;
+    if (found) then begin
+      testf = true;
+       if (nonblank(RepSpec.AccStr)) then begin
+        if (Actr.PBXQueues!=RepSpec.AccStr) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f1)) then begin
+        if (Actr.MainPersons!=RepSpec.f1) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f2)) then begin
+        if (Actr.ActType!=RepSpec.f2) then begin testf = false; end;
+      end;  
+      if (testf) then begin
+        if (printedf==false) then begin
+          StartFormat(15);
+          OutString(0,0,USetStr(38370+t),false);
+          EndFormat;
+          StartFormat(15);
+          OutString(0,0,USetStr(38375),false);
+          OutString(2,0,USetStr(38376),false);
+          OutString(3,0,USetStr(38377),false);
+          OutString(4,0,USetStr(38378),false);
+          OutString(5,0,USetStr(38379),true);
+          OutString(6,0,USetStr(38380),false);
+          OutString(7,0,USetStr(38381),false);
+          EndFormat;
+          Gray_Divider(0,1);
+          printedf = true;
+        end;
+        StartFormat(15);
+        OutDateID(0,"DblActVc",Actr.TransDate,false,Actr.SerNr);
+        OutString(2,0,Actr.StartTime,false);
+        OutString(3,0,Actr.CUCode,false);
+        OutString(4,0,Actr.Contact,false);
+        OutString(5,0,Actr.CostTime,true);
+        OutString(6,0,Actr.MainPersons,false);
+        OutString(7,0,Actr.Comment,false);
+        EndFormat;
+        cnt = cnt + 1;
+      end;
+    end;
+  end;
+  if (printedf) then begin
+    Gray_Divider(0,1);
+    StartFormat(15);
+     OutString(6,0,USetStr(6690),false);
+     OutVal(1,0,cnt,M40Val,true);
+    EndFormat;
+    StartFormat(5);
+    EndFormat;
+  end;
+  return;
+end;
+
+global
+procedure PrintActivitiesPerCompany(record RcVc RepSpec)
+begin
+  record ASTBlock ASTb;
+  Integer tmp;
+
+  SetRepCol(2,50);
+  SetRepCol(3,90);
+  SetRepCol(4,150);
+  SetRepCol(5,260);
+  SetRepCol(6,270);
+  SetRepCol(7,320);
+
+  GetUserDefActTypes(CurrentUser,"AsteriskCalls",ASTb.AsteriskCalls,tmp,ASTb.AsteriskCallsDone);
+  GetUserDefActTypes(CurrentUser,"MissedAsteriskCalls",ASTb.MissedAsteriskCalls,tmp,ASTb.MissedAsteriskCallsDone);
+  GetUserDefActTypes(CurrentUser,"ServerAsteriskCalls",ASTb.ServerAsteriskCalls,tmp,ASTb.ServerAsteriskCallsDone);
+  GetUserDefActTypes(CurrentUser,"ServerMissedAsteriskCalls",ASTb.ServerMissedAsteriskCalls,tmp,ASTb.ServerMissedAsteriskCallsDone);
+  
+  if (RepSpec.flags[0]!=0) then begin
+    PrintActivitiesSummary(RepSpec,1,ASTb.AsteriskCalls);
+    PrintActivities(RepSpec,1,ASTb.AsteriskCalls);
+  end;
+  if (RepSpec.flags[1]!=0) then begin
+    PrintActivitiesSummary(RepSpec,2,ASTb.MissedAsteriskCalls);
+    PrintActivities(RepSpec,2,ASTb.MissedAsteriskCalls);
+  end;
+  if (RepSpec.flags[2]!=0) then begin
+    PrintActivitiesSummary(RepSpec,3,ASTb.MissedAsteriskCalls);
+    PrintActivities(RepSpec,3,ASTb.ServerAsteriskCalls);
+  end;
+  if (RepSpec.flags[3]!=0) then begin
+    PrintActivitiesSummary(RepSpec,4,ASTb.MissedAsteriskCalls);
+    PrintActivities(RepSpec,4,ASTb.ServerMissedAsteriskCalls);
+  end;
+  return;
+end;
+
+global
+procedure SwtchbrdCallsRn(record RcVc RepSpec)
+begin
+  Integer rw;
+  string 255 tstr;
+  record ASTBlock ASTb;
+  Integer tmp,curcomp;
+  string 255 frpers,topers;
+  val totcosttimev;
+  LongInt totalcomp,totcounter;
+  Integer i,rwcnt;
+  record CompaniesBlock CompaniesRec;
+  row CompaniesBlock comprw;
+  val compcosttimev;
+
+  frpers = FirstInRange(RepSpec.f2,10);  
+  topers = LastInRange(RepSpec.f2,10); 
+
+  BlockLoad(ASTb);
+  StartReportJob(USetStr(38370));  
+  rw = 1;
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  if (nonblank(RepSpec.f1)) then begin
+    tstr = USetStr(38382) & RepSpec.f1;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f2)) then begin
+    tstr = USetStr(38383) & RepSpec.f2;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (RepSpec.flags[0]==1) then begin
+    tstr = USetStr(38374);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+    if (RepSpec.flags[1]==1) then begin
+    tstr = USetStr(38371);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (RepSpec.flags[2]==1) then begin
+    tstr = USetStr(38373);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (RepSpec.flags[3]==1) then begin
+    tstr = USetStr(38372);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (RepSpec.IncDaughter==1) then begin
+    tstr = USetStr(38384);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+    if (RepSpec.flags[5]==1) then begin
+    tstr =  USetStr(38385);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  EndHeader;
+  if (RepSpec.IncDaughter==0) then begin
+    totcounter = 0;
+    PrintActivitiesPerCompany(RepSpec);
+  end else begin
+    totalcomp = 0;
+    BlockLoad(CompaniesRec);
+    curcomp = CurrentCompany;  
+    rwcnt = MatRowCnt(CompaniesRec);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(CompaniesRec,i,comprw);
+      if (SetCompanyCode(comprw.CompCode,false)) then begin
+        StartFormat(15);
+        OutString(0,0,USetStr(7661) & ":",false);
+        OutString(80,0,comprw.CompCode,false);
+        OutString(100,0,comprw.CompName,false);
+        EndFormat;
+        totcounter = 0;
+        PrintActivitiesPerCompany(RepSpec);
+      end;
+    end;
+    ResetCompany(curcomp);
+   end;
+  EndJob;
+  return;
+end;

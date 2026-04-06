@@ -1,0 +1,750 @@
+external function val AbsoluteVal(val);
+remote updating procedure StoreCredCardSlip_VerifoneBanksys3(string,val,string,string,string,string,string,string,string,LongInt,string,Integer,string,var record NotepadVc,var record NotepadVc);
+remote procedure IVCashSumup(var record IVCashVc,Boolean);
+external procedure IVCashDClass_RefreshStringList(Integer,record IVCashVc);
+external function Date DateFromString(string,string);
+external procedure LogAreaToFile(string,Area);
+external function Boolean FindLocalSerialPortDevice(Integer,LongInt,string,var record LSerialPortDeviceVc);
+external function string 255 StrReplace(string,string,string);
+
+function string 255 StripSpaces(string source)
+begin
+  integer i,l;
+  boolean testf;
+  string 255 res;
+  
+  l = len(source);
+  for (i=0;i<l;i=i+1) begin
+    testf = true;
+    if (mid(source,i,1)==" ") then begin
+      testf = false;
+    end;
+    if (testf) then begin
+      res = res & mid(source,i,1);
+    end;
+  end;
+  
+  StripSpaces = res;
+  return;
+end;
+
+global
+function LongInt TCPIPWorldPayMessageSize(var area reply)
+begin
+  LongInt pos;
+  
+  pos = FindStringInArea("99=0",reply);
+  if (pos>=0) then begin
+    pos = pos + 4;
+  end;
+  
+  TCPIPWorldPayMessageSize = pos;
+end;
+
+global
+function LongInt TCPIPWorldPayReceiptSize(var area reply)
+begin
+  LongInt i,res,pos_eot,leng;
+  string 255 response,resp,resp2,filename;
+  area reply2,ttst,ttst2;
+
+  filename = "TCPIPWorldPayReceiptSize" & Random(1,24) & ".txt";
+  pos_eot = FindStringInArea("CUSTOMER:CUSTOMER RECEIPT",reply);
+  leng=GetAreaLength(reply)-pos_eot;
+  GetAreaFromArea(reply,pos_eot,leng,reply2);
+  pos_eot = -1;
+  pos_eot = FindStringInArea("AUTH CODE:",reply2);
+  if (pos_eot<0) then begin
+    pos_eot = FindStringInArea("TRANSACTION VOID",reply2);
+  end;
+  if (pos_eot>=0) then begin
+    res = GetAreaLength(reply);
+    goto LTCPIPWorldPayReceiptSize;
+  end;
+
+LTCPIPWorldPayReceiptSize:;
+  response = AreaToString(reply);
+  TCPIPWorldPayReceiptSize = res;
+  return;
+end;
+
+procedure ParseResponseField(string field,var string fname,var string fvalue)
+begin
+  LongInt pos;
+  string 255 tstr;
+
+  pos = 0;
+  GetNextSubstring(field,pos,"=",fname);
+  GetNextSubstring(field,pos,"=",fvalue);
+  return;
+end;
+
+global
+procedure TCPIPWorldPay_DisplayStatus(Integer ProcessingWn,LongInt sid)
+begin
+  record RcVc RepSpec;
+//*******TODO Make window unable to be closed nameofthewindow+OnClose(wn,wn2); just return false
+  if (nonblank(GetWindowClass(ProcessingWn))) then begin
+    GetWindowRecord(ProcessingWn,RepSpec);
+    PutWindowString(ProcessingWn,"Status",USetStr(sid));        
+    PutWindowRecord(ProcessingWn,RepSpec);
+  end;
+  return;
+end;
+
+procedure SeparateMerchantCustomerReceipts(area receipt,var record NotepadVc merchantNoter,var record NotepadVc customerNoter)
+begin
+  area merchantReceipt,customerReceipt;
+  Integer pos,leng;
+
+  leng = GetAreaLength(receipt);
+  pos = FindStringInArea("CUSTOMER:CUSTOMER RECEIPT",receipt);
+  GetAreaFromArea(receipt,0,pos,merchantReceipt);
+  AddAreaToTextField(merchantReceipt,merchantNoter);
+  GetAreaFromArea(receipt,pos,leng,customerReceipt);
+  AddAreaToTextField(customerReceipt,customerNoter);
+  AddAreaToTextField(customerReceipt,customerNoter);
+  return;
+end;
+
+updating procedure AddPaymentRow(Integer ProcessingWn,val v,string paymode,string label,string receipt,vector string vreplyfields)
+begin
+  Integer mwn;
+  record IVCashVc IVCr;
+  row IVCashVc IVCrw;
+  Date td;
+  record NotepadVc merchantNoter,customerNoter;
+  area a;
+  
+  mwn = MotherWindow(ProcessingWn);
+  if (GetWindowFileName(mwn)=="RcVc") then begin
+    mwn = MotherWindow(mwn);
+  end;
+  switch (GetWindowFileName(mwn)) begin
+    case "IVCashVc":
+      GetWindowRecord(mwn,IVCr);
+      ClearRow(IVCr,IVCrw,kInvoiceRowTypeCreditCardPayment);  
+      IVCrw.Sum = v;
+      IVCrw.AuthorizationCode = vreplyfields["4"];
+      IVCrw.PayMode = paymode;
+      IVCrw.Spec = label;
+      td = DateFromString(vreplyfields["8"],"DDMMYYYY");
+      IVCrw.CCTimestamp = DateToString(td,"YYYYMMDD") & vreplyfields["9"];
+      IVCrw.CCTransID = vreplyfields["28"]; //vreplyfields["61"];
+      IVCrw.CCReceiptNr = vreplyfields["36"];
+      MatRowPut(IVCr,MatRowCnt(IVCr),IVCrw);
+      IVCashSumup(IVCr,true);
+      PutWindowRecord(mwn,IVCr);
+      IVCashDClass_RefreshStringList(mwn,IVCr);
+      if (WindowDoOK(mwn,0)) then begin
+        if (len(receipt)>0) then begin
+          AddTextToArea(receipt,a);
+          SeparateMerchantCustomerReceipts(a,merchantNoter,customerNoter);
+          AddAreaToTextField(a,merchantNoter);
+          StoreCredCardSlip_VerifoneBanksys3("A",v,vreplyfields["28"],vreplyfields["36"],vreplyfields["4"],IVCrw.CCTimestamp,"","","",IVCr.SerNr,"IVCashVc",0,IVCr.LocalMachineCode,merchantNoter,customerNoter);
+        end;
+        TCPIPWorldPay_DisplayStatus(ProcessingWn,27384);
+      end;
+  end;
+  return;
+end;
+
+updating procedure WorldPayTransactionDeclined(Integer ProcessingWn,val v,string paymode,string label,string receipt,vector string vreplyfields, Integer DisplayStat)
+begin
+  record IVCashVc IVCr;
+  row IVCashVc IVCrw;
+  Date td;
+  record NotepadVc merchantNoter,customerNoter;
+  area a;
+
+  td = DateFromString(vreplyfields["8"],"DDMMYYYY");
+  IVCrw.CCTimestamp = DateToString(td,"YYYYMMDD") & vreplyfields["9"];
+  if (len(receipt)>0) then begin
+    AddTextToArea(receipt,a);
+    SeparateMerchantCustomerReceipts(a,merchantNoter,customerNoter);
+    AddAreaToTextField(a,merchantNoter);
+    StoreCredCardSlip_VerifoneBanksys3("V",v,vreplyfields["28"],vreplyfields["36"],vreplyfields["4"],IVCrw.CCTimestamp,"","","",IVCr.SerNr,"IVCashVc",0,IVCr.LocalMachineCode,merchantNoter,customerNoter);
+  end;
+  TCPIPWorldPay_DisplayStatus(ProcessingWn,DisplayStat);
+  return;
+end;
+
+global
+procedure WorldPayConfirmSignature()
+begin
+  Integer wn,mwn;
+  record RcVc RepSpec;
+  string 255 CtrlSeq;
+  LongInt messagesocket;
+
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+  messagesocket = RepSpec.long1;
+  mwn = MotherWindow(wn);
+  CloseWindow(wn);
+  TCPIPWorldPay_DisplayStatus(mwn,42429);
+  CtrlSeq = "2=401" & chr(10) & "3=0" & chr(10) & "99=0";
+  if (!SendStringOnSocket(messagesocket,CtrlSeq)) then begin
+    CloseSocket(messagesocket);
+  end;
+  return;
+end;
+
+global
+procedure WorldPayDeclineSignature()
+begin
+  Integer wn,mwn;
+  record RcVc RepSpec;
+  string 255 CtrlSeq;
+  LongInt messagesocket;
+
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+  messagesocket = RepSpec.long1;
+  mwn = MotherWindow(wn);
+  CloseWindow(wn);
+  TCPIPWorldPay_DisplayStatus(mwn,42428);
+  CtrlSeq = "2=401" & chr(10) & "3=1" & chr(10) & "99=0";//test this
+  //CtrlSeq = "1=1200" & chr(10) & "2=99" & chr(10) & "99=0";
+  if (!SendStringOnSocket(messagesocket,CtrlSeq)) then begin
+    CloseSocket(messagesocket);
+  end;
+  return;
+end;
+
+global
+procedure WorldPayConfirmCall()
+begin
+  Integer wn,mwn;
+  record RcVc RepSpec;
+  string 255 CtrlSeq;
+  LongInt messagesocket;
+
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+  if (nonblank(RepSpec.f3)) then begin
+    messagesocket = RepSpec.long1;
+    mwn = MotherWindow(wn);
+    CloseWindow(wn);
+    TCPIPWorldPay_DisplayStatus(mwn,42419);
+    CtrlSeq = "2=400" & chr(10) & "3=0" & chr(10) & "4=" & RepSpec.f3 & chr(10) & "99=0";
+    if (!SendStringOnSocket(messagesocket,CtrlSeq)) then begin
+      CloseSocket(messagesocket);
+    end;
+  end else begin
+    MessageBox(42431,"");
+  end;
+  return;
+end;
+
+global
+procedure WorldPayDeclineCall()
+begin
+  Integer wn,mwn;
+  record RcVc RepSpec;
+  string 255 CtrlSeq;
+  LongInt messagesocket;
+
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+  messagesocket = RepSpec.long1;
+  mwn = MotherWindow(wn);
+  CloseWindow(wn);
+  TCPIPWorldPay_DisplayStatus(mwn,42428);
+  CtrlSeq = "2=400" & chr(10) & "3=1" & chr(10) & "99=0";
+  if (!SendStringOnSocket(messagesocket,CtrlSeq)) then begin
+    CloseSocket(messagesocket);
+  end;
+  return;
+end;
+
+procedure FillWithDataFromResponse(record RcVc RepSpec,string response)
+begin
+  Integer resplen;
+  string 255 tstr,checkstr,s,tstr1;
+  LongInt i;
+
+  resplen = len(response);
+
+  checkstr = "3";
+  for (i=0;i<=resplen;i=i+1) begin
+    s = mid(response,i,len(checkstr));
+    if (s=="3") then begin
+      GetNextSubstring(response,i,":",tstr);
+      GetNextSubstring(response,i,".",tstr);
+      tstr1 = tstr;
+      GetNextSubstring(response,i,chr(10),tstr);
+      tstr1 = tstr1 & "." & tstr;
+      RepSpec.vals0 = StringToVal(tstr1,M4Val);
+      i = i - 1;
+      checkstr = "11";
+    end;
+    if (s=="11") then begin
+      GetNextSubstring(response,i,"=",tstr);
+      GetNextSubstring(response,i,chr(10),tstr);
+      RepSpec.f2 = tstr;
+      checkstr = "12";
+      i = i - 1;
+    end;
+    if (s=="12") then begin
+      GetNextSubstring(response,i,"=",tstr);
+      GetNextSubstring(response,i,",",tstr);
+      RepSpec.f4 = tstr;
+      GetNextSubstring(response,i,chr(10),tstr);
+      RepSpec.f5 = tstr;
+    end;
+  end;
+
+  return;
+end;
+
+updating procedure TCPIPWorldPay_WaitForTransactionResult(LongInt socket,LongInt receiptsocket,LongInt messagesocket,val v,string paymode,string label,Integer ProcessingWn)
+begin
+  string 255 response,response2,response3,field,responsestring,info,info2,tmp;
+  LongInt pos,pos_eot;
+  Integer POSstatus,nwn;
+  string 255 fname,fvalue;
+  string 255 transtype,transactionstatus;
+  vector string 255 vreplyfields;
+  record RcVc RepSpec,RepSpec2;
+  Boolean foundf,donef;
+
+  POSstatus = 1;
+  while (POSstatus) begin
+    pos = 0;
+    GetStringFromSocket(messagesocket,response3,100);
+    responsestring = StrReplace(response3,"99=0","");
+    if (nonblank(responsestring)) then begin
+      info = StrReplace(responsestring,"info:","");
+      pos_eot = 0;
+      info2 = info;
+      foundf = GetNextSubstring(info2,pos_eot," ",tmp);
+      if(foundf and len(info2)>pos_eot+2) then begin
+        info = tmp;
+      end;
+      if (POSstatus) then begin
+        donef = false;
+        if (left(info,5)=="2=401" and right(info,6)=="3=AUTH") then begin
+          donef = true;
+          RepSpec2.long1 = messagesocket;
+          nwn = OpenWindow("WorldPaySignatureWClass",0,ProcessingWn,"","",RepSpec2);
+        end;
+        if (left(info,5)=="2=400" and right(info,6)=="3=CALL") then begin
+          donef = true;
+          RecordClear(RepSpec2);
+          RepSpec2.long1 = messagesocket;
+          FillWithDataFromResponse(RepSpec2,info2);
+          nwn = OpenWindow("WorldPayCallWClass",0,ProcessingWn,"","",RepSpec2);
+        end;
+        if (!donef) then begin
+          info = StrReplace(info,chr(10),"");
+          switch (info) begin
+            case "insertSwipeCardctls":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,27420);
+            case "chipCardInserted":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,27371);
+            case "pleaseWait":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,27421);
+            case "ChpWt":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,27421);
+            case "EnterPin":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,27422);
+            case "connectingMsg":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,42420);
+            case "authorisingMsg":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,27389);
+            case "finalisingMsg":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,42421);
+            case "waitingMsg":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,27421);
+            case "transactionRefered":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,42422);
+            case "cardTapped":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,42423);
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,0);
+            case "AuthCd1":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,42429);
+              POSstatus = 0;
+            case "CardRemoved":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,27444);
+              POSstatus = 0;
+            case "declined_T":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,42428);
+              POSstatus = 0;
+            case "cancelled_T":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,42418);
+              POSstatus = 0;
+            case "aborted_T":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,27388);
+              POSstatus = 0;
+            case "ClearInstruction":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,0);
+              //TODO should probably close the window
+            case "reinsertCardtry1":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,42424);
+            case "reinsertCardtry2":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,42424);
+            case "SWIPE_CARD":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,42425);
+            case "pleaseswipeagain1":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,42426);
+            case "pleaseswipeagain2":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,42426);
+            case "cardSwiped":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,42427);
+            otherwise
+            case "waitingMsg":
+              TCPIPWorldPay_DisplayStatus(ProcessingWn,42430);
+            otherwise
+              GetWindowRecord(ProcessingWn,RepSpec);
+              PutWindowString(ProcessingWn,"Status",info);    
+              PutWindowRecord(ProcessingWn,RepSpec);
+          end;
+        end;
+      end;
+    end;
+  end;
+  GetStringFromSocket(socket,response,100);
+  GetStringFromSocket(receiptsocket,response2,100);
+  GetStringFromSocket(messagesocket,response3,100);
+  if (nonblank(response)) then begin
+    pos = 0;
+    GetNextSubstring(response,pos,chr(10),field);
+    while (nonblank(field)) begin
+      ParseResponseField(field,fname,fvalue);
+      vreplyfields[fname] = fvalue;
+      GetNextSubstring(response,pos,chr(10),field);
+    end;
+    switch (vreplyfields["2"]) begin
+      case "0":
+        switch (vreplyfields["3"]) begin
+          case "1":
+            AddPaymentRow(ProcessingWn,v,paymode,label,response2,vreplyfields);
+          case "2"://approving return
+            AddPaymentRow(ProcessingWn,v,paymode,label,response2,vreplyfields);
+          case "3"://approving manually
+            AddPaymentRow(ProcessingWn,v,paymode,label,response2,vreplyfields);
+          case "4":
+           WorldPayTransactionDeclined(ProcessingWn,v,paymode,label,response2,vreplyfields,27386);
+          case "9":
+            WorldPayTransactionDeclined(ProcessingWn,v,paymode,label,response2,vreplyfields,27385);
+          case "19":
+            WorldPayTransactionDeclined(ProcessingWn,v,paymode,label,response2,vreplyfields,27388);
+          otherwise
+            WorldPayTransactionDeclined(ProcessingWn,v,paymode,label,response2,vreplyfields,27386);
+        end;
+      case "20"://approving return
+        switch (vreplyfields["3"]) begin
+          case "1":
+            AddPaymentRow(ProcessingWn,v,paymode,label,response2,vreplyfields);
+          case "2":
+            AddPaymentRow(ProcessingWn,v,paymode,label,response2,vreplyfields);
+        end;
+    end;
+  end else begin
+    if (nonblank(response3)) then begin
+      if (InString(response3,"AppdOl99=0")) then begin
+        //AddPaymentRow(ProcessingWn,v,paymode,label,response2,vreplyfields);
+      end;
+    end;
+  end;
+
+  return;
+end;
+
+global
+updating procedure WorldPayCreditCard_Purchase(LongInt transnr,Integer invtype,val v,string paymode,string label,Integer ProcessingWn)
+begin
+  record LocalMachineBlock LMb;  
+  record LSerialPortDeviceVc LSPDr;
+  string 255 host,CtrlSeq,tstr;
+  LongInt socket,receiptsocket,port,receiptport,pos,messagesocket,messageport,errorcode;
+
+  errorcode = 27427;
+  PutWindowString(ProcessingWn,"ProcessingFinished","false");
+
+  BlockLoad(LMb);
+  if (FindLocalSerialPortDevice(kSerialPortDeviceClassCreditCardTerminal,kSerialPortDeviceModelCreditCardTerminalWorldPay,LMb.LocalMachineCode,LSPDr)==false) then begin  
+    goto LWorldPayCreditCard_Purchase;
+  end;
+  if (InString(LSPDr.Port,":")) then begin
+    pos = 0;
+    GetNextSubstring(LSPDr.Port,pos,":",host);
+    GetNextSubstring(LSPDr.Port,pos,":",tstr);
+    port = StringToLongInt(tstr);    
+    GetNextSubstring(LSPDr.Port,pos,":",tstr);
+    receiptport = StringToLongInt(tstr); 
+  end;
+  messageport = 8000;
+
+  if (blank(host) or port<=0 or receiptport<=0 or messageport<=0) then begin
+    errorcode = 27430;
+    goto LWorldPayCreditCard_Purchase;
+  end;
+
+  socket = OpenSocket(host,port);
+  receiptsocket = OpenSocket(host,receiptport);
+  messagesocket = OpenSocket(host,messageport);
+
+  if (socket<0 or receiptsocket<0 or messagesocket<0) then begin
+    goto LWorldPayCreditCard_Purchase;
+  end;
+
+  SetSocketMessageSizeCallback(socket,"TCPIPWorldPayMessageSize");
+  SetSocketMessageSizeCallback(receiptsocket,"TCPIPWorldPayReceiptSize");
+  SetSocketMessageSizeCallback(messagesocket,"TCPIPWorldPayMessageSize");
+
+  CtrlSeq = CtrlSeq & "1=" & transnr & chr(10);
+  if (v<0 or invtype==kPOSInvoiceTypeCredit) then begin
+    CtrlSeq = CtrlSeq & "2=20" & chr(10);
+    CtrlSeq = CtrlSeq & "3=" & ValToString(AbsoluteVal(v),M4Val,"",".",0) & chr(10);
+  end else begin
+    CtrlSeq = CtrlSeq & "2=0" & chr(10);
+    CtrlSeq = CtrlSeq & "3=" & ValToString(v,M4Val,"",".",0) & chr(10);
+  end;
+  CtrlSeq = CtrlSeq & "99=0" & chr(10);
+
+  if (SendStringOnSocket(socket,CtrlSeq)==false) then begin
+    goto LWorldPayCreditCard_Purchase;
+  end;
+
+  TCPIPWorldPay_WaitForTransactionResult(socket,receiptsocket,messagesocket,v,paymode,label,ProcessingWn);
+
+  errorcode = 0;
+
+LWorldPayCreditCard_Purchase:;
+  if (errorcode<>0) then begin
+    TCPIPWorldPay_DisplayStatus(ProcessingWn,errorcode);
+  end;
+  if (socket>=0) then begin CloseSocket(socket); end;
+  if (receiptsocket>=0) then begin CloseSocket(receiptsocket); end;
+  if (messagesocket>=0) then begin CloseSocket(messagesocket); end;
+
+  PutWindowString(ProcessingWn,"ProcessingFinished","true");
+
+  return;
+end;  
+
+procedure WorldPayParseReportXML(string fvalue,var string xmlstr)
+begin
+  Integer i,cnt,j,cnt2;
+  string 255 curstrkey,nstr,tstr;
+  xml xmlreply;
+
+    xmlreply = ParseXmlString(fvalue);
+
+    xmlstr = XMLGet(xmlreply,"BatchReport/FCR");
+    xmlstr = xmlstr & ":" & XMLGet(xmlreply,"BatchReport/ReportDate");
+
+    curstrkey = "BatchReport/Report[" & i & "]";
+    while (XmlNodeExists(xmlreply,curstrkey)) begin
+      xmlstr = xmlstr & ":" & Trim(XMLGet(xmlreply,curstrkey & "/CardScheme"));
+      xmlstr = xmlstr & ":" & XMLGet(xmlreply,curstrkey & "/CreditCount");
+      xmlstr = xmlstr & ":" & XMLGet(xmlreply,curstrkey & "/CreditTotals");
+      xmlstr = xmlstr & ":" & XMLGet(xmlreply,curstrkey & "/DebitCount");
+      xmlstr = xmlstr & ":" & XMLGet(xmlreply,curstrkey & "/DebitTotals");
+      i = i + 1;
+      curstrkey = "BatchReport/Report[" & i & "]";
+    end;
+
+  return;
+end;
+
+updating function Boolean WorldPayCreateCCTerminalReport(string xmlstr,string response,string reportcode,vector string data)
+begin
+  Boolean res;
+  record CCTRVc CCTRr;
+  record LocalMachineBlock LMb;
+  row CCTRVc CCTRrw;
+  LongInt pos;
+  Date reportdate;
+  Integer rw;
+  string 255 tstr;
+
+  BlockLoad(LMb);
+
+  pos = 0;
+  GetNextSubString(xmlstr,pos,":",tstr); //FCR
+  GetNextSubString(xmlstr,pos,":",tstr);
+  reportdate = StringToDate(tstr);
+  if (blank(reportdate)) then begin
+    reportdate = CurrentDate;
+  end;
+  
+  RecordNew(CCTRr);
+  if (CCTRr.SerNr<=0) then begin
+    CCTRr.SerNr = NextSerNr("CCTRVc",CCTRr.TransDate,-1,false,"");
+  end;
+  CCTRr.TransTime = CurrentTime;
+  CCTRr.TransDate = reportdate;
+  CCTRr.ReportType = reportcode;
+  CCTRr.LocalMachineCode = LMb.LocalMachineCode;
+  CCTRr.TerminalID = data["TerminalID"];
+  CCTRr.SalesCnt = data["SalesCnt"];
+  CCTRr.RefundCnt = data["RefundCnt"];
+  CCTRr.SalesAmt = StringToVal(data["SalesAmt"],M4Val)/100;
+  CCTRr.RefundAmt = StringToVal(data["RefundAmt"],M4Val)/100;
+  CCTRr.BatchNo = data["BatchNo"];
+  CCTRr.TransRefNo = data["TransRefNo"];
+  CCTRr.Comment = reportcode & " " USetStr(30061);
+  SetTextField(CCTRr,response);
+  while (GetNextSubString(xmlstr,pos,":",tstr)) begin
+    CCTRrw.CardType = tstr;
+    GetNextSubString(xmlstr,pos,":",tstr);
+    CCTRrw.CreditSalesCnt = StringToVal(tstr,M4Val);
+    GetNextSubString(xmlstr,pos,":",tstr);
+    CCTRrw.CreditSalesAmt = StringToVal(tstr,M4Val)/100;
+    GetNextSubString(xmlstr,pos,":",tstr);
+    CCTRrw.DebitSalesCnt = StringToVal(tstr,M4Val);
+    GetNextSubString(xmlstr,pos,":",tstr);
+    CCTRrw.DebitSalesAmt = StringToVal(tstr,M4Val)/100;
+    MatRowPut(CCTRr,MatRowCnt(CCTRr),CCTRrw);
+  end;
+  if (RecordStore(CCTRr,false)) then begin end; //TODO make sure no data is lost if saving fails..
+
+LWorldPayCreateCCTerminalReport:;
+  WorldPayCreateCCTerminalReport = res;
+  return;
+end;
+
+global
+updating procedure TCPIPWorldPay_WaitForTransactionReportResult(LongInt socket,string reportcode,var LongInt errorcode,Integer ProcessingWn)
+begin
+  Integer POSstatus;
+  LongInt pos;
+  string 255 response,responsestring,tstr,fname,fvalue;
+  string 255 xmlstr;
+  vector string 255 data;
+
+  POSstatus = 1;
+  while (POSstatus) begin
+    GetStringFromSocket(socket,response,100);
+    responsestring = StrReplace(response,"99=0","");
+//    responsestring = "1=0"&chr(10)&"13=22980012"&chr(10)&"2=36"&chr(10)&"41=0"&chr(10)&"19=0"&chr(10)&"18=7848"&chr(10)&"17=0"&chr(10)&"16=2"&chr(10)&"25=557461543"&chr(10)&"48=<BatchReport><FCR>557461543</FCR><ReportDate>11122019</ReportDate><Report><CardScheme>Mastercard                    </CardScheme>";
+//    responsestring = responsestring & "<CreditCount>0</CreditCount><CreditTotals>0</CreditTotals><DebitCount>2</DebitCount><DebitTotals>7850</DebitTotals></Report>";
+//    responsestring = responsestring & "<Report><CardScheme>Visa                    </CardScheme><CreditCount>0</CreditCount><CreditTotals>0</CreditTotals><DebitCount>2</DebitCount><DebitTotals>7848</DebitTotals></Report></BatchReport>"&chr(10)&"76=84105018"&chr(10)&"98=2217";
+    if (nonblank(responsestring)) then begin
+      pos = 0;
+      while (GetNextSubstring(responsestring,pos,chr(10),tstr)) begin
+        ParseResponseField(tstr,fname,fvalue);
+        if (nonblank(fname) and nonblank(fvalue)) then begin
+          switch (fname) begin
+            case 1: 
+              if (fvalue!="0") then begin
+                errorcode = 42416;
+              end;
+            case 2:
+              if ((reportcode=="Z" and fvalue!="37") or (reportcode=="X" and fvalue!="36")) then begin
+                errorcode = 42416;
+              end;
+            case 13: data["TerminalID"] = fvalue;
+            case 16: data["SalesCnt"] = fvalue;
+            case 17: data["RefundCnt"] = fvalue;
+            case 18: data["SalesAmt"] = StringToVal(fvalue,M4Val);
+            case 19: data["RefundAmt"] = StringToVal(fvalue,M4Val);
+            case 25: data["BatchNo"] = fvalue;
+            case 41: //fuel card = 1 otherwise 0
+            case 48: WorldPayParseReportXML(fvalue,xmlstr);
+            case 76: //Serial number of connected pinpad
+            case 98: data["TransRefNo"] = fvalue;
+          end;
+        end;
+      end;
+      WorldPayCreateCCTerminalReport(xmlstr,responsestring,reportcode,data);
+      POSstatus = 0;
+    end;
+  end;
+
+LTCPIPWorldPay_WaitForTransactionReportResult:;
+  return;
+end;
+
+global
+updating procedure TCPIPWorldPay_Report(record LocalMachineBlock LMb,record LSerialPortDeviceVc LSPDr,string reportcode,Integer ProcessingWn)
+begin
+  LongInt pos;
+  LongInt errorcode,port,socket;
+  string 255 tstr,host,CtrlSeq;
+  val v;
+  string 255 paymode,label;
+
+  errorcode = 27427;
+  PutWindowString(ProcessingWn,"ProcessingFinished","false");
+
+  if (reportcode!="X" and reportcode!="Z") then begin
+    errorcode = 42415;
+    goto LTCPIPWorldPay_Report; 
+  end;
+
+  BlockLoad(LMb);
+  if (FindLocalSerialPortDevice(kSerialPortDeviceClassCreditCardTerminal,kSerialPortDeviceModelCreditCardTerminalWorldPay,LMb.LocalMachineCode,LSPDr)==false) then begin  
+    goto LTCPIPWorldPay_Report;
+  end;
+
+  if (InString(LSPDr.Port,":")) then begin
+    pos = 0;
+    GetNextSubstring(LSPDr.Port,pos,":",host);
+    GetNextSubstring(LSPDr.Port,pos,":",tstr);
+    port = StringToLongInt(tstr);
+  end;
+ 
+  if (blank(host) or port<=0) then begin
+    errorcode = 27430;
+    goto LTCPIPWorldPay_Report;
+  end;
+
+  socket = OpenSocket(host,port);
+  if (socket<0) then begin goto LTCPIPWorldPay_Report; end;
+  SetSocketMessageSizeCallback(socket,"TCPIPWorldPayMessageSize");
+
+  if (reportcode=="Z") then begin
+    CtrlSeq = CtrlSeq & "1=2218" & chr(10);
+    CtrlSeq = CtrlSeq & "2=37" & chr(10);
+  end else begin
+    if (reportcode=="X") then begin
+      CtrlSeq = CtrlSeq & "1=2217" & chr(10);
+      CtrlSeq = CtrlSeq & "2=36" & chr(10);
+    end;
+  end;
+  CtrlSeq = CtrlSeq & "3=0" & chr(10);
+  CtrlSeq = CtrlSeq & "99=0" & chr(10);
+
+  if (SendStringOnSocket(socket,CtrlSeq)==false) then begin goto LTCPIPWorldPay_Report; end;
+  
+  errorcode = 0;
+  TCPIPWorldPay_WaitForTransactionReportResult(socket,reportcode,errorcode,ProcessingWn);
+
+LTCPIPWorldPay_Report:;
+  if (errorcode<>0) then begin
+    TCPIPWorldPay_DisplayStatus(ProcessingWn,errorcode);
+  end else begin
+    TCPIPWorldPay_DisplayStatus(ProcessingWn,42429);
+  end;
+  if (socket>=0) then begin CloseSocket(socket); end;
+
+  PutWindowString(ProcessingWn,"ProcessingFinished","true");
+
+  return;
+end;
+
+global
+procedure CloseWorldPayTerminalReportWClass()
+begin
+  Integer mwn,wn;
+  record RcVc RepSpec;
+  Boolean closef;
+
+  wn = CurWindow;
+  closef = GetWindowString(wn,"ProcessingFinished")=="true";
+  if (closef) then begin
+    GetWindowRecord(wn,RepSpec);
+    mwn =  MotherWindow(CurWindow);
+    CloseWindow(wn);
+  end;
+
+  return;
+end;

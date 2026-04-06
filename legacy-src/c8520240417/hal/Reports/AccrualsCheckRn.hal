@@ -1,0 +1,77 @@
+external procedure GetAccBalance(string,string,Date,record ObjBalVc,Integer,Integer,Integer,string,Integer,var val);
+external function Boolean GetObjBal(string,string,var record ObjBalVc);
+external procedure GetAccTurnover(string,string,Date,Date,record ObjBalVc,string,Integer,Integer,Integer,var val,var val);
+external procedure HT2Per(Date, Date , var string);
+
+global
+procedure AccrualsCheckingRn(record RcVc RepSpec)
+begin
+  Boolean Objbalsf;
+  record ObjBalVc ObjBalr;
+  Date td;
+  val v,v1,v2,v3,totalvalnosim,totalvalinclsim,t;
+  Integer rw;
+  string 255 tstr;
+  Boolean testf;
+
+  StartReportJob(USetStr(42861));
+  rw = 1;
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  if (nonblank(RepSpec.f12)) then begin
+    tstr = USetStr(42851) & " " & RepSpec.f12;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  EndHeader;
+
+  if (blank(RepSpec.f12)) then begin
+    OutString(0,0,USetStr(42850),false);
+    goto LAccrualsCheckingRn;
+  end;
+
+  SetRepCol(2,280);
+  SetRepCol(3,380);
+
+  StartFormat(15);
+  OutString(0,0,USetStr(28301),false);
+  OutString(2,0,USetStr(42856),true);
+  OutString(3,0,USetStr(42857),true);
+  OutString(1,0,USetStr(42854),true);
+  EndFormat;
+  Gray_Divider(0,1);
+
+  td = RepSpec.sStartDate;
+  totalvalnosim = blankval;
+  totalvalinclsim = blankval;
+  while (td<=RepSpec.sEndDate) begin
+    testf = true;
+    Objbalsf = GetObjBal(RepSpec.f12,"",ObjBalr);
+    GetAccBalance(RepSpec.f12,"",td,ObjBalr,0,0,0,"",0,v1);
+    GetAccTurnover(RepSpec.f12,"",td,td,ObjBalr,"",0,0,0,t,v2);
+    totalvalnosim = v1+v3;
+    GetAccBalance(RepSpec.f12,"",td,ObjBalr,1,0,0,"",0,v);
+    GetAccTurnover(RepSpec.f12,"",td,td,ObjBalr,"",1,0,0,t,v2);
+    totalvalinclsim = v+v2;
+    if (RepSpec.flags[2]!=0) then begin
+      if (totalvalnosim==totalvalinclsim) then begin
+        testf = false;
+      end;
+    end;
+    if (testf) then begin
+      StartFormat(15);
+      OutString(0,"DblTrialBalanceVc",td,false);
+      OutVal(2,0,totalvalnosim,M4Val,true);
+      OutVal(3,0,totalvalinclsim,M4Val,true);
+      OutVal(1,0,totalvalnosim-totalvalinclsim,M4Val,true);
+      EndFormat;
+    end;
+    td = AddDay(td,1);
+  end;
+  EndJob;
+LAccrualsCheckingRn:;
+  return;
+end;
+
+

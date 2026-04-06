@@ -1,0 +1,95 @@
+remote function LongInt DoAuthRequest(string,string,var string,var string);
+remote function LongInt DoSendJWTRequest(var string);
+
+global
+procedure EnableBankingAuthBankDsm()
+begin
+  LongInt err;
+  Integer wn,rownr,mwn;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record BankVc Bankr;
+  record RcVc RepSpec;
+  string 255 url;
+  record EnableBankBlock EnableBankBl;
+  string 255 errmsg;
+
+  BlockLoad(EnableBankBl);
+
+  err = 0;
+  wn = CurWindow;
+  rownr = WindowActiveRow(wn);
+
+  //do check for the row if all bank details are filled in
+  if (rownr>=0) then begin
+    BlockLoad(PMb);
+    MatRowGet(PMb,rownr,PMbrw);
+    Bankr.Code = PMbrw.BankCode;
+    if (ReadFirstMain(Bankr,1,true)==false) then begin
+      err = 43480;
+      goto LEnableBankingAuthBankDsm;
+    end;
+    if (blank(Bankr.EBBank)) then begin
+      err = 43480;
+      goto LEnableBankingAuthBankDsm;
+    end;
+    err = DoSendJWTRequest(errmsg);
+    if (err!=0 or nonblank(errmsg)) then begin
+      goto LEnableBankingAuthBankDsm;
+    end else begin
+      err = DoAuthRequest("auth",Bankr.EBBank,errmsg,url);
+      if (err!=0 or nonblank(errmsg)) then begin
+        goto LEnableBankingAuthBankDsm;
+      end;
+      OpenWebBrowser(url);
+    end;
+  end;
+LEnableBankingAuthBankDsm:;
+  if (err!=0 or nonblank(errmsg)) then begin
+    MessageBox(err,": " & errmsg);
+  end;
+  return;
+end;
+
+global
+procedure EnableBankingReAuthBank(string bankcode,string accountuid)
+begin
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record BankVc Bankr;
+  Integer rwcnt,i;
+  LongInt err;
+  string 255 errmsg,url;
+
+  BlockLoad(PMb);
+  rwcnt = MatRowCnt(PMb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(PMb,i,PMbrw);
+    if (PMbrw.BankCode==bankcode) and (PMbrw.EBAccountUId==accountuid) then begin
+      Bankr.Code = PMbrw.BankCode;
+      if (ReadFirstMain(Bankr,1,true)==false) then begin
+        err = 43480;
+        goto LEnableBankingReAuthBank;
+      end;
+      if (blank(Bankr.EBBank)) then begin
+        err = 43480;
+        goto LEnableBankingReAuthBank;
+      end;
+      err = DoSendJWTRequest(errmsg);
+      if (err!=0 or nonblank(errmsg)) then begin
+        goto LEnableBankingReAuthBank;
+      end else begin
+        err = DoAuthRequest("auth",Bankr.EBBank,errmsg,url);
+        if (err!=0 or nonblank(errmsg)) then begin
+          goto LEnableBankingReAuthBank;
+        end;
+      end;
+    end;  
+  end;
+LEnableBankingReAuthBank:;
+  if (err!=0 or nonblank(errmsg)) then begin
+    MessageBox(err,": " & errmsg);
+  end;
+
+  return;
+end;

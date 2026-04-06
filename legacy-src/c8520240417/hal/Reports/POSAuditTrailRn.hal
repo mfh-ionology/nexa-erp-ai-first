@@ -1,0 +1,104 @@
+external procedure HTPers(string,var string);
+external procedure HT2Per(Date,Date,var string);
+external procedure HTLocalMachines(string,string,var string);
+external procedure HTNr(Integer,Integer,LongInt,LongInt,var string);
+
+procedure SStrings()
+begin
+  SString(40100,"Audit Trail");
+  SString(40101,"No.");
+  SString(40102,"Date");
+  SString(40103,"Action");
+  SString(40104,"Machine");
+  SString(40105,"User");
+  SString(40106,"Approver");
+
+  return;
+end;
+
+procedure PrintAuditTrail(record RcVc RepSpec,LongInt afr,LongInt ato)
+begin
+  Boolean found,testf;
+  record POSJournalVc POSJr;
+  record IVCashVc IVCr;
+  string 255 offnr;
+  
+  found = true;
+  POSJr.FileName = "IVCashVc";
+  POSJr.TransDate = RepSpec.sStartDate;
+  while (LoopKey("FNTransDate",POSJr,2,found)) begin
+    if (POSJr.FileName!="IVCashVc") then begin found = false; end;
+    if (DateInRange(POSJr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin found = false; end;
+    if (found) then begin
+      testf = true;
+      if (nonblank(RepSpec.FirstAcc)) then begin
+        if (POSJr.UserCode!=RepSpec.FirstAcc) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.Stext)) then begin
+        if (POSJr.LocalMachineCode!=RepSpec.Stext) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f1)) then begin
+        if (POSJr.TransNr<afr) then begin testf = false; end;
+        if (POSJr.TransNr>ato) then begin testf = false; end;
+      end;
+      if (testf) then begin
+        offnr = POSJr.OfficialSerNr;
+        if (blank(offnr)) then begin
+          if (POSJr.TransNr!=IVCr.SerNr) then begin
+            IVCr.SerNr = POSJr.TransNr;
+            ReadFirstMain(IVCr,1,true);
+          end;
+          offnr = IVCr.OfficialSerNr;
+        end;
+        StartFormat(15);
+        OutString(0,0,offnr,false);
+        OutStringID(60,"DblPOSJournalVc",POSJr.TransDate,false,POSJr.SerNr);
+        OutString(120,0,StringFromSet(622,POSJr.Action),false);
+        OutString(300,0,POSJr.LocalMachineCode,false);
+        OutString(360,0,POSJr.UserCode,false);
+        OutString(420,0,POSJr.Approver,false);
+        EndFormat;
+      end;
+    end;
+  end;
+  return;
+end;
+
+global
+procedure POSAuditTrailRn(record RcVc RepSpec)
+begin
+  Integer rw;
+  string 255 tstr;
+  LongInt afr,ato;
+  
+  afr = FirstInRange(RepSpec.f1,20);
+  ato = LastInRange(RepSpec.f1,20);
+  SStrings;
+  StartReportJob(USetStr(40100));
+  rw = 1;
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  HTPers(RepSpec.FirstAcc,tstr);
+  Header(rw,tstr,0);
+  HTLocalMachines(RepSpec.Stext,RepSpec.Stext,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  HTNr(1111,1112,afr,ato,tstr);
+  Header(rw,tstr,0);
+  rw = rw + 1;
+  EndHeader;
+  StartFormat(15);
+  OutString(0,0,USetStr(40101),false);
+  OutString(60,0,USetStr(40102),false);
+  OutString(120,0,USetStr(40103),false);
+  OutString(300,0,USetStr(40104),false);
+  OutString(360,0,USetStr(40105),false);
+  OutString(420,0,USetStr(40106),false);
+  EndFormat;
+  Gray_Divider(0,1);
+  PrintAuditTrail(RepSpec,afr,ato);
+  Gray_Divider(0,1);
+  EndJob;
+  return;
+end;

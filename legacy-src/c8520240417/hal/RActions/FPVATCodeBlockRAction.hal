@@ -1,0 +1,32 @@
+global
+function LongInt FPVATCodeBlockCheck(var record FPVATCodeBlock FPVATCodeb,record FPVATCodeBlock FPVATCode2b,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  Integer i,j,rwcnt;
+  row FPVATCodeBlock FPVATCodebrw;
+  row FPVATCodeBlock FPVATCode2brw;
+  
+  res = 0;
+  rwcnt = MatRowCnt(FPVATCodeb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(FPVATCodeb,i,FPVATCodebrw);
+    if (blank(FPVATCodebrw.FiscalVATCode)) then begin
+      RecordCheckError(1058,"",j,"FiscalVATCode");   
+      res = -1;
+      goto LFPVATCodeBlockCheck;
+    end;
+    for (j=(i+1);j<rwcnt;j=j+1) begin
+      MatRowGet(FPVATCodeb,j,FPVATCode2brw);
+      if (FPVATCodebrw.VATCode==FPVATCode2brw.VATCode and 
+          FPVATCodebrw.LocalMachineCode==FPVATCode2brw.LocalMachineCode and 
+          FPVATCodebrw.FiscalVATCode==FPVATCode2brw.FiscalVATCode) then begin
+        RecordCheckError(43970,"",j,"VATCode");   
+        res = -1;
+        goto LFPVATCodeBlockCheck;
+      end;
+    end;
+  end;
+LFPVATCodeBlockCheck:;
+  FPVATCodeBlockCheck = res;
+  return;
+end;

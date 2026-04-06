@@ -1,0 +1,91 @@
+external function Boolean FindFormcode(Integer,Integer);
+external function Boolean Getformcode(Integer,Integer,string,string,string,LongInt,LongInt,string,string,Integer,string,var string);
+external function Integer NumberofDocumentPages(string,Integer);
+external procedure GetLangNr(string,var record LangNrVc);
+external procedure CommonDocumentFields(record RcVc);
+
+procedure DoTrainingPlanForm(record RcVc RepSpec,record TrainingPlanVc TrainingPlanr)
+begin
+  Integer i,rwcnt,intdocnr;
+  string 255 tstr;
+  Boolean printf,langf;
+  string 30 formcode,langcode;
+  record DocVc Docr;
+  record LangNrVc LangNrr;
+  record SysFormatBlock SFb;
+  record FormDefVc FDr;
+  row FormDefVc FDrw;
+
+  BlockLoad(SFb);
+  GetLangNr("",LangNrr);
+  FDr.repname = RepSpec.repname;
+  FDr.shortname = RepSpec.shortname;
+  if (ReadFirstMain(FDr,1,true)==false) then begin
+    MessageBox(1624, " " & USetStr(1623));
+    goto LDoTrainingPlanForm;
+  end;
+  rwcnt = MatRowCnt(FDr);
+  langcode = "";
+  for (i=rwcnt-1;i>=0;i=i-1) begin
+    MatRowGet(FDr,i,FDrw);
+    if (FDrw.LangCode==langcode) then begin
+      i = -1;
+      langf = true;
+    end;
+  end;
+  if (langf==false) then begin langcode = ""; end;
+  intdocnr = 1;
+  printf = true;
+  while (printf) begin  
+    formcode = "";
+    for (i=rwcnt-1;i>=0;i=i-1) begin
+      MatRowGet(FDr,i,FDrw);
+      if (FindFormcode(TrainingPlanr.SerNr,FDrw.Typ)) then begin 
+        if (Getformcode(i,FDrw.intdocnr,FDrw.FPCode,FDrw.UserGroup,FDrw.LangCode,FDrw.SerNr,TrainingPlanr.SerNr,FDrw.PrintGroupCode,
+                        langcode,intdocnr,"TrainingPlanVc",formcode)) then            
+        begin
+          goto LBREAK;
+        end;
+      end;
+    end;
+LBREAK:;
+    if (nonblank(formcode)) then begin
+      if (OpenForm(formcode)) then begin
+          CommonDocumentFields(RepSpec);
+          NumberofDocumentPages(FDrw.FPCode,MatRowCnt(TrainingPlanr));
+          Docr.Code = formcode;
+          if (ReadFirstMain(Docr,1,true)) then begin end;
+          OUTFORMFIELD("F_SERNR",TrainingPlanr.SerNr);
+          OUTFORMFIELD( "F_EMPLOYEE",TrainingPlanr.Employee);
+          OUTFORMFIELD( "F_EMPLOYEENAME",TrainingPlanr.Name);
+          OUTFORMFIELD( "F_TOPIC",TrainingPlanr.Topic);
+          OUTFORMFIELD( "F_SPECIFIKATION",TrainingPlanr.Description);
+          OUTFORMFIELD( "F_STATUS",TrainingPlanr.Status);
+          OUTFORMFIELD( "F_TRAININGDATE",TrainingPlanr.TrainingDate);
+          OUTFORMFIELD( "F_STARTTIME",TrainingPlanr.TrainingStart);
+          OUTFORMFIELD( "F_ENDTIME",TrainingPlanr.TrainingEnd);
+          OUTFORMFIELD( "F_TRAINER",TrainingPlanr.Trainer);
+          OUTFORMFIELD( "F_TRAINERNAME",TrainingPlanr.TrainerName);
+          OUTFORMFIELD( "F_SHADOWER",TrainingPlanr.Shadower);
+          OUTFORMFIELD( "F_SHADOWERNAME",TrainingPlanr.ShadowerName);
+          OUTFORMFIELD( "F_SHADOWER2",TrainingPlanr.Shadower2);
+          OUTFORMFIELD( "F_SHADOWERNAME2",TrainingPlanr.ShadowerName2);
+          OUTFORMFIELD( "F_SHADOWER3",TrainingPlanr.Shadower3);
+          OUTFORMFIELD( "F_SHADOWERNAME3",TrainingPlanr.ShadowerName3);
+          OUTFORMFIELD("F_COMMENT" ,TrainingPlanr.Comment);
+          CloseForm;        
+      end else begin
+        printf = false;
+        MessageBox(1546,formcode);
+      end;
+    end else begin
+      printf = false;
+      if (intdocnr==1) then begin
+        MessageBox(1624, " " & USetStr(1623));
+      end;
+    end;
+    intdocnr = intdocnr + 1;
+  end;
+LDoTrainingPlanForm:;  
+  return;
+end;

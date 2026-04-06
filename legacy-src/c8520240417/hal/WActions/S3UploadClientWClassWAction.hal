@@ -1,0 +1,311 @@
+external function string 255 GeneratePassword2(Integer);
+external function string 255 FileSizeToString(Val);
+
+global
+procedure UpdateList(Integer wn,record RcVc RepSpec,array string volumesarr)
+begin
+  string 255 volume;
+  LongInt pos;
+  Integer i;
+
+  ClearStringList(wn);
+  for (i = 0; i<volumesarr.length; i = i + 1) begin
+    pos = -1;
+    GetNextSubstring(volumesarr[i],pos,";",volume);
+//    GetNextSubstring(volumesarr[i],pos,";",cost);
+//    GetNextSubstring(volumesarr[i],pos,";",type);
+
+    AddListRow(wn,"volumes",1,volume,0);
+    AddListData(wn,"volumes","volume",volume);
+//    AddListData(wn,"numbers","type",type);
+//    AddListData(wn,"numbers","cost",cost);
+  end;
+
+  PutWindowRecord(wn,RepSpec);
+
+  return;
+end;
+
+global
+procedure CallLoadVolumes(Integer wn,record RcVc RepSpec)
+begin
+  array string 255 volumesarr;
+  string 255 stdout,disk,volume;
+  area a_stdout;
+  LongInt lines,line;
+
+  RunShellScriptGetStdout("diskutil list|grep external|sed 's/.*\\(disk[0-9]\\).*/\\1/'",stdout);
+
+  disk = trim(stdout);
+  if (blank(disk)) then begin goto LCallLoadVolumes; end;
+
+  RunShellScriptGetStdout("diskutil list|grep " & disk & "|grep Apple_APFS\\ Container|sed 's/.*" & disk & "/" & disk & "/'|head -1",stdout);
+  volume = trim(stdout);
+  if (blank(volume)) then begin
+    // Non-APFS disk
+    //RunShellScriptGetStdout("diskutil list|grep $(diskutil list|grep external|head|sed 's/.*\\(" & disk & "\\).*/\\1/')s|sed 's/.*" & disk & "/" & disk & "/'|head -1",stdout);
+    volume = disk;
+  end;
+
+/* not working
+  AddStringToArea(stdout,a_stdout);
+  lines = CountLinesInArea(a_stdout);
+  for (line=0;line<lines;line=line+1) begin
+    linestr = Trim(GetLineFromArea(a_stdout,line));
+    LogText(0,"linestr=" & linestr);
+    if (nonblank(linestr)) then begin
+      volumesarr[volumesarr.length] = linestr;
+    end;
+  end;
+*/
+
+  volumesarr[volumesarr.length] = volume;
+  UpdateList(wn,RepSpec,volumesarr);
+LCallLoadVolumes:;
+  return;
+end;
+
+global
+procedure S3UploadClientWClassGenerate()
+begin
+  record RcVc RepSpec;
+  Integer wn;
+  
+  wn = FindWindow("S3UploadClientWClass");
+  if (wn<=0) then begin
+    goto LS3UploadClientWClassGenerate;
+  end;
+
+  DeSelectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+  RepSpec.f5 = GeneratePassword2(21);
+  PutWindowRecord(wn,RepSpec);
+  WindowFieldGoto(wn,RepSpec,-1,"f4",false);
+
+LS3UploadClientWClassGenerate:;
+  return;
+end;
+
+
+global
+procedure S3UploadClientWClassRescan()
+begin
+  record RcVc RepSpec;
+  Integer wn;
+  
+  wn = FindWindow("S3UploadClientWClass");
+  if (wn<=0) then begin
+    goto LS3UploadClientWClassRescan;
+  end;
+
+  DeSelectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+
+  ClearStringList(wn);
+  AddListRow(wn,"volumes",1,"tagLOADING%",0);
+  AddListData(wn,"volumes","volume","Make sure exactly one external disk is connected...");
+  PutWindowRecord(wn,RepSpec);
+
+  CallLoadVolumes(wn,RepSpec);
+  WindowFieldGoto(wn,RepSpec,-1,"f1",false);
+
+LS3UploadClientWClassRescan:;
+  return;
+end;
+
+global
+procedure S3UploadClientWClassSelectFile()
+begin
+  record RcVc RepSpec;
+  Integer wn,nwn;
+  LongInt line;
+  string 255 filename;
+  Boolean fdres;
+
+  wn = FindWindow("S3UploadClientWClass");
+  if (wn<=0) then begin
+    goto LS3UploadClientWClassSelectFile;
+  end;
+
+  DeSelectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+  fdres = OpenFileDialog("",filename);
+  if (blank(filename) or (fdres==false)) then begin goto LS3UploadClientWClassSelectFile; end;
+
+  RepSpec.f7 = filename;
+  RepSpec.f8 = BaseName(filename);
+  PutWindowRecord(wn,RepSpec);
+  WindowFieldGoto(wn,RepSpec,-1,"f7",false);
+
+LS3UploadClientWClassSelectFile:;
+  return;
+end;
+
+global
+procedure CreateDiskImageCompleted(record RcVc RepSpec,string imagename,string errmsg,string okmsg,Integer progresswn)
+begin
+  string 255 msg;
+  Integer nwn;
+  
+  msg = okmsg;
+  if (nonblank(errmsg)) then begin
+    msg = errmsg;
+  end else begin
+    nwn = FindWindow("JobStatusClass");
+    if (nwn<=0) then begin
+      nwn = OpenWindow("JobStatusClass",1,0,"","",RepSpec);
+    end;
+    StartGenericFileUpload(imagename,RepSpec.f4,RepSpec.f3,imagename,true,"","");
+  end;
+  CloseWindow(progresswn);
+
+  if (nonblank(errmsg)) then begin
+    MessageBox(0,msg);
+  end;
+  OpenWindow("S3UploadClientWClass",1,0,"","",RepSpec);
+
+  return;
+end;
+
+global
+procedure CreateDiskImage(record RcVc RepSpec,string volume,Integer progresswn)
+begin
+  string 255 stdout,imagename,errmsg,okmsg;
+  
+  SetJobNohup(true);
+  
+  RunShellScriptGetStdout("diskutil unmountDisk /dev/disk2s2",stdout);
+  imagename = LowerCase(RepSpec.f6) & "-hdd-" & DateToString(CurrentDate,"YYYYMMDD") & ".dmg";
+  Delete_File(imagename);
+  
+  RunShellScriptGetStdout("echo -n \"" & RepSpec.f5 & "\"|hdiutil create " & imagename & " -srcdevice /dev/" & volume & " -encryption AES-256 -stdinpass",stdout);
+  if (FileExists(imagename)==false) then begin
+    errmsg = "Error: " & chr(10) & chr(10) & stdout;
+  end else begin
+    okmsg = "File created successfully: " & chr(10) & chr(10) & imagename & " " & FileSizeToString(FileSize2(imagename));
+  end;
+  queued.CreateDiskImageCompleted(RepSpec,imagename,errmsg,okmsg,progresswn);
+  
+  return;
+end;
+
+procedure UploadSingleFile(record RcVc RepSpec)
+begin
+  Integer nwn;
+  
+  nwn = FindWindow("JobStatusClass");
+  if (nwn<=0) then begin
+    nwn = OpenWindow("JobStatusClass",1,0,"","",RepSpec);
+  end;
+  StartGenericFileUpload(RepSpec.f7,RepSpec.f4,RepSpec.f3,RepSpec.f8,false,"","");
+
+  return;
+end;
+
+global
+updating procedure S3UploadClientWClassUpload()
+begin
+  record RcVc RepSpec;
+  Integer wn,nwn;
+  LongInt line;
+  string 255 volume;
+  record AmazonWSBlock AWSb;
+
+  wn = FindWindow("S3UploadClientWClass");
+  if (wn<=0) then begin
+    goto LS3UploadClientWClassUpload;
+  end;
+
+  DeSelectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+  
+  if (blank(RepSpec.f1)) then begin
+    MessageBox(0,"Amazon Access Key ID is required");
+    WindowFieldGoto(wn,RepSpec,-1,"f1",false);
+    goto LS3UploadClientWClassUpload;
+  end;
+
+  if (blank(RepSpec.f2)) then begin
+    MessageBox(0,"Amazon Secret Access Key is required");
+    WindowFieldGoto(wn,RepSpec,-1,"f2",false);
+    goto LS3UploadClientWClassUpload;
+  end;
+  
+  if (blank(RepSpec.f3)) then begin
+    MessageBox(0,"S3 Bucket is required");
+    WindowFieldGoto(wn,RepSpec,-1,"f3",false);
+    goto LS3UploadClientWClassUpload;
+  end;
+
+  if (blank(RepSpec.f4)) then begin
+    MessageBox(0,"Amazon Region is required");
+    WindowFieldGoto(wn,RepSpec,-1,"f4",false);
+    goto LS3UploadClientWClassUpload;
+  end;
+
+  BlockLoad(AWSb);
+  AWSb.AWSAccessKeyID = RepSpec.f1;
+  AWSb.SecretKey = RepSpec.f2;
+  BlockStore(AWSb);
+
+  if (nonblank(RepSpec.f7)) then begin
+    if (blank(RepSpec.f8)) then begin
+      MessageBox(0,"Destination filename is required");
+      WindowFieldGoto(wn,RepSpec,-1,"f7",false);
+      goto LS3UploadClientWClassUpload;
+    end;
+    if (!FileExists(RepSpec.f7)) then begin
+      MessageBox(0,"File not found");
+      WindowFieldGoto(wn,RepSpec,-1,"f6",false);
+      goto LS3UploadClientWClassUpload;
+    end;
+    UploadSingleFile(RepSpec);
+    goto LS3UploadClientWClassUpload;
+  end;
+  
+  if (blank(RepSpec.f5)) then begin
+    MessageBox(0,"Password is required");
+    WindowFieldGoto(wn,RepSpec,-1,"f4",false);
+    goto LS3UploadClientWClassUpload;
+  end;
+
+  if (blank(RepSpec.f6)) then begin
+    MessageBox(0,"User Signature is required");
+    WindowFieldGoto(wn,RepSpec,-1,"f5",false);
+    goto LS3UploadClientWClassUpload;
+  end;
+
+  line = SelectedListLine(wn);
+  if (line<0) then begin
+    MessageBox(0,"Select a volume in the list");
+    goto LS3UploadClientWClassUpload;
+  end;
+  volume = GetListTag(wn,line);
+  
+  nwn = OpenWindow("S3UploadClientWorkingWClass",1,0,"","",RepSpec);
+  HandleEvents;
+  CloseWindow(wn);
+  threadasync.CreateDiskImage(RepSpec,volume,nwn);
+
+LS3UploadClientWClassUpload:;
+  return;
+end;
+
+global
+function Boolean S3UploadClientWClassOnOpenWindow(Integer wn)
+begin
+  record RcVc RepSpec;
+  record AmazonWSBlock AWSb;
+  
+  GetWindowRecord(wn,RepSpec);
+
+  BlockLoad(AWSb);
+  RepSpec.f1 = AWSb.AWSAccessKeyID;
+  RepSpec.f2 = AWSb.SecretKey;
+  PutWindowRecord(wn,RepSpec);
+  WindowFieldGoto(wn,RepSpec,-1,"f3",false);
+
+  S3UploadClientWClassRescan;
+  S3UploadClientWClassOnOpenWindow = false;
+  return;
+end;

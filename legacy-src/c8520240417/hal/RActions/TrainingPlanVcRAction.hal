@@ -1,0 +1,199 @@
+external function Boolean TimeInRange(Time,Time,Time);
+external function LongInt AddTime(Time,LongInt,var Time);
+external function Boolean HasOpenHRMCO(string,LongInt);
+
+function Boolean FindDuplicatePerson(record TrainingPlanVc TPr,string employee,string trainer,string shadower,string shadower2,string shadower3,var LongInt message) 
+begin
+  Boolean res;
+  string 255 tstr;
+
+  res = false;
+  if (nonblanktime(TPr.TrainingStart)) and (nonblanktime(TPr.TrainingEnd)) then begin 
+    if (nonblank(employee)) then begin
+      tstr = employee;
+      if (TPr.Employee==tstr) or (TPr.Trainer==tstr) or (TPr.Shadower==tstr) or (TPr.Shadower2==tstr) or (TPr.Shadower3==tstr) then begin 
+        res = true; message = 43099; 
+        goto LFindDuplicatePerson; 
+      end;
+    end;
+    if (nonblank(trainer)) then begin
+      tstr = trainer;
+      if (TPr.Employee==tstr) or (TPr.Trainer==tstr) or (TPr.Shadower==tstr) or (TPr.Shadower2==tstr) or (TPr.Shadower3==tstr) then begin 
+        res = true; message = 43102; 
+        goto LFindDuplicatePerson; 
+      end;
+    end;
+    if (nonblank(shadower)) then begin
+      tstr = shadower; 
+      if (TPr.Employee==tstr) or (TPr.Trainer==tstr) or (TPr.Shadower==tstr) or (TPr.Shadower2==tstr) or (TPr.Shadower3==tstr) then begin 
+        res = true; message = 43103; 
+        goto LFindDuplicatePerson; 
+      end;
+    end;
+    if (nonblank(shadower2)) then begin
+      tstr = shadower2;
+      if (TPr.Employee==tstr) or (TPr.Trainer==tstr) or (TPr.Shadower==tstr) or (TPr.Shadower2==tstr) or (TPr.Shadower3==tstr) then begin 
+        res = true; message = 43107; 
+        goto LFindDuplicatePerson; 
+      end;
+    end;
+      if (nonblank(shadower3)) then begin
+      tstr = shadower3;
+      if (TPr.Employee==tstr) or (TPr.Trainer==tstr) or (TPr.Shadower==tstr) or (TPr.Shadower2==tstr) or (TPr.Shadower3==tstr) then begin 
+        res = true; message = 43108; 
+        goto LFindDuplicatePerson; 
+      end;
+    end;
+  end;
+LFindDuplicatePerson:;
+FindDuplicatePerson = res;
+  return;
+end;
+
+function Boolean IsDoubleBooked(record TrainingPlanVc TrainingPlanr,var LongInt message)
+begin
+  Boolean foundf,res,testf;
+  record TrainingPlanVc TPr;
+  string 255 tstr;
+
+  res = false;
+  foundf = true;
+  TPr.TrainingDate = TrainingPlanr.TrainingDate;
+  while (LoopKey("TrainingDate",TPr,1,foundf)) begin
+    testf = true;
+    if (TrainingPlanr.SerNr==TPr.SerNr) then begin testf = false; end;
+    if (DateInRange(TrainingPlanr.TrainingDate,TPr.TrainingDate,TPr.TrainingDate)==false) then begin testf = false; end;
+    if (nonblank(TPr.TrainingStart)) and (nonblank(TPr.TrainingEnd)) then begin 
+      if (nonblanktime(TPr.TrainingStart)) and (nonblanktime(TPr.TrainingEnd)) then begin 
+        if (TimeInRange(AddSeconds(TrainingPlanr.TrainingStart,1),TPr.TrainingStart,TPr.TrainingEnd)==false) then begin testf = false; end;    
+      end;
+    end;
+    if (testf) then begin 
+      if (nonblank(TrainingPlanr.Employee)) then begin
+        res = FindDuplicatePerson(TPr,TrainingPlanr.Employee,TrainingPlanr.Trainer,TrainingPlanr.Shadower,TrainingPlanr.Shadower2,TrainingPlanr.Shadower3,message); 
+       if (res) then begin 
+        goto LIsDoubleBooked;
+       end;
+      end;
+    end;
+  end;
+  LIsDoubleBooked:;
+IsDoubleBooked = res;
+  return;
+end;
+
+global
+function LongInt TrainingPlanVcRecordCheck(var record TrainingPlanVc TrainingPlanr,record TrainingPlanVc TrainingPlan2r,LongInt stat,LongInt long4)
+begin
+  LongInt res,message;
+  string 255 fieldname;
+
+  res = 0;
+  if (TrainingPlanr.SerNr<0) then begin
+    TrainingPlanr.SerNr = NextSerNr("TrainingPlanVc",CurrentDate,-1,false,"");
+  end;
+  if (blank(TrainingPlanr.Employee)) then begin
+    RecordCheckError(1058,"",-1,"Employee");      
+    res = -1;
+    goto LTrainingPlanVcRecordCheck;
+  end;
+  if (nonblank(TrainingPlanr.Employee) and nonblank(TrainingPlanr.Trainer) and nonblank(TrainingPlanr.Shadower)) then begin
+    if (TrainingPlanr.Employee==TrainingPlanr.Trainer or TrainingPlanr.Employee==TrainingPlanr.Shadower) then begin
+      RecordCheckError(43091,"",-1,"Trainer");      
+      res = -1;
+      goto LTrainingPlanVcRecordCheck;
+    end;
+    if (TrainingPlanr.Trainer==TrainingPlanr.Shadower) then begin
+      RecordCheckError(43090,"",-1,"Trainer");      
+      res = -1;
+      goto LTrainingPlanVcRecordCheck;
+    end;
+    if (TrainingPlanr.Trainer==TrainingPlanr.Employee) then begin
+      RecordCheckError(43090,"",-1,"Trainer");      
+      res = -1;
+      goto LTrainingPlanVcRecordCheck;
+    end;
+  end;
+  if (blank(TrainingPlanr.Topic)) then begin
+    RecordCheckError(1058,"",-1,"Topic");      
+    res = -1;
+    goto LTrainingPlanVcRecordCheck;
+  end;
+  // if (blank(TrainingPlanr.TrainingDate)) then begin
+  //   RecordCheckError(1058,"",-1,"TrainingDate");      
+  //   res = -1;
+  //   goto LTrainingPlanVcRecordCheck;
+  // end;
+  if (nonblank(TrainingPlanr.TrainingStart)) then begin
+    if (blank(TrainingPlanr.TrainingEnd)) then begin
+      RecordCheckError(1058,"",-1,"TrainingEnd");      
+      res = -1;
+      goto LTrainingPlanVcRecordCheck;
+    end;
+  end;
+  if (nonblank(TrainingPlanr.TrainingDate)) and (nonblank(TrainingPlanr.TrainingStart)) then begin
+    if (IsDoubleBooked(TrainingPlanr,message)) then begin
+      MessageBox(0, USetStr(message) & " " & USetStr(43092));
+      //  RecordCheckError(message,USetStr(43092),-1,fieldname);  
+      //  res = -1;
+      //  goto LTrainingPlanVcRecordCheck;
+    end;
+  end;
+LTrainingPlanVcRecordCheck:;
+  TrainingPlanVcRecordCheck = res; 
+  return;
+end; 
+
+global
+function LongInt TrainingPlanVcRecordDuplicate(var record TrainingPlanVc TrainingPlanr,record TrainingPlanVc TrainingPlan2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+
+  TrainingPlanr.SerNr = -1;
+  if (SingleUserMode) then begin
+    TrainingPlanr.SerNr = NextSerNr("TrainingPlanVc",CurrentDate,-1,false,"");
+  end;
+  TrainingPlanVcRecordDuplicate = res; 
+  return;
+end;
+
+global
+function LongInt TrainingPlanVcRecordDefaults(var record TrainingPlanVc TrainingPlanr,record TrainingPlanVc TrainingPlan2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  record TrainingPlanBlock TPBl;
+  
+  BlockLoad(TPBl);
+  if (nonblank(TPBl.DefStatus)) then begin
+    TrainingPlanr.Status = TPBl.DefStatus; 
+  end; 
+  TrainingPlanVcRecordDefaults = res;
+  return;
+end;
+
+global
+updating procedure SetTrainingPlanClosedStatus(record HRMCOVc HRMCOr)
+begin
+  Boolean foundf,testf;
+  record TrainingPlanVc TrainingPlanr,oldTrainingPlanr;
+  record TrainingPlanBlock TPBl;
+  
+  BlockLoad(TPBl);
+  foundf = true;
+    TrainingPlanr.Employee = HRMCOr.Employee;
+    while (LoopKey("Employee",TrainingPlanr,1,foundf)) begin
+      testf = true;
+      if (TrainingPlanr.Employee!=HRMCOr.Employee) then begin testf = false; end;
+      if (TrainingPlanr.Status==TPBl.DoneStatus) then begin testf = false; end;
+      if (HasOpenHRMCO(HRMCOr.Employee,HRMCOr.SerNr)) then begin testf = false; end;
+      if (testf) then begin
+        if (nonblank(TPBl.ClosedStatus)) then begin
+          RecordCopy(oldTrainingPlanr,TrainingPlanr);
+          TrainingPlanr.Status = TPBl.ClosedStatus;
+          RecordUpdate(oldTrainingPlanr,TrainingPlanr,false);
+        end;
+      end;
+    end;
+
+  return;
+end;

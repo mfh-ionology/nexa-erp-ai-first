@@ -1,0 +1,57 @@
+external procedure HT2Per(Date, Date , var string);
+
+global
+procedure EPaymentStatusRn(record RcVc RepSpec)
+begin
+  string 255 tstr;
+  record EPaymentStatusVc EPaymentStatusr;
+  Integer i,rwcnt,rw;
+  Boolean testf,TrHs;
+
+  StartReportJob(USetStr(43990));
+
+  rw = 1;
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  if (nonblank(RepSpec.f1)) then begin 
+    tstr = USetStr(43993) & ": " & RepSpec.f1;
+    Header(rw,tstr,1); 
+  end;
+  EndHeader;
+
+  SetRepCol(2,50);
+  SetRepCol(3,150);
+  SetRepCol(4,190);
+  SetRepCol(5,450);
+
+  StartFormat(15);
+  OutString(0,0,USetStr(43991),false);
+  OutString(2,0,USetStr(43992),false);
+  OutString(3,0,USetStr(43993),false);
+  StartFormat(15);
+  EndFormat;
+  Gray_Divider(0,1);
+
+  TrHs = true;
+  EPaymentStatusr.PaymentDate = RepSpec.sStartDate;
+  while (LoopKey("PaymentDate",EPaymentStatusr,1,TrHs)) begin
+    if (DateInRange(EPaymentStatusr.PaymentDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin TrHs = false; LogText(0, "fail date test"); end;
+    if (TrHs) then begin
+      testf = true;
+      if (nonblank(RepSpec.f1))  then begin
+        if (StringSetFromString(767,EPaymentStatusr.Status)!=RepSpec.f1) then begin testf = false; end;
+      end;
+      if (testf) then begin
+        StartFormat(15);
+        OutString(0,"DblOPVc",EPaymentStatusr.Payment,false);
+        OutString(2,0,EPaymentStatusr.PaymentRow+1,false);
+        OutString(3,0,EPaymentStatusr.Status,false);
+        OutString(4,0,StringFromStringSet(767,EPaymentStatusr.Status),false);
+        EndFormat;
+      end;
+    end;
+  end;
+  EndJob;  
+  return;
+end;

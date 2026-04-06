@@ -1,0 +1,197 @@
+remote function boolean emSzmalDoSecondPhaseAuthenticationData(string,string,string,string,string);
+remote procedure emSzmalGetAccountHistory(record RcVc,integer);
+remote procedure emSzmalGetAccountsList(record BankVc);
+remote procedure DoEmSzmalStartSessionRemote(Integer);
+remote function LongInt DateDiff(Date,Date);
+
+procedure emSzmalStartSession(Integer sessiontype)
+begin
+  record EmSzmalBlock EmSzmalBl;
+  integer wn;
+
+  BlockLoad(EmSzmalBl);
+  wn = CurWindow;
+  if (blank(EmSzmalBl.ApiId)) then begin
+    MessageBox(0,USetStr(42960));
+    goto LemSzmalStartSession;
+  end;
+  if (blank(EmSzmalBl.ApiKey)) then begin
+    MessageBox(0,USetStr(42961));
+    goto LemSzmalStartSession;
+  end;
+
+  DoEmSzmalStartSessionRemote(sessiontype);
+LemSzmalStartSession:;
+  return;
+end;
+
+global
+procedure emSzmalSubmitAuthCode()
+begin
+  integer wn,nwn,wn2;
+  record RcVc RepSpec;
+  record BankVc Bankr;
+  wn = FindWindow("EmSzmalAuthCodeOClass");
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+
+  wn2 = FindWindow("BankDClass");
+  DeselectWindow(wn2,false);
+  GetWindowRecord(wn2,Bankr); 
+  
+  emSzmalDoSecondPhaseAuthenticationData(RepSpec.f1,Bankr.emSzmalBankLogin,Bankr.emSzmalBankPassword,Bankr.emSzmalBankProvider,Bankr.emSzmalBankUserContext);
+  CloseWIndow(wn);
+  return;
+end;
+
+global
+procedure emSzmalSubmitAuthCode2()
+begin
+  integer wn,nwn,wn2;
+  record RcVc RepSpec;
+  record BankVc Bankr;
+  record RcVc RepSpec2;
+  string 255 accountnr,bankname,pmmode;
+  record PMBlock PMBl;
+  row PMBlock PMBlrw;
+  Integer rwcnt,i;
+  Boolean testf;
+
+  testf = false;
+  BlockLoad(PMBl);
+
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+  pmmode = GetWindowString(FindWindow("BankAccountReconWClass"),"gAccRcn_vpmaccnr");
+  rwcnt = MatRowCnt(PMBl);
+  for (i=0 ;i<rwcnt;i=i+1) begin
+    MatRowGet(PMBl,i,PMBlrw);
+    if (PMBlrw.AccNr==pmmode) then begin
+      accountnr = PMBlrw.BankNr;
+      bankname = PMBlrw.BankCode;
+      goto LemSzmalSubmitAuthCode2;
+    end;
+  end;
+  LemSzmalSubmitAuthCode2:;
+
+  Bankr.Code = bankname;
+  if (ReadFirstMain(Bankr,1,true)) begin 
+    if (Bankr.Nr2 == accountnr) then begin
+       testf = true;
+    end;
+  end;
+  if (testf) then begin
+    emSzmalDoSecondPhaseAuthenticationData(RepSpec.f1,Bankr.emSzmalBankLogin,Bankr.emSzmalBankPassword,Bankr.emSzmalBankProvider,Bankr.emSzmalBankUserContext);
+  end;
+  CloseWIndow(wn);
+  return;
+end;
+
+
+global
+procedure emSzmalGetAccountsListDsm()
+begin
+  record BankVc Bankr;
+  integer wn,nwn;
+
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,Bankr); 
+  emSzmalGetAccountsList(Bankr);
+  return;
+end;
+
+global
+procedure EmSzmalAuthCodesm()
+begin
+  integer wn,nwn;
+  record RcVc RepSpec;
+
+  wn = CurWindow;
+  nwn = OpenWindow("EmSzmalAuthCodeOClass",1,wn,"","",RepSpec);
+  return;
+end;
+
+global
+procedure EmSzmalAuthCode2sm()
+begin
+  integer wn,nwn;
+  record RcVc RepSpec;
+
+  wn = CurWindow;
+  nwn = OpenWindow("EmSzmalAuthCode2OClass",1,wn,"","",RepSpec);
+  return;
+end;
+
+global
+procedure EmSzmalBalancesm()
+begin
+  emSzmalStartSession(1);
+  return;
+end;
+
+global
+procedure EmSzmalHistorysm()
+begin
+  integer wn,nwn;
+  record RcVc RepSpec;
+  record BankVc Bankr;
+  record EmSzmalBlock EmSzmalBl;
+
+  emSzmalStartSession(0);
+  BlockLoad(EmSzmalBl);
+  if (nonblank(EmSzmalBl.SessionId)) then begin
+    wn = CurWindow;
+    GetWindowRecord(wn,Bankr);
+    if (blank(Bankr.Nr2)) then begin
+      MessageBox(0,USetStr(42966));
+      goto LEmSzmalHistorysm;
+    end;
+    if (blank(Bankr.emSzmalBankLogin)) then begin
+      MessageBox(0,USetStr(42965));
+      goto LEmSzmalHistorysm;
+    end;
+    if (blank(Bankr.emSzmalBankPassword)) then begin
+      MessageBox(0,USetStr(42964));
+      goto LEmSzmalHistorysm;
+    end;
+    if (blank(Bankr.emSzmalBankProvider)) then begin
+      MessageBox(0,USetStr(42963));
+      goto LEmSzmalHistorysm;
+    end;
+    RepSpec.f1 = Bankr.Nr2;
+    RepSpec.f2 = Bankr.emSzmalBankLogin;
+    RepSpec.f3 = Bankr.emSzmalBankPassword;
+    RepSpec.f4 = Bankr.emSzmalBankProvider;
+    RepSpec.flags[0] = Bankr.SkipSms;
+    RepSpec.f5 = Bankr.emSzmalBankUserContext;
+    nwn = OpenWindow("EmSzmalAccountHistoryPeriodOClass",0,wn,"","",RepSpec);
+  end;
+LEmSzmalHistorysm:;
+  return;
+end;
+
+global
+procedure EmSzmalHistoryRequestDsm()
+begin
+  integer wn,oldwn;
+  record RcVc RepSpec;
+  record BankVc Bankr;
+
+  wn = FindWindow("EmSzmalAccountHistoryPeriodOClass");
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+  if (DateDiff(RepSpec.sEndDate,RepSpec.sStartDate)>7) then begin
+    MessageBox(42972,"");
+    goto LEmSzmalHistoryRequestDsm;
+  end;
+  if (DateDiff(RepSpec.sStartDate,CurrentDate)>30) then begin
+    MessageBox(42976,"");
+    goto LEmSzmalHistoryRequestDsm;
+  end;
+  CloseWindow(wn);
+  emSzmalGetAccountHistory(RepSpec,0);
+LEmSzmalHistoryRequestDsm:;
+  return;
+end;

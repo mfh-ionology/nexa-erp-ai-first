@@ -1,0 +1,2382 @@
+external function string 60 AddStringToStringList(string,string);
+external procedure GetAccDCTurnover(string,string,Date,Date,record ObjBalVc,string,Integer,Integer,Integer,val,val,var val,var val);
+external function Boolean GetNextTokenReturn(string,var Integer,var string);
+external procedure GetNext2Sep(string,var Integer,var string);
+external procedure GetNextToken(string,var Integer,var string);
+external procedure DefaultPeriod(var string);
+external procedure Bud1Sumup(var record Bud1Vc);
+external procedure Bud2Sumup(var record Bud1Vc);
+external function val FormulaCalcSum(val,string);
+external function val Budg1Calc2(string,string,string,string,Date,Date,Integer,Integer,Integer);
+external function string 255 ServerDateFormat();
+external function Boolean HasYodlee();
+external function Boolean GetAccPMRow(string,var row PMBlock);
+external function string 255 DateToStr(Date);
+external function Boolean GetAccName(string,var string,Integer);
+external function Boolean GetPMRow(string,var row PMBlock);
+remote procedure BankAccountReconWClass_FillDataAsyncCallback(Integer,string);
+external procedure ExtractObj(string,var Integer,var string);
+external function Integer PMCheckType(string,var string,var string);
+external function Integer TypeOfCurncy(var string,var Integer);
+external function Boolean AccInRange(string,string);
+external function string 255 UserBlockedAccs(string);
+external function Boolean ObjIncluded(string,string);
+external procedure FindNLAccBal(string,string,string,Integer,Date,Date,Integer,Integer,Boolean,string,Integer,string,string,var val);
+external procedure In2Period(var string,var Date,var Date);
+external updating procedure UpdateObjBal(string,string,Date,val,val,string,Boolean);
+external function Integer DateGetIntMonth(Date);
+forward updating function Boolean BankAccountReconWClass_ReconcileRecord(LongInt,Integer,Integer,string);
+external function Boolean HasBankImport();
+external function Boolean HasModExp();
+external function Boolean GetPMBlockRow(record PMBlock,string,var row PMBlock);
+external function string 255 StripCharacter(string,string);
+external function string 255 StrReplace(string,string,string);
+external function Boolean FindStringInString(string,string);
+remote function Integer TestReconsBankRecW(record BankRecVc,Integer);
+external procedure InPeriod(string,var Date,var Date);
+external function Boolean PasteInvIn2IPr(var record IPVc,Integer,Date,var val,Boolean,var Boolean);
+external procedure RunMainRn2(var record RcVc,Boolean,Date,var Boolean,var val,var val,record SMVc,Boolean,var val,var val,var LongInt,var val);
+external procedure FindAccSD(Date,var Date,var Boolean);
+external procedure MainRClassReportDef(var record RcVc);
+
+function string 255 JSCallHal(string procname,string args)
+begin
+  string 255 res;
+
+  if (GuiType==kGuiiPhone) then begin // iOS only for now but we should make this the only way on all platforms
+    res = "window.location.href='m4callhal:" & procname & ":" & args & "'";
+  end else begin
+    // This method is deprecated, we should use URL schemes instead, see above
+    res = "HansaWorld.callHal('" & procname & "','" & args & "')";
+  end;
+  
+  JSCallHal = res;
+  return;
+end;
+
+global
+procedure BankRecSortOnAmount(record BankRecVc brp)
+begin
+  Integer i,rwcnt,nostop;
+  row BankRecVc brrw,nbrrw,tbrrw;
+
+  rwcnt = MatRowCnt(brp);
+  nostop = 1;
+  while (nostop==1) begin
+    nostop = 0;
+    for (i=0;i<rwcnt-1;i=i+1) begin
+      MatRowGet(brp,i,brrw);
+      MatRowGet(brp,i+1,nbrrw);
+      if (brrw.Val<nbrrw.Val) then begin
+        nostop = 1;
+        CopyRow(brp,brrw,tbrrw);
+        CopyRow(brp,nbrrw,brrw);
+        CopyRow(brp,tbrrw,nbrrw);
+        MatRowPut(brp,i,brrw);
+        MatRowPut(brp,i+1,nbrrw);
+      end;
+    end;
+  end;
+  return;
+end;
+
+global
+procedure BankRecSortOnReconCode(record BankRecVc brp)
+begin
+  Integer i,rwcnt,nostop;
+  row BankRecVc brrw,nbrrw,tbrrw;
+
+  rwcnt = MatRowCnt(brp);
+  nostop = 1;
+  while (nostop==1) begin
+    nostop = 0;
+    for (i=0;i<rwcnt-1;i=i+1) begin
+      MatRowGet(brp,i,brrw);
+      MatRowGet(brp,i+1,nbrrw);
+      if (brrw.ReconCode<nbrrw.ReconCode) then begin
+        nostop = 1;
+        CopyRow(brp,brrw,tbrrw);
+        CopyRow(brp,nbrrw,brrw);
+        CopyRow(brp,tbrrw,nbrrw);
+        MatRowPut(brp,i,brrw);
+        MatRowPut(brp,i+1,nbrrw);
+      end;
+    end;
+  end;
+  return;
+end;
+
+procedure Do_RefreshBRPost_AllNotReconciled(var record BankRecVc brp,record AccVc Accr)
+begin
+  record TRVc TRr;
+  row TRVc TRrw;
+  row BankRecVc brrw;
+  Boolean TrHs,testf;
+  string 255 ckey;
+  Integer i,rwcnt;
+  Integer trrwcnt;
+  val v;
+  string 255 tstr;
+  Date sd,ed;
+  
+  sd.day = 1; sd.month = 1; sd.year = 1980;
+  ed = AddDay(brp.d1,-1);
+  ckey = "AccNumberReconsf:" & brp.AccNumber;
+  TRr.TransDate = sd;
+  TrHs = true;
+  while (LoopKey(ckey,TRr,2,TrHs)) begin
+    if (TRr.TransDate>ed) then begin TrHs = false; end;
+    if (TrHs) then begin
+      trrwcnt = MatRowCnt(TRr);
+      for (i=0;i<trrwcnt;i=i+1) begin
+        MatRowGet(TRr,i,TRrw);
+        if (TRrw.stp==1) then begin
+          if (TRrw.ovst==0) then begin
+            testf = true;
+            if (TRrw.AccNumber!=brp.AccNumber) then begin testf = false; end;
+            if (ObjIncluded(brp.Objects,TRrw.Objects)==false) then begin testf = false; end;
+            if ((nonblank(brp.CompCode)) and (brp.CompCode!=TRrw.CompCode)) then begin testf = false; end;
+            if (TRrw.Reconsf!=0) then begin
+              if ((nonblank(brp.ReconCode)) and (brp.ReconCode!=TRrw.ReconCode)) then begin testf = false; end;
+            end;
+            if (nonblankdate(TRrw.ReconDate) and nonblankdate(brp.ReconDate)) then begin
+//                    if (TRrw.ReconDate!=brp.ReconDate) then begin testf = false; end;
+//they say it should not be acting as filter, KS and JW
+            end else begin
+//                    if (nonblankdate(brp.ReconDate)) then begin
+//                      if (TRr.TransDate!=brp.ReconDate) then begin testf = false; end;
+//                    end;
+            end;
+            if (brp.ReconSum!=0) then begin
+              if (blank(brp.CurncyCode)) then begin
+                if (TRrw.DebVal!=0) then begin
+                  if (TRrw.DebVal!=brp.ReconSum) then begin testf = false; end;
+                end else begin
+                  if (TRrw.CredVal!=brp.ReconSum) then begin testf = false; end;
+                end;
+              end else begin
+                if (TRrw.CurDebVal!=0) then begin
+                  if (TRrw.CurDebVal!=brp.ReconSum) then begin testf = false; end;
+                end else begin
+                  if (TRrw.CurCredVal!=brp.ReconSum) then begin testf = false; end;
+                end;
+              end;
+            end;
+            if (brp.Typ!=kTransactionRowTypeAny) then begin
+              if (TRrw.Typ!=brp.Typ) then begin testf = false; end;
+            end;
+            if (testf) then begin
+              if (rwcnt>500) then begin
+                brp.Incompletef = 1;
+                goto LDo_RefreshBRPost_AllNotReconciled;
+              end;
+              if (TRrw.Reconsf==0) then begin
+                if (brp.Unrecedf==0) then begin goto L33Do_RefreshBRPost_AllNotReconciled; end;
+              end;
+              if (TRrw.Reconsf!=0) then begin
+                if (brp.Recedf==0) then begin goto L33Do_RefreshBRPost_AllNotReconciled; end;
+              end;
+              ClearRow(brp,brrw,1);
+              brrw.IntYc = TRr.IntYc;
+              brrw.Number = TRr.Number;
+              brrw.rownr = i;
+              brrw.TransDate = TRr.TransDate;
+              brrw.Val = TRrw.DebVal - TRrw.CredVal;
+              brrw.Val2 = TRrw.DebVal2 - TRrw.CredVal2;
+              brrw.CurVal = TRrw.CurDebVal - TRrw.CurCredVal;
+              v = v + brrw.Val;
+              brrw.BalVal = v;
+              tstr = TRr.Comment;
+              if (TRrw.Comment!=Accr.Comment) then begin
+                if (nonblank(tstr)) then begin
+                  tstr = tstr & ", ";
+                end;
+                tstr = tstr & TRrw.Comment;
+              end;
+              if (brp.ShowRefStr!=0) then begin
+                brrw.Comment = TRr.RefStr;
+              end else begin
+                brrw.Comment = tstr;
+              end;
+              brrw.Objects = TRrw.Objects;
+              brrw.Reconsf = TRrw.Reconsf;
+              if (TRrw.Reconsf!=0) then begin
+                brrw.ReconCode = TRrw.ReconCode;
+              end else  begin
+                brrw.ReconCode = brp.ReconCode;
+              end;
+              brrw.ReconDate = TRrw.ReconDate;
+              brrw.CurncyCode = TRrw.Curncy;
+              MatRowPut(brp,rwcnt,brrw);
+              rwcnt = rwcnt + 1;
+L33Do_RefreshBRPost_AllNotReconciled:;
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+LDo_RefreshBRPost_AllNotReconciled:;
+  return;
+end;
+
+global
+procedure Do_RefreshBRPost(var record BankRecVc brp,Integer sorting)
+begin
+  Boolean TrHs;
+  record CYBlock CompYear;
+  record MainVc mainr;
+  record FBVc FBr;
+  record SMVc SMr;
+  record TRVc TRr;
+  row TRVc TRrw;
+  row BankRecVc brrw;
+  val v;
+  Boolean Accs;
+  Integer i,rwcnt;
+  Integer trrwcnt;
+  record AccVc Accr;
+  string 255 tstr;
+  val accbal;
+  string 20 balostr;
+  Boolean testf;
+  Date d1,d2,td;
+  record BankRecVc oldbrp;
+  row BankRecVc oldbrrw;
+  Integer oi,orwcnt;
+  string 255 blockaccs;
+  record ReconBlock Reconb;
+  record CheckVc Checkr;
+  record OwnCheckVc OwnCheckr;
+
+  BlockLoad(Reconb);
+  RecordCopy(oldbrp,brp);
+  Accr.AccNumber = brp.AccNumber;
+  Accs = ReadFirstMain(Accr,1,false);
+  if (Accs==false) then begin goto LDo_UpdateBRPost; end;
+  blockaccs = UserBlockedAccs(CurrentUser);
+  brp.Incompletef = 0;
+  In2Period(brp.Period2Str,d1,d2);
+  brp.d1 = d1;
+  brp.d2 = d2;
+  BlockLoad(CompYear);
+  brp.RecVal = 0;
+  balostr = brp.Objects & ";;;";
+//  balostr = ";;;";
+  while(MatRowCnt(brp)>0) begin
+    MatRowDelete(brp,0);
+  end;
+  if (nonblank(blockaccs)) then begin
+    if (AccInRange(brp.AccNumber,blockaccs)) then begin goto LDo_UpdateBRPost; end;
+  end;
+/*
+  if ((Accr.AccType==0) or (Accr.AccType==1) or (Accr.AccType==2)) then begin
+    if (nonblank(brp.CompCode)) then beginUpdateBRPost
+      td = AddDay(brp.RecDate,1);
+    end else begin
+      td = AddDay(brp.RecDate,0);
+    end;
+  end;
+*/
+  td = brp.RecDate;
+  if (td.day==DaysInMonth(td.year,td.month)) then begin
+    td = AddDay(td,1);
+//FindNLAccBal does -1 on date
+  end;
+  FindNLAccBal(brp.AccNumber,balostr,"",0,td,td,0,0,false,brp.CurncyCode,0,"",brp.CompCode,accbal);
+
+  brp.StartBal = accbal;
+  brp.EndBal = brp.StartBal + brp.RecVal;
+  
+  if (Reconb.NotReconTransIgnoreStartDate!=0) then begin
+    Do_RefreshBRPost_AllNotReconciled(brp,Accr);
+    if (MatRowCnt(brp)>500) then begin
+      brp.Incompletef = 1;
+      goto LDo_UpdateBRPost;
+    end;
+  end;
+  
+  mainr.AccNumber = brp.AccNumber;
+  mainr.TransDate = brp.d1;
+  TrHs = true;
+  while (LoopMain(mainr,2,TrHs)) begin
+    if (mainr.TransDate>brp.d2) then begin TrHs = false; end;
+    if (TrHs) then begin
+      if (mainr.AccNumber!=brp.AccNumber) then begin TrHs = false; end;
+    end;
+    if (TrHs) then begin
+      if (mainr.FileName=="TRVc") then begin
+        TRr.Number = mainr.TransNr;
+        TRr.IntYc = mainr.IntYc;
+        if (ReadFirstMain(TRr,2,true)) then begin
+          if (mainr.TransDate==TRr.TransDate) then begin
+            trrwcnt = MatRowCnt(TRr);
+            for (i=0;i<trrwcnt;i=i+1) begin
+              MatRowGet(TRr,i,TRrw);
+              if (TRrw.stp==1) then begin
+                if (TRrw.ovst==0) then begin
+                  testf = true;
+                  if (TRrw.AccNumber!=brp.AccNumber) then begin testf = false; end;
+                  if (ObjIncluded(brp.Objects,TRrw.Objects)==false) then begin testf = false; end;
+                  if ((nonblank(brp.CompCode)) and (brp.CompCode!=TRrw.CompCode)) then begin testf = false; end;
+                  if (TRrw.Reconsf!=0) then begin
+                    if ((nonblank(brp.ReconCode)) and (brp.ReconCode!=TRrw.ReconCode)) then begin testf = false; end;
+                  end;
+                  if (nonblankdate(TRrw.ReconDate) and nonblankdate(brp.ReconDate)) then begin
+//                    if (TRrw.ReconDate!=brp.ReconDate) then begin testf = false; end;
+//they say it should not be acting as filter, KS and JW
+                  end else begin
+//                    if (nonblankdate(brp.ReconDate)) then begin
+//                      if (TRr.TransDate!=brp.ReconDate) then begin testf = false; end;
+//                    end;
+                  end;
+                  if (brp.ReconSum!=0) then begin
+                    if (blank(brp.CurncyCode)) then begin
+                      if (TRrw.DebVal!=0) then begin
+                        if (TRrw.DebVal!=brp.ReconSum) then begin testf = false; end;
+                      end else begin
+                        if (TRrw.CredVal!=brp.ReconSum) then begin testf = false; end;
+                      end;
+                    end else begin
+                      if (TRrw.CurDebVal!=0) then begin
+                        if (TRrw.CurDebVal!=brp.ReconSum) then begin testf = false; end;
+                      end else begin
+                        if (TRrw.CurCredVal!=brp.ReconSum) then begin testf = false; end;
+                      end;
+                    end;
+                  end;
+                  if (brp.Typ!=kTransactionRowTypeAny) then begin
+                    if (TRrw.Typ!=brp.Typ) then begin testf = false; end;
+                  end;
+                  if (testf) then begin
+                    if (rwcnt>500) then begin
+                      brp.Incompletef = 1;
+                      goto LDo_UpdateBRPost;
+                    end;
+                    if (TRrw.Reconsf==0) then begin
+                      if (brp.Unrecedf==0) then begin goto L33Do_UpdateBRPost; end;
+                    end;
+                    if (TRrw.Reconsf!=0) then begin
+                      if (brp.Recedf==0) then begin goto L33Do_UpdateBRPost; end;
+                    end;
+                    ClearRow(brp,brrw,1);
+                    brrw.IntYc = TRr.IntYc;
+                    brrw.Number = TRr.Number;
+                    brrw.rownr = i;
+                    if (TRr.IntYc==Check0Yc) or (TRr.IntYc==CheckYc) or (TRr.IntYc==Check2Yc)
+                       then begin
+                      Checkr.SerNr = TRr.Number;
+                      ReadFirstMain(Checkr,1,true);
+                      brrw.CheckNr = Checkr.CheckNr;
+                    end;
+                    if (TRr.IntYc==OwnCheck0Yc) or (TRr.IntYc==OwnCheckYc) then begin
+                      OwnCheckr.SerNr = TRr.Number;
+                      ReadFirstMain(OwnCheckr,1,true);
+                      brrw.CheckNr = OwnCheckr.CheckNr;
+                    end;
+                    brrw.TransDate = TRr.TransDate;
+                    brrw.Val = TRrw.DebVal - TRrw.CredVal;
+                    brrw.Val2 = TRrw.DebVal2 - TRrw.CredVal2;
+                    brrw.CurVal = TRrw.CurDebVal - TRrw.CurCredVal;
+                    v = v + brrw.Val;
+                    brrw.BalVal = v;
+                    tstr = TRr.Comment;
+                    if (TRrw.Comment!=Accr.Comment) then begin
+                      if (nonblank(tstr)) then begin
+                        tstr = tstr & ", ";
+                      end;
+                      tstr = tstr & TRrw.Comment;
+                    end;
+                    if (brp.ShowRefStr!=0) then begin
+                      brrw.Comment = TRr.RefStr;
+                    end else begin
+                      brrw.Comment = tstr;
+                    end;
+                    brrw.Objects = TRrw.Objects;
+                    brrw.Reconsf = TRrw.Reconsf;
+                    if (TRrw.Reconsf!=0) then begin
+                      brrw.ReconCode = TRrw.ReconCode;
+                    end else  begin
+                      brrw.ReconCode = brp.ReconCode;
+                    end;
+                    brrw.ReconDate = TRrw.ReconDate;
+                    brrw.CurncyCode = TRrw.Curncy;
+                    MatRowPut(brp,rwcnt,brrw);
+                    rwcnt = rwcnt + 1;
+L33Do_UpdateBRPost:;
+                  end;
+                end;
+              end;
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+LDo_UpdateBRPost:;
+  switch (sorting) begin
+    case 1: BankRecSortOnAmount(brp);
+    case 2: BankRecSortOnReconCode(brp);
+  end;
+  brp.Diff = brp.EndBal - brp.BankBal;
+/*  300*300 = 90000. slow move to client
+  orwcnt = MatRowCnt(oldbrp);
+  rwcnt = MatRowCnt(brp);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(brp,i,brrw);
+    for (oi=0;oi<orwcnt;oi=oi+1) begin
+      MatRowGet(oldbrp,oi,oldbrrw);
+      if (oldbrrw.IntYc==brrw.IntYc) and (oldbrrw.Number==brrw.Number) then begin
+        brrw.Reconsf = oldbrrw.Reconsf;
+        MatRowPut(brp,i,brrw);
+        oi = orwcnt;
+      end;
+    end;
+  end;
+*/
+  return;
+end;
+
+global
+updating procedure UpdateSubsytem(record TRVc TRr,row TRVc TRrw)
+begin
+  record OPVc OPr;
+  row OPVc OPrw;
+  Integer i,rwcnt;
+  Integer typeofcur,oldstyle,cht;
+  val trv;
+  string 255 tstr,thepm;
+  record OwnCheckVc oldOwnCheckr;
+  record OwnCheckVc OwnCheckr;
+  
+  switch (TRr.IntYc) begin
+    case OPYc:
+      OPr.SerNr = TRr.Number;
+      if (ReadFirstMain(OPr,1,true)) then begin
+        rwcnt = MatRowCnt(OPr);
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(OPr,i,OPrw);
+          if (OPrw.ChequeNr>0) then begin
+            typeofcur = TypeOfCurncy(OPrw.BankCurncy,oldstyle);
+            switch (typeofcur) begin
+              case 1:
+                trv = TRrw.CredVal - TRrw.DebVal;
+              case 2:
+                trv = TRrw.CredVal2 - TRrw.DebVal2;
+              otherwise
+                trv = TRrw.CurCredVal - TRrw.CurDebVal;
+            end;
+            if (OPrw.BankVal==trv) then begin
+              thepm = OPrw.PayMode;
+              if (blank(thepm)) then begin
+                thepm = OPr.PayMode;
+              end;
+              cht = PMCheckType(thepm,tstr,tstr);
+              switch (cht) begin
+                case kPayModeTypeOwnCheque:
+                  OwnCheckr.SerNr = OPrw.ChequeNr;
+                  if (ReadFirstMain(OwnCheckr,1,true)) then begin
+                    if (OwnCheckr.Openf==kCheckTypeAccepted) then begin
+                      RecordCopy(oldOwnCheckr,OwnCheckr);
+                      OwnCheckr.Openf = kCheckTypeDeposited;
+                      RecordUpdate(oldOwnCheckr,OwnCheckr,true);
+                    end;
+                  end;
+              end;
+            end;
+          end;
+        end;
+      end;
+  end;
+  return;
+end;
+
+updating procedure Do_ReconsBRPost(record BankRecVc brp)
+begin
+  row BankRecVc brrw;
+  Integer i,rwcnt,pos;
+  record TRVc oldTRr;
+  record TRVc TRr;
+  row TRVc TRrw;
+  Integer trrwcnt;
+  string 255 balostr;
+  record BankRecBlock BRb;
+  Boolean updatef;
+  Date rd;
+  
+  BlockLoad(BRb);
+  rwcnt = MatRowCnt(brp);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(brp,i,brrw);
+    TRr.IntYc = brrw.IntYc;
+    TRr.Number = brrw.Number;
+    if (ReadFirstMain(TRr,2,true)) then begin
+      RecordCopy(oldTRr,TRr);
+      trrwcnt = MatRowCnt(TRr);
+      if (brrw.rownr<trrwcnt) then begin
+        MatRowGet(TRr,brrw.rownr,TRrw);
+        rd = brrw.ReconDate;
+        if (blankdate(rd)) then begin
+          rd = brp.ReconDate;
+        end;
+        if (blankdate(rd)) then begin
+          rd = TRr.TransDate;
+        end;
+// LogText(0,"Do_ReconsBRPost TRrw.Reconsf=" & TRrw.Reconsf & ", brrw.Reconsf=" & brrw.Reconsf);
+        if (TRrw.Reconsf!=brrw.Reconsf) then begin
+          TRrw.Reconsf = brrw.Reconsf;
+          TRrw.ReconCode = brrw.ReconCode;
+          if (brrw.Reconsf==0) then begin
+            TRrw.ReconDate = "";
+          end else begin
+            if (rd<brrw.TransDate) then begin 
+              TRrw.ReconDate = brrw.TransDate;
+            end else begin 
+              TRrw.ReconDate = rd;
+            end;
+            if (blank(TRrw.ReconDate)) then begin
+              TRrw.ReconDate = brp.ReconDate;
+            end;
+            if (blank(TRrw.ReconDate)) then begin
+              TRrw.ReconDate = CurrentDate;
+            end;
+          end;
+          MatRowPut(TRr,brrw.rownr,TRrw);
+          if (RecordUpdate(oldTRr,TRr,true)==0) then begin
+          end;
+          if (TRrw.Reconsf==0) then begin
+            TRrw.DebVal = -TRrw.DebVal;
+            TRrw.CredVal = -TRrw.CredVal;
+          end;
+          /*
+          balostr = ";;;";
+          //TODO when UN reconciliating substract from credval
+          //LogText(0,"Do_ReconsBRPost1 TRrw.Objects=" & TRrw.Objects & ", TRrw.DebVal" & TRrw.DebVal & ", TRrw.CredVal=" & TRrw.CredVal & ", TRrw.DebVal2=" & TRrw.DebVal2 & ", TRrw.CredVal2=" & TRrw.CredVal2 & ", rd=" & rd & ", balostr=" & balostr);
+          UpdateObjBal(TRrw.AccNumber,balostr,rd,TRrw.DebVal,TRrw.CredVal,"transdebit",false);
+          UpdateObjBal(TRrw.AccNumber,balostr,rd,TRrw.DebVal2,TRrw.CredVal2,"transdebit2",false);
+          pos = 0;
+          //LogText(0,"Do_ReconsBRPost2 TRrw.Objects=" & TRrw.Objects & ", TRrw.DebVal" & TRrw.DebVal & ", TRrw.CredVal=" & TRrw.CredVal & ", TRrw.DebVal2=" & TRrw.DebVal2 & ", TRrw.CredVal2=" & TRrw.CredVal2 & ", rd=" & rd & ", balostr=" & balostr);
+          ExtractObj(TRrw.Objects,pos,balostr);
+          while (nonblank(balostr)) begin
+            balostr = balostr & ";;;";
+            //LogText(0,"in while1 TRrw.Objects=" & TRrw.Objects & ", TRrw.DebVal" & TRrw.DebVal & ", TRrw.CredVal=" & TRrw.CredVal & ", TRrw.DebVal2=" & TRrw.DebVal2 & ", TRrw.CredVal2=" & TRrw.CredVal2 & ", rd=" & rd & ", balostr=" & balostr);
+            UpdateObjBal(TRrw.AccNumber,balostr,rd,TRrw.DebVal,TRrw.CredVal,"transdebit",false);
+            UpdateObjBal(TRrw.AccNumber,balostr,rd,TRrw.DebVal2,TRrw.CredVal2,"transdebit2",false);
+            ExtractObj(TRrw.Objects,pos,balostr);
+            //LogText(0,"in while2 TRrw.Objects=" & TRrw.Objects & ", TRrw.DebVal" & TRrw.DebVal & ", TRrw.CredVal=" & TRrw.CredVal & ", TRrw.DebVal2=" & TRrw.DebVal2 & ", TRrw.CredVal2=" & TRrw.CredVal2 & ", rd=" & rd & ", balostr=" & balostr);
+          end;
+          //LogText(0,"Do_ReconsBRPost3 TRrw.Objects=" & TRrw.Objects & ", TRrw.DebVal" & TRrw.DebVal & ", TRrw.CredVal=" & TRrw.CredVal & ", TRrw.DebVal2=" & TRrw.DebVal2 & ", TRrw.CredVal2=" & TRrw.CredVal2 & ", rd=" & rd & ", balostr=" & balostr);
+          */
+/*
+          balostr = brp.Objects & ";;;";
+          UpdateObjBal(TRrw.AccNumber,balostr,rd,TRrw.DebVal,TRrw.CredVal,"transdebit",false);
+          UpdateObjBal(TRrw.AccNumber,balostr,rd,TRrw.DebVal2,TRrw.CredVal2,"transdebit2",false);
+*/
+          UpdateSubsytem(TRr,TRrw);
+          updatef = true;
+        end;
+      end;
+    end;
+  end;
+  if (updatef) then begin
+    BRb.LastBankRecDate = brp.ReconDate;
+    if (blankdate(BRb.LastBankRecDate)) then begin
+      BRb.LastBankRecDate = brp.d2;
+    end;
+    BlockStore(BRb);
+  end;
+  Do_RefreshBRPost(brp,0);
+  return;
+end;
+
+global
+updating procedure UpdateBRPost(var record BankRecVc BankRecp,Boolean increcon,Integer sorting)
+begin
+  Integer pm;
+  
+  if (increcon) then begin
+    Do_ReconsBRPost(BankRecp);
+  end else begin
+    Do_RefreshBRPost(BankRecp,sorting);
+  end;
+  return;
+end;
+
+global
+updating procedure UpdateBankRecW(var record BankRecVc BankRecp)
+begin
+  BankRecp.RecVal = blankval;
+  BankRecp.StartBal = blankval;
+  BankRecp.EndBal = blankval;
+  if (nonblank(BankRecp.Period2Str)) then begin
+    if (nonblank(BankRecp.AccNumber)) then begin
+//      if (BankRecp.Unrecedf!=0) or (BankRecp.Recedf!=0) then begin
+//recon and derecon doesnt update
+        UpdateBRPost(BankRecp,false,0);
+//      end;
+    end;
+  end;
+  return;
+end;
+
+global
+updating procedure UpdateOnAmountBankRecW(var record BankRecVc BankRecp)
+begin
+
+  if (nonblank(BankRecp.Period2Str)) then begin
+    if (nonblank(BankRecp.AccNumber)) then begin
+      UpdateBRPost(BankRecp,false,1);
+    end;
+  end;
+  return;
+end;
+
+global
+updating procedure UpdateOnReconCodeBankRecW(var record BankRecVc BankRecp)
+begin
+
+  if (nonblank(BankRecp.Period2Str)) then begin
+    if (nonblank(BankRecp.AccNumber)) then begin
+      UpdateBRPost(BankRecp,false,2);
+    end;
+  end;
+  return;
+end;
+
+function string 255 PastePeriod(string pcode)
+begin
+  string 255 res;
+  Date d1,d2;
+  
+  res = pcode;
+  In4Period(res,d1,d2);
+
+  PastePeriod = res;
+  return;
+end;
+
+global
+updating procedure BankRecVc_PastePeriod2Str(var record BankRecVc BankRecp)
+begin
+  Date d1,d2;
+  string 30 tstr;
+  
+  tstr = PastePeriod(BankRecp.Period2Str);
+  In4Period(tstr,d1,d2);
+  //BankRecp.d1 = d1;
+  //BankRecp.d2 = d2;
+  //tstr = d1;
+  //tstr = tstr & ":";
+  //tstr = tstr & d2;
+  BankRecp.Period2Str = tstr;
+  if (BankRecp.Recedf!=0 or BankRecp.Unrecedf!=0) then begin
+    UpdateBankRecW(BankRecp);
+  end;
+  return;
+end;
+
+global
+updating procedure BankRecVc_PasteAccNumber(var record BankRecVc BankRecp)
+begin
+  record AccVc Accr;
+  
+  Accr.AccNumber = BankRecp.AccNumber;
+  if (ReadFirstMain(Accr,1,true)) then begin
+    BankRecp.CurncyCode = Accr.Curncy;
+  end;
+  UpdateBankRecW(BankRecp);
+  return;
+end;
+
+global
+updating procedure BankRecVc_PasteReconSum(var record BankRecVc BankRecp)
+begin
+  UpdateBankRecW(BankRecp);
+  return;
+end;
+
+global
+updating procedure BankRecVc_PasteTyp(var record BankRecVc BankRecp)
+begin
+  record AccVc Accr;
+  
+  Accr.AccNumber = BankRecp.AccNumber;
+  if (ReadFirstMain(Accr,1,true)) then begin
+    BankRecp.CurncyCode = Accr.Curncy;
+  end;
+  UpdateBankRecW(BankRecp);
+  return;
+end;
+
+global
+updating procedure BankRecVc_PasteCurncyCode(var record BankRecVc BankRecp)
+begin
+  UpdateBankRecW(BankRecp);
+  return;
+end;
+
+global
+updating procedure BankRecVc_PasteObjects(var record BankRecVc BankRecp)
+begin
+  UpdateBankRecW(BankRecp);
+  return;
+end;
+
+global
+updating procedure BankRecVc_PasteRecDate(var record BankRecVc BankRecp)
+begin
+  Date td;
+  string 255 balostr;
+  val v;
+  record AccVc Accr;
+          
+  balostr = BankRecp.Objects & ";;;";
+  Accr.AccNumber = BankRecp.AccNumber;
+  ReadFirstMain(Accr,1,true);
+/*
+  if ((Accr.AccType==0) or (Accr.AccType==1) or (Accr.AccType==2)) then begin
+    if (nonblank(BankRecp.CompCode)) then begin
+      td = AddDay(BankRecp.RecDate,1);
+    end else begin
+      td = AddDay(BankRecp.RecDate,1);
+    end;
+  end;
+*/
+  td = BankRecp.RecDate;
+  if (td.day==DaysInMonth(td.year,td.month)) then begin
+    td = AddDay(td,1);
+//FindNLAccBal does -1 on date
+  end;
+  FindNLAccBal(BankRecp.AccNumber,balostr,"",0,td,td,0,0,false,Accr.Curncy,0,"",BankRecp.CompCode,v);
+  BankRecp.StartBal = v;
+  BankRecp.EndBal = BankRecp.StartBal + BankRecp.RecVal;
+  BankRecp.Diff = BankRecp.EndBal - BankRecp.BankBal;
+  return;
+end;
+
+procedure AddStyle(var string html,string typeref)
+begin
+  html = html & "<style>" & chr(13);
+  html = html & ".AccountReconWindow {font-style: Sans-serif; font-size: 11pt; height:auto; position:fixed; background-color: #F0F0F0; z-index: 10; padding: 0px; border-bottom: 1px solid black; left: 0%; top: 0%; width: 100%;}" & chr(13);
+  html = html & ".AccRcn_row {background-color: #FFFFFF; width: 980px; height: 85px; border-style: none; border-width:0.6px; border-color: lightgray; display: block;}" & chr(13);
+  html = html & ".AccRcn_rowseparator {background-color: #FFFFFF; width: 980px; height: 5px; border-bottom:1px solid lightgray; margin-bottom: 5px; display: block;}" & chr(13);
+  html = html & ".AccRcn_monthrow {background-color: #F0F0F0; width: 980px; height: 20px; border-style: solid none solid none; border-width:1px; padding-top: 0px; margin-bottom: 6px; position: sticky; top:0px; z-index: 15;}" & chr(13);
+  html = html & ".AccRcn_banktransaction { background-color: #FFFFFF; width: 490px; height: 80px; border-style: none solid none none; border-width:2px; border-color: lightgray; display: inline; float: left; }" & chr(13);
+  html = html & ".AccRcn_banktransactionD {background-color: #FFFFFF; width: 490px; height: 80px; border-style: none solid none none; border-width:2px; border-color: #FB6148; display: inline; float: left;}" & chr(13);
+  html = html & ".AccRcn_banktransactionC {background-color: #FFFFFF; width: 490px; height: 80px; border-style: none solid none none; border-width:2px; border-color: #63CF40; display: inline; float: left;}" & chr(13);
+  html = html & ".AccRcn_banktransactionref {font-style: Sans-serif; background-color: #FFFFFF; float: left; width: 70%; margin-left: 2%; text-align: left; }" & chr(13);
+  html = html & ".AccRcn_banktransactionref:hover {background-color: #EBF6FA; opacity: .9; border-radius: 4px; }" & chr(13);
+  html = html & ".AccRcn_banktransactionref2 {background-color: #FFFFFF; width: 98%; padding-left: 2%; text-align: left; display: inline; }" & chr(13);
+  html = html & ".AccRcn_banktransactionref2:hover {background-color: #EBF6FA; opacity: .9; border-radius: 4px; display: inline;}" & chr(13);
+  html = html & ".AccRcn_banktransactionref3 {background-color: #FFFFFF; width: 98%; padding-right: 2%; text-align: left; display: inline; }" & chr(13);
+  html = html & ".AccRcn_banktransactioncmnt {font-style: Sans-serif; background-color: #FFFFFF; float: left; width: 98%; margin-left: 2%; text-align: left; }" & chr(13);
+  html = html & ".AccRcn_banktransactionsum {background-color: #FFFFFF; float: right; width: 26%; padding-right: 2%; text-align: right;}" & chr(13);
+  html = html & ".AccRcn_banktransactionsum:hover {background-color: #EBF6FA;}" & chr(13);
+  html = html & ".AccRcn_banktransactionmatch {background-color: #FFFFFF; width: 485px; height: 80px; display: inline; float: right;}" & chr(13);
+  html = html & ".AccRcn_banktransactionnomatch {background-color: #FFFFFF; width: 470px; height: 80px; text-align: center; display: inline; float: right;}" & chr(13);
+  html = html & ".AccRcn_specificationfield {background-color: #FFFFFF; opacity: .9; border-radius: 3px; border:1px solid LightSteelBlue;}" & chr(13);
+  //html = html & ".AccRcn_Data_CreateButton {background-color: #FFFFFF; opacity: .9; border-radius: 7px; border:1px solid LightSteelBlue;}" & chr(13);
+  html = html & ".AccRcn_Data_CreateButton:hover {background-color: #EBF6FB; opacity: .9; border-radius: 7px; border:1px solid black;}" & chr(13);
+//  html = html & ".AccRcn_banktransactionokbuttondiv {background-color: #FFFFFF; float: right; width: 26%; padding-right: 2%; text-align: right;}" & chr(13);
+  html = html & ".AccRcn_banktransactionokbuttondiv {background-color: #FFFFFF;right: 0px;}" & chr(13);
+  html = html & ".AccRcn_banktransactioncreatediv {background-color: #FFFFFF; float: right; width: 26%; padding-right: 4%; text-align: right;}" & chr(13);
+  html = html & ".AccRcn_banktransactionokbutton {margin-top: 65px; margin-left: 73px; position: absolute; background-color: #FFFFFF; opacity: .9; border-radius: 7px; border:1px solid LightSteelBlue;}" & chr(13);
+  html = html & ".AccRcn_banktransactionokbutton:hover {background-color: #EBF6FA; opacity: .9; border-radius: 7px; border:1px solid black;}" & chr(13);
+  switch (typeref) begin
+    case "C": html = html & ".show_receipts {background-color: #EBF6FB; opacity: .9; border-radius: 7px; border:1px solid black;}" & chr(13);
+    case "D": html = html & ".show_payments {background-color: #EBF6FB; opacity: .9; border-radius: 7px; border:1px solid black;}" & chr(13);
+    otherwise
+      html = html & ".show_all {background-color: #EBF6FB; opacity: .9; border-radius: 7px; border:1px solid black;}" & chr(13);
+  end;
+  html = html & "</style>" & chr(13);
+  return;
+end;
+
+procedure AddJavaScript(var string html)
+begin
+  html = html & "<script type='text/javascript'>" & chr(13);
+  html = html & "function BankAccountReconWClass_ReconcileBankTransactionJS(arg)" & chr(13);
+  html = html & "{" & chr(13);
+
+  html = html & "  " & JSCallHal("BankAccountReconWClass_ReconcileBankTransaction","' + arg + '") & ";" & chr(13);
+  
+//  html = html & "  setTimeout(function(){" & chr(13);
+//  html = html & "  alert(""Hello"");" & chr(13);
+//  html = html & "  " & JSCallHal("BankAccountReconWClassReload","' + arg + '") & ";" & chr(13);
+//  html = html & "},3000);" & chr(13);
+  html = html & "}" & chr(13);
+  
+  html = html & "function BankAccountReconWClassChangeEditFieldJS(fieldname,fieldvalue)" & chr(13);
+  html = html & "{" & chr(13);
+
+  html = html & "var e = document.getElementById(fieldname);" & chr(13);
+
+ // html = html & "  alert('fieldname ' + fieldname + ' e.value ' + e.value);" & chr(13);
+  html = html & "  " & JSCallHal("BankAccountReconWClassChangeEditField","' + fieldname + ',' + e.value + '") & ";" & chr(13);
+  html = html & "}" & chr(13);
+
+  html = html & "function BankAccountReconWClass_SelectAccRcn_pmaccnrJS(fieldvalue)" & chr(13);
+  html = html & "{" & chr(13);
+  html = html & "  " & JSCallHal("BankAccountReconWClassChangeEditField","AccRcn_pmaccnr,' + fieldvalue + '") & ";" & chr(13);
+  html = html & "}" & chr(13);
+
+  html = html & "function BankAccountReconWClassChangeEditFieldJS2(event)" & chr(13);
+  html = html & "{" & chr(13);
+  html = html & "  var e = document.getElementById(event.target.name);" & chr(13);
+  html = html & "  switch (event.type) {" & chr(13);
+  html = html & "    case 'keydown':" & chr(13);
+  html = html & "      switch (event.target.name) {" & chr(13);
+  html = html & "        case 'AccRcn_pmaccnr':" & chr(13);
+  html = html & "          if (event.which==13 || event.which==9) {" & chr(13);
+  html = html & "            document.getElementById('AccRcn_period').focus();" & chr(13);
+  html = html & "            " & JSCallHal("BankAccountReconWClassChangeEditField","' + event.target.name + ',' + e.value + '") & ";" & chr(13);
+  html = html & "          };" & chr(13);
+  html = html & "        case 'AccRcn_period':" & chr(13);
+  html = html & "          if (event.which==13 || event.which==9) {" & chr(13);
+  html = html & "            document.getElementById('AccRcn_pmaccnr').focus();" & chr(13);
+  html = html & "            " & JSCallHal("BankAccountReconWClassChangeEditField","' + event.target.name + ',' + e.value + '") & ";" & chr(13);
+  html = html & "          };" & chr(13);
+  html = html & "      };" & chr(13);
+  html = html & "  };" & chr(13);
+  html = html & "}" & chr(13);
+
+  html = html & "function BankAccountReconWClassChangeEditFieldJS3(event,arg)" & chr(13);
+  html = html & "{" & chr(13);
+  html = html & "  var e = document.getElementsByName('AccRcn_period');" & chr(13);
+  html = html & "  " & JSCallHal("BankAccountReconWClassChangeEditField","AccRcn_period,' + e[0].value + '") & ";" & chr(13);
+  html = html & "  " & JSCallHal("BankAccountReconWClass_RefillData","' + arg + '") & "" & chr(13);
+  html = html & "}" & chr(13);
+
+  html = html & "function BankAccountReconWClassRefreshOnChangeFieldJS(arg)" & chr(13);
+  html = html & "{" & chr(13);
+  html = html & "  BankAccountReconWClassChangeEditFieldJS3(event,arg);" & chr(13);
+  html = html & "}" & chr(13);
+
+  html = html & "function BankAccountReconWClass_CreateJS(arg)" & chr(13);
+  html = html & "{" & chr(13);
+  html = html & "  " & JSCallHal("BankAccountReconWClass_Create","' + arg + '") & ";" & chr(13);
+  html = html & "}" & chr(13);
+
+  html = html & "function BankAccountReconWClassConfirmAllJS()" & chr(13);
+  html = html & "{" & chr(13);
+  html = html & "  var e, ecnt,ai,ei;" & chr(13);
+  html = html & "  var attributeNodes;" & chr(13);
+
+  html = html & "  e = document.getElementById('AccRcn_banktransactionokbuttondiv0');" & chr(13);
+  html = html & "  if (!e) {" & chr(13);
+  html = html & "    e = document.getElementById('AccRcn_banktransactioncreatediv0');" & chr(13);
+  html = html & "  }" & chr(13);
+  html = html & "  if (e) {" & chr(13);
+//  html = html & "        alert('e ');" & chr(13);
+  html = html & "    attributeNodes = e.attributes;" & chr(13);
+  html = html & "    for ( ai = 0; ai < attributeNodes.length; ai++ ) {" & chr(13);
+  html = html & "      if (attributeNodes[ai].name=='data-banktransactioncnt') {" & chr(13);
+//  html = html & "        alert(attributeNodes[ai].value);" & chr(13);
+  html = html & "        ecnt = parseInt(attributeNodes[ai].value);" & chr(13);
+  html = html & "        ai = attributeNodes.length;" & chr(13);
+  html = html & "      }" & chr(13);
+  html = html & "    }" & chr(13);
+  html = html & "  }" & chr(13);
+//  html = html & "      alert(ecnt);" & chr(13);
+
+  html = html & "  for ( ei = 0; ei < ecnt; ei++ ) {" & chr(13);
+  html = html & "    e = document.getElementById('AccRcn_banktransactionokbuttondiv' + ei);" & chr(13);
+  html = html & "    if (e) {" & chr(13);
+  html = html & "      attributeNodes = e.attributes;" & chr(13);
+  html = html & "      for ( ai = 0; ai < attributeNodes.length; ai++ ) {" & chr(13);
+  html = html & "        if (attributeNodes[ai].name=='data-banktransaction') {" & chr(13);
+  html = html & "          " & JSCallHal("BankAccountReconWClass_ReconcileBankTransaction","' + attributeNodes[ai].value + '") & ";" & chr(13);
+//  html = html & "      alert(attributeNodes[ai].value);" & chr(13);
+  html = html & "        }" & chr(13);
+//  html = html & "    alert(attributeNodes[ai].name + '=' + attributeNodes[ai].value);" & chr(13);
+  html = html & "      }" & chr(13);
+  html = html & "    }" & chr(13);
+  html = html & "  }" & chr(13);
+  html = html & "}" & chr(13);
+
+/*
+  html = html & "function BankAccountReconWClassRefreshJS(arg)" & chr(13);
+  html = html & "{" & chr(13);
+  html = html & "  var list,e,i,s;" & chr(13);
+
+  html = html & "  list = document.getElementsByClassName('AccRcn_banktransaction' + arg);" & chr(13);
+  html = html & "  if (list) {" & chr(13);
+  html = html & "      for (i = 0; i < list.length; i++ ) { " & chr(13);
+  html = html & "        e = list[i];" & chr(13);
+//  html = html & "        alert ('e.id '+ e.id);" & chr(13);
+  html = html & "        if (e.style.display == 'none') {" & chr(13);
+  html = html & "          e.style.display = 'block';" & chr(13);
+  html = html & "        } else {" & chr(13);
+  html = html & "          e.style.display = 'none';" & chr(13);
+  html = html & "        }" & chr(13);
+  html = html & "        s = e.id;" & chr(13);
+//  html = html & "        alert ('s.substring(0,22) '+ s.substring(0,22) + 's.substring(22,s.length) '+ s.substring(22,s.length));" & chr(13);
+  html = html & "        e = document.getElementById(s.substring(0,22) + 'match' + s.substring(22,s.length));" & chr(13);
+  html = html & "        if (e.style.display == 'none') {" & chr(13);
+  html = html & "          e.style.display = 'block';" & chr(13);
+  html = html & "        } else {" & chr(13);
+  html = html & "          e.style.display = 'none';" & chr(13);
+  html = html & "        }" & chr(13);
+  html = html & "      };" & chr(13);
+
+  html = html & "  }" & chr(13);
+  html = html & "}" & chr(13);
+*/
+
+/*
+function getAttributes ( node ) {
+    var i,
+        attributeNodes = node.attributes,
+        length = attributeNodes.length,
+        attrs = {};
+
+    for ( i = 0; i < length; i++ ) attrs[attributeNodes[i].name] = attributeNodes[i].value;
+    return attrs;
+}
+
+  html = html & "function BankAccountReconWClassOpenPasteSpecialJS(fieldname,fieldvalue)" & chr(13);
+  html = html & "{" & chr(13);
+
+  html = html & "var e = document.getElementById(fieldname);" & chr(13);
+
+//e.addEventListener("mouseover", myFunction);
+
+  html = html & "  var pssel = document.createElement('select');"  & chr(13);
+  html = html & "  pssel.setAttribute('id', fieldname + 'PS');" & chr(13);
+  html = html & "  pssel.setAttribute('name', fieldname + 'PS');" & chr(13);
+  
+  html = html & "  var psselop = document.createElement('option');"  & chr(13);
+  html = html & "  psselop.innerHTML = 'jarek1';" & chr(13);
+  html = html & "  pssel.appendChild(psselop);" & chr(13);
+
+  html = html & "  var psselop = document.createElement('option');"  & chr(13);
+  html = html & "  psselop.innerHTML = 'jarek2';" & chr(13);
+  html = html & "  pssel.appendChild(psselop);" & chr(13);
+
+  html = html & "  e.appendChild(pssel);" & chr(13);
+
+  html = html & "  setTimeout(function(){" & chr(13);
+
+*/
+/*
+  html = html & "  var psdiv = document.createElement('div');"  & chr(13);
+  html = html & "  psdiv.setAttribute('id', fieldname + 'PS');" & chr(13);
+
+  html = html & "  var ul = document.createElement('ul');"  & chr(13);
+  html = html & "  ul.setAttribute('id', fieldname + 'PS' + 'ul');" & chr(13);
+
+  html = html & "  var li = document.createElement('li');"  & chr(13);
+  html = html & "  li.setAttribute('id', fieldname + 'PS' + 'ul' + 'li');" & chr(13);
+  html = html & "  li.innerHTML = 'jarek1';" & chr(13);
+  html = html & "  ul.appendChild(li);" & chr(13);
+
+  html = html & "  var li = document.createElement('li');"  & chr(13);
+  html = html & "  li.setAttribute('id', fieldname + 'PS' + 'ul' + 'li');" & chr(13);
+  html = html & "  li.innerHTML = 'jarek2';" & chr(13);
+  html = html & "  ul.appendChild(li);" & chr(13);
+
+  html = html & "  psdiv.appendChild(ul);" & chr(13);
+
+  html = html & "  e.appendChild(psdiv);" & chr(13);
+*/
+
+/*
+
+  html = html & "  alert('fieldname ' + fieldname + ' e.value ' + e.value);" & chr(13);
+//  html = html & "  alert(' fieldname + e.value ' + fieldname + e.value);" & chr(13);
+
+//  html = html & "  " & JSCallHal("BankAccountReconWClassReload","' + arg + '") & ";" & chr(13);
+  html = html & "},3000);" & chr(13);
+
+//  html = html & "  alert('fieldname ' + fieldname + ' e.value ' + e.value);" & chr(13);
+  html = html & "}" & chr(13);
+*/
+    
+  html = html & "</script>" & chr(13);
+  return;
+end;
+
+function Boolean IsTransactionRowReconciled(record TRVc TRr,string paymodeacc,val sum)
+begin
+  Boolean res;
+  row TRVc TRrw;
+  Integer i,rwcnt;
+  val v;
+
+  rwcnt = MatRowCnt(TRr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(TRr,i,TRrw);
+    v = TRrw.DebVal - TRrw.CredVal;
+    if (TRrw.AccNumber==paymodeacc and TRrw.Reconsf!=0 and TRrw.ovst==0 and sum==v) then begin
+      res = true;
+      i = rwcnt;
+    end;
+  end;
+  IsTransactionRowReconciled = res;
+  return;
+end;
+
+
+function Boolean FindMatchingPayment(Date sd,Date ed,record AccountReconDataVc ARDr,var row OPVc OPrw,var row PPVc PPrw,var record TRVc TRr,var row TRVc TRrw)
+begin
+  record MainVc Mainr;
+  record OPVc OPr;
+  record PPVc PPr;
+  row TRVc TR2rw;
+  Integer i,j,rwcnt;
+  Boolean found,testf,res;
+  transaction string 255 gAccRcn_vpmaccnr;
+  val v;
+  array Integer arownr;
+  
+  RecordClear(TRr);
+  ClearRow(TRr,TRrw,1);
+  if (nonblank(ARDr.FileName)) then begin
+    switch (ARDr.FileName) begin
+      case "OPVc":
+        OPr.SerNr = ARDr.TransNr;
+        if (ReadFirstMain(OPr,1,true)) then begin
+          if (ARDr.TransRow>=0 and ARDr.TransRow<MatRowCnt(OPr)) then begin
+            MatRowGet(OPr,ARDr.TransRow,OPrw);
+            TRr.Number = OPr.SerNr;
+            TRr.IntYc = OPYc;
+            if (ReadFirstMain(TRr,2,true)) then begin
+              res = true;
+            end else begin
+              res = OPr.OrderedFlag!=0 and OPr.DoneFlag==0;
+            end;
+          end;
+        end;
+      case "PPVc":
+        PPr.SerNr = ARDr.TransNr;
+        if (ReadFirstMain(PPr,1,true)) then begin
+          if (ARDr.TransRow>=0 and ARDr.TransRow<MatRowCnt(PPr)) then begin
+            MatRowGet(PPr,ARDr.TransRow,PPrw);
+            TRr.Number = PPr.SerNr;
+            TRr.IntYc = PPYc;
+            if (ReadFirstMain(TRr,2,true)) then begin
+              res = true;
+            end;
+          end;
+        end;
+      case "TRVc":
+        TRr.Number = ARDr.TransNr;
+        TRr.IntYc = ARDr.IntYc;
+        if (ReadFirstMain(TRr,2,true)) then begin
+          if (ARDr.TransRow>=0 and ARDr.TransRow<MatRowCnt(TRr)) then begin
+            MatRowGet(TRr,ARDr.TransRow,TRrw);
+            if (ARDr.Sum==TRr.DSum) or (ARDr.Sum==TRr.CSum) then begin
+              TRrw.Comment = TRr.Comment;
+              res = true;
+            end;
+          end;
+        end;
+      otherwise
+    end;
+    goto LFindMatchingPayment;
+  end;
+
+  ClearRow(OPr,OPrw,1);
+  ClearRow(PPr,PPrw,1);
+  ClearRow(TRr,TRrw,1);
+  found = true;
+  Mainr.AccNumber = gAccRcn_vpmaccnr;
+  Mainr.TransDate = sd;
+  while (LoopMain(Mainr,2,found)) begin
+    if (Mainr.AccNumber!=gAccRcn_vpmaccnr) then begin found = false; end;
+    if (DateInRange(Mainr.TransDate,sd,ed)==false) then begin found = false; end;
+    if (found) then begin
+      testf = true;
+      if (Mainr.FileName!="TRVc") then begin testf = false; end;
+      if (Mainr.IntYc!=OPYc and Mainr.IntYc!=PPYc and Mainr.IntYc>=IPYc) then begin
+        testf = false;
+      end;
+      if (testf) then begin
+        TRr.Number = Mainr.TransNr;
+        TRr.IntYc = Mainr.IntYc;
+        if (ReadFirstMain(TRr,2,true)==false) then begin
+          testf = false;
+        end;
+      end;
+      if (testf) then begin
+        testf = IsTransactionRowReconciled(TRr,gAccRcn_vpmaccnr,-ARDr.Sum)==false;
+      end;
+      if (testf) then begin
+        switch (Mainr.IntYc) begin
+          case OPYc:
+            if (DateInRange(Mainr.TransDate,AddDay(ARDr.TransDate,-1),AddDay(ARDr.TransDate,1))) then begin
+              OPr.SerNr = Mainr.TransNr;
+              if (ReadFirstMain(OPr,1,true)) then begin
+                rwcnt = MatRowCnt(OPr);
+                 for (i=0;i<rwcnt;i=i+1) begin
+                  MatRowGet(OPr,i,OPrw);
+                  testf = true;
+  //                if (OPrw.BankVal==(-ARDr.Sum)) then begin
+                  if (Left(ARDr.TypeRef,1)=="D") then begin
+                    if (OPrw.BankVal!=ARDr.Sum) then begin testf = false; end;
+                    if (nonblank(ARDr.ContactName)) then begin
+                     // if (OPrw.Comment!=ARDr.ContactName) then begin testf = false; end;
+                     if (FindStringInString(OPrw.Comment,ARDr.ContactName)==false) then begin testf = false; end;
+                    end;
+                    if (DateInRange(OPr.TransDate,AddDay(ARDr.TransDate,-1),AddDay(ARDr.TransDate,1))==false) then begin testf = false; end;
+                    if (testf) then begin
+                      ARDr.FileName = "OPVc";
+                      ARDr.TransNr = Mainr.TransNr;
+                      ARDr.TransRow = i;
+                      ARDr.TransDate = Mainr.TransDate;
+                      ARDr.IntYc = OPYc;
+                      ARDr.ContactName = OPrw.Comment;
+                      i = rwcnt;
+                      res = true;
+                      found = false;
+                    end;
+                  end;
+                end;
+              end;
+            end;
+          case PPYc:
+            PPr.SerNr = Mainr.TransNr;
+            if (ReadFirstMain(PPr,1,true)) then begin
+              rwcnt = MatRowCnt(PPr);
+               for (i=0;i<rwcnt;i=i+1) begin
+                MatRowGet(PPr,i,PPrw);
+                if (PPrw.PayVal==ARDr.Sum and Left(ARDr.TypeRef,1)=="D") then begin
+                  ARDr.FileName = "PPVc";
+                  ARDr.TransNr = Mainr.TransNr;
+                  ARDr.TransRow = i;
+                  ARDr.TransDate = Mainr.TransDate;
+                  ARDr.CurncyCode = PPr.CurncyCode;
+                  ARDr.IntYc = PPYc;
+                  i = rwcnt;
+                  res = true;
+                  found = false;
+                end;
+              end;
+            end;
+          otherwise
+            rwcnt = MatRowCnt(TRr);
+            for (i=0;i<rwcnt;i=i+1) begin
+              MatRowGet(TRr,i,TRrw);
+              v = 0;
+/*
+              ClearArray(arownr);
+              for (j=i+1;j<rwcnt;j=j+1) begin
+                MatRowGet(TRr,j,TR2rw);
+                if (TR2rw.AccNumber==gAccRcn_vpmaccnr and TR2rw.Reconsf==0 and TR2rw.ovst==0 and (Left(ARDr.TypeRef,1)=="D")) then begin
+                  v = v + (TR2rw.DebVal - TR2rw.CredVal);
+                  arownr[arownr.length] = j;
+                end;
+              end;
+*/
+              v = v + (TRrw.DebVal - TRrw.CredVal);
+              if (TRrw.AccNumber==gAccRcn_vpmaccnr and TRrw.Reconsf==0 and TRrw.ovst==0 and (ARDr.Sum==-v and Left(ARDr.TypeRef,1)=="D")) then begin
+                ARDr.FileName = "TRVc";
+                ARDr.TransNr = Mainr.TransNr;
+                ARDr.TransRow = i;
+                ARDr.TransDate = Mainr.TransDate;
+                ARDr.IntYc = Mainr.IntYc;
+                res = true;
+                i = rwcnt;
+                found = false;
+//                for (j=0;j<arownr.length) begin
+//                  ARDr.FileName = "TRVc";
+//                  ARDr.TransNr = Mainr.TransNr;
+//                  ARDr.TransRow = arownr[j];
+//                  ARDr.TransDate = Mainr.TransDate;
+//                  ARDr.IntYc = Mainr.IntYc;
+//                end;
+              end;
+            end;
+        end;
+      end;
+    end;
+  end;
+  OPr.OrderedFlag = 1;
+  OPr.DoneFlag = 0;
+  found = true;
+  while (LoopKey("OrderedFlag",OPr,2,found)) begin
+    if (OPr.OrderedFlag!=1) then begin found = false; end;
+    if (OPr.DoneFlag!=0) then begin found = false; end;
+    if (OPr.Invalid!=0) then begin found = false; end;
+    if (found) then begin
+      testf = true;
+      if (testf) then begin
+        rwcnt = MatRowCnt(OPr);
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(OPr,i,OPrw);
+          if (Left(ARDr.TypeRef,1)=="D") then begin
+            testf = true;
+            if (OPrw.BankVal!=ARDr.Sum) then begin testf = false; end;
+            if (OPrw.ovst!=0) then begin testf = false; end;
+            if (nonblank(ARDr.ContactName)) then begin
+             // if (OPrw.Comment!=ARDr.ContactName) then begin testf = false; end;
+             if (FindStringInString(OPrw.Comment,ARDr.ContactName)==false) then begin testf = false; end;
+            end;
+            if (testf) then begin
+              ARDr.FileName = "OPVc";
+              ARDr.TransNr = OPr.SerNr;
+              ARDr.TransRow = i;
+              ARDr.TransDate = OPr.TransDate;
+              ARDr.IntYc = OPYc;
+              i = rwcnt;
+              res = true;
+              found = false;
+            end;
+          end;
+        end;
+        if (res==false) then begin
+          testf = true;
+          if (OPr.CurPayVal!=ARDr.Sum) then begin testf = false; end;
+          if (DateInRange(OPr.TransDate,AddDay(ARDr.TransDate,-1),AddDay(ARDr.TransDate,1))==false) then begin testf = false; end;
+            if (testf) then begin
+              ARDr.FileName = "OPVc";
+              ARDr.TransNr = OPr.SerNr;
+              ARDr.TransRow = 1;
+              ARDr.TransDate = OPr.TransDate;
+              ARDr.IntYc = OPYc;
+              ARDr.CurncyCode = OPr.PayCurCode;
+              res = true;
+              found = false;
+            end;
+        end;
+      end;
+    end;
+  end;
+
+LFindMatchingPayment:;
+  FindMatchingPayment = res;
+  return;
+end;
+
+function val GetInvoiceBalance(LongInt ivnr,Integer rownr,val curval,var Boolean curbalf)
+begin
+  val res;
+  record IPVc IPr;
+  row IPVc IPrw;
+  val chk;
+  Boolean installmentf;
+
+  curbalf = true;
+  if (rownr=-1) then begin 
+    res = 0;
+    goto LGetInvoiceBalance;
+  end;
+  
+  RecordNew(IPr);
+  IPrw.InvoiceNr = ivnr;
+  MatRowPut(IPr,rownr,IPrw);
+  PasteInvIn2IPr(IPr,rownr,IPr.TransDate,chk,false,installmentf);
+  MatRowGet(IPr,rownr,IPrw);
+
+  res = IPrw.RecVal;
+  if (res==blankval) then begin
+    res = curval;
+    curbalf = false;
+  end;
+  
+LGetInvoiceBalance:;
+  GetInvoiceBalance = res;
+  return;
+end;
+
+function Boolean FindMatchingReceipt(Date sd,Date ed,var record AccountReconDataVc ARDr,var row IPVc IPrw,var record TRVc TRr,var row TRVc TRrw,record BankTRVc BankTRr,var Boolean curbalf)
+begin
+  record MainVc Mainr;
+  record IPVc IPr;
+  row IPVc tIPrw;
+  Integer i,rwcnt;
+  Boolean found,testf,res,checkf;
+  transaction string 255 gAccRcn_vpmaccnr;
+  val v;
+    
+  RecordNew(TRr);
+  if (nonblank(ARDr.FileName)) then begin
+    switch (ARDr.FileName) begin
+      case "IPVc":
+        IPr.SerNr = ARDr.TransNr;
+        if (ReadFirstMain(IPr,1,true)) then begin
+          if (ARDr.TransRow>=0 and ARDr.TransRow<MatRowCnt(IPr)) then begin
+            MatRowGet(IPr,ARDr.TransRow,IPrw);
+            IPrw.Comment = IPrw.InvoiceNr;
+            res = true;
+          end else begin
+            if (ARDr.TransRow==-2) then begin
+              IPrw.Comment = "";
+              rwcnt = MatRowCnt(IPr);
+              for (i=0;i<rwcnt;i=i+1) begin
+                MatRowGet(IPr,i,tIPrw);
+                IPrw.Comment = AddStringToStringList(IPrw.Comment,tIPrw.InvoiceNr);
+              end;
+              IPrw.CustName = ARDr.ContactName;
+              res = true;
+            end;
+          end;
+        end;
+      case "TRVc":
+        TRr.Number = ARDr.TransNr;
+        TRr.IntYc = ARDr.IntYc;
+        if (ReadFirstMain(TRr,2,true)) then begin
+          if (ARDr.TransRow>=0 and ARDr.TransRow<MatRowCnt(TRr)) then begin
+            MatRowGet(TRr,ARDr.TransRow,TRrw);
+            if (ARDr.Sum==TRr.DSum) or (ARDr.Sum==TRr.CSum) then begin
+              TRrw.Comment = TRr.Comment;
+              res = true;
+            end;
+          end;
+        end;
+      otherwise
+    end;
+    goto LFindMatchingReceipt;
+  end;
+  ClearRow(IPr,IPrw,1);
+  ClearRow(TRr,TRrw,1);
+  found = true;
+  Mainr.AccNumber = gAccRcn_vpmaccnr;
+  Mainr.TransDate = sd;
+  while (LoopMain(Mainr,2,found)) begin
+    if (Mainr.AccNumber!=gAccRcn_vpmaccnr) then begin found = false; end;
+    if (DateInRange(Mainr.TransDate,sd,ed)==false) then begin found = false; end;
+    if (found) then begin
+      testf = true;
+      if (Mainr.FileName!="TRVc") then begin testf = false; end;
+      if (Mainr.IntYc!=IPYc and Mainr.IntYc>=IVYc) then begin
+        testf = false;
+      end;
+      if (testf) then begin
+        TRr.Number = Mainr.TransNr;
+        TRr.IntYc = Mainr.IntYc;
+        if (ReadFirstMain(TRr,2,true)==false) then begin
+          testf = false;
+        end;
+      end;
+      if (testf) then begin
+        testf = IsTransactionRowReconciled(TRr,gAccRcn_vpmaccnr,ARDr.Sum)==false;
+      end;
+      if (testf) then begin
+        switch (Mainr.IntYc) begin
+          case IPYc:
+            IPr.SerNr = Mainr.TransNr;
+            if (ReadFirstMain(IPr,1,true)) then begin 
+              rwcnt = MatRowCnt(IPr);
+              for (i=0;i<rwcnt;i=i+1) begin
+                MatRowGet(IPr,i,IPrw);
+                if (IPrw.BankVal==ARDr.Sum) then begin
+                  ARDr.FileName = "IPVc";
+                  ARDr.TransNr = Mainr.TransNr;
+                  ARDr.TransRow = i;
+                  ARDr.TransDate = Mainr.TransDate;
+                  ARDr.IntYc = IPYc;
+                  i = rwcnt;
+                  res = true;
+                  found = false;
+                end;
+              end;
+              if (res==false) then begin
+                if (IPr.CurPayVal==ARDr.Sum) then begin
+                  ARDr.FileName = "IPVc";
+                  ARDr.TransNr = Mainr.TransNr;
+                  ARDr.TransRow = -2;
+                  ARDr.TransDate = Mainr.TransDate;
+                  ARDr.IntYc = IPYc;
+                  ARDr.CurncyCode = IPr.PayCurCode;
+                  res = true;
+                  found = false;
+                end;
+              end;
+            end;
+          otherwise
+            rwcnt = MatRowCnt(TRr);
+            for (i=0;i<rwcnt;i=i+1) begin
+              MatRowGet(TRr,i,TRrw);
+              v = TRrw.DebVal - TRrw.CredVal;
+              if (TRrw.AccNumber==gAccRcn_vpmaccnr and TRrw.Reconsf==0 and TRrw.ovst==0 /*and ARDr.Sum==v*/) then begin
+                ARDr.FileName = "TRVc";
+                ARDr.TransNr = Mainr.TransNr;
+                ARDr.TransRow = i;
+                ARDr.TransDate = Mainr.TransDate;
+                ARDr.IntYc = Mainr.IntYc;
+                res = true;
+                i = rwcnt;
+                found = false;
+              end;
+            end;
+        end;
+      end;
+    end;
+  end;
+  found = true;
+  IPr.OKFlag = 0;
+  IPr.TransDate = sd;
+  while (LoopKey("OKFlagTransDate",IPr,2,found)) begin
+    if (IPr.OKFlag!=0) then begin found = false; end;
+    if (DateInRange(IPr.TransDate,sd,ed)==false) then begin found = false; end;
+    if (found) then begin
+      testf = true;
+      if (testf) then begin
+        rwcnt = MatRowCnt(IPr);
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(IPr,i,IPrw);
+          if (Left(ARDr.TypeRef,1)=="C") then begin
+            testf = true;
+            checkf = false;
+
+            if ((IPrw.InvoiceNr!=StringToLongInt(BankTRr.Reference) or (IPrw.InvoiceNr==-1 and StringToLongInt(BankTRr.Reference)==-1))) then begin checkf = true; end;
+            if ((nonblank(BankTRr.Reference) and nonblank(IPrw.rkRecNumber)) and (BankTRr.Reference!=IPrw.rkRecNumber)) then begin checkf = true; end;
+            if (checkf) then begin
+              if (IPrw.BankVal!=ARDr.Sum) then begin testf = false; end;
+              if (nonblank(ARDr.ContactName)) then begin
+                ARDr.ContactName = StripCharacter(ARDr.ContactName,"""");
+                if ((UpperCase(IPrw.CustName))!=ARDr.ContactName) then begin testf = false; end;
+              end;
+            end;
+
+            if (DateInRange(IPr.TransDate,AddDay(ARDr.TransDate,-1),AddDay(ARDr.TransDate,1))==false) then begin testf = false; end;
+            if (testf) then begin
+              ARDr.FileName = "IPVc";
+              ARDr.TransNr = IPr.SerNr;
+              ARDr.TransRow = i;
+              ARDr.TransDate = IPr.TransDate;
+              ARDr.IntYc = IPYc;
+              i = rwcnt;
+              res = true;
+              found = false;
+            end;
+          end;
+        end;
+        if (res==false) then begin
+          testf = true;
+          if (IPr.CurPayVal!=ARDr.Sum) then begin testf = false; end;
+          if (DateInRange(IPr.TransDate,AddDay(ARDr.TransDate,-1),AddDay(ARDr.TransDate,1))==false) then begin testf = false; end;
+          if (testf) then begin
+            ARDr.FileName = "IPVc";
+            ARDr.TransNr = IPr.SerNr;
+            ARDr.TransRow = -2;
+            ARDr.TransDate = IPr.TransDate;
+            ARDr.IntYc = IPYc;
+            ARDr.CurncyCode = IPr.PayCurCode;
+            res = true;
+            found = false;
+          end;
+        end;
+      end;
+    end;
+  end;
+
+LFindMatchingReceipt:;
+  ARDr.Sum = GetInvoiceBalance(IPrw.InvoiceNr,ARDr.TransRow,ARDr.Sum,curbalf);
+  FindMatchingReceipt = res;
+  return;
+end;
+
+function Boolean PaymentReconcilled(record OPVc OPr)
+begin
+  Boolean res;
+  row OPVc OPrw;
+  Integer i,rwcnt;
+  
+  res = true;
+  rwcnt = MatRowCnt(OPr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(OPr,i,OPrw);
+    if (OPrw.Reconsf!=0 or OPrw.ovst!=0) then begin
+    end else begin
+      res = false;
+      i = rwcnt;
+    end;
+  end;
+  PaymentReconcilled = res;
+  return;
+end;
+
+function Boolean ReceiptReconcilled(record IPVc IPr)
+begin
+  Boolean res;
+  row IPVc IPrw;
+  Integer i,rwcnt;
+  
+  res = true;
+  rwcnt = MatRowCnt(IPr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(IPr,i,IPrw);
+    if (IPrw.Reconsf==0) then begin
+      res = false;
+      i = rwcnt;
+    end;
+  end;
+  ReceiptReconcilled = res;
+  return;
+end;
+
+updating function Boolean BankAccountReconWClass_ReconcileTransaction(LongInt nr,Integer intyc,Integer transrow,string paymodeacc)
+begin
+  Boolean res;
+  record TRVc oldTRr,TRr;
+  row TRVc TRrw;
+  row TRVc TR2rw;
+  Integer i,j,rwcnt;
+  val v;
+  Boolean updf;
+  array Integer arownr;
+
+  TRr.Number = nr;
+  TRr.IntYc = intyc;
+
+  if (ReadFirstMain(TRr,2,true)) then begin
+    RecordCopy(oldTRr,TRr);
+    rwcnt = MatRowCnt(TRr);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(TRr,i,TRrw);
+      v = 0;
+      for (j=i+1;j<rwcnt;j=j+1) begin
+        MatRowGet(TRr,j,TR2rw);
+        if (TR2rw.AccNumber==paymodeacc and TR2rw.Reconsf==0 and TR2rw.ovst==0) then begin
+          v = v + (TR2rw.DebVal - TR2rw.CredVal);
+        end;
+      end;
+    end;
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(TRr,i,TRrw);
+      if (TRrw.AccNumber==paymodeacc) then begin
+        TRrw.Reconsf = 1;
+        TRrw.ReconDate = CurrentDate;
+        MatRowPut(TRr,i,TRrw);
+        updf = true;
+      end;
+    end;
+    if (updf) then begin
+      res = RecordUpdate(oldTRr,TRr,true)==0;
+    end;
+  end else begin
+    res = BankAccountReconWClass_ReconcileRecord(nr,intyc,transrow,paymodeacc);
+  end;
+  BankAccountReconWClass_ReconcileTransaction = res;
+  return;
+end;
+
+updating function Boolean BankAccountReconWClass_ReconcileRecord(LongInt nr,Integer intyc,Integer transrow,string paymodeacc)
+begin
+  Boolean res;
+  record OPVc OPr;
+  record OPVc oldOPr;
+  row OPVc OPrw;
+  record IPVc IPr;
+  record IPVc oldIPr;
+  row IPVc IPrw;
+  Integer i,rwcnt;
+  Boolean updatef;
+
+  switch (intyc) begin
+    case OPYc:
+      OPr.SerNr = nr;
+      if (ReadFirstMain(OPr,1,true)) then begin
+        if (OPr.OrderedFlag!=0 and OPr.DoneFlag==0) then begin
+          if (transrow<MatRowCnt(OPr)) then begin
+            RecordCopy(oldOPr,OPr);
+            MatRowGet(OPr,transrow,OPrw);
+            OPrw.Reconsf = 1;
+            OPrw.ReconDate = CurrentDate;
+            MatRowPut(OPr,transrow,OPrw);
+            if (PaymentReconcilled(OPr)) then begin
+              OPr.DoneFlag = 1;
+            end;
+            if (RecordUpdate(oldOPr,OPr,true)==0) then begin
+              res = true;
+              if (OPr.DoneFlag!=0) then begin
+                res = BankAccountReconWClass_ReconcileTransaction(nr,intyc,transrow,paymodeacc);
+              end;
+            end;
+          end;
+        end;
+      end;
+    case IPYc:
+      IPr.SerNr = nr;
+      if (ReadFirstMain(IPr,1,true)) then begin
+        if (IPr.OKFlag==0) then begin
+          RecordCopy(oldIPr,IPr);
+          if (transrow==-2) then begin
+            rwcnt = MatRowCnt(IPr);
+            for (i=0;i<rwcnt;i=i+1) begin
+              MatRowGet(IPr,i,IPrw);
+              IPrw.Reconsf = 1;
+              IPrw.ReconDate = CurrentDate;
+              MatRowPut(IPr,i,IPrw);
+            end;
+            if (ReceiptReconcilled(IPr)) then begin
+              IPr.OKFlag = 1;
+            end;
+            updatef = true;
+          end else begin
+            if (transrow<MatRowCnt(IPr)) then begin
+              MatRowGet(IPr,transrow,IPrw);
+              IPrw.Reconsf = 1;
+              IPrw.ReconDate = CurrentDate;
+              MatRowPut(IPr,transrow,IPrw);
+              if (ReceiptReconcilled(IPr)) then begin
+                IPr.OKFlag = 1;
+              end;
+              updatef = true;
+            end;
+          end;
+          if (updatef) then begin
+            if (RecordUpdate(oldIPr,IPr,true)==0) then begin
+              res = true;
+              if (IPr.OKFlag!=0) then begin
+                res = BankAccountReconWClass_ReconcileTransaction(nr,intyc,transrow,paymodeacc);
+              end;
+            end;
+          end;
+        end;
+      end;
+  end;
+  BankAccountReconWClass_ReconcileRecord = res;
+  return;
+end;
+
+global
+updating procedure BankAccountReconWClass_ReconcileBankTransactionRemote(string arg)
+begin
+  record PPVc PPr;
+  record OPVc OPr;
+  record IPVc IPr;
+  record TRVc TRr;
+  string 255 filename,transnr,transrow,pmaccnr,transintyc,banktr;
+  LongInt pos,trrow;
+  record BankTRVc BankTRr;
+  record BankTRVc oldBankTRr;
+  Boolean recf;
+
+  pos = 0;
+  GetNextSubstring(arg,pos,",",filename);
+  GetNextSubstring(arg,pos,",",transnr);
+  GetNextSubstring(arg,pos,",",transintyc);
+  GetNextSubstring(arg,pos,",",transrow);
+  GetNextSubstring(arg,pos,",",pmaccnr);
+  GetNextSubstring(arg,pos,",",banktr);
+  trrow = StringToLongInt(transrow);
+  switch (filename) begin
+    case "IPVc":
+      IPr.SerNr = StringToLongInt(transnr);
+      if (ReadFirstMain(IPr,1,true)) then begin
+        recf = BankAccountReconWClass_ReconcileTransaction(IPr.SerNr,IPYc,StringToInt(transrow),pmaccnr);
+      end;
+    case "OPVc":
+      OPr.SerNr = StringToLongInt(transnr);
+      if (ReadFirstMain(OPr,1,true)) then begin
+        recf = BankAccountReconWClass_ReconcileTransaction(OPr.SerNr,OPYc,StringToInt(transrow),pmaccnr);
+      end;
+    case "PPVc":
+      PPr.SerNr = StringToLongInt(transnr);
+      if (ReadFirstMain(PPr,1,true)) then begin
+        recf = BankAccountReconWClass_ReconcileTransaction(PPr.SerNr,PPYc,StringToInt(transrow),pmaccnr);
+      end;
+    case "TRVc":
+      TRr.Number = StringToLongInt(transnr);
+      TRr.IntYc = StringToLongInt(transintyc);
+      if (ReadFirstMain(TRr,2,true)) then begin
+        recf = BankAccountReconWClass_ReconcileTransaction(TRr.Number,TRr.IntYc,StringToInt(transrow),pmaccnr);
+      end;
+  end;
+  if (nonblank(banktr) and recf) then begin
+    BankTRr.SerNr = StringToLongInt(banktr);
+    if (ReadFirstMain(BankTRr,1,true)) then begin
+      RecordCopy(oldBankTRr,BankTRr);
+      BankTRr.Reconsf = 1;
+      BankTRr.FileName = StringFromStringSet(760,filename);
+      BankTRr.RecNumber = StringToLongInt(transnr);
+      RecordUpdate(oldBankTRr,BankTRr,false);
+    end;
+  end;
+  return;
+end;
+
+global
+updating procedure BankAccountReconWClass_InvalidateBankPaymentRemote(string arg)
+begin
+  record OPVc OPr;
+  record OPVc oldOPr;
+  row OPVc OPrw;
+  string 255 filename,transnr,transrow,pmaccnr,transintyc,banktr;
+  LongInt pos,trrow;
+
+  pos = 0;
+  GetNextSubstring(arg,pos,",",filename);
+  GetNextSubstring(arg,pos,",",transnr);
+  GetNextSubstring(arg,pos,",",transintyc);
+  GetNextSubstring(arg,pos,",",transrow);
+  GetNextSubstring(arg,pos,",",pmaccnr);
+  GetNextSubstring(arg,pos,",",banktr);
+  trrow = StringToLongInt(transrow);
+  switch (filename) begin
+    case "OPVc":
+      OPr.SerNr = StringToLongInt(transnr);
+      if (ReadFirstMain(OPr,1,true)) then begin
+        if (OPr.OrderedFlag!=0 and OPr.DoneFlag==0) then begin
+          if (trrow<MatRowCnt(OPr)) then begin
+            RecordCopy(oldOPr,OPr);
+            MatRowGet(OPr,trrow,OPrw);
+            OPrw.ovst = 1;
+            MatRowPut(OPr,trrow,OPrw);
+            RecordUpdate(oldOPr,OPr,true);
+          end;
+        end;
+      end;
+  end;
+  return;
+end;
+
+//------
+
+function Boolean TransactionAlreadyDisplayed(record MainVc Mainr,array record AccountReconDataVc aARDr)
+begin
+  Boolean res;
+  Integer i;
+  record AccountReconDataVc ARDr;
+  
+  for (i=0;i<aARDr.length;i=i+1) begin
+    ARDr = aARDr[i];
+    if (ARDr.IntYc==Mainr.IntYc and ARDr.TransNr==Mainr.TransNr) then begin
+      res = true;
+      goto LTransactionAlreadyDisplayed;
+    end;
+  end;
+LTransactionAlreadyDisplayed:;
+  TransactionAlreadyDisplayed = res;
+  return;
+end;
+
+function Boolean ExistsInAccountReconData(array record AccountReconDataVc aARDr,string filename,LongInt transnr,Integer transrow)
+begin
+  Boolean res;
+  record AccountReconDataVc ARDr;
+  Integer i;
+  
+  for (i=0;i<aARDr.length;i=i+1) begin
+    ARDr = aARDr[i];
+    if (ARDr.FileName==filename and ARDr.TransNr==transnr and (ARDr.TransRow==transrow or ARDr.TransRow==-2)) then begin
+      res = true;
+      goto LExistsInAccountReconData;
+    end;
+  end;
+LExistsInAccountReconData:;
+  ExistsInAccountReconData = res;
+  return;
+end;
+
+procedure AddDataMissingInBankTransactions(string pmaccnr,string typeref,Date sd,Date ed,var string html,array record AccountReconDataVc aARDr)
+begin
+  Boolean found,testf;
+  record MainVc Mainr;
+  record OPVc OPr;
+  row OPVc OPrw;
+  record IPVc IPr;
+  row IPVc IPrw;
+  record TRVc TRr;
+  row TRVc TRrw;
+  record AccountReconDataVc ARDr;
+  Integer i,rwcnt;
+  string 255 paymode;
+  transaction string 255 gAccRcn_vpmaccnr;
+  LongInt l;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  
+  BlockLoad(PMb);
+  l = aARDr.length;
+/*
+  Mainr.AccNumber = gAccRcn_vpmaccnr;
+  Mainr.TransDate = sd;
+  found = true;
+  while (LoopMain(Mainr,2,found)) begin
+    if (Mainr.AccNumber!=gAccRcn_vpmaccnr) then begin found = false; end;
+    if (DateInRange(Mainr.TransDate,sd,ed)==false) then begin found = false; end;
+    if (found) then begin
+      testf = true;
+      if (Mainr.FileName!="TRVc") then begin testf = false; end;
+      if (testf) then begin
+        TRr.Number = Mainr.TransNr;
+        TRr.IntYc = Mainr.IntYc;
+        if (ReadFirstMain(TRr,2,true)==false) then begin
+          testf = false;
+        end;
+      end;
+      if (testf) then begin
+        testf = TransactionAlreadyDisplayed(Mainr,aARDr)==false;//Row ?
+      end;
+      if (testf) then begin
+        rwcnt = MatRowCnt(TRr);
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(TRr,i,TRrw);
+          if (TRrw.Reconsf==0 and TRrw.ovst==0 and TRrw.AccNumber==gAccRcn_vpmaccnr) then begin
+            html = html & "    <div id='AccRcn_Data" & l &  "' class='AccRcn_DataWithRecord' onclick=\"" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",Mainr.FileName & "," & Mainr.TransNr & "," & Mainr.IntYc) & "\">" & chr(13);
+            html = html & "      <div style='float: left; width: 70%; padding-left: 2%' align='left'>" & TRr.TransDate & "</div> " & chr(13);
+            html = html & "      <div style='float: left; width: 26%; padding-right: 2%' align='right'>" & TRrw.DebVal-TRrw.CredVal & "</div>" & chr(13);
+            html = html & "      <div style='float: left; width: 98%; padding-left: 2%' align='left'>" & TRrw.Comment & "</div> " & chr(13);
+            html = html & "      <div style='float: left; width: 98%; padding-left: 2%' align='left'>" & USetStr(14161) & ": " & Mainr.TransNr & "</div> " & chr(13);
+            html = html & "    </div>" & chr(13);
+            l = l + 1;
+          end;
+        end;
+      end;
+    end;
+  end;
+*/
+
+  OPr.OrderedFlag = 1;
+  OPr.DoneFlag = 0;
+  found = typeref=="D";
+  while (LoopKey("OrderedFlag",OPr,2,found)) begin
+    if (OPr.OrderedFlag!=1) then begin found = false; end;
+    if (OPr.DoneFlag!=0) then begin found = false; end;
+    if (found) then begin
+      testf = true;
+      if (DateInRange(OPr.TransDate,sd,ed)==false) then begin testf = false; end;
+      if (testf) then begin
+        rwcnt = MatRowCnt(OPr);
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(OPr,i,OPrw);
+          if (OPrw.ovst==0 and OPrw.Reconsf==0) then begin
+            if (ExistsInAccountReconData(aARDr,"OPVc",OPr.SerNr,i)==false) then begin
+              paymode = OPrw.PayMode;
+              if (blank(paymode)) then begin paymode = OPr.PayMode; end;
+//              GetPMBlockRow(PMb,paymode,PMbrw);
+              GetPMRow(paymode,PMbrw);
+              if (PMbrw.AccNr==pmaccnr) then begin
+                ARDr.BankTRNr = -1;
+                ARDr.FileName = "OPVc";
+                ARDr.TransNr = OPr.SerNr;
+                ARDr.TransRow = i;
+                ARDr.TransDate = OPr.TransDate;
+                ARDr.IntYc = OPYc;
+                ARDr.Sum = OPrw.BankVal;
+                ARDr.CurncyCode = OPrw.BankCurncy;
+                ARDr.ContactName = OPrw.Comment;
+                aARDr[aARDr.length] = ARDr;
+              end;
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+
+  found = typeref=="C";
+  IPr.OKFlag = 0;
+  IPr.TransDate = sd;
+  while (LoopKey("OKFlagTransDate",IPr,2,found)) begin
+    if (IPr.OKFlag!=0) then begin found = false; end;
+    if (DateInRange(IPr.TransDate,sd,ed)==false) then begin found = false; end;
+    if (found) then begin
+      testf = true;
+      if (DateInRange(IPr.TransDate,sd,ed)==false) then begin testf = false; end;
+      if (testf) then begin
+        rwcnt = MatRowCnt(IPr);
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(IPr,i,IPrw);
+          if (IPrw.Reconsf==0) then begin
+            if (ExistsInAccountReconData(aARDr,"IPVc",IPr.SerNr,i)==false) then begin
+              paymode = IPrw.PayMode;
+              if (blank(paymode)) then begin paymode = IPr.PayMode; end;
+//              GetPMBlockRow(PMb,paymode,PMbrw);
+              GetPMRow(paymode,PMbrw);
+              if (PMbrw.AccNr==pmaccnr) then begin
+                ARDr.BankTRNr = -1;
+                ARDr.FileName = "IPVc";
+                ARDr.TransNr = IPr.SerNr;
+                ARDr.TransRow = i;
+                ARDr.TransDate = IPr.TransDate;
+                ARDr.IntYc = IPYc;
+                ARDr.Sum = IPrw.BankVal;
+                ARDr.CurncyCode = IPrw.BankCurncy;
+                ARDr.ContactName = IPrw.CustName;
+                aARDr[aARDr.length] = ARDr;
+              end;
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+
+  return;
+end;
+
+procedure AddPaymentModeData(string pmaccnr,string pmcode,Date sd,Date ed,var string html)
+begin
+  string 255 tstr;
+  transaction string 255 gAccRcn_vpmaccnr;
+  transaction string 255 gAccRcn_vperiod;
+  transaction string 255 gAccRcn_vpmcode;
+  record PMBLock PMb;
+  row PMBLock PMbrw;
+  Integer i,rwcnt;
+  Boolean testf;
+  
+  gAccRcn_vpmaccnr = pmaccnr;
+  gAccRcn_vpmcode = pmcode;
+  if (WindowsMode) then begin
+    if (HasLocalization("POL")) then begin
+      html = html & "  <div id='AccRcn_PaymentData' style='height: 30px;'>" & chr(13);
+    end else begin
+      html = html & "  <div id='AccRcn_PaymentData' style='height: 30px;'>" & chr(13);
+    end;
+  end else begin
+    html = html & "  <div id='AccRcn_PaymentData' style='height: 30px;'>" & chr(13);
+  end;
+  GetAccName(gAccRcn_vpmaccnr,tstr,60);
+
+  if (HasLocalization("POL")) then begin
+    html = html & "    <div style='float: left; width: 20%; padding-left: 2%;'>" & chr(13);
+  end  else begin
+    html = html & "    <div style='float: left; width: 30%; padding-left: 2%;'>" & chr(13);
+  end;
+
+//**  html = html & "    <label for=""" & "pmaccnr"  & """>" & "Account" &  chr(13);
+//  html = html & "    <input type=""text"" class=""AccRcn_specificationfield"" style='width: 200px;' id=""" & "AccRcn_pmaccnr" & """ name=""" & "AccRcn_pmaccnr" & """ value=""" & gAccRcn_vpmaccnr & " - " & tstr & """" & " onblur=""" & "" & JSCallHal("BankAccountReconWClassChangeEditField","AccRcn_pmaccnr,") & "" & """" & " /> " & chr(13);
+//  html = html & "    <input type=""text"" class=""AccRcn_specificationfield"" style='width: 200px;' id=""" & "AccRcn_pmaccnr" & """ name=""" & "AccRcn_pmaccnr" & """ value=""" & gAccRcn_vpmaccnr & " - " & tstr & """" & " onblur=""" & "BankAccountReconWClassChangeEditFieldJS('" & "AccRcn_pmaccnr" & "','" & gAccRcn_vpmaccnr & "')"" /> " & chr(13);
+//**  html = html & "    <input type=""text"" class=""AccRcn_specificationfield"" style='width: 200px;' id=""" & "AccRcn_pmaccnr" & """ name=""" & "AccRcn_pmaccnr" & """ value=""" & gAccRcn_vpmaccnr & " - " & tstr & """" & " onkeydown=""" & "return BankAccountReconWClassChangeEditFieldJS2(event)"" /> " & chr(13);
+//  html = html & "    <input type=""text"" class=""AccRcn_specificationfield"" style='width: 200px;' id=""" & "AccRcn_pmaccnr" & """ name=""" & "AccRcn_pmaccnr" & """ value=""" & gAccRcn_vpmaccnr & " - " & tstr & """" & " onmouseover=""" & "BankAccountReconWClassOpenPasteSpecialJS('" & "AccRcn_pmaccnr" & "','" & gAccRcn_vpmaccnr & "')""" & " onblur=""" & "BankAccountReconWClassChangeEditFieldJS('" & "AccRcn_pmaccnr" & "','" & gAccRcn_vpmaccnr & "')"" /> " & chr(13);
+  
+
+  html = html & "      <select id='AccRcn_pmaccnr" & "' onchange=""BankAccountReconWClass_SelectAccRcn_pmaccnrJS(this.value);"">" & chr(13);
+  BlockLoad(PMb);
+  rwcnt = MatRowCnt(PMb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(PMb,i,PMbrw);
+    if (PMbrw.AccNr==pmaccnr and PMbrw.Code==pmcode) then begin
+      html = html & "        <option value='" & PMbrw.AccNr & " " & PMbrw.Code & "'>" & PMbrw.AccNr & " " & PMbrw.Comment & "</option>" & chr(13);
+      i = rwcnt;
+    end;
+  end;
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(PMb,i,PMbrw);
+    if (PMbrw.AccNr!=pmaccnr or PMbrw.Code!=pmcode) then begin
+      html = html & "        <option value='" & PMbrw.AccNr & " " & PMbrw.Code & "'>" & PMbrw.AccNr & " " & PMbrw.Comment & "</option>" & chr(13);
+    end;
+  end;
+  html = html & "    </select>" & chr(13);
+  html = html & "    </div>" & chr(13);
+  testf = false;
+  if (UserCanAction("BankStatmentData",false) or HasBankImport) then begin
+    if (HasLocalization("POL")) and (WindowsMode) then begin
+      html = html & "    <div style='float: left; width: 21%;'>" & chr(13);
+    end else begin
+      html = html & "    <div style='float: left; width: 25%;'>" & chr(13);
+    end;
+    html = html & "    <label for=""" & "period"  & """>" & "Period" & "</label>" & chr(13);
+//  html = html & "    <input type=""text"" class=""AccRcn_specificationfield"" style='width: 150px;' id=""" & "AccRcn_period" & """ name=""" & "AccRcn_vperiod" & """ value=""" & gAccRcn_vperiod & """" & " onblur=""" & "" & JSCallHal("BankAccountReconWClassChangeEditField","AccRcn_period,") & "" & """" & " /> " & chr(13);
+//  html = html & "    <input type=""text"" class=""AccRcn_specificationfield"" style='width: 150px;' id=""" & "AccRcn_period" & """ name=""" & "AccRcn_period" & """ value=""" & gAccRcn_vperiod & """" & " onblur=""" & "BankAccountReconWClassChangeEditFieldJS('" & "AccRcn_period" & "','" & gAccRcn_vperiod & "')"" /> " & chr(13);
+    html = html & "    <input type=""text"" class=""AccRcn_specificationfield"" style='width: 180px;' id=""" & "AccRcn_period" & """ name=""" & "AccRcn_period" & """ value=""" & gAccRcn_vperiod & """" & " onkeydown=""" & "BankAccountReconWClassChangeEditFieldJS2(event)"" /> " & chr(13);
+    html = html & "    </div>" & chr(13);
+
+    if (HasLocalization("POL")) then begin
+      if (WindowsMode) then begin
+        html = html & "  <div style='float: right; width: 55%;'>" & chr(13);
+      end else begin
+        html = html & "  <div style='float: right; width: 51%;'>" & chr(13);
+      end;
+    end else begin
+      html = html & "  <div style='float: right; width: 42%;'>" & chr(13);
+    end;
+    html = html & "    <div style='float: left; align=center'>" & chr(13);
+    html = html & "    <button type='button' class='AccRcn_Data_CreateButton' onclick=""" & JSCallHal("BankAccountReconWClass_ImportBankStatmentData","") & """>" & USetStr(40806) & "</button>" & chr(13);
+    html = html & "    </div>" & chr(13);
+    html = html & "    <div style='float: left; align=center'>" & chr(13);
+    html = html & "    <button type='button' class='AccRcn_Data_CreateButton show_receipts' onclick=""BankAccountReconWClassRefreshOnChangeFieldJS('TypeRef=C')"">" & USetStr(40811) & "</button>" & chr(13);
+    html = html & "    </div>" & chr(13);
+    html = html & "    <div style='float: left; align=center'>" & chr(13);
+    html = html & "    <button type='button' class='AccRcn_Data_CreateButton show_payments' onclick=""BankAccountReconWClassRefreshOnChangeFieldJS('TypeRef=D')"">" & USetStr(40812) & "</button>" & chr(13);
+    html = html & "    </div>" & chr(13);
+    html = html & "    <div style='float: left; align=center'>" & chr(13);
+    html = html & "    <button type='button' class='AccRcn_Data_CreateButton show_all' onclick=""BankAccountReconWClassChangeEditFieldJS3(event,'')"">" & USetStr(40805) & "</button>" & chr(13);
+    html = html & "    </div>" & chr(13);
+    html = html & "    <div style='float: left; align=center'>" & chr(13);
+    html = html & "    <button type='button' class='AccRcn_Data_CreateButton' onclick=""BankAccountReconWClassConfirmAllJS('')"">" & USetStr(40809) & "</button>" & chr(13);
+    html = html & "    </div>" & chr(13);
+    if (HasLocalization("POL")) then begin
+      html = html & "  <button type='button' class='AccRcn_Data_CreateButton' onclick=""" & JSCallHal("emSzmalGetBankData_AccountReconWClass","") & """>" & USetStr(40814) & "</button>" & chr(13);
+      html = html & "  </div>" & chr(13);
+    end;
+    html = html & "    </div>" & chr(13);
+    html = html & "    <div style='position: absolute; bottom: 5px; right: 5px; color: #d2ccc514;'>Bank Statement</div>"  & chr(13);
+    testf = true;
+  end;
+  if (HasYodlee and testf==false and UserCanAction("YodleeData",true)) then begin
+    html = html & "    <div style='float: left; width: 26%;'>" & chr(13);
+    html = html & "    <label for=""" & "period"  & """>" & "Period" & "</label>" & chr(13);
+//  html = html & "    <input type=""text"" class=""AccRcn_specificationfield"" style='width: 150px;' id=""" & "AccRcn_period" & """ name=""" & "AccRcn_vperiod" & """ value=""" & gAccRcn_vperiod & """" & " onblur=""" & "" & JSCallHal("BankAccountReconWClassChangeEditField","AccRcn_period,") & "" & """" & " /> " & chr(13);
+//  html = html & "    <input type=""text"" class=""AccRcn_specificationfield"" style='width: 150px;' id=""" & "AccRcn_period" & """ name=""" & "AccRcn_period" & """ value=""" & gAccRcn_vperiod & """" & " onblur=""" & "BankAccountReconWClassChangeEditFieldJS('" & "AccRcn_period" & "','" & gAccRcn_vperiod & "')"" /> " & chr(13);
+    html = html & "    <input type=""text"" class=""AccRcn_specificationfield"" style='width: 180px;' id=""" & "AccRcn_period" & """ name=""" & "AccRcn_period" & """ value=""" & gAccRcn_vperiod & """" & " onkeydown=""" & "BankAccountReconWClassChangeEditFieldJS2(event)"" /> " & chr(13);
+    html = html & "    </div>" & chr(13);
+
+    html = html & "    <div style='float: left; width: 39%;'>" & chr(13);
+    html = html & "    <div style='float: left; align=center'>" & chr(13);
+    html = html & "      <button type='button' class='AccRcn_Data_CreateButton' onclick=""" & JSCallHal("BankAccountReconWClass_ImportYodleeData","") & """>" & USetStr(40806) & "</button>" & chr(13);
+    html = html & "    </div>" & chr(13);
+    html = html & "    <div style='float: left; align=center'>" & chr(13);
+    html = html & "      <button type='button' class='AccRcn_Data_CreateButton' onclick=""" & JSCallHal("BankAccountReconWClass_RefillData","TypeRef=C") & """>" & USetStr(40811) & "</button>" & chr(13);
+    html = html & "    </div>" & chr(13);
+    html = html & "    <div style='float: left; align=center'>" & chr(13);
+    html = html & "      <button type='button' class='AccRcn_Data_CreateButton' onclick=""" & JSCallHal("BankAccountReconWClass_RefillData","TypeRef=D") & """>" & USetStr(40812) & "</button>" & chr(13);
+    html = html & "    </div>" & chr(13);
+    html = html & "    <div style='float: left; align=center'>" & chr(13);
+    html = html & "      <button type='button' class='AccRcn_Data_CreateButton' onclick=""BankAccountReconWClassChangeEditFieldJS3(event,'')"">" & USetStr(40805) & "</button>" & chr(13);
+    html = html & "    </div>" & chr(13);
+    html = html & "    <div style='float: left; align=center'>" & chr(13);
+    html = html & "      <button type='button' class='AccRcn_Data_CreateButton' onclick=""BankAccountReconWClassConfirmAllJS('')"">" & USetStr(40809) & "</button>" & chr(13);
+    html = html & "    </div>" & chr(13);
+    html = html & "    </div>" & chr(13);
+    html = html & "    <div style='position: absolute; bottom: 5px; right: 5px; color: #d2ccc514;'>Yodlee</div>" & chr(13);
+    testf = true;
+  end;
+  
+  if (testf==false) then begin
+    html = html & "    <div style='float: left; width: 45%;'>" & chr(13);
+    html = html & "    <label for=""" & "period"  & """>" & "Period" & "</label>" & chr(13);
+//  html = html & "    <input type=""text"" class=""AccRcn_specificationfield"" style='width: 150px;' id=""" & "AccRcn_period" & """ name=""" & "AccRcn_vperiod" & """ value=""" & gAccRcn_vperiod & """" & " onblur=""" & "" & JSCallHal("BankAccountReconWClassChangeEditField","AccRcn_period,") & "" & """" & " /> " & chr(13);
+//  html = html & "    <input type=""text"" class=""AccRcn_specificationfield"" style='width: 150px;' id=""" & "AccRcn_period" & """ name=""" & "AccRcn_period" & """ value=""" & gAccRcn_vperiod & """" & " onblur=""" & "BankAccountReconWClassChangeEditFieldJS('" & "AccRcn_period" & "','" & gAccRcn_vperiod & "')"" /> " & chr(13);
+    html = html & "    <input type=""text"" class=""AccRcn_specificationfield"" style='width: 180px;' id=""" & "AccRcn_period" & """ name=""" & "AccRcn_period" & """ value=""" & gAccRcn_vperiod & """" & " onkeydown=""" & "BankAccountReconWClassChangeEditFieldJS2(event)"" /> " & chr(13);
+    html = html & "    </div>" & chr(13);
+
+    html = html & "    <div style='float: left; width: 8%; padding-right: 2%'; align='right'>" & chr(13);
+    html = html & "      <button type='button' class='AccRcn_Data_CreateButton' onclick=""BankAccountReconWClassChangeEditFieldJS3(event,'')"">" & USetStr(40805) & "</button>" & chr(13);
+    html = html & "    </div>" & chr(13);
+    html = html & "    <div style='float: left; width: 8%; padding-right: 2%'; align='right'>" & chr(13);
+    html = html & "      <button type='button' class='AccRcn_Data_CreateButton' onclick=""BankAccountReconWClassConfirmAllJS('')"">" & USetStr(40809) & "</button>" & chr(13);
+    html = html & "    </div>" & chr(13);
+  end;
+
+  html = html & "  </div>" & chr(13);
+  //html = html & "  <br>" & chr(13);
+  //html = html & "  <br>" & chr(13);
+
+  return;
+end;
+
+procedure AddToAccountReconDataArray(string pmaccnr,string pmcode,string typeref,Date sd,Date ed,array record AccountReconDataVc aARDr)
+begin
+  record AccountReconDataVc ARDr;
+  record BankTRVc BankTRr;
+  Boolean found,testf;
+  row OPVc OPrw;
+  row PPVc PPrw;
+  row IPVc IPrw;
+  record TRVc TRr;
+  row TRVc TRrw;
+  row PMBlock PMrw;
+  record PMBlock PMb;
+  Boolean curbalf;
+  
+  BlockLoad(PMb);
+  GetPMBlockRow(PMb,pmcode,PMrw);
+  found = true;
+  BankTRr.TransDate = sd;
+  while (LoopKey("TransDate",BankTRr,1,found)) begin
+    if (DateInRange(BankTRr.TransDate,sd,ed)==false) then begin
+      found = false;
+    end;
+    if (found) then begin
+      testf = true;
+      if (BankTRr.Reconsf!=0) then begin testf = false; end;
+      if (BankTRr.Invalid!=0) then begin testf = false; end;
+      if (nonblank(typeref)) then begin
+        if (Left(BankTRr.TypeRef,1)!=typeref) then begin testf = false; end;
+      end;
+      if (testf) then begin
+        testf = false;
+        RecordClear(ARDr);
+        ARDr.BankTRNr = BankTRr.SerNr;
+        ARDr.TypeRef = BankTRr.TypeRef;
+        ARDr.Sum = BankTRr.Sum;
+        ARDr.BankTRDate = BankTRr.TransDate;
+      
+        switch (Left(ARDr.TypeRef,1)) begin
+          case "D":
+/*
+            if (ARDr.Sum>0) then begin
+              ARDr.Sum = -ARDr.Sum;
+            end;
+*/
+            if (blank(BankTRr.PayBankAcc) or PMrw.BankNr==BankTRr.PayBankAcc) then begin testf = true; end;
+            if (!testf and HasLocalization("SWE")) then begin
+              if (Right(PMrw.BankNr,Len(BankTRr.PayBankAcc))==BankTRr.PayBankAcc) then begin testf = true; end;
+              if (Right(BankTRr.PayBankAcc,Len(PMrw.BankNr))==PMrw.BankNr) then begin testf = true; end;
+            end;
+            if (testf) then begin
+              ARDr.ContactName = BankTRr.RcpName;
+              FindMatchingPayment(sd,ed,ARDr,OPrw,PPrw,TRr,TRrw);
+            end;
+          case "C":
+            if (blank(BankTRr.RcpBankAcc) or PMrw.BankNr==BankTRr.RcpBankAcc) then begin testf = true; end;
+            if (!testf and HasLocalization("SWE")) then begin
+              if (Right(PMrw.BankNr,Len(BankTRr.RcpBankAcc))==BankTRr.RcpBankAcc) then begin testf = true; end;
+              if (Right(BankTRr.RcpBankAcc,Len(PMrw.BankNr))==PMrw.BankNr) then begin testf = true; end;
+            end;
+            if (testf) then begin
+              ARDr.ContactName = BankTRr.PayName;
+              FindMatchingReceipt(sd,ed,ARDr,IPrw,TRr,TRrw,BankTRr,curbalf);
+            end;
+          otherwise
+            testf = true;
+        end;
+        if (testf) then begin
+          aARDr[aARDr.length] = ARDr;
+        end;
+      end;
+    end;
+  end;
+  return;
+end;
+
+procedure HtmlAccountBalance(string pmaccnr,var string html,date sd,date ed)
+begin
+  record RcVc RepSpec;
+  Date AccumStartDate;
+  Boolean resUseAccum;
+  val TotSumDebet,TotSumCredit;
+  val TotSumFwBal,TotSumBal,CurBal;
+  LongInt TotTransCnt;
+  record SMVc VATSumr;
+
+  FindAccSD(RepSpec.sStartDate,AccumStartDate,resUseAccum);
+
+  MainRClassReportDef(RepSpec);
+  RepSpec.IncDaughter = 0;
+  RepSpec.f4 = pmaccnr;
+  RepSpec.sStartDate = sd;
+  RepSpec.sEndDate = ed;  
+  RunMainRn2(RepSpec,false,AccumStartDate,resUseAccum,TotSumDebet,TotSumCredit,VATSumr,false,TotSumFwBal,TotSumBal,TotTransCnt,CurBal);
+ 
+  html = html & "<div class=""AccRcn_balancerow"">" &
+                "<span class=""balance_entry align-left"">"  & "Opening Balance: " &
+                "<span class=""balance_value align-left"">"  & TotSumFwBal & "</span></span>" &   chr(13) &
+                "<span class=""balance_entry align-right"">" & "Current Balance: "  &
+                "<span class=""balance_value align-right"">" & CurBal & "</span></span>" ;
+     html = html & "</div>" & chr(13);
+return;
+end;
+
+procedure HtmlAccountReconDataArray(string pmaccnr,string bc1,array record AccountReconDataVc aARDr,var string html,date sd,date ed)
+begin
+  record AccountReconDataVc ARDr;
+  record BankTRVc BankTRr;
+  row OPVc OPrw;
+  row PPVc PPrw;
+  row IPVc IPrw;
+  record TRVc TRr;
+  row TRVc TRrw;
+  LongInt l;
+  Date td;
+  Boolean testf,curbalf;
+  string 255 crncy,tstr;
+
+  if (aARDr.length>0) then begin
+    HtmlAccountBalance(pmaccnr,html,sd,ed);
+  end;
+
+  for (l=0;l<aARDr.length;l=l+1) begin
+  ARDr = aARDr[l];
+  if (ARDr.BankTRNr>0) then begin
+    BankTRr.SerNr = ARDr.BankTRNr;
+    if (ReadFirstMain(BankTRr,1,true)) then begin
+      testf = false;
+      if (td.month!=GetMonth(ARDr.BankTRDate)) then begin
+        html = html & "  <div class='AccRcn_monthrow'>" & USetStr(2780+GetMonth(ARDr.BankTRDate)) & " " & GetYear(ARDr.BankTRDate) & "</div>" & chr(13);
+      end;
+      crncy = BankTRr.CurncyCode;
+      if (blank(crncy)) then begin
+        crncy = bc1;
+      end;
+      html = html & "  <div id='AccRcn_row" & l &  "' class='AccRcn_row' foo='a'>" & chr(13);
+        
+        switch (Left(ARDr.TypeRef,1)) begin
+          case "D": html = html & "    <div id='AccRcn_banktransaction" & BankTRr.SerNr &  "' class='AccRcn_banktransactionD'>" & chr(13);
+          case "C": html = html & "    <div id='AccRcn_banktransaction" & BankTRr.SerNr &  "' class='AccRcn_banktransactionC'>" & chr(13);
+          otherwise html = html & "    <div id='AccRcn_banktransaction" & BankTRr.SerNr &  "' class='AccRcn_banktransaction'>" & chr(13);
+        end;
+ 
+        html = html & "      <div class='AccRcn_banktransactionref' onclick=""" & JSCallHal("BankAccountReconWClass_OpenBankTransaction",BankTRr.SerNr) & """> " & USetStr(40807) & ": " & BankTRr.Reference & "</div> " & chr(13);
+        html = html & "      <div class='AccRcn_banktransactionsum' onclick=""" & JSCallHal("BankAccountReconWClass_OpenBankTransaction",BankTRr.SerNr) & """>" & crncy & " " & BankTRr.Sum & "</div>" & chr(13);
+        if (nonblank(BankTRr.Comment)) then begin
+          html = html & "      <div class='AccRcn_banktransactionref'>" & BankTRr.Comment & "</div> " & chr(13);
+          html = html & "      <div class='AccRcn_banktransactionsum' onclick=""" & JSCallHal("BankAccountReconWClass_OpenBankTransaction",BankTRr.SerNr) & """>" & ARDr.BankTRDate & "</div> " & chr(13);
+        end else begin
+          html = html & "      <div style='float: left; width: 98%; padding-right: 2%' align='right' onclick=""" & JSCallHal("BankAccountReconWClass_OpenBankTransaction",BankTRr.SerNr) & """>" & ARDr.BankTRDate & "</div> " & chr(13);
+        end;
+        switch (Left(ARDr.TypeRef,1)) begin
+          case "D":  html = html & "      <div class='AccRcn_banktransactioncmnt' onclick=""" & JSCallHal("BankAccountReconWClass_OpenBankTransaction",BankTRr.SerNr) & """> " & BankTRr.RcpName & "</div> " & chr(13);
+          case "C":  html = html & "      <div class='AccRcn_banktransactioncmnt' onclick=""" & JSCallHal("BankAccountReconWClass_OpenBankTransaction",BankTRr.SerNr) & """> " & BankTRr.PayName & "</div> " & chr(13);
+          otherwise ;
+        end;
+
+        html = html & "    </div>" & chr(13);
+
+        switch (ARDr.FileName) begin
+          case "IPVc":
+            html = html & "    <div id='AccRcn_banktransactionmatch" & BankTRr.SerNr &  "' class='AccRcn_banktransactionmatch'>" & chr(13);
+          case "OPVc":
+            html = html & "    <div id='AccRcn_banktransactionmatch" & BankTRr.SerNr &  "' class='AccRcn_banktransactionmatch'>" & chr(13);
+          case "PPVc":
+            html = html & "    <div id='AccRcn_banktransactionmatch" & BankTRr.SerNr &  "' class='AccRcn_banktransactionmatch'>" & chr(13);
+          case "TRVc":
+            html = html & "    <div id='AccRcn_banktransactionmatch" & BankTRr.SerNr &  "' class='AccRcn_banktransactionmatch'>" & chr(13);
+          otherwise
+            html = html & "    <div id='AccRcn_banktransactionmatch" & BankTRr.SerNr &  "' class='AccRcn_banktransactionnomatch'>" & chr(13);
+        end;
+        switch (ARDr.FileName) begin
+          case "IPVc":
+            if (FindMatchingReceipt(sd,ed,ARDr,IPrw,TRr,TRrw,BankTRr,curbalf)) then begin
+              if (curbalf) then begin
+                tstr = USetStr(43310);
+              end;
+              html = html & "      <div class='AccRcn_banktransactionref' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & IPrw.CustName & "</div> " & chr(13);
+              html = html & "      <div class='AccRcn_banktransactionsum' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & tstr & " " & IPrw.BankCurncy & " " & ARDr.Sum & "</div>" & chr(13);
+              html = html & "      <div class='AccRcn_banktransactionref' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & USetStr(14345) & ": " & IPrw.Comment & "</div> " & chr(13);
+              html = html & "      <div class='AccRcn_banktransactionsum' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & ARDr.TransDate & "</div> " & chr(13);
+              testf = true;
+            end;
+          case "OPVc":
+            if (FindMatchingPayment(sd,ed,ARDr,OPrw,PPrw,TRr,TRrw)) then begin
+              html = html & "      <div class='AccRcn_banktransactionref' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & OPrw.Comment & "</div> " & chr(13);
+              html = html & "      <div class='AccRcn_banktransactionsum' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & OPrw.BankCurncy & " " & ARDr.Sum & "</div>" & chr(13);
+              html = html & "      <div class='AccRcn_banktransactionref' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & USetStr(8297) & ": " & OPrw.VISerNr & "</div> " & chr(13);
+              html = html & "      <div class='AccRcn_banktransactionsum' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & ARDr.TransDate & "</div> " & chr(13);
+              testf = true;
+            end;
+          case "PPVc":
+            if (FindMatchingPayment(sd,ed,ARDr,OPrw,PPrw,TRr,TRrw)) then begin
+              html = html & "      <div class='AccRcn_banktransactionref' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & TRrw.Comment & "</div> " & chr(13);
+              html = html & "      <div class='AccRcn_banktransactionsum' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & ARDr.CurncyCode & " " & ARDr.Sum & "</div>" & chr(13);
+              html = html & "      <div class='AccRcn_banktransactionref' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & USetStr(1835) & ": " & PPrw.Comment & "</div> " & chr(13);
+              html = html & "      <div class='AccRcn_banktransactionsum' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & ARDr.TransDate & "</div> " & chr(13);
+              testf = true;
+            end;
+          case "TRVc":
+            if (FindMatchingPayment(sd,ed,ARDr,OPrw,PPrw,TRr,TRrw)) then begin
+              html = html & "      <div class='AccRcn_banktransactionref' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & USetStr(14161) & ": " & ARDr.TransNr & "</div> " & chr(13);
+              html = html & "      <div class='AccRcn_banktransactionsum' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & TRrw.Curncy & " " & ARDr.Sum & "</div>" & chr(13);
+              html = html & "      <div class='AccRcn_banktransactionref' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & TRrw.Comment & "</div> " & chr(13);
+              html = html & "      <div class='AccRcn_banktransactionsum' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & ARDr.TransDate & "</div> " & chr(13);
+              testf = true;
+            end else begin
+              if (FindMatchingReceipt(sd,ed,ARDr,IPrw,TRr,TRrw,BankTRr,curbalf)) then begin
+                if (curbalf) then begin
+                  tstr = USetStr(43310);
+                end;
+                html = html & "      <div class='AccRcn_banktransactionref' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & USetStr(14161) & ": " & ARDr.TransNr & "</div> " & chr(13);
+                html = html & "      <div class='AccRcn_banktransactionsum' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & tstr & " " & TRrw.Curncy & " " & ARDr.Sum & "</div>" & chr(13);
+                html = html & "      <div class='AccRcn_banktransactionref' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & TRrw.Comment & "</div> " & chr(13);
+                html = html & "      <div class='AccRcn_banktransactionsum' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & ARDr.TransDate & "</div> " & chr(13);
+                testf = true;
+              end;
+            end;
+/*
+            if (nonblank(TRrw.Comment)) then begin
+              html = html & "      <div class='AccRcn_banktransactionref2' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & TRrw.Comment & "</div> " & chr(13);
+            end;
+            html = html & "      <div class='AccRcn_banktransactionref' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & USetStr(14161) & ": " & ARDr.TransNr & "</div> " & chr(13);
+            html = html & "      <div class='AccRcn_banktransactionsum' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & ARDr.TransDate & "</div> " & chr(13);
+            testf = true;
+*/
+          otherwise
+            html = html & "      <div class='AccRcn_banktransactionref3'>" & USetStr(40808) & "</div> " & chr(13);
+        end;
+        if (testf) then begin
+          html = html & "    <div id='AccRcn_banktransactionokbuttondiv" & l &  "'" & " data-banktransactioncnt=" & aARDr.length & " data-banktransaction=" & ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc & "," & ARDr.TransRow & "," & pmaccnr  & "," & ARDr.BankTRNr & " class='AccRcn_banktransactionokbuttondiv'>" & chr(13);
+          html = html & "      <button type='button' class='AccRcn_banktransactionokbutton' onclick=""" & JSCallHal("BankAccountReconWClass_ReconcileBankTransaction",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc & "," & ARDr.TransRow & "," & pmaccnr  & "," & ARDr.BankTRNr) & """>" & USetStr(40813) & "</button>" & chr(13);
+          html = html & "    </div>" & chr(13);
+        end else begin
+
+          html = html & "    <div id='AccRcn_banktransactioncreatediv" & l &  "'" & " data-banktransactioncnt=" & aARDr.length & "' class='AccRcn_banktransactioncreatediv'>" & chr(13);
+          html = html & "      <select id='AccRcn_banktransactioncreateselect" & l & "' onclick=""BankAccountReconWClass_CreateJS(this.value);"">" & chr(13);
+          html = html & "        <option value='None," & -1 & "'>" & USetStr(40800) & "</option>" & chr(13);
+          html = html & "        <option value='OPVc," & ARDr.BankTRNr & "'>" & USetStr(40802) &"</option>" & chr(13);
+          html = html & "        <option value='IPVc," & ARDr.BankTRNr & "'>" & USetStr(40803) & "</option>" & chr(13);
+          html = html & "        <option value='TRVc," & ARDr.BankTRNr & "'>" & USetStr(40801)  & "</option>" & chr(13);
+          if (HasModExp) then begin
+            html = html & "        <option value='PPVc," & ARDr.BankTRNr & "'>" & USetStr(40804)  & "</option>" & chr(13);
+          end;
+          html = html & "      </select>" & chr(13);
+          html = html & "    </div>" & chr(13);
+        end;
+        html = html & "    </div>" & chr(13);
+        html = html & "    </div>" & chr(13);
+//        html = html & "  </div>" & chr(13);
+//      html = html & "  </div>" & chr(13);
+      html = html & "  <div class='AccRcn_rowseparator'></div>" & chr(13);
+
+      td = ARDr.BankTRDate;
+    end;
+  end else begin
+    html = html & "  <div id='AccRcn_row" & l &  "' class='AccRcn_row' foo='b'>" & chr(13);
+    html = html & "    <div id='AccRcn_banktransaction" & -1 &  "' class='AccRcn_banktransactionD'>" & chr(13);
+    html = html & "      <div class='AccRcn_banktransactionref' onclick=""" & JSCallHal("BankAccountReconWClass_OpenBankTransaction","-1") & """> " & "Missing" & "</div> " & chr(13);
+    html = html & "    </div>" & chr(13);
+    
+    html = html & "    <div id='AccRcn_banktransactionmatch" & -1 &  "' class='AccRcn_banktransactionmatch'>" & chr(13);
+    switch (ARDr.FileName) begin
+      case "IPVc":
+        html = html & "      <div class='AccRcn_banktransactionref' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & ARDr.ContactName & "</div> " & chr(13);
+        html = html & "      <div class='AccRcn_banktransactionsum' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & ARDr.CurncyCode & " " & ARDr.Sum & "</div>" & chr(13);
+        html = html & "      <div class='AccRcn_banktransactionref' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & USetStr(11055) & ": " & "not specified" & "</div> " & chr(13);
+      case "OPVc":
+        html = html & "      <div class='AccRcn_banktransactionref' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & ARDr.ContactName & "</div> " & chr(13);
+        html = html & "      <div class='AccRcn_banktransactionsum' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & ARDr.CurncyCode & " " & ARDr.Sum & "</div>" & chr(13);
+        html = html & "      <div class='AccRcn_banktransactionref' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & USetStr(8297) & ": " & OPrw.VISerNr & "</div> " & chr(13);
+    end;
+    html = html & "      <div class='AccRcn_banktransactionsum' onclick=""" & JSCallHal("BankAccountReconWClass_OpenRecordToReconcile",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc) & """>" & ARDr.TransDate & "</div> " & chr(13);
+    html = html & "    </div>" & chr(13);
+    
+    html = html & "    <div id='AccRcn_banktransactionokbuttondiv" & l &  "'" & " data-banktransactioncnt=" & aARDr.length & " data-banktransaction=" & ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc & "," & ARDr.TransRow & "," & pmaccnr  & "," & ARDr.BankTRNr & " class='AccRcn_banktransactionokbuttondiv'>" & chr(13);
+    html = html & "    </div>" & chr(13);
+    html = html & "      <button type='button' class='AccRcn_banktransactionokbutton' onclick=""" & JSCallHal("BankAccountReconWClass_InvalidateBankPayment",ARDr.FileName & "," & ARDr.TransNr & "," & ARDr.IntYc & "," & ARDr.TransRow & "," & pmaccnr  & "," & ARDr.BankTRNr) & """>" & USetStr(40810) & "</button>" & chr(13);
+    html = html & "    </div>" & chr(13);
+    
+//    html = html & "  </div>" & chr(13);
+//    html = html & "  </div>" & chr(13);
+
+    html = html & "  <div class='AccRcn_rowseparator'></div>" & chr(13);
+  end;
+  end;
+  return;
+end;
+
+global
+procedure BankAccountReconWClass_FillDataAsync(Integer wn,string pmaccnr,string pmcode,string typeref,Date sd,Date ed)
+begin
+  string 255 html;
+  array LongInt abtnr;
+  array record AccountReconDataVc aARDr;
+  transaction string 255 gAccRcn_vperiod;
+  record BaseCurBlock BCb;
+
+  BlockLoad(BCb);
+  gAccRcn_vperiod = sd & " " & ed;
+
+  html = "<!DOCTYPE html>" & chr(13);
+  html = "<html>" & chr(13);
+  html = html & "<head>" & chr(13);
+  html = html & "<title></title>" & chr(13);
+  AddStyle(html,typeref);
+  AddJavaScript(html);
+  html = html & "</head>" & chr(13);
+  html = html & "<body style='background-color: #FFFFFF; overflow: hidden;'>" & chr(13);
+  html = html & "<div id='AccountReconWindow' class='AccountReconWindow'>" & chr(13);
+
+  AddPaymentModeData(pmaccnr,pmcode,sd,ed,html);
+  html = html & "<div id='scrollview' style='overflow: scroll left: 0%; top: 0%; width: 100%; height:100%; display:block;'>" & chr(13);
+
+  AddToAccountReconDataArray(pmaccnr,pmcode,typeref,sd,ed,aARDr);
+  AddDataMissingInBankTransactions(pmaccnr,typeref,sd,ed,html,aARDr);
+  HtmlAccountReconDataArray(pmaccnr,BCb.BaseCur1,aARDr,html,sd,ed);
+  
+  html = html & "</div>" & chr(13); // scrollview
+ 
+  html = html & "</div>" & chr(13);
+  html = html & "</body>" & chr(13);
+  html = html & "</html>" & chr(13);
+
+//LogText2(0,html,kVerbositySilent);//kVerbosityDebug
+  clientremoteasync.BankAccountReconWClass_FillDataAsyncCallback(wn,html);
+  
+  return;
+end;

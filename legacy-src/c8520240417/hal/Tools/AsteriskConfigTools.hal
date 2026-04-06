@@ -1,0 +1,4213 @@
+external function Integer IsBankHoliday(record BHollVc,Integer,Date);
+external function string 255 PBXPublicSSHKeyName();
+external function string 255 PBXPrivateSSHKeyName();
+external function boolean IsNumeric(string);
+
+enum begin
+  kAsteriskBackgroundPlayback = 1,
+  kAsteriskForegroundPlayback = 2
+end;
+
+function Boolean IsValidPBXConnection(string pbxcode)
+begin
+  record PBXConnectionVc PBXCr;
+  Boolean res;
+
+  PBXCr.Code = pbxcode;
+  if (ReadFirstMain(PBXCr,1,true)) then begin
+    if (PBXCr.Closed==0) then begin
+      res = true;
+    end;
+  end;
+  IsValidPBXConnection = res;
+  return;
+end;
+
+function Boolean UseChanSIP(record PBXConnectionVc PBXCr)
+begin
+  record SipTrunk2Vc STr;
+  Boolean foundf,testf,res;
+  
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (testf) then begin
+      if (STr.ChanSIPf!=0) then begin
+        res = true;
+        goto LUseChanSIP;
+      end;
+    end;
+  end;
+  
+LUseChanSIP:;
+  UseChanSIP = res;
+  return;
+end;
+
+function Boolean UseChanPJSIP(record PBXConnectionVc PBXCr)
+begin
+  record SipTrunk2Vc STr;
+  Boolean foundf,testf,res;
+  
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (testf) then begin
+      if (STr.ChanSIPf==0) then begin
+        res = true;
+        goto LUseChanPJSIP;
+      end;
+    end;
+  end;
+  
+LUseChanPJSIP:;
+  UseChanPJSIP = res;
+  return;
+end;
+
+global
+function string 255 AsteriskUser(record PBXConnectionVc PBXCr)
+begin
+  string 255 res;
+
+  res = PBXCr.RemoteUser;
+  if (blank(res)) then begin
+    res = "asterisk";
+  end;
+
+  AsteriskUser = res;
+  return;
+end;
+
+global
+function Boolean SavePBXSSHKey(string keyname,string keyfile,record PBXConnectionVc PBXr)
+begin
+  Integer i;
+  record Attach2Vc AT2r;
+  record RLinkVc RLr;
+  Boolean res;
+  LongInt blocklen;
+  area a_key;
+
+  while (ReadRecordLink(PBXr,i,AT2r,RLr)) begin
+    if (AT2r.FileName==keyname) then begin
+      goto LSavePBXSSHKey_FoundKey;
+    end;
+    i = i + 1;
+  end;
+  goto LSavePBXSSHKey;
+
+LSavePBXSSHKey_FoundKey:;
+  res = true;
+  blocklen = AttachFileSize(AT2r);
+  LoadAttachFilePartToArea(AT2r,0,blocklen,a_key);
+  WriteAreaToFile(a_key,keyfile,0);
+  RunShellScript("chmod 600 """ & keyfile & """");
+
+LSavePBXSSHKey:;
+  SavePBXSSHKey = res;
+  return;
+end;
+
+procedure AddLineToArea(string line,area req)
+begin
+  AddTextToArea(line,req);
+  AddTextToArea(chr(10),req);
+  return;
+end;
+
+global
+function string 255 MakeTrailingSlash(string path)
+begin
+  string 255 res;
+  if (right(path,1)=="/" or right(path,1)=="\\") then begin
+    res = path;
+  end else begin
+    res = path & "/";
+  end;
+  MakeTrailingSlash = res;
+  return;
+end;
+
+global
+function string 255 SoundFileName(string queueName,Integer astevent)
+begin
+  string 255 res;
+  
+  res = "HW_PBXSound_" & queueName & "_";
+  switch (astevent) begin
+    case kAsteriskEventSoundWelcome:      res = res & "Welcome";
+    case kAsteriskEventSoundLineClosed:   res = res & "LineClosed";
+    case kAsteriskEventSoundQueueStart:   res = res & "QueueStart";
+    case kAsteriskEventSoundIVRStart:     res = res & "IVRStart";
+    case kAsteriskEventSoundLineBusy:     res = res & "LineBusy";
+    case kAsteriskEventSoundMusicOnHold:  res = res & "MusicOnHold";
+    case kAsteriskEventSoundIVRClosed:    res = res & "IVRClosed";
+    otherwise
+      res = "";
+  end;
+  
+  SoundFileName = res;
+end;
+
+function Boolean SoundExistsForEvent(string code,Integer astevent)
+begin
+  record PBXSoundVc PBXSr;
+  record Attach2Vc Attach2r;
+  record RLinkVc RLr;
+  Boolean res,foundf,testf;
+  Integer filenr;
+  string 255 soundfile;
+  
+  soundfile = SoundFileName(code,astevent);
+  if (blank(soundfile)) then begin goto LSoundExistsForEvent; end;
+
+  PBXSr.Queue = code;
+  PBXSr.Event = astevent;
+  foundf = true;
+  while (LoopKey("QueueEvent",PBXSr,2,foundf)) begin
+    if (PBXSr.Queue!=code) then begin foundf = false; end;
+    if (PBXSr.Event!=astevent) then begin foundf = false; end;
+    testf = foundf;
+    if (PBXSr.Closed!=0) then begin testf = false; end;
+    if (testf) then begin
+      filenr = 1;
+      while (ReadRecordLink(PBXSr,filenr,Attach2r,RLr)) begin
+        if ((nonblank(Attach2r.FileName)) and (Attach2r.Uploading==0) and (Attach2r.FileSize>0)) then begin
+          res = true;
+          goto LSoundExistsForEvent;
+        end;
+      end;
+    end;
+  end;
+
+LSoundExistsForEvent:;
+  SoundExistsForEvent = res;
+  return;
+end;
+
+function string 255 PlayAsteriskSound(string code,Integer astevent,Integer playbackmode)
+begin
+  string 255 res;
+  
+  if (SoundExistsForEvent(code,astevent)==false) then begin
+    res = "NoOp(No sound defined for " & code & ", event " & StringFromSet(587,astevent) & ")";
+    goto LPlayAsteriskSound;
+  end;
+  
+  switch (playbackmode) begin
+    case kAsteriskBackgroundPlayback: res = "Background(" & SoundFileName(code,astevent) & ")";
+    case kAsteriskForegroundPlayback: res = "Playback(" & SoundFileName(code,astevent) & ")";
+    otherwise
+      res = "NoOp()";
+  end;
+
+LPlayAsteriskSound:;
+  PlayAsteriskSound = res;
+  return;
+end;
+
+            
+global
+procedure MoveFileInPlaceRemote(area afile,string path)
+begin
+  //Check sanity
+  WriteAreaToFile(afile,path,0);
+  return;
+end;
+
+global
+procedure RemoveFolderInPlaceRemote(string path)
+begin
+  //Check sanity
+  if (DirExists(path)) then begin
+    DeleteFolder(path & ".old");
+    RenameFile(path,path & ".old");
+    CreateFolderHierarchy(MakeTrailingSlash(path));
+  end;
+  return;
+end;
+
+global
+procedure MoveAsteriskDirInPlace(string servcode,string localdir)
+begin
+  record PBXConnectionVc PBXCr;
+  Integer i,filecnt;
+  area afile;
+  string 255 args,remotepath,filename,keyfile;
+
+  PBXCr.Code = servcode;
+  if (ReadFirstMain(PBXCr,1,true)) then begin
+    remotepath = MakeTrailingSlash(PBXCr.RemoteConfigDir) & "/etc/asterisk/";
+    if (blank(remotepath)) then begin
+      remotepath = "/Servers/Asterisk/etc/asterisk/";
+    end;
+    if (blank(PBXCr.AsteriskController)) then begin
+      keyfile = CreateTempFile("asterisk-config-key-dir",".pem");
+      if (SavePBXSSHKey(PBXPrivateSSHKeyName,keyfile,PBXCr)) then begin
+        args = "-avz --remove-source-files --delete -e ""ssh -o UserKnownHostsFile=/dev/null -i " & keyfile & " -o ServerAliveInterval=60 -o StrictHostKeyChecking=no -o PasswordAuthentication=no"" --rsync-path=""sudo rsync"" --partial " & localdir & " " & AsteriskUser(PBXCr) & "@" & PBXCr.PBXHost & ":" & remotepath;
+        RunShellScript("/usr/bin/rsync " & args);
+//LogText(0,"/usr/bin/rsync " & args);
+      end;
+      Delete_File(keyfile);
+    end else begin
+      CallService2(PBXCr.AsteriskController,PBXCr.AsteriskControllerKey).RemoveFolderInPlaceRemote(MakeTrailingSlash(remotepath) & filename);
+      filecnt = CountFilesInDir(localdir);
+      for (i = 0; i<filecnt; i = i + 1) begin
+        filename = GetFileNameInDir(localdir,i);
+        AddFileToArea(MakeTrailingSlash(localdir) & filename,afile,false);
+        CallService2(PBXCr.AsteriskController,PBXCr.AsteriskControllerKey).MoveFileInPlaceRemote(afile,MakeTrailingSlash(remotepath) & filename);
+      end;
+    end;
+  end else begin
+    LogText(0,"Asterisk server not found: " & servcode);
+  end;
+end;
+
+global
+procedure MoveAsteriskSoundDirInPlace(record PBXConnectionVc PBXCr,string localdir,string remotepath)
+begin
+  Integer i,filecnt;
+  area afile;
+  string 255 args,filename,keyfile;
+
+  if (blank(PBXCr.AsteriskController)) then begin
+    keyfile = CreateTempFile("asterisk-config-key-sounddir",".pem");
+    if (SavePBXSSHKey(PBXPrivateSSHKeyName,keyfile,PBXCr)) then begin
+      args = "-avz --remove-source-files --delete -e ""ssh -i " & keyfile & " -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=60 -o StrictHostKeyChecking=no -o PasswordAuthentication=no"" --rsync-path=""sudo rsync"" --partial " & localdir & " " & AsteriskUser(PBXCr) & "@" & PBXCr.PBXHost & ":" & remotepath;
+      RunShellScript("/usr/bin/rsync " & args);
+//LogText(0,"/usr/bin/rsync " & args);
+    end;
+    Delete_File(keyfile);
+  end else begin
+    filecnt = CountFilesInDir(localdir);
+    for (i = 0; i<filecnt; i = i + 1) begin
+      filename = GetFileNameInDir(localdir,i);
+      AddFileToArea(MakeTrailingSlash(localdir) & filename,afile,false);
+      CallService2(PBXCr.AsteriskController,PBXCr.AsteriskControllerKey).MoveFileInPlaceRemote(afile,MakeTrailingSlash(remotepath) & filename);
+    end;
+  end;
+end;
+
+global
+procedure MoveAsteriskFileInPlace(string servcode,string localfile,string remotefile)
+begin
+  area afile;
+  record PBXConnectionVc PBXCr;
+  string 255 args,remotepath,keyfile;
+
+  PBXCr.Code = servcode;
+  if (ReadFirstMain(PBXCr,1,true)) then begin
+    remotepath = MakeTrailingSlash(PBXCr.RemoteConfigDir) & "/etc/asterisk/";
+    if (blank(remotepath)) then begin
+      remotepath = "/Servers/Asterisk/etc/asterisk/";
+    end;
+    if (blank(PBXCr.AsteriskController)) then begin
+      keyfile = CreateTempFile("asterisk-config-key-file",".pem");
+      if (SavePBXSSHKey(PBXPrivateSSHKeyName,keyfile,PBXCr)) then begin
+        args = "-i " & keyfile & " " & localfile & " " & AsteriskUser(PBXCr) & "@" & PBXCr.PBXHost & ":" & remotepath & remotefile;
+        RunShellScript("/usr/bin/scp " & args);
+      end;
+      Delete_File(keyfile);
+    end else begin
+      AddFileToArea(localfile,afile,false);
+      CallService2(PBXCr.AsteriskController,PBXCr.AsteriskControllerKey).MoveFileInPlaceRemote(afile,remotepath & remotefile);
+    end;
+  end else begin
+    LogText(0,"Asterisk server not found: " & servcode);
+  end;
+end;
+
+global
+procedure MoveAsteriskSoundFileInPlace(record PBXConnectionVc PBXCr,string localfile,string remotefile)
+begin
+  string 255 args,keyfile;
+
+  keyfile = CreateTempFile("asterisk-config-key-sounds",".pem");
+  if (SavePBXSSHKey(PBXPrivateSSHKeyName,keyfile,PBXCr)) then begin
+    args = "-i " & keyfile & " " & localfile & " " & AsteriskUser(PBXCr) & "@" & PBXCr.PBXHost & ":" & remotefile;
+    RunShellScript("/usr/bin/scp " & args);
+  end;
+  Delete_File(keyfile);
+  return;
+end;
+
+
+/*
+global
+procedure ReloadAsterisk(string arg)
+begin
+  LongInt pos;
+  String 255 fname,code,astmod;
+
+  pos = -1;
+  GetNextSubstring(arg,pos,":",fname);
+  GetNextSubstring(arg,pos,":",code);
+  GetNextSubstring(arg,pos,":",astmod);
+  ReloadAsteriskConfig(code,astmod);
+  if (nonblank(fname)) then begin
+    Delete_File(fname);
+  end;
+end;
+*/
+
+global
+function string 255 AsteriskHomeDir(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  record LocalAsteriskBlock LAb;
+  string 255 res;
+
+  if (blank(PBXCr.RemoteConfigDir) or localf) then begin
+    BlockLoad(LAb);
+    res = LAb.LocalAsteriskDir;
+  end else begin
+    res = PBXCr.RemoteConfigDir;
+  end;
+
+  AsteriskHomeDir = res;
+  return;
+end;
+
+global
+function string 255 AsteriskConfigBaseDir(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  string 255 res;
+  record LocalAsteriskBlock LAb;
+
+  BlockLoad(LAb);
+
+  if ((nonblank(LAb.LocalAsteriskDir) and (PublicHostName==PBXCr.PBXHostIP)) or localf) then begin
+    res = AsteriskHomeDir(PBXCr,true);
+  end else begin
+    if (nonblank(PBXCr.AsteriskControllerKey)) then begin
+      res = "tmp/RemoteAsteriskConfig-" & PBXCr.Code;
+    end;
+    if (blank(res)) then begin
+      res = "tmp/AsteriskConfig-" & PBXCr.Code;
+    end;
+  end;
+  AsteriskConfigBaseDir = res;
+end;
+
+
+function string 255 AsteriskLocalHomeDir()
+begin
+  record PBXConnectionVc PBXCr;
+  AsteriskLocalHomeDir = AsteriskHomeDir(PBXCr,true);
+end;
+
+function string 255 AsteriskPidFile()
+begin
+  string 255 res;
+
+  res = AsteriskLocalHomeDir & "/var/run/asterisk/asterisk.pid";
+  //LogText(0,"AsteriskPidFile: " & res);
+
+  AsteriskPidFile = res;
+  return;
+end;
+
+function string 255 ReadStringFromFile(string filename)
+begin
+  string 255 res;
+  area a;
+
+  AddFileToArea(filename,a,false);
+  res = Trim(GetStringFromArea(a,0,GetAreaLength(a)));
+  ReadStringFromFile = res;
+
+  return;
+end;
+
+function LongInt ReadLongFromFile(string filename)
+begin
+  LongInt res;
+  area a;
+
+  ReadLongFromFile = StringToLongInt(ReadStringFromFile(filename));
+
+  return;
+end;
+
+global
+function LongInt AsteriskPid()
+begin
+  LongInt res;
+  LongInt lpid;
+  string 255 pid_file;
+
+  res = -1;
+  pid_file = AsteriskPidFile();
+  lpid = ReadLongFromFile(pid_file);
+
+  if (PidIsRunning(lpid)) then begin
+    res = lpid;
+  end;
+  AsteriskPid = res;
+  return;
+end;
+
+procedure DetectAndFixDuplicateAsteriskProcs()
+begin
+  LongInt lpid,last_pid,proc_pid;
+  string 255 tstr;
+  
+LDetectAndFixDuplicateAsteriskProcs_again:
+  lpid = AsteriskPid;
+  RunShellScriptGetStdout("ps x |grep asterisk_orig |grep -v -- -R |grep -v -- -RC |grep -v -- -CR|grep -v grep |grep -v -- " & lpid & " 2>/dev/null |awk '{print $1}'|tail -1",tstr);
+  tstr = trim(tstr);
+  proc_pid = StringToLongInt(tstr);
+  if (proc_pid>0) then begin
+    if (proc_pid!=last_pid) then begin
+      LogText(0,"Stopping duplicate Asterisk process: " & proc_pid);
+      StopExternalProcess(lpid); // If a duplicate is found, we kill the currently running process also, as it might be hung
+      StopExternalProcess(proc_pid);
+    end else begin
+      LogText(0,"Forcefully stopping duplicate Asterisk process: " & proc_pid);
+      ForceStopExternalProcess(lpid);
+      ForceStopExternalProcess(proc_pid);
+    end;
+    last_pid = proc_pid;
+    goto LDetectAndFixDuplicateAsteriskProcs_again;
+  end;
+  
+  return;
+end;
+
+global
+procedure StartAsteriskIfNeeded()
+begin
+  LongInt lpid;
+  string 255 cmd,args;
+
+  if (DirExists(AsteriskLocalHomeDir)==false) then begin
+    if (GetGlobalBoolean("AsteriskRunningLogged")==false) then begin
+      LogText(0,"ERROR: Can't start Asterisk because it is not installed");
+      SetGlobalBoolean("AsteriskRunningLogged",true);
+    end;
+    goto LStartAsteriskIfNeeded;
+  end;
+
+  if (IncreaseVmLong("starting_asterisk",1)==false) then begin goto LStartAsteriskIfNeeded; end;
+
+  lpid = AsteriskPid;
+
+  if (lpid==-1 or PidIsRunning(lpid)==false) then begin
+    goto LStartAsteriskIfNeeded;
+    
+    cmd = AsteriskLocalHomeDir & "/sbin/asterisk";
+    args = "-C " & AsteriskLocalHomeDir & "/etc/asterisk/asterisk.conf";
+    LogText(0,"Starting Asterisk with command " & cmd & " " & args);
+    RunShellScript(cmd & " " & args);
+    SetGlobalBoolean("AsteriskRunningLogged",false);
+  end else begin
+    if (GetGlobalBoolean("AsteriskRunningLogged")==false) then begin
+      LogText(0,"Asterisk process running, pid:" & lpid);
+      SetGlobalBoolean("AsteriskRunningLogged",true);
+      DetectAndFixDuplicateAsteriskProcs;
+    end;
+  end;
+  
+  ChangeVmLong("starting_asterisk",-1);
+
+LStartAsteriskIfNeeded:
+  return;
+end;
+
+global
+procedure ReloadAsteriskConfiguration()
+begin
+  LongInt lpid;
+  string 255 cmd,args;
+
+  lpid = AsteriskPid;
+  if (lpid>0 and PidIsRunning(lpid)) then begin
+    cmd = AsteriskLocalHomeDir & "/sbin/asterisk";
+    args = "-RC " & AsteriskLocalHomeDir & "/etc/asterisk/asterisk.conf";
+    args = args & " -x \"core restart when convenient\"";
+    LogText(0,"Reloading Asterisk configuration with command " & cmd & " " & args);
+    RunShellScript(cmd & " " & args);
+  end;
+  return;
+end;
+
+global
+procedure ReloadAsteriskLoggerConfiguration()
+begin
+  LongInt lpid;
+  string 255 cmd,args;
+
+  lpid = AsteriskPid;
+  if (lpid>0 and PidIsRunning(lpid)) then begin
+    cmd = AsteriskLocalHomeDir & "/sbin/asterisk";
+    args = "-RC " & AsteriskLocalHomeDir & "/etc/asterisk/asterisk.conf";
+    args = args & " -x \"logger reload\"";
+    RunShellScript(cmd & " " & args);
+  end;
+  return;
+end;
+
+global
+procedure StopAsterisk()
+begin
+  LongInt lpid;
+
+  lpid = AsteriskPid;
+  if (lpid>0) then begin
+    LogText(0,"Stopping Asterisk process " & lpid);
+    DetectAndFixDuplicateAsteriskProcs;
+    StopExternalProcess(lpid);
+  end;
+  return;
+end;
+
+function string 255 AsteriskAMIUser(record PBXConnectionVc PBXCr)
+begin
+  AsteriskAMIUser = PBXCr.PBXUser;
+  return;
+end;
+
+function string 255 AsteriskAMIPassword(record PBXConnectionVc PBXCr)
+begin
+  AsteriskAMIPassword = PBXCr.PBXPassword;
+  return;
+end;
+
+function string 255 AsteriskIAXPassword(record PBXConnectionVc PBXCr)
+begin
+  AsteriskIAXPassword = PBXCr.IAXPassword;
+  return;
+end;
+
+
+global
+updating procedure CreateAsteriskConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/asterisk.conf";
+  AddLineToArea("[directories]",a_conf);
+  AddLineToArea("astetcdir => " & AsteriskHomeDir(PBXCr,localf) & "/etc/asterisk",a_conf);
+  AddLineToArea("astmoddir => " & AsteriskHomeDir(PBXCr,localf) & "/lib/asterisk/modules",a_conf);
+  AddLineToArea("astvarlibdir => " & AsteriskHomeDir(PBXCr,localf) & "/var/lib/asterisk",a_conf);
+  AddLineToArea("astdbdir => " & AsteriskHomeDir(PBXCr,localf) & "/var/lib/asterisk",a_conf);
+  AddLineToArea("astkeydir => " & AsteriskHomeDir(PBXCr,localf) & "/var/lib/asterisk",a_conf);
+  AddLineToArea("astdatadir => " & AsteriskHomeDir(PBXCr,localf) & "/var/lib/asterisk",a_conf);
+  AddLineToArea("astagidir => " & AsteriskHomeDir(PBXCr,localf) & "/var/lib/asterisk/agi-bin",a_conf);
+  AddLineToArea("astspooldir => " & AsteriskHomeDir(PBXCr,localf) & "/var/spool/asterisk",a_conf);
+  AddLineToArea("astrundir => " & AsteriskHomeDir(PBXCr,localf) & "/var/run/asterisk",a_conf);
+  AddLineToArea("astlogdir => " & AsteriskHomeDir(PBXCr,localf) & "/var/log/asterisk",a_conf);
+  AddLineToArea("",a_conf);
+  AddLineToArea("[options]",a_conf);
+  AddLineToArea("verbose = 10",a_conf);
+  AddLineToArea(";debug = 3",a_conf);
+  AddLineToArea(";quiet = yes",a_conf);
+  AddLineToArea("timestamp = yes",a_conf);
+  AddLineToArea("dumpcore = yes",a_conf);
+  AddLineToArea("autosystemname = yes",a_conf);
+  AddLineToArea(";maxcalls = 100",a_conf);
+  AddLineToArea("minmemfree = 5",a_conf);
+  AddLineToArea("cache_record_files = yes",a_conf);
+  AddLineToArea("record_cache_dir = /tmp",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+end;
+
+global
+updating procedure CreateCDRConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/cdr.conf";
+  AddLineToArea("[general]",a_conf);
+  AddLineToArea("enable=no",a_conf);
+  AddLineToArea("unanswered=yes",a_conf);
+  AddLineToArea("batch=yes",a_conf);
+  AddLineToArea("size=100",a_conf);
+  AddLineToArea("time=300",a_conf);
+  AddLineToArea("safeshutdown=yes",a_conf);
+  AddLineToArea("[csv]",a_conf);
+  AddLineToArea("usegmtime=yes",a_conf);
+  AddLineToArea("loguniqueid=no",a_conf);
+  AddLineToArea("loguserfield=no",a_conf);
+  AddLineToArea("accountlogs=no",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+end;
+
+global
+updating procedure CreateCLIAliasesConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/cli_aliases.conf";
+  AddLineToArea("[general]",a_conf);
+  AddLineToArea("template=friendly",a_conf);
+  AddLineToArea("[friendly]",a_conf);
+  AddLineToArea("hangup request=channel request hangup",a_conf);
+  AddLineToArea("originate=channel originate",a_conf);
+  AddLineToArea("help=core show help",a_conf);
+  AddLineToArea("pri intense debug span=pri set debug 2 span",a_conf);
+  AddLineToArea("reload=module reload",a_conf);
+//  AddLineToArea("[asterisk12](asterisk12_tpl)",a_conf);
+//  AddLineToArea("[asterisk14](asterisk14_tpl)",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+end;
+
+global
+updating procedure CreateCLIPermissionsConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/cli_permissions.conf";
+  AddLineToArea("[general]",a_conf);
+//  AddLineToArea("[@asterisk]",a_conf); //Only useful if there's a group "asterisk"
+//  AddLineToArea("deny=all",a_conf);
+//  AddLineToArea("permit=queue show *",a_conf);
+  AddLineToArea("[root]",a_conf);
+  AddLineToArea("permit=all",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+end;
+
+global
+updating procedure CreateCodecsConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/codecs.conf";
+  /* Not compatible with opensource-opus
+  AddLineToArea("[hw_opus]",a_conf);
+  AddLineToArea("type=opus",a_conf);
+  AddLineToArea("packet_loss=60",a_conf); // packet loss resistance percentage; 40 seems to give good results as well
+  AddLineToArea("complexity=10",a_conf); // computational complexity, 0-10; lower gives worse audio quality
+  AddLineToArea("max_bandwidth=full",a_conf); // narrow, medium, wide, super_wide, full; suprisingly effective to use full
+  AddLineToArea("signal=voice",a_conf); // auto, voice, music; significant improvement for calls when using voice
+  AddLineToArea("application=voip",a_conf); // voip, audio, low_delay
+  AddLineToArea("max_playback_rate=32000",a_conf); // 8000-48000; 48000 gave poor results in conference calls
+  AddLineToArea("bitrate=auto",a_conf); // 500-512000, auto, max
+  AddLineToArea("cbr=no",a_conf); // constant bitrate: yes, no
+  AddLineToArea("fec=yes",a_conf); // forward error correction: yes, no
+  AddLineToArea("dtx=no",a_conf); // discontinuous transmission: yes, no
+  */
+  WriteAreaToFile(a_conf,conf_file,0);
+  return;
+end;
+
+
+global
+updating procedure CreateConfBridgeConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/confbridge.conf";
+  
+  AddLineToArea("[default_user]",a_conf);
+  AddLineToArea("type=user",a_conf);
+  AddLineToArea("music_on_hold_when_empty=no",a_conf);
+  AddLineToArea("quiet=yes",a_conf); // When enabled enter/leave prompts and user intros are not played.
+  AddLineToArea("announce_user_count=no",a_conf);
+  AddLineToArea("announce_user_count_all=no",a_conf);
+  AddLineToArea("announce_only_user=no",a_conf);
+  AddLineToArea("wait_marked=no",a_conf);
+  AddLineToArea("end_marked=no",a_conf);
+  AddLineToArea("announce_join_leave=no",a_conf);
+  AddLineToArea("announce_join_leave_review=no",a_conf);
+  AddLineToArea("dtmf_passthrough=no",a_conf);
+  AddLineToArea("timeout=0",a_conf);
+  AddLineToArea("text_messaging=no",a_conf);
+  /*
+    This option drops what Asterisk detects as silence from entering into the bridge. Enabling
+    this option will drastically improve performance and help remove the buildup of background
+    noise from the conference. Highly recommended for large conferences due to its performance
+    enhancements.
+  */
+  AddLineToArea("dsp_drop_silence=yes",a_conf);
+  /*
+    Enabling this option places a jitterbuffer on the user's audio stream before audio mixing
+    is performed.  This is highly recommended but will add a slight delay to the audio. This
+    option is using the JITTERBUFFER dialplan function's default adaptive jitterbuffer. For a
+    more fine tuned jitterbuffer, disable this option and use the JITTERBUFFER dialplan function
+    on the user before entering the ConfBridge application.
+  */
+  AddLineToArea("jitterbuffer=yes",a_conf); // We have it in the dialplan instead //220111 - turned on, dialpan func seems missing on arm asterisk?
+  /*
+    Average magnitude threshold to determine talking. The minimum average magnitude per sample
+    in a frame for the DSP to consider talking/noise present. A value below this level is
+    considered silence. This value affects several operations and should not be changed unless
+    the impact on call quality is fully understood. What this value affects internally:
+    1. Audio is only mixed out of a user's incoming audio stream if talking is detected. If
+       this value is set too high the user will hear himself talking.
+    2. When talk detection AMI events are enabled, this value determines when talking has begun
+       which results in an AMI event to fire. If this value is set too low AMI events may be falsely
+       triggered by variants in room noise.
+    3. The 'drop_silence' option depends on this value to determine when the user's audio should be
+       mixed into the bridge after periods of silence. If this value is too high the user's speech
+       will get discarded as they will be considered silent.
+    Valid values are 1 through 2^15. By default this value is 160.
+    ;dsp_talking_threshold=128
+  */
+  /*
+    The number of milliseconds of silence necessary to declare talking stopped. The time in milliseconds
+    of sound falling below the 'dsp_talking_threshold' option when a user is considered to stop talking.
+    This value affects several operations and should not be changed unless the impact on call quality is
+    fully understood. What this value affects internally:
+    1. When talk detection AMI events are enabled, this value determines when the user has stopped talking
+       after a period of talking. If this value is set too low AMI events indicating the user has stopped
+       talking may get falsely sent out when the user briefly pauses during mid sentence.
+    2. The 'drop_silence' option depends on this value to determine when the user's audio should begin to
+       be dropped from the conference bridge after the user stops talking. If this value is set too low
+       the user's audio stream may sound choppy to the other participants. This is caused by the user
+       transitioning constantly from silence to talking during mid sentence.
+    The best way to approach this option is to set it slightly above the maximum amount of milliseconds of
+    silence a user may generate during natural speech.
+    Valid values are 1 through 2^31. By default this value is 2500ms.
+    ;dsp_silence_threshold=2000
+  */
+  /*
+    This option sets whether or not notifications of when a user begins and ends talking should be sent out
+    as events over AMI. By default this option is off.
+    ;talk_detection_events=yes
+  */
+  AddLineToArea("talk_detection_events=yes",a_conf);
+  /*
+    Sets whether or not a denoise filter should be applied to the audio before mixing or not. Off by default.
+    Requires func_speex to be built and installed. Do not confuse this option with drop_silence. Denoise is
+    useful if there is a lot of background noise for a user as it attempts to remove the noise while preserving
+    the speech. This option does NOT remove silence from being mixed into the conference and does come at the
+    cost of a slight performance hit.
+  */
+  AddLineToArea("denoise=yes",a_conf); // In some tests, caused poor quality, possibly because too much CPU demand
+  
+  AddLineToArea("[default_bridge]",a_conf);
+  AddLineToArea("type=bridge",a_conf);
+  AddLineToArea("record_conference=no",a_conf);
+  /*
+    Sets the internal native sample rate the conference is mixed at. This is set to automatically
+    adjust the sample rate to the best quality by default. Other values can be anything from
+    8000-192000. If a sample rate is set that Asterisk does not support, the closest sample rate
+    Asterisk does support to the one requested will be used.
+    ;internal_sample_rate=48000
+  */
+  //AddLineToArea("internal_sample_rate=96000",a_conf);
+  AddLineToArea("internal_sample_rate=48000",a_conf);
+  /*
+    Sets the maximum sample rate the conference is mixed at. This is set to no maximum by default.
+    Values can be anything from 8000-192000.
+    ;maximum_sample_rate=48000
+  */
+  //AddLineToArea("maximum_sample_rate=192000",a_conf);
+  AddLineToArea("maximum_sample_rate=48000",a_conf);
+  /*
+    Sets the internal mixing interval in milliseconds for the bridge. This number reflects how tight
+    or loose the mixing will be for the conference. In order to improve performance a larger mixing
+    interval such as 40ms may be chosen. Using a larger mixing interval comes at the cost of introducing
+    larger amounts of delay into the bridge. Valid values here are 10, 20, 40, or 80.  By default 20ms
+    is used.
+  */
+  //AddLineToArea("mixing_interval=40",a_conf); // 40 does not work - breakups and horrible audio quality
+  AddLineToArea("enable_events=no",a_conf);
+  AddLineToArea("binaural_active=no",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+  return;
+end;
+
+global
+updating procedure CreateDNSMgrConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/dnsmgr.conf";
+  AddLineToArea("[general]",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+  return;
+end;
+
+global
+updating procedure CreateExtConfigConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/extconfig.conf";
+  AddLineToArea("[settings]",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+  return;
+end;
+
+global
+updating procedure CreateFeaturesConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/features.conf";
+  AddLineToArea("[general]",a_conf);
+  AddLineToArea("transferdigittimeout => 3",a_conf);
+  AddLineToArea("xfersound=beep",a_conf);
+  AddLineToArea("xferfailsound=beeperr",a_conf);
+  AddLineToArea("pickupexten=*8",a_conf);
+  AddLineToArea("pickupsound=beep",a_conf);
+  AddLineToArea("pickupfailsound=beeperr",a_conf);
+  AddLineToArea("featuredigittimeout=2000",a_conf);
+  AddLineToArea("atxfernoanswertimeout=15",a_conf);
+  AddLineToArea("atxferdropcall=yes",a_conf);
+  AddLineToArea("atxfercallbackretries=2",a_conf);
+  AddLineToArea("[featuremap]",a_conf);
+  AddLineToArea("blindxfer => *52",a_conf);
+  AddLineToArea("atxfer => *62",a_conf);
+  AddLineToArea("parkcall => *72",a_conf);
+  AddLineToArea("[applicationmap]",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+  return;
+end;
+
+global
+updating procedure CreateIAXConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+  record PBXConnectionVc PBXC2r;
+  record SipTrunk2Vc STr;
+  boolean testf,foundf;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/iax.conf";
+  AddLineToArea("[general]",a_conf);
+  AddLineToArea("bindport=4569",a_conf);
+  AddLineToArea("delayreject=yes",a_conf);
+  AddLineToArea("srvlookup=yes",a_conf);
+  AddLineToArea("language=en",a_conf);
+  AddLineToArea("mohinterpret=HW",a_conf);
+  AddLineToArea("mohsuggest=HW",a_conf);
+  AddLineToArea("bandwidth=high",a_conf);
+  AddLineToArea("disallow=all",a_conf); // Required for Gradwell (GBR SIP) to work
+  AddLineToArea("allow=opus",a_conf);
+  AddLineToArea("allow=alaw",a_conf);
+  //AddLineToArea("allow=ulaw",a_conf);
+  //AddLineToArea("allow=gsm",a_conf);
+  //AddLineToArea("allow=g729",a_conf);
+  AddLineToArea("jitterbuffer=yes",a_conf);
+  AddLineToArea("forcejitterbuffer=no",a_conf);
+  AddLineToArea("encryption=no",a_conf);
+  AddLineToArea("authdebug=no",a_conf);
+  AddLineToArea("autokill=yes",a_conf);
+
+  AddLineToArea("[HW_IAX_USER]",a_conf);
+  AddLineToArea("type=user",a_conf);
+  AddLineToArea("auth=md5",a_conf);
+  AddLineToArea("secret=" & AsteriskIAXPassword(PBXCr),a_conf);
+  AddLineToArea("context=HW_IAX_CTX",a_conf);
+  AddLineToArea("requirecalltoken=auto",a_conf);
+  AddLineToArea("trunk=no",a_conf);
+  AddLineToArea("deny=0.0.0.0/0.0.0.0",a_conf);
+
+  while (LoopMain(PBXC2r,1,true)) begin
+    testf = true;
+    if (PBXC2r.Closed!=0) then begin testf = false; end;
+    if (IsAsteriskPbxType(PBXC2r.PBXType)==false) then begin testf = false; end;
+    if (PBXC2r.Code==PBXCr.Code) then begin testf = false; end;
+    if (PBXC2r.IAXf==0) then begin testf = false; end;
+    if (blank(PBXC2r.PBXHostIP)) then begin testf = false; end;
+    if (testf==true) then begin
+      AddLineToArea("permit=" & PBXC2r.PBXHostIP,a_conf);
+    end;
+  end;
+
+  RecordClear(PBXC2r);
+  ResetLoop(PBXC2r);
+  while (LoopMain(PBXC2r,1,true)) begin
+    testf = true;
+    if (PBXC2r.Closed!=0) then begin testf = false; end;
+    if (IsAsteriskPbxType(PBXC2r.PBXType)==false) then begin testf = false; end;
+    if (PBXC2r.Code==PBXCr.Code) then begin testf = false; end;
+    if (PBXC2r.IAXf==0) then begin testf = false; end;
+    if (testf==true) then begin
+      AddLineToArea("[HW_IAX_" & PBXC2r.Code & "]",a_conf);
+      AddLineToArea("type=peer",a_conf);
+      AddLineToArea("requirecalltoken=yes",a_conf);
+      AddLineToArea("host=" & PBXC2r.PBXHostIP,a_conf);
+      AddLineToArea("username=HW_IAX_USER",a_conf);
+      AddLineToArea("secret=" & AsteriskIAXPassword(PBXC2r),a_conf);
+      AddLineToArea("auth=md5",a_conf);
+      AddLineToArea("qualify=yes",a_conf);
+    end;
+  end;
+
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (STr.IAXf==0) then begin testf = false; end;
+    if (testf) then begin
+      if (blank(STr.FromUser)) then begin
+        AddLineToArea("[" & STr.Username & "]",a_conf);
+      end else begin
+        AddLineToArea("[" & STr.FromUser & "]",a_conf);
+      end;
+      AddLineToArea("disallow=all",a_conf);
+      AddLineToArea("allow=opus",a_conf);
+      AddLineToArea("allow=alaw",a_conf);
+      AddLineToArea("context=HW_INBOUND",a_conf);
+      AddLineToArea("sendrpid=no",a_conf);
+      AddLineToArea("qualify=yes",a_conf);
+      AddLineToArea("dtmfmode=rfc2833",a_conf);
+      AddLineToArea("insecure=very",a_conf);
+      AddLineToArea("nat=force_rport,comedia",a_conf);
+      AddLineToArea("canreinvite=no",a_conf);
+      AddLineToArea("notransfer=no",a_conf);
+      AddLineToArea("auth=plaintext",a_conf);
+      AddLineToArea("tos=none",a_conf);
+      AddLineToArea("type=friend",a_conf);
+      AddLineToArea("host=" & STr.Host,a_conf);
+      AddLineToArea("secret=" & STr.Password,a_conf);
+      AddLineToArea("register=no",a_conf);
+      if (blank(STr.FromUser)) then begin
+        AddLineToArea("username=" & STr.Username,a_conf);
+      end else begin
+        AddLineToArea("username=" & STr.FromUser,a_conf);
+      end;
+      AddLineToArea("requirecalltoken=no",a_conf);
+    end;
+  end;
+  WriteAreaToFile(a_conf,conf_file,0);
+end;
+
+global
+updating procedure CreateIndicationsConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/indications.conf";
+  AddLineToArea("[general]",a_conf);
+  AddLineToArea("country=us",a_conf);
+  AddLineToArea("[at]",a_conf);
+  AddLineToArea("description=Austria",a_conf);
+  AddLineToArea("ringcadence=1000,5000",a_conf);
+  AddLineToArea("dial=420",a_conf);
+  AddLineToArea("busy=420/400,0/400",a_conf);
+  AddLineToArea("ring=420/1000,0/5000",a_conf);
+  AddLineToArea("congestion=420/200,0/200",a_conf);
+  AddLineToArea("callwaiting=420/40,0/1960",a_conf);
+  AddLineToArea("dialrecall=420",a_conf);
+  AddLineToArea("record=1400/80,0/14920",a_conf);
+  AddLineToArea("info=950/330,1450/330,1850/330,0/1000",a_conf);
+  AddLineToArea("stutter=380+420",a_conf);
+  AddLineToArea("[au]",a_conf);
+  AddLineToArea("description=Australia",a_conf);
+  AddLineToArea("ringcadence=400,200,400,2000",a_conf);
+  AddLineToArea("dial=413+438",a_conf);
+  AddLineToArea("busy=425/375,0/375",a_conf);
+  AddLineToArea("ring=413+438/400,0/200,413+438/400,0/2000",a_conf);
+  AddLineToArea("congestion=425/375,0/375,420/375,0/375",a_conf);
+  AddLineToArea("callwaiting=425/200,0/200,425/200,0/4400",a_conf);
+  AddLineToArea("dialrecall=413+438",a_conf);
+  AddLineToArea("record=!425/1000,!0/15000,425/360,0/15000",a_conf);
+  AddLineToArea("info=425/2500,0/500",a_conf);
+  AddLineToArea("std=!525/100,!0/100,!525/100,!0/100,!525/100,!0/100,!525/100,!0/100,!525/100",a_conf);
+  AddLineToArea("facility=425",a_conf);
+  AddLineToArea("stutter=413+438/100,0/40",a_conf);
+  AddLineToArea("ringmobile=400+450/400,0/200,400+450/400,0/2000",a_conf);
+  AddLineToArea("[bg]",a_conf);
+  AddLineToArea("description=Bulgaria",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=425/500,0/500",a_conf);
+  AddLineToArea("ring=425/1000,0/4000",a_conf);
+  AddLineToArea("congestion=425/250,0/250",a_conf);
+  AddLineToArea("callwaiting=425/150,0/150,425/150,0/4000",a_conf);
+  AddLineToArea("dialrecall=!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,425",a_conf);
+  AddLineToArea("record=1400/425,0/15000",a_conf);
+  AddLineToArea("info=950/330,1400/330,1800/330,0/1000",a_conf);
+  AddLineToArea("stutter=425/1500,0/100",a_conf);
+  AddLineToArea("[br]",a_conf);
+  AddLineToArea("description=Brazil",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=425/250,0/250",a_conf);
+  AddLineToArea("ring=425/1000,0/4000",a_conf);
+  AddLineToArea("congestion=425/250,0/250,425/750,0/250",a_conf);
+  AddLineToArea("callwaiting=425/50,0/1000",a_conf);
+  AddLineToArea("dialrecall=350+440",a_conf);
+  AddLineToArea("record=425/250,0/250",a_conf);
+  AddLineToArea("info=950/330,1400/330,1800/330",a_conf);
+  AddLineToArea("stutter=350+440",a_conf);
+  AddLineToArea("[be]",a_conf);
+  AddLineToArea("description=Belgium",a_conf);
+  AddLineToArea("ringcadence=1000,3000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=425/500,0/500",a_conf);
+  AddLineToArea("ring=425/1000,0/3000",a_conf);
+  AddLineToArea("congestion=425/167,0/167",a_conf);
+  AddLineToArea("callwaiting=1400/175,0/175,1400/175,0/3500",a_conf);
+  AddLineToArea("dialrecall=!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,350+440",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=900/330,1400/330,1800/330,0/1000",a_conf);
+  AddLineToArea("stutter=425/1000,0/250",a_conf);
+  AddLineToArea("[ch]",a_conf);
+  AddLineToArea("description=Switzerland",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=425/500,0/500",a_conf);
+  AddLineToArea("ring=425/1000,0/4000",a_conf);
+  AddLineToArea("congestion=425/200,0/200",a_conf);
+  AddLineToArea("callwaiting=425/200,0/200,425/200,0/4000",a_conf);
+  AddLineToArea("dialrecall=!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,425",a_conf);
+  AddLineToArea("record=1400/80,0/15000",a_conf);
+  AddLineToArea("info=950/330,1400/330,1800/330,0/1000",a_conf);
+  AddLineToArea("stutter=425+340/1100,0/1100",a_conf);
+  AddLineToArea("[cl]",a_conf);
+  AddLineToArea("description=Chile",a_conf);
+  AddLineToArea("ringcadence=1000,3000",a_conf);
+  AddLineToArea("dial=400",a_conf);
+  AddLineToArea("busy=400/500,0/500",a_conf);
+  AddLineToArea("ring=400/1000,0/3000",a_conf);
+  AddLineToArea("congestion=400/200,0/200",a_conf);
+  AddLineToArea("callwaiting=400/250,0/8750",a_conf);
+  AddLineToArea("dialrecall=!400/100,!0/100,!400/100,!0/100,!400/100,!0/100,400",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=950/333,1400/333,1800/333,0/1000",a_conf);
+  AddLineToArea("stutter=!400/100,!0/100,!400/100,!0/100,!400/100,!0/100,!400/100,!0/100,!400/100,!0/100,!400/100,!0/100,400",a_conf);
+  AddLineToArea("[cn]",a_conf);
+  AddLineToArea("description=China",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=450",a_conf);
+  AddLineToArea("busy=450/350,0/350",a_conf);
+  AddLineToArea("ring=450/1000,0/4000",a_conf);
+  AddLineToArea("congestion=450/700,0/700",a_conf);
+  AddLineToArea("callwaiting=450/400,0/4000",a_conf);
+  AddLineToArea("dialrecall=450",a_conf);
+  AddLineToArea("record=950/400,0/10000",a_conf);
+  AddLineToArea("info=450/100,0/100,450/100,0/100,450/100,0/100,450/400,0/400",a_conf);
+  AddLineToArea("stutter=450+425",a_conf);
+  AddLineToArea("[cz]",a_conf);
+  AddLineToArea("description=Czech Republic",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=425/330,0/330,425/660,0/660",a_conf);
+  AddLineToArea("busy=425/330,0/330",a_conf);
+  AddLineToArea("ring=425/1000,0/4000",a_conf);
+  AddLineToArea("congestion=425/165,0/165",a_conf);
+  AddLineToArea("callwaiting=425/330,0/9000",a_conf);
+  AddLineToArea("dialrecall=!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,425/330,0/330,425/660,0/660",a_conf);
+  AddLineToArea("record=1400/500,0/14000",a_conf);
+  AddLineToArea("info=950/330,0/30,1400/330,0/30,1800/330,0/1000",a_conf);
+  AddLineToArea("stutter=425/450,0/50",a_conf);
+  AddLineToArea("[de]",a_conf);
+  AddLineToArea("description=Germany",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=425/480,0/480",a_conf);
+  AddLineToArea("ring=425/1000,0/4000",a_conf);
+  AddLineToArea("congestion=425/240,0/240",a_conf);
+  AddLineToArea("callwaiting=!425/200,!0/200,!425/200,!0/5000,!425/200,!0/200,!425/200,!0/5000,!425/200,!0/200,!425/200,!0/5000,!425/200,!0/200,!425/200,!0/5000,!425/200,!0/200,!425/200,0",a_conf);
+  AddLineToArea("dialrecall=!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,425",a_conf);
+  AddLineToArea("record=1400/80,0/15000",a_conf);
+  AddLineToArea("info=950/330,1400/330,1800/330,0/1000",a_conf);
+  AddLineToArea("stutter=425+400",a_conf);
+  AddLineToArea("[dk]",a_conf);
+  AddLineToArea("description=Denmark",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=425/500,0/500",a_conf);
+  AddLineToArea("ring=425/1000,0/4000",a_conf);
+  AddLineToArea("congestion=425/200,0/200",a_conf);
+  AddLineToArea("callwaiting=!425/200,!0/600,!425/200,!0/3000,!425/200,!0/200,!425/200,0",a_conf);
+  AddLineToArea("dialrecall=!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,425",a_conf);
+  AddLineToArea("record=1400/80,0/15000",a_conf);
+  AddLineToArea("info=950/330,1400/330,1800/330,0/1000",a_conf);
+  AddLineToArea("stutter=425/450,0/50",a_conf);
+  AddLineToArea("[ee]",a_conf);
+  AddLineToArea("description=Estonia",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=425/300,0/300",a_conf);
+  AddLineToArea("ring=425/1000,0/4000",a_conf);
+  AddLineToArea("congestion=425/200,0/200",a_conf);
+  AddLineToArea("callwaiting=950/650,0/325,950/325,0/30,1400/1300,0/2600",a_conf);
+  AddLineToArea("dialrecall=425/650,0/25",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=950/650,0/325,950/325,0/30,1400/1300,0/2600",a_conf);
+  AddLineToArea("stutter=!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,425",a_conf);
+  AddLineToArea("[es]",a_conf);
+  AddLineToArea("description=Spain",a_conf);
+  AddLineToArea("ringcadence=1500,3000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=425/200,0/200",a_conf);
+  AddLineToArea("ring=425/1500,0/3000",a_conf);
+  AddLineToArea("congestion=425/200,0/200,425/200,0/200,425/200,0/600",a_conf);
+  AddLineToArea("callwaiting=425/175,0/175,425/175,0/3500",a_conf);
+  AddLineToArea("dialrecall=!425/200,!0/200,!425/200,!0/200,!425/200,!0/200,425",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=950/330,0/1000",a_conf);
+  AddLineToArea("dialout=500",a_conf);
+  AddLineToArea("[fi]",a_conf);
+  AddLineToArea("description=Finland",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=425/300,0/300",a_conf);
+  AddLineToArea("ring=425/1000,0/4000",a_conf);
+  AddLineToArea("congestion=425/200,0/200",a_conf);
+  AddLineToArea("callwaiting=425/150,0/150,425/150,0/8000",a_conf);
+  AddLineToArea("dialrecall=425/650,0/25",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=950/650,0/325,950/325,0/30,1400/1300,0/2600",a_conf);
+  AddLineToArea("stutter=425/650,0/25",a_conf);
+  AddLineToArea("[fr]",a_conf);
+  AddLineToArea("description=France",a_conf);
+  AddLineToArea("ringcadence=1500,3500",a_conf);
+  AddLineToArea("dial=440",a_conf);
+  AddLineToArea("busy=440/500,0/500",a_conf);
+  AddLineToArea("ring=440/1500,0/3500",a_conf);
+  AddLineToArea("congestion=440/250,0/250",a_conf);
+  AddLineToArea("callwait=440/300,0/10000",a_conf);
+  AddLineToArea("dialrecall=!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,350+440",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=!950/330,!1400/330,!1800/330",a_conf);
+  AddLineToArea("stutter=!440/100,!0/100,!440/100,!0/100,!440/100,!0/100,!440/100,!0/100,!440/100,!0/100,!440/100,!0/100,440",a_conf);
+  AddLineToArea("[gr]",a_conf);
+  AddLineToArea("description=Greece",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=425/200,0/300,425/700,0/800",a_conf);
+  AddLineToArea("busy=425/300,0/300",a_conf);
+  AddLineToArea("ring=425/1000,0/4000",a_conf);
+  AddLineToArea("congestion=425/200,0/200",a_conf);
+  AddLineToArea("callwaiting=425/150,0/150,425/150,0/8000",a_conf);
+  AddLineToArea("dialrecall=425/650,0/25",a_conf);
+  AddLineToArea("record=1400/400,0/15000",a_conf);
+  AddLineToArea("info=!950/330,!1400/330,!1800/330,!0/1000,!950/330,!1400/330,!1800/330,!0/1000,!950/330,!1400/330,!1800/330,!0/1000,0",a_conf);
+  AddLineToArea("stutter=425/650,0/25",a_conf);
+  AddLineToArea("[hu]",a_conf);
+  AddLineToArea("description=Hungary",a_conf);
+  AddLineToArea("ringcadence=1250,3750",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=425/300,0/300",a_conf);
+  AddLineToArea("ring=425/1250,0/3750",a_conf);
+  AddLineToArea("congestion=425/300,0/300",a_conf);
+  AddLineToArea("callwaiting=425/40,0/1960",a_conf);
+  AddLineToArea("dialrecall=425+450",a_conf);
+  AddLineToArea("record=1400/400,0/15000",a_conf);
+  AddLineToArea("info=!950/330,!1400/330,!1800/330,!0/1000,!950/330,!1400/330,!1800/330,!0/1000,!950/330,!1400/330,!1800/330,!0/1000,0",a_conf);
+  AddLineToArea("stutter=350+375+400",a_conf);
+  AddLineToArea("[il]",a_conf);
+  AddLineToArea("description=Israel",a_conf);
+  AddLineToArea("ringcadence=1000,3000",a_conf);
+  AddLineToArea("dial=414",a_conf);
+  AddLineToArea("busy=414/500,0/500",a_conf);
+  AddLineToArea("ring=414/1000,0/3000",a_conf);
+  AddLineToArea("congestion=414/250,0/250",a_conf);
+  AddLineToArea("callwaiting=414/100,0/100,414/100,0/100,414/600,0/3000",a_conf);
+  AddLineToArea("dialrecall=!414/100,!0/100,!414/100,!0/100,!414/100,!0/100,414",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=1000/330,1400/330,1800/330,0/1000",a_conf);
+  AddLineToArea("stutter=!414/160,!0/160,!414/160,!0/160,!414/160,!0/160,!414/160,!0/160,!414/160,!0/160,!414/160,!0/160,!414/160,!0/160,!414/160,!0/160,!414/160,!0/160,!414/160,!0/160,414",a_conf);
+  AddLineToArea("[in]",a_conf);
+  AddLineToArea("description=India",a_conf);
+  AddLineToArea("ringcadence=400,200,400,2000",a_conf);
+  AddLineToArea("dial=400*25",a_conf);
+  AddLineToArea("busy=400/750,0/750",a_conf);
+  AddLineToArea("ring=400*25/400,0/200,400*25/400,0/2000",a_conf);
+  AddLineToArea("congestion=400/250,0/250",a_conf);
+  AddLineToArea("callwaiting=400/200,0/100,400/200,0/7500",a_conf);
+  AddLineToArea("dialrecall=!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,350+440",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=!950/330,!1400/330,!1800/330,0/1000",a_conf);
+  AddLineToArea("stutter=!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,350+440",a_conf);
+  AddLineToArea("[it]",a_conf);
+  AddLineToArea("description=Italy",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=425/200,0/200,425/600,0/1000",a_conf);
+  AddLineToArea("busy=425/500,0/500",a_conf);
+  AddLineToArea("ring=425/1000,0/4000",a_conf);
+  AddLineToArea("congestion=425/200,0/200",a_conf);
+  AddLineToArea("callwaiting=425/400,0/100,425/250,0/100,425/150,0/14000",a_conf);
+  AddLineToArea("dialrecall=470/400,425/400",a_conf);
+  AddLineToArea("record=1400/400,0/15000",a_conf);
+  AddLineToArea("info=!950/330,!1400/330,!1800/330,!0/1000,!950/330,!1400/330,!1800/330,!0/1000,!950/330,!1400/330,!1800/330,!0/1000,0",a_conf);
+  AddLineToArea("stutter=470/400,425/400",a_conf);
+  AddLineToArea("[lt]",a_conf);
+  AddLineToArea("description=Lithuania",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=425/350,0/350",a_conf);
+  AddLineToArea("ring=425/1000,0/4000",a_conf);
+  AddLineToArea("congestion=425/200,0/200",a_conf);
+  AddLineToArea("callwaiting=425/150,0/150,425/150,0/4000",a_conf);
+  AddLineToArea("dialrecall=425/500,0/50",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=!950/330,!1400/330,!1800/330,!0/1000,!950/330,!1400/330,!1800/330,!0/1000,!950/330,!1400/330,!1800/330,!0/1000,0",a_conf);
+  AddLineToArea("stutter=!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,425",a_conf);
+  AddLineToArea("[jp]",a_conf);
+  AddLineToArea("description=Japan",a_conf);
+  AddLineToArea("ringcadence=1000,2000",a_conf);
+  AddLineToArea("dial=400",a_conf);
+  AddLineToArea("busy=400/500,0/500",a_conf);
+  AddLineToArea("ring=400+15/1000,0/2000",a_conf);
+  AddLineToArea("congestion=400/500,0/500",a_conf);
+  AddLineToArea("callwaiting=400+16/500,0/8000",a_conf);
+  AddLineToArea("dialrecall=!400/200,!0/200,!400/200,!0/200,!400/200,!0/200,400",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=!950/330,!1400/330,!1800/330,0",a_conf);
+  AddLineToArea("stutter=!400/100,!0/100,!400/100,!0/100,!400/100,!0/100,!400/100,!0/100,!400/100,!0/100,!400/100,!0/100,400",a_conf);
+  AddLineToArea("[mx]",a_conf);
+  AddLineToArea("description=Mexico",a_conf);
+  AddLineToArea("ringcadence=2000,4000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=425/250,0/250",a_conf);
+  AddLineToArea("ring=425/1000,0/4000",a_conf);
+  AddLineToArea("congestion=425/250,0/250",a_conf);
+  AddLineToArea("callwaiting=425/200,0/600,425/200,0/10000",a_conf);
+  AddLineToArea("dialrecall=!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,350+440",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=950/330,0/30,1400/330,0/30,1800/330,0/1000",a_conf);
+  AddLineToArea("stutter=!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,350+440",a_conf);
+  AddLineToArea("[my]",a_conf);
+  AddLineToArea("description=Malaysia",a_conf);
+  AddLineToArea("ringcadence=2000,4000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=425/500,0/500",a_conf);
+  AddLineToArea("ring=425/400,0/200",a_conf);
+  AddLineToArea("congestion=425/500,0/500",a_conf);
+  AddLineToArea("[nl]",a_conf);
+  AddLineToArea("description=Netherlands",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=425/500,0/500",a_conf);
+  AddLineToArea("ring=425/1000,0/4000",a_conf);
+  AddLineToArea("congestion=425/250,0/250",a_conf);
+  AddLineToArea("callwaiting=425/500,0/9500",a_conf);
+  AddLineToArea("dialrecall=425/500,0/50",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=950/330,1400/330,1800/330,0/1000",a_conf);
+  AddLineToArea("stutter=425/500,0/50",a_conf);
+  AddLineToArea("[no]",a_conf);
+  AddLineToArea("description=Norway",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=425/500,0/500",a_conf);
+  AddLineToArea("ring=425/1000,0/4000",a_conf);
+  AddLineToArea("congestion=425/200,0/200",a_conf);
+  AddLineToArea("callwaiting=425/200,0/600,425/200,0/10000",a_conf);
+  AddLineToArea("dialrecall=470/400,425/400",a_conf);
+  AddLineToArea("record=1400/400,0/15000",a_conf);
+  AddLineToArea("info=!950/330,!1400/330,!1800/330,!0/1000,!950/330,!1400/330,!1800/330,!0/1000,!950/330,!1400/330,!1800/330,!0/1000,0",a_conf);
+  AddLineToArea("stutter=470/400,425/400",a_conf);
+  AddLineToArea("[nz]",a_conf);
+  AddLineToArea("description=New Zealand",a_conf);
+  AddLineToArea("ringcadence=400,200,400,2000",a_conf);
+  AddLineToArea("dial=400",a_conf);
+  AddLineToArea("busy=400/250,0/250",a_conf);
+  AddLineToArea("ring=400+450/400,0/200,400+450/400,0/2000",a_conf);
+  AddLineToArea("congestion=400/375,0/375",a_conf);
+  AddLineToArea("callwaiting=!400/200,!0/3000,!400/200,!0/3000,!400/200,!0/3000,!400/200",a_conf);
+  AddLineToArea("dialrecall=!400/100,!0/100,!400/100,!0/100,!400/100,!0/100,400",a_conf);
+  AddLineToArea("record=1400/425,0/15000",a_conf);
+  AddLineToArea("info=400/750,0/100,400/750,0/100,400/750,0/100,400/750,0/400",a_conf);
+  AddLineToArea("stutter=!400/100,!0/100,!400/100,!0/100,!400/100,!0/100,!400/100,!0/100,!400/100,!0/100,!400/100,!0/100,400",a_conf);
+  AddLineToArea("unobtainable=400/75,0/100,400/75,0/100,400/75,0/100,400/75,0/400",a_conf);
+  AddLineToArea("[ph]",a_conf);
+  AddLineToArea("description=Philippines",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=480+620/500,0/500",a_conf);
+  AddLineToArea("ring=425+480/1000,0/4000",a_conf);
+  AddLineToArea("congestion=480+620/250,0/250",a_conf);
+  AddLineToArea("callwaiting=440/300,0/10000",a_conf);
+  AddLineToArea("dialrecall=!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,350+440",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=!950/330,!1400/330,!1800/330,0",a_conf);
+  AddLineToArea("stutter=!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,350+440",a_conf);
+  AddLineToArea("[pl]",a_conf);
+  AddLineToArea("description=Poland",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=425/500,0/500",a_conf);
+  AddLineToArea("ring=425/1000,0/4000",a_conf);
+  AddLineToArea("congestion=425/500,0/500",a_conf);
+  AddLineToArea("callwaiting=425/150,0/150,425/150,0/4000",a_conf);
+  AddLineToArea("dialrecall=425/500,0/50",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=!950/330,!1400/330,!1800/330,!0/1000,!950/330,!1400/330,!1800/330,!0/1000,!950/330,!1400/330,!1800/330,!0/1000",a_conf);
+  AddLineToArea("stutter=!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,425",a_conf);
+  AddLineToArea("[pt]",a_conf);
+  AddLineToArea("description=Portugal",a_conf);
+  AddLineToArea("ringcadence=1000,5000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=425/500,0/500",a_conf);
+  AddLineToArea("ring=425/1000,0/5000",a_conf);
+  AddLineToArea("congestion=425/200,0/200",a_conf);
+  AddLineToArea("callwaiting=440/300,0/10000",a_conf);
+  AddLineToArea("dialrecall=425/1000,0/200",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=950/330,1400/330,1800/330,0/1000",a_conf);
+  AddLineToArea("stutter=!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,425",a_conf);
+  AddLineToArea("[ru]",a_conf);
+  AddLineToArea("description=Russian Federation / ex Soviet Union",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=425/350,0/350",a_conf);
+  AddLineToArea("ring=425/1000,0/4000",a_conf);
+  AddLineToArea("congestion=425/175,0/175",a_conf);
+  AddLineToArea("callwaiting=425/200,0/5000",a_conf);
+  AddLineToArea("record=1400/400,0/15000",a_conf);
+  AddLineToArea("info=950/330,1400/330,1800/330,0/1000",a_conf);
+  AddLineToArea("dialrecall=425/400,0/40",a_conf);
+  AddLineToArea("stutter=!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,425",a_conf);
+  AddLineToArea("[se]",a_conf);
+  AddLineToArea("description=Sweden",a_conf);
+  AddLineToArea("ringcadence=1000,5000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("busy=425/250,0/250",a_conf);
+  AddLineToArea("ring=425/1000,0/5000",a_conf);
+  AddLineToArea("congestion=425/250,0/750",a_conf);
+  AddLineToArea("callwaiting=425/200,0/500,425/200,0/9100",a_conf);
+  AddLineToArea("dialrecall=!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,425",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=!950/332,!0/24,!1400/332,!0/24,!1800/332,!0/2024,!950/332,!0/24,!1400/332,!0/24,!1800/332,!0/2024,!950/332,!0/24,!1400/332,!0/24,!1800/332,!0/2024,!950/332,!0/24,!1400/332,!0/24,!1800/332,!0/2024,!950/332,!0/24,!1400/332,!0/24,!1800/332,0",a_conf);
+  AddLineToArea("stutter=!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,425",a_conf);
+  AddLineToArea("[sg]",a_conf);
+  AddLineToArea("description=Singapore",a_conf);
+  AddLineToArea("ringcadence=400,200,400,2000",a_conf);
+  AddLineToArea("dial=425",a_conf);
+  AddLineToArea("ring=425*24/400,0/200,425*24/400,0/2000",a_conf);
+  AddLineToArea("busy=425/750,0/750",a_conf);
+  AddLineToArea("congestion=425/250,0/250",a_conf);
+  AddLineToArea("callwaiting=425*24/300,0/200,425*24/300,0/3200",a_conf);
+  AddLineToArea("stutter=!425/200,!0/200,!425/600,!0/200,!425/200,!0/200,!425/600,!0/200,!425/200,!0/200,!425/600,!0/200,!425/200,!0/200,!425/600,!0/200,425",a_conf);
+  AddLineToArea("info=950/330,1400/330,1800/330,0/1000",a_conf);
+  AddLineToArea("dialrecall=425*24/500,0/500,425/500,0/2500",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("nutone=425/2500,0/500",a_conf);
+  AddLineToArea("intrusion=425/250,0/2000",a_conf);
+  AddLineToArea("warning=425/624,0/4376",a_conf);
+  AddLineToArea("acceptance=425/125,0/125",a_conf);
+  AddLineToArea("holdinga=!425*24/500,!0/500",a_conf);
+  AddLineToArea("holdingb=!425/500,!0/2500",a_conf);
+  AddLineToArea("[th]",a_conf);
+  AddLineToArea("description=Thailand",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=400*50",a_conf);
+  AddLineToArea("busy=400/500,0/500",a_conf);
+  AddLineToArea("ring=420/1000,0/5000",a_conf);
+  AddLineToArea("congestion=400/300,0/300",a_conf);
+  AddLineToArea("callwaiting=1000/400,10000/400,1000/400",a_conf);
+  AddLineToArea("dialrecall=400*50/400,0/100,400*50/400,0/100",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=950/330,1400/330,1800/330",a_conf);
+  AddLineToArea("stutter=!400/200,!0/200,!400/600,!0/200,!400/200,!0/200,!400/600,!0/200,!400/200,!0/200,!400/600,!0/200,!400/200,!0/200,!400/600,!0/200,400",a_conf);
+  AddLineToArea("[uk]",a_conf);
+  AddLineToArea("description=United Kingdom",a_conf);
+  AddLineToArea("ringcadence=400,200,400,2000",a_conf);
+  AddLineToArea("dial=350+440",a_conf);
+  AddLineToArea("specialdial=350+440/750,440/750",a_conf);
+  AddLineToArea("busy=400/375,0/375",a_conf);
+  AddLineToArea("congestion=400/400,0/350,400/225,0/525",a_conf);
+  AddLineToArea("specialcongestion=400/200,1004/300",a_conf);
+  AddLineToArea("unobtainable=400",a_conf);
+  AddLineToArea("ring=400+450/400,0/200,400+450/400,0/2000",a_conf);
+  AddLineToArea("callwaiting=400/100,0/4000",a_conf);
+  AddLineToArea("specialcallwaiting=400/250,0/250,400/250,0/250,400/250,0/5000",a_conf);
+  AddLineToArea("creditexpired=400/125,0/125",a_conf);
+  AddLineToArea("confirm=1400",a_conf);
+  AddLineToArea("switching=400/200,0/400,400/2000,0/400",a_conf);
+  AddLineToArea("info=950/330,0/15,1400/330,0/15,1800/330,0/1000",a_conf);
+  AddLineToArea("record=1400/500,0/60000",a_conf);
+  AddLineToArea("stutter=350+440/750,440/750",a_conf);
+  AddLineToArea("[us]",a_conf);
+  AddLineToArea("description=United States / North America",a_conf);
+  AddLineToArea("ringcadence=2000,4000",a_conf);
+  AddLineToArea("dial=350+440",a_conf);
+  AddLineToArea("busy=480+620/500,0/500",a_conf);
+  AddLineToArea("ring=440+480/2000,0/4000",a_conf);
+  AddLineToArea("congestion=480+620/250,0/250",a_conf);
+  AddLineToArea("callwaiting=440/300,0/10000",a_conf);
+  AddLineToArea("dialrecall=!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,350+440",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=!950/330,!1400/330,!1800/330,0",a_conf);
+  AddLineToArea("stutter=!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,350+440",a_conf);
+  AddLineToArea("[us-old]",a_conf);
+  AddLineToArea("description=United States Circa 1950/ North America",a_conf);
+  AddLineToArea("ringcadence=2000,4000",a_conf);
+  AddLineToArea("dial=600*120",a_conf);
+  AddLineToArea("busy=500*100/500,0/500",a_conf);
+  AddLineToArea("ring=420*40/2000,0/4000",a_conf);
+  AddLineToArea("congestion=500*100/250,0/250",a_conf);
+  AddLineToArea("callwaiting=440/300,0/10000",a_conf);
+  AddLineToArea("dialrecall=!600*120/100,!0/100,!600*120/100,!0/100,!600*120/100,!0/100,600*120",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=!950/330,!1400/330,!1800/330,0",a_conf);
+  AddLineToArea("stutter=!600*120/100,!0/100,!600*120/100,!0/100,!600*120/100,!0/100,!600*120/100,!0/100,!600*120/100,!0/100,!600*120/100,!0/100,600*120",a_conf);
+  AddLineToArea("[tw]",a_conf);
+  AddLineToArea("description=Taiwan",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=350+440",a_conf);
+  AddLineToArea("busy=480+620/500,0/500",a_conf);
+  AddLineToArea("ring=440+480/1000,0/2000",a_conf);
+  AddLineToArea("congestion=480+620/250,0/250",a_conf);
+  AddLineToArea("callwaiting=350+440/250,0/250,350+440/250,0/3250",a_conf);
+  AddLineToArea("dialrecall=300/1500,0/500",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=!950/330,!1400/330,!1800/330,0",a_conf);
+  AddLineToArea("stutter=!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,!350+440/100,!0/100,350+440",a_conf);
+  AddLineToArea("[ve]",a_conf);
+  AddLineToArea("description=Venezuela / South America",a_conf);
+  AddLineToArea("ringcadence=1000,4000",a_conf);
+  AddLineToArea("dial=425",a_conf); 
+  AddLineToArea("busy=425/500,0/500",a_conf);
+  AddLineToArea("ring=425/1000,0/4000",a_conf);
+  AddLineToArea("congestion=425/250,0/250",a_conf);
+  AddLineToArea("callwaiting=400+450/300,0/6000",a_conf);
+  AddLineToArea("dialrecall=425",a_conf);
+  AddLineToArea("record=1400/500,0/15000",a_conf);
+  AddLineToArea("info=!950/330,!1440/330,!1800/330,0/1000",a_conf);
+  AddLineToArea("[za]",a_conf);
+  AddLineToArea("description=South Africa",a_conf);
+  AddLineToArea("ringcadence=400,200,400,2000",a_conf);
+  AddLineToArea("dial=400*33",a_conf);
+  AddLineToArea("ring=400*33/400,0/200,400*33/400,0/2000",a_conf);
+  AddLineToArea("callwaiting=400*33/250,0/250,400*33/250,0/250,400*33/250,0/250,400*33/250,0/250",a_conf);
+  AddLineToArea("congestion=400/250,0/250",a_conf);
+  AddLineToArea("busy=400/500,0/500",a_conf);
+  AddLineToArea("dialrecall=350+440",a_conf);
+  AddLineToArea("record=1400/500,0/10000",a_conf);
+  AddLineToArea("info=950/330,1400/330,1800/330,0/330",a_conf);
+  AddLineToArea("stutter=!400*33/100,!0/100,!400*33/100,!0/100,!400*33/100,!0/100,!400*33/100,!0/100,!400*33/100,!0/100,!400*33/100,!0/100,400*33",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+end;
+
+global
+updating procedure CreateLoggerConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/logger.conf";
+  AddLineToArea("[general]",a_conf);
+  AddLineToArea("dateformat=%F %T",a_conf);
+  AddLineToArea("[logfiles]",a_conf);
+  AddLineToArea("console => notice,warning,error",a_conf);
+  AddLineToArea("messages => notice,warning,error",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+end;
+
+
+global
+updating procedure CreateManagerConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  record PBXExtraMngrsBlock PBXExtraMngrsb;
+  row PBXExtraMngrsBlock PBXExtraMngrsrw;
+  area a_conf;
+  string 255 conf_file;
+  Integer i,rwcnt;
+
+  BlockLoad(PBXExtraMngrsb);
+  rwcnt = MatRowCnt(PBXExtraMngrsb);
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/manager.conf";
+  AddLineToArea("[general]",a_conf);
+  AddLineToArea("enabled=yes",a_conf);
+  AddLineToArea("port=" & PBXCr.PBXPort,a_conf);
+  AddLineToArea("bindaddr=0.0.0.0",a_conf);           //##
+  AddLineToArea("allowmultiplelogin=yes",a_conf);
+  AddLineToArea("displayconnects=yes",a_conf);                  
+  AddLineToArea("timestampevents=yes",a_conf);
+  AddLineToArea("[" & AsteriskAMIUser(PBXCr) & "]",a_conf);
+  AddLineToArea("secret=" & AsteriskAMIPassword(PBXCr),a_conf);
+  AddLineToArea("deny=0.0.0.0/0.0.0.0",a_conf);
+  // NOTE: Only IP addresses (no DNS names) can be used in permit statements
+  if (nonblank(PBXCr.PBXHostIP)) then begin
+    AddLineToArea("permit=" & PBXCr.PBXHostIP,a_conf);
+  end;
+  AddLineToArea("permit=127.0.0.1",a_conf);
+  AddLineToArea("permit=" & CurIPAddress,a_conf); // this must be the IP address, not the public hostname
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(PBXExtraMngrsb,i,PBXExtraMngrsrw);
+    AddLineToArea("permit=" & PBXExtraMngrsrw.IP,a_conf);
+  end;
+  AddLineToArea("read=system,call,originate,user,config,agent,all",a_conf);     // all is needed for QueueAdd/QueueRemove
+  AddLineToArea("write=system,call,originate,user,config,command,all",a_conf);  // all is needed for QueueAdd/QueueRemove
+  WriteAreaToFile(a_conf,conf_file,0);
+end;
+
+global
+updating procedure CreateModulesConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file,sip_op,pjsip_op;
+  Boolean use_chan_sipf,use_chan_pjsipf;
+
+  use_chan_sipf = UseChanSIP(PBXCr);
+  use_chan_pjsipf = UseChanPJSIP(PBXCr);
+    
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/modules.conf";
+  
+  if (use_chan_sipf) then begin
+    sip_op = "load";
+  end else begin
+    sip_op = "noload";
+  end;
+  
+  if (use_chan_pjsipf) then begin
+    pjsip_op = "load";
+  end else begin
+    pjsip_op = "noload";
+  end;
+  
+  AddLineToArea("[modules]",a_conf);
+  AddLineToArea("autoload=no",a_conf);
+  AddLineToArea("load = app_bridgewait.so",a_conf);
+  AddLineToArea("load = app_dial.so",a_conf);
+  AddLineToArea("load = app_playback.so",a_conf);
+  AddLineToArea("load = app_stack.so",a_conf);
+  AddLineToArea("load = app_verbose.so",a_conf);
+  AddLineToArea("load = app_directory.so",a_conf);
+  AddLineToArea("load = app_confbridge.so",a_conf);
+  AddLineToArea("load = app_queue.so",a_conf);
+  AddLineToArea("load = bridge_builtin_features.so",a_conf);
+  AddLineToArea("load = bridge_builtin_interval_features.so",a_conf);
+  AddLineToArea("load = bridge_holding.so",a_conf);
+  AddLineToArea("load = bridge_native_rtp.so",a_conf);
+  AddLineToArea("load = bridge_simple.so",a_conf);
+  AddLineToArea("load = bridge_softmix.so",a_conf);
+  AddLineToArea("load = chan_bridge_media.so",a_conf);
+  AddLineToArea("load = chan_pjsip.so",a_conf);
+  AddLineToArea("load = chan_iax2.so",a_conf);
+  AddLineToArea("load = codec_gsm.so",a_conf);
+  AddLineToArea("load = codec_resample.so",a_conf);
+  AddLineToArea("load = codec_ulaw.so",a_conf);
+  AddLineToArea("load = codec_g722.so",a_conf);
+  AddLineToArea("load = format_gsm.so",a_conf);
+  AddLineToArea("load = format_pcm.so",a_conf);
+  AddLineToArea("load = format_wav_gsm.so",a_conf);
+  AddLineToArea("load = format_wav.so",a_conf);
+  AddLineToArea("load = res_format_attr_opus.so",a_conf);
+  AddLineToArea("load = res_crypto.so",a_conf);
+  AddLineToArea("load = codec_opus_open_source.so",a_conf);
+  AddLineToArea("load = codec_alaw.so",a_conf);
+  AddLineToArea("load = res_parking.so",a_conf);
+  AddLineToArea("load = func_jitterbuffer.so",a_conf);
+  AddLineToArea("load = func_speex.so",a_conf);
+  AddLineToArea("load = codec_speex.so",a_conf);
+  AddLineToArea("load = func_callerid.so",a_conf);
+  AddLineToArea("load = func_cdr.so",a_conf);
+  AddLineToArea("load = func_pjsip_endpoint.so",a_conf);
+  AddLineToArea("load = func_sorcery.so",a_conf);
+  AddLineToArea("load = func_devstate.so",a_conf);
+  AddLineToArea("load = func_strings.so",a_conf);
+  AddLineToArea("load = pbx_config.so",a_conf);
+  AddLineToArea("load = res_http_websocket.so",a_conf);
+  AddLineToArea("load = res_musiconhold.so",a_conf);
+  AddLineToArea("load = func_channel.so",a_conf);
+  AddLineToArea("load = app_userevent.so",a_conf);
+  AddLineToArea("load = app_exec.so",a_conf);
+  AddLineToArea("load = res_pjproject.so",a_conf); // required by res_rtp_asterisk.so
+  AddLineToArea(pjsip_op & " = res_pjsip_acl.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_authenticator_digest.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_caller_id.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_dialog_info_body_generator.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_diversion.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_dtmf_info.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_endpoint_identifier_anonymous.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_endpoint_identifier_ip.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_endpoint_identifier_user.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_exten_state.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_header_funcs.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_logger.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_messaging.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_mwi_body_generator.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_mwi.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_nat.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_one_touch_record_info.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_outbound_authenticator_digest.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_outbound_publish.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_outbound_registration.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_path.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_pidf_body_generator.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_pidf_digium_body_supplement.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_pidf_eyebeam_body_supplement.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_publish_asterisk.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_pubsub.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_refer.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_registrar.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_rfc3326.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_sdp_rtp.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_send_to_voicemail.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_session.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_t38.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_transport_websocket.so",a_conf);
+  AddLineToArea(pjsip_op & " = res_pjsip_xpidf_body_generator.so",a_conf);
+  AddLineToArea("load = res_rtp_asterisk.so",a_conf);
+  AddLineToArea("load = res_sorcery_astdb.so",a_conf);
+  AddLineToArea("load = res_sorcery_config.so",a_conf);
+  AddLineToArea("load = res_sorcery_memory.so",a_conf);
+  AddLineToArea("load = res_sorcery_realtime.so",a_conf);
+  AddLineToArea("load = res_timing_timerfd.so",a_conf);
+  AddLineToArea(sip_op & " => chan_sip.so",a_conf);
+
+/* Pre-18.4
+  AddLineToArea("[modules]",a_conf);
+  AddLineToArea("autoload=yes",a_conf);
+  AddLineToArea("load => format_g719.so",a_conf);
+  AddLineToArea("load => format_gsm.so",a_conf);
+  //AddLineToArea("load => format_jpeg.so",a_conf); // Not available in our Asterisk 17.6.0 build
+  AddLineToArea("load => format_siren7.so",a_conf);
+  AddLineToArea("load => format_wav.so",a_conf);
+  AddLineToArea("load => res_format_attr_h264.so",a_conf);
+  AddLineToArea("load => res_format_attr_siren14.so",a_conf);
+  AddLineToArea("load => format_g723.so",a_conf);
+  AddLineToArea("load => format_h263.so",a_conf);
+  //AddLineToArea("load => format_ogg_vorbis.so",a_conf); // Not available in our Asterisk 17.6.0 build
+  AddLineToArea("load => format_sln.so",a_conf);
+  AddLineToArea("load => res_format_attr_celt.so",a_conf);
+  AddLineToArea("load => res_format_attr_ilbc.so",a_conf);
+  AddLineToArea("load => res_format_attr_siren7.so",a_conf);
+  AddLineToArea("load => format_g726.so",a_conf);
+  AddLineToArea("load => format_h264.so",a_conf);
+  AddLineToArea("load => format_pcm.so",a_conf);
+  AddLineToArea("load => format_vox.so",a_conf);
+  AddLineToArea("load => res_format_attr_g729.so",a_conf);
+  AddLineToArea("load => res_format_attr_opus.so",a_conf);
+  AddLineToArea("load => res_format_attr_vp8.so",a_conf);
+  AddLineToArea("load => format_g729.so",a_conf);
+  AddLineToArea("load => format_ilbc.so",a_conf);
+  AddLineToArea("load => format_siren14.so",a_conf);
+  AddLineToArea("load => format_wav_gsm.so",a_conf);
+  AddLineToArea("load => res_format_attr_h263.so",a_conf);
+  AddLineToArea("load => res_format_attr_silk.so",a_conf);
+
+  AddLineToArea("noload => res_odbc.so",a_conf);
+  AddLineToArea("noload => res_config_odbc.so",a_conf);
+  AddLineToArea("noload => res_config_sqlite3.so",a_conf);
+  
+  AddLineToArea("noload => pbx_gtkconsole.so",a_conf);
+  AddLineToArea("noload => chan_alsa.so",a_conf);
+  AddLineToArea("noload => chan_console.so",a_conf);
+  AddLineToArea("noload => res_config_curl.so",a_conf);
+  AddLineToArea("noload => res_config_ldap.so",a_conf);
+  AddLineToArea("noload => res_config_mysql.so",a_conf);
+  AddLineToArea("noload => res_config_pgsql.so",a_conf);
+  AddLineToArea("noload => res_config_sqlite.so",a_conf);
+  AddLineToArea("noload => res_adsi.so",a_conf);
+  AddLineToArea("noload => app_adsiprog.so",a_conf);
+  AddLineToArea("noload => res_ais.so",a_conf);
+  AddLineToArea("noload => res_ael_share.so",a_conf);
+  AddLineToArea("noload => res_agi.so",a_conf);
+  AddLineToArea("noload => app_alarmreceiver.so",a_conf);
+  AddLineToArea("noload => app_amd.so",a_conf);
+  AddLineToArea("noload => res_calendar_ews.so",a_conf);
+  AddLineToArea("noload => app_image.so",a_conf);
+  AddLineToArea("noload => app_ivrdemo.so",a_conf);
+  AddLineToArea("noload => app_macro.so",a_conf);
+  AddLineToArea("noload => app_milliwatt.so",a_conf);
+  AddLineToArea("noload => res_calendar_caldav.so",a_conf);
+  AddLineToArea("noload => res_calendar_icalendar.so",a_conf);
+  AddLineToArea("noload => res_calendar_exchange.so",a_conf);
+  AddLineToArea("noload => app_followme.so",a_conf);
+  AddLineToArea("noload => res_calendar.so",a_conf);
+  AddLineToArea("noload => cdr_custom.so",a_conf);
+  AddLineToArea("load => func_cdr.so",a_conf);
+  AddLineToArea("noload => cdr_manager.so",a_conf);
+  AddLineToArea("noload => cdr_odbc.so",a_conf);
+  AddLineToArea("noload => cdr_syslog.so",a_conf);
+  AddLineToArea("noload => cdr_mysql.so",a_conf);
+  AddLineToArea("noload => cdr_pgsql.so",a_conf);
+  AddLineToArea("noload => cdr_radius.so",a_conf);
+  AddLineToArea("noload => cdr_sqlite.so",a_conf);
+  AddLineToArea("noload => app_ices.so",a_conf);
+  AddLineToArea("noload => cdr_sqlite3_custom.so",a_conf);
+  AddLineToArea("noload => cdr_syslog.so",a_conf);
+  AddLineToArea("noload => cdr_tds.so",a_conf);
+  AddLineToArea("noload => cel_custom.so",a_conf);
+  AddLineToArea("noload => app_controlplayback.so",a_conf);
+  AddLineToArea("noload => app_dahdiras.so",a_conf);
+  AddLineToArea("noload => app_fax.so",a_conf);
+  AddLineToArea("noload => app_getcpeid.so",a_conf);
+  AddLineToArea("noload => app_db.so",a_conf);
+  AddLineToArea("noload => app_dictate.so",a_conf);
+  AddLineToArea("noload => app_disa.so",a_conf);
+  AddLineToArea("noload => app_dumpchan.so",a_conf);
+  AddLineToArea("noload => app_externalivr.so",a_conf);
+  AddLineToArea("noload => app_dahdibarge.so",a_conf);
+  AddLineToArea("load => app_confbridge.so",a_conf);
+  AddLineToArea("noload => app_flash.so",a_conf);
+  AddLineToArea("noload => app_chanspy.so",a_conf);
+  AddLineToArea("noload => app_channelredirect.so",a_conf);
+  AddLineToArea("noload => cel_pgsql.so",a_conf);
+  AddLineToArea("noload => cel_radius.so",a_conf);
+  AddLineToArea("noload => app_playtones.so",a_conf);
+  AddLineToArea("noload => app_readexten.so",a_conf);
+  AddLineToArea("noload => app_readfile.so",a_conf);
+  AddLineToArea("noload => app_record.so",a_conf);
+  AddLineToArea("noload => app_rpt.so",a_conf);
+  AddLineToArea("noload => app_saycountpl.so",a_conf);
+  AddLineToArea("noload => cel_sqlite3_custom.so",a_conf);
+  AddLineToArea("noload => cel_tds.so",a_conf);
+  AddLineToArea("noload => app_chanisavail.so",a_conf);
+  AddLineToArea("noload => app_celgenuserevent.so",a_conf);
+  AddLineToArea("noload => cel_manager.so",a_conf);
+  AddLineToArea("noload => cel_odbc.so",a_conf);
+  AddLineToArea("noload => res_clioriginate.so",a_conf);
+  AddLineToArea("noload => func_enum.so",a_conf);
+  AddLineToArea("noload => app_festival.so",a_conf);
+  AddLineToArea("noload => chan_gtalk.so",a_conf);
+  AddLineToArea("noload => chan_dahdi.so",a_conf);
+  AddLineToArea("noload => app_morsecode.so",a_conf);
+  AddLineToArea("noload => app_nbscat.so",a_conf);
+  AddLineToArea("noload => app_osplookup.so",a_conf);
+  AddLineToArea("noload => app_mysql.so",a_conf);
+  AddLineToArea("noload => app_parkandannounce.so",a_conf);
+  AddLineToArea("noload => app_page.so",a_conf);
+  AddLineToArea("noload => res_http_post.so",a_conf);
+  AddLineToArea("noload => res_jabber.so",a_conf);
+  AddLineToArea("noload => chan_jingle.so",a_conf);
+  AddLineToArea("noload => app_meetme.so",a_conf);
+  AddLineToArea("noload => chan_mgcp.so",a_conf);
+  AddLineToArea("noload => app_minivm.so",a_conf);
+  AddLineToArea("noload => chan_oss.so",a_conf);
+  AddLineToArea("noload => chan_mobile.so",a_conf);
+  AddLineToArea("noload => chan_phone.so",a_conf);
+  AddLineToArea("noload => res_phoneprov.so",a_conf);
+  AddLineToArea("noload => res_curl.so",a_conf);
+  AddLineToArea("noload => res_fax.so",a_conf);
+  AddLineToArea("noload => res_stun_monitor.so",a_conf);
+  AddLineToArea("noload => app_sayunixtime.so",a_conf);
+  AddLineToArea("noload => app_sendtext.so",a_conf);
+  AddLineToArea("noload => app_setcallerid.so",a_conf);
+  AddLineToArea("noload => app_skel.so",a_conf);
+  AddLineToArea("noload => app_sms.so",a_conf);
+  AddLineToArea("noload => app_speech_utils.so",a_conf);
+  AddLineToArea("noload => app_talkdetect.so",a_conf);
+  AddLineToArea("noload => app_test.so",a_conf);
+  AddLineToArea("noload => app_voicemail.so",a_conf);
+  AddLineToArea("noload => app_waitforring.so",a_conf);
+//  AddLineToArea("noload => bridge_builtin_features.so",a_conf);
+//  AddLineToArea("noload => bridge_multiplexed.so",a_conf);
+//  AddLineToArea("noload => bridge_simple.so",a_conf);
+//  AddLineToArea("noload => bridge_softmix.so",a_conf);
+  AddLineToArea("noload => chan_skinny.so",a_conf);
+  AddLineToArea("noload => res_smdi.so",a_conf);
+  AddLineToArea("noload => chan_unistim.so",a_conf);
+  AddLineToArea("noload => res_mutestream.so",a_conf);
+  AddLineToArea("noload => res_pktccops.so",a_conf);
+  AddLineToArea("noload => res_realtime.so",a_conf);
+  AddLineToArea("noload => res_snmp.so",a_conf);
+  AddLineToArea("noload => res_speech.so",a_conf);
+  AddLineToArea("noload => res_timing_kqueue.so",a_conf);
+  AddLineToArea("noload => res_timing_pthread.so",a_conf);
+  AddLineToArea("noload => pbx_ael.so",a_conf);
+  AddLineToArea("noload => pbx_dundi.so",a_conf);
+  AddLineToArea("noload => pbx_loopback.so",a_conf);
+  AddLineToArea("noload => pbx_lua.so",a_conf);
+  AddLineToArea("noload => pbx_realtime.so",a_conf);
+  AddLineToArea("noload => pbx_spool.so",a_conf);
+  AddLineToArea("noload => cdr_odbc.so",a_conf);
+  AddLineToArea("noload => cdr_adaptive_odbc.so",a_conf);
+
+  AddLineToArea("load => res_pjproject.so",a_conf);
+  AddLineToArea("noload => res_prometheus.so",a_conf);
+  
+  if (use_chan_sipf) then begin
+    sip_op = "load";
+  end else begin
+    sip_op = "noload";
+  end;
+  
+  if (use_chan_pjsipf) then begin
+    pjsip_op = "load";
+  end else begin
+    pjsip_op = "noload";
+  end;
+  
+  AddLineToArea(pjsip_op & " => res_pjsip_registrar.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_nat.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_outbound_registration.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_pubsub.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_dlg_options.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_empty_info.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_rfc3326.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_exten_state.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_header_funcs.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_outbound_authenticator_digest.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_endpoint_identifier_ip.so",a_conf);
+  AddLineToArea(pjsip_op & " => func_pjsip_aor.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_sips_contact.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_sdp_rtp.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_logger.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_dialog_info_body_generator.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_outbound_publish.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_dtmf_info.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_path.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_transport_websocket.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_pidf_digium_body_supplement.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_diversion.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_endpoint_identifier_anonymous.so",a_conf);
+  AddLineToArea(pjsip_op & " => chan_pjsip.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_xpidf_body_generator.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_pidf_eyebeam_body_supplement.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_acl.so",a_conf);
+  AddLineToArea(pjsip_op & " => func_pjsip_contact.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_refer.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_publish_asterisk.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_mwi.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_caller_id.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_send_to_voicemail.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_authenticator_digest.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_t38.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_pidf_body_generator.so",a_conf);
+  AddLineToArea(pjsip_op & " => func_pjsip_endpoint.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_mwi_body_generator.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_history.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_endpoint_identifier_user.so",a_conf);
+  AddLineToArea(pjsip_op & " => res_pjsip_session.so",a_conf);
+
+  AddLineToArea(sip_op & " => chan_sip.so",a_conf);
+
+  AddLineToArea("load => res_rtp_asterisk.so",a_conf);
+  AddLineToArea("noload => res_pjsip_messaging.so",a_conf);
+  AddLineToArea("noload => res_pjsip_one_touch_record_info.so",a_conf);
+  AddLineToArea("noload => res_hep.so",a_conf);
+  AddLineToArea("noload => res_hep_pjsip.so",a_conf);
+  AddLineToArea("noload => res_hep_rtcp.so",a_conf);
+  AddLineToArea("noload => res_pjsip_notify.so",a_conf);
+  AddLineToArea("noload => res_pjsip_config_wizard.so",a_conf);
+  AddLineToArea("noload => res_pjsip_phoneprov_provider.so",a_conf);
+  AddLineToArea("load => func_speex.so",a_conf);
+*/
+
+  WriteAreaToFile(a_conf,conf_file,0);
+end;
+
+global
+updating procedure CreateMusicOnHoldConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/musiconhold.conf";
+  AddLineToArea("[general]",a_conf);
+  AddLineToArea("[default]",a_conf);
+  AddLineToArea("mode=files",a_conf);
+  AddLineToArea("directory=" & AsteriskHomeDir(PBXCr,localf) & "/var/lib/asterisk/moh",a_conf);
+  AddLineToArea("[HW]",a_conf);
+  AddLineToArea("mode=files",a_conf);
+  AddLineToArea("directory=" & AsteriskHomeDir(PBXCr,localf) & "/var/lib/asterisk/sounds-moh",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+end;
+
+global
+updating procedure CreateRTPConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/rtp.conf";
+  AddLineToArea("[general]",a_conf);
+  AddLineToArea("rtpstart=10000",a_conf);   //##
+  AddLineToArea("rtpend=20000",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+end;
+
+procedure DefineGenericQueue(area a_conf,record PBXQueueVc PBXQr)
+begin
+  AddLineToArea("[HWQUEUE" & PBXQr.Code & "]",a_conf);
+  AddLineToArea("strategy=ringall",a_conf);
+  //AddLineToArea("joinempty=unavailable,invalid,wrapup",a_conf);
+  AddLineToArea("joinempty=paused,inuse,ringing,unavailable,invalid,wrapup",a_conf);
+  //AddLineToArea("joinempty=yes",a_conf);
+  AddLineToArea("musicclass=HW",a_conf);
+  AddLineToArea("wrapuptime=10",a_conf);
+  AddLineToArea("ringinuse=no",a_conf);
+  //AddLineToArea("leavewhenempty=yes,wrapup",a_conf);
+  AddLineToArea("leavewhenempty=paused,inuse,unavailable,invalid",a_conf);
+  //AddLineToArea("leavewhenempty=no",a_conf);
+  AddLineToArea("timeout=60",a_conf);
+  AddLineToArea("setinterfacevar=yes",a_conf);
+  AddLineToArea("setqueuevar=yes",a_conf);
+  return;
+end;
+
+global
+function Integer MaxAnnaConversations()
+begin
+  Integer res;
+  // TODO: Setting should be in system>settings>configuration (moduleblock)
+  res = 20;
+  MaxAnnaConversations = res;
+  return;
+end;
+
+global
+function string 255 AnnaSIPUserName(record PBXConnectionVc PBXCr,Integer idx)
+begin
+  string 255 res;
+  res = "HWANNA_" & PBXCr.Code & "_USER_" & right("0000" & idx + 1,5);
+  AnnaSIPUserName = res;
+  return;
+end;
+
+function string 255 AnnaQueueName(record PBXConnectionVc PBXCr)
+begin
+  string 255 res;
+  res = "HWQUEUE-ANNA_" & PBXCr.Code;
+  AnnaQueueName = res;
+  return;
+end;
+
+procedure DefineAnnaQueue(area a_conf,record PBXConnectionVc PBXCr)
+begin
+  Integer idx;
+  
+  AddLineToArea("[" & AnnaQueueName(PBXCr) & "]",a_conf);
+  AddLineToArea("strategy=rrmemory",a_conf);
+  AddLineToArea("servicelevel=0",a_conf);
+  AddLineToArea("joinempty=yes",a_conf);
+  AddLineToArea("musicclass=HW",a_conf);
+  AddLineToArea("wrapuptime=0",a_conf);
+  AddLineToArea("autopause=no",a_conf);
+  AddLineToArea("ringinuse=no",a_conf);
+  AddLineToArea("leavewhenempty=no",a_conf);
+  AddLineToArea("timeout=3",a_conf);
+  AddLineToArea("retry=0",a_conf);
+  AddLineToArea("setinterfacevar=yes",a_conf);
+  AddLineToArea("setqueuevar=yes",a_conf);
+  AddLineToArea("announce-frequency=0",a_conf);
+
+  for (idx=0; idx<MaxAnnaConversations; idx = idx + 1) begin
+    AddLineToArea("member => PJSIP/" & AnnaSIPUserName(PBXCr,idx),a_conf);
+  end;
+  
+  return;
+end;
+
+global
+function Boolean PBXConnectionSupportsAnna(record PBXConnectionVc PBXCr,var string password)
+begin
+  Boolean res;
+  record SipTrunk2Vc STr;
+  record PBXIVRTreeVc PBXIVRTreer;
+  Integer idx,rwcnt;
+  row PBXIVRTreeVc PBXIVRTreerw;
+  Boolean testf,test2f,foundf,found2f;
+  record PBXQueueVc PBXQr;
+  
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (testf) then begin
+      ResetLoop(PBXQr);
+      PBXQr.SipTrunk = STr.Code;
+      found2f = true;
+      while (LoopKey("SipTrunk",PBXQr,1,found2f)) begin
+        if (PBXQr.SipTrunk!=STr.Code) then begin found2f = false; end;
+        test2f = found2f;
+        if (PBXQr.Closed!=0) then begin test2f = false; end;
+        if (test2f==true) then begin
+          if (PBXQr.DirectToAnnaFlag!=0 and nonblank(PBXQr.AnnaPassword)) then begin
+            password = PBXQr.AnnaPassword;
+            res = true;
+            goto LPBXConnectionSupportsAnna;
+          end;
+        end;
+      end;
+
+      ResetLoop(PBXIVRTreer);
+      PBXIVRTreer.SipTrunk = STr.Code;
+      found2f = true;
+      while (LoopKey("SipTrunk",PBXIVRTreer,1,found2f)) begin
+        if (PBXIVRTreer.SipTrunk!=STr.Code) then begin found2f = false; end;
+        test2f = found2f;
+        if (PBXIVRTreer.Closed!=0) then begin test2f = false; end;
+        if (test2f==true) then begin
+          rwcnt = MatRowCnt(PBXIVRTreer);
+          for (idx = 0; idx<rwcnt; idx = idx + 1) begin
+            MatRowGet(PBXIVRTreer,idx,PBXIVRTreerw);
+            if (PBXIVRTreerw.AnnaFlag!=0 and nonblank(PBXIVRTreerw.AnnaPassword)) then begin
+              password = PBXIVRTreerw.AnnaPassword;
+              res = true;
+              goto LPBXConnectionSupportsAnna;
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+  
+LPBXConnectionSupportsAnna:;
+  PBXConnectionSupportsAnna = res;
+  return;
+end;
+
+global
+updating procedure CreateQueuesConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file,tstr;
+  record PBXQueueVc PBXQr;
+  record SipTrunk2Vc STr;
+  Boolean testf,foundf,found2f,test2f;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/queues.conf";
+
+  AddLineToArea("[general]",a_conf);
+  AddLineToArea("persistentmembers=yes",a_conf);
+  AddLineToArea("autofill=yes",a_conf);
+  AddLineToArea("monitor-type=MixMonitor",a_conf);
+  AddLineToArea("shared_lastcall=no",a_conf);
+
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (testf) then begin
+      ResetLoop(PBXQr);
+      PBXQr.SipTrunk = STr.Code;
+      found2f = true;
+      while (LoopKey("SipTrunk",PBXQr,1,found2f)) begin
+        if (PBXQr.SipTrunk!=STr.Code) then begin found2f = false; end;
+        test2f = found2f;
+        if (PBXQr.Closed!=0) then begin test2f = false; end;
+        if (test2f==true) then begin
+          if (PBXQr.DirectToAnnaFlag==0) then begin
+            DefineGenericQueue(a_conf,PBXQr);
+          end;
+        end;
+      end;
+    end;
+  end;
+
+  if (PBXConnectionSupportsAnna(PBXCr,tstr)) then begin
+    DefineAnnaQueue(a_conf,PBXCr);
+  end;
+
+  WriteAreaToFile(a_conf,conf_file,0);
+  return;
+end;
+
+function string 255 DefaultSIPTrunk(record PBXConnectionVc PBXCr,string astusername)
+begin
+  string 255 res;
+  record SipTrunk2Vc STr;
+  record UserDefSipTrunkVc UDSTr;
+  Boolean foundf,testf;
+
+  UDSTr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopMain(UDSTr,1,foundf)) begin
+    if (UDSTr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (blank(UDSTr.AstUserName)) then begin
+      res = UDSTr.SipTrunk;
+    end;
+    if (UDSTr.AstUserName==astusername) then begin
+      res = UDSTr.SipTrunk;
+      goto LDefaultSIPTrunk;
+    end;
+  end;
+
+  if (nonblank(res)) then begin goto LDefaultSIPTrunk; end;
+  
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (STr.Type!=kAsteriskTrunkTypeOutbound) then begin testf = false; end;
+    if (testf) then begin
+      res = STr.Code;
+      goto LDefaultSIPTrunk;
+    end;
+  end;
+  
+LDefaultSIPTrunk:;
+  DefaultSIPTrunk = res;
+  return;
+end;
+
+procedure AddOneUserToPJSIPConf(record PBXConnectionVc PBXCr,string UserName,string Password,string CallerIdName,string CallerIdNumber,area a_conf)
+begin
+  string 255 defsiptrunk;
+  
+  AddLineToArea("[" & UserName & "](HW_USERS)",a_conf);
+  AddLineToArea("secret=" & Password,a_conf);
+  //AddLineToArea("callerid=""" & CallerIdName & """ <" & CallerIdNumber & ">",a_conf);
+  AddLineToArea("callerid=""" & CallerIdName & """ <" & UserName & ">",a_conf);
+
+  AddLineToArea("[" & UserName & "](HW_USERS)",a_conf);
+  AddLineToArea("type=endpoint",a_conf);
+  AddLineToArea("auth=" & UserName,a_conf);
+  AddLineToArea("aors=" & UserName,a_conf);
+  //AddLineToArea("callerid=\"" & CallerIdName & "\" <" & CallerIdNumber & ">",a_conf);
+  AddLineToArea("callerid=\"" & CallerIdName & "\" <" & UserName & ">",a_conf);
+  AddLineToArea("context=HW_EXTENSIONS",a_conf);
+  AddLineToArea("set_var=IAXVAR(HW_IAX_SOURCE)=HW_NOT_IAX",a_conf);
+
+  defsiptrunk = DefaultSIPTrunk(PBXCr,UserName);
+  if (nonblank(defsiptrunk)) then begin
+    AddLineToArea("set_var=DIALCOUNTRY=HW_SIPTRUNK_" & defsiptrunk,a_conf);
+  end;
+
+  AddLineToArea("[" & UserName & "](HW_USERS_AORS)",a_conf);
+  AddLineToArea("type=aor",a_conf);
+  
+  AddLineToArea("[" & UserName & "]",a_conf);
+  AddLineToArea("type=auth",a_conf);
+  AddLineToArea("auth_type=userpass",a_conf);
+  AddLineToArea("password=" & Password,a_conf);
+  AddLineToArea("username=" & UserName,a_conf);
+
+  return;
+end;
+
+procedure AddOneUserToSIPConf(string UserName,string Password,string CallerIdName,string CallerIdNumber,area a_conf)
+begin
+  AddLineToArea("[" & UserName & "](HW_USERS)",a_conf);
+  AddLineToArea("secret=" & Password,a_conf);
+  //AddLineToArea("callerid=""" & CallerIdName & """ <" & CallerIdNumber & ">",a_conf);
+  AddLineToArea("callerid=""" & CallerIdName & """ <" & UserName & ">",a_conf);
+  return;
+end;
+
+procedure AddOneUserToConf(record PBXConnectionVc PBXCr,Boolean pjsipf,string UserName,string Password,string CallerIdName,string CallerIdNumber,area a_conf)
+begin
+  if (pjsipf) then begin
+    AddOneUserToPJSIPConf(PBXCr,UserName,Password,CallerIdName,CallerIdNumber,a_conf);
+  end else begin
+    AddOneUserToSIPConf(UserName,Password,CallerIdName,CallerIdNumber,a_conf);
+  end;
+  return;
+end;
+
+procedure AddUsersToConf(record PBXConnectionVc PBXCr,Boolean pjsipf,area a_conf)
+begin
+  record AsteriskUser2Vc AsteriskUserr;
+  record UserVc Userr;
+  record GlobalUserVc GUserr;
+  string 255 tstr,password;
+  LongInt pos;
+  Integer idx;
+  Boolean testf;
+  vector Boolean uservec;
+
+  while (LoopMain(AsteriskUserr,1,true)) begin
+    testf = false;
+    if (AsteriskUserr.Closedf==0) then begin
+      if (blank(AsteriskUserr.PBXConnection)) then begin testf = true; end;
+      pos = 0;
+      while (GetNextSubstring(AsteriskUserr.PBXConnection,pos,",",tstr)) begin
+        if ((tstr==PBXCr.Code) or (PBXCr.AllUsersFlag!=0)) then begin
+          if (IsValidPBXConnection(tstr)) then begin
+            testf = true;
+          end;
+        end;
+      end;
+    end;
+    if (testf) then begin
+      if (uservec[AsteriskUserr.UserName]==false) then begin
+        AddOneUserToConf(PBXCr,pjsipf,AsteriskUserr.UserName,AsteriskUserr.Password,AsteriskUserr.CallerIdName,AsteriskUserr.CallerIdNumber,a_conf);
+        uservec[AsteriskUserr.UserName] = true;
+      end;
+    end;
+  end;
+  while (LoopMain(GUserr,1,true)) begin
+    testf = false;
+    if (GUserr.Closed==0) then begin
+      if (blank(GUserr.AstPBXConnection)) then begin testf = true; end;
+      pos = 0;
+      while (GetNextSubstring(GUserr.AstPBXConnection,pos,",",tstr)) begin
+        if ((tstr==PBXCr.Code) or (PBXCr.AllUsersFlag!=0)) then begin
+          if (IsValidPBXConnection(tstr)) then begin
+            testf = true;
+          end;
+        end;
+      end;
+    end;
+    if (blank(GUserr.AstUserName)) then begin testf = false; end;
+    if (testf) then begin
+      if (uservec[GUserr.AstUserName]==false) then begin
+        AddOneUserToConf(PBXCr,pjsipf,GUserr.AstUserName,GUserr.AstPassword,GUserr.Name,GUserr.AstCallerIdNumber,a_conf);
+        uservec[GUserr.AstUserName] = true;
+      end;
+    end;
+  end;
+  while (LoopMain(Userr,1,true)) begin
+    testf = false;
+    if (Userr.Closed==0) then begin
+      if (blank(Userr.AstPBXConnection)) then begin testf = true; end;
+      pos = 0;
+      while (GetNextSubstring(Userr.AstPBXConnection,pos,",",tstr)) begin
+        if ((tstr==PBXCr.Code) or (PBXCr.AllUsersFlag!=0)) then begin
+          if (IsValidPBXConnection(tstr)) then begin
+            testf = true;
+          end;
+        end;
+      end;
+    end;
+    if (blank(Userr.AstUserName)) then begin testf = false; end;
+    if (testf) then begin
+      if (uservec[Userr.AstUserName]==false) then begin
+        AddOneUserToConf(PBXCr,pjsipf,Userr.AstUserName,Userr.AstPassword,Userr.Name,Userr.AstCallerIdNumber,a_conf);
+        uservec[Userr.AstUserName] = true;
+      end;
+    end;
+  end;
+
+  if (PBXConnectionSupportsAnna(PBXCr,password)) then begin
+    for (idx=0; idx<MaxAnnaConversations; idx = idx + 1) begin
+      AddOneUserToConf(PBXCr,pjsipf,AnnaSIPUserName(PBXCr,idx),password,"Anna the Bot","",a_conf);
+    end;
+  end;
+
+  return;
+end;
+
+global
+updating procedure CreatePJSIPConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file,tstr,username;
+  Boolean foundf,testf;
+  record SipTrunk2Vc STr;
+  row SipTrunk2Vc STrw;
+  Integer i,rwcnt;
+  LongInt pos;
+
+  if (UseChanPJSIP(PBXCr)==false) then begin
+    goto LCreatePJSIPConf;
+  end;
+  
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/pjsip.conf";
+
+  AddLineToArea("[global]",a_conf);
+  AddLineToArea("type=global",a_conf);
+  AddLineToArea("user_agent=Asterisk PBX 18 - StandardERP Configuration",a_conf);
+
+  tstr = DefaultSIPTrunk(PBXCr,"");
+  if (nonblank(tstr)) then begin
+    AddLineToArea("default_outbound_endpoint=HW_SIPTRUNK_" & tstr,a_conf);
+  end;
+  
+  AddLineToArea("[transport-udp]",a_conf);
+  AddLineToArea("type=transport",a_conf);
+  AddLineToArea("protocol=udp",a_conf);
+  AddLineToArea("bind=0.0.0.0",a_conf);
+  AddLineToArea("external_media_address=" & PBXCr.PBXHostIP,a_conf);
+  AddLineToArea("external_signaling_address=" & PBXCr.PBXHostIP,a_conf);
+
+  AddLineToArea("[transport-udp-ipv6]",a_conf);
+  AddLineToArea("type=transport",a_conf);
+  AddLineToArea("protocol=udp",a_conf);
+  AddLineToArea("bind=::",a_conf);
+  
+  //AddLineToArea("[transport-tls]",a_conf);
+  //AddLineToArea("type=transport",a_conf);
+  //AddLineToArea("protocol=tls",a_conf);
+  //AddLineToArea("bind=0.0.0.0",a_conf);
+  //AddLineToArea("cert_file=...",a_conf);
+  //AddLineToArea("priv_key_file=...",a_conf);
+  //AddLineToArea("cipher=ADH-AES256-SHA,ADH-AES128-SHA",a_conf);
+  //AddLineToArea("method=tlsv1",a_conf);
+
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (testf) then begin
+      AddLineToArea("[HW_SIPTRUNK_" & STr.Code & "]",a_conf);
+      AddLineToArea("type=endpoint",a_conf);
+      if (nonblank(STr.Proxy)) then begin
+        AddLineToArea("outbound_proxy=sip:" & STr.Proxy & "\\;lr",a_conf);
+      end;
+      AddLineToArea("aors=HW_SIPTRUNK_" & STr.Code,a_conf);
+      AddLineToArea("outbound_auth=HW_SIPTRUNK_" & STr.Code & "_AUTH",a_conf);
+      AddLineToArea("context=HW_INBOUND",a_conf);
+      AddLineToArea("transport=transport-udp",a_conf);
+      if (blank(STr.FromUser)) then begin
+        AddLineToArea("from_user=" & STr.Username,a_conf);
+      end else begin
+        AddLineToArea("from_user=" & STr.FromUser,a_conf);
+      end;
+      if (nonblank(STr.Domain)) then begin
+        AddLineToArea("from_domain=" & Trim(STr.Domain),a_conf);
+      end;
+      //AddLineToArea("disallow=all",a_conf);
+      AddLineToArea("allow=alaw",a_conf);
+      AddLineToArea("allow=ulaw",a_conf);
+      //AddLineToArea("allow=opus",a_conf);
+      if (nonblank(STr.Domain)) then begin
+        AddLineToArea("[HW_SIPTRUNK_" & STr.Code & "]",a_conf);
+        AddLineToArea("type=aor",a_conf);
+        if (nonblank(STr.Proxy)) then begin
+          AddLineToArea("outbound_proxy=sip:" & STr.Proxy & "\\;lr",a_conf);
+        end;
+        AddLineToArea("contact=sip:" & STr.Domain,a_conf);
+        AddLineToArea("qualify_frequency=120",a_conf);
+      end;
+      AddLineToArea("[HW_SIPTRUNK_" & STr.Code & "_AUTH]",a_conf);
+      AddLineToArea("type=auth",a_conf);
+      AddLineToArea("auth_type=userpass",a_conf);
+      if (nonblank(STr.Username)) then begin
+        AddLineToArea("username=" & STr.Username,a_conf);
+      end else begin
+        AddLineToArea("username=" & STr.FromUser,a_conf);
+      end;
+      AddLineToArea("password=" & STr.Password,a_conf);
+      
+      if (STr.Type==kAsteriskTrunkTypeOutbound) then begin
+        rwcnt = MatRowCnt(STr);
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(STr,i,STrw);
+          username = STrw.AuthUsername;
+          if (blank(username)) then begin username = STrw.Username; end;
+          if (nonblank(username)) then begin
+            AddLineToArea("[HW_SIPTRUNK_" & STr.Code & "_REG_" & i & "_AUTH]",a_conf);
+            AddLineToArea("type=auth",a_conf);
+            AddLineToArea("auth_type=userpass",a_conf);
+            AddLineToArea("username=" & username,a_conf);
+            AddLineToArea("password=" & STrw.Password,a_conf);
+          end;
+          AddLineToArea("[HW_SIPTRUNK_" & STr.Code & "_REG_" & i & "]",a_conf);
+          AddLineToArea("type=registration",a_conf);
+          if (nonblank(STr.Proxy)) then begin
+            AddLineToArea("outbound_proxy=sip:" & STr.Proxy & "\\;lr",a_conf);
+          end;
+          AddLineToArea("auth_rejection_permanent=no",a_conf);
+          AddLineToArea("retry_interval=1",a_conf);
+          AddLineToArea("forbidden_retry_interval=300",a_conf);
+          AddLineToArea("max_retries=120",a_conf);
+
+          AddLineToArea("transport=transport-udp",a_conf);
+          if (nonblank(username)) then begin
+            AddLineToArea("outbound_auth=HW_SIPTRUNK_" & STr.Code & "_REG_" & i & "_AUTH",a_conf);
+          end else begin
+            AddLineToArea("outbound_auth=HW_SIPTRUNK_" & STr.Code & "_AUTH",a_conf);
+          end;
+          AddLineToArea("server_uri=sip:" & STrw.Domain,a_conf);
+          AddLineToArea("client_uri=sip:" & STrw.Username & "@" & STrw.Domain,a_conf);
+          AddLineToArea("contact_user=" & STrw.Username,a_conf);
+          AddLineToArea("[HW_SIPTRUNK_" & STr.Code & "_REG_" & i & "_AOR]",a_conf);
+          AddLineToArea("type=aor",a_conf);
+          if (nonblank(STr.Proxy)) then begin
+            AddLineToArea("outbound_proxy=sip:" & STr.Proxy & "\\;lr",a_conf);
+          end;
+          AddLineToArea("contact=sip:" & STrw.Domain,a_conf);
+          AddLineToArea("qualify_frequency=120",a_conf);
+          AddLineToArea("[HW_SIPTRUNK_" & STr.Code & "_REG_" & i & "_ENDPOINT]",a_conf);
+          AddLineToArea("type=endpoint",a_conf);
+          if (nonblank(STr.Proxy)) then begin
+            AddLineToArea("outbound_proxy=sip:" & STr.Proxy & "\\;lr",a_conf);
+          end;
+          AddLineToArea("transport=transport-udp",a_conf);
+          AddLineToArea("context=HW_INBOUND",a_conf);
+          AddLineToArea("disallow=all",a_conf);
+          AddLineToArea("allow=alaw",a_conf);
+          AddLineToArea("allow=ulaw",a_conf);
+          if (nonblank(username)) then begin
+            AddLineToArea("outbound_auth=HW_SIPTRUNK_" & STr.Code & "_REG_" & i & "_AUTH",a_conf);
+          end else begin
+            AddLineToArea("outbound_auth=HW_SIPTRUNK_" & STr.Code & "_AUTH",a_conf);
+          end;
+          AddLineToArea("aors=HW_SIPTRUNK_" & STr.Code & "_REG_" & i & "_AOR",a_conf);
+          AddLineToArea("[HW_SIPTRUNK_" & STr.Code & "_REG_" & i & "_IDENTIFY]",a_conf);
+          AddLineToArea("type=identify",a_conf);
+          AddLineToArea("match=" & STrw.Domain,a_conf);
+          AddLineToArea("endpoint=HW_SIPTRUNK_" & STr.Code & "_REG_" & i & "_ENDPOINT",a_conf);
+        end;
+      end;
+      if (nonblank(STr.AllowedIPs)) then begin
+        AddLineToArea("[HW_SIPTRUNK_" & STr.Code & "_IDENTIFY]",a_conf);
+        AddLineToArea("type=identify",a_conf);
+        AddLineToArea("endpoint=HW_SIPTRUNK_" & STr.Code,a_conf);
+        pos = 0;
+        while (GetNextSubstring(STr.AllowedIPs,pos,",",tstr)) begin
+          AddLineToArea("match=" & tstr,a_conf);
+        end;
+      end;
+    end;
+  end;
+  
+  AddLineToArea("[HW_USERS]",a_conf);
+  AddLineToArea("from_domain=" & PBXCr.PBXHostIP,a_conf);
+  AddLineToArea("transport=transport-udp",a_conf);
+  AddLineToArea("set_var=IAXVAR(HW_IAX_SOURCE)=HW_NOT_IAX",a_conf);
+  //AddLineToArea("disallow=all",a_conf);
+  AddLineToArea("allow=opus",a_conf);
+  AddLineToArea("allow=alaw",a_conf);
+  AddLineToArea("allow=ulaw",a_conf);
+  AddLineToArea("direct_media=no",a_conf);
+  AddLineToArea("rtp_symmetric=yes",a_conf);
+  AddLineToArea("force_rport=yes",a_conf);
+  AddLineToArea("rewrite_contact=yes",a_conf);
+  AddLineToArea("ice_support=no",a_conf); // maybe we need this to be on - but if so, we should turn it off for the Anna users
+  
+  AddLineToArea("[HW_USERS_AORS]",a_conf);
+  AddLineToArea("max_contacts=1",a_conf);
+  AddLineToArea("remove_existing=yes",a_conf);
+  AddLineToArea("qualify_frequency=120",a_conf);
+
+  AddUsersToConf(PBXCr,true,a_conf);
+  
+  WriteAreaToFile(a_conf,conf_file,0);
+
+LCreatePJSIPConf:;
+  return;
+end;
+
+global
+updating procedure CreateSIPConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+  record SipTrunk2Vc STr;
+  row SipTrunk2Vc STrw;
+  Boolean foundf,testf,test2f;
+  Integer i,rwcnt;
+  record AsteriskUser2Vc AsteriskUserr;
+  record UserVc Userr;
+  record GlobalUserVc GUserr;
+  string 255 tstr;
+  LongInt pos;
+  vector Boolean uservec;
+
+  if (UseChanSIP(PBXCr)==false) then begin
+    goto LCreateSIPConf;
+  end;
+  
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/sip.conf";
+  AddLineToArea("[general]",a_conf);
+  AddLineToArea("tos_sip=cs3",a_conf);
+  AddLineToArea("tos_audio=ef",a_conf);
+  AddLineToArea("tos_video=af41",a_conf);
+  AddLineToArea("tos_text=af41",a_conf);
+  AddLineToArea("context=HW_INBOUND",a_conf);
+  AddLineToArea("srvlookup=yes",a_conf);
+  AddLineToArea("defaultexpirey=300",a_conf);
+  AddLineToArea("allowoverlap=yes",a_conf);
+  AddLineToArea("dtmfmode=auto",a_conf);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  test2f = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (STr.Type!=kAsteriskTrunkTypeOutbound) then begin testf = false; end;
+    if (testf) then begin
+      if (STr.AllowGuestf) then begin test2f = false; end;
+    end;
+  end;
+  if (test2f) then begin
+    AddLineToArea("allowguest=no",a_conf);
+  end;
+  AddLineToArea("bindport=5060",a_conf);
+  AddLineToArea("bindaddr=0.0.0.0",a_conf);
+  AddLineToArea("externip=" & PBXCr.PBXHostIP,a_conf);
+  AddLineToArea("realm=" & PBXCr.PBXHost,a_conf);
+  AddLineToArea("localnet=127.0.0.1",a_conf);
+  AddLineToArea("udpbindaddr=0.0.0.0",a_conf);
+  AddLineToArea("tcpbindaddr=0.0.0.0",a_conf);
+  AddLineToArea("tcpenable=yes",a_conf);
+  AddLineToArea("videosupport=no",a_conf);
+  AddLineToArea("directmedia=no",a_conf);
+  AddLineToArea("autodomain=no",a_conf);
+  AddLineToArea("allowexternaldomains=yes",a_conf);
+  AddLineToArea("disallow=all",a_conf);
+  //AddLineToArea("allow=ulaw",a_conf);
+  //AddLineToArea("allow=gsm",a_conf);
+  //AddLineToArea("allow=g729",a_conf);
+  AddLineToArea("allow=opus",a_conf);
+  AddLineToArea("allow=alaw",a_conf);
+  AddLineToArea("mohinterpret=default",a_conf);
+  AddLineToArea("mohsuggest=default",a_conf);
+  AddLineToArea("musicclass=default",a_conf);
+  AddLineToArea("callevents=yes",a_conf);
+  AddLineToArea("authfailureevents=yes",a_conf);
+  AddLineToArea("forwardloopdetected=yes",a_conf);
+  AddLineToArea("notifyringing=no",a_conf);
+  AddLineToArea("busylevel=2",a_conf);
+  AddLineToArea("callcounter=yes",a_conf);
+  AddLineToArea("alwaysauthreject=yes",a_conf);
+  AddLineToArea("canreinvite=no",a_conf);
+  AddLineToArea("nat=force_rport,comedia",a_conf);
+  AddLineToArea("rtcachefriends=yes",a_conf);
+  AddLineToArea("rtsavesysname=yes",a_conf);
+  AddLineToArea("rtupdate=yes",a_conf);
+  AddLineToArea("rtautoclear=yes",a_conf);
+  //AddLineToArea("subscribecontext=hints",a_conf);
+
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (STr.Type!=kAsteriskTrunkTypeOutbound) then begin testf = false; end;
+    if (testf) then begin
+      rwcnt = MatRowCnt(STr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(STr,i,STrw);
+        tstr = "register => " & STrw.Username & ":" & STrw.Password;
+        if (nonblank(STrw.AuthUsername)) then begin
+          tstr = tstr & ":" & STrw.AuthUsername;
+        end;
+        tstr = tstr & "@" & STrw.Domain;
+        if (nonblank(STrw.Extension)) then begin
+          tstr = tstr & "/" & STrw.Extension;
+        end;
+        AddLineToArea(tstr,a_conf);
+      end;
+    end;
+  end;
+
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (testf) then begin
+      if (nonblank(STr.TalkBotHost)) then begin
+        AddLineToArea("[HW_TALKBOT_SIPTRUNK_" & STr.Code & "]",a_conf);
+        AddLineToArea("context=HW_EXTENSIONS",a_conf);
+        AddLineToArea("type=friend",a_conf);
+        AddLineToArea("canreinvite=yes",a_conf);
+        AddLineToArea("defaultuser=" & STr.TalkBotUser,a_conf);
+        AddLineToArea("host=" & STr.TalkBotHost,a_conf);
+        AddLineToArea("disallow=all",a_conf);
+        AddLineToArea("allow=ulaw",a_conf);
+        AddLineToArea("allow=opus",a_conf);
+      end;
+    end;
+
+    if (STr.IAXf!=0) then begin testf = false; end; // Because this means it is an IAX trunk, not SIP
+    
+    if (testf) then begin
+      AddLineToArea("[HW_SIPTRUNK_" & STr.Code & "]",a_conf);
+      if (STr.Type==kAsteriskTrunkTypeOutbound) then begin
+        AddLineToArea("type=peer",a_conf); // peer == outbound
+      end else begin
+        AddLineToArea("type=friend",a_conf); // friend == outbound + inbound
+      end;
+      AddLineToArea("context=HW_INBOUND ",a_conf);
+      if (blank(STr.FromUser)) then begin
+        AddLineToArea("defaultuser=" & STr.Username,a_conf);    // username,defaultuser, same thing, username for "fromdomain" and "secret"
+        AddLineToArea("fromuser=" & STr.Username,a_conf);    // username,defaultuser, same thing, username for "fromdomain" and "secret"
+      end else begin
+        AddLineToArea("defaultuser=" & STr.Username,a_conf);
+        AddLineToArea("fromuser=" & STr.FromUser,a_conf);
+      end;
+      AddLineToArea("secret=" & STr.Password,a_conf);         // secret, new name is remotesecret
+      if (nonblank(STr.Domain)) then begin
+        AddLineToArea("fromdomain=" & STr.Domain,a_conf);
+      end;
+      AddLineToArea("canreinvite=no ",a_conf);
+      AddLineToArea("disallow=all ",a_conf); 
+      AddLineToArea("allow=alaw ",a_conf);
+      AddLineToArea("nat=force_rport,comedia",a_conf);
+      if (nonblank(STr.Insecure)) then begin
+        AddLineToArea("insecure=" & STr.Insecure,a_conf);
+      end else begin
+        AddLineToArea("insecure=port,invite",a_conf);
+      end;
+      if (nonblank(STr.Domain)) then begin
+        AddLineToArea("realm=" & STr.Domain,a_conf);
+      end;
+      AddLineToArea("qualify=yes",a_conf);
+      if (STr.AllowGuestf) then begin
+        AddLineToArea("allowguest=yes",a_conf);
+      end else begin
+        AddLineToArea("allowguest=no",a_conf);
+      end;
+      if (nonblank(STr.AllowedIPs)) then begin
+        AddLineToArea("deny=0.0.0.0/0.0.0.0",a_conf);
+        pos = 0;
+        while (GetNextSubstring(STr.AllowedIPs,pos,",",tstr)) begin
+          AddLineToArea("permit=" & tstr,a_conf);
+        end;
+      end;
+
+      if (nonblank(STr.Host)) then begin
+        pos = 0;
+        i = 0;
+        while (GetNextSubstring(STr.Host,pos,",",tstr)) begin
+          if (i>0) then begin
+            AddLineToArea("[HW_SIPTRUNK_" & STr.Code & "-" & Right("0" & i,2) & "](HW_SIPTRUNK_" & STr.Code & ")",a_conf);
+          end;
+          AddLineToArea("host=" & tstr,a_conf);
+          i = i + 1;
+        end;
+      end;
+
+    end;
+  end;
+
+  AddLineToArea("[basic-options](!)",a_conf);
+  AddLineToArea("type=friend",a_conf);
+  AddLineToArea("host=dynamic",a_conf);
+//  AddLineToArea("qualify=yes",a_conf);
+  AddLineToArea("qualify=5000",a_conf); // default is 2s, we allow longer
+  AddLineToArea("transport=udp",a_conf);
+  AddLineToArea("callcounter=yes",a_conf);
+  AddLineToArea("notifyringing=no",a_conf);
+  AddLineToArea("busylevel=3",a_conf);
+  AddLineToArea("[HW_USERS](!,basic-options)",a_conf);
+  AddLineToArea("context=HW_EXTENSIONS",a_conf);
+  AddLineToArea("setvar=IAXVAR(HW_IAX_SOURCE)=HW_NOT_IAX",a_conf);
+  AddLineToArea("nat=force_rport,comedia",a_conf);
+  //AddLineToArea("qualifyfreq=10",a_conf);
+
+  AddUsersToConf(PBXCr,false,a_conf);
+
+  WriteAreaToFile(a_conf,conf_file,0);
+  
+LCreateSIPConf:;
+  return;
+end;
+
+function string 255 AstMonthName(Integer monthno)
+begin
+  string 255 res;
+  switch (monthno) begin
+    case 1:  res = "jan";
+    case 2:  res = "feb";
+    case 3:  res = "mar";
+    case 4:  res = "apr";
+    case 5:  res = "may";
+    case 6:  res = "jun";
+    case 7:  res = "jul";
+    case 8:  res = "aug";
+    case 9:  res = "sep";
+    case 10: res = "oct";
+    case 11: res = "nov";
+    case 12: res = "dec";
+  end;
+  AstMonthName = res;
+  return;
+end;
+
+updating procedure AddBankHolidays(string qcode,string company,area a_conf)
+begin
+  record CYBlock CYb;
+  record BHollVc BHollr;
+  Integer oldcomp,compno,i;
+  Date d,dp;
+  string 4 daystr;
+
+  compno = StringToLongInt(company);
+  oldcomp = CurrentCompany;
+  dp = CurrentDate;
+  if (company!="" and compno>-1) then begin
+    SetCompany(compno,false);
+  end;
+  BlockLoad(CYb);
+  RecordClear(BHollr);
+  ResetLoop(BHollr);
+  BHollr.CountryCode = CYb.CountryCode;
+  if (ReadFirstMain(BHollr,1,true)) then begin
+    for (i = 0;i<365;i=i+1) begin
+      d = AddDay(dp,i);
+      if (IsBankHoliday(BHollr,0,d)) then begin
+        AddLineToArea(",GotoIfTime(*,*," & d.day & "," & AstMonthName(d.month) & "?" & qcode & ")",a_conf);
+        AddTextToArea("same => n",a_conf);
+      end;
+    end;
+  end;
+  ResetCompany(oldcomp);
+  return;
+end;
+
+function string 255 AnnaQueueContextName(record PBXConnectionVc PBXCr)
+begin
+  string 255 res;
+  res = "HW_Q-ANNA_" & PBXCr.Code;
+  AnnaQueueContextName = res;
+  return;
+end;
+
+global
+updating procedure CreateExtensionsConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+  record PBXQueueVc PBXQr;
+  record SipTrunk2Vc STr,ST2r;
+  record PBXConnectionVc PBXC2r;
+  record AsteriskUser2Vc AsteriskUserr;
+  record UserVc Userr;
+  record GlobalUserVc GUserr;
+  record PBXIVRTreeVc PBXIVRTreer,PBXIVRTree2r;
+  row PBXIVRTreeVc PBXIVRTreerw;
+  row SipTrunk2Vc STrw;
+  Boolean foundf,testf,found2f,test2f,test3f,notfirstf;
+  Integer i,rwcnt;
+  LongInt pos;
+  string 255 tstr,chanstr;
+  vector Boolean stextvec;
+  vector Boolean ivrqvec;
+
+  if (UseChanPJSIP(PBXCr)) then begin
+    chanstr = "PJSIP/"; // Maybe "Local/" would work for both?
+  end else begin
+    chanstr = "SIP/";
+  end;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/extensions.conf";
+  AddLineToArea("[general]",a_conf);
+  AddLineToArea("static=yes",a_conf);
+  AddLineToArea("writeprotect=yes",a_conf);
+  AddLineToArea("autofallthrough=yes",a_conf);
+  AddLineToArea("clearglobalvars=no",a_conf);
+  AddLineToArea("priorityjumping=yes",a_conf);
+  AddLineToArea("userscontext=hwusers",a_conf);
+  AddLineToArea("[globals]",a_conf);
+
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (testf) then begin
+      if (STr.IAXf) then begin
+        if (blank(STr.FromUser)) then begin
+          AddLineToArea("HW_SIPTRUNKVAR_" & STr.Code & "=IAX2/" & STr.Username,a_conf);
+        end else begin
+          AddLineToArea("HW_SIPTRUNKVAR_" & STr.Code & "=IAX2/" & STr.FromUser,a_conf);
+        end;
+      end else begin
+        //AddLineToArea("HW_SIPTRUNKVAR_" & STr.Code & "=" & chanstr & "HW_SIPTRUNK_" & STr.Code,a_conf);
+        AddLineToArea("HW_SIPTRUNKVAR_" & STr.Code & "=HW_SIPTRUNK_" & STr.Code,a_conf);
+      end;
+    end;
+  end;
+
+  AddLineToArea("[HW_IAX_CTX]",a_conf);
+  AddLineToArea("include => HW_BASICS",a_conf);
+  AddLineToArea("include => HW_FUNCTIONS",a_conf);
+  AddLineToArea("include => HW_TRUNK",a_conf);
+  AddLineToArea("include => HW_QUEUE_MANAGEMENT",a_conf);
+  AddLineToArea("[HansaWorld]",a_conf);
+  AddLineToArea("include => HW_BASICS",a_conf);
+  AddLineToArea("include => HW_IAX_CTX",a_conf);
+  AddLineToArea("include => HW_PARKED_CALLS",a_conf);
+  AddLineToArea("include => HW_QUEUE_MANAGEMENT",a_conf);
+/*
+  AddLineToArea("[hints]",a_conf);
+
+  while (LoopMain(AsteriskUserr,1,true)) begin
+    test3f = false;
+    if (AsteriskUserr.Closedf==0) then begin
+      if (blank(AsteriskUserr.PBXConnection)) then begin test3f = true; end;
+      pos = 0;
+      while (GetNextSubstring(AsteriskUserr.PBXConnection,pos,",",tstr)) begin
+        if (tstr==PBXCr.Code) then begin
+          if (IsValidPBXConnection(tstr)) then begin
+            test3f = true;
+          end;
+        end;
+      end;
+      if (test3f) then begin
+        if (uservec[AsteriskUserr.UserName]==false) then begin
+          AddLineToArea("exten => " & AsteriskUserr.UserName & ",hint," & chanstr & AsteriskUserr.UserName,a_conf);
+          uservec[AsteriskUserr.UserName] = true;
+        end;
+      end;
+    end;
+  end;
+  while (LoopMain(GUserr,1,true)) begin
+    test3f = false;
+    if (GUserr.Closed==0) then begin
+      if (blank(GUserr.AstPBXConnection)) then begin test3f = true; end;
+      pos = 0;
+      while (GetNextSubstring(GUserr.AstPBXConnection,pos,",",tstr)) begin
+        if (tstr==PBXCr.Code) then begin
+          if (IsValidPBXConnection(tstr)) then begin
+            test3f = true;
+          end;
+        end;
+      end;
+      if (blank(GUserr.AstUserName)) then begin
+        test3f = false;
+      end;
+      if (test3f) then begin
+        if (uservec[GUserr.AstUserName]==false) then begin
+          AddLineToArea("exten => " & GUserr.AstUserName & ",hint," & chanstr & GUserr.AstUserName,a_conf);
+          uservec[GUserr.AstUserName] = true;
+        end;
+      end;
+    end;
+  end;
+  while (LoopMain(Userr,1,true)) begin
+    test3f = false;
+    if (Userr.Closed==0) then begin
+      if (blank(Userr.AstPBXConnection)) then begin test3f = true; end;
+      pos = 0;
+      while (GetNextSubstring(Userr.AstPBXConnection,pos,",",tstr)) begin
+        if (tstr==PBXCr.Code) then begin
+          if (IsValidPBXConnection(tstr)) then begin
+            test3f = true;
+          end;
+        end;
+      end;
+      if (blank(Userr.AstUserName)) then begin
+        test3f = false;
+      end;
+      if (test3f) then begin
+        if (uservec[Userr.AstUserName]==false) then begin
+          AddLineToArea("exten => " & Userr.AstUserName & ",hint," & chanstr & Userr.AstUserName,a_conf);
+          uservec[Userr.AstUserName] = true;
+        end;
+      end;
+    end;
+  end;
+*/
+  AddLineToArea("[HW_EXTENSIONS]",a_conf);
+  AddLineToArea("include => HW_BASICS",a_conf);
+  AddLineToArea("include => HW_FUNCTIONS",a_conf);
+  AddLineToArea("include => HW_QUEUE_MANAGEMENT",a_conf);
+  AddLineToArea("include => HW_TRUNK",a_conf);
+  AddLineToArea("[HW_BASICS]",a_conf);
+  AddLineToArea("exten => h,1,Hangup()",a_conf);
+  
+  AddLineToArea("[HW_FUNCTIONS]",a_conf);
+  
+  AddLineToArea("; Talkbot extensions",a_conf);
+  AddLineToArea(";",a_conf);
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (blank(STr.TalkBotExtension)) then begin testf = false; end;
+    if (testf) then begin
+      AddLineToArea("exten => _" & STr.TalkBotExtension & ",1,Dial(" & chanstr & "HW_TALKBOT_SIPTRUNK_" & STr.Code & ",60,TtKk)",a_conf);
+    end;
+  end;
+
+  if (PBXCr.IAXf!=0) then begin
+    AddLineToArea("; IAX routed extensions for menus",a_conf);
+    AddLineToArea(";",a_conf);
+    ResetLoop(PBXC2r);
+    while (LoopMain(PBXC2r,1,true)) begin
+      testf = true;
+      if (PBXC2r.Closed!=0) then begin testf = false; end;
+      if (IsAsteriskPbxType(PBXC2r.PBXType)==false) then begin testf = false; end;
+      if (PBXC2r.Code==PBXCr.Code) then begin testf = false; end;
+      if (PBXC2r.IAXf==0) then begin testf = false; end;
+      if (blank(PBXC2r.PBXHostIP)) then begin testf = false; end;
+      if (testf==true) then begin
+        ResetLoop(STr);
+        STr.PBXConnection = PBXC2r.Code;
+        foundf = true;
+        while (LoopKey("PBXConnection",STr,1,foundf)) begin
+          if (STr.PBXConnection!=PBXC2r.Code) then begin foundf = false; end;
+          test2f = foundf;
+          if (STr.Closedf!=0) then begin test2f = false; end;
+          if (test2f) then begin
+            ResetLoop(PBXIVRTreer);
+            PBXIVRTreer.SipTrunk = STr.Code;
+            found2f = true;
+            while (LoopKey("SipTrunk",PBXIVRTreer,1,found2f)) begin
+              if (PBXIVRTreer.SipTrunk!=STr.Code) then begin found2f = false; end;
+              test3f = found2f;
+              if (PBXIVRTreer.Closed!=0) then begin test3f = false; end;
+              if (test3f) begin
+                AddLineToArea("exten => HW_IVR_" & PBXIVRTreer.Code & ",1,Answer()",a_conf);
+                AddLineToArea("same => n,Dial(IAX2/HW_IAX_" & PBXC2r.Code & "/HW_IVR_" & PBXIVRTreer.Code & ",60,TtKk)",a_conf);
+                AddLineToArea("same => n,Hangup()",a_conf);
+              end;
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+
+  AddLineToArea("; Locally routed extensions for menus and queues",a_conf);
+  AddLineToArea(";",a_conf);
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (testf) then begin
+      ResetLoop(PBXQr);
+      PBXQr.SipTrunk = STr.Code;
+      found2f = true;
+      while (LoopKey("SipTrunk",PBXQr,1,found2f)) begin
+        if (PBXQr.SipTrunk!=STr.Code) then begin found2f = false; end;
+        test2f = found2f;
+        if (PBXQr.Closed!=0) then begin test2f = false; end;
+        if (PBXQr.Extension=="") then begin test2f = false; end;
+        if (test2f==true) then begin
+          pos = 0;
+          while (GetNextSubstring(PBXQr.Extension,pos,",",tstr)) begin
+            if (ivrqvec[tstr]==false) then begin
+              AddLineToArea("exten => _" & tstr & ",1,Goto(HW_Q_" & PBXQr.Code & ",s,1)",a_conf);
+              ivrqvec[tstr] = true;
+            end;
+          end;
+        end;
+      end;
+      
+      ResetLoop(PBXIVRTreer);
+      PBXIVRTreer.SipTrunk = STr.Code;
+      found2f = true;
+      while (LoopKey("SipTrunk",PBXIVRTreer,1,found2f)) begin
+        if (PBXIVRTreer.SipTrunk!=STr.Code) then begin found2f = false; end;
+        test2f = found2f;
+        if (PBXIVRTreer.Closed!=0) then begin test2f = false; end;
+        if (test2f) begin
+          AddLineToArea("exten => HW_IVR_" & PBXIVRTreer.Code & ",1,Goto(HW_IVR_" & PBXIVRTreer.Code & ",s,1)",a_conf);
+        end;
+        if (PBXIVRTreer.Extension=="") then begin test2f = false; end;
+        if (test2f==true) then begin
+          pos = 0;
+          while (GetNextSubstring(PBXIVRTreer.Extension,pos,",",tstr)) begin
+            if (ivrqvec[tstr]==false) then begin
+              AddLineToArea("exten => _" & tstr & ",1,Goto(HW_IVR_" & PBXIVRTreer.Code & ",s,1)",a_conf);
+              ivrqvec[tstr] = true;
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+  
+  AddLineToArea("[HW_ADD_CALLEDEXT_HEADER]",a_conf);
+  AddLineToArea("exten => s,1,Set(PJSIP_HEADER(add,X-StandardERP-CalledExten)=${ARG1})",a_conf);
+  AddLineToArea("same => n,Return",a_conf);
+
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (testf) then begin
+      ResetLoop(PBXQr);
+      PBXQr.SipTrunk = STr.Code;
+      found2f = true;
+      while (LoopKey("SipTrunk",PBXQr,1,found2f)) begin
+        if (PBXQr.SipTrunk!=STr.Code) then begin found2f = false; end;
+        test2f = found2f;
+        if (PBXQr.Closed!=0) then begin test2f = false; end;
+        if (blank(PBXQr.Code)) then begin test2f = false; end;
+        if (test2f==true) then begin
+          AddLineToArea("[HW_Q_" & PBXQr.Code & "]",a_conf);
+          AddLineToArea("exten => s,1,Answer()",a_conf);
+          AddLineToArea("same => n,Set(CALLERID(num-pres)=allowed)",a_conf);
+          AddLineToArea("same => n,MSet(Q=" & PBXQr.Code & ",L=" & PBXQr.Code & ")",a_conf);
+          AddLineToArea("same => n,Set(CALLERID(all)=""${Q} ${L}: ${CALLERID(num)}<${CALLERID(num)}>"")",a_conf);
+          AddLineToArea("same => n,Ringing",a_conf);
+          if (PBXQr.DirectToAnnaFlag==0) then begin
+            AddLineToArea("same => n,UserEvent(Queue,Type: Reached,Code: " & PBXQr.Code & ",Caller: ${CALLERID(num)})",a_conf);
+            AddLineToArea("same => n,GoTo(HW_OPENING_HOURS,s,HW_JUMP_Q_" & PBXQr.Code & ")",a_conf);
+            AddLineToArea("same => n(HW_JUMP_ISOPEN),NoOp(" & PBXQr.Code & " is open)",a_conf);
+            AddLineToArea("same => n,UserEvent(Queue,Type: Open,Code: " & PBXQr.Code & ",Caller: ${CALLERID(num)})",a_conf);
+            AddLineToArea("same => n," & PlayAsteriskSound(PBXQr.Code,kAsteriskEventSoundQueueStart,kAsteriskForegroundPlayback),a_conf);
+            AddLineToArea("same => n(HW_JUMP_BACKINQUEUE),Queue(HWQUEUE" & PBXQr.Code & ",Rtk,,,60,,,HW_AGENT_PICKUP,)",a_conf);
+            AddLineToArea("same => n,Verbose(0,Queue exited with status ${QUEUESTATUS})",a_conf);
+            AddLineToArea("same => n,ExecIf($[""${QUEUESTATUS}"" = ""JOINEMPTY""]?Goto(HW_JUMP_JOINEMPTY)",a_conf);
+            AddLineToArea("same => n," & PlayAsteriskSound(PBXQr.Code,kAsteriskEventSoundLineBusy,kAsteriskForegroundPlayback),a_conf);
+            AddLineToArea("same => n,Goto(HW_JUMP_BACKINQUEUE)",a_conf);
+            AddLineToArea("same => n,Hangup()",a_conf);
+            AddLineToArea("same => n(HW_JUMP_JOINEMPTY),NoOp()",a_conf);
+            AddLineToArea("same => n," & PlayAsteriskSound(PBXQr.Code,kAsteriskEventSoundLineBusy,kAsteriskForegroundPlayback),a_conf);
+            //AddLineToArea("same => n,GosubIf($[""${QUEUESTATUS}"" = ""JOINEMPTY""]?HW_QUEUE_FALLBACK_" & PBXQr.Code & ",s,1)",a_conf);
+            AddLineToArea("same => n,MusicOnHold(HW,20)",a_conf);
+            AddLineToArea("same => n,Goto(HW_JUMP_BACKINQUEUE)",a_conf);
+          end else begin
+            AddLineToArea("same => n(HW_JUMP_BACKINQUEUE),Queue(" & AnnaQueueName(PBXCr) & ",rtkb(HW_ADD_CALLEDEXT_HEADER^s^1(${INBOUND_EXTEN})),,,60,,,HW_AGENT_PICKUP,)",a_conf);
+            AddLineToArea("same => n,ExecIf($[""${QUEUESTATUS}"" = ""TIMEOUT""]?Goto(HW_JUMP_TIMEOUT)",a_conf);
+            AddLineToArea("same => n,Verbose(0,Queue exited with status ${QUEUESTATUS}, retrying)",a_conf);
+            AddLineToArea("same => n,Goto(HW_JUMP_BACKINQUEUE)",a_conf);
+            AddLineToArea("same => n(HW_JUMP_TIMEOUT)," & PlayAsteriskSound(PBXQr.Code,kAsteriskEventSoundLineBusy,kAsteriskForegroundPlayback),a_conf);
+            AddLineToArea("same => n,Goto(HW_JUMP_BACKINQUEUE)",a_conf);
+          end;
+        end;
+      end;
+      ResetLoop(PBXIVRTreer);
+      PBXIVRTreer.SipTrunk = STr.Code;
+      found2f = true;
+      while (LoopKey("SipTrunk",PBXIVRTreer,1,found2f)) begin
+        if (PBXIVRTreer.SipTrunk!=STr.Code) then begin found2f = false; end;
+        test2f = found2f;
+        if (PBXIVRTreer.Closed!=0) then begin test2f = false; end;
+        if (blank(PBXIVRTreer.Code)) then begin test2f = false; end;
+        if (test2f==true) then begin
+          AddLineToArea("[HW_IVR_" & PBXIVRTreer.Code & "]",a_conf);
+          AddLineToArea("exten => s,1,Answer()",a_conf);
+          AddLineToArea("same => n,Set(CALLERID(num-pres)=allowed)",a_conf);
+          AddLineToArea("same => n,MSet(Q=" & PBXIVRTreer.Code & ",L=" & PBXIVRTreer.Code & ")",a_conf);
+          AddLineToArea("same => n,Set(CALLERID(all)=""${Q} ${L}: ${CALLERID(num)}<${CALLERID(num)}>"")",a_conf);
+          AddLineToArea("same => n,Ringing",a_conf);
+          AddLineToArea("same => n,UserEvent(IVRTree,Type: Reached,Code: " & PBXIVRTreer.Code & ",Caller: ${CALLERID(num)})",a_conf);
+          AddLineToArea("same => n,GoTo(HW_OPENING_HOURS,s,HW_JUMP_IVR_" & PBXIVRTreer.Code & ")",a_conf);
+          AddLineToArea("same => n(HW_JUMP_ISOPEN),NoOp(" & PBXIVRTreer.Code & " is open)",a_conf);
+          AddLineToArea("same => n,UserEvent(IVRTree,Type: Open,Code: " & PBXIVRTreer.Code & ",Caller: ${CALLERID(num)})",a_conf);
+          AddLineToArea("same => n(HW_JUMP_IVRSTART)," & PlayAsteriskSound(PBXIVRTreer.Code,kAsteriskEventSoundIVRStart,kAsteriskBackgroundPlayback),a_conf);
+          if (PBXIVRTreer.Interval>0) then begin
+            AddLineToArea("same => n,WaitExten(" & PBXIVRTreer.Interval & ")",a_conf);
+          end else begin
+            AddLineToArea("same => n,WaitExten(10)",a_conf);
+          end;
+          AddLineToArea("same => n,GoTo(HW_JUMP_IVRSTART)",a_conf);
+          rwcnt = MatRowCnt(PBXIVRTreer);
+          for (i=0;i<rwcnt;i=i+1) begin
+            MatRowGet(PBXIVRTreer,i,PBXIVRTreerw);
+            if (PBXIVRTreerw.AnnaFlag!=0 and nonblank(PBXIVRTreerw.AnnaPassword)) then begin
+              AddLineToArea("exten => " & PBXIVRTreerw.Number & ",1,Verbose(0,  [${UNIQUEID}] Caller selected """& PBXIVRTreerw.Number & """, continuing to Anna...)",a_conf);
+              AddLineToArea("same => n,GoTo(" & AnnaQueueContextName(PBXCr) & ",s,1)",a_conf);
+              AddLineToArea("same => n,Hangup())",a_conf);
+            end else begin
+              if (nonblank(PBXIVRTreerw.Queue)) then begin
+                AddLineToArea("exten => " & PBXIVRTreerw.Number & ",1,Set(L=" & PBXIVRTreerw.Queue & ")",a_conf);
+//                AddLineToArea("same => n,Verbose(0,  [${UNIQUEID}] Caller selected """& PBXIVRTreerw.Number & """, continuing to ${Q} ${L}...)",a_conf);
+                ResetLoop(PBXQr);
+                PBXQr.Code = PBXIVRTreerw.Queue;
+                if (ReadFirstMain(PBXQr,1,true)) then begin
+                  ResetLoop(ST2r);
+                  ST2r.Code = PBXQr.SipTrunk;
+                  if (ReadFirstMain(ST2r,1,true)) then begin
+                    if (PBXCr.Code==ST2r.PBXConnection) then begin
+                      AddLineToArea("same => n,GoTo(HW_Q_" & PBXIVRTreerw.Queue & ",s,1)",a_conf);
+                    end else begin
+                      AddLineToArea("same => n,Dial(IAX2/HW_IAX_" & ST2r.PBXConnection & "/HW_Q_" & PBXIVRTreerw.Queue & ",60,TtKk)",a_conf);
+                      AddLineToArea("same => n,Hangup()",a_conf);
+                    end;
+                  end;
+                end;
+              end else begin
+                AddLineToArea("exten => " & PBXIVRTreerw.Number & ",1,Set(L=" & PBXIVRTreerw.Menu & ")",a_conf);
+//                AddLineToArea("same => n,Verbose(0,  [${UNIQUEID}] Caller selected """& PBXIVRTreerw.Number & """, continuing to ${Q} ${L}...)",a_conf);
+                ResetLoop(PBXQr);
+                PBXIVRTree2r.Code = PBXIVRTreerw.Menu;
+                if (ReadFirstMain(PBXIVRTree2r,1,true)) then begin
+                  ResetLoop(ST2r);
+                  ST2r.Code = PBXIVRTree2r.SipTrunk;
+                  if (ReadFirstMain(ST2r,1,true)) then begin
+                    if (PBXCr.Code==ST2r.PBXConnection) then begin
+                      AddLineToArea("same => n,GoTo(HW_IVR_" & PBXIVRTreerw.Menu & ",s,1)",a_conf);
+                    end else begin
+                      AddLineToArea("same => n,Dial(IAX2/HW_IAX_" & ST2r.PBXConnection & "/HW_IVR_" & PBXIVRTreerw.Menu & ",60,TtKk)",a_conf);
+                      AddLineToArea("same => n,Hangup()",a_conf);
+                    end;
+                  end;
+                end;
+              end;
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+  
+  if (PBXConnectionSupportsAnna(PBXCr,tstr)) then begin
+    AddLineToArea("[" & AnnaQueueContextName(PBXCr) & "]",a_conf);
+    AddLineToArea("exten => s,1,Answer()",a_conf);
+    AddLineToArea("same => n,Ringing",a_conf);
+    AddLineToArea("same => n(HW_JUMP_BACKINQUEUE),Queue(" & AnnaQueueName(PBXCr) & ",Rtk,,,60,,,HW_AGENT_PICKUP,)",a_conf);
+    AddLineToArea("same => n,MusicOnHold(HW,20)",a_conf);
+    AddLineToArea("same => n,Goto(HW_JUMP_BACKINQUEUE)",a_conf);
+    AddLineToArea("same => n,Hangup()",a_conf);
+  end;
+  
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (testf) then begin
+      ResetLoop(PBXQr);
+      PBXQr.SipTrunk = STr.Code;
+      found2f = true;
+      while (LoopKey("SipTrunk",PBXQr,1,found2f)) begin
+        if (PBXQr.SipTrunk!=STr.Code) then begin found2f = false; end;
+        test2f = found2f;
+        if (PBXQr.Closed!=0) then begin test2f = false; end;
+        if (test2f==true) then begin
+          AddLineToArea("[HW_QUEUE_FALLBACK_" & PBXQr.Code & "]",a_conf);
+          AddLineToArea("exten => s,1,NoOp()",a_conf);
+          if (PBXQr.NoGeneralSIPFallback==0) then begin
+            notfirstf = false;
+            AsteriskUserr.SerNr = -1;
+            ResetLoop(AsteriskUserr);
+            while (LoopMain(AsteriskUserr,1,true)) begin
+              test3f = false;
+              if (AsteriskUserr.Closedf==0 and AsteriskUserr.ExcludeQueueFallbackf==0) then begin
+                if (blank(AsteriskUserr.PBXConnection)) then begin test3f = true; end;
+                pos = 0;
+                while (GetNextSubstring(AsteriskUserr.PBXConnection,pos,",",tstr)) begin
+                  if (tstr==STr.PBXConnection) then begin
+                    if (IsValidPBXConnection(tstr)) then begin
+                      test3f = true;
+                    end;
+                  end;
+                end;
+                if (test3f) then begin
+                  if (notfirstf) then begin
+                    AddTextToArea("&",a_conf);
+                  end else begin
+                    AddTextToArea("same => n,Dial(",a_conf);
+                  end;
+                  notfirstf = true;
+                  AddTextToArea("" & chanstr & AsteriskUserr.UserName,a_conf);
+                end;
+              end;
+            end;
+            RecordClear(GUserr);
+            ResetLoop(GUserr);
+            while (LoopMain(GUserr,1,true)) begin
+              test3f = false;
+              if (GUserr.Closed==0 and GUserr.ExcludeQueueFallbackf==0) then begin
+                if (blank(GUserr.AstPBXConnection)) then begin test3f = true; end;
+                pos = 0;
+                while (GetNextSubstring(GUserr.AstPBXConnection,pos,",",tstr)) begin
+                  if (tstr==PBXCr.Code) then begin
+                    if (IsValidPBXConnection(tstr)) then begin
+                      test3f = true;
+                    end;
+                  end;
+                end;
+                if (blank(GUserr.AstUserName)) then begin
+                  test3f = false;
+                end;
+                if (test3f) then begin
+                  if (notfirstf) then begin
+                    AddTextToArea("&",a_conf);
+                  end else begin
+                    AddTextToArea("same => n,Dial(",a_conf);
+                  end;
+                  notfirstf = true;
+                  AddTextToArea("" & chanstr & GUserr.AstUserName,a_conf);
+                end;
+              end;
+            end;
+            RecordClear(Userr);
+            ResetLoop(Userr);
+            while (LoopMain(Userr,1,true)) begin
+              test3f = false;
+              if (Userr.Closed==0 and Userr.ExcludeQueueFallbackf==0) then begin
+                if (blank(Userr.AstPBXConnection)) then begin test3f = true; end;
+                pos = 0;
+                while (GetNextSubstring(Userr.AstPBXConnection,pos,",",tstr)) begin
+                  if (tstr==PBXCr.Code) then begin
+                    if (IsValidPBXConnection(tstr)) then begin
+                      test3f = true;
+                    end;
+                  end;
+                end;
+                if (blank(Userr.AstUserName)) then begin
+                  test3f = false;
+                end;
+                if (test3f) then begin
+                  if (notfirstf) then begin
+                    AddTextToArea("&",a_conf);
+                  end else begin
+                    AddTextToArea("same => n,Dial(",a_conf);
+                  end;
+                  notfirstf = true;
+                  AddTextToArea(chanstr & Userr.AstUserName,a_conf);
+                end;
+              end;
+            end;
+            if (notfirstf) then begin
+              AddTextToArea(",60)" & chr(10),a_conf);
+            end;
+          end;
+          if (nonblank(PBXQr.FallBackNumber)) then begin
+            AddLineToArea("same => n,Goto(HW_TRUNK," & PBXQr.FallBackNumber & ",1)",a_conf);
+          end;
+          AddLineToArea("same => n,Return",a_conf);
+        end;
+      end;
+    end;
+  end;
+  AddLineToArea("[HW_OPENING_HOURS]",a_conf);
+  AddLineToArea("exten => s,1,NoOp()",a_conf); // Must have exten => ...
+  
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (testf) then begin
+      ResetLoop(PBXQr);
+      PBXQr.SipTrunk = STr.Code;
+      found2f = true;
+      while (LoopKey("SipTrunk",PBXQr,1,found2f)) begin
+        if (PBXQr.SipTrunk!=STr.Code) then begin found2f = false; end;
+        test2f = found2f;
+        if (PBXQr.Closed!=0) then begin test2f = false; end;
+        if (blank(PBXQr.Code)) then begin test2f = false; end;
+        if (test2f==true) then begin
+          //## Add days and timezone
+          AddTextToArea("same => n(HW_JUMP_Q_" & PBXQr.Code & ")",a_conf);
+          if (PBXQr.ExcludeBankHolidaysf) then begin
+            AddBankHolidays("HW_JUMP_ISCLOSED_Q_" & PBXQr.Code,PBXQr.CRMCompany,a_conf);
+          end;
+          if (PBXQr.AlwaysClosedf==0) then begin
+            if (blanktime(PBXQr.OpenTime) or blanktime(PBXQr.CloseTime)) then begin
+              AddLineToArea(",GotoIfTime(*,*,*,*?HW_Q_" & PBXQr.Code & ",s,HW_JUMP_ISOPEN)",a_conf);
+            end else begin
+              AddLineToArea(",GotoIfTime(" & PBXQr.OpenTime & "-" & PBXQr.CloseTime & ",mon-fri,*,*?HW_Q_" & PBXQr.Code & ",s,HW_JUMP_ISOPEN)",a_conf);
+              if (nonblanktime(PBXQr.OpenTime2) and nonblanktime(PBXQr.CloseTime2)) then begin
+                AddLineToArea("same => n,GotoIfTime(" & PBXQr.OpenTime2 & "-" & PBXQr.CloseTime2 & ",mon-fri,*,*?HW_Q_" & PBXQr.Code & ",s,HW_JUMP_ISOPEN)",a_conf);
+              end;
+            end;
+          end;
+          AddLineToArea("same => n(HW_JUMP_ISCLOSED_Q_" & PBXQr.Code & "),Verbose(0,${Q} line is closed, playing ""office closed"" message and hanging up...)",a_conf);
+          AddLineToArea("same => n," & PlayAsteriskSound(PBXQr.Code,kAsteriskEventSoundLineClosed,kAsteriskForegroundPlayback),a_conf);
+          AddLineToArea("same => n,Hangup()",a_conf);
+        end;
+      end;
+      ResetLoop(PBXIVRTreer);
+      PBXIVRTreer.SipTrunk = STr.Code;
+      found2f = true;
+      while (LoopKey("SipTrunk",PBXIVRTreer,1,found2f)) begin
+        if (PBXIVRTreer.SipTrunk!=STr.Code) then begin found2f = false; end;
+        test2f = found2f;
+        if (PBXIVRTreer.Closed!=0) then begin test2f = false; end;
+        if (blank(PBXIVRTreer.Code)) then begin test2f = false; end;
+        if (test2f==true) then begin
+          AddTextToArea("same => n(HW_JUMP_IVR_" & PBXIVRTreer.Code & ")",a_conf);
+          if (PBXIVRTreer.ExcludeBankHolidaysf) then begin
+            AddBankHolidays("HW_JUMP_ISCLOSED_IVR_" & PBXIVRTreer.Code,PBXQr.CRMCompany,a_conf);
+          end;
+          if (PBXIVRTreer.AlwaysClosedf==0) then begin
+            if (blanktime(PBXIVRTreer.OpenTime) or blanktime(PBXIVRTreer.CloseTime)) then begin
+              AddLineToArea(",GotoIfTime(*,*,*,*?HW_IVR_" & PBXIVRTreer.Code & ",s,HW_JUMP_ISOPEN)",a_conf);
+            end else begin
+              AddLineToArea(",GotoIfTime(" & PBXIVRTreer.OpenTime & "-" & PBXIVRTreer.CloseTime & ",mon-fri,*,*?HW_IVR_" & PBXIVRTreer.Code & ",s,HW_JUMP_ISOPEN)",a_conf);
+              if (nonblanktime(PBXIVRTreer.OpenTime2) and nonblanktime(PBXIVRTreer.CloseTime2)) then begin
+                AddLineToArea("same => n,GotoIfTime(" & PBXIVRTreer.OpenTime2 & "-" & PBXIVRTreer.CloseTime2 & ",mon-fri,*,*?HW_IVR_" & PBXIVRTreer.Code & ",s,HW_JUMP_ISOPEN)",a_conf);
+              end;
+            end;
+          end;
+          AddLineToArea("same => n(HW_JUMP_ISCLOSED_IVR_" & PBXIVRTreer.Code & "),Verbose(0,${Q} line is closed, playing ""office closed"" message and hanging up...)",a_conf);
+          AddLineToArea("same => n," & PlayAsteriskSound(PBXIVRTreer.Code,kAsteriskEventSoundLineClosed,kAsteriskForegroundPlayback),a_conf);
+          AddLineToArea("same => n,Hangup()",a_conf);
+        end;
+      end;
+    end;
+  end;
+
+  AddLineToArea("[HW_AGENT_PICKUP]",a_conf);
+  AddLineToArea("exten => s,1,Verbose(0,Call from number ${CALLERID(num)} was answered by agent ${MEMBERNAME} in ${QUEUENAME} queue)",a_conf);
+  //AddLineToArea("same => n,MixMonitor(,br(${UNIQUEID}-in.ogg)t(${UNIQUEID}-out.ogg)W(1))",a_conf);
+  AddLineToArea("same => n,Return",a_conf);
+  
+  AddLineToArea("#include queuemanagement.conf",a_conf); //??
+  AddLineToArea("#include trunks.conf",a_conf); //??
+
+  AddLineToArea("[HW_INBOUND]",a_conf);
+
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (testf) then begin
+      rwcnt = MatRowCnt(STr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(STr,i,STrw);
+        if (nonblank(STrw.Extension) and stextvec[STrw.Extension]==false) then begin
+          stextvec[STrw.Extension] = true;
+          if (STr.ChanSIPf==1) then begin
+            AddLineToArea("exten => _" & STrw.Extension & ",1,Verbose(0,Setting up an inbound call [ CALLID: ${UNIQUEID} ] from [ ${CALLERID(num)} ] to [ ${EXTEN} ] on channel [ ${CHANNEL(peername)} ])",a_conf);
+          end else begin
+            AddLineToArea("exten => _" & STrw.Extension & ",1,Verbose(0,Setting up an inbound call [ CALLID: ${UNIQUEID} ] from [ ${CALLERID(num)} ] to [ ${EXTEN} ] on channel [ ${CHANNEL(endpoint)} ])",a_conf);
+          end;
+          AddLineToArea("same => n,Set(INBOUND_EXTEN=${EXTEN})",a_conf);
+          AddLineToArea("same => n,Goto(HW_JUMP_TRUNK_" & STr.Code & ")",a_conf);
+        end;
+      end;
+    end;
+  end;
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (testf) then begin
+      ResetLoop(PBXQr);
+      PBXQr.SipTrunk = STr.Code;
+      found2f = true;
+      while (LoopKey("SipTrunk",PBXQr,1,found2f)) begin
+        if (PBXQr.SipTrunk!=STr.Code) then begin found2f = false; end;
+        test2f = found2f;
+        if (PBXQr.Closed!=0) then begin test2f = false; end;
+        if (PBXQr.Extension=="") then begin test2f = false; end;
+        if (test2f==true) then begin
+          pos = 0;
+          while (GetNextSubstring(PBXQr.Extension,pos,",",tstr)) begin
+            if (stextvec[tstr]==false) then begin
+              stextvec[tstr] = true;
+              if (STr.ChanSIPf==1) then begin
+                AddLineToArea("exten => _" & tstr & ",1,Verbose(0,Setting up an inbound call [ CALLID: ${UNIQUEID} ] from [ ${CALLERID(num)} ] to [ ${EXTEN} ] on channel [ ${CHANNEL(peername)} ])",a_conf);
+              end else begin
+                AddLineToArea("exten => _" & tstr & ",1,Verbose(0,Setting up an inbound call [ CALLID: ${UNIQUEID} ] from [ ${CALLERID(num)} ] to [ ${EXTEN} ] on channel [ ${CHANNEL(endpoint)} ])",a_conf);
+              end;
+              AddLineToArea("same => n,Goto(HW_JUMP_TRUNK_" & STr.Code & ")",a_conf);
+            end;
+          end;
+        end;
+      end;
+      ResetLoop(PBXIVRTreer);
+      PBXIVRTreer.SipTrunk = STr.Code;
+      found2f = true;
+      while (LoopKey("SipTrunk",PBXIVRTreer,1,found2f)) begin
+        if (PBXIVRTreer.SipTrunk!=STr.Code) then begin found2f = false; end;
+        test2f = found2f;
+        if (PBXIVRTreer.Closed!=0) then begin test2f = false; end;
+        if (PBXIVRTreer.Extension=="") then begin test2f = false; end;
+        if (test2f==true) then begin
+          pos = 0;
+          while (GetNextSubstring(PBXIVRTreer.Extension,pos,",",tstr)) begin
+            if (stextvec[tstr]==false) then begin
+              stextvec[tstr] = true;
+              if (STr.ChanSIPf==1) then begin
+                AddLineToArea("exten => _" & tstr & ",1,Verbose(0,Setting up an inbound call [ CALLID: ${UNIQUEID} ] from [ ${CALLERID(num)} ] to [ ${EXTEN} ] on channel [ ${CHANNEL(peername)} ])",a_conf);
+              end else begin
+                AddLineToArea("exten => _" & tstr & ",1,Verbose(0,Setting up an inbound call [ CALLID: ${UNIQUEID} ] from [ ${CALLERID(num)} ] to [ ${EXTEN} ] on channel [ ${CHANNEL(endpoint)} ])",a_conf);
+              end;
+              AddLineToArea("same => n,Goto(HW_JUMP_TRUNK_" & STr.Code & ")",a_conf);
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+  AddLineToArea("exten => _X.,1,Verbose(0,Setting up an inbound call [ CALLID: ${UNIQUEID} ] from [ ${CALLERID(num)} ] to [ ${EXTEN} ])",a_conf);
+
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (testf) then begin
+      if (STr.ChanSIPf==1) then begin
+        AddLineToArea("same => n,GotoIf($[""${CHANNEL(peername)}"" = ""HW_SIPTRUNK_" & STr.Code & """]?HW_JUMP_TRUNK_" & STr.Code & ")",a_conf);
+      end else begin
+        AddLineToArea("same => n,GotoIf($[""${CHANNEL(endpoint)}"" = ""HW_SIPTRUNK_" & STr.Code & """]?HW_JUMP_TRUNK_" & STr.Code & ")",a_conf);
+      end;
+    end;
+  end;
+
+  AddLineToArea("same => n,Goto(HW_JUMP_DENYCALL)",a_conf);
+
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (testf) then begin
+      if (nonblank(STr.TalkBotHost)) then begin
+        AddLineToArea("same => n(HW_JUMP_TRUNK_" & STr.Code & "),Set(IAXVAR(HW_IAX_SOURCE)=HW_NOT_IAX)",a_conf);
+        AddLineToArea("same => n,Answer",a_conf);
+        AddLineToArea("same => n,Dial(" & chanstr & "HW_TALKBOT_SIPTRUNK_" & STr.Code & ",60,TtKk)",a_conf);
+      end else begin
+        AddLineToArea("same => n(HW_JUMP_TRUNK_" & STr.Code & "),Set(IAXVAR(HW_IAX_SOURCE)=HW_NOT_IAX)",a_conf);
+        AddLineToArea("same => n,Goto(HW_FUNCTIONS,${EXTEN},1)",a_conf);
+      end;
+    end;
+  end;
+
+  AddLineToArea("same => n(HW_JUMP_DENYCALL),Verbose(0,Inbound call forbidden. Hanging up)",a_conf);
+  AddLineToArea("same => n,Hangup()",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+  return;
+end;
+
+function Boolean AddOneUserToTrunksConf(string astusername,string pbxconnections,record PBXConnectionVc PBXCr,var area a_conf)
+begin
+  LongInt pos;
+  string 255 pbxcode;
+  Boolean res,testf;
+  
+  while (GetNextSubstring(pbxconnections,pos,",",pbxcode)) begin
+    if (nonblank(pbxcode)) then begin
+      if (pbxcode==PBXCr.Code) then begin
+        if (IsValidPBXConnection(pbxcode)) then begin
+          goto LAddOneUserToTrunksConf_addlocal;
+        end;
+      end;
+    end;
+  end;
+  
+  pos = -1;
+  while (GetNextSubstring(pbxconnections,pos,",",pbxcode)) begin
+    if (nonblank(pbxcode)) then begin
+      if (pbxcode!=PBXCr.Code) then begin
+        if (IsValidPBXConnection(pbxcode)) then begin
+          goto LAddOneUserToTrunksConf_addiax; // possibly we could add all iax connections with priorities...
+        end;
+      end;
+    end;
+  end;
+  goto LAddOneUserToTrunksConf;
+  
+LAddOneUserToTrunksConf_addiax:;
+  AddLineToArea("exten => " & astusername & ",1,Exec(Dial(IAX2/HW_IAX_" & pbxcode & "/${EXTEN},60,TtKk))",a_conf);
+  AddLineToArea("same => n,Hangup()",a_conf);
+  res = true;
+  goto LAddOneUserToTrunksConf;
+
+LAddOneUserToTrunksConf_addlocal:;
+  AddLineToArea("exten => " & astusername & ",1,Exec(Dial(PJSIP/${EXTEN},60,TtKk))",a_conf);
+  AddLineToArea("same => n,Hangup()",a_conf);
+  res = true;
+
+LAddOneUserToTrunksConf:;
+  AddOneUserToTrunksConf = res;
+  return;
+end;
+
+procedure AddIAXRoutedUsersToTrunksConf(record PBXConnectionVc PBXCr,var area a_conf)
+begin
+  record AsteriskUser2Vc AsteriskUserr;
+  record UserVc Userr;
+  record GlobalUserVc GUserr;
+  vector Boolean uservec;
+  Boolean testf;
+
+  while (LoopMain(AsteriskUserr,1,true)) begin
+    testf = true;
+    if (uservec[AsteriskUserr.UserName]==true) then begin testf = false; end;
+    if (AsteriskUserr.Closedf<>0) then begin testf = false; end;
+    if (testf) then begin
+      testf = AddOneUserToTrunksConf(AsteriskUserr.UserName,AsteriskUserr.PBXConnection,PBXCr,a_conf);
+      if (testf) then begin uservec[AsteriskUserr.UserName] = true; end;
+    end;
+  end;
+  
+  while (LoopMain(GUserr,1,true)) begin
+    testf = true;
+    if (uservec[GUserr.AstUserName]==true) then begin testf = false; end;
+    if (GUserr.Closed<>0) then begin testf = false; end;
+    if (testf) then begin
+      testf = AddOneUserToTrunksConf(GUserr.AstUserName,GUserr.AstPBXConnection,PBXCr,a_conf);
+      if (testf) then begin uservec[GUserr.AstUserName] = true; end;
+    end;
+  end;
+  
+  while (LoopMain(Userr,1,true)) begin
+    testf = true;
+    if (uservec[Userr.AstUserName]==true) then begin testf = false; end;
+    if (Userr.Closed<>0) then begin testf = false; end;
+    if (testf) then begin
+      testf = AddOneUserToTrunksConf(Userr.AstUserName,Userr.AstPBXConnection,PBXCr,a_conf);
+      if (testf) then begin uservec[Userr.AstUserName] = true; end;
+    end;
+  end;
+  
+  return;
+end;
+
+global
+updating procedure CreateTrunksConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+  record SipTrunk2Vc STr;
+  record PBXConnectionVc PBXC2r;
+  boolean testf,foundf;
+  string 255 defcallid,chanstr,defsiptrunk;
+  Integer l;
+
+  if (UseChanPJSIP(PBXCr)) then begin
+    chanstr = "PJSIP/"; // Maybe "Local/" would work for both?
+  end else begin
+    chanstr = "SIP/";
+  end;
+  
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/trunks.conf";
+
+  AddLineToArea("[HW_TRUNK]",a_conf);
+  
+  defcallid = "";
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (STr.CountryCode!=PBXCr.CountryCode) then begin testf = false; end;
+    if (testf) then begin
+      defcallid = STr.DefaultCallerId;
+    end;
+  end;
+  AddLineToArea("exten => _XX.,1,Set(DIALEXTEN=${FILTER(0-9,${EXTEN})})",a_conf);
+  AddLineToArea("same => n,Gosub(groupgw,s,1)",a_conf);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  if (nonblank(defcallid)) then begin
+    AddLineToArea("same => n,Set(CALLERID(num)=" & defcallid & ")",a_conf);
+  end;
+  AddLineToArea("same => n,ExecIf($[\"${DIALCOUNTRY:0:5}\" = \"IAX2/\"]?Dial(${DIALCOUNTRY}/${DIALEXTEN},60):Dial(" & chanstr & "${DIALEXTEN}@${DIALCOUNTRY},60))",a_conf);
+  AddLineToArea("same => n,Hangup()",a_conf);
+  AddLineToArea("exten => _00XX.,1,Set(DIALEXTEN=${FILTER(0-9,${EXTEN})})",a_conf);
+  AddLineToArea("same => n,Gosub(groupgw,s,1)",a_conf);
+  if (nonblank(defcallid)) then begin
+    AddLineToArea("same => n,Set(CALLERID(num)=" & defcallid & ")",a_conf);
+  end;
+  AddLineToArea("same => n,ExecIf($[\"${DIALCOUNTRY:0:5}\" = \"IAX2/\"]?Dial(${DIALCOUNTRY}/${DIALEXTEN},60):Dial(" & chanstr & "${DIALEXTEN}@${DIALCOUNTRY},60))",a_conf);
+  AddLineToArea("same => n,Hangup()",a_conf);
+  
+  AddLineToArea("exten => _+XX.,1,Set(DIALEXTEN=${FILTER(+0-9,${EXTEN})})",a_conf);
+  AddLineToArea("same => n,Gosub(groupgw,s,1)",a_conf);
+  if (nonblank(defcallid)) then begin
+    AddLineToArea("same => n,Set(CALLERID(num)=" & defcallid & ")",a_conf);
+  end;
+  AddLineToArea("same => n,ExecIf($[\"${DIALCOUNTRY:0:5}\" = \"IAX2/\"]?Dial(${DIALCOUNTRY}/${DIALEXTEN},60):Dial(" & chanstr & "${DIALEXTEN}@${DIALCOUNTRY},60))",a_conf);
+  AddLineToArea("same => n,Hangup()",a_conf);
+
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (blank(STr.CountryCode)) then begin testf = false; end;
+    if (testf) then begin
+      l = len(STr.CountryCode);
+      if (nonblank(STr.SkipDigit)) then begin
+        AddLineToArea("exten => _" & STr.SkipDigit & "XX.,1,Set(DIALEXTEN=+" & STr.CountryCode & "${FILTER(0-9,${EXTEN:1})})",a_conf);
+        AddLineToArea("same => n,Gosub(groupgw,s,1)",a_conf);
+        AddLineToArea("same => n,Set(CALLERID(num)=" & STr.DefaultCallerId & ")",a_conf);
+        AddLineToArea("same => n,ExecIf($[\"${DIALCOUNTRY:0:5}\" = \"IAX2/\"]?Dial(${DIALCOUNTRY}/${DIALEXTEN},60):Dial(" & chanstr & "${DIALEXTEN}@${HW_SIPTRUNKVAR_" & STr.Code & "},60))",a_conf);
+        AddLineToArea("same => n,Hangup()",a_conf);
+      end;
+      if (STr.DialLocallyf) then begin
+        AddLineToArea("exten => _+" & STr.CountryCode & "XX.,1,Set(DIALEXTEN=${FILTER(+0-9,${EXTEN:" & len("+" & STr.CountryCode) & "})})",a_conf);
+        AddLineToArea("same => n,Gosub(groupgw,s,1)",a_conf);
+        AddLineToArea("same => n,Set(CALLERID(num)=" & STr.DefaultCallerId & ")",a_conf);
+        AddLineToArea("same => n,ExecIf($[\"${DIALCOUNTRY:0:5}\" = \"IAX2/\"]?Dial(${DIALCOUNTRY}/${DIALEXTEN},60):Dial(" & chanstr & "${DIALEXTEN}@${HW_SIPTRUNKVAR_" & STr.Code & "},60))",a_conf);
+        AddLineToArea("same => n,Hangup()",a_conf);
+      end;
+    end;
+  end;
+
+  RecordClear(PBXC2r);
+  ResetLoop(PBXC2r);
+  while (LoopMain(PBXC2r,1,true)) begin
+    testf = true;
+    if (PBXC2r.Closed!=0) then begin testf = false; end;
+    if (IsAsteriskPbxType(PBXC2r.PBXType)==false) then begin testf = false; end;
+    if (PBXC2r.Code==PBXCr.Code) then begin testf = false; end;
+    if (PBXC2r.IAXf==0) then begin testf = false; end;
+    if (testf==true) then begin
+      AddLineToArea("exten => _[+]" & PBXC2r.CountryCode & "XX.,1,Set(DIALEXTEN=+${FILTER(0-9,${EXTEN})})",a_conf);
+      AddLineToArea("same => n,Gosub(groupgw,s,1)",a_conf);
+      AddLineToArea("same => n,Dial(IAX2/HW_IAX_" & PBXC2r.Code & "/${DIALEXTEN},60)",a_conf);
+      AddLineToArea("same => n,Hangup()",a_conf);
+      AddLineToArea("exten => _00" & PBXC2r.CountryCode & "XX.,1,Set(DIALEXTEN=${FILTER(0-9,${EXTEN})})",a_conf);
+      AddLineToArea("same => n,Gosub(groupgw,s,1)",a_conf);
+      AddLineToArea("same => n,Dial(IAX2/HW_IAX_" & PBXC2r.Code & "/${DIALEXTEN},60)",a_conf);
+      AddLineToArea("same => n,Hangup()",a_conf);
+    end;
+  end;
+  
+  AddIAXRoutedUsersToTrunksConf(PBXCr,a_conf);
+  
+  AddLineToArea("exten => _X.,1,Exec(Dial(PJSIP/${EXTEN},60,TtKk))",a_conf);
+  AddLineToArea("same => n,Hangup()",a_conf);
+
+  AddLineToArea("[groupgw]",a_conf);
+  AddLineToArea("exten => s,1,Verbose(0,Setting up an outbound call by ${CALLERID(name)} to number: ${DIALEXTEN} \"[CALLID: ${UNIQUEID}\", IAXVAR(HW_IAX_SOURCE): \"${IAXVAR(HW_IAX_SOURCE)}\"])",a_conf);
+
+  AddLineToArea("same => n,Set(DENOISE(tx)=on)",a_conf);
+//  AddLineToArea("same => n,Set(AGC(rx)=-8000)",a_conf); // This doesn't work, external calls get voice muted entirely
+
+  AddLineToArea("same => n,GoToIf($[""${IAXVAR(HW_IAX_SOURCE)}"" = """"]?HW_JUMP_INVALID_IAX)",a_conf);
+//  AddLineToArea("same => n,MixMonitor(,br(${UNIQUEID}-in.ogg)t(${UNIQUEID}-out.ogg)W(1))",a_conf);
+  AddLineToArea("same => n,GoToIf($[""${IAXVAR(HW_IAX_SOURCE)}"" = ""HW_NOT_IAX""]?HW_USERS,s,1)",a_conf);
+
+  RecordClear(PBXC2r);
+  ResetLoop(PBXC2r);
+  while (LoopMain(PBXC2r,1,true)) begin
+    testf = true;
+    if (PBXC2r.Closed!=0) then begin testf = false; end;
+    if (IsAsteriskPbxType(PBXC2r.PBXType)==false) then begin testf = false; end;
+    if (PBXC2r.Code==PBXCr.Code) then begin testf = false; end;
+    if (PBXC2r.IAXf==0) then begin testf = false; end;
+    if (testf==true) then begin
+      AddLineToArea("same => n,GoToIf($[""${IAXVAR(HW_IAX_SOURCE)}"" = ""HW_IAX_" & PBXC2r.Code & """]?HW_JUMP_IAX)",a_conf);
+    end;
+  end;
+
+  AddLineToArea("same => n(HW_JUMP_INVALID_IAX),Verbose(0,This caller is not allowed to make outbound calls, hanging up...)",a_conf);
+  AddLineToArea("same => n,Hangup()",a_conf);
+  AddLineToArea("same => n(HW_JUMP_IAX),Verbose(0,Handling inbound call from ${DIALEXEN})",a_conf);
+  AddLineToArea("same => n,Return",a_conf);
+
+  AddLineToArea("[HW_USERS]",a_conf);
+  defsiptrunk = "";
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (testf) then begin
+//      AddLineToArea("exten => s,1,MSet(DIALCOUNTRY=${HW_SIPTRUNKVAR_" & STr.Code & "})",a_conf);
+      defsiptrunk = STr.Code;
+    end;
+  end;
+
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (STr.CountryCode!=PBXCr.CountryCode) then begin testf = false; end;
+    if (testf) then begin
+      defsiptrunk = STr.Code;
+    end;
+  end;
+
+  if (blank(defsiptrunk)) then begin
+    defsiptrunk = DefaultSIPTrunk(PBXCr,"");
+  end;
+
+  if (nonblank(defsiptrunk)) then begin
+    AddLineToArea("exten => s,1,ExecIf($[\"${DIALCOUNTRY}\" = \"\"]?MSet(DIALCOUNTRY=${HW_SIPTRUNKVAR_" & defsiptrunk & "}))",a_conf);
+  end;
+
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  if (ReadFirstMain(STr,1,true)) begin
+    if (STr.PBXConnection==PBXCr.Code) then begin
+      if (STr.Closedf==0) then begin
+        if (nonblank(STr.DefaultCallerId)) then begin
+          AddLineToArea("same => n,Set(CALLERID(all)=""" & STr.Comment & """ <" & STr.DefaultCallerId & ">)",a_conf);
+        end;
+      end;
+    end;
+  end;
+  
+  AddLineToArea("same => n,Return",a_conf);
+
+  WriteAreaToFile(a_conf,conf_file,0);
+  return;
+end;
+
+global
+updating procedure CreateQueueManagementConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+  record SipTrunk2Vc STr;
+  record PBXQueueVc PBXQr;
+  record PBXConnectionVc PBXC2r;
+  boolean testf,foundf,test2f,test3f,found2f,firstf,found3f;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/queuemanagement.conf";
+
+  AddLineToArea("[HW_QUEUE_MANAGEMENT]",a_conf);
+
+  if (PBXCr.IAXf!=0) then begin
+    while (LoopMain(PBXC2r,1,true)) begin
+      testf = true;
+      if (PBXC2r.Closed!=0) then begin testf = false; end;
+      if (IsAsteriskPbxType(PBXC2r.PBXType)==false) then begin testf = false; end;
+      if (PBXC2r.Code==PBXCr.Code) then begin testf = false; end;
+      if (PBXC2r.IAXf==0) then begin testf = false; end;
+      if (blank(PBXC2r.PBXHostIP)) then begin testf = false; end;
+      if (testf==true) then begin
+        ResetLoop(STr);
+        STr.PBXConnection = PBXC2r.Code;
+        foundf = true;
+        while (LoopKey("PBXConnection",STr,1,foundf)) begin
+          if (STr.PBXConnection!=PBXC2r.Code) then begin foundf = false; end;
+          test2f = foundf;
+          if (STr.Closedf!=0) then begin test2f = false; end;
+          if (test2f) then begin
+            ResetLoop(PBXQr);
+            PBXQr.SipTrunk = STr.Code;
+            found2f = true;
+            while (LoopKey("SipTrunk",PBXQr,1,found2f)) begin
+              if (PBXQr.SipTrunk!=STr.Code) then begin found2f = false; end;
+              test3f = found2f;
+              if (PBXQr.Closed!=0) then begin test3f = false; end;
+              if (test3f==true) then begin
+                AddLineToArea("exten => HW_Q_" & PBXQr.Code & ",1,Answer()",a_conf);
+                AddLineToArea("same => n,Ringing",a_conf);
+                AddLineToArea("same => n,Dial(IAX2/HW_IAX_" & PBXC2r.Code & "/HW_Q_" & PBXQr.Code & ",60,TtKk)",a_conf);
+                AddLineToArea("same => n,Hangup()",a_conf);
+              end;
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (testf) then begin
+      ResetLoop(PBXQr);
+      PBXQr.SipTrunk = STr.Code;
+      found2f = true;
+      while (LoopKey("SipTrunk",PBXQr,1,found2f)) begin
+        if (PBXQr.SipTrunk!=STr.Code) then begin found2f = false; end;
+        test2f = found2f;
+        if (PBXQr.Closed!=0) then begin test2f = false; end;
+        if (test2f==true) then begin
+          AddLineToArea("exten => HW_Q_" & PBXQr.Code & ",1,Answer()",a_conf);
+          AddLineToArea("same => n,GoTo(HW_Q_" & PBXQr.Code & ",s,1)",a_conf);
+// We use AMI actions to add/remove queue members now, so this code is not needed - and it is buggy (can generate conflicts if many PBX connections/queues are defined)
+//          AddLineToArea("exten => *" & STr.CountryCode & "*" & PBXQr.QueueID & "1,1,AddQueueMember(HWQUEUE" & PBXQr.Code & ",,,,${CALLERID(name)},)",a_conf);
+//          AddLineToArea("same => n,Wait(1)",a_conf);
+//          AddLineToArea("same => n,GoToIf($[""${AQMSTATUS}"" = ""ADDED""]?HW_QUEUEMEMBER_LOGGEDIN,s,1)",a_conf);
+//          AddLineToArea("same => n,GoToIf($[""${AQMSTATUS}"" = ""MEMBERALREADY""]?HW_QUEUEMEMBER_ALREADYON,s,1)",a_conf);
+//          AddLineToArea("same => n,Wait(1)",a_conf);
+//          AddLineToArea("same => n,Hangup()",a_conf);
+//          AddLineToArea("exten => *" & STr.CountryCode & "*" & PBXQr.QueueID & "0,1,RemoveQueueMember(HWQUEUE" & PBXQr.Code & ",)",a_conf);
+//          AddLineToArea("same => n,Wait(1)",a_conf);
+//          AddLineToArea("same => n,GoToIf($[""${RQMSTATUS}"" = ""REMOVED""]?HW_QUEUEMEMBER_LOGGEDOUT,s,1)",a_conf);
+//          AddLineToArea("same => n,Wait(1)",a_conf);
+//          AddLineToArea("same => n,Hangup()",a_conf);
+        end;
+      end;
+    end;
+  end;
+
+  ResetLoop(STr);
+  STr.PBXConnection = PBXCr.Code;
+  foundf = true;
+  while (LoopKey("PBXConnection",STr,1,foundf)) begin
+    if (STr.PBXConnection!=PBXCr.Code) then begin foundf = false; end;
+    testf = foundf;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (blank(STr.CountryCode)) then begin testf = false; end;
+    if (testf) then begin
+      found3f = false;
+      firstf = true;
+      ResetLoop(PBXQr);
+      PBXQr.SipTrunk = STr.Code;
+      found2f = true;
+      while (LoopKey("SipTrunk",PBXQr,1,found2f)) begin
+        if (PBXQr.SipTrunk!=STr.Code) then begin found2f = false; end;
+        test2f = found2f;
+        if (PBXQr.Closed!=0) then begin test2f = false; end;
+        if (test2f==true) then begin
+          if (firstf) then begin
+            firstf = false;
+            found3f = true;
+            AddLineToArea("exten => *" & STr.CountryCode & "*00,1,RemoveQueueMember(HWQUEUE" & PBXQr.Code & ",)",a_conf);
+          end else begin
+            AddLineToArea("same => n,RemoveQueueMember(HWQUEUE" & PBXQr.Code & ",)",a_conf);
+          end;
+        end;
+      end;
+      if (found3f) then begin
+        AddLineToArea("same => n,GoTo(HW_QUEUEMEMBER_LOGGEDOUT,s,1)",a_conf);
+      end;
+    end;
+  end;
+
+  AddLineToArea("[HW_QUEUEMEMBER_LOGGEDIN]",a_conf);
+  AddLineToArea("exten => s,1,Playback(agent-loginok)",a_conf);
+  AddLineToArea("same => n,Wait(1)",a_conf);
+  AddLineToArea("same => n,Hangup()",a_conf);
+
+  AddLineToArea("[HW_QUEUEMEMBER_LOGGEDOUT]",a_conf);
+  AddLineToArea("exten => s,1,Playback(silence/1&agent-loggedoff)",a_conf);
+  AddLineToArea("same => n,Wait(1)",a_conf);
+  AddLineToArea("same => n,Hangup()",a_conf);
+
+  AddLineToArea("[HW_QUEUEMEMBER_ALREADYON]",a_conf);
+  AddLineToArea("exten => s,1,Wait(1)",a_conf);
+  AddLineToArea("same => n,Wait(1)",a_conf);
+  AddLineToArea("same => n,Playback(silence/1&agent-alreadyon)",a_conf);
+  AddLineToArea("same => n,Wait(1)",a_conf);
+  AddLineToArea("same => n,Hangup()",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+  return;
+end;
+
+function Boolean ShouldCopySoundFileToPBX(record PBXConnectionVc PBXCr,record PBXSoundVc PBXSr,var string queue)
+begin
+  Boolean res;
+  record PBXQueueVc PBXQr;
+  record SipTrunk2Vc STr;
+  record PBXIVRTreeVc PBXIVRTr;
+  LongInt pos;
+  
+  res = true;
+  if (blank(PBXSr.Queue)) then begin goto LShouldCopySoundFileToPBX; end;
+  
+  while (GetNextSubstring(PBXSr.Queue,pos,",",queue)) begin
+    if ((PBXSr.Event==kAsteriskEventSoundQueueStart) or (PBXSr.Event==kAsteriskEventSoundLineClosed) or (PBXSr.Event==kAsteriskEventSoundLineBusy)) begin
+      PBXQr.Code = queue;
+      if (ReadFirstMain(PBXQr,1,true)) then begin
+        STr.Code = PBXQr.SipTrunk;
+        if (ReadFirstMain(STr,1,true)) then begin
+          if (PBXCr.Code==STr.PBXConnection) then begin goto LShouldCopySoundFileToPBX; end;
+        end;
+      end;
+    end;
+    if ((PBXSr.Event==kAsteriskEventSoundIVRStart) or (PBXSr.Event==kAsteriskEventSoundIVRClosed)) begin
+      PBXIVRTr.Code = queue;
+      if (ReadFirstMain(PBXIVRTr,1,true)) then begin
+        STr.Code = PBXIVRTr.SipTrunk;
+        if (ReadFirstMain(STr,1,true)) then begin
+          if (PBXCr.Code==STr.PBXConnection) then begin goto LShouldCopySoundFileToPBX; end;
+        end;
+      end;
+    end;
+  end;
+  res = false;
+
+LShouldCopySoundFileToPBX:;
+  ShouldCopySoundFileToPBX = res;
+  return;
+end;
+
+global
+updating procedure GenerateSoundFiles(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  record PBXSoundVc PBXSr;
+  record Attach2Vc Attach2r;
+  record RLinkVc RLr;
+  string 255 fname,queue;
+  Area a;
+  Integer filenr;
+  LongInt filecnt,idx;
+  string 255 sounddir,mohsounddir,filename;
+
+  sounddir = AsteriskConfigBaseDir(PBXCr,localf) & "/var/lib/asterisk/sounds";
+  CreateFolderHierarchy(sounddir & "/");
+  filecnt = CountFilesInDir(sounddir);
+  for (idx = filecnt; idx>0; idx = idx - 1) begin
+    filename = GetFileNameInDir(sounddir,idx-1);
+    if ((left(filename,12)=="HW_PBXSound_") or (left(filename,4)=="snd_")) then begin
+      Delete_File(sounddir & "/" & filename);
+    end;
+  end;
+
+  mohsounddir = AsteriskConfigBaseDir(PBXCr,localf) & "/var/lib/asterisk/sounds-moh";
+  if (DirExists(mohsounddir)) then begin DeleteFolder(mohsounddir); end;
+  CreateFolderHierarchy(mohsounddir & "/");
+  while (LoopMain(PBXSr,1,true)) begin
+    if (PBXSr.Closed==0) then begin
+      filenr = 1;
+      if (PBXSr.Event==kAsteriskEventSoundMusicOnHold) then begin
+        fname = mohsounddir & "/";
+        CreateFolderHierarchy(fname);
+        while (ReadRecordLink(PBXSr,filenr,Attach2r,RLr)) begin
+          if ((nonblank(Attach2r.FileName)) and (Attach2r.Uploading==0)) then begin
+            fname = mohsounddir & "/" & Attach2r.FileName;
+            SetAreaZeroSize(a);
+            AddAttachFileToArea(Attach2r,a,false);
+            Delete_File(fname);
+            WriteAreaToFile(a,fname,0);
+          end;
+          filenr = filenr + 1;
+        end;
+      end else begin
+        if (ShouldCopySoundFileToPBX(PBXCr,PBXSr,queue)==true) then begin
+          if (nonblank(queue)) then begin
+            fname = AsteriskConfigBaseDir(PBXCr,localf) & "/var/lib/asterisk/sounds/" & SoundFileName(queue,PBXSr.Event) & ".wav";
+            while (ReadRecordLink(PBXSr,filenr,Attach2r,RLr)) begin
+              if ((nonblank(Attach2r.FileName)) and (Attach2r.Uploading==0)) then begin
+                SetAreaZeroSize(a);
+                AddAttachFileToArea(Attach2r,a,false);
+                Delete_File(fname);
+                WriteAreaToFile(a,fname,0);
+              end;
+              filenr = filenr + 1;
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+  return;
+end;
+
+global
+updating procedure CreateACLConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/acl.conf";
+  WriteAreaToFile(a_conf,conf_file,0);
+  return;
+end;
+
+global
+updating procedure CreateUDPTLConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/udptl.conf";
+  AddLineToArea("[general]",a_conf);
+  AddLineToArea("udptlstart=4000",a_conf);
+  AddLineToArea("udptlend=4999",a_conf);
+  AddLineToArea("udptlfecentries = 3",a_conf);
+  AddLineToArea("udptlfecspan = 3",a_conf);
+  AddLineToArea("use_even_ports = no",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+  return;
+end;
+
+global
+updating procedure CreateCELConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/cel.conf";
+  AddLineToArea("[general]",a_conf);
+  AddLineToArea("[manager]",a_conf);
+  AddLineToArea("[radius]",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+  return;
+end;
+
+global
+updating procedure CreateCCSSConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/ccss.conf";
+  AddLineToArea("[general]",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+  return;
+end;
+
+global
+updating procedure CreateStatsdConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/statsd.conf";
+  AddLineToArea("[general]",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+  return;
+end;
+
+global
+updating procedure CreatePJProjectConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/pjproject.conf";
+  WriteAreaToFile(a_conf,conf_file,0);
+  return;
+end;
+
+global
+updating procedure CreatePJSIPWizardConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+//  area a_conf;
+//  string 255 conf_file;
+
+//  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+//  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/pjsip_wizard.conf";
+//  WriteAreaToFile(a_conf,conf_file,0);
+  return;
+end;
+
+global
+updating procedure CreateARIConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/ari.conf";
+  AddLineToArea("[general]",a_conf);
+  AddLineToArea("enabled=no",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+  return;
+end;
+
+global
+updating procedure CreateHEPConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+//  area a_conf;
+//  string 255 conf_file;
+
+//  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+//  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/hep.conf";
+//  AddLineToArea("[general]",a_conf);
+//  AddLineToArea("enabled = no",a_conf);
+//  WriteAreaToFile(a_conf,conf_file,0);
+  return;
+end;
+
+global
+updating procedure CreateResParkingConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/res_parking.conf";
+  AddLineToArea("[general]",a_conf);
+  AddLineToArea("[default]",a_conf);
+  AddLineToArea("parkext => 700",a_conf);
+  AddLineToArea("parkpos => 701-720",a_conf);
+  AddLineToArea("context => HW_PARKED_CALLS",a_conf);
+  AddLineToArea("parkinghints = yes",a_conf);
+  AddLineToArea("parkingtime => 45",a_conf);
+  AddLineToArea("comebacktoorigin = yes",a_conf);
+  AddLineToArea("parkedplay = caller",a_conf);
+  AddLineToArea("parkedcalltransfers = both",a_conf);
+  AddLineToArea("parkedcallreparking = both",a_conf);
+  AddLineToArea("parkedmusicclass = HW",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+end;
+
+global
+updating procedure CreateResConfigSQLite3Conf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/res_config_sqlite3.conf";
+  WriteAreaToFile(a_conf,conf_file,0);
+end;
+
+global
+updating procedure CreatePJSIPNotifyConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+//  area a_conf;
+//  string 255 conf_file;
+
+//  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+//  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/pjsip_notify.conf";
+//  AddLineToArea("[clear-mwi]",a_conf);
+//  AddLineToArea("Event=>message-summary",a_conf);
+//  AddLineToArea("Content-type=>application/simple-message-summary",a_conf);
+//  AddLineToArea("Content=>Messages-Waiting: no",a_conf);
+//  AddLineToArea("Content=>Message-Account: sip:asterisk@127.0.0.1",a_conf);
+//  AddLineToArea("Content=>Voice-Message: 0/0 (0/0)",a_conf);
+//  AddLineToArea("Content=>",a_conf);
+//  AddLineToArea("[aastra-check-cfg]",a_conf);
+//  AddLineToArea("Event=>check-sync",a_conf);
+//  AddLineToArea("[aastra-xml]",a_conf);
+//  AddLineToArea("Event=>aastra-xml",a_conf);
+//  AddLineToArea("[digium-check-cfg]",a_conf);
+//  AddLineToArea("Event=>check-sync",a_conf);
+//  AddLineToArea("[linksys-cold-restart]",a_conf);
+//  AddLineToArea("Event=>reboot_now",a_conf);
+//  AddLineToArea("[linksys-warm-restart]",a_conf);
+//  AddLineToArea("Event=>restart_now",a_conf);
+//  AddLineToArea("[polycom-check-cfg]",a_conf);
+//  AddLineToArea("Event=>check-sync",a_conf);
+//  AddLineToArea("[sipura-check-cfg]",a_conf);
+//  AddLineToArea("Event=>resync",a_conf);
+//  AddLineToArea("[sipura-get-report]",a_conf);
+//  AddLineToArea("Event=>report",a_conf);
+//  AddLineToArea("[snom-check-cfg]",a_conf);
+//  AddLineToArea("Event=>check-sync\;reboot=false",a_conf);
+//  AddLineToArea("[snom-reboot]",a_conf);
+//  AddLineToArea("Event=>check-sync\;reboot=true",a_conf);
+//  AddLineToArea("[cisco-check-cfg]",a_conf);
+//  AddLineToArea("Event=>check-sync",a_conf);
+//  WriteAreaToFile(a_conf,conf_file,0);
+  return;
+end;
+
+global
+updating procedure CreateAgentsConf(record PBXConnectionVc PBXCr,Boolean localf)
+begin
+  area a_conf;
+  string 255 conf_file;
+
+  CreateFolderHierarchy(AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/");
+  conf_file = AsteriskConfigBaseDir(PBXCr,localf) & "/etc/asterisk/agents.conf";
+  AddLineToArea("[general]",a_conf);
+  WriteAreaToFile(a_conf,conf_file,0);
+end;
+

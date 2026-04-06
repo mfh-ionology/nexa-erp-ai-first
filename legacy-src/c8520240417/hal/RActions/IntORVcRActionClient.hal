@@ -1,0 +1,71 @@
+external updating procedure RecordActionIntOR_Print(var record IntORVc,string,Boolean);
+
+global
+updating function LongInt IntORVcRecordUpdateClient(LongInt wn,var record IntORVc IntORp,record IntORVc IntOR2p,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  record AutoActionBlock AutoActionRec;
+
+  if ((IntOR2p.StatusFlag==0) and (IntORp.StatusFlag==1)) then begin
+    BlockLoad(AutoActionRec);
+    if (AutoActionRec.Or2Printing!=0) then begin
+      RecordActionIntOR_Print(IntORp,"",false);
+    end;
+  end;
+//  res = 1;
+  IntORVcRecordUpdateClient = res;
+  RETURN;
+END;
+
+global
+updating function LongInt IntORVcRecordSaveClient(LongInt wn,var record IntORVc IntORp,record IntORVc IntOR2p,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  record AutoActionBlock AutoActionRec;
+
+  if (IntORp.StatusFlag!=0) then begin
+    BlockLoad(AutoActionRec);
+    if (AutoActionRec.Or2Printing!=0) then begin
+      RecordActionIntOR_Print(IntORp,"",false);
+    end;
+  end;
+//  res = 1;
+  IntORVcRecordSaveClient = res;
+  RETURN;
+END;
+
+procedure RetainIntORStatus(record IntORVc IntORp,record IntORVc IntOR2p)
+begin
+  Integer i,rwcnt;
+  row IntORVc IntORrw;
+  row IntORVc IntOR2rw;
+  Integer rwcnt2;
+  
+  IntORp.OSFlag = IntOR2p.OSFlag;
+  IntORp.StatusFlag = IntOR2p.StatusFlag;
+  IntORp.StatusMark = IntOR2p.StatusMark;
+  rwcnt = MatRowCnt(IntORp);
+  rwcnt2 = MatRowCnt(IntOR2p);
+  for (i=0;i<rwcnt;i=i+1) begin
+    if (i<rwcnt2) then begin
+      MatRowGet(IntORp,i,IntORrw);
+      MatRowGet(IntOR2p,i,IntOR2rw);
+      IntORrw.Sent = IntOR2rw.Sent;
+      IntORrw.POOrd = IntOR2rw.POOrd;
+      IntORrw.Shipd1 = IntOR2rw.Shipd1;
+      IntORrw.Shipd2 = IntOR2rw.Shipd2;
+      MatRowPut(IntORp,i,IntORrw);
+    end;
+  end;
+  return;
+end;
+
+global
+function LongInt IntORVcRecordProtectFields(var record IntORVc IntORr,record IntORVc IntOR2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  
+  RetainIntORStatus(IntOR2r,IntORr);
+  IntORVcRecordProtectFields = res;
+  return;
+end;

@@ -1,0 +1,97 @@
+remote function string 255 GetMPesaPhone(string);
+remote function string 255 GetMPesaTill(string);
+remote procedure MPesaTransVc_PasteTransactionId(var record RcVc);
+remote function string 255 FindMpesaTransactionID(string,string);
+
+global
+procedure OpenMPesaPayTouchScreenOClass(Integer mwn,LongInt sernr,val sum4,val change,val tot,string curncy,string paymode,string label,string custcode)
+begin
+  Integer nwn;
+  record RcVc RepSpec;
+  record BaseCurBlock BCb;
+  Boolean testf;
+  record IVCashVc IVCashr;
+
+  RepSpec.vals0 = -change;
+  if (RepSpec.vals0==0) then begin
+    RepSpec.vals0 = tot;
+  end;
+  testf = true;
+  if (sum4>0) then begin
+    if (RepSpec.vals0<=0) then begin
+      testf = false;
+    end;
+  end else begin
+    if (RepSpec.vals0>=0) then begin
+      testf = false;
+    end;
+  end;
+  if (testf) then begin
+    nwn = OpenWindow("MPesaPayTouchScreenOClass",0,mwn,"","",RepSpec);
+    if (nwn>0) then begin
+      switch (GetWindowClass(mwn)) begin
+        case "NPTSIVCashDClass":
+          GetWindowRecord(mwn,IVCashr);
+      end;
+      BlockLoad(BCb);
+      DeselectWindow(nwn,false);
+      RepSpec.ArtMode = 1;
+      RepSpec.long1 = sernr;
+      RepSpec.CurncyCode = curncy;
+      if (blank(RepSpec.CurncyCode)) then begin
+        RepSpec.CurncyCode = BCb.BaseCur1;
+      end;
+      RepSpec.AccStr = paymode;
+      RepSpec.f6 = label;
+      RepSpec.f1 = GetMPesaPhone(custcode);
+      RepSpec.f2 = GetMPesaTill(curncy);
+      PutWindowRecord(nwn,RepSpec);
+      WindowFieldGoto(nwn,RepSpec,-1,"f1",true);
+    end;
+  end else begin
+    CloseWindow(nwn);
+    MessageBox(24195,"");
+  end;
+  return;
+end;
+
+global
+function Boolean MPesaPayTouchScreenOClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record RcVc RepSpec;
+
+  switch (fieldname) begin
+    case "f1":
+      if (changed!=0) then begin
+        DeselectWindow(wn,false);
+        GetWindowRecord(wn,RepSpec);
+        MPesaTransVc_PasteTransactionId(RepSpec);
+        PutWindowRecord(wn,RepSpec);
+      end;
+  end;
+  MPesaPayTouchScreenOClassAfterEditField = res;
+  return;
+end;
+
+global
+procedure SendMpesaTransactionStatusMessage(record MPesaTransVc MPesaTransr,string resultcode,string result)
+begin
+  record RcVc RepSpec;
+  Integer wn;
+
+  wn = FindWindow("MPesaPayTouchScreenOClass");
+  if (wn>0) then begin
+    GetWindowRecord(wn,RepSpec);
+    if (RepSpec.f3==MPesaTransr.TransID) then begin
+      if (resultcode=="0") then begin
+        RepSpec.f1 = MPesaTransr.MSISDN;
+        PutWindowRecord(wn,RepSpec);
+        FindMpesaTransactionID(RepSpec.f1,RepSpec.vals0);
+      end else begin
+        MessageBox(0,result);
+      end;
+    end;
+  end; 
+  return;
+end;

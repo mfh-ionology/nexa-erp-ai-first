@@ -1,0 +1,558 @@
+external function string 255 GeneratePassword2(Integer);
+external function string 255 StrReplace(string,string,string);
+external procedure IVCashDClass_RefreshStringList(Integer,record IVCashVc);
+remote procedure IVCashSumup(var record IVCashVc,Boolean);
+external function val ValFromString(string,string,string);
+remote updating procedure StoreCredCardSlip_VerifoneBanksys3(string,val,string,string,string,string,string,string,string,LongInt,string,Integer,string,var record NotepadVc,var record NotepadVc);
+external updating procedure IVCashDClassTouchScreenFinishButton();
+external function string 50 TimeToString(time,string,boolean);
+external function val AbsoluteVal(val);
+external procedure LogAreaToFile(string,area);
+remote function Integer IVCashPOSButtonAutoFinish(Integer);
+
+global
+function Boolean SmartPayPairingRequest(string localmachine,string terminalid,string pairingcode)
+begin
+  Boolean res;
+  record RahaxiBlock Rb;
+  record CYBlock CYb;
+  area request,reply,replyheader;
+  json js; 
+  string 255 tstr,t1,errcode,errstr;
+  LongInt pos;
+  
+  BlockLoad(Rb);
+  if (nonblank(Rb.RahaxiServerIP) and Rb.RahaxiServerPort>0) begin
+    BlockLoad(CYb);
+
+    AddTextToArea("POSRegisterID=" & UrlEncode(localmachine) & "&",request);
+    AddTextToArea("POSRegisterName=" & UrlEncode(terminalid) & "&",request);
+    AddTextToArea("POSBusinessName=" & UrlEncode(CYb.CompName) & "&",request);
+    AddTextToArea("POSVendorName=" & UrlEncode("HansaWorld Ireland Ltd.") & "&",request);
+    AddTextToArea("Address=" & UrlEncode(CYb.Addr0 & " " & CYb.Addr1) & "&",request);
+    AddTextToArea("City=" & UrlEncode(CYb.Addr2) & "&",request);
+    AddTextToArea("State=" & UrlEncode(CYb.Addr3) & "&",request);
+    AddTextToArea("ZipCode=" & UrlEncode(CYb.Addr4) & "&",request);
+    AddTextToArea("Email=" & UrlEncode(CYb.emailAddr) & "&",request);
+    AddTextToArea("Phone=" & UrlEncode(CYb.Phone),request);
+
+      LogAreaToFile("_SmartPayPairingRequest_request" & ".txt",request);
+
+    if (SendWebRequest3(Rb.RahaxiServerIP,Rb.RahaxiServerPort,-1,true,"PUT","/POS/Pairing/" & pairingcode,"application/x-www-form-urlencoded","",false,request,reply,replyheader,60)) then begin
+      js = ParseJSONArea(reply);
+      if (JSONNodeExists(js,"error")) then begin
+        MessageBox(0,JSONGet(js,"error"));
+      end else begin
+        if (JSONNodeExists(js,"result")) then begin
+          if (JSONGet(js,"result")=="success") then begin
+            CheckmarkBox(0,USetStr(15092));
+            res = true;
+          end;
+        end else begin
+          if (GetAreaLength(replyheader)>4) then begin
+            tstr = GetLineFromArea(replyheader,0);
+            pos = 0;
+            GetNextSubstring(tstr,pos," ",t1);
+            GetNextSubstring(tstr,pos," ",errcode);
+            switch (errcode) begin
+              otherwise 
+                GetNextSubstring(tstr,pos," ",errstr);
+            end;
+            MessageBox(40432," " & errstr);
+          end;
+        end;
+      end;
+    end else begin
+      MessageBox(41900,"");
+    end;
+
+      LogAreaToFile("_SmartPayPairingRequest_replyheader" & ".txt",replyheader);
+      LogAreaToFile("_SmartPayPairingRequest_reply" & ".txt",reply);
+  end;
+  SmartPayPairingRequest = res;
+  return;
+end;
+
+
+procedure TCPIPSmartPay_DisplayStatus(Integer ProcessingWn,string result,string authorisation,Integer sid,Boolean finishedf)
+begin
+  record RcVc RepSpec;
+
+  GetWindowRecord(ProcessingWn,RepSpec);
+  PutWindowString(ProcessingWn,"Status",USetStr(sid));        
+  PutWindowString(ProcessingWn,"Result",result);   
+  PutWindowString(ProcessingWn,"AdditionalInfo",authorisation);   
+  if (finishedf) then begin
+    PutWindowString(ProcessingWn,"ProcessingFinished","true");        
+  end else begin
+    PutWindowString(ProcessingWn,"ProcessingFinished","false");        
+  end;
+  PutWindowRecord(ProcessingWn,RepSpec);
+  return;
+end;
+
+global
+procedure SmartPayCreditCard_Purchase(string ahost,LongInt aport,LongInt transnr,Integer invtype,val v,val cw,string paymode,string label,string action,string authorisation,Integer ProcessingWn)
+begin
+  record LocalMachineBlock LMb;  
+  record RahaxiBlock Rb;
+  record CYBlock CYb;
+  area request;  
+  record RcVc RepSpec;
+  string 255 host;
+  LongInt port;
+  transaction Integer gProcessingWn;
+  transaction Integer gProcessingInvType;
+  transaction string 255 gProcessingPayMode;
+  transaction string 255 gProcessingLabel;
+  transaction string 255 gProcessingAmount;
+  transaction string 255 gProcessingWithdrawal;
+  transaction string 255 gLocalMachineCode;
+
+  host = ahost;
+  port = aport;
+  BlockLoad(Rb);
+  if (blank(host)) then begin
+    host = Rb.RahaxiServerIP;
+  end;
+  if (port<=0) then begin
+    port = Rb.RahaxiServerPort;
+  end;
+  if (blank(host) or port<=0) begin
+    goto LSmartPayCreditCard_Purchase;
+  end;
+
+  if (nonblank(host)) then begin
+
+    switch (action) begin
+      case "QRPayment":
+        TCPIPSmartPay_DisplayStatus(ProcessingWn,"",authorisation,27419,false);
+      otherwise
+        TCPIPSmartPay_DisplayStatus(ProcessingWn,"",authorisation,27420,false);
+    end;
+
+    BlockLoad(CYb);
+    BlockLoad(LMb);
+
+    AddTextToArea("POSRegisterID=" & UrlEncode(LMb.LocalMachineCode) & "&",request);
+    AddTextToArea("POSRegisterName=" & UrlEncode(LMb.TerminalID) & "&",request);
+    AddTextToArea("POSBusinessName=" & UrlEncode(CYb.CompName) & "&",request);
+    AddTextToArea("POSVendorName=" & UrlEncode("HansaWorld Ireland Ltd.") & "&",request);
+    AddTextToArea("TransactionMode=" & "ASYNC" & "&",request);
+    switch (action) begin
+      case "Authorise":
+        AddTextToArea("TransactionType=" & "Card.Authorise" & "&",request);
+      case "Finalise":
+        AddTextToArea("TransactionType=" & "Card.Finalise" & "&",request);
+        AddTextToArea("TransactionReference=" & authorisation & "&",request);
+      case "CCPayment":
+        if (invtype==kPOSInvoiceTypeCredit or v<0) then begin
+          AddTextToArea("TransactionType=" & "Card.Refund" & "&",request);
+        end else begin
+          if (cw>0) then begin
+            AddTextToArea("TransactionType=" & "Card.PurchasePlusCash" & "&",request);
+          end else begin
+            AddTextToArea("TransactionType=" & "Card.Purchase" & "&",request);
+          end;
+        end;
+      case "QRPayment":
+        if (invtype==kPOSInvoiceTypeCredit or v<0) then begin
+          AddTextToArea("TransactionType=" & "QR.Refund" & "&",request);
+        end else begin
+          AddTextToArea("TransactionType=" & "QR.Merchant.Purchase" & "&",request);
+        end;
+    end;
+    switch (action) begin
+      case "Authorise":
+        AddTextToArea("AmountAuth=" & ValToString(AbsoluteVal(v*100),M40Val,"",".",0) & "&",request);
+        AddTextToArea("TransactionReference=" & authorisation,request);
+      case "Finalise":
+        if (v==0) then begin
+          AddTextToArea("AmountFinal=" & "0" & "&",request);
+        end else begin
+          AddTextToArea("AmountFinal=" & ValToString(AbsoluteVal(v*100),M40Val,"",".",0) & "&",request);
+        end;
+        AddTextToArea("TransactionReference=" & authorisation,request);
+      otherwise
+        if (cw>0) then begin
+          AddTextToArea("AmountTotal=" & ValToString(AbsoluteVal(v*100),M40Val,"",".",0) & "&",request);
+          AddTextToArea("AmountCash=" & ValToString(AbsoluteVal(cw*100),M40Val,"",".",0),request);
+        end else begin
+          AddTextToArea("AmountTotal=" & ValToString(AbsoluteVal(v*100),M40Val,"",".",0),request);
+        end;
+    end;
+  
+    gProcessingWn = ProcessingWn;
+    gLocalMachineCode = LMb.LocalMachineCode;
+    gProcessingLabel = label;
+    gProcessingInvType = invtype;
+    gProcessingPayMode = paymode;
+    gProcessingAmount = ValToString(v*100,M40Val,"",".",0);
+    gProcessingWithdrawal = ValToString(cw*100,M40Val,"",".",0);
+
+    LogAreaToFile("_SmartPayCreditCard_Purchase_request.txt",request);
+
+    SendAsyncWebRequest(host,port,-1,true,"POST","/POS/Transaction","application/x-www-form-urlencoded","",request,"SmartPayCreditCard_PurchaseReply",40);
+  
+  end;
+  
+LSmartPayCreditCard_Purchase:;  
+  return;
+end;
+
+updating procedure AddPayment(Integer ProcessingWn,string amount,string withdrawal,string paymode,string label,string receipt,vector string vreplyfields)
+begin
+  Integer mwn,ivwn;
+  record IVCashVc IVCr;
+  row IVCashVc IVCrw;
+  record JobVc Jobr;
+  Date td;
+  record NotepadVc merchantNoter;
+  area a;
+  string 255 tstr;
+  record RcVc RepSpec;
+  record RcVc tRepSpec;
+  val sum,cw;
+  record DefCashBlock DCb;
+  
+  mwn = MotherWindow(ProcessingWn);
+  ivwn = MotherWindow(mwn);
+  
+  switch (GetWindowFileName(ivwn)) begin
+    case "IVCashVc":
+      GetWindowRecord(ivwn,IVCr);
+      GetWindowRecord(ProcessingWn,RepSpec);
+
+      if (RepSpec.FirstVer>0) then begin
+        ClearRow(IVCr,IVCrw,RepSpec.FirstVer);
+      end else begin
+        ClearRow(IVCr,IVCrw,kInvoiceRowTypeCreditCardPayment);
+      end;
+      sum = ValFromString(amount,"","")/100.00;
+      cw = ValFromString(withdrawal,"","")/100.00;
+      IVCrw.Sum = sum;
+      if (cw>0) then begin
+        if ((sum-cw)>0) then begin
+          IVCrw.Sum = sum - cw;
+          if (IVCrw.Sum<0) then begin
+            IVCrw.Sum = sum;
+          end;
+        end;
+      end;
+      IVCrw.AuthorizationCode = vreplyfields["authorisation"];
+      IVCrw.PayMode = paymode;
+      IVCrw.Spec = label;
+      IVCrw.CCTimestamp = vreplyfields["timestamp"];
+      IVCrw.CCTransID = vreplyfields["transactionId"];
+      IVCrw.CCReceiptNr = vreplyfields["receiptnr"];
+      MatRowPut(IVCr,MatRowCnt(IVCr),IVCrw);
+      IVCashSumup(IVCr,true);
+      if (sum>0) then begin
+        BlockLoad(DCb);
+        ClearRow(IVCr,IVCrw,kInvoiceRowTypeCashWithdrawal);
+        IVCrw.Sum = cw;
+        IVCrw.PayMode = DCb.DefCWPayMode;
+        IVCrw.Spec = USetStr(24615);
+        MatRowPut(IVCr,MatRowCnt(IVCr),IVCrw);
+      end;
+      IVCashSumup(IVCr,true);
+      PutWindowRecord(ivwn,IVCr);
+      IVCashDClass_RefreshStringList(ivwn,IVCr);
+      if (WindowDoOK(ivwn,0)) then begin
+        if (nonblank(receipt)) then begin
+//          tstr = ReplaceStringWithString(receipt,"\\n",chr(13) & chr(10));
+          tstr = StrReplace(receipt,"\\n",chr(13) & chr(10));
+
+          AddTextToArea(tstr,a);
+          AddAreaToTextField(a,merchantNoter);
+          StoreCredCardSlip_VerifoneBanksys3("A",ValFromString(amount,"","")/100.00,IVCrw.CCTransID,IVCrw.CCReceiptNr,IVCrw.AuthorizationCode,IVCrw.CCTimestamp,"","","",IVCr.SerNr,"IVCashVc",0,IVCr.LocalMachineCode,merchantNoter,merchantNoter);
+        end;
+        TCPIPSmartPay_DisplayStatus(ProcessingWn,"","",27384,true);
+        if (IVCr.RetValue>=0) then begin
+          if (IVCashPOSButtonAutoFinish(ivwn)==kPOSButtonAutoFinishYes) then begin
+            IVCashDClassTouchScreenFinishButton;
+          end;
+          CloseWindow(mwn);
+        end;
+      end;
+    case "JobVc":
+      GetWindowRecord(ivwn,Jobr);
+      GetWindowRecord(ProcessingWn,RepSpec);
+      switch (Jobr.PreAuthorized) begin
+        case 0:
+          Jobr.PreAuthTransactionReference = vreplyfields["TransactionReference"];
+          Jobr.AuthorizationCode = vreplyfields["authorisation"];
+          Jobr.PreAuthorized = 1;
+        case 1:
+          Jobr.PreAuthorized = 2;
+      end;
+      PutWindowRecord(ivwn,Jobr);
+      if (WindowDoOK(ivwn,0)) then begin
+        CloseWindow(mwn);
+      end;
+    otherwise
+      switch (GetWindowFileName(mwn)) begin  //just for testing    
+        case "RcVc":
+          PutWindowString(ProcessingWn,"ProcessingFinished","true");        
+          switch (GetWindowClass(mwn)) begin
+            case "CCSmartPayTestingOClass":
+              GetWindowRecord(ProcessingWn,RepSpec);
+              GetWindowRecord(mwn,tRepSpec);
+              tRepSpec.f1 = vreplyfields["TransactionReference"];
+              PutWindowRecord(mwn,tRepSpec);          
+              CloseWindow(ProcessingWn);
+          end;
+      end;
+  end;
+  return;
+end;
+
+global
+updating procedure RESTAPISmartPay_WaitForTransactionResultIdleTask(string arg)
+begin
+  LongInt pos;
+  string 255 pollingurl,lm,amount,withdrawal,paymode,label;
+  string 255 url,transid,accesstoken;
+  string 255 tstr,t1,errcode,errstr;
+  string 255 transstatus,transresult,result,receipt,resulttext;
+  vector string 255 vreplyfields;
+  Integer ProcessingWn;
+  area request,reply,replyheader;
+  Boolean timedf,testf;
+  Time ct,t;
+  Date td;
+  json js; 
+
+  pos = 0;
+  GetNextSubstring(arg,pos,"|",pollingurl);
+  GetNextSubstring(arg,pos,"|",tstr);
+  ProcessingWn = StringToInt(tstr);  
+  GetNextSubstring(arg,pos,"|",lm);
+  GetNextSubstring(arg,pos,"|",amount);
+  GetNextSubstring(arg,pos,"|",withdrawal);
+  GetNextSubstring(arg,pos,"|",paymode);
+  GetNextSubstring(arg,pos,"|",label);
+
+  pos = 0;
+  GetNextSubstring(pollingurl,pos,"//",url);
+  GetNextSubstring(pollingurl,pos,"/",url);
+  GetNextSubstring(pollingurl,pos,"/",url);
+  GetNextSubstring(pollingurl,pos,"/",tstr);
+  GetNextSubstring(pollingurl,pos,"/",tstr);
+  GetNextSubstring(pollingurl,pos,"?",transid);
+  GetNextSubstring(pollingurl,pos,"=",tstr);
+  GetNextSubstring(pollingurl,pos,"=",accesstoken);
+
+
+  if (SendWebRequest3(url,443,-1,true,"GET","/POS/Transaction/" & transid & "?merchantAccessToken=" & accesstoken,"application/x-www-form-urlencoded","",false,request,reply,replyheader,60)) then begin
+    ct = CurrentTime;
+//    LogAreaToFile("_RESTAPISmartPay_WaitForTransactionResultIdleTask" & TimeToString(ct,"HHMMSS",false)  & "_reply.txt",reply);
+//    LogAreaToFile("_RESTAPISmartPay_WaitForTransactionResultIdleTask" & TimeToString(ct,"HHMMSS",false)  & "_replyheader.txt",replyheader);
+
+    LogAreaToFile("_RESTAPISmartPay_WaitForTransactionResultIdleTask_reply.txt",reply);
+
+    tstr = GetLineFromArea(replyheader,0);
+    pos = 0;
+    GetNextSubstring(tstr,pos," ",t1);
+    GetNextSubstring(tstr,pos," ",errcode);
+
+    switch (errcode) begin
+      case "200": testf = true;
+      case "204": testf = true;
+      otherwise 
+        GetNextSubstring(tstr,pos,chr(13),errstr);
+        MessageBox(0,"errcode " & errcode & " errstr " & errstr);
+    end;
+
+    if (testf) then begin
+      js = ParseJSONArea(reply);
+      if (JSONNodeExists(js,"error")) then begin
+        TCPIPSmartPay_DisplayStatus(ProcessingWn,JSONGet(js,"error"),"",27388,true);
+        PutWindowString(ProcessingWn,"ProcessingFinished","true");        
+      end else begin
+        vreplyfields["TransactionReference"] = JSONGet(js,"data/TransactionReference");
+        vreplyfields["transactionId"] = JSONGet(js,"transactionId");
+        vreplyfields["timestamp"] = JSONGet(js,"data/Timestamp");
+        if (blank(vreplyfields["timestamp"])) then begin
+          vreplyfields["timestamp"] = JSONGet(js,"transactionTimeStamp");
+        end;
+        
+        vreplyfields["authorisation"] = JSONGet(js,"data/AuthId");
+        if (blank(vreplyfields["authorisation"])) then begin
+          vreplyfields["authorisation"] = JSONGet(js,"data/RefundId");
+        end;
+        vreplyfields["receiptnr"] = JSONGet(js,"data/AcquirerRef");
+
+        receipt = JSONGet(js,"data/Receipt");
+        tstr = JSONGet(js,"data/Function");
+        transstatus = JSONGet(js,"transactionStatus");
+        transresult = JSONGet(js,"data/TransactionResult");
+        result = JSONGet(js,"data/Result");
+        resulttext = JSONGet(js,"data/ResultText");
+        if (blank(resulttext)) then begin resulttext = transresult; end;
+
+        switch (transstatus) begin
+          case "PENDING": 
+            timedf = true;
+            TCPIPSmartPay_DisplayStatus(ProcessingWn,"",GetWindowString(ProcessingWn,"AdditionalInfo"),27389,false);
+          case "COMPLETED": 
+            switch (transresult) begin
+              case "OK":
+                AddPayment(ProcessingWn,amount,withdrawal,paymode,label,receipt,vreplyfields);
+              case "OK-ACCEPTED":
+                AddPayment(ProcessingWn,amount,withdrawal,paymode,label,receipt,vreplyfields);
+              case "CANCELLED":
+                TCPIPSmartPay_DisplayStatus(ProcessingWn,resulttext,"",27385,true);
+              case "OK-DECLINED":
+                TCPIPSmartPay_DisplayStatus(ProcessingWn,resulttext,"",27386,true);
+              case "OK-UNAVAILABLE":
+                TCPIPSmartPay_DisplayStatus(ProcessingWn,resulttext,"",27388,true);
+              case "FAILED":
+                TCPIPSmartPay_DisplayStatus(ProcessingWn,resulttext,"",27386,true);
+              case "FAILED-INTERFACE":
+                TCPIPSmartPay_DisplayStatus(ProcessingWn,resulttext,"",27386,true);
+            end;
+        end;
+        
+      end;
+    end;
+  end else begin
+    timedf = true;
+  end;
+
+  if (timedf) then begin
+    RemoveTask("RESTAPISmartPay_WaitForTransactionResult");
+    ct = CurrentTime;
+    t = ct;
+    t.second = t.second + 1;
+    td = CurrentDate;
+    if (ct>t) then begin
+      td = AddDay(td,1);
+    end;
+    NewTimedTask("RESTAPISmartPay_WaitForTransactionResult","RESTAPISmartPay_WaitForTransactionResult","RESTAPISmartPay_WaitForTransactionResultIdleTask",pollingurl & "|" & ProcessingWn & "|" & lm & "|" & amount &  "|" & withdrawal & "|" & paymode & "|" & label,td,t,"","");
+  end;
+  return;
+end;
+
+global
+procedure SmartPayCreditCard_PurchaseReply(area reply,area replyheader,boolean timedout)
+begin
+  string 255 tstr,t1,errstr,errcode;
+  LongInt pos;
+  Boolean testf;
+  json js; 
+  string 255 url;
+  Time ct,t;
+  Date td;
+  transaction Integer gProcessingWn;
+  transaction Integer gProcessingInvType;
+  transaction string 255 gProcessingPayMode;
+  transaction string 255 gProcessingLabel;
+  transaction string 255 gProcessingAmount;
+  transaction string 255 gProcessingWithdrawal;
+  transaction string 255 gLocalMachineCode;
+
+
+
+    LogAreaToFile("_SmartPayCreditCard_PurchaseReply_reply.txt",reply);
+    LogAreaToFile("_SmartPayCreditCard_PurchaseReply_replyheader.txt",replyheader);
+
+  if (timedout) then begin
+  end else begin
+    if (GetAreaLength(replyheader)>4) then begin
+      tstr = GetLineFromArea(replyheader,0);
+      pos = 0;
+      GetNextSubstring(tstr,pos," ",t1);
+      GetNextSubstring(tstr,pos," ",errcode);
+
+      switch (errcode) begin
+        case "200": testf = true;
+        case "204": testf = true;
+        otherwise 
+          GetNextSubstring(tstr,pos,chr(13),errstr);
+//          MessageBox(0,"errcode " & errcode & " errstr " & errstr);
+          TCPIPSmartPay_DisplayStatus(gProcessingWn,errstr,"",27388,true);
+          PutWindowString(gProcessingWn,"ProcessingFinished","true");        
+      end;
+    end;
+    if (testf) then begin
+      js = ParseJSONArea(reply);
+      tstr = JSONGet(js,"transactionId");
+      tstr = JSONGet(js,"deviceId");
+      tstr = JSONGet(js,"transactionStatus");
+      tstr = JSONGet(js,"data/Function");
+      url = JSONGet(js,"data/PollingUrl");
+
+      RemoveTask("RESTAPISmartPay_WaitForTransactionResult");
+      ct = CurrentTime;
+      t = ct;
+      t.second = t.second + 1;
+      td = CurrentDate;
+      if (ct>t) then begin
+        td = AddDay(td,1);
+      end;
+
+      NewTimedTask("RESTAPISmartPay_WaitForTransactionResult","RESTAPISmartPay_WaitForTransactionResult","RESTAPISmartPay_WaitForTransactionResultIdleTask",url & "|" & gProcessingWn & "|" & gLocalMachineCode & "|" & gProcessingAmount & "|" & gProcessingWithdrawal & "|" & gProcessingPayMode & "|" & gProcessingLabel,td,t,"","");
+    end;
+  end;
+  return;
+end;
+
+
+
+global
+procedure CancelCCSmartPayTestingOClass()
+begin
+  CloseWindow(CurWindow);
+  return;
+end;
+
+global
+procedure AuthoriseCCSmartPayTestingOClass()
+begin
+  record RcVc RepSpec;
+  record RcVc vRepSpec;
+  Integer vwn;
+
+  DeselectWindow(CurWindow,false);
+  GetWindowRecord(CurWindow,RepSpec);
+
+              vRepSpec.UsedOnly = kLocalCCTerminalSmartPay;
+              vRepSpec.ArtMode = 1;
+              vRepSpec.long1 = 1;
+              vRepSpec.AccStr = "Q";
+              vRepSpec.f5 = "Authorise";
+              vRepSpec.CurncyCode = "USD";
+              vRepSpec.OKmode = 0;
+              vRepSpec.FirstVer = -1;
+              vwn = OpenWindow("CCPayVerifoneProcessingWClass",0,CurWindow,"","",vRepSpec);
+              DeselectWindow(vwn,false);
+
+//  SmartPayCreditCard_Purchase(1,0,RepSpec.vals0,"Authorise","Q","Authorise",GeneratePassword2(8),vwn);
+  return;
+end;
+
+global
+procedure FinaliseCCSmartPayTestingOClass()
+begin
+  record RcVc RepSpec;
+  record RcVc vRepSpec;
+  Integer vwn;
+
+  DeselectWindow(CurWindow,false);
+  GetWindowRecord(CurWindow,RepSpec);
+
+              vRepSpec.UsedOnly = kLocalCCTerminalSmartPay;
+              vRepSpec.ArtMode = 1;
+              vRepSpec.long1 = 1;
+              vRepSpec.AccStr = "Q";
+              vRepSpec.f5 = "Finalise";
+              vRepSpec.CurncyCode = "USD";
+              vRepSpec.OKmode = 0;
+              vRepSpec.FirstVer = -1;
+              vwn = OpenWindow("CCPayVerifoneProcessingWClass",0,CurWindow,"","",vRepSpec);
+              DeselectWindow(vwn,false);
+
+//  SmartPayCreditCard_Purchase(1,0,RepSpec.vals0,"Authorise","Q","Finalise",RepSpec.f1,vwn);
+  return;
+end;

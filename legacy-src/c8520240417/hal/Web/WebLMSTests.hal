@@ -1,0 +1,1373 @@
+external function Boolean FindTheUser(var record UserVc);
+external function Date DateFromString(string,string);
+external Function Boolean WebHBSDivPublicMain(string,string,LongInt,LongInt,Boolean,Boolean);
+external function string 60 GetWHUCountryCode2(Integer);
+external procedure ToolWebStartPage();
+external procedure ToolWebStartBody(string);
+external procedure ToolWebEndPage(Boolean);
+external procedure ToolWebSetMainTitle();
+
+external procedure ToolWebStartTable();
+external procedure ToolWebEndTable();
+external procedure ToolWebMenuItem(string,string,string,string,var Integer);
+
+external function string 255 ToolWebBuildLink(string,string);
+external procedure ToolWebHBSDivStartPage();
+external procedure ToolWebHBSDivSetMainTitle();
+external procedure ToolWebHBSDivStartBody(string,string);
+external procedure ToolWebLineStart();
+external procedure ToolWebLineEnd();
+external procedure ToolWebHBSDivEndPage();
+external function string 200 GetWebLanguage();
+external procedure ToolWebHBSDivPrintHeaderLang(string,string,string);
+external function string 200 ToolWebReturnTheText(Integer);
+external procedure GetConfInfo(string,var string,var string,var LongInt);
+external procedure ToolWebGetTheText(Integer,var string);
+external function Boolean GetNextCustNr(var string);
+external procedure WebOutStringNL(string);
+external function string 255 TranslateString(string,string);
+external procedure WebSetLanguage(var string);
+external procedure CourseEventVc_UpdatePrice(var record CourseEventVc);
+external procedure HT2Per(Date, Date , var string);
+external function string 255 ConvertXml(string);
+external function Boolean UnivTestActiveVc_GetCourseDateTime(string,var Date,var Time,var Date,var Time);
+external function Boolean DateTimeInRange(Date,Time,Date,Time,Date,Time);
+
+function Boolean CourseContentVc_VisibilityDateTime(LongInt contentnr,var date sd,var time st,var date ed,var time et)
+begin
+  Boolean res;
+  record CourseContentVc CourseContentr;
+
+  CourseContentr.SerNr = contentnr;
+  if (ReadFirstMain(CourseContentr,1,true)) then begin
+    if (CourseContentr.Visible==0) then begin
+      res = false;
+      goto LCourseContentVc_VisibilityDateTime;
+    end;
+    if (nonblankdate(CourseContentr.VisibleFromDate)) then begin
+      sd = CourseContentr.VisibleFromDate;
+      st = CourseContentr.VisibleFromTime;
+      ed = CourseContentr.VisibleToDate;
+      et = CourseContentr.VisibleToTime;
+      if (DateTimeInRange(CurrentDate,CurrentTime,sd,st,ed,et)==false) then begin
+        res = false;
+        goto LCourseContentVc_VisibilityDateTime;
+      end;
+    end;
+    res = true;
+  end;
+LCourseContentVc_VisibilityDateTime:;
+  CourseContentVc_VisibilityDateTime = res;
+  return;
+end;
+
+procedure WebHWUSendRefreshHTML(string newaddress,integer delay,boolean htmlenvelope)
+begin
+  boolean debug;
+  debug = false;
+    
+  if (htmlenvelope) then begin
+    ToolWebStartPage;
+    ToolWebSetMainTitle;
+    ToolWebStartBody("");
+  end;
+  WebOutString("Please Wait...");
+  WebOutString("<br><img src=""art/anim_clock.gif"">");
+  
+  WebOutString("<form id=""webhwuhf"" method=""POST"" action=""");
+  if (debug) then begin
+    WebOutString(newaddress);
+  end else begin
+    WebOutLink(newaddress);
+  end;
+  WebOutString(""">");
+  WebOutString("</form>");
+  if (debug==false) then begin
+    WebOutString("<script>");
+    WebOutNL;
+    WebOutString("<!--");
+    WebOutNL;
+    WebOutString("setTimeout('document.getElementById(""webhwuhf"").submit()'," & delay * 1000 & ");");
+    WebOutString("//-->");
+    WebOutNL;
+    WebOutString("</script>");
+  end;
+  if (htmlenvelope) then begin
+    ToolWebEndPage(true);
+  end;
+  return;
+end;
+
+function Time GetTime(string t)
+begin
+  Time t2;
+  string 20 tstr;
+  if (len(t)>=6) then begin
+    tstr = left(t,2) & ":";
+    tstr = tstr & mid(t,2,2) & ":";
+    tstr = tstr & mid(t,4,2);
+    t2 = tstr;
+  end;
+  GetTime = t2;
+  return;
+end;
+
+function string 255 ToTimeString(Time t)
+begin
+  string 255 res,tstr;
+
+  if (nonblank(t)) then begin
+    tstr = "" & t.hour;
+    if (len(tstr)<2) then begin tstr = "0" & tstr; end;
+    res = tstr;
+    tstr = "" & t.minute;
+    if (len(tstr)<2) then begin tstr = "0" & tstr; end;
+    res = res & tstr;
+    tstr = "" & t.second;
+    if (len(tstr)<2) then begin tstr = "0" & tstr; end;
+    res = res & tstr;
+  end else begin
+    res = "000000";
+  end;
+  ToTimeString = res;
+  return;
+end;
+
+procedure WebTestFeedbackJS()
+begin
+  WebOutStringNL("<link type=""text/css"" rel=""stylesheet"" href=""/styles/webtest.css"" />");
+  WebOutStringNL("<script type=""text/javascript"" src=""/js/webtest.js""></script>");
+  WebOutStringNL("<script type=""text/javascript"" src=""/js/jquery.js""></script>");
+  return;
+end;
+
+function boolean FindWebTestFeedback(string custcode,LongInt univtestnr,date startdate,time starttime,var record UnivTestFeedback2Vc UTFr)
+begin
+  boolean res;
+  
+  UTFr.CustCode = custcode;
+  UTFr.UnivTestNr = univtestnr;
+  UTFr.CreatedDate = startdate;
+  UTFr.CreatedTime = starttime;
+  res = ReadFirstMain(UTFr,4,true);
+  
+  FindWebTestFeedback = res;
+  return;  
+end;
+
+procedure ToolWebTestFeedbackInfo(boolean showfeedbackfields)
+begin
+  WebOutString("  <tr height=""30"" class=""hiddenwebfeedback""");
+  if (showfeedbackfields) then begin
+    WebOutStringNL(">");
+  end else begin
+    WebOutStringNL(" style=""display: none;"">");
+  end;
+  WebOutStringNL("    <td width=""45"" class=""triip"" align=""center"">&nbsp;</td>");
+  WebOutString("    <td class=""triip""><div class=""webfeedbackinfo"">");
+  WebOutString("You can enter feedback into the provided fields.  If you want to inform us about spelling mistakes or badly phrased questions/answers, please enter the corrected/better version into the provided field. Thank you for your comments.");
+  WebOutStringNL("</div></td>");
+  WebOutStringNL("  </tr>");
+  return;
+end;
+
+
+procedure ToolWebTestFeedbackHead(integer rownr,string curvalue,boolean showfeedbackfields)
+begin
+  string 255 lcurval;
+  
+  lcurval = curvalue;
+  if (lcurval=="-") then begin
+    lcurval = "";
+  end;
+  WebOutString("  <tr height=""30"" class=""hiddenwebfeedback""");
+  if (showfeedbackfields) then begin
+    WebOutStringNL(">");
+  end else begin
+    WebOutStringNL(" style=""display: none;"">");
+  end;
+  WebOutStringNL("    <td width=""45"" class=""triip"" align=""center""><div class=""webfeedbackrowicon headfield"">&nbsp;</div></td>");
+  WebOutString("    <td class=""triip""><input type=""text"" name=""feedbackQ"" maxlength=""250"" value=""");
+  WebOutString(ConvertXml(lcurval));
+  WebOutStringNL(""" class=""webfeedbackfield headfield""></td>");
+  WebOutStringNL("  </tr>");
+  return;
+end;
+
+
+procedure ToolWebTestFeedbackRow(integer rownr,integer answernr,string curvalue,boolean showfeedbackfields)
+begin
+  WebOutString("        <tr valign=""top"" class=""hiddenwebfeedback""");
+  if (showfeedbackfields) then begin
+    WebOutStringNL(">");
+  end else begin
+    WebOutStringNL(" style=""display: none;"">");
+  end;
+  WebOutStringNL("          <td align=""center"" width=""30""><div class=""webfeedbackrowicon"">&nbsp;</div></td>");
+  WebOutString("          <td><input type=""text"" name=""feedback" & answernr & """ maxlength=""250"" value=""");
+  WebOutString(ConvertXml(curvalue));
+  WebOutStringNL(""" class=""webfeedbackfield""></td>");
+  WebOutStringNL("        </tr>");
+  return;
+end;
+
+
+procedure ToolWebTestFeedbackRating(string label,string fieldname,integer curvalue)
+begin
+  integer i;
+  
+  WebOutStringNL("<div class=""ratingscontrol"">");
+  WebOutStringNL(label);
+  WebOutStringNL("<br>");
+  for (i=1;i<=5;i=i+1) begin
+    if (curvalue==i) then begin
+      WebOutString("<input type=""radio"" name=""" & fieldname & """ value=""" & i & """ checked=""checked"">");
+    end else begin
+      WebOutString("<input type=""radio"" name=""" & fieldname & """ value=""" & i & """>");
+    end;
+    WebOutString(i);
+    if (i!=5) then begin
+      WebOutString("&nbsp;");
+    end;
+  end;
+  WebOutStringNL("</div>");
+  return;
+end;
+
+
+procedure ToolWebTestFeedbackQuestionRating(integer rownr,integer currating1,integer currating2,boolean showfeedbackfields)
+begin
+  WebOutStringNL("<tr height=""30"" class=""hiddenwebfeedback""");
+  if (showfeedbackfields) then begin
+    WebOutStringNL(">");
+  end else begin
+    WebOutStringNL(" style=""display: none;"">");
+  end;
+  WebOutStringNL("<td width=""390"">");
+
+  ToolWebTestFeedbackRating("How suitable is this question to the topic?","rating1",currating1);
+  ToolWebTestFeedbackRating("How suitable is this question to the training material?","rating2",currating2);
+
+  WebOutStringNL("</td>");
+  WebOutStringNL("</tr>");
+  return;
+end;
+
+procedure ToolWebTestFeedbackOverallComment(record UnivTestAnswer2Vc Answerr,boolean feedbacksubmitted)
+begin
+  WebOutStringNL("<div id=""webfeedbackoverall"">");
+  WebOutStringNL("<h2>Feedback</h2>");
+  if (feedbacksubmitted==false) then begin
+    WebOutStringNL("<form method=""POST"" action=""/WebTestFeedback.hal"">");
+    WebOutStringNL("<input type=""hidden"" name=""p_cc"" value=""" & WebGetArg("p_cc") & """>");
+    WebOutStringNL("<input type=""hidden"" name=""testnr"" value=""" & WebGetArg("testnr") & """>");
+    WebOutStringNL("<input type=""hidden"" name=""enddate"" value=""" & WebGetArg("enddate") & """>");
+    WebOutStringNL("<input type=""hidden"" name=""starttime"" value=""" & WebGetArg("starttime") & """>");
+    WebOutStringNL("<input type=""hidden"" name=""plook"" value=""" & WebGetArg("plook") & """>");
+    WebOutStringNL("<input type=""hidden"" name=""company"" value=""" & CurrentCompany & """>");
+    WebOutStringNL("<input type=""hidden"" name=""langcode"" value=""" & WebGetArg("langcode") & """>");
+    WebOutStringNL("<input type=""hidden"" name=""ed"" value=""" & WebGetArg("ed") & """>");
+    WebOutStringNL("<input type=""hidden"" name=""st"" value=""" & WebGetArg("st") & """>");
+    
+    WebOutStringNL("<ul>");
+    WebOutStringNL("<li class=""info"">");
+    WebOutStringNL("Please take a few minutes to provide some feedback about this test.");
+    WebOutStringNL("</li>");
+    WebOutStringNL("<li class=""overallfeedback"">");
+    WebOutStringNL("<textarea name=""overallfeedback"" id=""overallfeedbacktext""></textarea>");
+    WebOutStringNL("</li>");
+    WebOutStringNL("<li class=""overallrating"">");
+    ToolWebTestFeedbackRating("How well did the test cover the topic?","rating_coverstopic",0);
+    WebOutStringNL("</li>");
+    WebOutStringNL("<li class=""overallrating"">");
+    ToolWebTestFeedbackRating("How well did the training cover the test?","rating_trainingcoverstest",0);
+    WebOutStringNL("</li>");
+    WebOutStringNL("<li class=""buttons"">");
+    WebOutStringNL("<input type=""submit"" name=""s1"" value=""Submit"">");
+    WebOutStringNL("</li>");
+    WebOutStringNL("</form>");
+  end else begin
+    WebOutStringNL("<p>Thank you for your feedback.</p>");
+  end;
+  WebOutStringNL("</div>");
+  return;
+end;
+
+
+procedure GetWebTestFeedbackRow(record UnivTestAnswer2Vc Answerr,integer rownr,var record UnivTestFeedback2Vc UTFr,var row UnivTestFeedback2Vc UTFrw,var boolean showfeedbackfields)
+begin
+  row UnivTestAnswer2Vc Answerrw;
+  
+  if (FindWebTestFeedback(Answerr.CustCode,Answerr.UnivTestNr,Answerr.EndDate,Answerr.StartTime,UTFr)) then begin
+    MatRowGet(Answerr,rownr,Answerrw);
+    MatRowGet(UTFr,Answerrw.OrigRowNo-1,UTFrw)
+    if ((UTFrw.Question!="-" and nonblank(UTFrw.Question)) or nonblank(UTFrw.Alt1) or nonblank(UTFrw.Alt2) or nonblank(UTFrw.Alt3) or nonblank(UTFrw.Alt4) or nonblank(UTFrw.Alt5) or nonblank(UTFrw.Alt6)) then begin
+      showfeedbackfields = true;
+    end;
+    if (showfeedbackfields==false) then begin
+      if (UTFrw.Rating1>0 or UTFrw.Rating2>0) then begin
+        showfeedbackfields = true;
+      end;
+    end;
+  end;
+  
+  return;
+end;
+
+global
+updating procedure LMSUpdateWebTestFeedback(string custcode,string univtestnr,date d,time t,integer rownr,string feedbackQ,string feedback1,string feedback2,string feedback3,string feedback4,string feedback5,string feedback6,string rating1,string rating2)
+begin
+  record UnivTestAnswer2Vc Answerr;
+  row UnivTestAnswer2Vc Answerrw;
+  record UnivTestFeedback2Vc oldUTFr,UTFr;
+  row UnivTestFeedback2Vc UTFrw;
+  integer i,rwcnt;
+  boolean newf;
+  
+  Answerr.CustCode = custcode;
+  Answerr.UnivTestNr = univtestnr;
+  Answerr.EndDate = d;
+  Answerr.StartTime = t;
+  if (ReadFirstKey("CustCode",Answerr,4,true)==false) then begin
+    goto LHWUUWTFeedback;
+  end;
+  MatRowGet(Answerr,rownr,Answerrw);
+
+  UTFr.CustCode = custcode;
+  UTFr.UnivTestNr = univtestnr;
+  UTFr.CreatedDate = d;
+  UTFr.CreatedTime = t;
+  if (ReadFirstMain(UTFr,4,true)) then begin
+    RecordCopy(oldUTFr,UTFr);
+  end else begin
+    Recordnew(UTFr);
+    UTFr.CustCode = custcode;
+    UTFr.UnivTestNr = univtestnr;
+    UTFr.CreatedDate = d;
+    UTFr.CreatedTime = t;
+    UTFr.CourseName = Answerr.CourseName;
+    UTFr.PersonName = Answerr.PersonName;
+    UTFr.UserCode = Answerr.Person;
+    UTFr.Answers = Answerr.SerNr;
+    newf = true;
+
+    rwcnt = MatRowCnt(Answerr);
+    for (i=0;i<rwcnt;i=i+1) begin
+      ClearRow(UTFr,UTFrw,1);
+      UTFrw.Question = "-";
+      MatRowPut(UTFr,i,UTFrw);
+    end;
+  end;
+  
+  MatRowGet(UTFr,Answerrw.OrigRowNo-1,UTFrw);
+  UTFrw.Question = feedbackQ;
+  UTFrw.Alt1 = feedback1;
+  UTFrw.Alt2 = feedback2;
+  UTFrw.Alt3 = feedback3;
+  UTFrw.Alt4 = feedback4;
+  UTFrw.Alt5 = feedback5;
+  UTFrw.Alt6 = feedback6;
+  UTFrw.Rating1 = StringToInt(rating1);
+  UTFrw.Rating2 = StringToInt(rating2);
+  if (blank(UTFrw.Question)) then begin UTFrw.Question = "-"; end;
+  MatRowPut(UTFr,Answerrw.OrigRowNo-1,UTFrw);
+  
+  if (newf) then begin
+    if (RecordInsert(UTFr,true)) then begin end;
+  end else begin
+    if (RecordUpdate(oldUTFr,UTFr,true)==0) then begin end;
+  end;
+
+LHWUUWTFeedback:;
+  return;
+end;
+
+function string 255 GetAnswerText(string Answer)
+begin
+  string 255 res;
+  
+  switch (Answer) begin
+    case "+": res = "yes";
+    case "-": res = "no";
+  end;
+  
+  GetAnswerText = res;
+  return;
+end;
+
+procedure ShowOneAnswer(string Answer)
+begin
+  string 1 UserAnswer,TestAnswer;
+  string 255 tstr;
+  
+  if (nonblank(Answer)) then begin
+    UserAnswer = Mid(Answer,0,1);
+    TestAnswer = Mid(Answer,1,1);
+    tstr = Right(Answer,Len(Answer)-2);
+    if (UserAnswer==TestAnswer) then begin
+      tstr = tstr & " [correct: " & GetAnswerText(UserAnswer) & "]";
+    end else begin
+      tstr = tstr & " [you answered: " & GetAnswerText(UserAnswer) & "; correct answer was: " & GetAnswerText(TestAnswer) & "]";
+    end;
+    WebOutStringNL("<li>" & tstr & "</li>");
+  end;
+  
+  return;
+end;
+
+procedure ShowAnswerFeedback(record UnivTestAnswer2Vc Answerr)
+begin
+  row UnivTestAnswer2Vc Answerrw;
+  Integer i,rwcnt;
+  record UnivTest2Vc Testr;
+  Boolean TestPassed;
+  
+  Testr.SerNr = Answerr.UnivTestNr;
+  ReadFirstMain(Testr,1,true);
+  TestPassed = Answerr.CorrectAnswers>=Testr.CorrAnsToPass;
+  WebOutTagOpen("<div id=""answerfeedback"">");
+  WebOutStringNL("<h1>Test Results</h1>");
+  WebOutStringNL("<p>");
+  if (TestPassed) then begin
+    WebOutStringNL("Congratulations! You passed the test.<br>");
+  end;
+  WebOutStringNL("You answered " & Answerr.CorrectAnswers & " out of " & Answerr.NoOfQuestions & " questions correctly.<br>");
+  WebOutStringNL("Number of questions needed to pass the test: " & Testr.CorrAnsToPass & ".<br>");
+  WebOutStringNL("</p>");
+  if (Answerr.CorrectAnswers<Answerr.NoOfQuestions) then begin
+    WebOutStringNL("<h2>Incorrectly answered questions</h2>");
+    WebOutStringNL("<ul>");
+    rwcnt = MatRowCnt(Answerr);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(Answerr,i,Answerrw);
+      if (Answerrw.Answer!="OK") then begin
+        WebOutStringNL("<li>");
+        WebOutStringNL(Answerrw.Question);
+        if (TestPassed) then begin
+          WebOutStringNL("<ul>");
+          ShowOneAnswer(Answerrw.Alt1);
+          ShowOneAnswer(Answerrw.Alt2);
+          ShowOneAnswer(Answerrw.Alt3);
+          ShowOneAnswer(Answerrw.Alt4);
+          ShowOneAnswer(Answerrw.Alt5);
+          ShowOneAnswer(Answerrw.Alt6);
+          WebOutStringNL("</ul>");
+        end;
+        WebOutStringNL("</li>");
+      end;
+    end;
+    WebOutStringNL("</ul>");
+  end;
+  WebOutTagClose("</div>");
+  return;
+end;
+
+procedure HWUUnivTestRowNew(record UnivTestAnswer2Vc Answerr,Integer rownr)
+begin
+  row UnivTestAnswer2Vc Answerrw;
+  string 255 ans;
+  boolean checked;
+  integer i;
+  string 255 tstr;
+  record UnivTestFeedback2Vc UTFr;
+  row UnivTestFeedback2Vc UTFrw;
+  string 255 curval;
+  boolean showfeedbackfields;
+
+  MatRowGet(Answerr,rownr,Answerrw);
+  GetWebTestFeedbackRow(Answerr,rownr,UTFr,UTFrw,showfeedbackfields);
+  WebOutStringNL("  <tr height=""1"">");
+  WebOutStringNL("    <td colspan=""3"">&nbsp;<br><br></td>");
+  WebOutStringNL("  </tr>");
+  WebOutStringNL("  <tr height=""30"">");
+  WebOutStringNL("    <td width=""45"" class=""triip"" align=""center"">" & rownr+1 & "</td>");
+  WebOutString("    <td class=""triip"">" & Answerrw.Question);
+  WebOutStringNL(" <a id=""showfeedbackfields"" onclick=""show_comments()"">[Comment]</a></td>");
+  WebOutStringNL("  </tr>");
+  ToolWebTestFeedbackHead(rownr,UTFrw.Question,showfeedbackfields);
+  ToolWebTestFeedbackInfo(showfeedbackfields);
+  WebOutStringNL("  <tr>");
+  WebOutStringNL("    <td valign=""top"" colspan=""2"">");
+  WebOutStringNL("      <table border=""0"" width=""100%"" class=""tekst"" cellspacing=""0"" cellpadding=""2"">");
+
+  tstr = "";
+  for (i=1;i<=6;i=i+1) begin
+    switch (i) begin
+      case 1: ans = Answerrw.Alt1; curval = UTFrw.Alt1;
+      case 2: ans = Answerrw.Alt2; curval = UTFrw.Alt2;
+      case 3: ans = Answerrw.Alt3; curval = UTFrw.Alt3;
+      case 4: ans = Answerrw.Alt4; curval = UTFrw.Alt4;
+      case 5: ans = Answerrw.Alt5; curval = UTFrw.Alt5;
+      case 6: ans = Answerrw.Alt6; curval = UTFrw.Alt6;
+      otherwise ans = ""; curval = "";
+    end;
+
+    if (nonblank(ans)) then begin
+      checked = false;
+      if (mid(ans,1,1)=="+" or mid(ans,1,1)=="-") then begin
+        if (left(ans,1)=="+") then begin
+          checked = true;
+        end;
+        ans = right(ans,len(ans)-2);
+      end else begin
+        ans = right(ans,len(ans)-1);
+      end;
+      WebOutStringNL("        <tr valign=""top"">");
+      WebOutString("          <td align=""center"" width=""30""><input id=""quest" & chr(96+i) & """ name=""quest" & chr(96+i) & """ type=""checkbox"" value=""true""");
+      if (checked) then begin
+        WebOutString("checked=""true""");
+        tstr = tstr & "+";
+      end else begin
+        tstr = tstr & "-";
+      end;
+
+      WebOutStringNL("></td>");
+      WebOutStringNL("          <td>" & ans & "</td>");
+      WebOutStringNL("        </tr>");
+      ToolWebTestFeedbackRow(rownr,i,curval,showfeedbackfields);
+    end else begin
+      tstr = tstr & ".";
+    end;
+  end;
+
+  WebOutStringNL("      </table>");
+  WebOutStringNL("    </td>");
+  WebOutStringNL("  </tr>");
+  return;
+end;
+
+procedure WebHWLMSUnivTestPageHeader(string UserName,record CUVc CUr,record UnivTest2Vc Testr,integer rownr,string langcode,integer newcomp,boolean custstyle,Date EndDate,Time StartTime,LongInt contentnr)
+begin
+  string 255 llink,tstr;
+  Date TestStartDate,TestEndDate,CurDate;
+  Time TestStartTime,TestEndTime,CurTime;
+
+  CurDate = CurrentDate;
+  CurTime = CurrentTime;
+
+  CourseContentVc_VisibilityDateTime(contentnr,TestStartDate,TestStartTime,TestEndDate,TestEndTime);
+
+  WebOutString("<form method=""post"" action=""");
+  llink = ToolWebBuildLink("WebHWULMSTestNavigate","&sessionid=" & WebGetArg("sessionid"));
+  WebOutLink(llink);
+  WebOutStringNL(""">");
+  WebOutStringNL("<input value=""" & WebGetArg("ws") & """ type=""hidden"" name=""warningshown"" id=""warningshown"">");
+  if (WebGetArg("ws")!="1" and nonblankdate(TestEndDate)) begin
+    WebOutStringNL("<script type=""text/javascript"">");
+    WebOutString("var t;");
+    WebOutString("var serverTime=new Date(");
+    WebOutString(CurDate.year & ",");
+    WebOutString(CurDate.month-1 & ","); //month is 0 based
+    WebOutString(CurDate.day & ",");
+    WebOutString(CurTime.hour & ",");
+    WebOutString(CurTime.minute & ",");
+    WebOutString(CurTime.second & ",");
+    WebOutString("0);");
+    WebOutString("var clientTime=new Date();");
+    WebOutString("var offset=serverTime-clientTime;");
+    WebOutString("var endTime=new Date(");
+    WebOutString(TestEndDate.year & ",");
+    WebOutString(TestEndDate.month-1 & ","); //month is 0 based
+    WebOutString(TestEndDate.day & ",");
+    WebOutString(TestEndTime.hour & ",");
+    WebOutString(TestEndTime.minute & ",");
+    WebOutString(TestEndTime.second & ",");
+    WebOutString("0)-offset;");
+    WebOutString("function TimeUpWarning() {");
+    WebOutString("  var curTime=new Date();");
+    WebOutString("  if ((endTime-curTime)<=(3*60*1000)) {");
+    WebOutString("    alert('You have less than 3 minutes before this test ends. Please finish up!');");
+    WebOutString("    var obj=document.getElementById('warningshown');");
+    WebOutString("    if (obj!=null) obj.value=1;");
+    WebOutString("  } else {");
+    WebOutString("    t=setTimeout('TimeUpWarning()',5000);");
+    WebOutString("  }");
+    WebOutString("}");
+    WebOutStringNL("t = setTimeout('TimeUpWarning()',5000);");
+    WebOutStringNL("</script>");
+  end;
+
+  WebOutString("<input value=""" & CUr.Code & """ type=""hidden"" name=""p_cc"" size=""31"">");
+  WebOutString("<input value=""" & Testr.SerNr & """ type=""hidden"" name=""testnr"" size=""31"">");
+  WebOutString("<input value=""" & contentnr & """ type=""hidden"" name=""contentnr"" size=""31"">");
+  WebOutString("<input value=""" & newcomp & """ type=""hidden"" name=""company"" size=""31"">");
+  WebOutString("<input value=""" & custstyle & """ type=""hidden"" name=""custstyle"">");
+  WebOutString("<input value=""" & rownr & """ type=""hidden"" name=""rownrpost"">");
+  WebOutString("<input value=""" & DateToString(EndDate,"YYYYMMDD") & """ type=""hidden"" name=""enddate"">");
+  WebOutString("<input value=""" & ToTimeString(StartTime) & """ type=""hidden"" name=""starttime"">");
+  WebOutString("<input type=""hidden"" name=""plook"" value=""" & WebGetArg("plook") & """");
+  WebOutStringNL("<table align=""center"" width=""90%"" cellspacing=""1"" cellpadding=""3"" border=""0"" class=""deftbl"">");
+  WebOutStringNL("  <tr><th>" & TranslateString("Test",langcode) & " " & Testr.CourseName & "</th></tr>");
+  WebOutStringNL("</table>");
+  WebOutString("<table align=""center"" bgcolor=""#FFFFFF"" width=""90%"" cellspacing=""3"" cellpadding=""3"" border=""0"" class="""">");
+
+  tstr = UserName;
+  if (blank(tstr)) then begin
+    WebOutString("<tr><td class=""feedback-txt"">" & TranslateString("30024",langcode) & "</td><td width=""72%""><input value="""" type=""text"" id=""person_name"" name=""person_name"" size=""31"" class=""feedback""></td></tr>");
+  end else begin
+    WebOutString("<tr><td width=""28%"" class=""feedback-txt"">" & TranslateString("30024",langcode) & ":</td><td width=""72%"" class=""feedback-txt"">" & tstr & "</td></tr>");
+  end;
+
+  WebOutStringNL("  <tr height=""1"">");
+  WebOutStringNL("    <td colspan=""3"">&nbsp;<br><br></td>");
+  WebOutStringNL("  </tr>");
+  WebOutString("</table>");
+  WebOutStringNL("<table align=""center"" width=""90%"" cellspacing=""1"" cellpadding=""3"" border=""0"" class=""deftbl"">");
+  tstr = "Questions";
+  if (nonblankdate(TestEndDate)) then begin
+    tstr = tstr & ", post your answers before";
+  end;
+  WebOutStringNL("  <tr><th>" & TranslateString(tstr,langcode) & " " & TestEndDate & " " & TestEndTime & "</th></tr>");
+  WebOutStringNL("</table>");
+
+  WebOutStringNL("<table align=""center"" bgcolor=""#FFFFFF"" width=""90%"" cellspacing=""0"" cellpadding=""3"" border=""0"" class="""">");
+  return;
+end;
+
+function boolean AllQuestionsAnsweredSkipCurrent(record UnivTestAnswer2Vc Answerr,integer rownr)
+begin
+  integer i,j,cnt;
+  string 255 alt;
+  boolean res,checked;
+  row UnivTestAnswer2Vc Answerrw;
+
+  res = true;
+  cnt = MatRowCnt(Answerr);
+
+  for (i=0;i<cnt;i=i+1) begin
+    if (i!=rownr) then begin
+      checked = false;
+      MatRowGet(Answerr,i,Answerrw);
+      for (j=1;j<=6;j=j+1) begin
+        switch (j) begin
+          case 1: alt = Answerrw.Alt1;
+          case 2: alt = Answerrw.Alt2;
+          case 3: alt = Answerrw.Alt3;
+          case 4: alt = Answerrw.Alt4;
+          case 5: alt = Answerrw.Alt5;
+          case 6: alt = Answerrw.Alt6;
+        end;
+        if (mid(alt,1,1)=="+" or mid(alt,1,1)=="-") then begin
+          if (left(alt,1)=="+") then begin
+            checked = true;
+          end;
+        end;
+      end;
+      if (checked==false) then begin
+        res = false;
+        goto LAllQuestionsAnsweredSkipCurrent;
+      end;
+    end;
+  end;
+LAllQuestionsAnsweredSkipCurrent:;
+  AllQuestionsAnsweredSkipCurrent = res;
+  return;
+end;
+
+procedure HWLMSShowQuestion(record UnivTestAnswer2Vc Answerr,integer quest,string langcode,integer thecomp,LongInt contentnr,boolean custstyle)
+begin
+  record UserVc Userr;
+  record UnivTest2Vc Testr;
+  record CUVc CUr;
+  string 255 confirmmessage,confirm2;
+  boolean res;
+  record UnivTestFeedback2Vc UTFr;
+  row UnivTestFeedback2Vc UTFrw;
+  boolean showfeedbackfields;
+  Integer nrofquestions;
+  Integer currentquest;
+
+  if (nonblank(CurrentUser)) then begin
+    Userr.Code = CurrentUser;
+    if (FindTheUser(Userr)) then begin
+      CUr.Code = Userr.CustCode;
+    end;
+  end;
+  if (blank(CUr.Code)) then begin
+    CUr.Code = CurrentCust;
+  end;
+  if (ReadFirstMain(CUr,1,true)) then begin end;
+
+  Testr.SerNr = Answerr.UnivTestNr;
+  if (ReadFirstMain(Testr,1,true)) then begin end;
+
+  nrofquestions = MatRowCnt(Answerr);
+  currentquest = quest + 1;
+
+  WebHWLMSUnivTestPageHeader(Answerr.PersonName,CUr,Testr,quest,langcode,thecomp,custstyle,Answerr.EndDate,Answerr.StartTime,contentnr);
+  HWUUnivTestRowNew(Answerr,quest);
+  
+  WebOutStringNL("  <tr height=""30""><td width=""190""><br><br></td></tr>");
+  GetWebTestFeedbackRow(Answerr,quest,UTFr,UTFrw,showfeedbackfields);
+  ToolWebTestFeedbackQuestionRating(quest,UTFrw.Rating1,UTFrw.Rating2,showfeedbackfields);
+
+  WebOutStringNL("  <tr height=""30"">");
+  WebOutStringNL("    <td width=""380"">");
+  if (currentquest>1) then begin
+    WebOutStringNL("<input type=""submit"" name=""navdircombo"" value=""Back"">&nbsp;");
+    if (currentquest>=4) then begin
+      WebOutStringNL("<button type=""submit"" name=""navdircombo"" value=""Page:1"">1</button>");
+      if (currentquest>=5) then begin
+        WebOutStringNL("...");
+      end;
+    end;
+  end;
+  if (currentquest==nrofquestions) then begin
+    if (currentquest-2>=0) then begin
+      WebOutStringNL("<button type=""submit"" name=""navdircombo"" value=""Page:" & currentquest-2 & """>" & currentquest-2 & "</button>");
+    end;
+    if (currentquest-1>=0) then begin 
+      WebOutStringNL("<button type=""submit"" name=""navdircombo"" value=""Page:" & currentquest-1 & """>" & currentquest-1 & "</button>");
+    end;
+    WebOutStringNL("<button type=""submit"" name=""navdircombo"" value=""Page:" & nrofquestions & """>" & nrofquestions & "</button>");
+    WebOutString("<input type=""submit"" name=""navdircombo"" value=""Finish"" onclick=""");
+    if (blank(Answerr.PersonName)) then begin
+      WebOutString("if (document.getElementById('person_name')!=null && document.getElementById('person_name').value=='') { ");
+      WebOutString("  alert('Please fill in your name. You cannot submit this test without specifying your name.'); ");
+      WebOutString("  return false; ");
+      WebOutString("} else {");
+    end;
+    WebOutString("    var submit=confirm('Do you want to submit this test? You cannot change any more questions after submitting!');");
+    res = AllQuestionsAnsweredSkipCurrent(Answerr,quest);
+    WebOutString("    if (submit) {");
+    if (res) then begin
+      WebOutString("      var ch=new Array('a','b','c','d','e','f');");
+      WebOutString("      var checked=false;");
+      WebOutString("      for (i=0;i<6;i++) {");
+      WebOutString("        var cb=document.getElementById('quest'+ch[i]);");
+      WebOutString("        if (cb!=null && cb.checked) checked=true;");
+      WebOutString("      }");
+      WebOutString("      if (checked==false) {");
+    end;
+    WebOutString("        submit=confirm('WARNING! You did not answer all the questions. Please cancel and review your questions. If you press Ok, your test will be submitted with unanswered questions!');");
+    if (res) then begin
+      WebOutString("      }");
+    end;
+    WebOutString("    }");
+    WebOutString("    return submit;");
+    if (blank(Answerr.PersonName)) then begin
+      WebOutString("}");
+    end;
+    WebOutStringNL("""></td>");
+  end else begin
+    if (currentquest-2>0) then begin
+      WebOutStringNL("<button type=""submit"" name=""navdircombo"" value=""Page:" & currentquest-2 & """>" & currentquest-2 & "</button>");
+    end;
+    if (currentquest-1>0) then begin 
+      WebOutStringNL("<button type=""submit"" name=""navdircombo"" value=""Page:" & currentquest-1 & """>" & currentquest-1 & "</button>");
+    end;
+    WebOutStringNL("<button type=""submit"" name=""navdircombo"" value=""Page:" & currentquest & """>" & currentquest & "</button>"); //Current page
+    if (currentquest+1<=nrofquestions) then begin
+      WebOutStringNL("<button type=""submit"" name=""navdircombo"" value=""Page:" & currentquest+1 & """>" & currentquest+1 & "</button>");
+    end;
+    if (currentquest+2<=nrofquestions) then begin
+      WebOutStringNL("<button type=""submit"" name=""navdircombo"" value=""Page:" & currentquest+2 & """>" & currentquest+2 & "</button>");
+    end;
+    if ((nrofquestions-currentquest)>=3) then begin
+      if ((nrofquestions-currentquest)>=4) then begin
+        WebOutStringNL("...");
+      end;
+      WebOutStringNL("<button type=""submit"" name=""navdircombo"" value=""Page:" & nrofquestions & """>" & nrofquestions & "</button>");
+    end;
+    WebOutStringNL("<input type=""submit"" name=""navdircombo"" value=""Next""></td>");
+  end;
+  WebOutStringNL("  </tr>");
+  WebOutStringNL("</table>");
+  WebOutStringNL("</form>");
+
+  return;
+end;
+
+global
+updating procedure LMSUpdateAnswers(string personname,LongInt univtestnr,string custcode,date enddate,time starttime,integer rownr,string questa,string questb,string questc,string questd,string queste,string questf)
+begin
+  row UnivTestAnswer2Vc Answerrw;
+  record UnivTestAnswer2Vc oldAnswerr,Answerr;
+  string 255 alt1,alt2,alt3,alt4,alt5,alt6;
+  string 255 ans,alt;
+  integer i;
+  string 255 oldstr,newstr;
+
+  oldstr = "";
+  newstr = "";
+
+  Answerr.UnivTestNr = univtestnr;
+  Answerr.CustCode = custcode;
+  Answerr.EndDate = enddate;
+  Answerr.StartTime = starttime;
+  if (ReadFirstKey("CustCode",Answerr,4,true)) then begin
+    RecordCopy(oldAnswerr,Answerr);
+    MatRowGet(Answerr,rownr,Answerrw);
+    for (i=1;i<=6;i=i+1) begin
+      switch (i) begin
+        case 1: ans = Answerrw.Alt1; alt = questa;
+        case 2: ans = Answerrw.Alt2; alt = questb;
+        case 3: ans = Answerrw.Alt3; alt = questc;
+        case 4: ans = Answerrw.Alt4; alt = questd;
+        case 5: ans = Answerrw.Alt5; alt = queste;
+        case 6: ans = Answerrw.Alt6; alt = questf;
+        otherwise
+          ans = "";
+      end;
+      if (nonblank(ans)) then begin
+        if (mid(ans,1,1)=="+" or mid(ans,1,1)=="-") then begin
+          oldstr = oldstr & left(ans,1);
+          ans = right(ans,len(ans)-1);
+        end else begin
+          oldstr = oldstr & ".";
+        end;
+        if (alt=="true") then begin
+          ans = "+" & ans;
+        end else begin
+          ans = "-" & ans;
+        end;
+        newstr = newstr & left(ans,1);
+        switch (i) begin
+          case 1: Answerrw.Alt1 = ans;
+          case 2: Answerrw.Alt2 = ans;
+          case 3: Answerrw.Alt3 = ans;
+          case 4: Answerrw.Alt4 = ans;
+          case 5: Answerrw.Alt5 = ans;
+          case 6: Answerrw.Alt6 = ans;
+        end;
+      end;
+    end;
+
+    MatRowPut(Answerr,rownr,Answerrw);
+
+    if (nonblank(Personname)) then begin
+      Answerr.PersonName = Personname;
+    end;
+    Answerr.LastRowUpdated = rownr;
+    i = RecordUpdate(oldAnswerr,Answerr,true);
+
+  end;
+
+  return;
+end;
+
+global
+updating procedure LMSCompleteTest(string personname,LongInt univtestnr,string custcode,date enddate,time starttime,integer rownr,string questa,string questb,string questc,string questd,string queste,string questf)
+begin
+  record UnivTestAnswer2Vc Answer2r;
+  row UnivTestAnswer2Vc Answerrw;
+  record UnivTestAnswer2Vc oldAnswerr;
+  integer correct_answers;
+  integer i,cnt,rw;
+
+  Answer2r.UnivTestNr = univtestnr;
+  Answer2r.CustCode = CustCode;
+  Answer2r.EndDate = EndDate;
+  Answer2r.StartTime = StartTime;
+  if (ReadFirstKey("CustCode",Answer2r,4,true)) then begin
+    LMSUpdateAnswers(Personname,univtestnr,CustCode,EndDate,StartTime,rownr,questa,questb,questc,questd,queste,questf);
+  end;
+
+  //called after UpdateAnswers which is not queued this time, so we know this happens after UpdateAnswers completed completely
+  Answer2r.UnivTestNr = univtestnr;
+  Answer2r.CustCode = CustCode;
+  Answer2r.EndDate = EndDate;
+  Answer2r.StartTime = StartTime;
+  if (ReadFirstKey("CustCode",Answer2r,4,true)) then begin end;
+
+  RecordCopy(oldAnswerr,Answer2r);
+
+  correct_answers = 0;
+  cnt = MatRowCnt(Answer2r);
+  for (i=0;i<cnt;i=i+1) begin
+    MatRowGet(Answer2r,i,Answerrw);
+    if ((left(Answerrw.Alt1,1)==mid(Answerrw.Alt1,1,1)) and
+       (left(Answerrw.Alt2,1)==mid(Answerrw.Alt2,1,1)) and
+       (left(Answerrw.Alt3,1)==mid(Answerrw.Alt3,1,1)) and
+       (left(Answerrw.Alt4,1)==mid(Answerrw.Alt4,1,1)) and
+       (left(Answerrw.Alt5,1)==mid(Answerrw.Alt5,1,1)) and
+       (left(Answerrw.Alt6,1)==mid(Answerrw.Alt6,1,1))) then begin
+      correct_answers = correct_answers + 1;
+      Answerrw.Answer = "OK";
+    end else begin
+      Answerrw.Answer = "";
+    end;
+    MatRowPut(Answer2r,i,Answerrw);
+  end;
+  Answer2r.CorrectAnswers = correct_answers;
+  Answer2r.EndTime = CurrentTime;
+  Answer2r.OKFlag = 1;
+
+  i = RecordUpdate(oldAnswerr,Answer2r,true);
+
+  return;
+end;
+
+global
+updating procedure WebHWUUnivTestsAnswersQueue(record UnivTestAnswer2Vc Answerr,Integer comp)
+begin
+  Boolean res;
+  Integer oldcomp;
+
+  oldcomp = CurrentCompany;
+  if (SetCompany(comp,false)) then begin
+    res = RecordStore(Answerr,true);
+  end;
+  ResetCompany(oldcomp);
+  return;
+end;
+
+//========================================================================================================================
+//========================================================================================================================
+//========================================================================================================================
+//========================================================================================================================
+
+global
+procedure WebHWULMSTest(LongInt contentnr)
+begin
+  record UnivTest2Vc Testr;
+  row UnivTest2Vc Testrw;
+  record UnivTestAnswer2Vc Answerr;
+  row UnivTestAnswer2Vc Answerrw;
+  string 60 langcode,llink,tstr;
+  integer rwcnt,i;
+  record UserVc Userr;
+  Integer oldcomp,newcomp;
+  Boolean res,res2,allowquestions,foundf;
+  record CUVc CUr;
+  Array Integer arows;
+  Integer acnt,ai;
+  string 255 newaddress;
+  Boolean TestIsActive;
+  Date TestSDate,TestEDate;
+  Time TestSTime,TestETime;
+  record CourseContentVc CourseContentr;
+
+  oldcomp = CurrentCompany;
+  newcomp = StringToInt(WebGetArg("company")); //not implemented yset
+  if ((newcomp>0) and (oldcomp!=newcomp)) then begin
+    res = SetCompany(newcomp,false);
+  end;
+  if (res==false) then begin
+    newcomp = oldcomp;
+  end;
+
+  WebSetLanguage(langcode);
+
+  CourseContentr.SerNr = contentnr;
+  if (ReadFirstMain(CourseContentr,1,true)) then begin 
+    
+  end;
+
+  Testr.SerNr = CourseContentr.Test;
+  if (ReadFirstMain(Testr,1,true)) then begin
+    ToolWebHBSDivStartPage;
+    ToolWebHBSDivSetMainTitle;
+    ToolWebHBSDivStartBody("","");
+
+//     if (WebLoginStatus <> 3) then begin
+//       WebOutStringNL("<table align=""center"" width=""90%"" cellspacing=""1"" cellpadding=""3"" border=""0"" class=""deftbl"">");
+//       WebOutStringNL("  <tr><td colspan=""4"" class=""feedback-txt"">You are not logged in.</td></tr>");
+//       WebOutStringNL("</table>");
+//       goto LWebHWULMSTestCUNew;
+//     end;
+
+    TestIsActive = CourseContentVc_VisibilityDateTime(contentnr,TestSDate,TestSTime,TestEDate,TestETime);
+    if (TestIsActive==false) then begin
+      WebOutStringNL("<table align=""center"" width=""90%"" cellspacing=""1"" cellpadding=""3"" border=""0"" class=""deftbl"">");
+      WebOutStringNL("  <tr><td colspan=""4"" class=""feedback-txt"">The test is not open at the moment, please contact HansaWorld University.</td></tr>");
+      WebOutStringNL("</table>");
+      goto LWebHWULMSTestCUNew;
+    end;
+
+    if (nonblank(CurrentUser)) then begin
+      Userr.Code = CurrentUser;
+      if (FindTheUser(Userr)) then begin
+        CUr.Code = Userr.CustCode;
+      end;
+    end;
+    if (blank(CUr.Code)) then begin
+      CUr.Code = CurrentCust;
+    end;
+    res2 = ReadFirstMain(CUr,1,true);
+
+    // if (blank(CUr.Code) or res2==false) then begin
+    //   WebOutStringNL("<table align=""center"" width=""90%"" cellspacing=""1"" cellpadding=""3"" border=""0"" class=""deftbl"">");
+    //   WebOutStringNL("  <tr><td colspan=""4"" class=""feedback-txt"">Your contact card is not set up correctly. You cannot take this test.</td></tr>");
+    //   WebOutStringNL("</table>");
+    //   goto LWebHWULMSTestCUNew;
+    // end;
+
+    rwcnt = MatRowCnt(Testr);
+    Randomize;
+    while (acnt<rwcnt) begin
+      i = Random(0,rwcnt-1);
+      for (ai=0;ai<acnt;ai=ai+1) begin
+        if (arows[ai]==i) then begin
+          goto LSKIPROWNRCUNEW;
+        end;
+      end;
+      arows[acnt] = i;
+      acnt = acnt + 1;
+LSKIPROWNRCUNEW:;
+    end;
+    if (acnt>Testr.NoOfQuestions) then begin acnt = Testr.NoOfQuestions; end;
+    allowquestions = true;
+
+    foundf = true;
+    Answerr.CustCode = CUr.Code;
+    Answerr.UnivTestNr = Testr.SerNr;
+    Answerr.EndDate = CurrentDate;
+    while (LoopKey("CustCode",Answerr,3,foundf)) begin
+      if (Answerr.CustCode != CUr.Code or Answerr.UnivTestNr != Testr.SerNr or Answerr.EndDate != CurrentDate) then begin
+        foundf = false;
+      end;
+      if (foundf and Answerr.OKFlag!=1) then begin
+        goto LWebHWULMSTestCustDoIt;
+      end;
+    end;
+    RecordNew(Answerr);
+    Answerr.SerNr = NextSerNr("UnivTestAnswer2Vc",CurrentDate,-1,false,"");
+    Answerr.EndDate = CurrentDate;
+    Answerr.CustCode = CUr.Code;
+    Answerr.Person = CurrentUser;
+    Answerr.PersonName = CUr.Name;
+    Answerr.UnivTestNr = Testr.SerNr;
+    Answerr.CourseName = Testr.CourseName;
+    Answerr.NoOfQuestions = acnt;
+    Answerr.CorrectAnswers = 0;
+    Answerr.StartDate = CurrentDate;
+    Answerr.StartTime = CurrentTime;
+    Answerr.LastRowUpdated = -1;
+
+    i = 0;
+    for (ai=0;ai<acnt;ai=ai+1) begin
+      MatRowGet(Testr,arows[ai],Testrw);
+      ClearRow(Answerr,Answerrw,1);
+      Answerrw.OrigRowNo = arows[ai]+1;
+      Answerrw.Question = Testrw.Question;
+      if (Testrw.Alt1Correct!=0) then begin Answerrw.Alt1 = "+"; end else begin Answerrw.Alt1 = "-"; end; if (blank(Testrw.Alt1)) then begin Answerrw.Alt1 = ""; end;
+      Answerrw.Alt1 = Answerrw.Alt1 & Testrw.Alt1;
+      if (Testrw.Alt2Correct!=0) then begin Answerrw.Alt2 = "+"; end else begin Answerrw.Alt2 = "-"; end; if (blank(Testrw.Alt2)) then begin Answerrw.Alt2 = ""; end;
+      Answerrw.Alt2 = Answerrw.Alt2 & Testrw.Alt2;
+      if (Testrw.Alt3Correct!=0) then begin Answerrw.Alt3 = "+"; end else begin Answerrw.Alt3 = "-"; end; if (blank(Testrw.Alt3)) then begin Answerrw.Alt3 = ""; end;
+      Answerrw.Alt3 = Answerrw.Alt3 & Testrw.Alt3;
+      if (Testrw.Alt4Correct!=0) then begin Answerrw.Alt4 = "+"; end else begin Answerrw.Alt4 = "-"; end; if (blank(Testrw.Alt4)) then begin Answerrw.Alt4 = ""; end;
+      Answerrw.Alt4 = Answerrw.Alt4 & Testrw.Alt4;
+      if (Testrw.Alt5Correct!=0) then begin Answerrw.Alt5 = "+"; end else begin Answerrw.Alt5 = "-"; end; if (blank(Testrw.Alt5)) then begin Answerrw.Alt5 = ""; end;
+      Answerrw.Alt5 = Answerrw.Alt5 & Testrw.Alt5;
+      if (Testrw.Alt6Correct!=0) then begin Answerrw.Alt6 = "+"; end else begin Answerrw.Alt6 = "-"; end; if (blank(Testrw.Alt6)) then begin Answerrw.Alt6 = ""; end;
+      Answerrw.Alt6 = Answerrw.Alt6 & Testrw.Alt6;
+      Answerrw.Answer = "";
+      MatRowPut(Answerr,i,Answerrw);
+      i = i+1;
+    end;
+
+    queued.WebHWUUnivTestsAnswersQueue(Answerr,newcomp);
+LWebHWULMSTestCustDoIt:;
+
+    newaddress = ToolWebBuildLink("WebHWULMSTARRefresh","&type=cust" & "&refact=hwunav" & "&startnav=1" & "&rownr=0" & "&plook=" & "hworld" & "&testnr=" & Answerr.UnivTestNr & "&p_cc=" & Answerr.CustCode & "&ed=" & DateToString(Answerr.EndDate,"YYYYMMDD") & "&st=" & ToTimeString(Answerr.StartTime) & "&thecomp=" & newcomp & "&langcode=" & langcode & "&contentnr=" & contentnr);
+    WebHWUSendRefreshHTML(newaddress,1,false);
+    ToolWebHBSDivEndPage;
+  end;
+LWebHWULMSTestCUNew:;
+  if (res) then begin
+    ResetCompany(oldcomp);
+  end;
+  return;
+end;
+
+global
+procedure WebHWULMSTARRefresh()
+begin
+  record UnivTestAnswer2Vc Answerr;
+  string 255 refreshaction,correct_answers,nrofqs,newaddress,p_cc,pagelook;
+  LongInt univtestnr;
+  integer oldcomp,thecomp;
+  Integer rw;
+  Date enddate;
+  Time starttime;
+  boolean handled,res,htmlenvelope;
+  integer rownr,torownr;
+  string 255 navdir,startnav;
+  string 255 nextpage,langcode,type;
+  LongInt contentnr;
+  boolean feedbacksubmitted;
+
+  type = WebGetArg("type");
+  refreshaction = WebGetArg("refact");
+  pagelook = WebGetArg("plook");
+  langcode = WebGetArg("langcode");
+  contentnr = StringToLongInt(WebGetArg("contentnr"));
+  thecomp = StringToInt(WebGetArg("thecomp"));
+  oldcomp = CurrentCompany;
+  if (thecomp>0 and thecomp!=oldcomp) then begin
+    res = SetCompany(thecomp,false);
+  end;
+  if (res==false) then begin
+    thecomp = oldcomp;
+  end;
+  
+  if (refreshaction=="hwuans2") then begin
+    feedbacksubmitted = true;
+    refreshaction = "hwuans";
+  end;
+
+  switch (refreshaction) begin
+    case "hwuans":
+      univtestnr = StringToLongInt(WebGetArg("testnr"));
+      p_cc = WebGetArg("p_cc");
+      enddate = DateFromString(WebGetArg("ed"),"YYYYMMDD");
+      starttime = GetTime(WebGetArg("st"));
+      correct_answers = WebGetArg("ans");
+      nrofqs = WebGetArg("qs");
+
+      Answerr.UnivTestNr = univtestnr;
+      Answerr.CustCode = p_cc;
+      Answerr.EndDate = enddate;
+      Answerr.StartTime = starttime;
+      if (ReadFirstKey("UnivTestNr",Answerr,4,true)) then begin
+        if (pagelook=="intranet") then begin
+          ToolWebStartPage;
+          ToolWebSetMainTitle;
+          WebTestFeedbackJS;
+          ToolWebStartBody("");
+        end;
+        if (pagelook=="hworld") then begin
+          ToolWebHBSDivStartPage;
+          ToolWebHBSDivSetMainTitle;
+          WebTestFeedbackJS;
+          ToolWebHBSDivStartBody("","");
+        end;
+        ShowAnswerFeedback(Answerr);
+        ToolWebTestFeedbackOverallComment(Answerr,feedbacksubmitted);
+        switch (pagelook) begin
+          case "intranet": ToolWebMenuItem("Finish","WebMainUser.hal","","",rw);
+          case "hworld": ToolWebMenuItem("Finish","/","","",rw);
+        end;
+        if (pagelook=="intranet") then begin
+          ToolWebEndPage(true);
+        end;
+        if (pagelook=="hworld") then begin
+          ToolWebHBSDivEndPage;
+        end;
+      end else begin
+        newaddress = ToolWebBuildLink("WebHWULMSTARRefresh","&type=" & type & "&refact=hwuans" & "&ans=" & correct_answers & "&qs=" & nrofqs & "&testnr=" & univtestnr & "&p_cc=" & p_cc & "&ed=" & enddate & "&st=" & WebGetArg("st") & "&thecomp=" & thecomp & "&langcode=" & langcode & "&ws=" & WebGetArg("ws") & "&contentnr=" & contentnr);
+        WebHWUSendRefreshHTML(newaddress,1,true);
+      end;
+    case "hwunav":
+      univtestnr = StringToLongInt(WebGetArg("testnr"));
+      p_cc = WebGetArg("p_cc");
+      enddate = DateFromString(WebGetArg("ed"),"YYYYMMDD");
+      starttime = GetTime(WebGetArg("st"));
+      navdir = WebGetArg("navdir");
+      startnav = WebGetArg("startnav");
+      rownr = StringToInt(WebGetArg("rownr"));
+      torownr = StringToInt(WebGetArg("torownr"));
+
+      handled = false;
+      htmlenvelope = false;
+
+      Answerr.UnivTestNr = univtestnr;
+      Answerr.CustCode = p_cc;
+      Answerr.EndDate = enddate;
+      Answerr.StartTime = starttime;
+      res = ReadFirstKey("UnivTestNr",Answerr,4,true);
+      if (res or startnav!="1") then begin
+        htmlenvelope = true;
+        if (pagelook=="intranet") then begin
+          ToolWebStartPage;
+          ToolWebSetMainTitle;
+          WebTestFeedbackJS;
+          ToolWebStartBody("");
+        end;
+        if (pagelook=="hworld") then begin
+          ToolWebHBSDivStartPage;
+          ToolWebHBSDivSetMainTitle;
+          WebTestFeedbackJS;
+          ToolWebHBSDivStartBody("","");
+        end;
+        ToolWebStartTable;
+
+        if (res) then begin
+          // if (startnav=="1") then begin //Answerr.LastRowUpdated==rownr or 
+            switch (navdir) begin
+              case "back":
+                if (rownr>0) then begin
+                  rownr = rownr-1;
+                end;
+              case "next":
+                rownr = rownr+1;
+                if (rownr>=MatRowCnt(Answerr)) then begin
+                  rownr = MatRowCnt(Answerr)-1;
+                end;
+              otherwise
+                if (Left(navdir,4)=="page") then begin
+                  rownr = torownr-1;
+                end;
+            end;
+            if (navdir=="finish") then begin
+
+            end else begin
+              if (type=="cust") then begin
+                HWLMSShowQuestion(Answerr,rownr,langcode,StringToInt(thecomp),contentnr,true);
+              end else begin
+                HWLMSShowQuestion(Answerr,rownr,langcode,StringToInt(thecomp),contentnr,false);
+              end;
+            end;
+            handled = true;
+          // end;
+        end else begin
+          if (startnav!="1") then begin
+            if (pagelook=="intranet") then begin
+              nextpage = "WebMainUser.hal";
+            end;
+            if (pagelook=="hworld") then begin
+              nextpage = "WebHBSDivMain.hal";
+            end;
+            ToolWebMenuItem("<b><big>" & "An error occurred. Could not find Answer record." & "</b></big>",nextpage,"","",rw);
+            handled = true;
+          end;
+        end;
+        ToolWebEndTable;
+        if (pagelook=="intranet") then begin
+          ToolWebEndPage(true);
+        end;
+        if (pagelook=="hworld") then begin
+          ToolWebHBSDivEndPage;
+        end;
+      end;
+
+      if (handled==false) then begin
+        newaddress = ToolWebBuildLink("WebHWULMSTARRefresh","&type=" & type & "&refact=hwunav" & "&rownr=" & rownr & "&navdir=" & navdir & "&plook=" & pagelook & "&testnr=" & univtestnr & "&p_cc=" & p_cc & "&ed=" & enddate & "&st=" & WebGetArg("st") & "&thecomp=" & thecomp & "&langcode=" & langcode & "&ws=" & WebGetArg("ws") & "&contentnr=" & contentnr);
+        WebHWUSendRefreshHTML(newaddress,1,(htmlenvelope==false));
+      end;
+
+  end;
+  if (res) then begin
+    ResetCompany(oldcomp);
+  end;
+  return;
+end;
+
+global
+procedure WebHWULMSTestNavigate()
+begin
+  integer oldcomp,newcomp;
+  boolean res,res2,custstyle;
+  record UnivTest2Vc Testr;
+  string 255 langcode,newaddress,navdir;
+  record UserVc Userr;
+  record CUVc CUr;
+  record UnivTestAnswer2Vc Answerr;
+  integer rownr;
+  string 255 page_look,torownr;
+  Date EndDate;
+  Time StartTime;
+  Boolean TestIsActive;
+  Date TestSDate,TestEDate;
+  Time TestSTime,TestETime;
+  LongInt pos,contentnr;
+
+  oldcomp = CurrentCompany;
+  newcomp = StringToInt(WebGetArg("company"));
+  if (newcomp>0 and newcomp!=oldcomp) then begin
+    res = SetCompany(newcomp,false);
+  end;
+
+  if (WebGetArg("type")=="cust") then begin
+    custstyle = true;
+  end;
+
+  page_look = WebGetArg("plook");
+  langcode = WebGetArg("langcode");
+  contentnr = StringToLongInt(WebGetArg("contentnr"));
+
+  WebSetLanguage(langcode);
+  Testr.SerNr = WebGetArg("testnr");
+  EndDate = DateFromString(WebGetArg("enddate"),"YYYYMMDD");
+  StartTime = GetTime(WebGetArg("starttime"));
+
+  if (ReadFirstMain(Testr,1,true)) then begin
+    if (custstyle) then begin
+      ToolWebHBSDivStartPage;
+      ToolWebHBSDivSetMainTitle;
+      ToolWebHBSDivStartBody("","");
+    end else begin
+      ToolWebStartPage;
+      ToolWebSetMainTitle;
+      ToolWebStartBody("");
+    end;
+
+    // if (WebLoginStatus <> 3) then begin
+    //   WebOutStringNL("<table align=""center"" width=""90%"" cellspacing=""1"" cellpadding=""3"" border=""0"" class=""deftbl"">");
+    //   WebOutStringNL("  <tr><td colspan=""4"" class=""feedback-txt"">You are not logged in.</td></tr>");
+    //   WebOutStringNL("</table>");
+    //   goto LWebHWULMSTestNavigate;
+    // end;
+
+    TestIsActive = CourseContentVc_VisibilityDateTime(contentnr,TestSDate,TestSTime,TestEDate,TestETime);
+    if (TestIsActive==false) then begin
+      WebOutStringNL("<table align=""center"" width=""90%"" cellspacing=""1"" cellpadding=""3"" border=""0"" class=""deftbl"">");
+      WebOutStringNL("  <tr><td colspan=""4"" class=""feedback-txt"">The test is not open at the moment, please contact HansaWorld University.</td></tr>");
+      WebOutStringNL("</table>");
+      goto LWebHWULMSTestNavigate;
+    end;
+
+    // if (nonblank(CurrentUser)) then begin
+    //   Userr.Code = CurrentUser;
+    //   if (FindTheUser(Userr)) then begin
+    //     CUr.Code = Userr.CustCode;
+    //   end;
+    // end;
+    // if (blank(CUr.Code)) then begin
+    //   CUr.Code = CurrentCust;
+    // end;
+    // res2 = ReadFirstMain(CUr,1,true);
+
+    // if (blank(CUr.Code) or res2==false) then begin
+    //   WebOutStringNL("<table align=""center"" width=""90%"" cellspacing=""1"" cellpadding=""3"" border=""0"" class=""deftbl"">");
+    //   WebOutStringNL("  <tr><td colspan=""4"" class=""feedback-txt"">Your contact card is not set up correctly. You cannot take this test.</td></tr>");
+    //   WebOutStringNL("</table>");
+    //   goto LWebHWULMSTestNavigate;
+    // end;
+
+    Answerr.UnivTestNr = Testr.SerNr;
+    Answerr.CustCode = CUr.Code;
+    Answerr.EndDate = EndDate;
+    Answerr.StartTime = StartTime;
+    if (ReadFirstKey("CustCode",Answerr,4,true)) then begin
+      if (Answerr.OKFlag==0) then begin
+
+        rownr = StringToInt(WebGetArg("rownrpost"));
+        navdir = WebGetArg("navdircombo");
+
+        if (navdir=="back" or navdir=="next" or Left(navdir,4)=="page") then begin
+          if (Left(navdir,4)=="page") then begin
+            pos = 0;
+            GetNextSubString(navdir,pos,":",torownr);
+            GetNextSubString(navdir,pos,":",torownr);
+          end;
+          queued.LMSUpdateAnswers(WebGetArg("person_name"),Answerr.UnivTestNr,Answerr.CustCode,Answerr.EndDate,Answerr.StartTime,rownr,WebGetArg("questa"),WebGetArg("questb"),WebGetArg("questc"),WebGetArg("questd"),WebGetArg("queste"),WebGetArg("questf"));
+          queued.LMSUpdateWebTestFeedback(Answerr.CustCode,Answerr.UnivTestNr,Answerr.EndDate,Answerr.StartTime,rownr,WebGetArg("feedbackQ"),WebGetArg("feedback1"),WebGetArg("feedback2"),WebGetArg("feedback3"),WebGetArg("feedback4"),WebGetArg("feedback5"),WebGetArg("feedback6"),WebGetArg("rating1"),WebGetArg("rating2"));
+          newaddress = ToolWebBuildLink("WebHWULMSTARRefresh","&type=" & WebGetArg("type") & "&refact=hwunav" & "&rownr=" & rownr & "&navdir=" & navdir & "&plook=" & page_look & "&testnr=" & Answerr.UnivTestNr & "&p_cc=" & Answerr.CustCode & "&ed=" & DateToString(Answerr.EndDate,"YYYYMMDD") & "&st=" & ToTimeString(Answerr.StartTime) & "&thecomp=" & newcomp & "&langcode=" & langcode & "&ws=" & WebGetArg("warningshown") & "&torownr=" & torownr & "&contentnr=" & contentnr);
+        end else begin
+          queued.LMSCompleteTest(WebGetArg("person_name"),Answerr.UnivTestNr,Answerr.CustCode,Answerr.EndDate,Answerr.StartTime,rownr,WebGetArg("questa"),WebGetArg("questb"),WebGetArg("questc"),WebGetArg("questd"),WebGetArg("queste"),WebGetArg("questf"));
+          queued.LMSUpdateWebTestFeedback(Answerr.CustCode,Answerr.UnivTestNr,Answerr.EndDate,Answerr.StartTime,rownr,WebGetArg("feedbackQ"),WebGetArg("feedback1"),WebGetArg("feedback2"),WebGetArg("feedback3"),WebGetArg("feedback4"),WebGetArg("feedback5"),WebGetArg("feedback6"),WebGetArg("rating1"),WebGetArg("rating2"));
+          newaddress = ToolWebBuildLink("WebHWULMSTARRefresh","&type=" & WebGetArg("type") & "&refact=hwuans" & "&plook=" & page_look & "&testnr=" & Answerr.UnivTestNr & "&p_cc=" & Answerr.CustCode & "&ed=" & DateToString(Answerr.EndDate,"YYYYMMDD") & "&st=" & ToTimeString(Answerr.StartTime) & "&thecomp=" & newcomp & "&langcode=" & langcode & "&ws=" & WebGetArg("warningshown") & "&contentnr=" & contentnr);
+        end;
+        WebHWUSendRefreshHTML(newaddress,1,false);
+      end else begin
+        WebOutStringNL("<table align=""center"" width=""90%"" cellspacing=""1"" cellpadding=""3"" border=""0"" class=""deftbl"">");
+        WebOutStringNL("  <tr><td colspan=""4"" class=""feedback-txt"">This test has already been submitted.</td></tr>");
+        WebOutStringNL("</table>");
+      end;
+    end else begin
+      WebOutStringNL("<table align=""center"" width=""90%"" cellspacing=""1"" cellpadding=""3"" border=""0"" class=""deftbl"">");
+      WebOutStringNL("  <tr><td colspan=""4"" class=""feedback-txt"">An error occurred. No open test for current user.</td></tr>");
+      WebOutStringNL("</table>");
+    end;
+SkipQuestions:;
+    ToolWebEndPage(true);
+  end;
+LWebHWULMSTestNavigate:;
+  if (res) then begin
+    ResetCompany(oldcomp);
+  end;
+  return;
+end;

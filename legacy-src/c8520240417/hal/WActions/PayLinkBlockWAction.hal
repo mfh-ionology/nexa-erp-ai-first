@@ -1,0 +1,73 @@
+remote procedure ServerRegisterPayLink(var record PayLinkBlock,var LongInt);
+remote procedure ServerDeactivatePayLink();
+
+function Boolean PayLinkTClassStatusUpdateEFAfter(Integer wn,Boolean changedf)
+begin  
+  record PayLinkBlock PayLinkb;
+
+  if (changedf) then begin
+    GetWindowRecord(wn,PayLinkb);
+    PayLinkb.Status = kPayLinkStatusUnregistered;
+    PutWindowRecord(wn,PayLinkb);
+    ServerDeactivatePayLink;
+  end;
+  PayLinkTClassStatusUpdateEFAfter = true;
+  return;
+end;
+
+global
+function Boolean PayLinkTClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
+begin
+  Boolean res;
+
+  switch (fieldname) begin
+    case "CCMerchantID": res = PayLinkTClassStatusUpdateEFAfter(wn,changed!=0);
+    case "CCAccountID": res = PayLinkTClassStatusUpdateEFAfter(wn,changed!=0);
+  end;
+  PayLinkTClassAfterEditField = res;
+  return;
+end;
+
+global
+procedure RegisterPayLinkDsm()
+begin
+  Integer wn;
+  LongInt errn;
+  record PayLinkBlock PayLinkb;
+  
+  wn = CurWindow;
+  
+  if (WindowState(wn)!=Rs_normal) then begin
+    MessageBox(30225,"");
+    goto LRegisterPayLinkDsm;
+  end;
+
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,PayLinkb);
+  
+  if (blank(PayLinkb.CCAccountID)) then begin
+    MessageBox(14803,"");
+    goto LRegisterPayLinkDsm;
+  end;
+  
+  if (PayLinkb.Status==kPayLinkStatusRegistered) then begin
+    MessageBox(1547,"");
+    goto LRegisterPayLinkDsm;
+  end;
+
+  ThreadRemote.ServerRegisterPayLink(PayLinkb,errn);
+  if (errn!=-1) then begin
+    MessageBox(errn,"");
+    goto LRegisterPayLinkDsm;
+  end;
+  
+  if (errn==-1) then begin
+    CheckmarkBox(42281,"");
+  end;
+
+  PutWindowRecord(wn,PayLinkb);
+  SetWindowState(wn,Rs_normal);
+  
+LRegisterPayLinkDsm:; 
+  return;
+end;

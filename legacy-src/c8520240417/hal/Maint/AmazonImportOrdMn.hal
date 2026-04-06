@@ -1,0 +1,344 @@
+external function Boolean HasRequiredAmazonMWSData();
+external function string 255 GetAmazonRequestPath(string,string,string,string,string);
+external function string 255 HexToBase64(string);
+external procedure AmazonMWSLogAreaToFile(string,area);
+external function Boolean CreateBlankOrderWSerial(var record ORVc);
+external procedure ORSumup(var record ORVc);
+external function string 255 FindINObjects(string,string);
+external procedure SetORFlags(record ORVc);
+external procedure ORDchsum(var record ORVc,Integer);
+external function Boolean ORDchrsum(var record ORVc,Integer);
+
+function Date TimestampToDate(string timestamp)
+begin
+  Date res;
+
+  res.year  = StringToInt(Left(timestamp,4));
+  res.month = StringToInt(Mid(timestamp,5,2));
+  res.day   = StringToInt(Mid(timestamp,8,2));
+
+  TimestampToDate = res;
+  return;
+end;
+
+function Integer AmazonOrderStatus(string str)
+begin
+  Integer res;
+
+  switch (str) begin
+    case "Pending":           res = kAmazonOrderStatusPending;
+    case "Unshipped":         res = kAmazonOrderStatusUnshipped;
+    case "Partially Shipped": res = kAmazonOrderStatusPartiallyShipped;
+    case "Shipped":           res = kAmazonOrderStatusShipped;
+  end;
+
+AmazonOrderStatus = res;
+  return;
+end;
+
+function Boolean ValidAmazonOrderSetings()
+begin
+  Boolean res;
+  record AmazonOrderSetBlock AOSBl;
+
+  BlockLoad(AOSBl);
+  res = true;
+
+  if (blank(AOSBl.OrderClass) or 
+      blank(AOSBl.DeliveryItem) or
+      blank(AOSBl.PayDeal) or 
+      blank(AOSBl.DefaultCust)) then begin 
+    res = false;
+  end;
+
+  if (!res) then begin
+    MessageBox(0,"Amazon Order Settings are not configured properly");
+  end;
+
+  ValidAmazonOrderSetings = res;
+  return;
+end;
+
+procedure RecalcRows(var record ORVc ORp)
+begin
+  Integer i,rwcnt;
+
+  rwcnt = MatRowCnt(ORp);
+  for (i=0;i<rwcnt;i=i+1) begin
+    if (ORDchrsum(ORp,i)) then begin
+      ORDchsum(ORp,i);
+    end;
+  end;
+  return;
+end;
+
+function Boolean FindItemByAmazonSKU(var record INVc INr,string itemcode,string itemname)
+begin
+  Boolean res;
+
+  INr.Code = itemcode;
+  if (ReadFirstMain(INr,1,true)==false) then begin
+    INr.Name = itemname;
+    if (ReadFirstKey("Name",INr,1,true)==false) then begin
+      while (LoopMain(INr,1,true)) begin
+        if (INr.AmazonSKU==itemcode) then begin 
+          res = true;
+          goto LFindItemByAmazonSKU;
+        end; 
+      end;
+    end;
+  end;
+LFindItemByAmazonSKU:;
+  if (!res) then begin
+    LogText(0,"AmazonMWSUpdateOrderItems: Item " & itemcode & " not found, skipping"); 
+  end;
+  FindItemByAmazonSKU = res;
+  return;
+end;
+
+procedure AddShippingItemToOrder(var record ORVc ORr,val shipping)
+begin
+  record AmazonOrderSetBlock AOSBl;
+  record INVc INr;
+  row ORVc ORrw;
+  Integer rwcnt;
+
+  BlockLoad(AOSBl);
+
+  INr.Code = AOSBl.DeliveryItem;
+  if (ReadFirstMain(INr,1,true)) then begin
+    rwcnt = MatRowCnt(ORr);
+    ORrw.ArtCode = INr.Code;
+    ORrw.Quant = 1;
+    ORrw.Price = shipping;
+    ORrw.Spec = INr.Name;
+    ORrw.SalesAcc = INr.SalesAcc;
+    ORrw.Objects = FindINObjects(INr.Objects,INr.Group);
+    MatRowPut(ORr,rwcnt,ORrw);
+  end;
+  return;
+end;
+
+function Boolean OrderExists(date sdate,date edate,string AmazonOrderId,var record ORVc ORr,Boolean logf)
+begin
+  Boolean res,foundf;
+
+  foundf = true;
+  ORr.OrdDate = sdate;
+  while (LoopKey("OrdDate",ORr,1,foundf)) begin
+    if (DateInRange(ORr.OrdDate,sdate,edate)==false) then begin foundf = false; end;
+    if (foundf) then begin
+      if (ORr.AmazonOrderId==AmazonOrderId) then begin
+        res = true;
+        if (logf) then begin
+          LogText2(0,"Amazon Order '" & AmazonOrderId & "' already exists and was not imported (Order " & ORr.SerNr & ")",kVerbosityDebug); 
+        end; 
+        goto LOrderExists_End;
+      end;
+    end;
+  end;
+LOrderExists_End:;
+  OrderExists = res;
+  return;
+end;
+
+global
+updating procedure AmazonCreateOR(xml xreply,string xpath)
+begin
+  record ORVc ORr;
+  record AmazonOrderSetBlock AOSBl;
+
+  RecordClear(ORr);
+  if (CreateBlankOrderWSerial(ORr)==false) then begin goto LAmazonCreateOR; end;
+  
+  BlockLoad(AOSBl);
+  ORr.CustCode = AOSBl.DefaultCust;;
+  ORr.OrdDate = TimestampToDate(XMLGet(xreply,xpath & "/PurchaseDate"));
+  ORr.Addr0 = XMLGet(xreply,xpath & "/ShippingAddress/Name");
+  ORr.ShipAddr0 = XMLGet(xreply,xpath & "/ShippingAddress/Name");
+  ORr.ShipAddr1 = XMLGet(xreply,xpath & "/ShippingAddress/AddressLine1");
+  ORr.ShipAddr3 = XMLGet(xreply,xpath & "/ShippingAddress/City");
+  ORr.DelAddr3 = XMLGet(xreply,xpath & "/ShippingAddress/StateOrRegion");
+  ORr.DelAddr4 = XMLGet(xreply,xpath & "/ShippingAddress/PostalCode");
+  ORr.DelCountry = XMLGet(xreply,xpath & "/ShippingAddress/CountryCode");
+  if (XmlNodeExists(xreply,xpath & "/BuyerTaxInfo")) then begin
+    if (nonblank(XMLGet(xreply,xpath & "/BuyerTaxInfo/CompanyLegalName"))) then begin
+       ORr.Addr0 = XMLGet(xreply,xpath & "/BuyerTaxInfo/CompanyLegalName");
+    end;
+    if (XMLGet(xreply,xpath & "/BuyerTaxInfo/TaxClassifications/TaxClassification/Name")=="VATNumber") then begin
+      ORr.VATNr = XMLGet(xreply,xpath & "/BuyerTaxInfo/TaxClassifications/TaxClassification/Value");
+    end;
+  end;
+  if (nonblank(XMLGet(xreply,xpath & "/LatestShipDate"))) then begin
+    ORr.PlanShip = TimestampToDate(XMLGet(xreply,xpath & "/LatestShipDate"));
+  end;
+  ORr.CustOrdNr = XMLGet(xreply,xpath & "/PurchaseOrderNumber");
+  ORr.PayDeal = AOSBl.PayDeal;
+  ORr.OrderClass = AOSBl.OrderClass;
+  ORr.CurncyCode = XMLGet(xreply,xpath & "/OrderTotal/CurrencyCode");
+  ORr.Sum4 = StringToVal(XMLGet(xreply,xpath & "/OrderTotal/Amount"),M4Val);
+  ORr.AmazonOrderId = XMLGet(xreply,xpath & "/AmazonOrderId");
+  ORr.AmazonOrderStatus = AmazonOrderStatus(XMLGet(xreply,xpath & "/OrderStatus"));
+  RecordStore(ORr,false);
+
+  /* for future
+  ORr.CustCode = customercode;
+  PasteCustInOrder(ORr,ORr.CustCode,"",warning,errstr);
+  */
+
+LAmazonCreateOR:;
+  return;
+end;
+
+global
+updating procedure AmazonMWSUpdateOrderItems(date sdate,date edate)
+begin
+  record AmazonWSBlock AWSb;
+  record ORVc ORr,oldORr;
+  record INVc INr;
+  row ORVc ORrw;
+  Boolean foundf,testf,shippedf;
+  transaction string 255 gAmazonAction;
+  area areq,areply;
+  xml xreply;
+  string 255 path,tstr,periodstr,docpath,method;
+  string 255 itemcode,itemname,currency,itemid;
+  val itemprice,ordered_qty,shipped_qty,shipping;
+  val itemvat,shippingvat,totalvat;
+  Integer i,rwcnt;
+
+  BlockLoad(AWSb);
+  foundf = true;
+  ORr.OrdDate = sdate;
+  while (LoopKey("OrdDate",ORr,1,foundf)) begin
+    if (DateInRange(ORr.OrdDate,sdate,edate)==false) then begin foundf = false; end;
+    if (foundf) then begin
+      testf = true;
+      shippedf = false;
+      if (blank(ORr.AmazonOrderId)) then begin testf = false; end;
+      if (ORr.AmazonSyncedFlag) then begin testf = false; end;
+      if (testf) then begin
+        gAmazonAction = "ListOrderItems";
+        method = "POST";
+        path = GetAmazonRequestPath(gAmazonAction,"",ORr.AmazonOrderId,"",method);
+        tstr = MD5Area(areq);  
+        SetWebHeaders("Content-MD5: " & HexToBase64(tstr));
+      
+        AmazonMWSLogAreaToFile("request",areq);
+        if (SendWebRequest(AWSb.Host,443,-1,true,method,"/Orders/2013-09-01/?" & path,"text/xml; charset=""utf-8""","",false,areq,areply,60)) then begin
+          AmazonMWSLogAreaToFile("reply",areply);
+          xreply = ParseXMLArea(areply);
+          if (XmlNodeExists(xreply,"ErrorResponse")) then begin
+            MessageBox(0,XmlGet(xreply,"ErrorResponse/Error/Message"));
+            goto LAmazonMWSUpdateOrderItems_NextOrder;
+          end;
+          i = 0;
+          docpath = "ListOrderItemsResponse/ListOrderItemsResult/OrderItems/OrderItem";
+          while (XmlNodeExists(xreply,docpath & "[" & i & "]")) begin
+            itemcode    = XMLGet(xreply,docpath & "[" & i & "]/SellerSKU");
+            itemname    = XMLGet(xreply,docpath & "[" & i & "]/Title");
+            itemid      = XMLGet(xreply,docpath & "[" & i & "]/OrderItemId");
+            currency    = XMLGet(xreply,docpath & "[" & i & "]/ItemPrice/CurrencyCode");
+            itemprice   = StringToVal(XMLGet(xreply,docpath & "[" & i & "]/ItemPrice/Amount"),M4Val);
+            ordered_qty = StringToVal(XMLGet(xreply,docpath & "[" & i & "]/QuantityOrdered"),M4Val);
+            shipped_qty = StringToVal(XMLGet(xreply,docpath & "[" & i & "]/QuantityShipped"),M4Val);
+            shipping    = StringToVal(XMLGet(xreply,docpath & "[" & i & "]/ShippingPrice"),M4Val);
+            itemvat     = StringToVal(XMLGet(xreply,docpath & "[" & i & "]/ItemTax"),M4Val);
+            shippingvat = StringToVal(XMLGet(xreply,docpath & "[" & i & "]/ShippingTax"),M4Val);
+            totalvat    = itemvat+shippingvat;
+            itemprice   = itemprice/ordered_qty;
+            if (shipped_qty>0) then begin
+              shippedf = true; //not working properly yet as we don't really check if all items are partially shipped or if whole order is fully shipped..
+            end;
+
+            if (FindItemByAmazonSKU(INr,itemcode,itemname)==false) then begin goto LAmazonMWSUpdateOrderItems_NextOrder; end;
+            rwcnt = MatRowCnt(ORr);
+            ORrw.ArtCode = INr.Code;
+            ORrw.Quant = ordered_qty;
+            ORrw.Price = itemprice;
+            ORrw.Spec = INr.Name;
+            ORrw.SalesAcc = INr.SalesAcc;
+            ORrw.Objects = FindINObjects(INr.Objects,INr.Group);
+            ORrw.CustArtCode = itemid;
+            ORrw.Shipd1 = shipped_qty;
+            MatRowPut(ORr,rwcnt,ORrw);
+            if (shipping>0) then begin
+              AddShippingItemToOrder(ORr,shipping);
+            end;
+            i = i + 1;
+          end;
+          RecordCopy(oldORr,ORr);
+          ORr.CurncyCode = currency;
+          ORr.AmazonSyncedFlag = 1;
+          if (shippedf) then begin
+            ORr.AmazonOrderStatus = kAmazonOrderStatusPartiallyShipped;
+          end;
+          RecalcRows(ORr);
+          ORSumup(ORr);
+          SetORFlags(ORr);
+          ORr.Sum3 = totalvat;
+          if (RecordUpdate(oldORr,ORr,false)) then begin end; //should this be true? hmm, we'll see
+        end;
+      end;
+    end;
+LAmazonMWSUpdateOrderItems_NextOrder:;
+  end;
+  return;
+end;
+
+procedure AmazonMWSImportAmazonOrders(record RcVc RepSpec)
+begin
+  record AmazonWSBlock AWSb;
+  record ORVc ORr;
+  transaction string 255 gAmazonAction;
+  string 255 path,tstr,periodstr,docpath,orderId,method;
+  area areq,areply;
+  xml xreply;
+  Integer i;
+
+  // https://docs.developer.amazonservices.com/en_UK/orders-2013-09-01/Orders_ListOrders.html
+  // https://stackoverflow.com/questions/5934953/amazon-api-marking-orders-as-shipped DDC: Storing for future
+
+  BlockLoad(AWSb);
+  if (!AWSb.Enable) then begin goto LAmazonMWSImportAmazonOrders; end;
+  if (!HasRequiredAmazonMWSData) then begin goto LAmazonMWSImportAmazonOrders; end;
+  if (ValidAmazonOrderSetings==false) then begin goto LAmazonMWSImportAmazonOrders; end;
+
+  periodstr = DateToString(RepSpec.sStartDate,"YYYY-MM-DD");
+  periodstr = periodstr & ":" & DateToString(RepSpec.sEndDate,"YYYY-MM-DD");
+  gAmazonAction = "ListOrders";
+  method = "POST";
+  path = GetAmazonRequestPath(gAmazonAction,"",periodstr,RepSpec.flags[0],method);
+  tstr = MD5Area(areq);  
+  SetWebHeaders("Content-MD5: " & HexToBase64(tstr));
+
+  AmazonMWSLogAreaToFile("request",areq);
+  if (SendWebRequest(AWSb.Host,443,-1,true,method,"/Orders/2013-09-01/?" & path,"text/xml; charset=""utf-8""","",false,areq,areply,60)) then begin
+    AmazonMWSLogAreaToFile("reply",areply);
+    xreply = ParseXMLArea(areply);
+    if (XmlNodeExists(xreply,"ErrorResponse")) then begin
+      MessageBox(0,XmlGet(xreply,"ErrorResponse/Error/Message"));
+      goto LAmazonMWSImportAmazonOrders;
+    end;
+
+    i = 0;
+    docpath = "ListOrdersResponse/ListOrdersResult/Orders/Order";
+    while (XmlNodeExists(xreply,docpath & "[" & i & "]")) begin
+      orderId = XMLGet(xreply,docpath & "[" & i & "]/AmazonOrderId");
+      if (OrderExists(RepSpec.sStartDate,RepSpec.sEndDate,orderId,ORr,true)==false) then begin
+        qupdating.AmazonCreateOR(xreply,docpath & "[" & i & "]");
+      end;
+      i = i + 1;
+    end;
+  end;
+LAmazonMWSImportAmazonOrders:;
+  return;
+end;
+
+global
+procedure AmazonImportOrdMn(record RcVc RepSpec)
+begin
+  AmazonMWSImportAmazonOrders(RepSpec);
+  qupdating.AmazonMWSUpdateOrderItems(RepSpec.sStartDate,RepSpec.sEndDate);
+  return;
+end;

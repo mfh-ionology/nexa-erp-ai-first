@@ -1,0 +1,96 @@
+external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+external function Integer GetIntYc(Date);
+external updating procedure SaveTrans(record TRVc);
+external function string 255 StripCharacter(string,string);
+external procedure TRSumup(var record TRVc,var val);
+external procedure UpdateTransRows(var record TRVc);
+
+procedure AddToTransArray(Date TransDate,string comment,string AccNumber,string RowComment,string RowExtraComment,val DebVal,val CredVal,var Array record TRVc aTRr,var Integer arrcnt)
+BEGIN
+  record TRVc TRr;
+  row TRVc TRrw;
+  Integer i,rwcnt;
+
+  for (i=0;i<=arrcnt;i=i+1) begin
+    TRr = aTRr[i];
+    if (TransDate==TRr.TransDate) then begin
+      rwcnt = MatRowCnt(TRr);
+      ClearRow(TRr,TRrw,1);
+      TRrw.AccNumber = AccNumber;
+      TRrw.Comment = RowComment;
+      TRrw.ExtraComment = RowExtraComment;
+      TRrw.DebVal = DebVal;
+      TRrw.CredVal = CredVal;
+      MatRowPut(TRr,rwcnt,TRrw);
+      aTRr[i] = TRr;
+      goto LAddToTransArray;
+    end;
+  end;
+  RecordNew(TRr);
+  aTRr[arrcnt] = TRr;
+  rwcnt = MatRowCnt(TRr);
+  TRr.TransDate = TransDate;
+  TRr.Comment = Comment;
+  ClearRow(TRr,TRrw,1);
+  TRrw.AccNumber = AccNumber;
+  TRrw.Comment = RowComment;
+  TRrw.ExtraComment = RowExtraComment;
+  TRrw.DebVal = DebVal;
+  TRrw.CredVal = CredVal;
+  MatRowPut(TRr,rwcnt,TRrw);  
+  aTRr[arrcnt] = TRr;
+  arrcnt = arrcnt + 1;
+LAddToTransArray:;
+  return;
+end;
+
+global
+updating procedure BrightPayIn()
+begin
+  string 255 pdate,amount,instr;
+  record PosVc Posr;
+  record TRVc TRr;
+  row TRVc TRrw;
+  Array record TRVc aTRr;
+  Boolean testf;
+  Integer r,rwcnt,pos,arrcnt,i;
+  val t;
+
+  RecordNew(TRr);
+  testf = true;
+  while (testf) begin  
+    instr =  ImportField; 
+    if (blank(instr)) then begin
+      goto LBrightPayIn;
+    end;  
+    pos = 0;
+    ExtractObjWithSeparator(",",instr,false,pos,pdate);
+    ExtractObjWithSeparator(",",instr,false,pos,TRrw.ExtraComment);
+    ExtractObjWithSeparator(",",instr,false,pos,TRrw.AccNumber);
+    ExtractObjWithSeparator(",",instr,false,pos,TRrw.Comment);
+    ExtractObjWithSeparator(",",instr,false,pos,amount);
+    TRr.Comment = "Brightpay Generic Journal";
+    TRr.TransDate = pdate;
+    if (Left(amount,1)=="-") then begin
+      TRrw.CredVal = StringToVal(StripCharacter(amount,"-"),M4Val);
+      TRrw.DebVal = blankval;
+    end else begin
+      TRrw.DebVal = StringToVal(amount,M4Val);
+      TRrw.CredVal = blankval;
+    end;
+    if (TRrw.AccNumber!="CODE") then begin
+      AddToTransArray(TRr.TransDate,TRr.Comment,TRrw.AccNumber,TRrw.Comment,TRrw.ExtraComment,TRrw.DebVal,TRrw.CredVal,aTRr,arrcnt);
+    end;
+    testf = NextImportLine(false); 
+  end;
+  for (i=0;i<=arrcnt;i=i+1) begin
+    TRr = aTRr[i];
+    TRr.Number = NextSerNr("TRVc",TRr.TransDate,-1,false,"");   
+    TRr.IntYc = GetIntYc(TRr.TransDate);
+    UpdateTransRows(TRr);
+    TRSumup(TRr,t);
+    RecordStore(TRr,true);
+  end;
+LBrightPayIn:;  
+  return;
+end;

@@ -1,0 +1,82 @@
+function Date GetRentResAllDueDate(LongInt agreementnr)
+begin
+  Date res;
+  record RentResVc RentResr;
+  Boolean foundf;
+  array Date datearr;
+
+  RentResr.AgreementNr = agreementnr;
+  foundf = true;
+  while (LoopKey("AgreementNr",RentResr,1,foundf)) begin
+    if (RentResr.AgreementNr<>agreementnr) then begin
+      foundf = false;
+    end;
+    if (foundf) then begin
+      datearr[datearr.length] = RentResr.EndDate;
+    end;
+  end;
+  if (datearr.length>0) then begin
+    SortArray(datearr,M4Date);
+    res = datearr[datearr.length-1];
+  end;
+  GetRentResAllDueDate = res;
+  return;
+end;
+
+function Boolean RentalResExists(record AgreementVc Agreementr)
+begin
+  Boolean foundf,res;
+  record RentResVc RentResr;
+
+  RentResr.AgreementNr = Agreementr.SerNr;
+  foundf = true;
+  while (LoopBackKey("AgreementNr",RentResr,1,foundf)) begin
+    if (RentResr.AgreementNr!=Agreementr.SerNr) then begin foundf = false; end; 
+    if (foundf) then begin
+      res = true;
+      goto LRentalResExists;
+    end;
+  end;
+  LRentalResExists:;
+  RentalResExists = res;
+  return;
+end; 
+
+global
+procedure AgreementAutoDispatch(record AgreementVc Agreementr)
+begin
+  record CUVc CUr;
+  Integer wn;
+  record RcVc RepSpec;
+  boolean onhold;
+  record RentControlBlock RCb;
+
+  BlockLoad(RCb);
+  onhold = false;
+  CUr.Code = Agreementr.CustCode;
+  if (ReadFirstMain(CUr,1,true)) then begin
+    if (CUr.OnHoldFlag == 1) then begin
+      onhold = true;
+    end;
+  end;
+  if (onhold) then begin
+    MessageBox(1300,""); 
+  end;
+  if (onhold == false) then begin        
+    if ((Agreementr.OKFlag<>0) and (Agreementr.AgreeStatus<1)) then begin 
+      if (((RCb.AutoItemsOut==1) and (RentalResExists(Agreementr)) and Agreementr.OKFlag==1) or (RCb.AutoItemsOut==0)) then begin
+        ReportDefaults(RepSpec,"DispatchAgreementVClass");  
+        wn = OpenWindow("DispatchAgreementVClass",1,0,"","",RepSpec);
+        DeselectWindow(wn,false);
+        RepSpec.long1 = Agreementr.SerNr;
+        RepSpec.d2 = GetRentResAllDueDate(Agreementr.SerNr);
+        RepSpec.ArtMode = 1;
+        PutWindowRecord(wn,RepSpec);
+        SelectWindow(wn);          
+      end;
+    end else begin
+      MessageBox(0,USetStr(2161));
+    end;
+  end;
+  return;
+end;

@@ -1,0 +1,57 @@
+external function Boolean CheckAndImportFile(string);
+
+global
+function Boolean ShowCompanyTypeWindow()
+begin
+  Boolean res;
+  record CYBlock CYb;
+  record SetupStatusBlock StSb;
+
+  BlockLoad(StSb);
+  if (HasLocalization("FIN")==false) then begin goto LShowCompanyTypeWindow_out; end;
+  if (IsLoggedIn==false) then begin             goto LShowCompanyTypeWindow_out; end;
+ //if (!SettingUpNewDatabase) then begin          goto LShowCompanyTypeWindow_out; end;
+  if (CountRecords("AccVc")>0) then begin       goto LShowCompanyTypeWindow_out; end;
+  if (CountRecords("DocVc")>0) then begin       goto LShowCompanyTypeWindow_out; end;
+  if (StSb.DataEntered==1) then begin           goto LShowCompanyTypeWindow_out; end;
+
+  BlockLoad(CYb);
+  if ((CYb.FinCompanyType!=0)) then begin res = false; goto LShowCompanyTypeWindow_out; end;
+  res = true;
+
+LShowCompanyTypeWindow_out:;
+  ShowCompanyTypeWindow = res;
+  return;
+end;
+
+
+global
+updating procedure CompanyTypeApplyDsm()
+begin
+  record RcVc RepSpec;
+  Integer wn;
+  record CYBlock CYb;
+
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+  
+  BlockLoad(CYb);
+  switch (RepSpec.flags[1]) begin
+    case 0: CheckAndImportFile("setup/01.OY_Perusasetuksia_2014.TXT");
+    case 1: CheckAndImportFile("setup/02.AB_Grund_2014.TXT");
+    case 2: CheckAndImportFile("setup/03.AY_Perusasetuksia_2014.TXT");
+    case 3: CheckAndImportFile("setup/04.AS_OY_Perusasetuksia_2014.TXT");
+    case 4: CheckAndImportFile("setup/05.Bostads_Grund_2014.TXT");
+    case 5: CheckAndImportFile("setup/06.Yhdistys_Perusasetuksia_2014.TXT");
+    case 6: CheckAndImportFile("setup/07.Forenings_bas_2021.TXT");
+    case 7: CheckAndImportFile("setup/08.TMI_PERUS_2014.TXT");
+    case 8: //Skip Setup
+  end;
+
+  CYb.FinCompanyType = StringToInt(RepSpec.flags[1]) + 1;
+
+  BlockStore(CYb);
+  CloseWindow(wn);
+  return;
+end;

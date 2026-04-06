@@ -1,0 +1,369 @@
+external function string 255 removenextnode(var string);
+external function string 255 GetStartStructLink();
+external function string 255 DisplayThumbnail(string,integer,integer);
+//translation
+external function string 255 ToolWebNGTranslateText(integer);
+external function string 10 CurrentWebLang();
+
+
+
+//TODO NRR move to tools (maybe move to C, refrence M4_WEBOUTPAGEWITHTEMPLATE)
+function string 255 GetWebTranslation(string code)
+begin
+  record WebNGTranslateVc WTr;
+  string 255 res,tstr,tstr2,part;
+  longint pos;
+  
+  WTr.Code = code;
+  WTr.LangCode = CurrentWebLang;
+  if (ReadFirstMain(WTr,2,true)) then begin
+    tstr = GetTextField(WTr);
+    if (WTr.HtmlTranslation) then begin
+      while(GetNextSubstring(tstr,pos,chr(13),part))
+      begin
+        if (len(tstr)>pos) then begin
+          tstr2 = tstr2 & part & "<br>";
+        end else begin
+          tstr2 = tstr2 & part;
+        end;
+      end;
+      pos = 0;
+      while(GetNextSubstring(tstr2,pos,chr(9),part))
+      begin
+        if (len(tstr2)>pos) then begin
+          res = res & part & "&nbsp;&nbsp;&nbsp;";
+          end else begin
+            res = res & part;
+          end;
+      end;
+    end else begin
+      res = tstr;
+    end;
+  end else begin
+    res = "Missing translation: " & code;
+  end;
+  
+  GetWebTranslation = res;
+  return;
+end;
+
+procedure WebMattsarveHead()
+begin
+
+  WebOutBegin;
+  <head>
+  <link rel="icon" href="img/favicon.png" sizes="32x32">
+  <title><?var(GetWebTranslation("WEBTITLE"))?></title>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+  <script src="/js/main.js"></script>
+  <link rel="stylesheet" type="text/css" href="/css/main.css">
+  </head>
+  EndWebOut;
+  
+  return;
+end;
+
+procedure WebMattsarveHeader(string lang)
+begin
+  
+  WebOutBegin;
+  <div class="header_cont">
+    <div class="head_title"><?var(GetWebTranslation("HEAD_TITLE"))?></div>
+    <div class="head_menu_cont">
+      <a href="http://<?var(WebHost)?>/<?var(lang)?>"><div class="head_menu_item"><?var(GetWebTranslation("MENU_HOME"))?></div></a>
+      <a href="http://<?var(WebHost)?>/<?var(lang)?>/history"><div class="head_menu_item"><?var(GetWebTranslation("MENU_HISTORY"))?></div></a>
+      <a href="http://<?var(WebHost)?>/<?var(lang)?>/stay"><div class="head_menu_item"><?var(GetWebTranslation("MENU_STAY"))?></div></a>
+      <a href="http://<?var(WebHost)?>/<?var(lang)?>/cafe"><div class="head_menu_item"><?var(GetWebTranslation("MENU_CAFE"))?></div></a>
+      <a href="http://<?var(WebHost)?>/<?var(lang)?>/conferences"><div class="head_menu_item"><?var(GetWebTranslation("MENU_CONF"))?></div></a>
+      <a href="http://<?var(WebHost)?>/<?var(lang)?>/wedding"><div class="head_menu_item"><?var(GetWebTranslation("MENU_PARTY"))?></div></a>
+      <a href="http://<?var(WebHost)?>/<?var(lang)?>/gallery"><div class="head_menu_item"><?var(GetWebTranslation("MENU_GALLERY"))?></div></a>
+      <!--<a href="http://<?var(WebHost)?>/<?var(lang)?>/contact"><div class="head_menu_item"><?var(GetWebTranslation("MENU_CONTACT"))?></div></a>-->
+    </div>
+  </div>
+  EndWebOut;
+  
+  return;
+end;
+
+procedure WebMattsarveFooter(string lang)
+begin
+
+  WebOutBegin;
+  <div class="footer">
+    <div class="footer_cont">
+      <div class="footer_info_cont">
+        <div class="footer_info_icon" style="background-image: url(/images/contact_address.png);"></div>
+        <div class="footer_info_item"><?var(GetWebTranslation("FOOT_ADDR"))?></div>
+        <div class="footer_info_icon" style="background-image: url(/images/contact_phone.png);"></div>
+        <div class="footer_info_item"><?var(GetWebTranslation("FOOT_PHONE"))?></div>
+        <div class="footer_info_icon" style="background-image: url(/images/contact_email.png);"></div>
+        <div class="footer_info_item"><?var(GetWebTranslation("FOOT_MAIL"))?></div>
+        <div class="footer_info_item_conect"><?var(GetWebTranslation("FOOT_CONNECT"))?></div>
+        <div class="footer_social_icon" style="background-image: url(/images/social_facebook.png);"></div>
+        <div class="footer_social_icon" style="background-image: url(/images/social_twitter.png);"></div>
+        <div class="footer_social_icon" style="background-image: url(/images/social_linkedin.png);"></div>
+        <div class="footer_social_icon" style="background-image: url(/images/social_youtube.png);"></div>
+        <div class="footer_social_icon" style="background-image: url(/images/social_instagram.png);"></div>
+      </div>
+      <div class="footer_image"></div>
+      <div class="footer_menu_cont">
+        <a href="http://<?var(WebHost)?>/<?var(lang)?>"><div class="footer_menu_item"><?var(GetWebTranslation("MENU_HOME"))?></div></a>
+        <a href="http://<?var(WebHost)?>/<?var(lang)?>/history"><div class="footer_menu_item"><?var(GetWebTranslation("MENU_HISTORY"))?></div></a>
+        <a href="http://<?var(WebHost)?>/<?var(lang)?>/stay"><div class="footer_menu_item"><?var(GetWebTranslation("MENU_STAY"))?></div></a>
+        <a href="http://<?var(WebHost)?>/<?var(lang)?>/cafe"><div class="footer_menu_item"><?var(GetWebTranslation("MENU_CAFE"))?></div></a>
+        <a href="http://<?var(WebHost)?>/<?var(lang)?>/conferences"><div class="footer_menu_item"><?var(GetWebTranslation("MENU_CONF"))?></div></a>
+        <a href="http://<?var(WebHost)?>/<?var(lang)?>/wedding"><div class="footer_menu_item"><?var(GetWebTranslation("MENU_PARTY"))?></div></a>
+        <a href="http://<?var(WebHost)?>/<?var(lang)?>/gallery"><div class="footer_menu_item"><?var(GetWebTranslation("MENU_GALLERY"))?></div></a>
+        <a href="http://<?var(WebHost)?>/<?var(lang)?>/contact"><div class="footer_menu_item"><?var(GetWebTranslation("MENU_CONTACT"))?></div></a>
+      </div>
+    </div>
+    <div class="footer_copyright"><?var(GetWebTranslation("FOOT_COPY"))?></div>
+  </div>
+  EndWebOut;
+  
+  return;
+end;
+
+procedure WebMattsarveIndex()
+begin
+
+  WebOutBegin;
+  <img class="index_image" src="/images/hotel_image.jpg"/>
+  <div class="index_availability">
+    <a href="<?var(GetWebTranslation("AIRBNB_LINK"))?>" target="_blank"><div class="index_airbnb_link">Book on AirBnb</div></a>
+  </div>
+  <div class="index_cont">
+    <img class="lion_left" src="/images/lion_left.png">
+    <img class="lion_right" src="/images/lion_right.png">
+    <div class="index_title"><?var(GetWebTranslation("INDEXTITLE"))?></div>
+    <div class="index_text"><?var(GetWebTranslation("INDEXTEXT"))?></div>
+  </div>
+  EndWebOut;
+
+  return;
+end;
+
+procedure WebMattsarveHistory()
+begin
+
+  WebOutBegin;
+  <div class="index_cont">
+  <div class="index_title"><?var(GetWebTranslation("HISTORYTITILE"))?></div>
+  <img class="lion_left" src="/images/lion_left.png">
+  <img class="lion_right" src="/images/lion_right.png">
+    <div class="history_cont">
+      <div class="history_top_text"><?var(GetWebTranslation("HISTORY1"))?></div>
+      <img class="history_top_image" src="/images/history_hotel.png">
+      <div class="history_bot_text"><?var(GetWebTranslation("HISTORY2"))?></div>
+      <img class="history_bot_image" src="/images/history_flower.png">
+    </div>
+  </div>
+  EndWebOut;
+
+  return;
+end;
+
+procedure WebMattsarveCafe()
+begin
+
+  WebOutBegin;
+  <div class="index_cont">
+  <div class="index_title"><?var(GetWebTranslation("CAFETITILE"))?></div>
+  <img class="lion_left" src="/images/lion_left.png">
+  <img class="lion_right" src="/images/lion_right.png">
+    <div class="history_cont">
+      <div class="cafe_top_text"><?var(GetWebTranslation("CAFE1"))?>
+        <img class="cafe_add_image1" src="/images/cafe_image_08.png">
+      </div>
+      <img class="cafe_top_image2" src="/images/cafe_image_05.png">
+      <img class="cafe_top_image1" src="/images/cafe_image_03.png">
+      <div class="cafe_bot_text"><?var(GetWebTranslation("CAFE2"))?>
+        <img class="cafe_add_image2" src="/images/cafe_image_07.png">
+      </div>
+      <img class="cafe_bot_image1" src="/images/cafe_image_04.png">
+      <img class="cafe_bot_image2" src="/images/cafe_image_06.png">
+    </div>
+  </div>
+  EndWebOut;
+
+  return;
+end;
+
+
+procedure WebMattsarveStay()
+begin
+
+  WebOutBegin;
+  <div class="index_cont">
+  <div class="index_title"><?var(GetWebTranslation("STAYTITLE"))?></div>
+  <img class="lion_left" src="/images/lion_left.png">
+  <img class="lion_right" src="/images/lion_right.png">
+    <div class="history_cont">
+      <div class="stay_top_text"><?var(GetWebTranslation("STAY1"))?></div>
+      <img class="stay_top_image" src="/images/stay_with_us_image_03.png">
+      <div class="stay_bot_text"><?var(GetWebTranslation("STAY2"))?></div>
+      <img class="stay_bot_image1" src="/images/stay_with_us_image_07.png">
+      <img class="stay_bot_image2" src="/images/stay_with_us_image_04.png">
+    </div>
+  </div>
+  EndWebOut;
+
+  return;
+end;
+
+procedure WebMattsarveConf()
+begin
+
+  WebOutBegin;
+  <div class="index_cont">
+  <div class="index_title"><?var(GetWebTranslation("CONFTITLE"))?></div>
+  <img class="lion_left" src="/images/lion_left.png">
+  <img class="lion_right" src="/images/lion_right.png">
+    <div class="history_cont">
+      <div class="conf_bot_text"><?var(GetWebTranslation("CONF1"))?></div>
+      <img class="conf_bot_image1" src="/images/Conference_image_03.png">
+      <img class="conf_bot_image2" src="/images/Conference_image_05.png">
+      <img class="conf_bot_image3" src="/images/Conference_image_07.png">
+    </div>
+  </div>
+  EndWebOut;
+
+  return;
+end;
+
+procedure WebMattsarveParty()
+begin
+
+  WebOutBegin;
+  <div class="index_cont">
+  <div class="index_title"><?var(GetWebTranslation("PARTYTITLE"))?></div>
+  <img class="lion_left" src="/images/lion_left.png">
+  <img class="lion_right" src="/images/lion_right.png">
+    <div class="history_cont">
+      <img class="party_petals_image1" src="/images/petal_under_layer.png">
+      <div class="party_top_text"><?var(GetWebTranslation("PARTY1"))?></div>
+      <div class="party_bot_text"><?var(GetWebTranslation("PARTY2"))?></div>
+      <img class="party_top_image1" src="/images/wedding_image_03.png">
+      <img class="party_bot_image1" src="/images/wedding_image_06.png">
+      <img class="party_bot_image2" src="/images/wedding_image_07.png">
+      <img class="party_petals_image2" src="/images/petal_over_layer.png">
+    </div>
+  </div>
+  EndWebOut;
+
+  return;
+end;
+
+procedure WebMattsarveGallery()
+begin
+  Integer filecnt,i;
+  string 255 filename,folder,extension,filepath,imagepath,imagename;
+
+  WebOutBegin;
+  <div class="index_cont">
+    <div class="index_title"><?var(GetWebTranslation("GALLERYTITLE"))?></div>
+    <img class="lion_left" src="/images/lion_left.png">
+    <img class="lion_right" src="/images/lion_right.png">
+    <div class="history_cont">
+    EndWebOut;
+    folder = "webcust/images/gallery";
+    filecnt = CountFilesInDir(folder);
+    while (i<filecnt) begin
+      filename = GetFileNameInDir(folder,i);
+      extension = right(filename,4);
+      if (extension==".jpg") then begin
+        filepath = "images/gallery/" & filename;
+        imagepath = WebHost & "/" & DisplayThumbnail(filepath,350,0);
+        imagename = "gallery_image_" & i;
+        WebOutBegin;
+        <div id="<?var(imagename)?>)" class="gallery_image" style="background-image: url(http://<?var(imagepath)?>"></div>
+        EndWebOut;
+      end;
+      i = i + 1;
+    end;
+    WebOutBegin;
+    </div>
+  </div>
+  <div id="gallery_overlay" class="gallery_overlay" onclick="$(this).toggle()"><img id="gallery_full_image" class="gallery_full_image"></div>
+  EndWebOut;
+
+  return;
+end;
+
+procedure WebMattsarveContact()
+begin
+
+  WebOutBegin;
+  <div class="index_cont">
+  <img class="lion_left" src="/images/lion_left.png">
+  <img class="lion_right" src="/images/lion_right.png">
+    <div class="history_cont">
+      <div class="contact_cont">
+        <form>
+          <img class="contact_top_image" src="/images/contac_us_image_03.png">
+          <div class="contact_title"><?var(GetWebTranslation("CONTACTTITLE"))?></div>
+          <div class="contact_text"><?var(GetWebTranslation("CONTACT1"))?></div>
+          <div class="contact_full"><?var(GetWebTranslation("SUBJECTCON"))?></div>
+          <div class="contact_full"><input class="contact_input" name="subject" type="text"></div>
+          <div class="contact_full">
+            <div class="contact_half"><?var(GetWebTranslation("NAMECON"))?></div>
+            <div class="contact_separator"></div>
+            <div class="contact_half"><?var(GetWebTranslation("SURNAMECON"))?></div>
+            <div class="contact_half"><input class="contact_input" name="name" type="text"></div>
+            <div class="contact_separator"></div>
+            <div class="contact_half"><input class="contact_input" name="surname" type="text"></div>
+          </div>
+          <div class="contact_full">
+            <div class="contact_half"><?var(GetWebTranslation("EMAILCON"))?></div>
+            <div class="contact_separator"></div>
+            <div class="contact_half"><?var(GetWebTranslation("NUMBERCON"))?></div>
+            <div class="contact_half"><input class="contact_input" name="email" type="text"></div>
+            <div class="contact_separator"></div>
+            <div class="contact_half"><input class="contact_input" name="number" type="text"></div>
+          </div>
+          <div class="contact_full"><?var(GetWebTranslation("MESSAGECON"))?></div>
+          <div class="contact_full"><textarea class="contact_textfield" name="message"></textarea></div>
+          <div class="contact_full">
+            <div class="contact_submit"><?var(GetWebTranslation("SUBMITCON"))?></div>
+          </div>
+          <img class="contact_bot_image" src="/images/contac_us_image_07.png">
+        </form>
+      </div>
+    </div>
+  </div>
+  EndWebOut;
+
+  return;
+end;
+
+global
+procedure HotelMattsarveMain(record WebNGStructVc WSr,string mpath)
+begin
+  string 255 path,node,lang;
+
+  path = WebGetArg("path");
+  node = removenextnode(path);
+  lang = removenextnode(path);
+  node = removenextnode(path);
+  WebOutBegin; <html lang="<?var(lang)?>"> EndWebOut;
+  WebMattsarveHead;
+  WebOutBegin; <body> EndWebOut;
+  WebMattsarveHeader(lang);
+  WebOutBegin; <div class="main_cont"> EndWebOut;
+  switch (node) begin
+    case "stay": WebMattsarveStay;
+    case "history": WebMattsarveHistory;
+    case "cafe": WebMattsarveCafe;
+    case "conferences": WebMattsarveConf;
+    case "wedding": WebMattsarveParty;
+    case "gallery": WebMattsarveGallery;
+    case "contact": WebMattsarveContact;
+    otherwise WebMattsarveIndex;
+  end;
+  WebOutBegin; </div> EndWebOut;
+  WebMattsarveFooter(lang);
+  WebOutBegin; </body> EndWebOut;
+  WebOutBegin; </html> EndWebOut;
+
+  return;
+end;

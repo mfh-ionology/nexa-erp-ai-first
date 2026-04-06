@@ -1,0 +1,184 @@
+// ## move R- and W-actions to separate files
+
+external procedure PasteFromSysList2(Integer);
+external procedure AIChat_AddMessage(var array string,var array string,string,string);
+external procedure AIChat_StoreWn(LongInt,array string,array string,Boolean,Boolean,Boolean);
+external procedure AIChat_LoadWn(LongInt,var array string,var array string);
+
+function string 255 CR()
+begin
+  CR = chr(13);
+end;
+
+function string 255 LF()
+begin
+  LF = chr(10);
+end;
+
+function string 255 NL()
+begin
+  if (ServingClient) then begin
+    NL = LF;
+  end else begin
+    NL = CR & LF;
+  end;
+end;
+
+global
+procedure Llama_OpenDebugWindow(record OpenAILogVc ALogr)
+begin
+  OpenWindow("LlamaLogWClass",1,0,"","",ALogr);
+end;
+
+global
+updating procedure StartLlamaChatSm()
+begin
+  record AIChatVc AICr;
+  
+  AICr.DisclaimerFlag = 1;
+  AICr.InstructionFlag = 1;
+  
+  OpenWindow("LlamaChatWClass",0,0,"","",AICr);
+end;
+
+global
+function Boolean LlamaChatWClassOnOpenWindow(Integer wn)
+begin
+  string 255 model,instruction;
+  array string 255 roles,messages;
+  record AIChatVc AICr;
+    
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,AICr);
+
+  if (AICr.AIModel=="") then begin
+    AICr.AIModel = "llama-2-7b-chat/ggml-model-q4_0.gguf";
+  end;
+  
+  AI_GetModel(AICr.AIModel,model);
+
+  if (AICr.Instruction<>"") then begin
+    instruction = AICr.Instruction;
+  end else begin
+    instruction = "### You are a helpful AI assistant called Anna. You answer questions shortly, correctly, and precisely";
+  end;
+  
+  LLM_Init(model,instruction,"");
+  
+  AIChat_AddMessage(roles,messages,"instruction",instruction);
+  AIChat_StoreWn(wn,roles,messages,false,AICr.DisclaimerFlag,AICr.InstructionFlag);
+end;
+
+global
+procedure LlamaChatWClass_Chat()
+begin
+  Integer wn,nwn;
+  record AIChatVc AICr;
+  record AIChatVc AIC2r;
+  string 255 chattext,request;
+  json response;
+  LongInt httpres,i;
+  array string 255 roles,messages;
+  string 255 resp_role,resp_message,model;
+
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,AICr);
+
+  AIChat_LoadWn(wn,roles,messages);
+
+  chattext = GetTextField(AICr);
+  SetTextField(AICr,"");
+  PutWindowRecord(wn,AICr);
+  
+  AIChat_AddMessage(roles,messages,"user",chattext);
+  AIChat_StoreWn(wn,roles,messages,false,AICr.DisclaimerFlag,AICr.InstructionFlag);
+  
+  resp_message = LLM_Process("[user]" & NL & chattext & NL & NL & "[anna]" & NL);
+  
+  if (resp_message<>"") then begin
+    AIChat_AddMessage(roles,messages,"ai",HTMLEncodeText(resp_message));
+    AIChat_StoreWn(wn,roles,messages,false,AICr.DisclaimerFlag,AICr.InstructionFlag);
+  end;
+end;
+
+global
+function Boolean LlamaChatWClassOnOKWindow(Integer wn)
+begin
+  LlamaChatWClass_Chat;
+  LlamaChatWClassOnOKWindow = false;
+end;
+
+global
+function Boolean LlamaModelSClassOnOpenWindow(Integer wn)
+begin
+/*
+  string 255 modelid;
+  string 255 request;
+  json response;
+  Integer rownr,nwn;
+  record AIChatVc AIC2r;
+  LongInt httpres;
+  
+  ClearStringList(wn);
+  
+  rownr = 0;
+  
+  while (modelid<>"") begin
+    modelpath = ...;
+    
+    AddListRow(wn,"aimodel",1,modelid,0);
+    AddListData(wn,"aimodel","model",modelid);
+    AddList...(modelpath)
+    
+    rownr = rownr + 1;
+  end;
+
+  SetSelectedListLine(wn,0);
+*/
+
+  LlamaModelSClassOnOpenWindow = false;
+end;
+
+global
+function Boolean LlamaModelSClassOnOKWindow(Integer wn)
+begin
+  PasteFromSysList2(wn);
+  LlamaModelSClassOnOKWindow = false;
+end;
+
+global
+updating procedure RepWClass_AIChat()
+begin
+  string 255 model,instruction;
+  array string 255 roles,messages;
+  LongInt wn;
+  record AIChatVc AICr;
+  
+  wn = CurWindow;
+  
+  //AI_GetModel("llama-2-7b-chat/ggml-model-q4_0.gguf",model);
+  
+  instruction =               "### Instruction " & NL & NL;
+  instruction = instruction & "You are a helpful AI assistant called Anna. You answer questions shortly, correctly, and precisely" & NL;
+  instruction = instruction & "Do not explain how you come to an answer, simply give the answer" & NL;
+  instruction = instruction & "You are are helping the user to analyze a report" & NL;
+  instruction = instruction & NL;
+  instruction = instruction & "### Report " & NL & NL;
+  instruction = instruction & ReportWindowToText(wn);
+  instruction = instruction & "### Questions and Answers " & NL & NL;
+
+  AICr.Instruction = instruction;
+  AICr.DisclaimerFlag = 0;
+  AICr.InstructionFlag = 0;
+  AICr.AIModel = "llama-2-13b-chat/ggml-model-q4_0.gguf";
+  
+  OpenWindow("LlamaChatWClass",0,0,"","",AICr);
+
+/*
+  LLM_Init(model,instruction,"");
+  
+  AIChat_AddMessage(roles,messages,"instruction",instruction);
+  AIChat_StoreWn(wn,roles,messages,false);
+*/
+end;

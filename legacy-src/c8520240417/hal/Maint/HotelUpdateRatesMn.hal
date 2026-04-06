@@ -1,0 +1,349 @@
+external function LongInt DateDiff(Date,Date);
+external procedure JobPasteTransDate(var record JobVc);
+external function Integer JobPasteResUsage(var record JobVc,string);
+external function Integer JobPasteType(var record JobVc,string);
+external function Boolean JobToJobPrices(record JobVc,string,var record JobPriceVc);
+
+procedure GetPriceListArray(string pricelist,Date sd,Date ed,var array record PLDefVc aPLDr)
+begin
+  record PLDefVc PLDr;
+  Boolean found;
+  
+  found = true;
+  PLDr.PLReplCode = pricelist;
+  while (LoopKey("PLReplCode",PLDr,1,found)) begin
+    if (PLDr.PLReplCode!=pricelist) then begin found = false; end;
+    if (found) then begin
+      aPLDr[aPLDr.length] = PLDr;
+    end;
+  end;
+  return;
+end;
+
+updating procedure DeletePrices(string pricelist,string artcode)
+begin
+  record PLVc PLr;
+  Boolean found;
+  
+  PLr.PLCode = pricelist;
+  PLr.ArtCode = artcode;
+  found = true;
+  while (LoopMain(PLr,2,found)) begin
+    if (PLr.PLCode!=pricelist) then begin found = false; end;
+    if (PLr.ArtCode!=artcode) then begin found = false; end;
+    if (found) then begin
+      RecordDelete(PLr);
+      StepBack(PLr);
+    end;
+  end;
+  return;
+end;
+
+updating procedure DeletePriceListsInsidePeriod(string artcode,Date sd,Date ed,array record PLDefVc aPLDr)
+begin
+  record PLDefVc PLDr;
+  Integer i;
+  
+  for (i=0;i<aPLDr.length;i=i+1) begin
+    PLDr = aPLDr[i];
+
+    if (PLDr.StartDate>=sd and PLDr.EndDate<=ed) then begin// all pricelists fully in specified period gone
+      RecordDelete(PLDr);
+      DeletePrices(PLDr.Code,artcode);
+      PLDr.BBVECode = "DELETED";
+
+      aPLDr[i] = PLDr;
+    end;
+  end;
+  return;
+end;
+
+updating procedure UpdatePrice(record RcVc RepSpec,string pricelist,string artcode)
+begin
+  record PLVc PLr;
+  record PLVc oPLr;
+  record ResArtCodeVc RACr;
+
+  PLr.PLCode = pricelist;        
+  PLr.ArtCode = artcode;
+  if (ReadFirstMain(PLr,2,true)) then begin
+    RecordCopy(oPLr,PLr);
+    PLr.ExVatPrice = RepSpec.vals0;
+    RecordUpdate(oPLr,PLr,false);
+  end else begin
+    RACr.ResType = RepSpec.FirstAcc;
+    RACr.ResUsageCode = RepSpec.LastAcc;
+    if (ReadFirstMain(RACr,2,true)) then begin
+      PLr.Comment = RACr.Comment;
+    end;
+
+    RecordNew(PLr);
+    PLr.ArtCode = artcode;
+    PLr.PLCode = pricelist;        
+    PLr.ExVatPrice = RepSpec.vals0;
+    RecordStore(PLr,false);
+  end;
+  return;
+end;
+
+function Boolean AddToResultArray(string action,record PLDefVc PLDr,array record PLDefVc aresPLDr)
+begin
+  Boolean res;
+  Integer i;
+  record PLDefVc nPLDr;
+  Boolean addf;
+
+  addf = true;
+  for (i=0;i<aresPLDr.length;i=i+1) begin
+    nPLDr = aresPLDr[i];
+
+    if (nPLDr.StartDate==PLDr.StartDate and nPLDr.EndDate==PLDr.EndDate) then begin
+      addf = false;
+    end;
+  end;
+  if (addf) then begin
+    res = true;
+    PLDr.BBVECode = action;
+    aresPLDr[aresPLDr.length] = PLDr;
+  end;
+  AddToResultArray = res;
+  return;
+end;
+
+function Boolean ExistsInResultArray(record PLDefVc PLDr,array record PLDefVc aresPLDr)
+begin
+  Boolean res;
+  Integer i;
+  record PLDefVc nPLDr;
+
+  res = false;
+  for (i=0;i<aresPLDr.length;i=i+1) begin
+    nPLDr = aresPLDr[i];
+
+    if (nPLDr.StartDate==PLDr.StartDate and nPLDr.EndDate==PLDr.EndDate) then begin
+      res = false;
+      i = aresPLDr.length;
+    end;
+  end;
+  ExistsInResultArray = res;
+  return;
+end;
+
+updating procedure UpdatePriceLists(record RcVc RepSpec,string pricelist,string artcode,Date sd,Date ed,array record PLDefVc aPLDr)
+begin
+  record PLDefVc PLDr;
+  record PLDefVc nPLDr;
+  record PLDefVc oPLDr;
+  record PLDefVc mainPLDr;
+  uuid bluuid;
+  string 255 tstr,lastpricelist;
+  LongInt lastpricelistnr;
+  Integer i;
+  Boolean testf,createnewf,allpricelists_outsideperiodf;
+  vector Boolean vplforperdiodaddedf;
+  array record PLDefVc aresPLDr;
+
+  mainPLDr.Code = pricelist;
+  if (ReadFirstMain(mainPLDr,1,true)==false) then begin
+    goto LUpdatePriceLists;
+  end;
+
+  for (i=0;i<aPLDr.length;i=i+1) begin
+    PLDr = aPLDr[i];
+    tstr = Right(PLDr.Code,len(PLDr.Code)-len(pricelist));
+    if (nonblank(lastpricelist)) then begin
+      if (StringToLongInt(tstr)>StringToLongInt(lastpricelist)) then begin
+        lastpricelist = tstr;
+      end;
+    end else begin
+      lastpricelist = tstr;
+    end;
+  end;
+  lastpricelistnr = StringToLongInt(lastpricelist);
+
+  if (aPLDr.length<=0) then begin
+    lastpricelistnr = 0;
+    RecordCopy(nPLDr,PLDr);  
+    nPLDr.UUID = bluuid;
+    nPLDr.StartDate = sd;
+    nPLDr.EndDate = ed;
+    nPLDr.Code = pricelist & lastpricelistnr;
+    nPLDr.Comment = pricelist & " " & DateToString(nPLDr.StartDate,"YYYY-MM-DD") & " - " & DateToString(nPLDr.EndDate,"YYYY-MM-DD");
+    nPLDr.PLReplCode = pricelist;
+    AddToResultArray("NEW",nPLDr,aresPLDr);
+    goto LPRICELISTUPDATED;
+  end;
+
+  allpricelists_outsideperiodf = true;  
+  for (i=0;i<aPLDr.length;i=i+1) begin
+    PLDr = aPLDr[i];
+    testf = true;
+    if (PLDr.BBVECode=="DELETED") then begin testf = false; end;
+    
+    if (testf) then begin    
+      if (PLDr.StartDate==sd and PLDr.EndDate==ed) then begin
+        testf = false;
+        AddToResultArray("UPDATE",PLDr,aresPLDr);
+        goto LPRICELISTUPDATED;
+      end;
+      if (DateInRange(PLDr.StartDate,sd,ed)==false and DateInRange(PLDr.EndDate,sd,ed)==false) then begin
+        PLDr.BBVECode = "OUT_OF_RANGE";
+      end else begin
+        allpricelists_outsideperiodf = false;
+      end;
+    end;    
+  end;
+  if (allpricelists_outsideperiodf) then begin
+    lastpricelistnr = lastpricelistnr + 1;
+    RecordCopy(nPLDr,mainPLDr);
+    nPLDr.UUID = bluuid;
+    nPLDr.StartDate = sd;
+    nPLDr.EndDate = ed;
+    nPLDr.Code = pricelist & lastpricelistnr;
+    nPLDr.Comment = pricelist & " " & DateToString(nPLDr.StartDate,"YYYY-MM-DD") & " - " & DateToString(nPLDr.EndDate,"YYYY-MM-DD");
+    nPLDr.PLReplCode = pricelist;
+    AddToResultArray("NEW",nPLDr,aresPLDr);
+    goto LPRICELISTUPDATED;
+  end;
+
+
+  for (i=0;i<aPLDr.length;i=i+1) begin
+    PLDr = aPLDr[i];
+    testf = true;
+    if (PLDr.BBVECode=="DELETED") then begin testf = false; end;
+    if (PLDr.BBVECode=="OUT_OF_RANGE") then begin testf = false; end;
+    
+    if (testf) then begin    
+      RecordCopy(oPLDr,PLDr);
+    end;
+    
+    if (testf) then begin
+      if (DateInRange(PLDr.StartDate,sd,ed)==false and DateInRange(PLDr.EndDate,sd,ed)) then begin
+        testf = false;
+                
+        PLDr.EndDate = AddDay(sd,-1);
+        PLDr.Comment = pricelist & " " & DateToString(PLDr.StartDate,"YYYY-MM-DD") & " - " & DateToString(PLDr.EndDate,"YYYY-MM-DD");
+        AddToResultArray("UPDATE_PERIOD",PLDr,aresPLDr);
+
+      end;
+    end;
+
+    if (testf) then begin
+      if (DateInRange(PLDr.StartDate,sd,ed) and DateInRange(PLDr.EndDate,sd,ed)==false) then begin
+        testf = false;
+
+        PLDr.StartDate = AddDay(ed,1); 
+        PLDr.Comment = pricelist & " " & DateToString(PLDr.StartDate,"YYYY-MM-DD") & " - " & DateToString(PLDr.EndDate,"YYYY-MM-DD");
+        AddToResultArray("UPDATE_PERIOD",PLDr,aresPLDr);
+
+      end;
+    end;
+  end;
+  
+  lastpricelistnr = lastpricelistnr + 1;
+  RecordCopy(nPLDr,PLDr);  
+  nPLDr.UUID = bluuid;
+  nPLDr.StartDate = sd; 
+  nPLDr.EndDate = ed;
+  nPLDr.Code = pricelist & lastpricelistnr;
+  nPLDr.Comment = pricelist & " " & DateToString(nPLDr.StartDate,"YYYY-MM-DD") & " - " & DateToString(nPLDr.EndDate,"YYYY-MM-DD");
+  nPLDr.PLReplCode = pricelist;
+  AddToResultArray("NEW",nPLDr,aresPLDr);
+
+LPRICELISTUPDATED:;
+  for (i=0;i<aresPLDr.length;i=i+1) begin
+    PLDr = aresPLDr[i];
+
+    switch (PLDr.BBVECode) begin
+      case "NEW":
+        PLDr.BBVECode = "";
+        if (RecordStore(PLDr,false)) then begin
+          UpdatePrice(RepSpec,PLDr.Code,artcode);
+        end;
+      case "UPDATE":
+        PLDr.BBVECode = "";
+        oPLDr.Code = PLDr.Code;
+        if (ReadFirstMain(oPLDr,1,true)) then begin
+          if (RecordUpdate(oPLDr,PLDr,false)==0) then begin
+            UpdatePrice(RepSpec,PLDr.Code,artcode);
+          end;
+        end;
+      case "UPDATE_PERIOD":
+        PLDr.BBVECode = "";
+        oPLDr.Code = PLDr.Code;
+        if (ReadFirstMain(oPLDr,1,true)) then begin
+          if (RecordUpdate(oPLDr,PLDr,false)==0) then begin
+          end;
+        end;
+    end;
+  end;
+LUpdatePriceLists:;
+  return;
+end;
+
+global
+updating procedure HotelUpdateRatesMn(record RcVc RepSpec)
+begin
+  array record PLDefVc aPLDr;
+  string 255 tstr;
+  Integer i,rwcnt;
+  record JobPriceVc JPr;
+  row JobPriceVc JPrw;
+  record JobVc Jobr;
+  val price;
+  Boolean testf,pldeffound,addpricelistf,addpricef;
+  Date sd,ed;
+  string 255 foundpricelist;
+  record HotelBlock Hotelb;
+  uuid bluuid;
+  
+  if (blank(RepSpec.LastAcc) or blank(RepSpec.AccStr) or blank(RepSpec.FirstAcc) or blank(RepSpec.vals0)) then begin
+    goto LHotelUpdateRatesMn;
+  end;
+
+  BlockLoad(Hotelb);
+  RecordNew(Jobr);
+  Jobr.TransDate = RepSpec.sStartDate;
+  JobPasteTransDate(Jobr);
+  Jobr.NrOfDays = DateDiff(RepSpec.sEndDate,Jobr.TransDate) + 1;
+  Jobr.EndDate = AddDay(Jobr.TransDate,Jobr.NrOfDays);
+//      Jobr.Persons = RTr.MaxPersons;
+  tstr = Jobr.Type;
+  Jobr.Type = RepSpec.LastAcc;
+  if (Jobr.Type!=tstr) then begin
+    JobPasteType(Jobr,tstr);
+  end;
+  Jobr.PriceList = RepSpec.FirstAcc;
+  Jobr.Persons = 1;
+  Jobr.StartTime = Hotelb.CheckIn;
+  Jobr.EndTime = Hotelb.CheckOut;
+  
+  tstr = Jobr.ResUsage;
+  Jobr.ResUsage = RepSpec.AccStr;
+  if (Jobr.ResUsage!=tstr) then begin
+    JobPasteResUsage(Jobr,tstr);
+  end;
+
+  sd = Jobr.TransDate;
+  ed = AddDay(Jobr.EndDate,-1);
+
+  if (JobToJobPrices(Jobr,Jobr.Type,JPr)) then begin
+    rwcnt = MatRowCnt(JPr);
+
+    MatRowGet(JPr,i,JPrw);
+    if (blankdate(sd)) then begin sd = JPrw.StayDay; end;
+    testf = true;
+    if (blankdate(JPrw.StayDay)) then begin testf = false; end;
+    if (JPrw.Price!=price and blank(price)==false) then begin testf = false; end;
+    if (testf) then begin
+      GetPriceListArray(Jobr.PriceList,sd,ed,aPLDr);
+      DeletePriceListsInsidePeriod(JPrw.ArtCode,sd,ed,aPLDr);
+      UpdatePriceLists(RepSpec,RepSpec.FirstAcc,JPrw.ArtCode,sd,ed,aPLDr);
+    end;
+    price = JPrw.Price;
+    ed = JPrw.StayDay;
+  end;    
+
+LHotelUpdateRatesMn:;  
+  return;
+end;

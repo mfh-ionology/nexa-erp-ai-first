@@ -1,0 +1,173 @@
+external procedure NewLineExport();
+
+global
+procedure BankExpZAF0_Header(Date paydate)
+begin
+  string 255 tstr;
+  record CYBlock CYb;
+  
+  BlockLoad(CYb);
+  
+  tstr = "BInSol - U ver 1.00";
+  ExportPadString(tstr,len(tstr)+35,",",false);
+  NewLineExport;
+  tstr = DateToString(paydate,"DD-MM-YYYY");
+  ExportPadString(tstr,len(tstr)+35,",",false);
+  NewLineExport;
+  ExportPadString(CYb.BankCode,len(CYb.BankCode)+1,",",false);
+  ExportPadString("",len("")+34,",",false); //hash totals TODO: generate hash
+  NewLineExport;
+  
+  ExportPadString("RECIPIENT NAME",len("RECIPIENT NAME")+1,",",false);
+  ExportPadString("RECIPIENT ACCOUNT",len("RECIPIENT ACCOUNT")+1,",",false);
+  ExportPadString("RECIPIENT ACCOUNT TYPE",len("RECIPIENT ACCOUNT TYPE")+1,",",false);
+  ExportPadString("BRANCHCODE",len("BRANCHCODE")+1,",",false);
+  ExportPadString("AMOUNT",len("AMOUNT")+1,",",false);
+  ExportPadString("OWN REFERENCE",len("OWN REFERENCE")+1,",",false);
+  ExportPadString("RECIPIENT REFERENCE",len("RECIPIENT REFERENCE")+1,",",false);
+  ExportPadString("EMAIL 1 NOTIFY",len("EMAIL 1 NOTIFY")+1,",",false);
+  ExportPadString("EMAIL 1 ADDRESS",len("EMAIL 1 ADDRESS")+1,",",false);
+  ExportPadString("EMAIL 1 SUBJECT",len("EMAIL 1 SUBJECT")+1,",",false);
+  ExportPadString("EMAIL 2 NOTIFY",len("EMAIL 2 NOTIFY")+1,",",false);
+  ExportPadString("EMAIL 2 ADDRESS",len("EMAIL 2 ADDRESS")+1,",",false);
+  ExportPadString("EMAIL 2 SUBJECT",len("EMAIL 2 SUBJECT")+1,",",false);
+  ExportPadString("EMAIL 3 NOTIFY",len("EMAIL 3 NOTIFY")+1,",",false);
+  ExportPadString("EMAIL 3 ADDRESS",len("EMAIL 3 ADDRESS")+1,",",false);
+  ExportPadString("EMAIL 3 SUBJECT",len("EMAIL 3 SUBJECT")+1,",",false);
+  ExportPadString("EMAIL 4 NOTIFY",len("EMAIL 4 NOTIFY")+1,",",false);
+  ExportPadString("EMAIL 4 ADDRESS",len("EMAIL 4 ADDRESS")+1,",",false);
+  ExportPadString("EMAIL 4 SUBJECT",len("EMAIL 4 SUBJECT")+1,",",false);
+  ExportPadString("EMAIL 5 NOTIFY",len("EMAIL 5 NOTIFY")+1,",",false);
+  ExportPadString("EMAIL 5 ADDRESS",len("EMAIL 5 ADDRESS")+1,",",false);
+  ExportPadString("EMAIL 5 SUBJECT",len("EMAIL 5 SUBJECT")+1,",",false);
+  ExportPadString("FAX 1 NOTIFY",len("FAX 1 NOTIFY")+1,",",false);
+  ExportPadString("FAX 1 CODE",len("FAX 1 CODE")+1,",",false);
+  ExportPadString("FAX 1 NUMBER",len("FAX 1 NUMBER")+1,",",false);
+  ExportPadString("FAX 1 SUBJECT",len("FAX 1 SUBJECT")+1,",",false);
+  ExportPadString("FAX 2 NOTIFY",len("FAX 2 NOTIFY")+1,",",false);
+  ExportPadString("FAX 2 CODE",len("FAX 2 CODE")+1,",",false);
+  ExportPadString("FAX 2 NUMBER",len("FAX 2 NUMBER")+1,",",false);
+  ExportPadString("FAX 2 SUBJECT",len("FAX 2 SUBJECT")+1,",",false);
+  ExportPadString("SMS 1 NOTIFY",len("SMS 1 NOTIFY")+1,",",false);
+  ExportPadString("SMS 1 CODE",len("SMS 1 CODE")+1,",",false);
+  ExportPadString("SMS 1 NUMBER",len("SMS 1 NUMBER")+1,",",false);
+  ExportPadString("SMS 2 NOTIFY",len("SMS 2 NOTIFY")+1,",",false);
+  ExportPadString("SMS 2 CODE",len("SMS 2 CODE")+1,",",false);
+  ExportPadString("SMS 2 NUMBER",len("SMS 2 NUMBER"),",",false);
+  NewLineExport;
+
+  return;
+end;
+
+procedure BankExpZAF0_Data(record RcVc RepSpec,record OPVc OPr,var Integer opcnt)
+begin
+  record VIVc VIr;
+  record BankVc Bankr;
+  row OPVc OPrw;
+  Integer i,rwcnt;
+  Boolean testf;
+  string 255 tstr,paynr,rkpaynr;
+  
+  rwcnt = MatRowCnt(OPr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(OPr,i,OPrw);
+    testf = true;
+    if (nonblank(RepSpec.CurncyCode)) then begin
+      if (OPrw.BankCurncy!=RepSpec.CurncyCode) then begin testf = false; end;
+    end; 
+    VIr.SerNr = OPrw.VISerNr;
+    if (ReadFirstMain(VIr,1,true)) then begin
+      Bankr.Code = VIr.BankCode;
+      if (ReadFirstMain(Bankr,1,true)) then begin 
+        if (blank(Bankr.BankIDCode)) then begin
+          MessageBox(42370,USetStr(42373) & " " & VIr.SerNr);
+          goto LBankExpZAF0_Data; 
+        end;
+      end;
+    end;   
+    if (blank(OPrw.rkPayNumber) and blank(VIr.InvoiceNr)) then begin
+      MessageBox(42370,USetStr(42371) & " " & VIr.SerNr);
+      goto LBankExpZAF0_Data; 
+    end;
+    if (blank(VIr.BankAcc)) then begin 
+      MessageBox(42370,USetStr(42372) & " " & VIr.SerNr);
+      goto LBankExpZAF0_Data; 
+    end;
+    
+    if (testf) then begin
+      paynr = OPr.PayNumber;
+      if (blank(OPr.PayNumber)) then begin
+        paynr = OPr.SerNr;
+      end;
+      rkpaynr = OPrw.rkPayNumber;
+      if (blank(OPrw.rkPayNumber)) then begin
+        rkpaynr = VIr.InvoiceNr;
+      end;
+      
+      ExportPadString(VIr.VEName,len(VIr.VEName)+1,",",false);
+      ExportPadString(VIr.BankAcc,len(VIr.BankAcc)+1,",",false);
+      ExportPadString("1",len("1")+1,",",false); //TODO recipient type
+      ExportPadString(Bankr.BankIDCode,len(Bankr.BankIDCode)+1,",",false);
+      tstr = ValToString(OPrw.RecVal,M4Val,"",".",0);
+      ExportPadString(tstr,len(tstr)+1,",",false);   
+      ExportPadString(paynr,len(paynr)+1,",",false);
+      ExportPadString(rkpaynr,len(rkpaynr)+1,",",false);
+
+      ExportPadString("",len("")+1,",",false); //EMAIL 1 NOTIFY
+      ExportPadString("",len("")+1,",",false); //EMAIL 1 ADDRESS
+      ExportPadString("",len("")+1,",",false); //EMAIL 1 SUBJECT
+      ExportPadString("",len("")+1,",",false); //EMAIL 2 NOTIFY
+      ExportPadString("",len("")+1,",",false); //EMAIL 2 ADDRESS
+      ExportPadString("",len("")+1,",",false); //EMAIL 2 SUBJECT
+      ExportPadString("",len("")+1,",",false); //EMAIL 3 NOTIFY
+      ExportPadString("",len("")+1,",",false); //EMAIL 3 ADDRESS
+      ExportPadString("",len("")+1,",",false); //EMAIL 3 SUBJECT
+      ExportPadString("",len("")+1,",",false); //EMAIL 4 NOTIFY
+      ExportPadString("",len("")+1,",",false); //EMAIL 4 ADDRESS
+      ExportPadString("",len("")+1,",",false); //EMAIL 4 SUBJECT
+      ExportPadString("",len("")+1,",",false); //EMAIL 5 NOTIFY
+      ExportPadString("",len("")+1,",",false); //EMAIL 5 ADDRESS
+      ExportPadString("",len("")+1,",",false); //EMAIL 5 SUBJECT
+
+      ExportPadString("",len("")+1,",",false); //FAX 1 NOTIFY
+      ExportPadString("",len("")+1,",",false); //FAX 1 NUMBER
+      ExportPadString("",len("")+1,",",false); //FAX 1 SUBJECT
+      ExportPadString("",len("")+1,",",false); //FAX 2 NOTIFY
+      ExportPadString("",len("")+1,",",false); //FAX 2 NUMBER
+      ExportPadString("",len("")+1,",",false); //FAX 2 SUBJECT
+
+      ExportPadString("",len("")+1,",",false); //SMS 1 NOTIFY
+      ExportPadString("",len("")+1,",",false); //SMS 1 CODE
+      ExportPadString("",len("")+1,",",false); //SMS 1 NUMBER
+      ExportPadString("",len("")+1,",",false); //SMS 2 NOTIFY
+      ExportPadString("",len("")+1,",",false); //SMS 2 CODE
+      ExportPadString("",len(""),",",false); //SMS 2 NUMBER
+      NewLineExport;
+    end;
+  end;
+  opcnt = opcnt + 1;
+LBankExpZAF0_Data:;
+  return;
+end;
+
+global
+procedure BankExpZAF0(record RcVc RepSpec,record OPVc OPr,var Integer opcnt)
+begin
+  Boolean testf;
+
+  if (RepSpec.flags[2]==0) then begin
+    testf = true;
+    if (RepSpec.OnlyUnprntd==0) then begin
+      if (OPr.ExportedFlag!=0) then begin testf = false; end;
+    end;
+    if (RepSpec.sStartDate!=OPr.PayDate) then begin testf = false; end;
+    if (testf) then begin
+      if (opcnt<1) then begin
+        BankExpZAF0_Header(OPr.PayDate);
+      end;
+      BankExpZAF0_Data(RepSpec,OPr,opcnt);
+    end;
+  end else begin
+  end;
+  return;
+end;

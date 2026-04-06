@@ -1,0 +1,33 @@
+
+global
+updating procedure CustExclMassMailMn(record RcVc RepSpec)
+begin
+
+  record CUVc CUr;
+  record CUVc oldCUr;
+  String 255 substr,onestr;
+  LongInt pos;
+  Boolean TrHs;
+
+  if (blank(RepSpec.f1)) then begin
+    goto LCustExclMassMailMn;
+  end;
+  TrHs = true;
+  substr = RepSpec.f1;
+  while (GetNextSubstring(substr,pos,",",onestr)) begin
+    CUr.CustCat = onestr;
+    while (LoopKey("Group",CUr,1,TrHs)) begin
+      if (CUr.CustCat!=onestr) then begin
+        TrHs = false;
+      end;
+      if (TrHs) then begin
+        RecordCopy(oldCUr,CUr);
+        CUr.NoLetterPosting = 1;
+        CUr.NoMailPosting = 1;
+        RecordUpdate(oldCUr,CUr,true);
+      end;
+    end;
+  end;
+LCustExclMassMailMn:;
+  return;
+end;

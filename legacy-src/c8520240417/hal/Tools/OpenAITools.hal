@@ -1,0 +1,669 @@
+// ## move R- and W-actions to separate files
+
+external procedure GetHostAndPathFromUrl(string,var string,var LongInt,var string,var Boolean);
+external procedure OpenAI_OpenDebugWindow(record OpenAILogVc);
+external procedure PasteFromSysList2(Integer);
+external procedure AddFileAsTag(var string,string,string,string);
+external function string 255 CR();
+external function string 255 LF();
+external function string 255 NL();
+
+global
+procedure OpenAI_OpenDebugWindow(record OpenAILogVc ALogr)
+begin
+  OpenWindow("OpenAILogWClass",1,0,"","",ALogr);
+end;
+
+function string 255 OpenAI_Url(string path)
+begin
+  string 255 res;
+  
+  res = "https://api.openai.com";
+  if (left(path,1)!="/") then begin
+    res = res & "/";
+  end;
+  res = res & path;
+  
+  OpenAI_Url = res;
+end;
+
+global
+procedure OpenAI_Message(string title,string disclaimer,string body)
+begin
+  Integer wn;
+  record AIChatVc AICr;
+  string 255 allhtml;
+  
+  wn = OpenWindow("AIMessageWClass",0,0,"","",AICr);
+  
+  allhtml = "<html><head>";
+  if (title<>"") then begin allhtml = allhtml & "<title>" & title & "</title>"; end;
+  allhtml = "<body>";
+  if (disclaimer<>"") then begin
+    allhtml = allhtml & "<div style=""border:2px #F04040; background-color: #ffdddd"">" & disclaimer & "</div><br><br>";
+  end;
+
+  allhtml = allhtml & "<div>" & body & "</div></body></html>";
+  
+  SetWebPageData(wn,"$AI_Message",allhtml);
+end;
+
+function Boolean OpenAI_SetupIfNeeded()
+begin
+  Boolean res;
+  record AILinkBlock AILb;
+  string 255 html;
+  record RcVc RepSpec;
+  
+  BlockLoad(AILb);
+  
+  if (AILb.OpenAI_ApiKey=="") then begin
+    res = false;
+    OpenWindow("OpenAISetupWClass",0,0,"","",RepSpec);
+  end else begin
+    res = true;
+  end;
+  
+  OpenAI_SetupIfNeeded = res;
+end;
+
+procedure OpenAI_Call(string path,string method,string payload,record WebRequestVc WRr)
+begin
+  record AILinkBlock AILb;
+  
+  BlockLoad(AILb);
+  
+  if (OpenAI_SetupIfNeeded==false) then begin
+    goto LOpenAI_Call;
+  end;
+
+  WRr.URL = OpenAI_Url(path);
+  WRr.Method = method;
+  WRr.Authorization = "Bearer " & AILb.OpenAI_ApiKey;
+  
+  WRr.PostContentType = "application/json";
+  WRr.PostData = payload;
+  WRr.Timeout = 120;
+  
+  SendWebRequest4(WRr);
+LOpenAI_Call:;
+end;
+
+function Integer OpenAI_Call_JSON(string path,string method,string payload,var json ReplyJSON)
+begin
+  record WebRequestVc WRr;
+  Integer res;
+  //string 255 ReplyHeaders;
+
+  OpenAI_Call(path,method,payload,WRr);
+  
+  //ReplyHeaders = WRr.ReplyHeaders;
+  ReplyJSON = ParseJSONString(WRr.ReplyData);  
+  res = WRr.ResultCode;
+  
+  OpenAI_Call_JSON = res;
+end;
+
+procedure OpenAI_Call_JSON_Async(string path,string method,string payload,string callback,Integer wn,Boolean DebugFlag)
+begin
+  record WebRequestVc WRr;
+  Integer res;
+  //string 255 ReplyHeaders;
+  
+  WRr.AsyncFlag = 1;
+  WRr.AsyncCallback = callback;
+  if (DebugFlag) then begin
+    WRr.Ctx_Long[0] = 1;
+  end;
+  WRr.Ctx_Long[1] = wn;
+
+  OpenAI_Call(path,method,payload,WRr);
+end;
+
+function Integer OpenAI_GET_JSON(string path,var json ReplyJSON)
+begin
+  OpenAI_GET_JSON = OpenAI_Call_JSON(path,"GET","",ReplyJSON);
+end;
+
+global
+function Integer OpenAI_POST_JSON(string path,string payload,var json ReplyJSON)
+begin
+  OpenAI_POST_JSON = OpenAI_Call_JSON(path,"POST",payload,ReplyJSON);
+end;
+
+global
+procedure OpenAI_POST_JSON_Async(string path,string payload,string callback,Integer wn,Boolean DebugFlag)
+begin
+  OpenAI_Call_JSON_Async(path,"POST",payload,callback,wn,DebugFlag);
+end;
+
+global
+updating procedure StartOpenAIChatSm()
+begin
+  record AIChatVc AICr;
+  
+  if (OpenAI_SetupIfNeeded) then begin
+    OpenWindow("AIChatWClass",0,0,"","",AICr);
+  end;
+end;
+
+global
+updating procedure StartOpenAIDataChatSm()
+begin
+  record AIChatVc AICr;
+  
+  OpenWindow("AIDataChatWClass",0,0,"","",AICr);
+end;
+
+global
+function string 255 CrlfStringToHtml(string crlfstring)
+begin
+  string 255 res;
+  
+  res = crlfstring;
+
+  res = ReplaceStringWithString(res,CR & LF,"<BR>");
+  res = ReplaceStringWithString(res,CR,"<BR>");
+  res = ReplaceStringWithString(res,LF,"<BR>");
+
+  res = ReplaceStringWithString(res,"\\r\\n","<BR>");
+  res = ReplaceStringWithString(res,"\\r","<BR>");
+  res = ReplaceStringWithString(res,"\\n","<BR>");
+  
+  CrlfStringToHtml = res;
+end;
+
+procedure AIChat_Display(LongInt wn,array string roles,array string messages,Boolean asstyping,Boolean disclaimerf,Boolean instructionf)
+begin
+  string 255 allhtml,message,disclaimer;
+  LongInt i;
+  area acss;
+  
+  allhtml = "<html><head>" & NL;
+
+  AddFileAsTag(allhtml,"chat.css","style","text/css");
+  AddFileAsTag(allhtml,"chat.js","script","text/javascript");
+
+  allhtml = allhtml & "</head><body>" & NL;
+  
+  if (disclaimerf) then begin
+    if (disclaimer=="") then begin
+      disclaimer = "<p>Disclaimer<p>This chat is for informational purposes only. We do not collect, store, or provide data. Any content presented is updated up to September 2021, and we bear no responsibility for its accuracy or timeliness";
+    end;
+
+    if (disclaimer<>"") then begin
+      allhtml = allhtml & "<div class='disclaimerbox'><div class='disclaimer'>" & disclaimer & "</div></div>" & NL;
+    end;
+  end;
+  
+  allhtml = allhtml & "<div class='scroller' id='scroller'><br class='fullwidth'>" & NL;
+
+  for (i = 0; i<roles.length; i = i + 1) begin
+    if (instructionf==true or roles[i]<>"instruction") then begin
+      allhtml = allhtml & "<div class='" & roles[i] & "'><p class='role'>" & roles[i] & "<p class='message'>" & CrlfStringToHtml(messages[i]) & "</div>" & NL;
+    end;
+  end;
+  
+  if (asstyping) then begin
+    allhtml = allhtml & "<div class='assistant'><p class='role'>assistant<p class='message'>...</div>" & NL;
+  end;
+  
+  allhtml = allhtml & "</div>" & NL;
+  allhtml = allhtml & "</body></html>" & NL;
+  
+  WriteStringToFile(allhtml,"chat.html",0);
+  SetWebPageData(wn,"$AI_ChatLog",allhtml);
+  
+  CallWebPageJavascript(wn,"$AI_ChatLog","scrolldown();");
+  //CallWebPageJavascript(wn,"$AI_ChatLog","document.getElementById(""scroller"").scrollTop = document.getElementById(""scroller"").scrollHeight;");
+  //CallWebPageJavascript(wn,"$AI_ChatLog","popup();");
+end;
+
+global
+procedure AIChat_LoadWn(LongInt wn,var array string roles,var array string messages)
+begin
+  string 255 role,message;
+  LongInt i;
+  
+  role = GetWindowString(wn,"AI_Roles[0]");
+  message = GetWindowString(wn,"AI_Messages[0]");
+  i = 0;
+  
+  while (role<>"") begin
+    roles[i] = role;
+    messages[i] = message;
+    
+    i = i + 1;
+    
+    role = GetWindowString(wn,"AI_Roles[" & i & "]");
+    message = GetWindowString(wn,"AI_Messages[" & i & "]");
+  end;
+end;
+
+global
+procedure AIChat_LoadCbctx(string cbctx,var array string roles,var array string messages)
+begin
+  string 255 role,message;
+  LongInt i;
+  
+  role = GetChatBotContextValue(cbctx,"AI_Roles[0]");
+  message = GetChatBotContextValue(cbctx,"AI_Messages[0]");
+  i = 0;
+  
+  while (role<>"") begin
+    roles[i] = role;
+    messages[i] = message;
+    
+    i = i + 1;
+    
+    role = GetChatBotContextValue(cbctx,"AI_Roles[" & i & "]");
+    message = GetChatBotContextValue(cbctx,"AI_Messages[" & i & "]");
+  end;
+end;
+
+global
+procedure AIChat_StoreWn(LongInt wn,array string roles,array string messages,Boolean asstyping,Boolean disclaimerf,Boolean instructionf)
+begin
+  LongInt i;
+  
+  for (i = 0; i<roles.length; i = i + 1) begin
+    PutWindowString(wn,"AI_Roles[" & i & "]",roles[i]);
+    PutWindowString(wn,"AI_Messages[" & i & "]",messages[i]);
+  end;
+
+  PutWindowString(wn,"AI_Roles[" & roles.length & "]","");
+  PutWindowString(wn,"AI_Messages[" & roles.length & "]","");
+  
+  AIChat_Display(wn,roles,messages,asstyping,disclaimerf,instructionf);
+end;
+
+global
+procedure AIChat_StoreCbctx(string cbctx,array string roles,array string messages,Boolean asstyping,Boolean disclaimerf,Boolean instructionf)
+begin
+  LongInt i;
+  
+  for (i = 0; i<roles.length; i = i + 1) begin
+    SetChatBotContextValue(cbctx,"AI_Roles[" & i & "]",roles[i]);
+    SetChatBotContextValue(cbctx,"AI_Messages[" & i & "]",messages[i]);
+  end;
+
+  SetChatBotContextValue(cbctx,"AI_Roles[" & roles.length & "]","");
+  SetChatBotContextValue(cbctx,"AI_Messages[" & roles.length & "]","");
+end;
+
+global
+procedure AddAIChatToJSON(array string roles,array string messages,var string jsontext)
+begin
+  LongInt i;
+  
+  jsontext = jsontext & """messages"": [{";
+  
+  for (i = 0; i<roles.length; i = i + 1) begin
+    if (i>0) then begin
+      jsontext = jsontext & ",";
+    end;
+    jsontext = jsontext & """role"": """ & roles[i] & """, ""content"": """ & JSONEncode(messages[i],true) & """";
+  end;
+  
+  jsontext = jsontext & "}]";
+end;
+
+global
+procedure OpenAI_DoChat_Async(string model,array string roles,array string messages,string callback,Integer wn,Boolean DebugFlag)
+begin
+  string 255 request;
+  LongInt httpres;
+  record AIChatVc AIC2r;
+  Integer dbgwn;
+  
+  request =           "{";
+  request = request & """model"": """ & model & """,";
+  AddAIChatToJSON(roles,messages,request);
+  request = request & "}";
+  
+  OpenAI_POST_JSON_Async("v1/chat/completions",request,callback,wn,DebugFlag);
+end;
+
+global
+function LongInt OpenAI_DoChat(string model,array string roles,array string messages,var json response,Boolean DebugFlag)
+begin
+  string 255 request;
+  LongInt httpres;
+  record AIChatVc AIC2r;
+  Integer dbgwn;
+  
+  request =           "{";
+  request = request & """model"": """ & model & """,";
+  AddAIChatToJSON(roles,messages,request);
+  request = request & "}";
+  
+  httpres = OpenAI_POST_JSON("v1/chat/completions",request,response);
+  
+  if (DebugFlag) then begin
+    SetTextField(AIC2r,request & CR & LF  & CR & LF & httpres & CR & LF  & CR & LF & JSONGetAsJSONString(response,"/"));
+    dbgwn = OpenWindow("AIChatReplyWClass",0,0,"","",AIC2r);
+  end;
+  
+  OpenAI_DoChat = httpres;
+end;
+
+global
+procedure AIChat_AddMessage(var array string roles,var array string messages,string role,string newtext)
+begin
+  LongInt pos;
+  
+  pos = roles.length - 1;
+  
+  if (pos<0) then begin
+    pos = pos + 1;
+    roles[pos] = role;
+    messages[pos] = "";
+  end;
+  
+  if (roles[pos]<>role) then begin
+    pos = pos + 1;
+    roles[pos] = role;
+    messages[pos] = "";
+  end;
+  
+  messages[pos] = Trim(messages[pos] & newtext);
+end;
+
+global
+procedure AIChatWClass_ChatReply()
+begin
+end;
+
+global
+procedure AIChatWClass_Chat_Callback(record WebRequestVc WRr)
+begin
+  json response;
+  LongInt wn;
+  Boolean DebugFlag;
+  string 255 resp_role;
+  string 255 resp_message;
+  array string 255 roles;
+  array string 255 messages;
+  record AIChatVc AIC2r;
+  Integer dbgwn;
+
+  response = ParseJSONString(WRr.ReplyData);
+  DebugFlag = WRr.Ctx_Long[0];
+  wn = WRr.Ctx_Long[1];
+
+  resp_role = JSONGet(response,"choices/[0]/message/role");
+  resp_message = JSONGet(response,"choices/[0]/message/content");
+  
+  if (resp_role<>"") then begin
+    AIChat_LoadWn(wn,roles,messages);
+    AIChat_AddMessage(roles,messages,resp_role,resp_message);
+    AIChat_StoreWn(wn,roles,messages,false,true,true);
+  end;
+  
+  if (DebugFlag) then begin
+    SetTextField(AIC2r,WRr.URL & " " & WRr.ResultCode & CR & LF  &
+                       CR & LF &
+                       WRr.PostData & CR & LF  &
+                       CR & LF & "----------------" & CR & LF  &
+                       CR & LF &
+                       JSONGetAsJSONString(response,"/"));
+                       
+    dbgwn = OpenWindow("AIChatReplyWClass",0,0,"","",AIC2r);
+  end;
+
+end;
+
+global
+function string 255 OpenAI_Model(string amodel,record AIChatVc AICr)
+begin
+  string 255 res;
+  record AILinkBlock AILb;
+  
+  BlockLoad(AILb);
+
+  res = amodel;
+    
+  if (res=="") then begin res = AICr.AIModel; end;
+  if (res=="") then begin res = AILb.OpenAI_DefaultModel; end;
+  if (res=="") then begin res = "gpt-3.5-turbo"; end;
+
+  OpenAI_Model = res;
+end;
+
+global
+procedure AIChatWClass_Chat()
+begin
+  Integer wn,nwn;
+  record AIChatVc AICr;
+  string 255 chattext,request;
+  LongInt i;
+  array string 255 roles,messages;
+  string 255 resp_role,resp_message,model;
+
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,AICr);
+
+  AIChat_LoadWn(wn,roles,messages);
+
+  chattext = GetTextField(AICr);
+  SetTextField(AICr,"");
+  PutWindowRecord(wn,AICr);
+  
+  i = roles.length;
+  roles[i] = "user";
+  messages[i] = chattext;
+  AIChat_StoreWn(wn,roles,messages,true,true,true);
+  
+  model = OpenAI_Model(model,AICr);
+  
+  OpenAI_DoChat_Async(model,roles,messages,"AIChatWClass_Chat_Callback",wn,AICr.DebugFlag);
+end;
+
+global
+function Boolean AIChatWClassOnOKWindow(Integer wn)
+begin
+  AIChatWClass_Chat;
+  AIChatWClassOnOKWindow = false;
+end;
+
+global
+function Boolean OpenAIModelSClassOnOpenWindow(Integer wn)
+begin
+  string 255 modelid;
+  string 255 request;
+  json response;
+  Integer rownr,nwn;
+  record AIChatVc AIC2r;
+  LongInt httpres;
+  record AILinkBlock AILb;
+  
+  BlockLoad(AILb);
+
+  httpres = OpenAI_GET_JSON("v1/models",response);
+
+  SetTextField(AIC2r,request & CR & LF  & CR & LF & httpres & CR & LF  & CR & LF & JSONGetAsJSONString(response,"/"));
+  
+  if (AILb.DebugFlag) then begin
+    nwn = OpenWindow("AIChatReplyWClass",0,0,"","",AIC2r);
+  end;
+  
+  ClearStringList(wn);
+  
+  rownr = 0;
+  
+  while (JSONNodeExists(response,"data/[" & rownr & "]")) begin
+    modelid = JSONGet(response,"data/[" & rownr & "]/id");
+    
+    //modelid = "gpt-4";
+    AddListRow(wn,"aimodel",1,modelid,0);
+    AddListData(wn,"aimodel","model",modelid);
+    
+    rownr = rownr + 1;
+  end;
+
+  SetSelectedListLine(wn,0);
+
+  OpenAIModelSClassOnOpenWindow = false;
+end;
+
+global
+function Boolean AIChatWClassOnOpenWindow(Integer wn)
+begin
+  array string 255 roles,messages;
+
+  AIChat_Display(wn,roles,messages,false,true,true);
+end;
+
+global
+function Boolean OpenAIModelSClassOnOKWindow(Integer wn)
+begin
+  PasteFromSysList2(wn);
+  OpenAIModelSClassOnOKWindow = false;
+end;
+
+global
+procedure OpenAISetupWClass_FetchKey()
+begin
+  OpenWebBrowser("https://platform.openai.com/account/api-keys");
+end;
+
+global
+procedure OpenAISetupWClass_OpenAILink()
+begin
+  record AILinkBlock AILb;
+  
+  BlockLoad(AILb);
+  OpenWindow("AILinkTClass",1,0,"","",AILb);
+end;
+
+procedure SetupDataFolder()
+begin
+  record IVVc IVr;
+  record CUVc CUr;
+
+  Delete_File("graphs/customers.txt");
+  CreateFile("graphs/customers.txt");
+  CloseFile;
+  OpenExportFile("graphs/customers.txt",true);
+
+  ExportString("customer_code");
+  ExportString("customer_name");
+  ExportString("customer_category_code");
+  NewLine;
+
+  while (LoopMain(CUr,1,true)) begin
+    if (CUr.CUType) then begin
+      ExportString(CUr.Code);
+      ExportString(CUr.Name);
+      ExportString(CUr.CustCat);
+      NewLine;
+    end;
+  end;
+
+  CloseFile;
+
+  Delete_File("graphs/invoices.txt");
+  CreateFile("graphs/invoices.txt");
+  CloseFile;
+  OpenExportFile("graphs/invoices.txt",true);
+
+  ExportString("invoice_number");
+  ExportString("customer_code");
+  ExportString("invoice_amount");
+  ExportString("gross_profit_amount");
+  ExportString("invoice_date");
+  NewLine;
+
+  while (LoopMain(IVr,1,true)) begin
+    if (IVr.OKFlag==1 and
+        IVr.Invalid==0 and
+        IVr.InvType==kInvoiceTypeNormal) then begin
+
+      ExportString(IVr.SerNr);
+      ExportString(IVr.CustCode);
+      ExportString(ValToString(IVr.Sum4,M4Val,"",".",0));
+      ExportString(ValToString(IVr.TotGP,M4Val,"",".",0));
+      ExportString(DateToString(IVr.InvDate,"YYYY-MM-DD"));
+      NewLine;
+    end;
+  end;
+
+  CloseFile;
+end;
+
+global
+procedure AIDataChatWClass_Chat()
+begin
+  Integer wn,nwn;
+  record AIChatVc AICr;
+  string 255 request;
+  json response;
+  LongInt httpres,i;
+  array string 255 roles,messages;
+  string 255 resp_role,resp_message,model;
+  string 255 systemprompt,dataprompt,pythoncode;
+  LongInt pos;
+
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,AICr);
+
+  //AIChat_Load(wn,roles,messages);
+
+  systemprompt = "You are a data analyst who are an expert at writing code to provide simple graphs in pyhthon" & NL;
+  AIChat_AddMessage(roles,messages,"system",systemprompt);
+
+  dataprompt =              "Given the following files in tab separated format where each filename is followed by the fields in the file" & NL;
+  dataprompt = dataprompt & NL;
+  dataprompt = dataprompt & "customers.txt with the fields customer_code, customer_name, customer_category_code" & NL;
+  dataprompt = dataprompt & "invoices.txt with the fields invoice_number, customer_code, invoice_amount, gross_profit_amount, invoice_date" & NL;
+  dataprompt = dataprompt & NL;
+  dataprompt = dataprompt & "Please write python code according to the below specification to produce a graph" & NL;
+  dataprompt = dataprompt & "Specity the data types when loading the data with panda" & NL;
+  dataprompt = dataprompt & "The graph shall be saved as 'graph.png' in the current directory" & NL;
+  dataprompt = dataprompt & NL;
+  dataprompt = dataprompt & "SPECIFICATION" & NL;
+  dataprompt = dataprompt & NL;
+  dataprompt = dataprompt & GetTextField(AICr);
+
+  AIChat_AddMessage(roles,messages,"user",dataprompt);
+
+  AIChat_StoreWn(wn,roles,messages,true,true,true);
+
+  model = OpenAI_Model(model,AICr);
+
+  httpres = OpenAI_DoChat(model,roles,messages,response,AICr.DebugFlag);
+
+  resp_role = JSONGet(response,"choices/[0]/message/role");
+  resp_message = JSONGet(response,"choices/[0]/message/content");
+
+  if (resp_role<>"") then begin
+    AIChat_AddMessage(roles,messages,resp_role,resp_message);
+    AIChat_StoreWn(wn,roles,messages,false,true,true);
+
+    Delete_File("graphs/program.py");
+    while (GetNextSubString(resp_message,pos,"```",pythoncode)) begin
+      if (left(pythoncode,6)=="python") then begin
+        CreateFolder("graphs");
+        pythoncode = right(pythoncode,len(pythoncode) - 6);
+        WriteStringToFile(pythoncode & NL,"graphs/program.py",1);
+      end;
+    end;
+
+    if (FileExists("graphs/program.py")) then begin
+      SetupDataFolder;
+      RunShellScript("bash -l ""cd graphs ; /opt/homebrew/opt/python@3.11/libexec/bin/python program.py""");
+      OpenFileWithDefaultProgram("graphs/graph.png");
+    end;
+  end;
+
+  return;
+end;
+
+global
+function Boolean AIDataChatWClassOnOKWindow(Integer wn)
+begin
+  AIDataChatWClass_Chat;
+  AIDataChatWClassOnOKWindow = false;
+end;

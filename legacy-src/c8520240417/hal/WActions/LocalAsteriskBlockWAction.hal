@@ -1,0 +1,55 @@
+remote updating procedure ConfigureLocalAsteriskAtServer(boolean,boolean);
+remote updating procedure SetupLocalAsteriskAtServer(boolean);
+remote procedure StartAsteriskIfNeeded();
+remote procedure StopAsterisk();
+external function string 255 GeneratePassword2(Integer);
+
+global
+updating procedure SetupLocalAsteriskDsm()
+begin
+  LongInt wn;
+  record RcVc RepSpec;
+
+  OpenProgressWindow(41100,41101,2);
+  SetupLocalAsteriskAtServer(false);
+end;
+
+global
+updating procedure ConfigureLocalAsteriskDsm()
+begin
+  ConfigureLocalAsteriskAtServer(true,false);
+end;
+
+global
+updating procedure StartLocalAsteriskDsm()
+begin
+  StartAsteriskIfNeeded;
+end;
+
+global
+updating procedure StopLocalAsteriskDsm()
+begin
+  StopAsterisk;
+end;
+
+
+global
+procedure LocalAsteriskTClassGenerate()
+begin
+  record LocalAsteriskBlock LAb;
+  Integer wn;
+  
+  wn = FindWindow("LocalAsteriskTClass");
+  if (wn<=0) then begin
+    goto LLocalAsteriskTClassGenerate;
+  end;
+
+  DeSelectWindow(wn,true);
+  GetWindowRecord(wn,LAb);
+  LAb.AsteriskControllerKey = GeneratePassword2(21);
+  PutWindowRecord(wn,LAb);
+  WindowFieldGoto(wn,LAb,-1,"AsteriskControllerKey",false);
+
+LLocalAsteriskTClassGenerate:;
+  return;
+end;

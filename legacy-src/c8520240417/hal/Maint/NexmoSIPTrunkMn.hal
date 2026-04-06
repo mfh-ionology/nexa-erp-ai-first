@@ -1,0 +1,105 @@
+external procedure AsteriskSIPConfigNSMn(record RcVc);
+
+global
+updating procedure NexmoSIPTrunkMn(record RcVc RepSpec)
+begin
+  record SipTrunk2Vc STr;
+  record PBXConnectionVc PBXCr;
+  record PBXQueueVc PBXQr;
+  row SipTrunk2Vc STrw;
+  Boolean foundf;
+  Integer i,nextcodenr;
+  string 255 country_code,country,trunk_code;
+  record LocalAsteriskBlock LAb;
+
+  country=StringFromSet(542,RepSpec.flags[0]);
+  country_code=StringSetFromString(627,StringFromSet(534,RepSpec.flags[0]));
+
+  foundf = true;
+  while (LoopMain(STr,1,foundf)) begin
+    if (Left(STr.Code,9)=="NEXMO-" & country_code & "-") then begin
+      i = StringToInt(StripNonDigits(STr.Code));
+      if (i>nextcodenr) then begin nextcodenr = i; end;
+    end;
+  end;
+  nextcodenr = nextcodenr + 1;
+  trunk_code = "NEXMO-" & country_code & "-" & Right("00" & nextcodenr,3);
+
+  RecordNew(STr);
+  STr.Code = trunk_code;
+  STr.PBXConnection = RepSpec.f1;
+  STr.Comment = "Vonage" & country & " +" & RepSpec.f3;
+  STr.Username = RepSpec.f5;
+  STr.FromUser = RepSpec.f3;
+  STr.Password = RepSpec.f6;
+  //STr.Host was used with ChanSIP, which is no longer supported by us or Asterisk (and IAX, which is irrelevant for this trunk)
+  //STr.Host = "169.60.141.29,169.60.141.30,5.10.112.121,5.10.112.122,119.81.44.6,119.81.44.7,169.48.36.56,169.48.36.66,169.55.62.70,169.55.62.215";
+  STr.Type = kAsteriskTrunkTypeOutbound;
+  //STr.Domain = "sip.nexmo.com";
+  STr.Domain = "sip-eu.vonage.com";
+  if (Left(RepSpec.f4,1)=="+") then begin
+    STr.DefaultCallerId = RepSpec.f4;
+  end else begin
+    if (blank(RepSpec.f4)) then begin
+      STr.DefaultCallerId = "+" & RepSpec.f3;
+    end else begin
+      STr.DefaultCallerId = "+" & RepSpec.f4;
+    end;
+  end;
+  STr.AllowGuestf = 0;
+//  STr.AllowedIPs = "169.60.141.29,169.60.141.30,5.10.112.121,5.10.112.122,119.81.44.6,119.81.44.7,169.48.36.56,169.48.36.66,169.55.62.70,169.55.62.215";
+  STr.AllowedIPs = "216.147.0.0/18,168.100.64.0/18";
+  STr.IAXf = 0;
+  // Note: Skipdigit / country code can't be set on the Nexmo SIP trunk, because nexmo requires all calls to be qualified,like "+<cc><phoneno>"
+
+  STrw.Username = RepSpec.f5;
+  STrw.Password = RepSpec.f6;
+  //STrw.Domain = "sip.nexmo.com";
+  STrw.Domain = "sip-eu.vonage.com";
+  STrw.Extension = RepSpec.f3;
+  MatRowPut(STr,MatRowCnt(STr),STrw);
+
+  RecordStore(STr,false);
+
+  if (RepSpec.flags[1]!=0) then begin
+    i = 0;
+    nextcodenr = 0;
+    foundf = true;
+    while (LoopMain(PBXQr,1,foundf)) begin
+      if (Left(STr.Code,9)=="NEXMO-" & country_code & "-") then begin
+        i = StringToInt(StripNonDigits(PBXQr.Code));
+        if (i>nextcodenr) then begin nextcodenr = i; end;
+      end;
+    end;
+    nextcodenr = nextcodenr + 1;
+    PBXQr.Code = "NEXMO-" & country_code & "-" & Right("00" & nextcodenr,3);
+    PBXQr.SipTrunk = trunk_code;
+    PBXQr.Comment = "Nexmo " & country & " +" & RepSpec.f3;
+    PBXQr.Extension = RepSpec.f3;
+    RecordStore(PBXQr,false);
+  end;
+
+  PBXCr.Code = RepSpec.f1;
+  if (ReadFirstMain(PBXCr,1,true)==false) then begin
+    goto LNexmoSIPTrunkMn;
+  end;
+
+  BlockLoad(LAb);
+  if (blank(LAb.LocalAsteriskDir) and blank(PBXCr.AsteriskControllerKey)) then begin
+    goto LNexmoSIPTrunkMn;
+  end;
+
+  RecordClear(RepSpec);
+  RepSpec.f1 = PBXCr.Code;
+  threadasync.AsteriskSIPConfigNSMn(RepSpec);
+
+LNexmoSIPTrunkMn:;
+  return;
+end;
+
+global
+procedure NexmoSIPTrunkNSMn(record RcVc RepSpec)
+begin
+  qupdating.NexmoSIPTrunkMn(RepSpec);
+  return;
+end;

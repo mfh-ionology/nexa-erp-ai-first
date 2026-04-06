@@ -1,0 +1,297 @@
+remote procedure JSONStringStart(var string);
+remote procedure JSONStringPut(var string,string,string);
+remote procedure JSONStringAdd(var string,string,string);
+remote procedure JSONStringMemberStart(var string,string);
+remote procedure JSONStringMemberEnd(var string);
+remote procedure JSONStringArrayStart(var string);
+remote procedure JSONStringArrayEnd(var string);
+remote procedure JSONStringEnd(var string);
+remote procedure JSONNotStringAdd(var string,string,string);
+remote procedure JSONNotStringPut(var string,string,string);
+remote procedure MulVATIV(string,val,var val,var val,Integer,Integer);
+remote function string 50 TimeToString(time,string,boolean);
+remote function val StringToValue(string,Integer,string,string);
+remote procedure WKFServerLog(string);
+remote procedure DoPrintWKFReceipt_IVCashVc(var record IVCashVc,record LSerialPortDeviceVc,var string,var LongInt);
+remote procedure DoPrintWKFReceipt_IVVc(var record IVVc,record LSerialPortDeviceVc,var string,var LongInt);
+remote updating procedure StoreIVCashReceiptUrl(var record IVCashVc,string,string);
+remote updating procedure StoreIVReceiptUrl(var record IVVc,string,string);
+remote updating procedure StoreIVRestAccUrl(var record RestAccVc,string,string);
+remote procedure WKFLogArea(string,area);
+remote procedure WKFLogString(string,string);
+external function Boolean FindLocalSerialPortDevice(Integer,LongInt,string,var record LSerialPortDeviceVc);
+
+global
+procedure SendESCPOSCommandToPrinter(string data)
+begin
+  Integer res;
+  
+  res = OpenComPort(0,"COM1",9600,-1,8,0,kFlowControlDefault);
+  OutComPort(0,data);
+  res = CloseComPort(0);
+
+  return;
+end;
+
+procedure ParseESCPOSCommand(record WKFBlock WKFb,json jspayload,var string data)
+begin
+  record LocalMachineBlock LMb;
+  string 255 node,tstr,codepage;
+  Integer i;
+
+  BlockLoad(LMb);
+
+  switch (WKFb.PrintSize) begin
+    case 0: node = "esc58";
+    case 1: node = "esc80";
+  end;
+
+  data = data & chr(27) & chr(64); // init - ESC '@'
+
+  if (blank(LMb.ESCPOSCodepage)) then begin
+    switch (WKFb.PrintCodepage) begin
+      case 0: data = data & chr(27) & chr(116) & chr(0); // ascii - ESC 't' 0
+      case 1: data = data & chr(27) & chr(116) & chr(18); // cp852 - ESC 't' 18
+      case 2: // nothing
+    end;
+  end else begin
+    codepage = ResolveLTGREscapes(LMb.ESCPOSCodepage);
+    data = data & codepage;
+  end;
+
+  i = 0;
+
+  while (JSONNodeExists(jspayload,node & "/" & i)) begin
+    tstr = JSONGet(jspayload,node & "/" & i);
+    tstr = ResolveBackslashEscapes(tstr);
+    tstr = ReplaceStringWithString(tstr,chr(13),"");
+    tstr = ReplaceStringWithString(tstr,chr(10),"");
+
+    // images
+    if (left(tstr,8)<>"GzMYGyoh" or WKFb.SkipImages==0) then begin
+      data = data & Base64Decode(tstr); // & chr(10);
+    end;
+
+    i = i + 1;
+  end;
+
+  //data = data & chr(10) & chr(10) & chr(10);
+
+  return;
+end;
+
+procedure ParseWKFResponse(record WebRequestVc WRr,var string receiptUrl,var string transdatetime,var LongInt err)
+begin
+  json js,jspayload;
+  string 255 errmsg,payload,rec,data;
+  record WKFBlock WKFb;
+  Integer wn;
+
+  wn = CurWindow;
+  if (err!=0) then begin goto LParseWKFResponse; end;
+  if (blank(WRr.ReplyData)) then begin 
+    err = 43981; 
+    goto LParseWKFResponse;
+  end;
+
+  js = ParseJSONString(WRr.ReplyData);
+  switch (JSONGet(js,"code")) begin
+    case "200":
+      if (WRr.ExtraHeaders=="print") then begin
+        payload = Base64Decode(JSONGet(js,"result/opPayload"));
+        if (blank(payload)) then begin
+          errmsg = USetStr(43981);
+          goto LParseWKFResponse;
+        end;
+        jspayload = ParseJSONString(payload);
+        if (JSONGet(jspayload,"status")=="FINISHED") then begin
+          BlockLoad(WKFb);
+          receiptUrl = JSONGet(jspayload,"receiptUrl");
+          //if (Right(receiptUrl,5)=="/land") then begin
+          //  receiptUrl = Left(receiptUrl,Len(receiptUrl)-5) & "/download";
+          //end;
+          transdatetime = JSONGet(jspayload,"transactionEndDateTime");
+          ParseESCPOSCommand(WKFb,jspayload,data);
+          if (WKFb.ReceiptPrint==2) then begin
+            SendESCPOSCommandToPrinter(data);
+          end;
+          PutWindowString(wn,"wkf_escpos_command",data);
+        end;
+      end;
+    case "202": goto LError;
+    case "401": goto LError;
+    case "500":
+LError:;
+      errmsg = JSONGet(js,"result/error");
+  end;
+
+LParseWKFResponse:;
+  if (nonblank(errmsg)) then begin  
+    MessageBox(0,errmsg);
+  end;
+  return;
+end;
+
+procedure DoWKFPrint(var record WebRequestVc WRr,record LSerialPortDeviceVc LSPDr,string payload,string path,var LongInt err)
+begin
+  string 255 host,tstr,vatnr,vendorid,jsr;
+  record CYBlock CYb;
+  record WKFBlock WKFb;
+  
+  if (err!=0) then begin goto LDoWKFPrint; end;
+
+  BlockLoad(CYb);  
+  BlockLoad(WKFb);  
+  if (InString(LSPDr.Port,":")==0) then begin goto LDoWKFPrint; end;
+
+  WKFServerLog("WKF request sent");
+
+  WRr.URL = "http://" & LSPDr.Port & "/" & path;
+  WRr.Method = "POST";
+
+  vatnr = CYb.VATNr;
+  if (InString(vatnr,"PL")) then begin
+    vatnr = Right(CYb.VATNr,len(CYb.VATNr)-2);
+  end;
+  vendorid = GetTextField(WKFb);
+
+  JSONStringStart(jsr);
+  JSONStringAdd(jsr,"orgNip",vatnr);
+  JSONStringAdd(jsr,"vendorId",vendorid);
+  JSONStringAdd(jsr,"vendorDeviceId",LSPDr.DeviceID);
+  JSONStringPut(jsr,"opPayload",Base64Encode(payload));
+  JSONStringEnd(jsr);
+
+  WKFLogString("DoWKFPrint-request",jsr);
+
+  WRr.PostContentType = "application/json";
+  WRr.PostData = jsr;
+  SendWebRequest4(WRr);
+  WKFServerLog("WKF reply received");
+
+  WKFLogString("DoWKFPrint-replydata",WRr.ReplyData);
+  WKFLogString("DoWKFPrint-replyresultcode",WRr.ResultCode);
+  WKFLogString("DoWKFPrint-replyheaders",WRr.ReplyHeaders);
+
+  WRr.ExtraHeaders = path; //just to pass it back and be able to recognise it, good enough for now
+LDoWKFPrint:;
+  return;
+end;
+
+global
+procedure PrintWKFReceipt_IVCashVc(var record IVCashVc IVCashr,record LSerialPortDeviceVc LSPDr)
+begin
+  string 255 jsr,receiptUrl,transdatetime;
+  record WKFBlock WKFb;
+  record WebRequestVc WRr;
+  LongInt err;
+  transaction Boolean gManualPrintToFiscf;
+
+  err = 0;
+
+  WKFServerLog("WKF fiscal process initiated");
+
+  BlockLoad(WKFb);
+  if (WKFb.Enable==0) then begin goto LPrintWKFReceipt_IVCashVc; end;
+  if (nonblank(IVCashr.QRCodeURL)) then begin 
+    err = 43982;
+    goto LPrintWKFReceipt_IVCashVc;
+  end;
+
+  DoPrintWKFReceipt_IVCashVc(IVCashr,LSPDr,jsr,err);
+
+  if (err==0) then begin
+    DoWKFPrint(WRr,LSPDr,jsr,"print",err);
+    ParseWKFResponse(WRr,receiptUrl,transdatetime,err);
+    qupdating.StoreIVCashReceiptUrl(IVCashr,receiptUrl,transdatetime);
+  end;
+LPrintWKFReceipt_IVCashVc:;
+  if (err!=0) then begin
+    MessageBox(err,"");
+  end else begin
+    if (gManualPrintToFiscf) then begin
+      CheckMarkBox(43983,"");
+    end;
+  end;
+  return;
+end;
+
+global
+procedure PrintWKFReceipt_IVVc(var record IVVc IVr,record LSerialPortDeviceVc LSPDr)
+begin
+  string 255 jsr,receiptUrl,transdatetime;
+  record WebRequestVc WRr;
+  record WKFBlock WKFb;
+  LongInt err;
+  transaction Boolean gManualPrintToFiscf;
+
+  BlockLoad(WKFb);
+  if (WKFb.Enable==0) then begin goto LPrintWKFReceipt_IVVc; end;
+  if (nonblank(IVr.QRCodeURL)) then begin 
+    err = 43982;
+    goto LPrintWKFReceipt_IVVc; 
+  end;
+
+  DoPrintWKFReceipt_IVVc(IVr,LSPDr,jsr,err);
+  if (err==0) then begin
+    DoWKFPrint(WRr,LSPDr,jsr,"print",err);
+    ParseWKFResponse(WRr,receiptUrl,transdatetime,err);
+    qupdating.StoreIVReceiptUrl(IVr,receiptUrl,transdatetime);
+  end;
+LPrintWKFReceipt_IVVc:;
+  if (err!=0) then begin
+    MessageBox(err,"");
+  end else begin
+    if (gManualPrintToFiscf) then begin
+      CheckMarkBox(43983,"");
+    end;
+  end;
+  return;
+end;
+
+global
+procedure WKFDailyReport(record LSerialPortDeviceVc LSPDr)
+begin
+  string 255 jsr,receiptUrl,transdatetime;
+  record WKFBlock WKFb;
+  record WebRequestVc WRr;
+  LongInt err;
+
+  BlockLoad(WKFb);
+  if (WKFb.Enable==0) then begin goto LWKFDailyReport; end;
+
+  JSONStringStart(jsr);
+  JSONNotStringPut(jsr,"reportPrint","true");
+  JSONStringEnd(jsr);
+  
+  WKFLogString("DailyReport",jsr);
+  DoWKFPrint(WRr,LSPDr,jsr,"createDailyReport",err);
+  ParseWKFResponse(WRr,receiptUrl,transdatetime,err);
+
+  if (err!=0) then begin
+    MessageBox(err,"");
+  end;
+LWKFDailyReport:;
+  return;
+end;
+
+global
+procedure PrintWKFReceipt_RestAccVc(var record RestAccVc RestAccr,record LSerialPortDeviceVc LSPDr)
+begin
+  record WKFBlock WKFb;
+  LongInt err;
+  transaction Boolean gManualPrintToFiscf;
+
+  BlockLoad(WKFb);
+  if (WKFb.Enable==0) then begin 
+    err = 43982;
+    goto LPrintWKFReceipt_RestAccVc; 
+  end;
+  // if (nonblank(RestAccr.QRCodeURL)) then begin goto LPrintWKFReceipt_RestAccVc; end;
+
+  //TODO
+  // DoPrintWKFReceipt_RestAccVc(RestAccr,LSPDr);
+
+LPrintWKFReceipt_RestAccVc:;
+  return;
+end;

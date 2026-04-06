@@ -1,0 +1,89 @@
+external function string 60 AddStringToStringList(string,string);
+
+function Boolean IncludeComany(Integer cmp)
+begin
+  Boolean res;
+  
+  if (cmp>=24) and (cmp<=25) then begin res = true; end;
+  if (cmp==28) then begin res = true; end;
+  if (cmp>=36) and (cmp<=40) then begin res = true; end;
+  if (cmp==58)then begin res = true; end;
+  if (cmp>=63) and (cmp<=64) then begin res = true; end;
+  if (cmp==74) then begin res = true; end;
+  if (cmp==86) then begin res = true; end;
+  if (cmp==90) then begin res = true; end;
+  if (cmp==95) then begin res = true; end;
+  if (cmp>=97) and (cmp<=98) then begin res = true; end;
+  IncludeComany = res;
+  return;
+end;
+
+updating procedure AddClassToIN(record RcVc RepSpec)
+begin
+  record INVc INr;
+  record INVc oldINr;
+  Boolean found,testf;
+  string 255 frin,toin;
+  string 255 index;
+  
+  frin = FirstInRange(RepSpec.f1,20);
+  toin = LastInRange(RepSpec.f1,20);
+  
+  index = "Code";
+  if (nonblank(RepSpec.FirstAcc)) then begin
+    index = "Group";
+    INr.Group = RepSpec.FirstAcc;
+  end;
+  found = true;
+  while (LoopKey(index,INr,1,found)) begin
+    if (nonblank(RepSpec.FirstAcc)) then begin
+      if (INr.Group!=RepSpec.FirstAcc) then begin found = false; end;
+    end;
+    if (nonblank(RepSpec.f1)) then begin
+      if (INr.Group<frin) then begin found = false; end;
+      if (INr.Group>toin) then begin found = false; end;
+    end;
+    if (found) then begin
+      testf = true;
+      if (nonblank(RepSpec.FirstAcc)) then begin
+        if (INr.Group!=RepSpec.FirstAcc) then begin testf = false; end;
+      end;
+      if (SetInSet(RepSpec.f2,INr.DispGroups)==false) then begin testf = false; end;
+      if (testf) then begin
+        RecordCopy(oldINr,INr);
+        INr.DispGroups = AddStringToStringList(INr.DispGroups,RepSpec.f10);
+        if (INr.DispGroups!=oldINr.DispGroups) then begin
+          RecordUpdate(oldINr,INr,false);
+        end;
+      end;
+    end;
+  end;
+  return;
+end;
+
+global
+updating procedure AddClassToINMn(record RcVc RepSpec)
+begin
+  record CompaniesBlock Compb;
+  row CompaniesBlock Compbrw;
+  Integer i,rwcnt;
+  Integer curcomp;
+  
+  if (RepSpec.IncDaughter==0) then begin
+    AddClassToIN(RepSpec);
+  end else begin
+    BlockLoad(Compb);
+    curcomp = CurrentCompany;
+    rwcnt = MatRowCnt(Compb);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(Compb,i,Compbrw);
+      if (IncludeComany(i+1)) then begin
+        if (SetCompanyCode(Compbrw.CompCode,false)) then begin
+          AddClassToIN(RepSpec);
+        end;
+      end;
+    end;
+    ResetCompany(curcomp);
+  end;
+  return;
+end;

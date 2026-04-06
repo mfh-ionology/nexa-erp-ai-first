@@ -1,0 +1,396 @@
+/*
+TODO:
+
+• When a call starts, send AsteriskManagerAction to start recording
+• When a call ends, send AsteriskManagerAction to end recording
+• If local Asterisk, send file in-place
+• If remote Asterisk, get file using Cloud Node file transfer
+• Get IBM Cloud Credentials from Cloud Service
+*/
+
+external procedure ActVcRecordDefServer(var record ActVc);
+external function Boolean PasteActTypeInAct(string,var record ActVc);
+external procedure SetActTypeValues(record ActVc);
+external function string 255 PBXPrivateSSHKeyName();
+external function Boolean SavePBXSSHKey(string,string,record PBXConnectionVc);
+external function string 255 AsteriskHomeDir(record PBXConnectionVc,Boolean);
+external function string 255 AsteriskUser(record PBXConnectionVc);
+external procedure IBMCloudAnalyzeTone(var array string);
+external procedure IBMCloudCombineSpeechTexts(array string,array string,var array string);
+external procedure DisplayCallTranscriptForActivity(record ActVc);
+external procedure GetChatStylesheet(var area);
+updating procedure AsteriskUserEventCreateActivity(string code,string callerid,string actCode,Boolean donef,string actCompanyCode,string cucode)
+begin
+  record CUVc CUr;
+  record ActVc Actr;
+  Integer oldcomp,actCompany;
+  record GlobalCRMBlock GCRMb;
+  record ContactRelVc ContactRelr;
+
+  BlockLoad(GCRMb);
+  oldcomp = CurrentCompany;
+  if (nonblank(actCompanyCode)) then begin
+    SetCompanyCode(actCompanyCode,false);
+  end else begin
+    if (nonblank(GCRMb.MainCRMCompany)) then begin
+      SetCompanyCode(GCRMb.MainCRMCompany,false);
+    end;
+  end;
+  RecordNew(Actr);
+  ActVcRecordDefServer(Actr);
+  Actr.SerNr = -1;
+  Actr.Invalid = 0;
+  Actr.TodoFlag = 1;
+  Actr.SymbNr = kActivitySymbolCall;
+  Actr.Comment = code;
+  CUr.Code = cucode;
+  if (ReadFirstMain(CUr,1,true)) then begin
+    Actr.CUName = CUr.Name;
+    Actr.Contact = CUr.Person;
+    Actr.Phone = CUr.Phone;
+    if ((CUr.CUType==0) and (CUr.VEType==0)) then begin
+      ContactRelr.ContactCode = CUr.Code;
+      if (ReadFirstKey("ActContactCode",ContactRelr,1,true)) then begin
+        Actr.CUCode = ContactRelr.CustCode;
+        Actr.CUName = ContactRelr.CustName;
+        Actr.Contact = CUr.Name;
+      end;
+    end;
+  end;
+  Actr.Phone = callerid;
+  Actr.PBXQueues = code;
+  Actr.ActType = actCode;
+  if (donef) then begin
+    Actr.OKFlag = 1;
+  end;
+  PasteActTypeInAct("",Actr);
+  SetActTypeValues(Actr);
+  Actr.AutoGenCallFlag = 1;
+  Actr.SerNr = NextSerNr("ActVc",Actr.TransDate,-1,false,"");
+  RecordStore(Actr,false);
+  ResetCompany(oldcomp);
+end;
+
+updating procedure HandleAsteriskIVRTreeEvent(string type,string code,string caller,string cucode)
+begin
+  record PBXIVRTreeVc PBXIVRTreer;
+  string 10 actCode;
+  Boolean donef;
+
+  PBXIVRTreer.Code = code;
+  if (ReadFirstMain(PBXIVRTreer,1,true)) then begin
+    switch (type) begin
+      case "Reached":
+        actCode = PBXIVRTreer.ActReached;
+        donef = PBXIVRTreer.ActReachedDone;
+      case "Open":
+        actCode = PBXIVRTreer.ActOpen;
+        donef = PBXIVRTreer.ActOpenDone;
+      otherwise
+        LogText(0,"HandleAsteriskIVRTreeEvent unknown type:" & type);
+    end;
+    if (nonblank(actCode)) then begin
+      AsteriskUserEventCreateActivity(code,caller,actCode,donef,PBXIVRTreer.CRMCompany,cucode);
+    end;
+  end else begin
+    LogText(0,"HandleAsteriskIVRTreeEvent unknown code:" & code);
+  end;
+end;
+
+updating procedure HandleAsteriskQueueEvent(string type,string code,string caller,string cucode)
+begin
+  record PBXQueueVc PBXQueuer;
+  string 10 actCode;
+  Boolean donef;
+
+  PBXQueuer.Code = code;
+  if (ReadFirstMain(PBXQueuer,1,true)) then begin
+    switch (type) begin
+      case "Reached":
+        actCode = PBXQueuer.ActReached;
+        donef = PBXQueuer.ActReachedDone;
+      case "Open":
+        actCode = PBXQueuer.ActOpen;
+        donef = PBXQueuer.ActOpenDone;
+      otherwise
+        LogText(0,"HandleAsteriskQueueEvent unknown type:" & type);
+    end;
+    if (nonblank(actCode)) then begin
+      AsteriskUserEventCreateActivity(code,caller,actCode,donef,PBXQueuer.CRMCompany,cucode);
+    end;
+  end else begin
+    LogText(0,"HandleAsteriskQueueEvent unknown code:" & code);
+  end;
+end;
+
+global
+updating procedure HandleAsteriskUserEvent(string userevent,string type,string code,string caller,string cucode)
+begin
+  switch (userevent) begin
+    case "Queue":
+      HandleAsteriskQueueEvent(type,code,caller,cucode);
+    case "IVRTree":
+      HandleAsteriskIVRTreeEvent(type,code,caller,cucode);
+  end;
+  return;
+end;
+
+global
+procedure PhoneCallToText(string in_file,string out_file,var array string textarr)
+begin
+  array string 255 in_textarr,out_textarr,tonearr;
+  LongInt l;
+  area a_dummy;
+/*
+  CloudSpeechToText(in_file,in_textarr,a_dummy);
+  CloudSpeechToText(out_file,out_textarr,a_dummy);
+  IBMCloudCombineSpeechTexts(in_textarr,out_textarr,textarr);
+  IBMCloudAnalyzeTone(textarr);
+*/
+  return;
+end;
+
+procedure CallTranscriptToHTML(array string textarr,area a_html)
+begin
+  string 255 text,tones,party,tone;
+  Integer i;
+  LongInt pos,pos2;
+  area a_css;
+
+  AddTextToArea("<html>",a_html);
+  AddTextToArea("<head>",a_html);
+
+  GetChatStylesheet(a_css);
+  AddAreaToArea(a_css,a_html);
+
+  AddTextToArea("</head>",a_html);
+  AddTextToArea("<body>",a_html);
+
+  AddTextToArea("<div class='c'>",a_html);
+  for (i = 0; i<textarr.length; i = i + 1) begin
+    pos = -1;
+    GetNextSubstring(textarr[i],pos,";",tones);
+    GetNextSubstring(textarr[i],pos,";",party);
+    GetNextSubstring(textarr[i],pos,";",text);
+
+    AddTextToArea("<div ",a_html);
+    if (party<>"1") then begin
+      AddTextToArea("class='rb'>",a_html);
+    end else begin
+      AddTextToArea("class='lb'>",a_html);
+    end;
+    AddTextToArea(text,a_html);
+
+    if (nonblank(tones)) then begin
+      AddTextToArea("<div class='e'>",a_html);
+      pos2 = -1;
+      while (GetNextSubstring(tones,pos2,",",tone)) begin
+        AddTextToArea("<div class='t " & tone & "'><span class='tt'>" & tone & "</span></div>",a_html);
+      end;
+      AddTextToArea("</div>",a_html);
+    end;
+    AddTextToArea("</div>",a_html);
+  end;
+
+  AddTextToArea("</div>",a_html);
+  AddTextToArea("</body>",a_html);
+  AddTextToArea("</html>",a_html);
+
+  return;
+end;
+
+global
+updating procedure DoAttachPhoneCallToText(record ActVc Actr,Integer compno,area a_text)
+begin
+  record RLinkVc RLr;
+  record NotepadVc NPr;
+  Integer notenr;
+
+  RecordNew(NPr);
+  NPr.SerNr = NextSerNr("NotepadVc",CurrentDate,-1,false,"");
+  NPr.NoteType = kNoteTypeCallTranscript;
+  AddAreaToTextField(a_text,NPr);
+  if (RecordStore(NPr,false)) then begin
+    CreateRecordLink(Actr,compno,NPr,CurrentCompany);
+    notenr = 1;
+    while (ReadRecordLink(Actr,notenr,NPr,RLr)) begin
+      notenr = notenr + 1;
+    end;
+    if (ReadRecordLink(Actr,notenr-1,NPr,RLr)) then begin
+      RLr.Comment = USetStr(20991);
+      if (RecordStore(RLr,true)) then begin end;
+    end;
+  end;
+
+  AllClientsRemoteAsync.DisplayCallTranscriptForActivity(Actr);
+  return;
+end;
+
+global
+procedure AttachPhoneCallToText(record ActVc Actr,Integer compno,string in_file,string out_file)
+begin
+  array string 255 textarr;
+  area a_text;
+
+  PhoneCallToText(in_file,out_file,textarr);
+
+  if (textarr.length>0) then begin
+    CallTranscriptToHTML(textarr,a_text);
+    qupdating.DoAttachPhoneCallToText(Actr,compno,a_text);
+  end;
+
+  Delete_File(in_file);
+  Delete_File(out_file);
+
+  return;
+end;
+
+global
+updating procedure DoAttachAsteriskRecordingToActivityComplete(LongInt actnr,Integer compno,string asteriskid,Boolean rl_inf,Boolean rl_outf,Boolean localf)
+begin
+  record ActVc Actr;
+  string 255 in_file,out_file;
+  record RcVc RepSpec;
+  string 255 dir;
+
+  Actr.SerNr = actnr;
+  if (ReadFirstMain(Actr,1,true)) then begin end;
+
+  if (localf) then begin
+    dir = "Asterisk/var/spool/asterisk/monitor/";
+  end else begin
+    dir = "tmp/";
+  end;
+
+  in_file = dir & asteriskid & "-in.ogg";
+  out_file = dir & asteriskid & "-out.ogg";
+
+  if (!rl_inf) then begin
+    if (!FileExists(in_file) or (FileSize(in_file)<2048)) then begin
+//LogText(0,"in_file=" & in_file & ", fsz=" & FileSize2(in_file));
+      LogText(0,"Error: Missing or too small audio file from phone call, skipping call transcript and analysis");
+      Delete_File(in_file);
+      Delete_File(out_file);
+      goto LDoAttachAsteriskRecordingToActivityComplete;
+    end else begin
+      RecordLinkFile(in_file,0,Actr,compno);
+    end;
+  end;
+  if (!rl_outf) then begin
+    if (!FileExists(out_file) or (FileSize(out_file)<2048)) then begin
+//LogText(0,"out_file=" & out_file & ", fsz=" & FileSize2(out_file));
+      LogText(0,"Error: Missing or too small audio file from phone call, skipping call transcript and analysis");
+      Delete_File(in_file);
+      Delete_File(out_file);
+      goto LDoAttachAsteriskRecordingToActivityComplete;
+    end else begin
+      RecordLinkFile(out_file,0,Actr,compno);
+    end;
+  end;
+
+  threadasync.AttachPhoneCallToText(Actr,compno,in_file,out_file);
+
+LDoAttachAsteriskRecordingToActivityComplete:;
+  return;
+end;
+
+global
+procedure DoAttachAsteriskRecordingToActivity(string pccode,string asteriskid,LongInt actnr,Integer compno)
+begin
+  record PBXConnectionVc PBXCr;
+  string 255 keyfile,args,remotepath,localpath;
+  record ActVc Actr;
+  record Attach2Vc AT2r;
+  record RLinkVc RLr;
+  Integer i,retries;
+  Boolean rl_inf,rl_outf,localf,f1,f2;
+  area a_tmp;
+  LongInt asz;
+
+  Actr.SerNr = actnr;
+  if (ReadFirstMain(Actr,1,true)) then begin
+    while (ReadRecordLink(Actr,i,AT2r,RLr)) begin
+      if (AT2r.FileName==asteriskid & "-in.ogg") then begin
+        SetAreaZeroSize(a_tmp);
+        asz = AttachFileSize(AT2r);
+        LoadAttachFilePartToArea(AT2r,0,asz,a_tmp);
+        WriteAreaToFile(a_tmp,"tmp/" & asteriskid & "-in.ogg",0);
+        rl_inf = true;
+      end;
+      if (AT2r.FileName==asteriskid & "-out.ogg") then begin
+        SetAreaZeroSize(a_tmp);
+        asz = AttachFileSize(AT2r);
+        LoadAttachFilePartToArea(AT2r,0,asz,a_tmp);
+        WriteAreaToFile(a_tmp,"tmp/" & asteriskid & "-out.ogg",0);
+        rl_outf = true;
+      end;
+      i = i + 1;
+    end;
+  end;
+
+  if (pccode=="LOCAL") then begin
+    localf = true;
+    while (!(f1 and f2) and (i<45)) begin
+      f1 = FileExists("Asterisk/var/spool/asterisk/monitor/" & asteriskid & "-in.ogg");
+      f2 = FileExists("Asterisk/var/spool/asterisk/monitor/" & asteriskid & "-out.ogg");
+      Sleep(1);
+      i = i + 1;
+    end;
+    if (!(f1 and f2)) then begin
+      LogText(0,"DoAttachAsteriskRecordingToActivity: Audio files didn't appear within 45s, giving up (f1=" & f1 & ", f2=" & f2 & ")");
+    end;
+  end else begin
+    if (!rl_inf or !rl_outf) then begin
+      PBXCr.Code = pccode;
+      if (ReadFirstMain(PBXCr,1,true)==false) then begin
+        LogText(0,"DoAttachAsteriskRecordingToActivity: No PBX Connection found");
+        goto LDoAttachAsteriskRecordingToActivity;
+      end;
+
+      keyfile = CreateTempFile("asterisk-config-key-recording",".pem");
+      if (SavePBXSSHKey(PBXPrivateSSHKeyName,keyfile,PBXCr)==false) then begin
+        LogText(0,"DoAttachAsteriskRecordingToActivity: PBX Connection " & PBXCr.Code & " doesn't have any private SSH key");
+        goto LDoAttachAsteriskRecordingToActivity;
+      end;
+
+LDoAttachAsteriskRecordingToActivity_retry:;
+      if (!rl_inf) then begin
+        remotepath = AsteriskHomeDir(PBXCr,false) & "/var/spool/asterisk/monitor/" & asteriskid & "-in.ogg";
+        args = "-avz --remove-source-files -e ""ssh -o UserKnownHostsFile=/dev/null -i " & keyfile & " -o ServerAliveInterval=60";
+        args = args & " -o StrictHostKeyChecking=no -o PasswordAuthentication=no"" --partial " & AsteriskUser(PBXCr) & "@" & PBXCr.PBXHost & ":";
+        args = args & remotepath & " " & "tmp/";
+        RunProgram("/usr/bin/rsync",args);
+//      MoveFile(asteriskid & "-in.ogg",AsteriskHomeDir(PBXCr,false) & "/var/spool/asterisk/monitor/","tmp/");
+        if (FileExists("tmp/" & asteriskid & "-in.ogg")) then begin rl_inf = true; end;
+      end;
+      if (!rl_outf) then begin
+        remotepath = AsteriskHomeDir(PBXCr,false) & "/var/spool/asterisk/monitor/" & asteriskid & "-out.ogg";
+        args = "-avz --remove-source-files -e ""ssh -o UserKnownHostsFile=/dev/null -i " & keyfile & " -o ServerAliveInterval=60";
+        args = args & " -o StrictHostKeyChecking=no -o PasswordAuthentication=no"" --partial " & AsteriskUser(PBXCr) & "@" & PBXCr.PBXHost & ":";
+        args = args & remotepath & " " & "tmp/";
+        RunProgram("/usr/bin/rsync",args);
+//      MoveFile(asteriskid & "-out.ogg",AsteriskHomeDir(PBXCr,false) & "/var/spool/asterisk/monitor/","tmp/");
+        if (FileExists("tmp/" & asteriskid & "-out.ogg")) then begin rl_outf = true; end;
+      end;
+      if ((!rl_inf or !rl_outf) and (retries<20)) then begin
+        retries = retries + 1;
+        Sleep(1);
+        goto LDoAttachAsteriskRecordingToActivity_retry;
+      end;
+      Delete_File(keyfile);
+    end;
+  end;
+
+  qupdating.DoAttachAsteriskRecordingToActivityComplete(actnr,compno,asteriskid,rl_inf,rl_outf,localf);
+
+LDoAttachAsteriskRecordingToActivity:;
+  return;
+end;
+
+global
+procedure AttachAsteriskRecordingToActivity(string pccode,string asteriskid,LongInt actnr,Integer compno)
+begin
+  // Should have a smarter solution, not using rsync
+  //threadasync.DoAttachAsteriskRecordingToActivity(pccode,asteriskid,actnr,compno);
+  return;
+end;

@@ -1,0 +1,80 @@
+external procedure DoCCLookupServiceAsync();
+external function Boolean HasPayLinkTransactions();
+external function Boolean TreatServiceError(LongInt,string,string);
+external outer updating procedure UpdateCCAccountID(record CCAccountIDVc,LongInt,var LongInt);
+
+global
+function LongInt CCAccountIDVcRecordCheck(var record CCAccountIDVc CCAIr,record CCAccountIDVc CCAI2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+
+  res = 0;
+  if (blank(CCAIr.Code)) then begin
+    RecordCheckError(1058,"",-1,"Code");
+    res = -1;
+    goto LCCAccountIDVcRecordCheck;
+  end;
+  if (nonblank(CCAIr.ProfileID)) then begin 
+    if (blank(CCAIr.AccessKey)) then begin 
+      RecordCheckError(1058,"",-1,"AccessKey");
+      res = -1;
+      goto LCCAccountIDVcRecordCheck;      
+    end;
+    if (BlankDate(CCAIr.KeyCreatedDate)) then begin 
+      RecordCheckError(1058,"",-1,"KeyCreatedDate");
+      res = -1;
+      goto LCCAccountIDVcRecordCheck;      
+    end;    
+    if (BlankDate(CCAIr.KeyExpireDate)) then begin 
+      RecordCheckError(1058,"",-1,"KeyExpireDate");
+      res = -1;
+      goto LCCAccountIDVcRecordCheck;      
+    end;      
+    if (CCAIr.KeyExpireDate<=CCAIr.KeyCreatedDate) then begin 
+      RecordCheckError(20851,"",-1,"KeyExpireDate");
+      res = -1;
+      goto LCCAccountIDVcRecordCheck;      
+    end;
+  end;
+LCCAccountIDVcRecordCheck:;
+  CCAccountIDVcRecordCheck = res;
+  return;
+end;
+
+global
+function LongInt CCAccountIDVcRecordSaveAfter(var record CCAccountIDVc CCAIDr,record CCAccountIDVc CCAID2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+
+  DoCCLookupServiceAsync;
+  CCAccountIDVcRecordSaveAfter = res;
+  return;
+end;
+
+global
+updating function LongInt CCAccountIDVcRecordUpdateAfter(var record CCAccountIDVc CCAIDr,record CCAccountIDVc CCAID2r,LongInt stat,LongInt long4)
+begin
+  LongInt res,err;
+  Integer stat2;
+  record PayLinkBlock PayLinkb;
+
+  if (HasPayLinkTransactions) then begin
+    BlockLoad(PayLinkb);
+    if (CCAIDr.Code!=PayLinkb.CCAccountID) then begin goto LSkipPayLink; end;
+    stat2 = CallCloud("REGISTERPAYLINK").UpdateCCAccountID(CCAIDr,PayLinkb.PayLinkID,err);
+    if (TreatServiceError(stat2,"","RegisterPayLink")) then begin
+      MessageBox(38213,", " & USetStr(42293));
+    end else begin
+      if (err>0) then begin
+        MessageBox(42293,": " & USetStr(err));
+      end else begin
+        MessageBox(42297,"");
+      end;
+    end;
+LSkipPayLink:;
+  end;
+
+  CCAccountIDVcRecordUpdateAfter = res;
+  return;
+end;
+

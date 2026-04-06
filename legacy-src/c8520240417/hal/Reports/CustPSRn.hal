@@ -1,0 +1,257 @@
+external function Boolean HasContactClassification();
+external function Boolean HasCategories();
+external procedure HTCustClass(string,var string);
+external function Boolean ContactInGroupClass(string,string,string,string,string,string);
+external function Boolean HasModSL();
+external procedure GetOnAccBalance(record RcVc,string,string,Boolean,Integer,var val,var val,var val,var val,var val,var val,var val,record SMVc,
+                   Array string,Array val,var Integer);
+external procedure CustPSCustomersDetails(record RcVc,Integer,record CUVc,Boolean,Boolean);
+external procedure RunCustPS2Rn(var record RcVc,record CustPSVc);
+external procedure BeginCurncyTotals(var Integer);
+external procedure HTCusts(string,string,var string);
+external procedure HTCustCat(string,var string);
+external procedure HTInvFrom(Integer,Integer, Date, var string);
+external procedure PSPrintCust(record RcVc,record CUVc,var val,var val,Integer,Integer);
+
+global
+procedure PrintCustCourseEvents(string custcode)
+begin
+  record CourseEventVc CEr;
+  Boolean found,firstf;
+  
+  firstf = true;
+  found = true;
+  while (LoopKey("CustCode:" & custcode,CEr,1,found)) begin
+    if (found) then begin
+      if (firstf) then begin
+        StartFormat(15);
+        EndFormat;
+        StartFormat(15);
+        OutString(0,0,"Course Events",false);
+        EndFormat;
+        Gray_Divider(0,80);
+        firstf = false;
+      end;
+      StartFormat(15);
+      OutString(15,"DblCourseEventVc",CEr.SerNr,false);
+      OutString(100,0,CEr.CourseCode,false);
+      OutString(200,0,CEr.CourseName,false);
+      EndFormat;
+    end;
+  end;
+  return;
+end;
+
+global
+procedure CustPS2Rn(var record RcVc RepSpec)
+BEGIN
+  record CustPSVc CuPSr;
+
+  StartReportJob(USetStr(2715));
+  EndHeader;
+
+  CuPSr.Signature = RepSpec.f6;
+  if (ReadFirstMain(CuPSr,1,true)) then begin
+    RepSpec.ArtMode = 0;
+    RepSpec.flags[10] = CuPSr.NrOfIV;
+    RepSpec.flags[11] = CuPSr.NotOKIV;
+    RepSpec.flags[12] = CuPSr.Invoices;
+    if (CuPSr.Invoices==0) then begin
+      RepSpec.flags[10] = 0;
+      RepSpec.flags[11] = 0;
+    end;
+    if (blank(CuPSr.NrOfAct)) then begin
+      RepSpec.vals0 = -1;
+    end else begin
+      RepSpec.vals0 = CuPSr.NrOfAct;
+    end;
+/*        
+    if (blank(CuPSr.NrOfAct)) then begin
+      RepSpec.flags[13] = -1;
+    end else begin
+      RepSpec.flags[13] = CuPSr.NrOfAct;
+    end;
+*/      
+    RepSpec.flags[14] = CuPSr.NotOKAct;
+    RepSpec.flags[15] = CuPSr.Activities;
+
+    RepSpec.flags[16] = CuPSr.Contract;
+    RepSpec.flags[17] = CuPSr.NotOKCO;
+
+    if (blank(CuPSr.NrOfCO)) then begin
+      RepSpec.vals1 = -1;
+    end else begin
+      RepSpec.vals1 = CuPSr.NrOfCO;
+    end;
+/*
+    if (blank(CuPSr.NrOfCO)) then begin
+      RepSpec.flags[18] = -1;
+    end else begin
+      RepSpec.flags[18] = CuPSr.NrOfCO;
+    end;
+*/      
+    RepSpec.flags[19] = CuPSr.MonthBal;
+    RepSpec.flags[20] = CuPSr.CustItem;
+    RepSpec.long1 = CuPSr.CustItemMonthNr;
+    RepSpec.flags[21] = CuPSr.Quotations;
+    RepSpec.vals2 = CuPSr.NrOfQT;
+//      RepSpec.flags[22] = CuPSr.NrOfQT;
+    RepSpec.FirstAcc = CuPSr.QTClass;
+    RepSpec.flags[23] = CuPSr.Orders;
+    RepSpec.vals3 = CuPSr.NrOfOR;
+//      RepSpec.flags[24] = CuPSr.NrOfOR;
+    RepSpec.LastAcc = CuPSr.ORClass;
+    RepSpec.flags[25] = CuPSr.Checks;
+    RepSpec.flags[26] = CuPSr.ContQuote;
+    RepSpec.flags[27] = CuPSr.TermCQ;
+    if (CuPSr.NrOfCQ==BlankVal) then begin
+      RepSpec.flags[28] = -1;
+    end else begin
+      RepSpec.flags[28] = CuPSr.NrOfCQ;
+    end;
+    RepSpec.f6 = CuPSr.ExcludeActTypes;
+    RepSpec.flags[29] = 1;
+//      RepSpec.flags[29] = CuPSr.PaymentHistory;     
+    RepSpec.SimVerf = CuPSr.ShowActivityClasses;
+    RepSpec.flags[13] = CuPSr.SMSes;
+    RepSpec.vals4 = CuPSr.NrOfSMS;
+    RepSpec.flags[9] = CuPSr.AdtnlEmailRecip;
+  end;
+  RunCustPS2Rn(RepSpec,CuPSr);
+//  StartFormat(15);
+//  OutStringID(0,"DblEnabDetails","Enabler Details",false,RepSpec.f1);
+//  EndFormat;
+  EndJob;
+  RETURN;
+END;
+
+global
+procedure CustPSRn(record RcVc RepSpec)
+BEGIN
+  record CUVc CUr;
+  string 255 frcc,tocc;
+  Boolean TrHs,testf;
+  val PStotdue;
+  val PStotopen;
+  string 255 tstr;
+  Integer rw;
+  array val av1;
+  array val av2;
+  array val av3;
+  array string 20 acur;
+  Integer curcnt;
+  record CustPSVc CuPSr;
+  val sum,sum2,rval,sumbooked,sumnow,sumincur,sumdiff;
+  record SMVc CurTotalsr;
+  Array string 10 debaccs;
+  Array val debbal;
+  Integer debcnt;
+  record ARVc ARr;
+  
+  // ArtMode==1, All invoices 
+  // ArtMode==0, Last 5 invoices 
+
+
+  frcc = FirstInRange(RepSpec.f1,20);
+  tocc = LastInRange(RepSpec.f1,20);
+  
+  StartReportJob(USetStr(2715));
+  rw = 1;
+  HTCusts(frcc,tocc,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  if (HasModSL or BuildProductCode!="StandardCRM") then begin
+    if (RepSpec.UsedOnly==1) then begin
+      tstr = USetStr(6651);
+      Header(rw,tstr,0);
+    end;
+  end;
+  if (HasCategories) then begin
+    HTCustCat(RepSpec.f3,tstr);
+    if (nonblank(tstr)) then begin
+      Header(rw,tstr,1);
+      rw = rw + 1;
+    end;  
+  end;
+  if (HasContactClassification) then begin
+    HTCustClass(RepSpec.Stext,tstr);
+    if (nonblank(tstr)) then begin
+      Header(rw,tstr,1);
+      rw = rw + 1;
+    end;
+  end;
+  if (RepSpec.flags[10]==0) then begin
+    RepSpec.flags[10] = 5;
+  end;
+  HTInvFrom(RepSpec.flags[10],RepSpec.ArtMode,RepSpec.d1,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  EndHeader;
+  BeginCurncyTotals(curcnt);
+  StartFormat(15);
+  OutString(15,0,USetStr(2701),false);
+  OutString(100,0,USetStr(2702),false);
+  OutString(290,0,USetStr(2703),false);
+  EndFormat;
+  Gray_Divider(0,1);
+  CUr.Code = frcc;
+  TrHs = true;
+  while (LoopMain(CUr,1,TrHs)) begin
+    if (nonblank(tocc)) then begin
+      if (CUr.Code>tocc) then begin
+        TrHs = false;
+      end;    
+    end;    
+    if (TrHs) then begin
+      testf = true;
+      if (CUr.CUType==0) then begin testf = false; end;
+      if (testf) then begin
+        testf = ContactInGroupClass("",RepSpec.f3,RepSpec.Stext,"CUST",CUr.CustCat,CUr.Classification);
+      end;
+      if (testf) then begin 
+        if (HasModSL or BuildProductCode!="StandardCRM") then begin
+          if (RepSpec.UsedOnly==1) then begin
+            ARr.CustCode = CUr.Code;
+            if (ReadFIrstKey("CustCode",ARr,1,true)==false) then begin
+              GetOnAccBalance(RepSpec,CUr.Code,CUr.CurncyCode,false,1,sum,sum2,rval,sumbooked,sumnow,sumincur,sumdiff,CurTotalsr,debaccs,debbal,debcnt);
+              if (sum==0) then begin testf = false; end;
+            end;
+          end;
+        end;
+      end;
+      if (testf) then begin
+        CustPSCustomersDetails(RepSpec,0,CUr,true,false);
+        if (HasModSL or BuildProductCode!="StandardCRM") then begin
+          PSPrintCust(RepSpec,CUr,PStotdue,PStotopen,5,1);
+        end;
+        PrintCustCourseEvents(CUr.Code);
+  //      StartFormat(15);
+  //      OutStringID(0,"DblEnabDetails","Enabler Details",false,CUr.Code);
+  //      EndFormat;
+        if (RepSpec.flags[1]==1) then begin
+          if (RepSpec.Media!=1) then begin
+            NewPage(false);
+          end;  
+        end;  
+      end;
+    end;
+  end;
+  if (HasModSL or BuildProductCode!="StandardCRM") then begin
+    StartFormat(10);
+    EndFormat;
+    Black_Divider(0,1);
+    StartFormat(15);
+    OutString(270,0,USetStr(2713),false);
+    OutValBiDi(470,0,PStotopen,M4Val,true,510);
+    EndFormat;
+    StartFormat(15);
+    OutString(270,0,USetStr(2714),false);
+    OutValBiDi(470,0,PStotdue,M4Val,true,510);
+    EndFormat;
+    Black_Divider(0,1);
+    StartFormat(10);
+    EndFormat;
+  end;
+  EndJob;
+  RETURN;
+END;

@@ -1,0 +1,175 @@
+remote procedure BudEntryDClass_OnOpenWindow(var record BudEntryVc);
+remote updating function LongInt BudEntryDClassPostRemote(var record BudEntryVc);
+remote procedure BudEntryDClass_AddVal(var record BudEntryVc,Integer);
+remote procedure BudEntryDClass_PasteFormula(var record BudEntryVc,Integer);
+remote procedure BudEntryDClass_Sumup(var record BudEntryVc,Boolean,Boolean);
+remote procedure BudEntryDClass_PastePeriod2Str(var record BudEntryVc);
+remote procedure BudEntryDClass_PasteAccNumber(var record BudEntryVc,Integer);
+
+global 
+function Boolean BudEntryDClassDeleteRowTest(Integer wn,Integer rownr)
+begin
+  Boolean res;
+
+  res = false;
+  BudEntryDClassDeleteRowTest = res;
+  return;
+end;
+
+global 
+function Boolean BudEntryDClassInsertRowTest(Integer wn,Integer rownr)
+begin
+  Boolean res;
+
+  res = false;
+  BudEntryDClassInsertRowTest = res;
+  return;
+end;
+
+global
+function Boolean BudEntryDClassActiveEditField(Integer wn,string fieldname,Integer fn,Integer wnst,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  
+  res = true;
+  if (rownr>=0) then begin  
+    switch (fieldname) begin
+      case "NewBudVal": res = false;
+    end;
+  end;
+  BudEntryDClassActiveEditField = res;
+  return;
+end;
+
+function Boolean BudEntryDClassAccNumberEFAfter(Integer wn,Integer rownr,Boolean changedf)
+begin
+  record BudEntryVc BEr;
+  Boolean res;
+
+  if (changedf) then begin
+    GetWindowRecord(wn,BEr);
+    BudEntryDClass_PasteAccNumber(BEr,rownr);
+    PutWindowRecord(wn,BEr);
+  end;  
+  BudEntryDClassAccNumberEFAfter = res;
+  return;
+end;
+
+function Boolean BudEntryDClassObjectsEFAfter(Integer wn,Boolean changedf)
+begin
+  record BudEntryVc BEr;
+  Boolean res;
+
+  if (changedf) then begin
+    GetWindowRecord(wn,BEr);
+    BudEntryDClass_Sumup(BEr,true,true);
+    PutWindowRecord(wn,BEr);
+  end;  
+  BudEntryDClassObjectsEFAfter = res;
+  return;
+end;
+
+function Boolean BudEntryDClassBudgetClassEFAfter(Integer wn,Boolean changedf)
+begin
+  record BudEntryVc BEr;
+  Boolean res;
+
+  if (changedf) then begin
+    GetWindowRecord(wn,BEr);
+    BudEntryDClass_Sumup(BEr,true,true);
+    PutWindowRecord(wn,BEr);
+  end;  
+  BudEntryDClassBudgetClassEFAfter = res;
+  return;
+end;
+
+function Boolean BudEntryDClassFormulaEFAfter(Integer wn,Integer rownr,Boolean changedf)
+begin
+  record BudEntryVc BEr;
+  Boolean res;
+
+  if (changedf) then begin
+    GetWindowRecord(wn,BEr);
+    BudEntryDClass_PasteFormula(BEr,rownr);
+    PutWindowRecord(wn,BEr);
+  end;  
+  BudEntryDClassFormulaEFAfter = res;
+  return;
+end;
+
+function Boolean BudEntryDClassAddValEFAfter(Integer wn,Integer rownr,Boolean changedf)
+begin
+  record BudEntryVc BEr;
+  Boolean res;
+
+  if (changedf) then begin
+    GetWindowRecord(wn,BEr);
+    BudEntryDClass_AddVal(BEr,rownr);
+    PutWindowRecord(wn,BEr);
+  end;  
+  BudEntryDClassAddValEFAfter = res;
+  return;
+end;
+
+function Boolean BudEntryDClassPeriod2StrEFAfter(Integer wn,Boolean changedf)
+begin
+  record BudEntryVc BEr;
+  Boolean res;
+
+  if (changedf) then begin
+    GetWindowRecord(wn,BEr);
+    BudEntryDClass_PastePeriod2Str(BEr);
+    PutWindowRecord(wn,BEr);
+  end;  
+  BudEntryDClassPeriod2StrEFAfter = res;
+  return;
+end;
+
+global
+function Boolean BudEntryDClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
+begin
+  Boolean res;
+
+  switch (fieldname) begin
+    case "Period2Str": res = BudEntryDClassPeriod2StrEFAfter(wn,changed!=0);
+    case "AccNumber": res = BudEntryDClassAccNumberEFAfter(wn,rownr,changed!=0);
+    case "Objects": res = BudEntryDClassObjectsEFAfter(wn,changed!=0);
+    case "BudgetClass": res = BudEntryDClassBudgetClassEFAfter(wn,changed!=0);
+    case "AddVal": res = BudEntryDClassAddValEFAfter(wn,rownr,changed!=0);
+    case "Formula": res = BudEntryDClassFormulaEFAfter(wn,rownr,changed!=0);
+  end;
+  BudEntryDClassAfterEditField = res;
+  return;
+end;
+
+/*
+global
+updating function Boolean BudEntryDClassOnOpenWindow(Integer wn)
+begin
+  record BudEntryVc BEr;
+
+  GetWindowRecord(wn,BEr);
+  BudEntryDClass_OnOpenWindow(BEr);
+  PutWindowRecord(wn,BEr);
+  BudEntryDClassOnOpenWindow = false;
+  return;
+end;
+*/
+
+global
+updating procedure BudEntryDClassPost()
+begin
+  record BudEntryVc BEr;
+  Integer wn;
+
+  wn = CurWindow;
+  GetWindowRecord(wn,BEr);
+  if (blank(BEr.BFCode)) then begin
+    MessageBox(1058,"");
+    WindowFieldGoto(wn,BEr,-1,"BFCode",true);
+    goto LBudEntryDClassPost;
+  end; 
+  BudEntryDClassPostRemote(BEr);
+LBudEntryDClassPost:;  
+  return;
+end;

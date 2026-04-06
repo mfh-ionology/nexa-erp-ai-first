@@ -1,0 +1,35 @@
+function Boolean Course2DClassContactEFAfter(integer wn,Integer changedf)
+begin
+  record Course2Vc Courser;  
+  record UserVc Userr;
+  Boolean res;
+  res = true;
+
+  if (changedf!=0) then begin
+    GetWindowRecord(wn,Courser);      
+    Userr.Code = Courser.Contact;
+    if( ReadFirstMain(Userr,1,true)) then begin
+      if (nonblank(Userr.CurOurContact)) then begin
+        Courser.Responsible = Userr.CurOurContact;
+      end else begin
+        Courser.Responsible = Userr.Name;
+      end;
+    end;  
+    PutWindowRecord(wn,Courser);  
+  end;
+  Course2DClassContactEFAfter = res;  
+  RETURN;
+END;
+
+global
+function Boolean Course2DClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
+BEGIN
+  Boolean res;
+  record Course2Vc Courser;
+  
+  switch (fieldname) begin
+    case "Contact" : res = Course2DClassContactEFAfter(wn,changed);
+   end;
+  Course2DClassAfterEditField = res;
+  RETURN;
+END;

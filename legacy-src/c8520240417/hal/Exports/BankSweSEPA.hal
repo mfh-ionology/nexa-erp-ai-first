@@ -1,0 +1,1281 @@
+external procedure StripSpace(var string,string);
+external function boolean ValidateIBAN(string);
+external function Boolean GetPMRow(string,var row PMBlock);
+external procedure NewLineExport();
+external function string 255 AddStr(string,string,string);
+external function string 255 ConvertXmlString(string,Boolean);
+
+procedure ExportTheLevel(Integer level)
+begin
+  string 255 tstr;
+  Integer i;
+  
+  tstr = "";
+  for (i=0;i<level;i=i+1) begin
+    tstr = tstr & "  ";
+  end;
+  ExportPadString(tstr,len(tstr)," ",false);
+  return;
+end;
+
+procedure ExportPlainXml(string value,Integer level)
+begin
+  ExportTheLevel(level);
+  ExportPadString(value,BytesInString(value)," ",false);
+  NewLineExport;
+  return;
+end;
+
+procedure ExportTagXml(string tag,string pvalue,Integer level)
+begin
+  string 255 value;
+  
+  value = pvalue;
+  ExportTheLevel(level);
+  ExportPadString("<",1," ",false);
+  ExportPadString(tag,len(tag)," ",false);
+  ExportPadString(">",1," ",false);  
+  ExportPadString(value,BytesInString(value)," ",false);
+  ExportPadString("</",2," ",false);
+  ExportPadString(tag,len(tag)," ",false);
+  ExportPadString(">",1," ",false);
+  NewLineExport;
+  return;
+end;
+
+procedure ExportAttributeTagXml(string tag,string pvalue,string attr,string attrvalue,Integer level)
+begin
+  string 255 value;
+  
+  value = pvalue;
+  ExportTheLevel(level);
+  ExportPadString("<",1," ",false);
+  ExportPadString(tag,len(tag)," ",false);
+  if (nonblank(attr)) then begin
+    ExportPadString(" ",1," ",false);
+    ExportPadString(attr,len(attr)," ",false);
+    ExportPadString("=""",2," ",false);
+    ExportPadString(attrvalue,BytesInString(attrvalue)," ",false);
+    ExportPadString("""",1," ",false);
+  end;
+  ExportPadString(">",1," ",false);  
+  ExportPadString(value,BytesInString(value)," ",false);
+  ExportPadString("</",2," ",false);
+  ExportPadString(tag,len(tag)," ",false);
+  ExportPadString(">",1," ",false);
+  NewLineExport;
+  return;
+end;
+
+global
+procedure AddToPerSupplierArray(Integer ExportSuppInvNr,row OPVc OPrw,string bankacc,array string aprvecode,array string aprbankacc,array string aprreference,array string aprbankcur,
+                                array string aprreccur,array val aprrecval,array string aprreferencedetails,array Integer aprpaychannel,array Integer aprpayurgency,array Integer aprbankfee,
+                                array string aprsortcode,array LongInt aprvisernr,array string aprpaycode,var Integer acnt)
+begin
+  Integer i;
+  record VIVc VIr;
+  string 255 tstr;
+
+  VIr.SerNr = OPrw.VISerNr;
+  ReadFirstMain(VIr,1,true);
+  for (i=0;i<acnt;i=i+1) begin
+    if (aprvecode[i]==OPrw.VECode and aprreccur[i]==OPrw.RecCurncy and aprpaychannel[i]==OPrw.PayChannel and aprpayurgency[i]==OPrw.PayUrgency and aprbankfee[i]==OPrw.BankFee) then begin
+      aprrecval[i] = aprrecval[i] + OPrw.RecVal;
+      // if (aprpaychannel[i]==kPaymentChannelSWESEPA) then begin
+        tstr = OPrw.BankRefStr;
+        if (blank(tstr)) then begin
+          tstr = VIr.InvoiceNr;
+          if (blank(tstr)) then begin
+            tstr = Left(OPrw.Comment,50);
+          end;
+        end;
+      // end else begin
+      //   if (aprpayurgency[i]!=kPaymentUrgencyNormal or (aprpayurgency[i]==kPaymentUrgencyNormal and blank(OPrw.VISerNr) and blank(OPrw.BankRefStr))) then begin
+      //     tstr = OPrw.BankRefStr;
+      //     if (blank(tstr)) then begin
+      //       tstr = VIr.InvoiceNr;
+      //       if (blank(tstr)) then begin
+      //         tstr = Left(OPrw.Comment,50);
+      //       end;
+      //     end;
+      //   end else begin
+      //     if (nonblank(OPrw.BankRefStr)) then begin
+      //       tstr = OPrw.BankRefStr;
+      //     end;
+      //   end;
+        if (nonblank(tstr)) then begin
+          if (blank(aprreference[i])) then begin
+            aprreference[i] = tstr;
+          end else begin
+            aprreference[i] = AddStr(aprreference[i],tstr,",");
+          end;
+        end;
+      // end;
+      goto LAddToPerSupplierArray;
+    end;
+  end;
+  aprvecode[acnt] = OPrw.VECode;
+  aprbankacc[acnt] = bankacc;
+  aprbankcur[acnt] = OPrw.BankCurncy;
+  aprreccur[acnt] = OPrw.RecCurncy;
+  aprrecval[acnt] = OPrw.RecVal;
+  aprpaychannel[acnt] = OPrw.PayChannel;
+  aprpayurgency[acnt] = OPrw.PayUrgency;
+  aprbankfee[acnt] = OPrw.BankFee;
+  aprsortcode[acnt] = OPrw.SortCode;
+  aprvisernr[acnt] = OPrw.VISerNr;
+  aprpaycode[acnt] = OPrw.PaymentCode;
+  // if (aprpaychannel[i]==kPaymentChannelSWESEPA) then begin
+    tstr = OPrw.BankRefStr;
+    if (blank(tstr)) then begin
+      tstr = VIr.InvoiceNr;
+      if (blank(tstr)) then begin
+        tstr = Left(OPrw.Comment,50);
+      end;
+    end;
+  // end else begin
+  //   if (OPrw.PayUrgency!=kPaymentUrgencyNormal or (OPrw.PayUrgency==kPaymentUrgencyNormal and blank(OPrw.VISerNr) and blank(OPrw.BankRefStr))) then begin
+  //     tstr = OPrw.BankRefStr;
+  //     if (blank(tstr)) then begin
+  //       tstr = VIr.InvoiceNr;
+  //       if (blank(tstr)) then begin
+  //         tstr = Left(OPrw.Comment,50);
+  //       end;
+  //     end;
+  //   end else begin
+  //     if (nonblank(OPrw.BankRefStr)) then begin
+  //       tstr = OPrw.BankRefStr;
+  //     end;
+  //   end;
+    if (nonblank(tstr)) then begin
+      if (blank(aprreference[acnt])) then begin
+        aprreference[acnt] = tstr;
+      end else begin
+        aprreference[acnt] = AddStr(aprreference[acnt],tstr,",");
+      end;
+    end;
+  // end;
+  acnt = acnt + 1;
+LAddToPerSupplierArray:;
+  return;
+end;
+
+global
+procedure BankExpSwedenSEPA_Domestic_GroupHeader2(record RcVc RepSpec,var record BankFileBlock bfr,integer bankcode)
+begin
+  string 255 tstr;
+  LongInt appsernr;
+  record CYBlock CYb;
+  record OPVc OPr;
+  Boolean found,testf;
+  Integer keys;
+  string 255 ckey;
+  LongInt afr,ato;
+  Integer i,rwcnt;
+  row OPVc OPrw;
+  Integer NbOfTxs;
+  record CUVc VEr;
+  string 255 bankacc;
+  Array string 255 aprvecode;
+  Array string 255 aprbankacc;
+  Array string 255 aprreference;
+  Array string 255 aprbankcur;
+  Array string 255 aprreccur;
+  Array val aprrecval;
+  Array string 255 aprreferencedetails;
+  Array string 255 aprsortcode;
+  Array Integer aprpaychannel,aprpayurgency,aprbankfee;
+  array LongInt aprvisernr;
+  array string 255 aprpaycode;
+  Integer prevacnt,acnt;
+  string 255 timestamp;
+  time curtime;
+  string 255 codepage;
+  val CtrlSum;
+  record BankVc Bankr;
+  row PMBlock PMrw;
+
+  codepage = StringSetFromString(89,RepSpec.f12);
+  if (blank(codepage)) then begin
+    codepage = "UTF-8";
+  end;
+  if (SetExportCodePage(codepage)) then begin end;
+  NbOfTxs = 0;
+  CtrlSum = 0;
+  BlockLoad(CYb);
+  appsernr = bfr.LastSerNr;
+  if (appsernr<=0) or (appsernr>999999) then begin
+    appsernr = 1;
+  end;
+  afr = FirstInRange(RepSpec.f1,20);
+  ato = LastInRange(RepSpec.f1,20);
+  found = true;
+  if (RepSpec.OnlyUnprntd==0) then begin
+    OPr.SentFlag = 0;
+    OPr.SerNr = afr;
+    keys = 2;
+    ckey = "SentFlag";
+  end else begin
+    OPr.SerNr = afr;
+    keys = 1;
+    ckey = "SerNr";
+  end;
+  while (LoopKey(ckey,OPr,keys,found)) begin
+    if (RepSpec.OnlyUnprntd==0) then begin
+      if (OPr.SentFlag==1) then begin
+        found = false;
+      end;
+    end;
+    if (ato<>-1) then begin
+      if (OPr.SerNr>ato) then begin
+        found = false;
+      end;
+    end;
+    testf = true;
+    if (RepSpec.OnlyUnprntd==0) then begin
+      if (OPr.DoneFlag==1) then begin 
+        testf = false;
+      end;
+    end;
+    // if (OPr.OrderedFlag==0) then begin 
+    //   testf = false;
+    // end;
+    if (OPr.Invalid!=0) then begin  testf = false; end;
+    if (DateInRange(OPr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin
+      testf = false;
+    end;
+    if (nonblank(RepSpec.CurncyCode)) then begin
+      if (nonblank(OPr.PayCurCode) and (OPr.PayCurCode <> RepSpec.CurncyCode)) then begin
+        testf = false;
+      end;
+    end;
+    if (found==false) then begin
+      testf = false;
+    end;
+    if (testf==true) then begin
+      GetPMRow(OPr.PayMode,PMrw);
+      Bankr.Code = PMrw.BankCode;
+      ReadFirstMain(Bankr,1,true);
+      rwcnt = MatRowCnt(OPr);
+      if (OPr.PayperSupplier==1) or (RepSpec.flags[5]!=0) then begin
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(OPr,i,OPrw);
+          if (OPrw.ovst!=0) or (OPrw.stp!=1) then begin
+            goto LBankExpSwedenSEPA_Domestic_GroupHeader_SKIPROW1;
+          end;
+          if (nonblank(RepSpec.CurncyCode)) then begin
+            if (OPrw.BankCurncy!=RepSpec.CurncyCode) then begin
+              goto LBankExpSwedenSEPA_Domestic_GroupHeader_SKIPROW1;
+            end;
+          end;
+
+          VEr.Code = OPrw.VECode;
+          ReadFirstMain(VEr,1,true);
+
+          bankacc = OPrw.BankAcc;
+          if (blank(bankacc)) then begin
+            bankacc = VEr.IBANCode;
+          end;
+          if (blank(bankacc)) then begin
+            bankacc = VEr.BankAccount;
+          end;
+          if (blank(bankacc)) then begin
+            bankacc = VEr.Bank;
+          end;
+          prevacnt = acnt;
+          AddToPerSupplierArray(1,OPrw,bankacc,aprvecode,aprbankacc,aprreference,aprbankcur,aprreccur,aprrecval,aprreferencedetails,aprpaychannel,aprpayurgency,aprbankfee,aprsortcode,aprvisernr,aprpaycode,acnt);
+          if (prevacnt!=acnt) then begin              
+            NbOfTxs = NbOfTxs + 1;
+          end;
+          CtrlSum = CtrlSum + OPrw.RecVal;
+LBankExpSwedenSEPA_Domestic_GroupHeader_SKIPROW1:;              
+        end;
+      end else begin
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(OPr,i,OPrw);
+          if (OPrw.ovst!=0) or (OPrw.stp!=1) then begin
+            goto LBankExpSwedenSEPA_Domestic_GroupHeader_SKIPROW2;
+          end;
+          if (nonblank(RepSpec.CurncyCode)) then begin
+            if (OPrw.BankCurncy!=RepSpec.CurncyCode) then begin
+              goto LBankExpSwedenSEPA_Domestic_GroupHeader_SKIPROW2;
+            end;
+          end;
+          NbOfTxs = NbOfTxs + 1;
+          CtrlSum = CtrlSum + OPrw.RecVal;
+LBankExpSwedenSEPA_Domestic_GroupHeader_SKIPROW2:;              
+        end;
+      end;
+    end;
+  end;
+
+  ExportPlainXml("<?xml version=""1.0"" encoding=""" & codepage & """?>",0);
+
+  tstr = "<Document xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns=""urn:iso:std:iso:20022:tech:xsd:pain.001.001.03"">";
+//  tstr = "<Document xmlns=""urn:iso:std:iso:20022:tech:xsd:pain.001.001.03"" xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xsi:schemaLocation=""urn:iso:std:iso:20022:tech:xsd:pain.001.001.03 pain.001.001.03.xsd"">";
+  ExportPlainXml(tstr,0); 
+
+  ExportPlainXml("<CstmrCdtTrfInitn>",0);
+
+  ExportPlainXml("<GrpHdr>",1);
+  curtime = CurrentTime;
+  timestamp = DateToString(CurrentDate,"YYMMDD") & GetHour(curtime) & GetMinute(curtime);
+  ExportTagXml("MsgId",appsernr & "-" & timestamp,2);
+  tstr = DateToString(CurrentDate,"YYYY-MM-DD");
+  tstr = tstr & "T";
+  tstr = tstr & CurrentTime;
+  ExportTagXml("CreDtTm",tstr,2);
+  ExportTagXml("NbOfTxs",NbOfTxs,2);
+  ExportTagXml("CtrlSum",ValToString(CtrlSum,M4UVal,"",".",0),2);
+  ExportPlainXml("<InitgPty>",2);
+  ExportPlainXml("<Id>",3);
+  ExportPlainXml("<OrgId>",4);
+  ExportPlainXml("<Othr>",5);
+  tstr = Bankr.BankIDCode;
+  if (blank(tstr)) then begin
+    Bankr.Code = CYb.BankName;
+    if (ReadFirstMain(Bankr,1,true)) then begin
+      tstr = Bankr.BankIDCode;
+    end;
+  end;
+  ExportTagXml("Id",tstr,6);
+  ExportPlainXml("<SchmeNm>",6);
+  if (bankcode==155) then begin
+    ExportTagXml("Cd","CUST",6);
+  end else begin
+    ExportTagXml("Cd","BANK",6);
+  end;
+  ExportPlainXml("</SchmeNm>",6);
+
+//  ExportTagXml("Nm",ConvertXmlString(CYb.CompName,false),3);
+/*  if(nonblank(CYb.Addr0) and nonblank(CYb.Addr1)) then begin
+    ExportPlainXml("<PstlAdr>",3);
+    ExportTagXml("Ctry",left(CYb.Bank2,2),4);
+    ExportTagXml("AdrLine",ConvertXmlString((CYb.Addr0 & "," & CYb.Addr1),false),4);
+    ExportPlainXml("</PstlAdr>",3);
+  end; */
+  ExportPlainXml("</Othr>",5);
+  ExportPlainXml("</OrgId>",4);
+  ExportPlainXml("</Id>",3);
+  ExportPlainXml("</InitgPty>",2);
+  ExportPlainXml("</GrpHdr>",1);
+  bfr.LastSerNr = appsernr + 1;
+  return;
+end;
+
+global
+procedure BankExpSwedenSEPA_Domestic_GroupHeader(record RcVc RepSpec,var record BankFileBlock bfr)
+begin
+  Integer bankcode;
+
+  BankExpSwedenSEPA_Domestic_GroupHeader2(RepSpec,bfr,bankcode);
+
+return;
+end;
+
+global
+procedure BankExpSwedenSEPA_Domestic_GroupFooter()
+begin
+  ExportPlainXml("</CstmrCdtTrfInitn>",0);
+  ExportPlainXml("</Document>",0);
+  return;
+end;
+
+procedure BankExpSwedenSEPA_Domestic_Header(record RcVc RepSpec,record OPVc OPr,var record BankFileBlock bfr)
+begin
+  string 255 bankacc;
+  LongInt rowsernr;
+  record CYBlock CYb;
+  record BankVc Bankr;
+  row PMBlock PMrw;
+  record BaseCurBlock BCb;
+  row OPVc OPrw;
+  Integer rwcnt;
+    
+  BlockLoad(BCb);
+  BlockLoad(CYb);
+  rowsernr = bfr.RowSerNr;
+  if (rowsernr<=0) or (rowsernr>999999) then begin
+    rowsernr = 1;
+  end;
+
+  GetPMRow(OPr.PayMode,PMrw);
+  Bankr.Code = PMrw.BankCode;
+  ReadFirstMain(Bankr,1,true);
+
+  if (nonblank(PMrw.BankNr)) then begin
+    bankacc = PMrw.BankNr;
+  end else begin
+    if (nonblank(Bankr.Nr2)) then begin
+      bankacc = Bankr.Nr2;
+    end else begin
+      bankacc = CYb.Bank2;
+    end;
+  end;  
+  StripSpace(bankacc,bankacc);
+  ExportPlainXml("<PmtInf>",1);
+
+  ExportTagXml("PmtInfId",rowsernr,2);
+  ExportTagXml("PmtMtd","TRF",2);
+  // ExportTagXml("BtchBookg","false",2);
+  rwcnt = MatRowCnt(OPr);
+  if (rwcnt==1) then begin MatRowGet(OPr,0,OPrw); end;
+  if (rwcnt==1) then begin
+    if (OPrw.PayChannel!=kPaymentChannelSWESEPA) then begin
+      ExportPlainXml("<PmtTpInf>",2);
+      ExportPlainXml("<SvcLvl>",3);
+      switch (OPrw.PayUrgency) begin
+        case kPaymentUrgencyNormal:   
+          if ((OPrw.PayChannel==kPaymentChannelSWEOtherDomestic and ValidateIBAN(bankacc)==false) or OPrw.PayChannel==kPaymentChannelSWEForeign) then begin
+            ExportTagXml("Cd","NURG",4); 
+          end else begin
+            ExportTagXml("Cd","MPNS",4); 
+          end;
+        case kPaymentUrgencySameDay:
+          if ((OPrw.PayChannel==kPaymentChannelSWEOtherDomestic and ValidateIBAN(bankacc)==false) or OPrw.PayChannel==kPaymentChannelSWEForeign) then begin
+            ExportTagXml("Cd","NURG",4); 
+          end else begin
+            ExportTagXml("Cd","MPNS",4); 
+          end;
+        case kPaymentUrgencyExpress:  ExportTagXml("Cd","URGP",4);
+        // case kPaymentUrgencyUrgent:   ExportTagXml("Cd","URGP",4);
+      end;
+      ExportPlainXml("</SvcLvl>",3);
+      if (OPrw.PayUrgency==kPaymentUrgencySameDay) then begin
+        ExportPlainXml("<LclInstrm>",3);
+        ExportTagXml("Cd","SDCL",4);
+        ExportPlainXml("</LclInstrm>",3);
+      end;
+      if (OPrw.PayChannel==kPaymentChannelSWEBankgiro or OPrw.PayChannel==kPaymentChannelSWEPlusgiro) then begin
+        ExportPlainXml("<CtgyPurp>",3);
+        ExportTagXml("Cd","SUPP",4); 
+        ExportPlainXml("</CtgyPurp>",3);
+      end;
+      ExportPlainXml("</PmtTpInf>",2);
+    end else begin
+      ExportPlainXml("<PmtTpInf>",2);
+      ExportPlainXml("<SvcLvl>",3);
+      ExportTagXml("Cd","SEPA",4);
+      ExportPlainXml("</SvcLvl>",3);
+      ExportPlainXml("<CtgyPurp>",3);
+      ExportTagXml("Cd","SUPP",4);
+      ExportPlainXml("</CtgyPurp>",3);
+      ExportPlainXml("</PmtTpInf>",2);
+    end;
+  end;
+
+  if (RepSpec.flags[0]==0) then begin
+    if (OPr.PayDate>CurrentDate) then begin
+      ExportTagXml("ReqdExctnDt",DateToString(OPr.PayDate,"YYYY-MM-DD"),2);
+    end else begin
+      ExportTagXml("ReqdExctnDt",DateToString(OPr.PayDate,"YYYY-MM-DD"),2);//CurrentDate
+    end;
+  end else begin
+    ExportTagXml("ReqdExctnDt",DateToString(OPr.PayDate,"YYYY-MM-DD"),2);//CurrentDate
+  end;
+
+  ExportPlainXml("<Dbtr>",2);
+  ExportTagXml("Nm",ConvertXmlString(CYb.CompName,false),3);
+//  if(nonblank(CYb.Addr0) and nonblank(CYb.Addr1)) then begin
+    ExportPlainXml("<PstlAdr>",3);
+    ExportTagXml("Ctry",CYb.CountryCode,4);
+   // ExportTagXml("AdrLine",ConvertXmlString(CYb.Addr0,false),4);
+   // ExportTagXml("AdrLine",ConvertXmlString(CYb.Addr1,false),4);
+    ExportPlainXml("</PstlAdr>",3);
+//  end;
+  ExportPlainXml("<Id>",3);
+  ExportPlainXml("<OrgId>",4);
+  ExportPlainXml("<Othr>",5);
+  ExportTagXml("Id",Bankr.BankIDCode,6);//Payer's ID, such as Company no., or VAT no. Not used at DNB bank
+  ExportPlainXml("<SchmeNm>",6);
+  ExportTagXml("Cd","BANK",7);//COID- company number, CUST - client's code in the payee system. Jei mokama i VMI, turi buti COID
+  ExportPlainXml("</SchmeNm>",6);
+  ExportPlainXml("</Othr>",5);
+  ExportPlainXml("</OrgId>",4);
+  ExportPlainXml("</Id>",3);  
+  ExportPlainXml("</Dbtr>",2);
+  
+  ExportPlainXml("<DbtrAcct>",2);
+  ExportPlainXml("<Id>",3);
+  if (ValidateIBAN(bankacc)) then begin
+    ExportTagXml("IBAN",bankacc,4);
+  end else begin
+    ExportPlainXml("<Othr>",4);
+    ExportTagXml("Id","54401060156",5);
+    ExportPlainXml("<SchmeNm>",5);
+    ExportTagXml("Cd","BBAN",6);
+    ExportPlainXml("</SchmeNm>",5);    
+    ExportPlainXml("</Othr>",4);    
+  end;
+  ExportPlainXml("</Id>",3);    
+  if (nonblank(OPr.PayCurCode)) then begin
+    ExportTagXml("Ccy",OPr.PayCurCode,3);
+  end else begin
+    if (nonblank(BCb.BaseCur1)) then begin
+      ExportTagXml("Ccy",BCb.BaseCur1,3);
+    end else begin
+      ExportTagXml("Ccy","EUR",3);
+    end;
+  end;
+  ExportPlainXml("</DbtrAcct>",2);
+
+  ExportPlainXml("<DbtrAgt>",2);
+  ExportPlainXml("<FinInstnId>",3);
+  if (nonblank(Bankr.SWIFT)) then begin
+    ExportTagXml("BIC",Bankr.SWIFT,4);  //not required?
+    // ExportTagXml("Nm",Bankr.Name,4);
+  end;
+  // if (nonblank(Bankr.CountryCode)) then begin
+  //   ExportPlainXml("<PstlAdr>",4);
+  //   ExportTagXml("Ctry",Bankr.CountryCode,5);  
+  //   ExportPlainXml("</PstlAdr>",5);
+  // end;
+  ExportPlainXml("</FinInstnId>",3);
+  ExportPlainXml("</DbtrAgt>",2);
+
+  if (rwcnt==1) then begin
+    if (OPrw.PayChannel!=kPaymentChannelSWESEPA) then begin
+      switch (OPrw.BankFee) begin
+        case 0: ExportTagXml("ChrgBr","SHAR",2); // Shared
+        case 1: ExportTagXml("ChrgBr","CRED",2); // Suppliers Pay
+        case 2: ExportTagXml("ChrgBr","DEBT",2); // We Pay
+      end;
+    end;
+  end;
+
+  bfr.RowSerNr = rowsernr + 1;
+  return;
+end;
+
+procedure BankExpSwedenSEPA_Domestic_Footer()
+begin
+  ExportPlainXml("</PmtInf>",1);
+  return;
+end;
+
+global
+procedure BankExpSwedenSEPA_Domestic(record RcVc RepSpec,record OPVc OPr,Integer today,String curnc,integer method,record BankFileBlock bfr)
+begin
+  string 255 tstr,tstr1;
+  Integer i,j,rwcnt;
+  row OPVc OPrw;
+  row OPVc OP2rw;
+  record CUVc VEr;
+  record BankVc Bankr;
+  record VIVc VIr;
+  string 255 bankacc;
+  Array string 255 aprvecode;
+  Array string 255 aprbankacc;
+  Array string 255 aprreference;
+  Array string 255 aprreccur;
+  Array string 255 aprbankcur;
+  Array val aprrecval;
+  Array string 255 aprreferencedetails;
+  Array string 255 aprsortcode;
+  Array Integer aprpaychannel,aprpayurgency,aprbankfee;
+  array LongInt aprvisernr;
+  array string 255 aprpaycode;
+  Integer acnt;
+  string 255 bvdet,brdet,invtype,country,refstr;
+  record CYBlock CYb;
+  boolean ForeignPaymf,printRef;
+  record BaseCurBlock BCb;
+  record PaymentCodeVc PCr;
+    
+  BlockLoad(BCb);
+  BLockLoad(CYb);
+  if (nonblank(RepSpec.CurncyCode)) then begin
+    if (nonblank(OPr.PayCurCode) and (OPr.PayCurCode <> RepSpec.CurncyCode)) then begin
+      goto LBankExpSwedenSEPA_Domestic_SKIPOP;
+    end;
+  end;
+
+  if (OPr.ForeignPayment==1) or (RepSpec.flags[2]==1) then begin
+    ForeignPaymf = true;
+  end;
+  BankExpSwedenSEPA_Domestic_Header(RepSpec,OPr,bfr);
+  rwcnt = MatRowCnt(OPr);
+  if (OPr.PayperSupplier==1) or (RepSpec.flags[5]!=0) then begin
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(OPr,i,OPrw);
+      If (OPrw.ovst!=0) or (OPrw.stp!=1) Then Begin
+        goto LBankExpSwedenSEPA_Domestic_SKIPROW1;
+      end;
+      if (nonblank(RepSpec.CurncyCode)) then begin
+        if (OPrw.BankCurncy!=RepSpec.CurncyCode) then begin
+          goto LBankExpSwedenSEPA_Domestic_SKIPROW1;
+        end;
+      end;
+      VEr.Code = OPrw.VECode;
+      ReadFirstMain(VEr,1,true);
+      bankacc = OPrw.BankAcc;
+      if (blank(bankacc)) then begin
+        bankacc = VEr.IBANCode;
+      end;
+      if (blank(bankacc)) then begin
+        bankacc = VEr.BankAccount;
+      end;
+      if (blank(bankacc)) then begin
+        bankacc = VEr.Bank;
+      end;
+      AddToPerSupplierArray(1,OPrw,bankacc,aprvecode,aprbankacc,aprreference,aprbankcur,aprreccur,aprrecval,aprreferencedetails,aprpaychannel,aprpayurgency,aprbankfee,aprsortcode,aprvisernr,aprpaycode,acnt);      
+LBankExpSwedenSEPA_Domestic_SKIPROW1:;
+    end;
+    for (i=0;i<acnt;i=i+1) begin
+      VEr.Code = aprvecode[i];
+      ReadFirstMain(VEr,1,true);
+      Bankr.Code = VEr.AccOperator;
+      ReadFirstMain(Bankr,1,true);
+
+      ExportPlainXml("<CdtTrfTxInf>",1);
+
+      ExportPlainXml("<PmtId>",2);    
+      ExportTagXml("InstrId",OPr.SerNr & "-" & i+1,3);
+      ExportTagXml("EndToEndId",OPr.SerNr & "-" & i+1,3);  
+      ExportPlainXml("</PmtId>",2);
+      if (rwcnt>1) then begin
+        if (aprpaychannel[i]!=kPaymentChannelSWESEPA) then begin
+          ExportPlainXml("<PmtTpInf>",2);
+          ExportPlainXml("<SvcLvl>",3);
+          if (aprpaychannel[i]==kPaymentChannelSWEBankgiro or aprpaychannel[i]==kPaymentChannelSWEPlusgiro) then begin
+            ExportTagXml("Prtry","MPNS",4);  
+          end;
+          switch (aprpayurgency[i]) begin
+            case kPaymentUrgencyNormal:   
+              if (aprpaychannel[i]==kPaymentChannelSWEOtherDomestic or aprpaychannel[i]==kPaymentChannelSWEForeign) then begin
+                ExportTagXml("Cd","NURG",4); 
+              end;
+            case kPaymentUrgencySameDay:
+              if (aprpaychannel[i]==kPaymentChannelSWEOtherDomestic or aprpaychannel[i]==kPaymentChannelSWEForeign) then begin
+                ExportTagXml("Cd","NURG",4); 
+              end;
+            case kPaymentUrgencyExpress:  ExportTagXml("Cd","URGP",4);
+            // case kPaymentUrgencyUrgent:   ExportTagXml("Cd","URGP",4);
+          end;
+          ExportTagXml("Cd","MPNS",4);  
+          ExportPlainXml("</SvcLvl>",3);
+          if (aprpayurgency[i]==kPaymentUrgencySameDay) then begin
+            ExportPlainXml("<LclInstrm>",3);
+            ExportTagXml("Cd","SDCL",4); 
+            ExportPlainXml("</LclInstrm>",3);
+          end;
+          ExportPlainXml("</PmtTpInf>",2);
+        end;
+      end;
+      ExportPlainXml("<Amt>",2);
+      if (nonblank(aprreccur[i])) then begin
+        ExportAttributeTagXml("InstdAmt",ValToString(aprrecval[i],M4Val,"",".",0),"Ccy",aprreccur[i],3);
+      end else begin
+        if (nonblank(BCb.BaseCur1)) then begin
+          ExportAttributeTagXml("InstdAmt",ValToString(aprrecval[i],M4Val,"",".",0),"Ccy",BCb.BaseCur1,3);
+        end else begin
+          ExportAttributeTagXml("InstdAmt",ValToString(aprrecval[i],M4Val,"",".",0),"Ccy","EUR",3);
+        end;
+      end;
+      ExportPlainXml("</Amt>",2);
+      if (rwcnt>1 and aprpaychannel[i]!=kPaymentChannelSWESEPA) then begin
+        switch (aprbankfee[i]) begin
+          case 0: ExportTagXml("ChrgBr","SHAR",2); // Shared
+          case 1: ExportTagXml("ChrgBr","CRED",2); // Suppliers Pay
+          case 2: ExportTagXml("ChrgBr","DEBT",2); // We Pay
+        end;
+      end;
+      ExportPlainXml("<CdtrAgt>",2);
+      ExportPlainXml("<FinInstnId>",3);
+      StripSpace(bankacc,aprbankacc[i]);
+      tstr = VEr.SWIFT;
+      if (blank(tstr)) then begin
+        tstr = Bankr.SWIFT;
+      end;
+      if (ValidateIBAN(bankacc)) then begin
+        ExportTagXml("BIC",tstr,4); 
+      end else begin
+        if (aprpaychannel[i]==kPaymentChannelSWEForeign) then begin
+          ExportTagXml("BIC",tstr,4); 
+        end;
+        ExportPlainXml("<ClrSysMmbId>",4);
+        ExportPlainXml("<ClrSysId>",5);
+        if (aprpaychannel[i]==kPaymentChannelSWEForeign) then begin
+          if (nonblank(Bankr.Nr1)) then begin
+            ExportTagXml("Cd",Left(Bankr.Nr1,5),6); 
+          end;
+        end else begin
+          ExportTagXml("Cd","SESBA",6); 
+        end;
+        ExportPlainXml("</ClrSysId>",5);
+        switch (aprpaychannel[i]) begin
+          case kPaymentChannelSWEBankgiro:      tstr = "9900";
+          case kPaymentChannelSWEPlusgiro:      tstr = "9960";
+          case kPaymentChannelSWEOtherDomestic: tstr = aprsortcode[i];
+          case kPaymentChannelSWEForeign:       tstr = Right(Bankr.Nr1,Len(Bankr.Nr1)-6);
+        end;
+        if (aprpaychannel[i]==kPaymentChannelSWEForeign and blank(tstr)) then begin
+        end else begin
+          ExportTagXml("MmbId",tstr,6); 
+        end;
+        ExportPlainXml("</ClrSysMmbId>",4);
+      end;
+      ExportPlainXml("</FinInstnId>",3);
+      ExportPlainXml("</CdtrAgt>",2);
+      StripSpace(bankacc,aprbankacc[i]);
+      if (ValidateIBAN(bankacc)) then begin
+        country = Left(bankacc,2);
+      end else begin
+        if(nonblank(Bankr.CountryCode)) then begin
+          country = Bankr.CountryCode;
+        end else begin
+          if(nonblank(VEr.CountryCode)) then begin
+            country = VEr.CountryCode;
+          end;
+        end;
+      end;
+      if(aprbankcur[i]!="EUR") then begin
+        if (nonblank(Bankr.ExchangeRateContract)) then begin
+          ExportPlainXml("<XchgRateInf>",2);
+          ExportTagXml("CtrctId",Bankr.ExchangeRateContract,3);
+          ExportPlainXml("</XchgRateInf>",2);
+        end;
+      end;
+      // if (ForeignPaymf) or (left(CYb.Bank2,2)!=country) then begin
+      //   if (nonblank(Bankr.SWIFT)) then begin
+      //     ExportPlainXml("<CdtrAgt>",2);
+      //     ExportPlainXml("<FinInstnId>",3);
+      //     ExportTagXml("BIC",Bankr.SWIFT,4);
+      //     ExportTagXml("Nm",Bankr.Name,4);  
+      //     if (nonblank(Bankr.CountryCode)) then begin
+      //       ExportPlainXml("<PstlAdr>",4);
+      //       ExportTagXml("Ctry",Bankr.CountryCode,5);  
+      //       ExportPlainXml("</PstlAdr>",5);
+      //     end;
+      //     ExportPlainXml("</FinInstnId>",3);
+      //     ExportPlainXml("</CdtrAgt>",2);
+      //   end;
+      // end;
+      ExportPlainXml("<Cdtr>",2);
+      ExportTagXml("Nm",ConvertXmlString(VEr.Name,false),3);
+      // if (nonblank(VEr.InvAddr1) and nonblank(VEr.InvAddr2)) then begin
+      //   ExportPlainXml("<PstlAdr>",3);
+      //   ExportTagXml("Ctry",country,4);
+      //   if (nonblank(VEr.InvAddr1)) then begin
+      //     ExportTagXml("AdrLine",ConvertXmlString(VEr.InvAddr1,false),4);  
+      //   end;
+      //   if (nonblank(VEr.InvAddr2)) then begin        
+      //     ExportTagXml("AdrLine",ConvertXmlString(VEr.InvAddr2,false),4);  
+      //   end;
+      //   ExportPlainXml("</PstlAdr>",3);
+      // end;
+      ExportPlainXml("</Cdtr>",2);
+
+      ExportPlainXml("<CdtrAcct>",2);
+      if (aprpaychannel[i]==kPaymentChannelSWEBankgiro) then begin
+        ExportTagXml("SchmeNm","BGNR",3);
+      end;
+      ExportPlainXml("<Id>",3);
+      if (ValidateIBAN(bankacc)) then begin
+        ExportTagXml("IBAN",bankacc,4);
+      end else begin
+        ExportPlainXml("<Othr>",4);
+        ExportTagXml("Id",StripNonDigits(aprbankacc[i]),5);
+        ExportPlainXml("</Othr>",4);
+      end;
+      ExportPlainXml("</Id>",3);
+      ExportPlainXml("</CdtrAcct>",2);
+      if ((aprpaychannel[i]==kPaymentChannelSWESEPA or aprpaychannel[i]==kPaymentChannelSWEForeign) and nonblank(OPrw.PaymentCode)) then begin
+        ExportPlainXml("<RgltryRptg>",2);
+        ExportTagXml("DbtCdtRptgInd","DEBT",3);
+        ExportPlainXml("<Dtls>",3);
+        ExportTagXml("Cd",OPrw.PaymentCode,4);
+        PCr.Code = OPrw.PaymentCode;
+        ReadFirstMain(PCr,1,true);
+        ExportTagXml("Inf",PCr.Desc,4);
+        ExportPlainXml("</Dtls>",3);
+        ExportPlainXml("</RgltryRptg>",2);
+      end;
+      // if (ForeignPaymf) or (CYb.CountryCode!=country) then begin
+      //   ExportPlainXml("<RgltryRptg>",2);
+      //   ExportPlainXml("<Dtls>",3);
+      //   ExportTagXml("Ctry",country,4);  
+      //   ExportTagXml("Cd","999",4);  
+      //   ExportPlainXml("</Dtls>",3);
+      //   ExportPlainXml("</RgltryRptg>",2);
+      // end;
+      
+      printRef = false;
+      ExportPlainXml("<RmtInf>",2);
+      if (aprpaychannel[i]==kPaymentChannelSWESEPA) then begin
+        ExportPlainXml("<Strd>",3);
+        ExportPlainXml("<CdtrRefInf>",4);
+        ExportPlainXml("<Tp>",5);
+        ExportPlainXml("<CdOrPrtry>",6);
+        ExportTagXml("Cd","SCOR",7);
+        ExportPlainXml("</CdOrPrtry>",6);
+        ExportPlainXml("</Tp>",5);
+        ExportTagXml("Ref",aprreference[i],5);
+        ExportPlainXml("</CdtrRefInf>",4);
+        ExportPlainXml("</Strd>",3);
+      end else begin
+        if (aprpayurgency[i]!=kPaymentUrgencyNormal or (aprpayurgency[i]==kPaymentUrgencyNormal and blank(OPrw.VISerNr) and blank(aprreference[i])) or ValidateIBAN(bankacc)) then begin
+          ExportTagXml("Ustrd",aprreference[i],3);
+        end else begin
+          if (nonblank(aprreference[i])) then begin
+            ExportPlainXml("<Strd>",3);
+            ExportPlainXml("<RfrdDocAmt>",4);
+            ExportAttributeTagXml("RmtdAmt",ValToString(OPrw.RecVal,M4Val,"",".",0),"Ccy",OPrw.RecCurncy,5);
+            ExportPlainXml("</RfrdDocAmt>",4);
+            ExportPlainXml("<CdtrRefInf>",4);
+            ExportPlainXml("<Tp>",5);
+            ExportPlainXml("<CdOrPrtry>",6);
+            ExportTagXml("Cd","SCOR",7);
+            ExportPlainXml("</CdOrPrtry>",6);
+            ExportPlainXml("</Tp>",5);
+            ExportTagXml("Ref",aprreference[i],5);
+            ExportPlainXml("</CdtrRefInf>",4);
+            ExportPlainXml("</Strd>",3);
+          end else begin
+            if (aprpaychannel[i]==kPaymentChannelSWEBankgiro or aprpaychannel[i]==kPaymentChannelSWEPlusgiro) then begin
+              VIr.SerNr = OPrw.VISerNr;
+              ReadFirstMain(VIr,1,true);
+              tstr = VIr.InvoiceNr;
+            end else begin
+              tstr = OPrw.VISerNr;
+            end;
+            if (nonblank(tstr)) then begin
+              ExportPlainXml("<Strd>",3);
+              ExportPlainXml("<RfrdDocInf>",4);
+              ExportPlainXml("<Tp>",5);
+              ExportPlainXml("<CdOrPrtry>",6);
+              ExportTagXml("Cd","CINV",7);
+              ExportPlainXml("</CdOrPrtry>",6);
+              ExportPlainXml("</Tp>",5);
+              ExportTagXml("Nb",tstr,5);
+              ExportPlainXml("</RfrdDocInf>",4);
+              ExportPlainXml("<RfrdDocAmt>",4);
+              ExportAttributeTagXml("DuePyblAmt",ValToString(OPrw.RecVal,M4Val,"",".",0),"Ccy",OPrw.RecCurncy,5);
+              ExportPlainXml("</RfrdDocAmt>",4);
+              ExportPlainXml("</Strd>",3);
+            end;
+          end;
+        end;
+      end;
+      // if ((ForeignPaymf) or (left(CYb.Bank2,2)!=country)) and (Bankr.Sorting == "Foreign") then begin
+      //   tstr = "Invoice:" & left(aprreference[i],122);
+      //   ExportTagXml("Ustrd",left(tstr,140),3);
+      // end else begin
+      //   if ((ForeignPaymf) or (left(CYb.Bank2,2)!=country)) and (Bankr.Sorting != "Foreign") then begin
+      //     if (nonblank(aprreferencedetails[i])) then begin
+      //       printRef = true;
+      //     end;
+      //   end;
+      //   if (!printRef) then begin
+      //     tstr = USetStr(16668);
+      //     if (nonblank(aprreferencedetails[i])) then begin
+      //       tstr = tstr & left(aprreference[i],122-len(aprreferencedetails[i]));
+      //       ExportTagXml("Ustrd",left(tstr,140),3);    
+      //     end else begin
+      //       tstr = tstr & aprreference[i];
+      //       ExportTagXml("Ustrd",left(tstr,140),3);  
+      //     end;
+      //   end;
+      //   if (nonblank(aprreferencedetails[i])) then begin
+      //     ExportPlainXml("<Strd>",3);
+      //     ExportPlainXml("<CdtrRefInf>",4);
+      //     ExportPlainXml("<Tp>",5);
+      //     ExportPlainXml("<CdOrPrtry>",6);
+      //     ExportTagXml("Cd","SCOR",7);  
+      //     ExportPlainXml("</CdOrPrtry>",6);  
+      //     ExportPlainXml("</Tp>",5);  
+      //     ExportTagXml("Ref",aprreferencedetails[i],5);          
+      //     ExportPlainXml("</CdtrRefInf>",4);
+      //     ExportPlainXml("</Strd>",3);       
+      //   end;
+      // end;
+      ExportPlainXml("</RmtInf>",2);
+      
+      ExportPlainXml("</CdtTrfTxInf>",1);
+    end;
+    
+  end else begin
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(OPr,i,OPrw);
+      if (OPrw.ovst!=0) or (OPrw.stp!=1) then begin
+        goto LBankExpSwedenSEPA_Domestic_SKIPROW2;
+      end;
+      if (nonblank(RepSpec.CurncyCode)) then begin
+        if (OPrw.BankCurncy!=RepSpec.CurncyCode) then begin
+          goto LBankExpSwedenSEPA_Domestic_SKIPROW2;
+        end;
+      end;
+      VEr.Code = OPrw.VECode;
+      ReadFirstMain(VEr,1,true);
+      Bankr.Code = VEr.AccOperator;
+      ReadFirstMain(Bankr,1,true);
+      VIr.SerNr = OPrw.VISerNr;
+      ReadFirstMain(VIr,1,true);
+      ExportPlainXml("<CdtTrfTxInf>",1);
+      ExportPlainXml("<PmtId>",2);    
+      ExportTagXml("InstrId",OPr.SerNr & "-" & i+1,3);
+      ExportTagXml("EndToEndId",OPr.SerNr & "-" & i+1,3);  
+      ExportPlainXml("</PmtId>",2);
+
+      if (rwcnt>1) then begin
+        if (OPrw.PayChannel!=kPaymentChannelSWESEPA) then begin
+          ExportPlainXml("<PmtTpInf>",2);
+          ExportPlainXml("<SvcLvl>",3);
+          if (OPrw.PayChannel==kPaymentChannelSWEBankgiro or OPrw.PayChannel==kPaymentChannelSWEPlusgiro) then begin
+            ExportTagXml("Prtry","MPNS",4);  
+          end;
+          switch (OPrw.PayUrgency) begin
+            case kPaymentUrgencyNormal:   
+              if (OPrw.PayChannel==kPaymentChannelSWEOtherDomestic or OPrw.PayChannel==kPaymentChannelSWEForeign) then begin
+                ExportTagXml("Cd","NURG",4); 
+              end;
+            case kPaymentUrgencySameDay:
+              if (OPrw.PayChannel==kPaymentChannelSWEOtherDomestic or OPrw.PayChannel==kPaymentChannelSWEForeign) then begin
+                ExportTagXml("Cd","NURG",4); 
+              end;
+            case kPaymentUrgencyExpress:  ExportTagXml("Cd","URGP",4);
+            // case kPaymentUrgencyUrgent:   ExportTagXml("Cd","URGP",4);
+          end;
+          ExportPlainXml("</SvcLvl>",3);
+          if (OPrw.PayUrgency==kPaymentUrgencySameDay) then begin
+            ExportPlainXml("<LclInstrm>",3);
+            ExportTagXml("Cd","SDCL",4);
+            ExportPlainXml("</LclInstrm>",3);
+          end;
+          if (OPrw.PayChannel==kPaymentChannelSWEBankgiro or OPrw.PayChannel==kPaymentChannelSWEPlusgiro) then begin
+            ExportPlainXml("<CtgyPurp>",3);
+            ExportTagXml("Cd","SUPP",4); 
+            ExportPlainXml("</CtgyPurp>",3);
+          end;
+          ExportPlainXml("</PmtTpInf>",2);
+        end;
+      end;
+
+      ExportPlainXml("<Amt>",2);
+      if (nonblank(OPrw.RecCurncy)) then begin
+        ExportAttributeTagXml("InstdAmt",ValToString(OPrw.RecVal,M4Val,"",".",0),"Ccy",OPrw.RecCurncy,3);
+      end else begin
+        if (nonblank(BCb.BaseCur1)) then begin
+          ExportAttributeTagXml("InstdAmt",ValToString(OPrw.RecVal,M4Val,"",".",0),"Ccy",BCb.BaseCur1,3);
+        end else begin
+          ExportAttributeTagXml("InstdAmt",ValToString(OPrw.RecVal,M4Val,"",".",0),"Ccy","EUR",3);
+        end;
+      end;
+      ExportPlainXml("</Amt>",2);
+      if (rwcnt>1 and OPrw.PayChannel!=kPaymentChannelSWESEPA) then begin
+        switch (OPrw.BankFee) begin
+          case 0: ExportTagXml("ChrgBr","SHAR",2); // Shared
+          case 1: ExportTagXml("ChrgBr","CRED",2); // Suppliers Pay
+          case 2: ExportTagXml("ChrgBr","DEBT",2); // We Pay
+        end;
+      end;
+      ExportPlainXml("<CdtrAgt>",2);
+      ExportPlainXml("<FinInstnId>",3);
+      tstr = OPrw.BankAcc;
+      if (blank(tstr)) then begin
+        tstr = VEr.IBANCode;
+      end;
+      if (blank(tstr)) then begin
+        tstr = VEr.BankAccount;
+      end;
+      if (blank(tstr)) then begin
+        tstr = VEr.Bank;
+      end;
+      StripSpace(bankacc,tstr);
+      tstr = VEr.SWIFT;
+      if (blank(tstr)) then begin
+        tstr = Bankr.SWIFT;
+      end;
+      if (ValidateIBAN(bankacc)) then begin
+        ExportTagXml("BIC",tstr,4); 
+      end else begin
+        if (OPrw.PayChannel==kPaymentChannelSWEForeign) then begin
+          ExportTagXml("BIC",tstr,4); 
+        end;
+        ExportPlainXml("<ClrSysMmbId>",4);
+        ExportPlainXml("<ClrSysId>",5);
+        if (OPrw.PayChannel==kPaymentChannelSWEForeign) then begin
+          if (nonblank(Bankr.Nr1)) then begin
+            ExportTagXml("Cd",Left(Bankr.Nr1,5),6); 
+          end;
+        end else begin
+          ExportTagXml("Cd","SESBA",6); 
+        end;
+        ExportPlainXml("</ClrSysId>",5);
+        switch (OPrw.PayChannel) begin
+          case kPaymentChannelSWEBankgiro:      tstr = "9900";
+          case kPaymentChannelSWEPlusgiro:      tstr = "9960";
+          case kPaymentChannelSWEOtherDomestic: tstr = OPrw.SortCode;
+          case kPaymentChannelSWEForeign:       tstr = Right(Bankr.Nr1,Len(Bankr.Nr1)-6);
+        end;
+        if (OPrw.PayChannel==kPaymentChannelSWEForeign and blank(tstr)) then begin
+        end else begin
+          ExportTagXml("MmbId",tstr,6); 
+        end;
+        ExportPlainXml("</ClrSysMmbId>",4);
+      end;
+      ExportPlainXml("</FinInstnId>",3);
+      ExportPlainXml("</CdtrAgt>",2);
+      if (OPrw.BankCurncy!="EUR") then begin
+        if (nonblank(Bankr.ExchangeRateContract)) then begin
+          ExportPlainXml("<XchgRateInf>",2);
+          ExportTagXml("CtrctId",Bankr.ExchangeRateContract,3);
+          ExportPlainXml("</XchgRateInf>",2);
+        end;
+      end;
+      tstr = OPrw.BankAcc;
+      if (blank(tstr)) then begin
+        tstr = VEr.IBANCode;
+      end;
+      if (blank(tstr)) then begin
+        tstr = VEr.BankAccount;
+      end;
+      if (blank(tstr)) then begin
+        tstr = VEr.Bank;
+      end;
+      StripSpace(bankacc,tstr);
+      if (ValidateIBAN(bankacc)) then begin
+        country = Left(bankacc,2);
+      end else begin
+        if(nonblank(Bankr.CountryCode)) then begin
+          country = Bankr.CountryCode;
+        end else begin
+          if(nonblank(VEr.CountryCode)) then begin
+            country = VEr.CountryCode;
+          end;
+        end;
+      end;
+      // if (ForeignPaymf) or (left(CYb.Bank2,2)!=country) then begin
+      //   if (nonblank(Bankr.SWIFT)) then begin
+      //     ExportPlainXml("<CdtrAgt>",2);
+      //     ExportPlainXml("<FinInstnId>",3);
+      //     ExportTagXml("BIC",Bankr.SWIFT,4);  
+      //     ExportTagXml("Nm",Bankr.Name,4);
+      //     if (nonblank(Bankr.CountryCode)) then begin
+      //       ExportPlainXml("<PstlAdr>",4);
+      //       ExportTagXml("Ctry",Bankr.CountryCode,5);  
+      //       ExportPlainXml("</PstlAdr>",5);
+      //     end;
+      //     ExportPlainXml("</FinInstnId>",3);
+      //     ExportPlainXml("</CdtrAgt>",2);
+      //   end;
+        
+      //   if (nonblank(Bankr.ClrSysMmbId)) then begin
+      //     ExportPlainXml("<ClrSysMmbId>",4);
+      //     ExportPlainXml("<ClrSysId>",5);
+      //     ExportTagXml("Cd",Bankr.ClrSysMmbId,6);  
+          
+      //     ExportPlainXml("</ClrSysId>",5);
+      //     ExportTagXml("MmbId",Bankr.Nr1,6);  
+          
+      //     ExportPlainXml("</ClrSysMmbId>",4);
+        
+      //   end;
+    
+      // end;
+      ExportPlainXml("<Cdtr>",2);
+      ExportTagXml("Nm",ConvertXmlString(VEr.Name,false),3); 
+      // ExportPlainXml("<PstlAdr>",3);
+      // if (VEr.ExportFlag == 0) then begin  
+      //   ExportTagXml("StrtNm",ConvertXmlString(VEr.InvAddr0,false),4);
+      //   ExportTagXml("PstCd",left(VEr.InvAddr1,6),4);
+      //   ExportTagXml("TwnNm",mid(ConvertXmlString(VEr.InvAddr1,false),7,30),4);
+      //   ExportTagXml("Ctry",country,4);
+      // end else begin
+      //   if(nonblank(VEr.InvAddr1) and nonblank(VEr.InvAddr2)) then begin
+      //     ExportTagXml("Ctry",country,4);
+      //     ExportTagXml("AdrLine",ConvertXmlString(VEr.InvAddr1,false),4);  
+      //     ExportTagXml("AdrLine",ConvertXmlString(VEr.InvAddr2,false),4);  
+      //   end;
+      // end;
+      // ExportPlainXml("</PstlAdr>",3);
+      ExportPlainXml("</Cdtr>",2);
+
+      ExportPlainXml("<CdtrAcct>",2);
+      ExportPlainXml("<Id>",3);
+      if (ValidateIBAN(bankacc)) then begin
+        ExportTagXml("IBAN",bankacc,4);  
+      end else begin
+        ExportPlainXml("<Othr>",4);
+        ExportTagXml("Id",StripNonDigits(tstr),5);
+        ExportPlainXml("<SchmeNm>",5);
+        if (OPrw.PayChannel==kPaymentChannelSWEBankgiro) then begin
+          ExportTagXml("Prtry","BGNR",6);
+        end else begin
+          ExportTagXml("Cd","BBAN",6);
+        end;
+        ExportPlainXml("</SchmeNm>",5);
+        ExportPlainXml("</Othr>",4);
+      end;
+      ExportPlainXml("</Id>",3);
+      ExportPlainXml("</CdtrAcct>",2);
+      if ((OPrw.PayChannel==kPaymentChannelSWESEPA or OPrw.PayChannel==kPaymentChannelSWEForeign) and nonblank(OPrw.PaymentCode)) then begin
+        ExportPlainXml("<RgltryRptg>",2);
+        ExportTagXml("DbtCdtRptgInd","DEBT",3);
+        ExportPlainXml("<Dtls>",3);
+        ExportTagXml("Cd",OPrw.PaymentCode,4);
+        PCr.Code = OPrw.PaymentCode;
+        ReadFirstMain(PCr,1,true);
+        ExportTagXml("Inf",PCr.Desc,4);
+        ExportPlainXml("</Dtls>",3);
+        ExportPlainXml("</RgltryRptg>",2);
+      end;
+      // if (ForeignPaymf) or (left(CYb.Bank2,2)!=country) then begin
+      //   ExportPlainXml("<RgltryRptg>",2);
+      //   ExportPlainXml("<Dtls>",3);
+      //   ExportTagXml("Ctry",country,4);  
+      //   if (nonblank(VIr.SortCode)) then begin
+      //     ExportTagXml("Cd",VIr.SortCode,4);  
+      //   end else begin
+      //     ExportTagXml("Cd","999",4);  
+      //   end;
+      //   ExportPlainXml("</Dtls>",3);
+      //   ExportPlainXml("</RgltryRptg>",2);
+      // end;
+      
+      printRef = false;
+      refstr = VIr.InvoiceNr;
+      if (blank(refstr)) then begin
+        refstr = "TRANSFER";
+      end;
+      tstr = OPrw.BankRefStr;
+      
+      ExportPlainXml("<RmtInf>",2);
+
+      if (OPrw.PayChannel==kPaymentChannelSWESEPA) then begin
+        ExportPlainXml("<Strd>",3);
+        ExportPlainXml("<CdtrRefInf>",4);
+        ExportPlainXml("<Tp>",5);
+        ExportPlainXml("<CdOrPrtry>",6);
+        ExportTagXml("Cd","SCOR",7);
+        ExportPlainXml("</CdOrPrtry>",6);
+        ExportPlainXml("</Tp>",5);
+        tstr = OPrw.BankRefStr;
+        if (blank(tstr)) then begin
+          tstr = VIr.InvoiceNr;
+          if (blank(tstr)) then begin
+            tstr = Left(OPrw.Comment,50);
+          end;
+        end;
+        ExportTagXml("Ref",tstr,5);
+        ExportPlainXml("</CdtrRefInf>",4);
+        ExportPlainXml("</Strd>",3);
+      end else begin
+        if (OPrw.PayUrgency!=kPaymentUrgencyNormal or 
+           (OPrw.PayUrgency==kPaymentUrgencyNormal and blank(VIr.InvoiceNr) and blank(OPrw.BankRefStr)) or 
+           ValidateIBAN(bankacc) or 
+           OPrw.PayChannel==kPaymentChannelSWEOtherDomestic) then begin
+          tstr = OPrw.BankRefStr;
+          if (blank(tstr)) then begin
+            tstr = VIr.InvoiceNr;
+            if (blank(tstr)) then begin
+              tstr = Left(OPrw.Comment,50);
+            end;
+          end;
+          ExportTagXml("Ustrd",tstr,3);
+        end else begin
+          if (nonblank(OPrw.BankRefStr)) then begin
+            ExportPlainXml("<Strd>",3);
+            ExportPlainXml("<RfrdDocAmt>",4);
+            ExportAttributeTagXml("RmtdAmt",ValToString(OPrw.RecVal,M4Val,"",".",0),"Ccy",OPrw.RecCurncy,5);
+            ExportPlainXml("</RfrdDocAmt>",4);
+            ExportPlainXml("<CdtrRefInf>",4);
+            ExportPlainXml("<Tp>",5);
+            ExportPlainXml("<CdOrPrtry>",6);
+            ExportTagXml("Cd","SCOR",7);
+            ExportPlainXml("</CdOrPrtry>",6);
+            ExportPlainXml("</Tp>",5);
+            ExportTagXml("Ref",OPrw.BankRefStr,5);
+            ExportPlainXml("</CdtrRefInf>",4);
+            ExportPlainXml("</Strd>",3);
+          end else begin
+            if (OPrw.PayChannel==kPaymentChannelSWEBankgiro or OPrw.PayChannel==kPaymentChannelSWEPlusgiro) then begin
+              tstr = VIr.InvoiceNr;
+            end else begin
+              tstr = OPrw.VISerNr;
+            end;
+            if (nonblank(tstr)) then begin
+              ExportPlainXml("<Strd>",3);
+              ExportPlainXml("<RfrdDocInf>",4);
+              ExportPlainXml("<Tp>",5);
+              ExportPlainXml("<CdOrPrtry>",6);
+              ExportTagXml("Cd","CINV",7);
+              ExportPlainXml("</CdOrPrtry>",6);
+              ExportPlainXml("</Tp>",5);
+              ExportTagXml("Nb",tstr,5);
+              ExportPlainXml("</RfrdDocInf>",4);
+              ExportPlainXml("<RfrdDocAmt>",4);
+              ExportAttributeTagXml("DuePyblAmt",ValToString(OPrw.RecVal,M4Val,"",".",0),"Ccy",OPrw.RecCurncy,5);
+              ExportPlainXml("</RfrdDocAmt>",4);
+              ExportPlainXml("</Strd>",3);
+              end;
+          end;
+        end;
+      end;
+
+
+//       if ((ForeignPaymf) or (left(CYb.Bank2,2)!=country)) and (Bankr.Sorting == "Foreign") then begin
+//         tstr1 = "Invoice:" & left(refstr,122);
+//         ExportTagXml("Ustrd",left(tstr1,140),3);    
+//       end else begin
+// //        if ((ForeignPaymf) or (left(CYb.Bank2,2)!=country)) and (Bankr.Sorting != "Foreign") then begin
+//           if (nonblank(tstr)) then begin
+//             printRef = true;
+//           end;
+// //        end else begin
+        
+// //        end;
+//         if (!printRef) then begin
+//           if (ForeignPaymf==false) then begin
+//             refstr = refstr;
+//           end else begin
+//             refstr = USetStr(16668) & refstr;
+//           end;
+//           if (nonblank(tstr)) then begin
+//             tstr1 = left(refstr,(130-len(tstr)));
+//             ExportTagXml("Ustrd",left(tstr1,140),3);  
+//           end else begin
+//             tstr1 = refstr;
+//             ExportTagXml("Ustrd",left(tstr1,140),3); 
+//           end;
+//         end;
+//         if (nonblank(tstr)) then begin
+//           ExportPlainXml("<Strd>",3);
+//           ExportPlainXml("<CdtrRefInf>",4);
+//           ExportPlainXml("<Tp>",5);
+//           ExportPlainXml("<CdOrPrtry>",6);
+//           ExportTagXml("Cd","SCOR",7);
+//           ExportPlainXml("</CdOrPrtry>",6);  
+//           ExportPlainXml("</Tp>",5);  
+//           ExportTagXml("Ref",tstr,5);   
+//           ExportPlainXml("</CdtrRefInf>",4);
+//           ExportPlainXml("<RfrdDocInf>",4);  
+//           ExportPlainXml("<Tp>",5);  
+//           ExportPlainXml("<CdOrPrtry>",6);  
+//           if (VIr.InvType==kInvoiceTypeCredit) then begin
+//             ExportTagXml("Cd","CREN",7);               
+//           end else begin
+//             ExportTagXml("Cd","CINV",7);
+//           end;
+//           ExportPlainXml("</CdOrPrtry>",6);  
+//           ExportPlainXml("</Tp>",5);  
+//           ExportTagXml("Nb",VIr.SerNr,5);               
+//           ExportTagXml("RltdDt",DateToString(VIr.TransDate,"YYYY-MM-DD"),5);
+//           ExportPlainXml("</RfrdDocInf>",4);
+//           ExportPlainXml("<RfrdDocAmt>",4);
+//           ExportAttributeTagXml("RmtdAmt",ValToString(VIr.PayVal,M4Val,"",".",0),"Ccy",VIr.CurncyCode,5);
+//           ExportPlainXml("</RfrdDocAmt>",4);
+
+//           ExportPlainXml("</Strd>",3);
+//         end;      
+//       end;      
+      ExportPlainXml("</RmtInf>",2);
+      
+      ExportPlainXml("</CdtTrfTxInf>",1);
+LBankExpSwedenSEPA_Domestic_SKIPROW2:;    
+    end;
+  end;
+  BankExpSwedenSEPA_Domestic_Footer;
+LBankExpSwedenSEPA_Domestic_SKIPOP:;
+  return;
+end;

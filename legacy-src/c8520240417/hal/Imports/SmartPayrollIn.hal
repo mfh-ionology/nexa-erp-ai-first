@@ -1,0 +1,211 @@
+external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+external procedure TRSumup(var record TRVc,var val);
+external function val StringToValue(string,Integer,string,string);
+external function string 255 StripCharacter(string,string);
+external function val MulRateToBase2(var string,val,val,val,val,val,val,roundmode);
+external function roundmode SetRoundModeD(Integer);
+external function Integer GetIntYc(Date);
+
+function string 255 DateToDateStr(Date curdate)
+begin
+  string 255 res,monthstr;
+
+  switch (curdate.month) begin
+    case 1: monthstr = USetStr(2781);
+    case 2: monthstr = USetStr(2782);
+    case 3: monthstr = USetStr(2783);
+    case 4: monthstr = USetStr(2784);
+    case 5: monthstr = USetStr(2785);
+    case 6: monthstr = USetStr(2786);
+    case 7: monthstr = USetStr(2787);
+    case 8: monthstr = USetStr(2788);
+    case 9: monthstr = USetStr(2789);
+    case 10: monthstr = USetStr(2790);
+    case 11: monthstr = USetStr(2791);
+    case 12: monthstr = USetStr(2792);
+  end;
+
+  res = monthstr & " " & curdate.year;
+
+  DateToDateStr = res;
+  return;
+end;
+
+function Boolean GetDataFromImportFile(var val totalGrossPay,var val totalNetPay, var val totalKiwiEmployerExpense, var val totalKiwiEmployer,var val totalKiwiEmployee,var val totalPAYE,var val totalStudentLoan)
+begin
+  Boolean res;
+  Integer pos;
+  string 255 instr,GrossPay,KiwiEmployer,PAYE,ChildSupp,StudentLoan,KiwiEmployee;
+  string 255 TotDeduct,NetPay,code,name,NormalPay,OneOffPay,TaxAllow,NonTaxAllow,hours;
+
+  while (NextImportLine(false)) begin 
+    instr = ImportField; 
+    if (blank(instr)) then begin goto LGetDataFromImportFile; end;  
+    pos = 0;
+    ExtractObjWithSeparator(",",instr,false,pos,code);   
+    ExtractObjWithSeparator(",",instr,false,pos,name);          
+    ExtractObjWithSeparator(",",instr,false,pos,hours);
+    ExtractObjWithSeparator(",",instr,false,pos,NormalPay);
+    ExtractObjWithSeparator(",",instr,false,pos,OneOffPay);
+    ExtractObjWithSeparator(",",instr,false,pos,TaxAllow);
+    ExtractObjWithSeparator(",",instr,false,pos,NonTaxAllow);
+    ExtractObjWithSeparator(",",instr,false,pos,GrossPay);
+    ExtractObjWithSeparator(",",instr,false,pos,KiwiEmployer);
+    ExtractObjWithSeparator(",",instr,false,pos,PAYE);  
+    ExtractObjWithSeparator(",",instr,false,pos,StudentLoan);
+    ExtractObjWithSeparator(",",instr,false,pos,ChildSupp);
+    ExtractObjWithSeparator(",",instr,false,pos,KiwiEmployee);
+    ExtractObjWithSeparator(",",instr,false,pos,TotDeduct);
+    ExtractObjWithSeparator(",",instr,false,pos,NetPay); 
+
+    totalNetPay = totalNetPay + StringToValue(StripCharacter(NetPay,""""),M4Rate,"",".");
+    totalGrossPay = totalGrossPay + StringToValue(StripCharacter(GrossPay,""""),M4Rate,"",".");
+    totalKiwiEmployerExpense = totalKiwiEmployerExpense + StringToValue(StripCharacter(KiwiEmployer,""""),M4Rate,"",".");
+    totalKiwiEmployer = totalKiwiEmployer + StringToValue(StripCharacter(KiwiEmployer,""""),M4Rate,"",".");
+    totalKiwiEmployee = totalKiwiEmployee + StringToValue(StripCharacter(KiwiEmployee,""""),M4Rate,"",".");
+    totalPAYE = totalPAYE +  StringToValue(StripCharacter(PAYE,""""),M4Rate,"",".");
+    totalStudentLoan = totalStudentLoan + StringToValue(StripCharacter(StudentLoan,""""),M4Rate,"",".");
+
+    res = true;
+  end;
+LGetDataFromImportFile:;
+  GetDataFromImportFile = res;
+  return;
+end;
+
+function Boolean GetDataFromImportFileAUS(var val totalGrossPay,var val totalNetEarnings,var val totalSuperannuationPayable,var val totalSuperannuationExpense,var val totalPAYG,var val totalSTSL)
+begin
+  Boolean res;
+  Integer pos;
+  string 255 instr,GrossPay,SuperannuationPayable,PAYG,ChildSupp,STSL,SuperannuationExpense;
+  string 255 ClientName,EmpID,EmpFirstName,EmpSurname,DOB,TerminationDate,Cost2,Cost1,StartDate,EndDate;
+  string 255 OrdHours,LeaveHours,TotalHours,OrdMonthPay,AnnualLeavePay,DirectCreditBal,TaxEarnings,NetEarnings,BankPay;
+  string 255 UnpaidLeaveHours,SupSunTax,AddPAYG;
+  while (NextImportLine(false)) begin
+    instr = ImportField; 
+    if (blank(instr)) then begin goto LGetDataFromImportFileAUS; end;
+    pos = 0;  
+    ExtractObjWithSeparator(",",instr,false,pos,ClientName);
+    ExtractObjWithSeparator(",",instr,false,pos,EmpID);   
+    if (EmpID=="Total:") then begin
+      ExtractObjWithSeparator(",",instr,false,pos,EmpFirstName);
+      ExtractObjWithSeparator(",",instr,false,pos,EmpSurname);
+      ExtractObjWithSeparator(",",instr,false,pos,DOB);
+      ExtractObjWithSeparator(",",instr,false,pos,TerminationDate);
+      ExtractObjWithSeparator(",",instr,false,pos,Cost2);
+      ExtractObjWithSeparator(",",instr,false,pos,Cost1);
+      ExtractObjWithSeparator(",",instr,false,pos,StartDate);
+      ExtractObjWithSeparator(",",instr,false,pos,EndDate);
+      ExtractObjWithSeparator(",",instr,false,pos,OrdHours);
+      ExtractObjWithSeparator(",",instr,false,pos,LeaveHours);
+      ExtractObjWithSeparator(",",instr,false,pos,UnpaidLeaveHours);
+      ExtractObjWithSeparator(",",instr,false,pos,TotalHours);
+      ExtractObjWithSeparator(",",instr,false,pos,SupSunTax);
+      ExtractObjWithSeparator(",",instr,false,pos,OrdMonthPay);
+      ExtractObjWithSeparator(",",instr,false,pos,AnnualLeavePay);
+      ExtractObjWithSeparator(",",instr,false,pos,DirectCreditBal);
+      ExtractObjWithSeparator(",",instr,false,pos,GrossPay);
+      ExtractObjWithSeparator(",",instr,false,pos,TaxEarnings);
+      ExtractObjWithSeparator(",",instr,false,pos,PAYG);
+      ExtractObjWithSeparator(",",instr,false,pos,AddPAYG);
+      ExtractObjWithSeparator(",",instr,false,pos,STSL);
+      ExtractObjWithSeparator(",",instr,false,pos,NetEarnings);
+      ExtractObjWithSeparator(",",instr,false,pos,BankPay);
+      ExtractObjWithSeparator(",",instr,false,pos,SuperannuationPayable);
+      SuperannuationExpense = SuperannuationPayable;
+
+      totalGrossPay =  StringToValue(StripCharacter(GrossPay,""""),M4Rate,"",".");
+      totalNetEarnings =  StringToValue(StripCharacter(NetEarnings,""""),M4Rate,"",".");
+      totalSuperannuationPayable =  StringToValue(StripCharacter(SuperannuationPayable,""""),M4Rate,"",".");
+      totalSuperannuationExpense = StringToValue(StripCharacter(SuperannuationExpense,""""),M4Rate,"",".");
+      totalPAYG =  StringToValue(StripCharacter(PAYG,""""),M4Rate,"",".") + StringToValue(StripCharacter(AddPAYG,""""),M4Rate,"",".");
+      res = true;
+    end;
+  end;
+LGetDataFromImportFileAUS:;
+  GetDataFromImportFileAUS = res;
+  return;
+end;
+procedure AddRowToTrans(var record TRVc TRr,val credval,val debval,string accnumber)
+begin
+  row TRVc TRrw;
+  record AccVc Accr;
+  Integer rwcnt;
+  record BaseCurBlock BaseCurBl;
+  record BaseERVc BERr;
+  
+  BlockLoad(BaseCurBl);
+  rwcnt = MatRowCnt(TRr);
+  ClearRow(TRr,TRrw,1);
+
+  TRrw.Curncy = BaseCurBl.BaseCur1;
+  BERr.Date = TRr.TransDate ;
+  if (ReadLastMain(BERr,1,false)) then begin
+    TRrw.BaseRate1 = BERr.Rate1;
+    TRrw.BaseRate2 = BERr.Rate2;
+  end;
+  TRrw.BaseRate1 = BERr.Rate1;
+  TRrw.BaseRate2 = BERr.Rate2 ;
+  if (credval>=0) then begin 
+    TRrw.CredVal = credval; 
+    TRrw.CredVal2 = MulRateToBase2(TRrw.Curncy,TRrw.CredVal,blankval,blankval,blankval, TRrw.BaseRate1,TRrw.BaseRate2,SetRoundModeD(2));
+  end;
+  if (debval>=0) then begin  
+    TRrw.DebVal = debval; 
+    TRrw.DebVal2 = MulRateToBase2(TRrw.Curncy,TRrw.DebVal,blankval,blankval,blankval, TRrw.BaseRate1,TRrw.BaseRate2,SetRoundModeD(2));
+  end;
+  TRrw.AccNumber = accnumber;
+  Accr.AccNumber = accnumber;
+  if (ReadFirstMain(Accr,1,true)) then begin
+    TRrw.Comment = Accr.Comment;
+  end;
+  MatRowPut(TRr,rwcnt,TRrw);
+
+  return;
+end;
+
+global
+updating procedure SmartPayrollIn()
+begin
+  record TRVc TRr;
+  Integer rwcnt,i;
+  val t,totalGrossPay,totalKiwiEmployer,totalKiwiEmployerExpense,totalKiwiEmployee,totalPAYE,totalStudentLoan,totalNetEarnings,totalSuperannuationPayable,totalSuperannuationExpense,totalPAYG,totalSTSL;
+  record SmartpayrollBlock SmartpayrollBl;
+
+  if (HasLocalization("NZL")) then begin
+    if (GetDataFromImportFile(totalGrossPay,totalNetEarnings,totalKiwiEmployerExpense,totalKiwiEmployer,totalKiwiEmployee,totalPAYE,totalStudentLoan)==false) then begin goto LSmartPayrollIn; end;
+  end;
+  if (HasLocalization("AUS")) then begin
+    if (GetDataFromImportFileAUS(totalGrossPay,totalNetEarnings,totalSuperannuationPayable,totalSuperannuationExpense,totalPAYG,totalSTSL)==false) then begin goto LSmartPayrollIn; end;
+  end;
+  BlockLoad(SmartpayrollBl);
+  RecordNew(TRr);
+  TRr.TransDate = CurrentDate;
+  TRr.Comment = "Payroll " & DateToDateStr(CurrentDate);
+
+  if (HasLocalization("NZL")) then begin
+    AddRowToTrans(TRr,blankval,totalGrossPay,SmartpayrollBl.SalaryExpence);
+    AddRowToTrans(TRr,totalNetEarnings,blankval,SmartpayrollBl.BasicPay);
+    AddRowToTrans(TRr,totalPAYE,blankval,SmartpayrollBl.PAYE);
+    AddRowToTrans(TRr,totalStudentLoan,blankval,SmartpayrollBl.StudentLoan);
+    AddRowToTrans(TRr,totalKiwiEmployee,blankval,SmartpayrollBl.KiwiEmployee);
+    AddRowToTrans(TRr,blankval,totalKiwiEmployerExpense,SmartpayrollBl.KiwiEmployerExpense);
+    AddRowToTrans(TRr,totalKiwiEmployer,blankval,SmartpayrollBl.KiwiEmployer);
+  end;
+  if (HasLocalization("AUS")) then begin
+    AddRowToTrans(TRr,blankval,totalGrossPay,SmartpayrollBl.SalaryExpence);
+    AddRowToTrans(TRr,totalNetEarnings,blankval,SmartpayrollBl.BasicPay);
+    AddRowToTrans(TRr,totalPAYG,blankval,SmartpayrollBl.PAYE);
+    AddRowToTrans(TRr,blankval,totalSuperannuationExpense,SmartpayrollBl.KiwiEmployerExpense);
+    AddRowToTrans(TRr,totalSuperannuationPayable,blankval,SmartpayrollBl.KiwiEmployer);
+  end;
+  
+  TRr.Number = NextSerNr("TRVc",CurrentDate,-1,false,"");
+  if (TRr.Number!=-1) then begin
+    TRSumup(TRr,t);
+    TRr.IntYc = GetIntYc(TRr.TransDate);
+    RecordStore(TRr,true);   
+  end;
+LSmartPayrollIn:;  
+  return;
+end;

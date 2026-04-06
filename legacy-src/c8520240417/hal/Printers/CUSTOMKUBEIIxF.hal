@@ -1,0 +1,1629 @@
+external function Boolean ReadFirstItem(string,var record INVc,Boolean,Boolean);
+external function Boolean GetPMRow(string,var row PMBlock);
+external procedure CalcSum(val,val,val,val,var val,Integer);
+external function val FormulaDiscountCalcSum(val,val,val,string);
+external function val AbsoluteVal(val);
+external procedure LogAreaToFile(string,area);
+external function val CalculateDiscountPercentage(val,val,val);
+external procedure ReverseString(string,var string);
+external procedure NewLineExport();
+external procedure M4PadString(string,Integer,string,Boolean,var string);
+external procedure ExtractObj(string,var Integer,var string);
+external procedure GetVATdouble(string,var val,var val,Integer);
+external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
+external function val ValFromString(string,string,string);
+external function string 255 NumToHex(string);
+forward function Integer CUSTOMKUBEIIxFWrite(var Integer,string,LongInt);
+
+//FS, Field Separator = 0x1C
+
+enum begin
+  CUSTOMKUBEIIxF_DELAY = 10,
+  CUSTOMKUBEIIxF_LONGDELAY = 30
+end;
+
+enum begin
+  CUSTOMKUBEIIxF_STX = 2,
+  CUSTOMKUBEIIxF_ETX = 3,
+  CUSTOMKUBEIIxF_ACK = 6,
+  CUSTOMKUBEIIxF_NAK = 15
+end;
+
+function string 255 CalculateLRC(string CtrlSeq)
+begin
+  string 255 res;
+  Integer i,resi,a;
+  
+  resi = 0;
+//LogText(0,"s.CalculateLRC CtrlSeq=" & CtrlSeq);  
+  for (i=0;i<len(CtrlSeq);i=i+1) begin
+    a = GetByteFromString(Mid(CtrlSeq,i,1),0);
+    resi = resi + a;
+  end;
+  resi = Mod(resi,100);  
+  res = resi;
+  res = Right(res,2);
+  M4PadString(res,2,"0",true,res);          
+  CalculateLRC = res;
+  return;
+end;
+
+function string 255 SequenceNr(var Integer seqnr)
+begin
+  string 255 res;
+  
+  seqnr = seqnr + 1;
+  if (seqnr>99) then begin
+    seqnr = 1;
+  end;
+  M4PadString(seqnr,2,"0",true,res);          
+  SequenceNr = res;
+  return;
+end;
+
+procedure ResetFiscal(var Integer seqnr)
+begin
+  Integer res,msglen,noErr;
+  string 255 CtrlSeq,msglenhex,cmd;
+
+/*
+  CtrlSeq = CtrlSeq & SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "1";
+  CtrlSeq = CtrlSeq & "1";
+  CtrlSeq = CtrlSeq & "007";
+  CtrlSeq = CtrlSeq & "0001";
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_DELAY);
+*/
+/*
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "3";
+  CtrlSeq = CtrlSeq & "013";
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+*/
+LogText(0,"ResetFiscal CtrlSeq=" & CtrlSeq);
+
+
+  return;
+end;
+
+function Integer WaitForCUSTOMKUBEIIxFReply(var Integer seqnr,string command,LongInt waittickscoef,var string response)
+begin
+  Integer res;
+  Integer noErr;
+  LongInt waitticks;
+  LongInt currenttick, starttick;
+  Integer l,responselen;
+  Boolean waitf;
+  string 255 c,fpresp,errorcode;
+  Integer i;
+  LongInt pos;
+  string 255 tstr,tstr2;
+
+  res = noErr;
+  response = "";
+  waitticks = waittickscoef*1000;
+  starttick = GetCurTick;
+
+  waitf = true;
+  while (waitf) begin
+    currenttick = GetCurTick;
+
+    c = ReadComPort(0,1);
+
+//LogText(0," 1.read c " & c & "  asc(c) " & asc(c) );
+
+    switch (asc(c)) begin
+      case CUSTOMKUBEIIxF_ACK:
+        waitf = false;
+      case CUSTOMKUBEIIxF_NAK:
+        OutComPort(0,chr(CUSTOMKUBEIIxF_ACK));
+        res = 1000;
+LogText(0," NACK " );
+        goto LWaitForCUSTOMKUBEIIxFReply;
+    end;
+    if ((currenttick-starttick)>waitticks) then begin
+      waitf = false;
+    end;
+  end;
+
+  starttick = GetCurTick;
+  waitf = true;
+  while (waitf) begin
+    currenttick = GetCurTick;
+
+    c = ReadComPort(0,1);
+//LogText(0," r.WaitForCUSTOMKUBEIIxFReply c=" & c & " asc(c) " & asc(c));
+
+    response = response & c;
+
+    if (asc(c)==CUSTOMKUBEIIxF_ETX) then begin
+      waitf = false;
+    end;    
+    if ((currenttick-starttick)>waitticks) then begin
+      waitf = false;
+    end;
+  end;
+
+  OutComPort(0,chr(CUSTOMKUBEIIxF_ACK));
+
+
+LogText(0," 3.read " & response & " command " & command & " Mid(response,3,5 " & Mid(response,3,5));
+
+  if (command==Mid(response,3,5)) then begin
+  end else begin
+     
+    if (Mid(response,4,3)=="ERR") then begin
+      errorcode = Mid(response,7,2);
+    end;
+
+//LogText(0," error.WaitForCUSTOMKUBEIIxFReply " & response & " command " & command & " fpresp " & fpresp & " errorcode " & errorcode & " Mid(response,4,3) " & Mid(response,4,3));
+
+    res = StringToInt(errorcode);
+
+    if (res!=0) then begin
+      LogText(0,"WaitForCUSTOMKUBEIIxFReply errorcode " & errorcode & " res " & res);
+      if (command!="11007") then begin//reset
+        ResetFiscal(seqnr);
+      end;
+    end;
+    
+  end else begin
+    res = 10000;
+  end;
+
+LWaitForCUSTOMKUBEIIxFReply:;
+  WaitForCUSTOMKUBEIIxFReply = res;
+  return;
+end;
+
+function Integer CUSTOMKUBEIIxFWrite(var Integer seqnr,string CtrlSeq,LongInt delay) 
+begin
+  Integer res;
+  string 255 response;
+  
+
+LogText(0,"write CtrlSeq=" & chr(CUSTOMKUBEIIxF_STX) & CtrlSeq & chr(CUSTOMKUBEIIxF_ETX));
+
+  res = OutComPort(0,chr(CUSTOMKUBEIIxF_STX) & CtrlSeq & chr(CUSTOMKUBEIIxF_ETX));
+  if (res!=0) then begin
+    res = WaitForCUSTOMKUBEIIxFReply(seqnr,Mid(CtrlSeq,2,5),delay,response);
+  end else begin
+    res = 1;
+  end;
+//LogText(0,"CUSTOMKUBEIIxFWrite CtrlSeq=" & CtrlSeq);
+//LogText(0,"CUSTOMKUBEIIxFWrite response=" & response);
+  CUSTOMKUBEIIxFWrite = res;
+  return;
+end;
+
+function Integer CUSTOMKUBEIIxFWriteAndGetResponse(var Integer seqnr,string CtrlSeq,LongInt delay,var string response) 
+begin
+  Integer res;
+
+  response = "";
+
+LogText(0,"writer CtrlSeq=" & chr(CUSTOMKUBEIIxF_STX) & CtrlSeq & chr(CUSTOMKUBEIIxF_ETX));
+
+  res = OutComPort(0,chr(CUSTOMKUBEIIxF_STX) & CtrlSeq & chr(CUSTOMKUBEIIxF_ETX));
+
+  if (res!=0) then begin
+    res = WaitForCUSTOMKUBEIIxFReply(seqnr,Mid(CtrlSeq,2,5),delay,response);
+  end else begin
+    res = 1;
+  end;
+//LogText(0," CUSTOMKUBEIIxFWriteAndGetResponse CtrlSeq=" & CtrlSeq);  
+//LogText(0," read response=" & response);  
+  CUSTOMKUBEIIxFWriteAndGetResponse = res;
+  return;
+end;
+  
+function Integer CUSTOMKUBEIIxFOpen(record LSerialPortDeviceVc LSPDr)
+begin
+  Integer res;
+  
+  if (OpenComPort(0,LSPDr.Port,LSPDr.BaudRate,LSPDr.Parity,LSPDr.ByteSize,LSPDr.StopBits,LSPDr.FlowControl)) then begin
+    SetComPortCodepage("UTF-8");
+  end else begin
+    res = 1;
+  end;
+  CUSTOMKUBEIIxFOpen = res;
+  return;
+end;
+
+procedure CUSTOMKUBEIIxFClose()
+begin
+  Integer res;
+
+  res = CloseComPort(0);
+  return;
+end;
+
+function Integer DisplayText(var Integer seqnr,string text)
+begin
+  Integer res;
+  string 255 CtrlSeq,tstr;
+  
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "7";
+  CtrlSeq = CtrlSeq & "007";
+  M4PadString(text,40," ",false,tstr);          
+  CtrlSeq = CtrlSeq & tstr;
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);  
+
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_DELAY);
+  DisplayText = res;
+  return;
+end;
+
+function Integer CheckCUSTOMKUBEIIxFClock(var Integer seqnr)
+begin
+  INteger res,msglen,noErr;
+  string 255 CtrlSeq,response,fpresp,tstr; 
+  Date td; 
+  Integer pY,pM,pD;
+  LongInt pos;
+  
+
+  td = CurrentDate;
+
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "1";//?? 1
+  CtrlSeq = CtrlSeq & "001";
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);  
+
+  res = CUSTOMKUBEIIxFWriteAndGetResponse(seqnr,CtrlSeq,CUSTOMKUBEIIxF_DELAY,response);
+        
+  if (res!=noErr) then begin
+    if (res>=12400) then begin
+      MessageBox(0,USetStr(res));
+    end else begin
+      MessageBox(0,"error " & USetStr(res));
+    end;
+    goto LCheckCUSTOMKUBEIIxFClock;
+  end;
+
+  fpresp = Mid(response,8,6);
+
+  pD = StringToInt(Left(fpresp,2));
+  pM = StringToInt(Mid(fpresp,2,2));
+  pY = 2000+StringToInt(Mid(fpresp,4,2));
+    
+  if ((td.year==pY) and (td.month==pM) and (td.day==pD)) then begin
+     res = noErr;
+  end else begin
+     MessageBox(0,USetStr(12402));
+     MessageBox(0,USetStr(12403) & pY & pM & pD);
+     MessageBox(0,USetStr(12404) & GetYear(td) & GetMonth(td) & GetDay(td));
+     res = 12402;
+  end;
+LCheckCUSTOMKUBEIIxFClock:;
+  CheckCUSTOMKUBEIIxFClock = res;
+  return;
+end;
+
+function Integer BeginFiscalInvoice(var Integer seqnr,LongInt sernr)
+begin
+  INteger res,noErr;
+  string 255 CtrlSeq,tstr;
+
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "7";
+  CtrlSeq = CtrlSeq & "102";
+  CtrlSeq = CtrlSeq & "3";
+  M4PadString(sernr,5,"0",true,tstr);
+  CtrlSeq = CtrlSeq & tstr;
+  M4PadString("",10,"0",true,tstr);
+  CtrlSeq = CtrlSeq & tstr;
+  M4PadString(sernr,16,"0",true,tstr);
+  CtrlSeq = CtrlSeq & tstr;
+  
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_DELAY);
+LBeginFiscalInvoice:;  
+  BeginFiscalInvoice = res;
+  return;
+end;
+
+function Integer BeginFiscalCreditNote(var Integer seqnr,string cnr)
+begin
+  INteger res,noErr;
+  string 255 CtrlSeq,tstr;
+
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "7";
+  CtrlSeq = CtrlSeq & "102";
+  CtrlSeq = CtrlSeq & "6";
+  M4PadString("0",5,"0",true,tstr);
+  CtrlSeq = CtrlSeq & tstr;
+  M4PadString("0",10,"0",true,tstr);
+  CtrlSeq = CtrlSeq & tstr;
+  M4PadString(cnr,16,"0",true,tstr);          
+  CtrlSeq = CtrlSeq & tstr;
+  
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_DELAY);
+  BeginFiscalCreditNote = res;
+  return;
+end;
+
+procedure CalculatePaymentModeSums(record IVVc IVr,vector val vpaymodesums)
+begin
+  row IVVc IVrw;
+  Integer i,rwcnt;
+  val t;
+  
+  if (IVr.InvType==kInvoiceTypeCredit) then begin
+    vpaymodesums[kInvoiceRowTypeCashPayment] = IVr.BaseSum4;
+  end else begin
+    vpaymodesums[kInvoiceRowTypeCreditCardPayment] = 0.00;
+    vpaymodesums[kInvoiceRowTypeCashPayment] = 0.00;
+    rwcnt = MatRowCnt(IVr);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(IVr,i,IVrw);
+      switch (IVrw.stp) begin
+  //      case kInvoiceRowTypeGiftVoucherPayment:
+        case kInvoiceRowTypeCreditCardPayment:
+          vpaymodesums[kInvoiceRowTypeCreditCardPayment] = vpaymodesums[kInvoiceRowTypeCreditCardPayment] + MulRateToBase1(IVrw.CurncyCode,IVrw.Sum,IVrw.FrRate,IVrw.ToRateB1,IVrw.ToRateB2,IVrw.BaseRate1,IVrw.BaseRate2,DefaultCurRoundOff);
+  //      case kInvoiceRowTypeLoyaltyPointsPayment:
+        case kInvoiceRowTypeCashPayment:
+          vpaymodesums[kInvoiceRowTypeCashPayment] = vpaymodesums[kInvoiceRowTypeCashPayment] + MulRateToBase1(IVrw.CurncyCode,IVrw.Sum,IVrw.FrRate,IVrw.ToRateB1,IVrw.ToRateB2,IVrw.BaseRate1,IVrw.BaseRate2,DefaultCurRoundOff);
+  //      case kInvoiceRowTypeChequePayment:
+      end;
+    end;
+    switch (IVr.InvType) begin
+      case kInvoiceTypeCreditSpecialSales: goto LkInvoiceTypeCredit;
+      case kInvoiceTypeCredit:
+  LkInvoiceTypeCredit:;
+        t = IVr.BaseSum4 - vpaymodesums[kInvoiceRowTypeCashPayment] - vpaymodesums[kInvoiceRowTypeCreditCardPayment];
+        if (t>0) then begin
+          vpaymodesums[kInvoiceRowTypeCashPayment] = vpaymodesums[kInvoiceRowTypeCashPayment] + t;  
+        end;
+      otherwise
+        t = IVr.BaseSum4 - vpaymodesums[kInvoiceRowTypeCashPayment] - vpaymodesums[kInvoiceRowTypeCreditCardPayment];
+        if (t>0) then begin
+          vpaymodesums[kInvoiceRowTypeCashPayment] = vpaymodesums[kInvoiceRowTypeCashPayment] + t;  
+        end;
+    end;
+  end;
+  return;
+end;
+
+function Integer EndFiscalReceipt(var Integer seqnr,record IVVc IVr)
+begin
+  INteger res,noErr;
+  string 255 CtrlSeq,tstr,tstr2;
+  vector val vpaymodesums;
+
+  CalculatePaymentModeSums(IVr,vpaymodesums);
+
+  if (vpaymodesums[kInvoiceRowTypeCreditCardPayment]!=0) then begin
+    CtrlSeq = SequenceNr(seqnr);
+    CtrlSeq = CtrlSeq & "0";
+    CtrlSeq = CtrlSeq & "3";
+    CtrlSeq = CtrlSeq & "004";
+    tstr = USetStr(20801);
+    M4PadString(len(tstr),2,"0",true,tstr2);          
+    CtrlSeq = CtrlSeq & tstr2;
+    CtrlSeq = CtrlSeq & tstr;
+    tstr = ValToString(AbsoluteVal(vpaymodesums[kInvoiceRowTypeCreditCardPayment]*100),M40Val,"","",1);
+    M4PadString(tstr,9,"0",true,tstr);          
+    CtrlSeq = CtrlSeq & tstr;
+    CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+    res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+    if (res!=noErr) then begin
+      res = 19389;
+      goto LEndFiscalReceipt;
+    end;
+  end;
+  if (vpaymodesums[kInvoiceRowTypeCashPayment]!=0) then begin
+    CtrlSeq = SequenceNr(seqnr);
+    CtrlSeq = CtrlSeq & "0";
+    CtrlSeq = CtrlSeq & "3";
+    CtrlSeq = CtrlSeq & "004";
+    tstr = USetStr(20800);
+    M4PadString(len(tstr),2,"0",true,tstr2);          
+    CtrlSeq = CtrlSeq & tstr2;
+    CtrlSeq = CtrlSeq & tstr;
+    tstr = ValToString(AbsoluteVal(vpaymodesums[kInvoiceRowTypeCashPayment]*100),M40Val,"","",1);
+    M4PadString(tstr,9,"0",true,tstr);          
+    CtrlSeq = CtrlSeq & tstr;
+    CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+    res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+    if (res!=noErr) then begin
+      res = 19389;
+      goto LEndFiscalReceipt;
+    end;
+  end;
+
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "3";
+  CtrlSeq = CtrlSeq & "011";
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+  if (res!=noErr) then begin
+    res = 19389;
+    goto LEndFiscalReceipt;
+  end;
+
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "3";
+  CtrlSeq = CtrlSeq & "013";
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+  
+LEndFiscalReceipt:;
+  EndFiscalReceipt = res;
+  return;
+end;
+
+function Integer EndFiscalInvoice(var Integer seqnr,record IVVc IVr)
+begin
+  LongInt cnr;
+  INteger res,noErr;
+  string 255 CtrlSeq,tstr,tstr2;
+  vector val vpaymodesums;
+
+
+  CalculatePaymentModeSums(IVr,vpaymodesums);
+    
+  if (vpaymodesums[kInvoiceRowTypeCreditCardPayment]!=0) then begin
+    CtrlSeq = SequenceNr(seqnr);
+    CtrlSeq = CtrlSeq & "0";
+    CtrlSeq = CtrlSeq & "3";
+    CtrlSeq = CtrlSeq & "004";
+    tstr = USetStr(20801);
+    M4PadString(len(tstr),2,"0",true,tstr2);          
+    CtrlSeq = CtrlSeq & tstr2;
+    CtrlSeq = CtrlSeq & tstr;
+    tstr = ValToString(AbsoluteVal(vpaymodesums[kInvoiceRowTypeCreditCardPayment]*100),M40Val,"","",1);
+    M4PadString(tstr,9,"0",true,tstr);          
+    CtrlSeq = CtrlSeq & tstr;
+    CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+    res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+    if (res!=noErr) then begin
+      res = 19389;
+      goto LEndFiscalInvoice;
+    end;
+  end;
+
+  if (vpaymodesums[kInvoiceRowTypeCashPayment]!=0) then begin
+    CtrlSeq = SequenceNr(seqnr);
+    CtrlSeq = CtrlSeq & "0";
+    CtrlSeq = CtrlSeq & "3";
+    CtrlSeq = CtrlSeq & "004";
+    tstr = USetStr(20800);
+    M4PadString(len(tstr),2,"0",true,tstr2);          
+    CtrlSeq = CtrlSeq & tstr2;
+    CtrlSeq = CtrlSeq & tstr;
+    tstr = ValToString(AbsoluteVal(vpaymodesums[kInvoiceRowTypeCashPayment]*100),M40Val,"","",1);
+    M4PadString(tstr,9,"0",true,tstr);          
+    CtrlSeq = CtrlSeq & tstr;
+    CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+    res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+    if (res!=noErr) then begin
+      res = 19389;
+      goto LEndFiscalInvoice;
+    end;
+  end;
+
+  if (IVr.InvType==kInvoiceTypeCredit) then begin
+    CtrlSeq = SequenceNr(seqnr);
+    CtrlSeq = CtrlSeq & "0";
+    CtrlSeq = CtrlSeq & "3";
+    CtrlSeq = CtrlSeq & "010";
+    CtrlSeq = CtrlSeq & "P";
+    CtrlSeq = CtrlSeq & "12";
+    M4PadString(IVr.SerNr,12,"0",true,tstr);          
+    CtrlSeq = CtrlSeq & tstr;
+    CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+    res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+    if (res!=noErr) then begin
+      res = 19389;
+      goto LEndFiscalInvoice;
+    end;
+  end else begin
+
+    CtrlSeq = SequenceNr(seqnr);
+    CtrlSeq = CtrlSeq & "0";
+    CtrlSeq = CtrlSeq & "3";
+    CtrlSeq = CtrlSeq & "010";
+    CtrlSeq = CtrlSeq & "C";
+    tstr = IVr.Addr0;
+    M4PadString(len(tstr),2,"0",true,tstr2);          
+    CtrlSeq = CtrlSeq & tstr2;
+    CtrlSeq = CtrlSeq & tstr;
+    CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+    res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+    if (res!=noErr) then begin
+      res = 19389;
+      goto LEndFiscalInvoice;
+    end;
+    if (nonblank(IVr.Addr1)) then begin
+      CtrlSeq = SequenceNr(seqnr);
+      CtrlSeq = CtrlSeq & "0";
+      CtrlSeq = CtrlSeq & "3";
+      CtrlSeq = CtrlSeq & "010";
+      CtrlSeq = CtrlSeq & "C";
+      tstr = IVr.Addr1;
+      M4PadString(len(tstr),2,"0",true,tstr2);          
+      CtrlSeq = CtrlSeq & tstr2;
+      CtrlSeq = CtrlSeq & tstr;
+      CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+      res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+      if (res!=noErr) then begin
+        res = 19389;
+        goto LEndFiscalInvoice;
+      end;
+    end;
+    if (nonblank(IVr.Addr2)) then begin
+      CtrlSeq = SequenceNr(seqnr);
+      CtrlSeq = CtrlSeq & "0";
+      CtrlSeq = CtrlSeq & "3";
+      CtrlSeq = CtrlSeq & "010";
+      CtrlSeq = CtrlSeq & "C";
+      tstr = IVr.Addr2;
+      M4PadString(len(tstr),2,"0",true,tstr2);          
+      CtrlSeq = CtrlSeq & tstr2;
+      CtrlSeq = CtrlSeq & tstr;
+      CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+      res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+      if (res!=noErr) then begin
+        res = 19389;
+        goto LEndFiscalInvoice;
+      end;
+    end;
+    if (nonblank(IVr.Addr3)) then begin
+      CtrlSeq = SequenceNr(seqnr);
+      CtrlSeq = CtrlSeq & "0";
+      CtrlSeq = CtrlSeq & "3";
+      CtrlSeq = CtrlSeq & "010";
+      CtrlSeq = CtrlSeq & "C";
+      tstr = IVr.Addr3;
+      M4PadString(len(tstr),2,"0",true,tstr2);          
+      CtrlSeq = CtrlSeq & tstr2;
+      CtrlSeq = CtrlSeq & tstr;
+      CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+      res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+      if (res!=noErr) then begin
+        res = 19389;
+        goto LEndFiscalInvoice;
+      end;
+    end;
+    if (nonblank(IVr.VATNr)) then begin
+      CtrlSeq = SequenceNr(seqnr);
+      CtrlSeq = CtrlSeq & "0";
+      CtrlSeq = CtrlSeq & "3";
+      CtrlSeq = CtrlSeq & "010";
+      CtrlSeq = CtrlSeq & "C";
+      tstr = USetStr(9362) & ": " & IVr.VATNr;
+      M4PadString(len(tstr),2,"0",true,tstr2);          
+      CtrlSeq = CtrlSeq & tstr2;
+      CtrlSeq = CtrlSeq & tstr;
+      CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+      res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+      if (res!=noErr) then begin
+        res = 19389;
+        goto LEndFiscalInvoice;
+      end;
+    end;
+
+/*
+    CtrlSeq = SequenceNr(seqnr);
+    CtrlSeq = CtrlSeq & "0";
+    CtrlSeq = CtrlSeq & "3";
+    CtrlSeq = CtrlSeq & "010";
+    CtrlSeq = CtrlSeq & "F";
+    tstr = IVr.VATNr;
+    M4PadString(len(tstr),2,"0",true,tstr2);          
+    CtrlSeq = CtrlSeq & tstr2;
+    CtrlSeq = CtrlSeq & tstr;
+    CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+    res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+    if (res!=noErr) then begin
+      res = 19389;
+      goto LEndFiscalInvoice;
+    end;
+ */   
+  end;
+
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "3";
+  CtrlSeq = CtrlSeq & "011";
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+  
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "3";
+  CtrlSeq = CtrlSeq & "013";
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+
+LEndFiscalInvoice:;
+  EndFiscalInvoice = res;
+  return;
+end;
+
+function string 255 GetCUSTOMKUBEIIxFVATCode(Integer InclVAT,string vatcode,vector val vatrates)
+begin
+  string 255 res;
+  val vatprc,tax1;
+
+  GetVATdouble(vatcode,vatprc,tax1,0);
+  if (vatprc==vatrates[0]) then begin 
+    res = "0"; 
+    goto LGetCUSTOMKUBEIIxFVATCode;
+  end;
+  if (vatprc==vatrates[1]) then begin 
+    res = "1"; 
+    goto LGetCUSTOMKUBEIIxFVATCode;
+  end;
+  if (vatprc==vatrates[2]) then begin 
+    res = "2"; 
+    goto LGetCUSTOMKUBEIIxFVATCode;
+  end;
+  if (vatprc==vatrates[3]) then begin 
+    res = "3"; 
+    goto LGetCUSTOMKUBEIIxFVATCode;
+  end;
+  if (vatprc==vatrates[4]) then begin 
+    res = "4"; 
+    goto LGetCUSTOMKUBEIIxFVATCode;
+  end;
+  if (vatprc==vatrates[5]) then begin 
+    res = "5"; 
+    goto LGetCUSTOMKUBEIIxFVATCode;
+  end;
+LGetCUSTOMKUBEIIxFVATCode:;
+  GetCUSTOMKUBEIIxFVATCode = res;
+  return;
+end;
+
+function Integer PrintReturnLine(var Integer seqnr,string OrgIVNr)
+begin
+  INteger res,noErr;
+  string 255 CtrlSeq,tstr,tstr2;
+  
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "3";
+  CtrlSeq = CtrlSeq & "002";
+  CtrlSeq = CtrlSeq & "1";
+  tstr = USetStr(41013) & ": " & OrgIVNr;
+  M4PadString(tstr,32," ",false,tstr);
+  M4PadString(len(tstr),2,"0",true,tstr2);          
+  CtrlSeq = CtrlSeq & tstr2;
+  CtrlSeq = CtrlSeq & tstr;
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_DELAY);    
+  PrintReturnLine = res;
+  return;
+end;
+
+function Integer DiscountAdditionForItem(var Integer seqnr,record IVVc IVr,row IVVc IVrw)
+begin
+  Integer res;
+  string 255 CtrlSeq,tstr,tstr2;
+  string 255 unit;
+  val v;
+  
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "3";
+  CtrlSeq = CtrlSeq & "001";
+  CtrlSeq = CtrlSeq & "3";  
+  tstr = ValToString(IVrw.vRebate,M41Val,"",".",0);
+  tstr = USetStr(1870) & " " & tstr & "%";
+  tstr = Left(tstr,22);
+  M4PadString(len(tstr),2,"0",true,tstr2);          
+  CtrlSeq = CtrlSeq & tstr2;
+  CtrlSeq = CtrlSeq & tstr;
+  v = (IVrw.Quant*IVrw.Price-IVrw.Sum);
+  tstr = ValToString(v*100,M40Val,"","",0);
+  M4PadString(tstr,9,"0",true,tstr);          
+  CtrlSeq = CtrlSeq & tstr;
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_DELAY);  
+  DiscountAdditionForItem = res;
+  return;
+end;
+
+function Integer PrintCommentLine(var Integer seqnr,record IVVc IVr,row IVVc IVrw)
+begin
+  INteger res,noErr;
+  string 255 CtrlSeq,tstr,tstr2 ;
+  
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "3";
+  CtrlSeq = CtrlSeq & "002";
+  CtrlSeq = CtrlSeq & "1";
+  tstr = Left(IVrw.Spec,32);
+  M4PadString(len(tstr),2,"0",true,tstr2);          
+  CtrlSeq = CtrlSeq & tstr2;
+  CtrlSeq = CtrlSeq & tstr;
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_DELAY);  
+  PrintCommentLine = res;
+  return;
+end;
+
+function Integer PrintItemRow(var Integer seqnr,record IVVc IVr,row IVVc IVrw)
+begin
+  INteger res,noErr;
+  string 255 CtrlSeq,tstr,tstr2;
+  string 255 unit;
+  Boolean negativef;
+  
+  if (IVrw.Quant<0) then begin
+    negativef = true;
+    IVrw.Quant = -IVrw.Quant;
+  end;
+  if (IVrw.Price<0) then begin
+    IVrw.Price = -IVrw.Price;
+  end;
+
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "3";
+  CtrlSeq = CtrlSeq & "001";
+  if (negativef) then begin
+    CtrlSeq = CtrlSeq & "9";
+  end else begin
+    CtrlSeq = CtrlSeq & "1";
+  end;
+  tstr = Left(IVrw.Spec,22);
+  M4PadString(len(tstr),2,"0",true,tstr2);          
+  CtrlSeq = CtrlSeq & tstr2;
+  CtrlSeq = CtrlSeq & tstr;
+  tstr = ValToString(IVrw.Quant*IVrw.Price*100,M40Val,"","",0);
+  M4PadString(tstr,9,"0",true,tstr);          
+  CtrlSeq = CtrlSeq & tstr;
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_DELAY);  
+
+  if (res==noErr) then begin
+    if (nonblank(IVrw.SerialNr)) then begin
+      IVrw.Spec = UsetStr(1141) & IVrw.SerialNr;
+      res = PrintCommentLine(seqnr,IVr,IVrw);
+    end;
+  end;
+
+  if (res==noErr) then begin
+    if (IVrw.vRebate!=0) then begin
+      res = DiscountAdditionForItem(seqnr,IVr,IVrw);
+    end;
+  end;
+  PrintItemRow = res;
+  return;
+end;
+
+function Integer PrintItemRows(var Integer seqnr,record IVVc IVr)
+begin
+  INteger res,noErr;
+  row IVVc IVrw;
+  Integer i,rwcnt;
+
+  rwcnt = MatRowCnt(IVr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(IVr,i,IVrw);    
+    switch (IVrw.stp) begin
+      case kInvoiceRowTypeStructuredItemComponent:
+        goto LkInvoiceRowTypeNormal1;
+      case kInvoiceRowTypeNormal:
+LkInvoiceRowTypeNormal1:;
+        if (nonblank(IVrw.ArtCode)) then begin
+          res = PrintItemRow(seqnr,IVr,IVrw);
+          if (res!=noErr) then begin
+            goto LPrintItemRows;
+          end;
+        end else begin
+          res = PrintCommentLine(seqnr,IVr,IVrw);
+          if (res!=noErr) then begin
+            goto LPrintItemRows;
+          end;
+        end;
+      case kInvoiceRowTypeCredit:
+        res = PrintReturnLine(seqnr,IVrw.OrdRow);
+        if (res!=noErr) then begin
+          goto LPrintItemRows;
+        end;
+      case kInvoiceRowTypeVoid:
+    end;
+  end;
+LPrintItemRows:;  
+  PrintItemRows = res;
+  return;
+end;
+
+global
+updating procedure PrintCUSTOMKUBEIIxFReceipt_IVVc(var record IVVc aIVr,record LSerialPortDeviceVc LSPDr)
+begin
+  record IVVc IVr;
+  record IVVc oldIVr;
+  Integer noErr,res;
+  record LocalMachineBlock LMb;
+  record MachineCashVc MCr;
+  vector val vatrates;
+  Integer seqnr;
+  
+  noErr = 0;
+  res = CUSTOMKUBEIIxFOpen(LSPDr);
+  if (res==noErr) then begin
+    noErr = 0;
+    BlockLoad(LMb);
+    
+    res = CheckCUSTOMKUBEIIxFClock(seqnr);
+    if (res!=noErr) then begin
+      goto LPrintCUSTOMKUBEIIxFReceipt;
+    end;
+    if (blank(aIVr.VATNr)) then begin
+
+      res = PrintItemRows(seqnr,aIVr);      
+      if (res!=noErr) then begin
+        goto LPrintCUSTOMKUBEIIxFReceipt;
+      end;
+      res = EndFiscalReceipt(seqnr,aIVr);
+      if (res!=noErr) then begin
+        goto LPrintCUSTOMKUBEIIxFReceipt;
+      end;
+
+    end else begin
+
+      if (aIVr.InvType==kInvoiceTypeCredit) then begin
+        res = BeginFiscalCreditNote(seqnr,aIVr.SerNr);
+      end else begin
+        res = BeginFiscalInvoice(seqnr,aIVr.SerNr);
+      end;
+      if (res!=noErr) then begin 
+        goto LPrintCUSTOMKUBEIIxFReceipt; 
+      end;
+      res = PrintItemRows(seqnr,aIVr);      
+      if (res!=noErr) then begin
+        goto LPrintCUSTOMKUBEIIxFReceipt;
+      end;
+      res = EndFiscalInvoice(seqnr,aIVr);
+      if (res!=noErr) then begin
+        goto LPrintCUSTOMKUBEIIxFReceipt;
+      end;
+
+    end;
+   
+    IVr.SerNr = aIVr.SerNr;
+    if (ReadFirstMain(IVr,1,true)) then begin
+      if (IVr.Prntdf==0) then begin
+        RecordCopy(oldIVr,IVr);
+        IVr.Prntdf = 1;
+        RecordUpdate(oldIVr,IVr,false);
+        RecordCopy(aIVr,IVr);
+      end;
+    end;    
+LPrintCUSTOMKUBEIIxFReceipt:;
+    DisplayText(seqnr,USetStr(27522));
+    CUSTOMKUBEIIxFClose;
+    if (res!=0) then begin
+      MessageBox(res,"");
+    end;
+  end;
+  return;
+end;
+
+procedure IVCash_CalculatePaymentModeSums(record IVCashVc IVCr,vector val vpaymodesums)
+begin
+  row IVCashVc IVCrw;
+  Integer i,rwcnt;
+  val t;
+  row PMBlock PMrw;
+  
+  vpaymodesums[kInvoiceRowTypeCreditCardPayment] = 0.00;
+  vpaymodesums[kInvoiceRowTypeCashPayment] = 0.00;
+  if (IVCr.InvType==kPOSInvoiceTypeCredit) then begin
+    vpaymodesums[kInvoiceRowTypeCashPayment] = IVCr.BaseSum4;
+  end else begin
+    rwcnt = MatRowCnt(IVCr);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(IVCr,i,IVCrw);
+      switch (IVCrw.stp) begin
+        case kInvoiceRowTypeCreditCardPayment:
+          vpaymodesums[kInvoiceRowTypeCreditCardPayment] = vpaymodesums[kInvoiceRowTypeCreditCardPayment] + MulRateToBase1(IVCrw.CurncyCode,IVCrw.Sum,IVCrw.FrRate,IVCrw.ToRateB1,IVCrw.ToRateB2,IVCrw.BaseRate1,IVCrw.BaseRate2,DefaultCurRoundOff);
+        case kInvoiceRowTypeCashPayment:
+          vpaymodesums[kInvoiceRowTypeCashPayment] = vpaymodesums[kInvoiceRowTypeCashPayment] + MulRateToBase1(IVCrw.CurncyCode,IVCrw.Sum,IVCrw.FrRate,IVCrw.ToRateB1,IVCrw.ToRateB2,IVCrw.BaseRate1,IVCrw.BaseRate2,DefaultCurRoundOff);
+      end;
+    end;
+
+    vpaymodesums[kInvoiceRowTypeCashPayment] = vpaymodesums[kInvoiceRowTypeCashPayment] + IVCr.CashValue;  
+
+    if (IVCr.RecValue!=0) then begin
+      GetPMRow(IVCr.PayDeal,PMrw);
+      switch (PMrw.CheckType) begin
+        case kPayModeTypeCreditCard:
+          vpaymodesums[kInvoiceRowTypeCreditCardPayment] = vpaymodesums[kInvoiceRowTypeCreditCardPayment] + IVCr.RecValue;  
+        otherwise
+          vpaymodesums[kInvoiceRowTypeCashPayment] = vpaymodesums[kInvoiceRowTypeCashPayment] + IVCr.RecValue;  
+      end;
+    end;
+    if (IVCr.RecValue2!=0) then begin
+      GetPMRow(IVCr.PayDeal2,PMrw);
+      switch (PMrw.CheckType) begin
+        case kPayModeTypeCreditCard:
+          vpaymodesums[kInvoiceRowTypeCreditCardPayment] = vpaymodesums[kInvoiceRowTypeCreditCardPayment] + IVCr.RecValue2;  
+        otherwise
+          vpaymodesums[kInvoiceRowTypeCashPayment] = vpaymodesums[kInvoiceRowTypeCashPayment] + IVCr.RecValue2;  
+      end;
+    end;
+  end;
+  return;
+end;
+
+function Integer IVCash_EndFiscalReceipt(var Integer seqnr,record IVCashVc IVCr,Boolean creditnotef)
+begin
+  INteger res,noErr;
+  string 255 CtrlSeq,tstr,tstr2;
+  vector val vpaymodesums;
+
+
+  IVCash_CalculatePaymentModeSums(IVCr,vpaymodesums);
+    
+  if (vpaymodesums[kInvoiceRowTypeCreditCardPayment]!=0) then begin
+    CtrlSeq = SequenceNr(seqnr);
+    CtrlSeq = CtrlSeq & "0";
+    CtrlSeq = CtrlSeq & "3";
+    CtrlSeq = CtrlSeq & "004";
+    tstr = USetStr(20801);
+    M4PadString(len(tstr),2,"0",true,tstr2);          
+    CtrlSeq = CtrlSeq & tstr2;
+    CtrlSeq = CtrlSeq & tstr;
+    tstr = ValToString(AbsoluteVal(vpaymodesums[kInvoiceRowTypeCreditCardPayment]*100),M40Val,"","",1);
+    M4PadString(tstr,9,"0",true,tstr);          
+    CtrlSeq = CtrlSeq & tstr;
+    CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+    res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+    if (res!=noErr) then begin
+      res = 19389;
+      goto LIVCash_EndFiscalReceipt;
+    end;
+  end;
+
+  if (vpaymodesums[kInvoiceRowTypeCashPayment]!=0) then begin
+    CtrlSeq = SequenceNr(seqnr);
+    CtrlSeq = CtrlSeq & "0";
+    CtrlSeq = CtrlSeq & "3";
+    CtrlSeq = CtrlSeq & "004";
+    tstr = USetStr(20800);
+    M4PadString(len(tstr),2,"0",true,tstr2);          
+    CtrlSeq = CtrlSeq & tstr2;
+    CtrlSeq = CtrlSeq & tstr;
+    tstr = ValToString(AbsoluteVal(vpaymodesums[kInvoiceRowTypeCashPayment]*100),M40Val,"","",1);
+    M4PadString(tstr,9,"0",true,tstr);          
+    CtrlSeq = CtrlSeq & tstr;
+    CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+    res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+    if (res!=noErr) then begin
+      res = 19389;
+      goto LIVCash_EndFiscalReceipt;
+    end;
+  end;
+
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "3";
+  CtrlSeq = CtrlSeq & "011";
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+  if (res!=noErr) then begin
+    res = 19389;
+    goto LIVCash_EndFiscalReceipt;
+  end;
+
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "3";
+  CtrlSeq = CtrlSeq & "013";
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+
+LIVCash_EndFiscalReceipt:;
+  IVCash_EndFiscalReceipt = res;
+  return;
+end;
+
+function LongInt FindCreditdInvoiceNr(record IVCashVc IVCr)
+begin
+  LongInt res;
+  row IVCashVc IVCrw;
+  Integer i,rwcnt;
+  
+  rwcnt = MatRowCnt(IVCr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(IVCr,i,IVCrw);
+    switch (IVCrw.stp) begin
+      case kInvoiceRowTypeReturnIVNr:
+        res = IVCrw.OrgIVNr;
+        goto LFindCreditdInvoiceNr;
+    end;
+  end;
+LFindCreditdInvoiceNr:;  
+  FindCreditdInvoiceNr = res;
+  return;
+end;
+
+function Integer IVCash_EndFiscalInvoice(var Integer seqnr,record IVCashVc IVCr,Boolean creditnotef)
+begin
+  LongInt cnr;
+  INteger res,noErr;
+  string 255 CtrlSeq,tstr,tstr2;
+  vector val vpaymodesums;
+
+
+  IVCash_CalculatePaymentModeSums(IVCr,vpaymodesums);
+    
+  if (vpaymodesums[kInvoiceRowTypeCreditCardPayment]!=0) then begin
+    CtrlSeq = SequenceNr(seqnr);
+    CtrlSeq = CtrlSeq & "0";
+    CtrlSeq = CtrlSeq & "3";
+    CtrlSeq = CtrlSeq & "004";
+    tstr = USetStr(20801);
+    M4PadString(len(tstr),2,"0",true,tstr2);          
+    CtrlSeq = CtrlSeq & tstr2;
+    CtrlSeq = CtrlSeq & tstr;
+    tstr = ValToString(AbsoluteVal(vpaymodesums[kInvoiceRowTypeCreditCardPayment]*100),M40Val,"","",1);
+    M4PadString(tstr,9,"0",true,tstr);          
+    CtrlSeq = CtrlSeq & tstr;
+    CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+    res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+    if (res!=noErr) then begin
+      res = 19389;
+      goto LIVCash_EndFiscalInvoice;
+    end;
+  end;
+
+  if (vpaymodesums[kInvoiceRowTypeCashPayment]!=0) then begin
+    CtrlSeq = SequenceNr(seqnr);
+    CtrlSeq = CtrlSeq & "0";
+    CtrlSeq = CtrlSeq & "3";
+    CtrlSeq = CtrlSeq & "004";
+    tstr = USetStr(20800);
+    M4PadString(len(tstr),2,"0",true,tstr2);          
+    CtrlSeq = CtrlSeq & tstr2;
+    CtrlSeq = CtrlSeq & tstr;
+    tstr = ValToString(AbsoluteVal(vpaymodesums[kInvoiceRowTypeCashPayment]*100),M40Val,"","",1);
+    M4PadString(tstr,9,"0",true,tstr);          
+    CtrlSeq = CtrlSeq & tstr;
+    CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+    res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+    if (res!=noErr) then begin
+      res = 19389;
+      goto LIVCash_EndFiscalInvoice;
+    end;
+  end;
+
+  if (creditnotef) then begin
+    CtrlSeq = SequenceNr(seqnr);
+    CtrlSeq = CtrlSeq & "0";
+    CtrlSeq = CtrlSeq & "3";
+    CtrlSeq = CtrlSeq & "010";
+    CtrlSeq = CtrlSeq & "P";
+    CtrlSeq = CtrlSeq & "12";
+    M4PadString(IVCr.SerNr,12,"0",true,tstr);          
+    CtrlSeq = CtrlSeq & tstr;
+    CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+    res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+    if (res!=noErr) then begin
+      res = 19389;
+      goto LIVCash_EndFiscalInvoice;
+    end;
+  end else begin
+
+    CtrlSeq = SequenceNr(seqnr);
+    CtrlSeq = CtrlSeq & "0";
+    CtrlSeq = CtrlSeq & "3";
+    CtrlSeq = CtrlSeq & "010";
+    CtrlSeq = CtrlSeq & "C";
+    tstr = IVCr.Addr0;
+    M4PadString(len(tstr),2,"0",true,tstr2);          
+    CtrlSeq = CtrlSeq & tstr2;
+    CtrlSeq = CtrlSeq & tstr;
+    CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+    res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+    if (res!=noErr) then begin
+      res = 19389;
+      goto LIVCash_EndFiscalInvoice;
+    end;
+    if (nonblank(IVCr.Addr1)) then begin
+      CtrlSeq = SequenceNr(seqnr);
+      CtrlSeq = CtrlSeq & "0";
+      CtrlSeq = CtrlSeq & "3";
+      CtrlSeq = CtrlSeq & "010";
+      CtrlSeq = CtrlSeq & "C";
+      tstr = IVCr.Addr1;
+      M4PadString(len(tstr),2,"0",true,tstr2);          
+      CtrlSeq = CtrlSeq & tstr2;
+      CtrlSeq = CtrlSeq & tstr;
+      CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+      res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+      if (res!=noErr) then begin
+        res = 19389;
+        goto LIVCash_EndFiscalInvoice;
+      end;
+    end;
+    if (nonblank(IVCr.Addr2)) then begin
+      CtrlSeq = SequenceNr(seqnr);
+      CtrlSeq = CtrlSeq & "0";
+      CtrlSeq = CtrlSeq & "3";
+      CtrlSeq = CtrlSeq & "010";
+      CtrlSeq = CtrlSeq & "C";
+      tstr = IVCr.Addr2;
+      M4PadString(len(tstr),2,"0",true,tstr2);          
+      CtrlSeq = CtrlSeq & tstr2;
+      CtrlSeq = CtrlSeq & tstr;
+      CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+      res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+      if (res!=noErr) then begin
+        res = 19389;
+        goto LIVCash_EndFiscalInvoice;
+      end;
+    end;
+    if (nonblank(IVCr.Addr3)) then begin
+      CtrlSeq = SequenceNr(seqnr);
+      CtrlSeq = CtrlSeq & "0";
+      CtrlSeq = CtrlSeq & "3";
+      CtrlSeq = CtrlSeq & "010";
+      CtrlSeq = CtrlSeq & "C";
+      tstr = IVCr.Addr3;
+      M4PadString(len(tstr),2,"0",true,tstr2);          
+      CtrlSeq = CtrlSeq & tstr2;
+      CtrlSeq = CtrlSeq & tstr;
+      CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+      res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+      if (res!=noErr) then begin
+        res = 19389;
+        goto LIVCash_EndFiscalInvoice;
+      end;
+    end;
+    if (nonblank(IVCr.VATNr)) then begin
+      CtrlSeq = SequenceNr(seqnr);
+      CtrlSeq = CtrlSeq & "0";
+      CtrlSeq = CtrlSeq & "3";
+      CtrlSeq = CtrlSeq & "010";
+      CtrlSeq = CtrlSeq & "C";
+      tstr = USetStr(9362) & ": " & IVCr.VATNr;
+      M4PadString(len(tstr),2,"0",true,tstr2);          
+      CtrlSeq = CtrlSeq & tstr2;
+      CtrlSeq = CtrlSeq & tstr;
+      CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+      res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+      if (res!=noErr) then begin
+        res = 19389;
+        goto LIVCash_EndFiscalInvoice;
+      end;
+    end;
+/*
+    CtrlSeq = SequenceNr(seqnr);
+    CtrlSeq = CtrlSeq & "0";
+    CtrlSeq = CtrlSeq & "3";
+    CtrlSeq = CtrlSeq & "010";
+    CtrlSeq = CtrlSeq & "F";
+    tstr = IVCr.VATNr;
+    M4PadString(len(tstr),2,"0",true,tstr2);          
+    CtrlSeq = CtrlSeq & tstr2;
+    CtrlSeq = CtrlSeq & tstr;
+    CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+    res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+    if (res!=noErr) then begin
+      res = 19389;
+      goto LIVCash_EndFiscalInvoice;
+    end;
+*/    
+  end;
+
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "3";
+  CtrlSeq = CtrlSeq & "011";
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+  
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "3";
+  CtrlSeq = CtrlSeq & "013";
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_LONGDELAY);
+
+LIVCash_EndFiscalInvoice:;
+  IVCash_EndFiscalInvoice = res;
+  return;
+end;
+
+function Integer IVCash_DiscountAdditionForItem(var Integer seqnr,record IVCashVc IVCr,row IVCashVc IVCrw)
+begin
+  INteger res,noErr;
+  string 255 CtrlSeq,tstr,tstr2;
+  string 255 unit;
+  val v,p;
+  
+  CalcSum(IVCrw.Quant,IVCrw.Price,IVCrw.PriceFactor,0,v,0);
+  v = v - FormulaDiscountCalcSum(IVCrw.Quant,IVCrw.Price,IVCrw.PriceFactor,IVCrw.vRebate);  
+  p = CalculateDiscountPercentage(IVCrw.Quant,IVCrw.Price,IVCrw.Sum);
+
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "3";
+  CtrlSeq = CtrlSeq & "001";
+  CtrlSeq = CtrlSeq & "3";  
+  tstr = ValToString(p,M41Val,"",".",0);
+  tstr = USetStr(1870) & " " & tstr & "%";
+  tstr = Left(tstr,22);
+  M4PadString(len(tstr),2,"0",true,tstr2);          
+  CtrlSeq = CtrlSeq & tstr2;
+  CtrlSeq = CtrlSeq & tstr;
+  tstr = ValToString(v*100,M40Val,"","",0);
+  M4PadString(tstr,9,"0",true,tstr);          
+  CtrlSeq = CtrlSeq & tstr;
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_DELAY);  
+
+  IVCash_DiscountAdditionForItem = res;
+  return;
+end;
+
+function Integer IVCash_PrintCommentLine(var Integer seqnr,record IVCashVc IVCr,row IVCashVc IVCrw)
+begin
+  INteger res,noErr;
+  string 255 CtrlSeq,tstr,tstr2;
+  
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "3";
+  CtrlSeq = CtrlSeq & "002";
+  CtrlSeq = CtrlSeq & "1";
+  tstr = Left(IVCrw.Spec,32);
+  M4PadString(len(tstr),2,"0",true,tstr2);          
+  CtrlSeq = CtrlSeq & tstr2;
+  CtrlSeq = CtrlSeq & tstr;
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_DELAY);  
+  IVCash_PrintCommentLine = res;
+  return;
+end;
+
+function Integer IVCash_PrintItemRow(var Integer seqnr,Integer typ,record IVCashVc IVCr,row IVCashVc IVCrw,var Boolean creditnotef,vector val vatrates)
+begin
+  INteger res,noErr;
+  string 255 CtrlSeq,tstr,tstr2;
+  string 255 unit;
+  record INVc INr;
+  Boolean negativef;
+  
+  ReadFirstItem(IVCrw.ArtCode,INr,false,true);
+  if (IVCrw.Quant<0) then begin
+    IVCrw.Quant = -IVCrw.Quant;
+    creditnotef = true;
+    negativef = true;
+  end;
+  if (IVCrw.Price<0) then begin
+    IVCrw.Price = -IVCrw.Price;
+  end;
+  creditnotef = IVCr.Sum4<0 or IVCr.InvType==kPOSInvoiceTypeCredit;
+
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "3";
+  CtrlSeq = CtrlSeq & "001";
+  if (negativef) then begin
+    CtrlSeq = CtrlSeq & "9";
+    tstr = Left(USetStr(17587) & " " & IVCrw.Spec,22);
+  end else begin
+    CtrlSeq = CtrlSeq & "1";
+    tstr = Left(IVCrw.Spec,22);
+  end;
+  M4PadString(len(tstr),2,"0",true,tstr2);          
+  CtrlSeq = CtrlSeq & tstr2;
+  CtrlSeq = CtrlSeq & tstr;
+  tstr = ValToString(IVCrw.Quant*IVCrw.Price*100,M40Val,"","",0);
+  M4PadString(tstr,9,"0",true,tstr);          
+  CtrlSeq = CtrlSeq & tstr;
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_DELAY);  
+  
+  if (res==noErr) then begin
+    if (nonblank(IVCrw.SerialNr)) then begin
+      IVCrw.Spec = UsetStr(1141) & IVCrw.SerialNr;
+      res = IVCash_PrintCommentLine(seqnr,IVCr,IVCrw);
+    end;
+  end;
+
+
+  if (res==noErr) then begin
+    if (nonblank(IVCrw.vRebate)) then begin
+      res = IVCash_DiscountAdditionForItem(seqnr,IVCr,IVCrw);
+    end;
+  end;
+  IVCash_PrintItemRow = res;
+  return;
+end;
+
+function Integer IVCash_PrintItemRows(var Integer seqnr,Integer typ,record IVCashVc IVCr,var Boolean creditnotef,vector val vatrates)
+begin
+  INteger res,noErr;
+  row IVCashVc IVCrw;
+  Integer i,rwcnt;
+
+  rwcnt = MatRowCnt(IVCr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(IVCr,i,IVCrw);
+    switch (IVCrw.stp) begin
+      case kInvoiceRowTypeStructuredItemComponent:
+        goto LkInvoiceRowTypeNormal2;
+      case kInvoiceRowTypeNormal:
+LkInvoiceRowTypeNormal2:;
+        if (nonblank(IVCrw.ArtCode)) then begin
+          res = IVCash_PrintItemRow(seqnr,typ,IVCr,IVCrw,creditnotef,vatrates);
+          if (res!=noErr) then begin
+            goto LPrintItemRows;
+          end;
+        end else begin
+          res = IVCash_PrintCommentLine(seqnr,IVCr,IVCrw);
+          if (res!=noErr) then begin
+            goto LPrintItemRows;
+          end;
+        end;
+      case kInvoiceRowTypeReturnIVNr:
+        res = PrintReturnLine(seqnr,IVCrw.OrgIVNr);
+        if (res!=noErr) then begin
+          goto LPrintItemRows;
+        end;
+      case kInvoiceRowTypeVoid:
+/*        
+        just skip 
+*/        
+    end;
+  end;
+LPrintItemRows:;  
+  IVCash_PrintItemRows = res;
+  return;
+end;
+
+global
+updating procedure PrintCUSTOMKUBEIIxFReceipt_IVCashVc(var record IVCashVc IVCr,record LSerialPortDeviceVc LSPDr)
+begin
+  record IVCashVc oldIVCr;
+  Integer noErr,res;
+  record LocalMachineBlock LMb;
+  record MachineCashVc MCr;
+  vector val vatrates;
+  Integer seqnr;
+  Boolean creditnotef;
+  
+  noErr = 0;
+  res = CUSTOMKUBEIIxFOpen(LSPDr);
+
+  if (res==noErr) then begin
+    noErr = 0;
+    BlockLoad(LMb);    
+
+    res = CheckCUSTOMKUBEIIxFClock(seqnr);
+    if (res!=noErr) then begin
+      goto LPrintCUSTOMKUBEIIxFReceipt;
+    end;
+
+    if (blank(IVCr.VATNr)) then begin
+      if (IVCr.InvType==kPOSInvoiceTypeCredit or IVCr.BaseSum4<0) then begin
+        res = 32974;
+        goto LPrintCUSTOMKUBEIIxFReceipt;
+      end;
+
+      res = IVCash_PrintItemRows(seqnr,0,IVCr,creditnotef,vatrates);      
+      if (res!=noErr) then begin
+        goto LPrintCUSTOMKUBEIIxFReceipt;
+      end;
+      res = IVCash_EndFiscalReceipt(seqnr,IVCr,creditnotef);
+      if (res!=noErr) then begin
+        goto LPrintCUSTOMKUBEIIxFReceipt;
+      end;
+
+    end else begin
+    
+      if (IVCr.InvType==kPOSInvoiceTypeCredit) then begin
+        res = BeginFiscalCreditNote(seqnr,IVCr.SerNr);
+      end else begin
+        res = BeginFiscalInvoice(seqnr,IVCr.SerNr);
+      end;
+      if (res!=noErr) then begin 
+        goto LPrintCUSTOMKUBEIIxFReceipt; 
+      end;
+      res = IVCash_PrintItemRows(seqnr,1,IVCr,creditnotef,vatrates);
+      if (res!=noErr) then begin
+        goto LPrintCUSTOMKUBEIIxFReceipt;
+      end;
+      res = IVCash_EndFiscalInvoice(seqnr,IVCr,creditnotef);
+      if (res!=noErr) then begin
+        goto LPrintCUSTOMKUBEIIxFReceipt;
+      end;
+
+    end;
+        
+    if (IVCr.Prntdf!=0) then begin
+      RecordCopy(oldIVCr,IVCr);
+      IVCr.Prntdf = 1;
+      RecordUpdate(oldIVCr,IVCr,false);
+    end;    
+
+LPrintCUSTOMKUBEIIxFReceipt:;
+    DisplayText(seqnr,USetStr(27522));
+    CUSTOMKUBEIIxFClose;
+    if (res!=0) then begin
+      MessageBox(res,"");
+    end;
+  end;
+  return;
+end;
+
+function Integer MoneyOutCurr(record CashVc Cashr)
+begin
+  Integer res,noErr,seqnr;
+  string 255 CtrlSeq,tstr;
+  
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "7";
+  CtrlSeq = CtrlSeq & "106";
+  CtrlSeq = CtrlSeq & "P";
+  tstr = ValToString(Cashr.Total*100,M40Val,"","",0);
+  M4PadString(tstr,9,"0",true,tstr);          
+  CtrlSeq = CtrlSeq & tstr;
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_DELAY);  
+  MoneyOutCurr = res;
+  return;
+end;
+
+function Integer MoneyInCurr(record CashVc Cashr)
+begin
+  Integer res,noErr,seqnr;
+  string 255 CtrlSeq,tstr;
+  
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "7";
+  CtrlSeq = CtrlSeq & "106";
+  CtrlSeq = CtrlSeq & "D";
+  tstr = ValToString(Cashr.Total*100,M40Val,"","",0);
+  M4PadString(tstr,9,"0",true,tstr);          
+  CtrlSeq = CtrlSeq & tstr;
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_DELAY);  
+  MoneyInCurr = res;
+  return;
+end;
+
+global
+procedure PrintCUSTOMKUBEIIxFCashEvent(var record CashVc Cashr,record LSerialPortDeviceVc LSPDr)
+begin
+  Integer noErr,res;
+  Integer seqnr;
+  
+  noErr = 0;
+  res = CUSTOMKUBEIIxFOpen(LSPDr);
+  if (res==noErr) then begin    
+    res = CheckCUSTOMKUBEIIxFClock(seqnr);
+    if (res!=noErr) then begin
+      goto LPrintCUSTOMKUBEIIxFReceipt;
+    end;
+    switch (Cashr.Event) begin
+      case 0:
+        MoneyOutCurr(Cashr);
+      case 1:
+        MoneyInCurr(Cashr);
+    end;
+LPrintCUSTOMKUBEIIxFCashEvent:;
+    CUSTOMKUBEIIxFClose;
+    if (res!=0) then begin
+      MessageBox(res,"");
+    end;
+  end;
+  return;
+end;
+
+global
+procedure CUSTOMKUBEIIxFDailyReport(record LSerialPortDeviceVc LSPDr)
+begin
+  Integer res,noErr,seqnr;
+  string 255 CtrlSeq; 
+
+  res = CUSTOMKUBEIIxFOpen(LSPDr);
+  if (res!=noErr) then begin
+    goto LCUSTOMKUBEIIxFDailyReport;
+  end;
+  
+  CtrlSeq = CtrlSeq & SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "0";
+  CtrlSeq = CtrlSeq & "2";
+  CtrlSeq = CtrlSeq & "002";
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_DELAY);
+  CUSTOMKUBEIIxFClose;
+
+  if (res!=0) then begin
+    MessageBox(res,"");
+  end;
+
+LCUSTOMKUBEIIxFDailyReport:;  
+  return;
+end;
+
+global
+procedure CUSTOMKUBEIIxFMonthlyReport(record LSerialPortDeviceVc LSPDr)
+begin
+/*
+  Integer res,noErr,seqnr;
+  string 255 CtrlSeq; 
+  Date sd,ed;
+
+  res = CUSTOMKUBEIIxFOpen(LSPDr);
+  if (res!=noErr) then begin
+    goto LCUSTOMKUBEIIxFDailyReport;
+  end;
+  
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "E";
+  CtrlSeq = CtrlSeq & "3";
+  CtrlSeq = CtrlSeq & "013";
+  sd = CurrentDate;
+  sd.day = 1;
+  ed = CurrentDate;
+  ed.day = DaysInMonth(ed.year,ed.month);
+  CtrlSeq = CtrlSeq & DateToString(sd,"DDMMYY");
+  CtrlSeq = CtrlSeq & DateToString(ed,"DDMMYY");
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_DELAY);
+  CUSTOMKUBEIIxFClose;
+  if (res!=0) then begin
+    MessageBox(res,"");
+  end;
+LCUSTOMKUBEIIxFDailyReport:;  
+*/
+  return;
+end;
+
+global
+procedure CUSTOMKUBEIIxFPeriodicReport(record RcVc RepSpec,record LSerialPortDeviceVc LSPDr)
+begin
+/*
+  Integer res,noErr,seqnr;
+  string 255 CtrlSeq; 
+
+  res = CUSTOMKUBEIIxFOpen(LSPDr);
+  if (res!=noErr) then begin
+    goto LCUSTOMKUBEIIxFPeriodicReport;
+  end;
+
+  CtrlSeq = SequenceNr(seqnr);
+  CtrlSeq = CtrlSeq & "E";
+  CtrlSeq = CtrlSeq & "3";
+  CtrlSeq = CtrlSeq & "013";
+  CtrlSeq = CtrlSeq & DateToString(RepSpec.d1,"DDMMYY");
+  CtrlSeq = CtrlSeq & DateToString(RepSpec.d2,"DDMMYY");
+  CtrlSeq = CtrlSeq & CalculateLRC(CtrlSeq);
+
+  res = CUSTOMKUBEIIxFWrite(seqnr,CtrlSeq,CUSTOMKUBEIIxF_DELAY);
+  CUSTOMKUBEIIxFClose;
+  if (res!=0) then begin
+    MessageBox(res,"");
+  end;
+ LCUSTOMKUBEIIxFPeriodicReport:;  
+*/ 
+  return;
+end;

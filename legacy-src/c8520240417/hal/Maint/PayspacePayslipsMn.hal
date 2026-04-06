@@ -1,0 +1,108 @@
+external function string 255 ColumnName(string);
+external procedure DoPayspaceWebRequest(string,string,var area);
+external function val StringToValue(string,Integer,string,string);
+external updating procedure SaveTrans(record TRVc);
+external function Integer GetIntYc(Date);
+external procedure UpdateTransRows(var record TRVc);
+
+function string 255 SetAccountNumber(string taxcode,string description)
+begin
+  record PayspaceBlock PayspaceBl;
+  string 255 res;
+
+  BlockLoad(PayspaceBl);
+  switch (taxcode) begin
+    case "4102":  
+    switch (description) begin
+      case "Tax Paid" : res = PayspaceBl.TaxPaid;
+      otherwise  res = PayspaceBl.PAYE;
+    end;
+    case "0000" : res = PayspaceBl.NetPay;
+    case "3605":  res = PayspaceBl.LeavePay;
+    case "4141":  res = PayspaceBl.UIFEmployer;
+    case "4142":  res = PayspaceBl.SDL;
+    case "4141":  res = PayspaceBl.UIFEmployee;
+    case "UIFI":  res = PayspaceBl.UIFIncome;
+    case "3601":
+    switch (description) begin
+      case "Medical Allowance": res = PayspaceBl.MedicalAllowance;
+      case "Basic Pay":         res = PayspaceBl.BasicPay;
+    end;
+  end;
+  SetAccountNumber = res;
+  return;
+end;
+
+global
+updating procedure PayspacePayslipsMn(record RcVc RepSpec)
+begin
+  record PayspaceBlock PayspaceBl;
+  string 255 mainkey,key,tstr,taxcode;
+  Area reply;
+  json js;
+  integer i,j,rowno;
+  record TRVc TRr;
+  row TRVc TRrw;
+  val t,v;
+
+  if (blank(RepSpec.f1)) then begin
+    MessageBox(42883,"");
+    goto LPayspacePayslipsMn; 
+  end;
+  if (blank(RepSpec.f2)) then begin   
+    MessageBox(42884,"");  
+    goto LPayspacePayslipsMn; 
+  end;
+
+  BlockLoad(PayspaceBl);
+
+  DoPayspaceWebRequest(RepSpec.f1,RepSpec.f2,reply);
+  if (GetAreaLength(reply)<=0) then begin goto LPayspacePayslipsMn; end;
+
+  js = ParseJSONArea(reply);
+
+  RecordNew(TRr);
+  TRr.TransDate = CurrentDate;
+  rowno = MatRowCnt(TRr);
+  while (JSONNodeExists(js,"value/[" & i & "]")) begin
+    mainkey = "value/[" & i & "]";
+    j = 0;
+    while (JSONNodeExists(js,mainkey & "/PayslipLines/" & "[" & j & "]")) begin
+      ClearRow(TRr,TRrw,1);
+      key = mainkey & "/PayslipLines/[" & j & "]";
+      TRrw.Objects = PayspaceBl.DefautTagObject;
+      TRrw.Curncy = PayspaceBl.DefautCur;
+      TRrw.Comment = JSONGet(js,key & "/AliasDescription");
+      TRrw.ExtraComment = JSONGet(js,mainkey & "/EmployeeNumber"); 
+      TRrw.AccNumber = SetAccountNumber(JSONGet(js,key & "/TaxCode"),TRrw.Comment);
+      taxcode = JSONGet(js,key & "/TaxCode");
+      tstr = JSONGet(js,key & "/PayslipLineValue");
+      switch (ColumnName(TRrw.Comment)) begin
+        case "d": TRrw.DebVal = StringToValue(tstr,M4Rate,"","."); TRrw.CredVal = blankval; 
+        case "c": TRrw.CredVal = StringToValue(tstr,M4Rate,"","."); TRrw.DebVal = blankval;
+      end;
+      if ((taxcode!="0000" and taxcode!="4149" and taxcode!="TAXA"  and taxcode!="4103") or (taxcode=="0000" and TRrw.Comment=="Net Pay")) then begin
+        if (taxcode=="UIFI") then begin TRrw.DebVal= TRrw.DebVal/100; end;
+        MatRowPut(TRr,rowno,TRrw);
+        rowno = rowno + 1;
+        if (taxcode=="4142") then begin
+          TRrw.AccNumber = PayspaceBl.SDL;
+          TRrw.DebVal = StringToValue(tstr,M4Rate,"","."); TRrw.CredVal = blankval;
+          MatRowPut(TRr,rowno,TRrw);
+          rowno = rowno + 1;
+        end;
+      end;
+      j = j + 1; 
+    end; 
+    i = i + 1;
+  end;
+  if (TRr.Number<=0) then begin
+    TRr.Number = NextSerNr("TRVc",TRr.TransDate,RepSpec.long1,false,"");
+  end;
+  TRr.Number = NextSerNr("TRVc",TRr.TransDate,-1,false,"");
+  TRr.IntYc = GetIntYc(TRr.TransDate);
+  UpdateTransRows(TRr);
+  SaveTrans(TRr);
+LPayspacePayslipsMn:;
+  return;
+end;

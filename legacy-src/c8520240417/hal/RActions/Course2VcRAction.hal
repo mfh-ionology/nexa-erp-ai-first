@@ -1,0 +1,157 @@
+external procedure ExtractObj(string,var Integer,var string);
+
+function Boolean CheckTeachers(string teachers,var string errstr)
+begin
+  Boolean res;
+  string 255 teacher;
+  vector Boolean vteacherf;
+  Integer pos;
+  record CUVc CUr;
+  
+  errstr = "";
+  ExtractObj(teachers,pos,teacher);
+  while (nonblank(teacher)) begin
+    res = false;
+    if (vteacherf[teacher]) then begin
+      errstr = teacher;
+      goto LCheckTeachers;
+    end;
+    CUr.Code = teacher;
+    res = ReadFirstMain(CUr,1,true);
+    if (res==false) then begin
+      errstr = teacher;
+      goto LCheckTeachers;
+    end;
+    vteacherf[teacher] = true;
+    ExtractObj(teachers,pos,teacher);
+  end;
+LCheckTeachers:;  
+  CheckTeachers = res;
+  return;
+end;
+
+function Boolean CheckDepartments(string departments,var string errstr)
+begin
+  Boolean res;
+  string 255 department;
+  vector Boolean vdepartmentf;
+  Integer pos;
+  record DepVc Depr;
+  
+  errstr = "";
+  ExtractObj(departments,pos,department);
+  while (nonblank(department)) begin
+    res = false;
+    if (vdepartmentf[department]) then begin
+      errstr = department;
+      goto LCheckDepartments;
+    end;
+    Depr.Code = department;
+    res = ReadFirstMain(Depr,1,true);
+    if (res==false) then begin
+      errstr = department;
+      goto LCheckDepartments;
+    end;
+    vdepartmentf[department] = true;
+    ExtractObj(departments,pos,department);
+  end;
+LCheckDepartments:;  
+  CheckDepartments = res;
+  return;
+end;
+
+function Boolean CheckClassifications(string Classification,var string errstr)
+begin
+  Boolean res;
+  string 255 class;
+  vector Boolean vclassf;
+  Integer pos;
+  record CourseClassVc CourseClassr;
+  
+  errstr = "";
+  ExtractObj(Classification,pos,class);
+  while (nonblank(class)) begin
+    res = false;
+    if (vclassf[class]) then begin
+      errstr = class;
+      goto LCheckClassifications;
+    end;
+    CourseClassr.Code = class;
+    res = ReadFirstMain(CourseClassr,1,true);
+    if (res==false) then begin
+      errstr = class;
+      goto LCheckClassifications;
+    end;
+    vclassf[class] = true;
+    ExtractObj(Classification,pos,class);
+  end;
+LCheckClassifications:;  
+  CheckClassifications = res;
+  return;
+end;
+
+global
+function LongInt Course2VcRecordDuplicate(var record Course2Vc Courser,record Course2Vc Course2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+
+  Courser.Terminated = 0;
+  Courser.SerNr = -1;
+  if (Courser.SerNr<0) then begin
+    Courser.SerNr = NextSerNr("Course2Vc",CurrentDate,-1,false,"");
+  end;
+  Course2VcRecordDuplicate = res; 
+  return;
+end;
+
+global
+function LongInt Course2VcRecordCheck(var record Course2Vc Courser,record Course2Vc Course2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  Integer insertmode,updatemode;
+  string 255 tstr;
+  
+  res = 0;
+  insertmode = 1;//Rs_insert
+  updatemode = 2;//Rs_update
+  if (Courser.SerNr<0) then begin
+    Courser.SerNr = NextSerNr("Course2Vc",CurrentDate,-1,false,"");
+  end;
+  if (nonblank(Courser.Teachers)) then begin
+    if (CheckTeachers(Courser.Teachers,tstr)==false) then begin
+      RecordCheckError(44185," " & tstr,-1,"Teachers");      
+      res = -1; 
+      goto LCourse2VcRecordCheck;
+    end;
+  end;
+  if (nonblank(Courser.Departments)) then begin
+    if (CheckDepartments(Courser.Departments,tstr)==false) then begin
+      RecordCheckError(44185," " & tstr,-1,"Departments");      
+      res = -1; 
+      goto LCourse2VcRecordCheck;
+    end;
+  end;
+  if (nonblank(Courser.Classification)) then begin
+    if (CheckClassifications(Courser.Classification,tstr)==false) then begin
+      RecordCheckError(44185," " & tstr,-1,"Classification");      
+      res = -1; 
+      goto LCourse2VcRecordCheck;
+    end;
+  end;
+LCourse2VcRecordCheck:;
+  Course2VcRecordCheck = res; 
+  return;
+end;
+
+global
+function LongInt Course2VcRecordDefaults(var record Course2Vc Courser,record Course2Vc Course2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  
+  Courser.StartDate = CurrentDate;
+  if (Courser.SerNr<0) then begin
+    Courser.SerNr = NextSerNr("Course2Vc",CurrentDate,-1,false,"");
+  end;
+  Course2VcRecordDefaults = res; 
+  return;
+end;

@@ -1,0 +1,3102 @@
+remote procedure ClientDisplayErrorMessage(string,LongInt,string);
+external function string 255 AddStringToStringList(string,string);
+external function LongInt HotelReservationExists(string,string,Date,Time,Date,Time);
+external procedure JobVc_PasteCurncyCode(var record JobVc,string);
+external function string 255 FindHotelClassForClassTerms(string);
+external function time TimeSub(time,time);
+external function time TimeAdd(time,time);
+external function Time ValToTime(val);
+external function val ValFromString(string,string,string);
+external function Boolean ReadFirstItem(string,var record INVc,Boolean,Boolean);
+external procedure AddPlainXmlToArea(area,string,Integer);
+external function Integer JobPasteType(var record JobVc,string);
+external updating procedure DeleteReservationAccount(LongInt);
+external procedure CalcSum(val,val,val,val,var val,Integer);
+external function string 20 FindJobCustomerCode(record JobVc);
+external updating function LongInt JobShopBask1VClassSaveRemote(record SoftFVc,var string,var Integer);
+external function Integer JobPasteResUsage(var record JobVc,string);
+external function Boolean PasteSourceToJob(var record JobVc,string);
+external procedure JobPasteTransDate(var record JobVc);
+external function Boolean JobToJobPrices(record JobVc,string,var record JobPriceVc);
+external function LongInt DateDiff(Date,Date);
+external procedure LogAreaToFile(string,Area);
+external procedure FindCancelledReservationState(var record ReservationStatusVc);
+external function Boolean PasteCUCodeToJob2(var record JobVc,Integer,Boolean);
+external function Date DateFromString(string,string);
+external function Integer JobPasteResCode(var record JobVc,string);
+external function Boolean GetNextCustNr(var string);
+
+forward updating procedure AddReservations(record SiteMinderBlock,var Area);
+forward procedure MakePerTypeDateArray(array record AgentRoomVc,Boolean,Integer,string,string,Date,Date,Boolean);
+forward procedure SortPerTypeDateArray(array record AgentRoomVc);
+forward procedure SumupPerTypeDateArray(array record AgentRoomVc,array record AgentRoomVc);
+forward procedure PrintPerTypeDateArray(array record AgentRoomVc);
+forward updating procedure UpdateSiteMinderSyncQue(LongInt,Integer);
+forward updating procedure AddPriceChangeToSiteMinderSyncQue(string,string,string,string,string,Date,Time,Date,Time);
+
+
+function string 10 TimeToString(time t)
+begin
+  string 10 res;
+  
+  if (t.hour<10) then begin res = res & "0"; end;
+  res = res & t.hour & ":";
+  if (t.minute<10) then begin res = res & "0"; end;
+  res = res & t.minute & ":";
+  if (t.second<10) then begin res = res & "0"; end;
+  res = res & t.second;
+  
+  TimeToString = res;
+  return;
+end;
+
+function string 5 TimeOffset(val gmtoffset)
+begin
+  string 255 res; 
+  Time t;
+  
+  if (gmtoffset>=0) then begin
+    res = "+";
+  end else begin
+    res = "-";
+  end;
+  
+  t = ValToTime(gmtoffset);
+  res = res & Left(t,5);
+  
+  TimeOffset = res;
+  return;
+end;
+
+procedure AddXmlTagWithAttr(string tag,string attributes,string value,var Area a)
+begin
+  
+  AddTextToArea("<",a);
+  AddTextToArea(tag,a);
+  if (nonblank(attributes)) then begin
+    AddTextToArea(" " & attributes,a);  
+  end;
+  AddTextToArea(">",a);  
+  if (nonblank(value)) then begin
+    AddTextToArea(URLEncode(value),a);
+  end;
+  if (Right(attributes,1)!="/") then begin
+    AddTextToArea("</",a);
+    AddTextToArea(tag,a);
+    AddTextToArea(">",a);
+  end;
+  return;
+end;
+
+procedure AddXmlTag(string tag,string value,var Area a)
+begin
+    
+  AddTextToArea("<",a);
+  AddTextToArea(tag,a);
+  AddTextToArea(">",a);  
+  AddTextToArea(URLEncode(value),a);
+  AddTextToArea("</",a);
+  AddTextToArea(tag,a);
+  AddTextToArea(">",a);
+  return;
+end;
+
+procedure OpenXmlTagWithAttr(string tag,string attributes,var Area a)
+begin
+  
+  AddTextToArea("<" & tag,a);
+  if (nonblank(attributes)) then begin
+    AddTextToArea(" " & attributes,a);  
+  end;
+  AddTextToArea(">",a);  
+  return;
+end;
+
+procedure OpenXmlTag(string tag,var Area a)
+begin
+  OpenXmlTagWithAttr(tag,"",a);
+  return;
+end;
+
+procedure CloseXmlTag(string tag,var Area a)
+begin
+  AddTextToArea("</" & tag & ">",a);
+  return;
+end;
+
+procedure AddSecurityHeader(record SiteMinderBlock SMb,var Area req)
+begin
+  OpenXmlTag("soap:Header",req);
+  OpenXmlTagWithAttr("wsse:Security","soap:mustUnderstand=""1"" xmlns:wsse=""http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd""",req);
+  OpenXmlTag("wsse:UsernameToken",req);
+  AddXmlTag("wsse:Username",SMb.Username,req);//StandardERPTest
+  AddXmlTagWithAttr("wsse:Password","Type=""http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText""",SMb.Password,req);//8pnc1iX197924NpA38R9WOJD
+  CloseXmlTag("wsse:UsernameToken",req);
+  CloseXmlTag("wsse:Security",req);
+  CloseXmlTag("soap:Header",req);
+  return;
+end;
+
+procedure AddReuqestor(record SiteMinderBlock SMb,var Area req)
+begin
+  AddTextToArea("<POS>" ,req);
+  AddTextToArea("<Source>" ,req);  
+  AddTextToArea("<RequestorID Type=""" & "22" & """" & " ID=""" & SMb.HotelID & """/>" ,req);//STANDARDERP
+  AddTextToArea("</Source>" ,req);
+  AddTextToArea("</POS>" ,req);
+  return;
+end;
+
+updating procedure LogSiteMinderUUID(string uid,Integer action,string soapmsg,Integer status,string errstr)
+begin
+  record SiteMinderUUIDLogVc SMUUIDLr;
+  
+  RecordNew(SMUUIDLr);
+  SMUUIDLr.RequestUUID = StringToUUID(uid);
+  SMUUIDLr.Action = action;
+  SMUUIDLr.Message = soapmsg;
+  SMUUIDLr.Status = status;
+  SMUUIDLr.Comment = errstr;
+
+  SMUUIDLr.TransDate = CurrentDate;
+  SMUUIDLr.TransTime = CurrentTime;
+  SMUUIDLr.SerNr = NextSerNr("SiteMinderUUIDLogVc",SMUUIDLr.TransDate,-1,false,"");
+  if (SMUUIDLr.SerNr>0) then begin
+    RecordStore(SMUUIDLr,false);
+    switch (status) begin
+      case kSOAPReplyError:
+        if (ServerMode) then begin
+          AllClientsRemoteAsync.ClientDisplayErrorMessage("",0,SMUUIDLr.RequestUUID  & " " & SMUUIDLr.Comment);
+        end else begin
+          ClientDisplayErrorMessage("",0,SMUUIDLr.RequestUUID  & " " & SMUUIDLr.Comment);
+        end;
+      case kSOAPReplyTimeOut:
+        if (ServerMode) then begin
+          AllClientsRemoteAsync.ClientDisplayErrorMessage("",0,SMUUIDLr.RequestUUID  & " " & SMUUIDLr.Comment);
+        end else begin
+          ClientDisplayErrorMessage("",0,SMUUIDLr.RequestUUID  & " " & SMUUIDLr.Comment);
+        end;
+    end;
+  end;
+  return;
+end;
+
+global
+updating procedure RetriveSiteMinderReservations()
+begin
+  record SiteMinderBlock SMb;
+  Area req;
+  Area reply;
+  string 255 timestamp;
+  LongInt fsz;
+  UUID uid;
+  transaction string 255 gSiteMinderRequestUUID;
+       
+  BlockLoad(SMb);
+  if (SMb.Enable!=0 and nonblank(SMb.HotelCode)) then begin
+    AddTextToArea("<?xml version=""1.0"" encoding=""UTF-8""?>",req);
+    OpenXmlTagWithAttr("soap:Envelope","xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/""",req);
+
+    AddSecurityHeader(SMb,req);
+    AddTextToArea("<soap:Body>" ,req);
+
+    timestamp = DateToString(CurrentDate,"YYYY-MM-DD") & "T" & TimeToString(CurrentTime) & TimeOffset(SMb.GMTOffset);
+    uid = MakeUUID;
+    OpenXmlTagWithAttr("OTA_ReadRQ","xmlns=""http://www.opentravel.org/OTA/2003/05"" Version=""1.0"" TimeStamp=""" & timestamp & """ EchoToken=""" & uid & """",req);
+
+    AddReuqestor(SMb,req);
+
+    OpenXmlTag("ReadRequests",req);
+    OpenXmlTagWithAttr("HotelReadRequest","HotelCode=""" & SMb.HotelCode & """",req);//StandardERP608
+    AddTextToArea("<SelectionCriteria SelectionType=""" & "Undelivered" & """" & " />" ,req);
+    CloseXmlTag("HotelReadRequest",req);
+    CloseXmlTag("ReadRequests",req);
+    CloseXmlTag("OTA_ReadRQ",req);
+
+    AddTextToArea("</soap:Body>" ,req);
+    AddTextToArea("</soap:Envelope>" ,req);
+
+
+
+    if (SMb.LogCommunication!=0) then begin
+      LogAreaToFile(ProgramFolder & "/SiteMinder/" & "_siteminder_retrive_res_req.xml",req);
+    end;
+
+//cmtpi.siteminder.com
+//STANDARDERP
+LogText(0,"RetriveSiteMinderReservations");
+    LogSiteMinderUUID(uid,kSOAPActionRequest,"ReadRQ",kSOAPReplyNone,"");
+    gSiteMinderRequestUUID = uid;
+    SendAsyncWebRequest(SMb.Host,443,-1,true,"POST","/pmsxchangev2/services/" & SMb.HotelID,"text/xml; charset=""utf-8""","pmsxchange/ReadRQ",req,"RetriveSiteMinderReservationsReply",30);
+//    fsz = FileSize("_siteminder_retrive_res_reply.xml");//debug Code
+//    LoadFileToArea("_siteminder_retrive_res_reply.xml",0,fsz,reply);
+//    AddReservations(SMb,reply);//debug code
+
+  end;
+  return;
+end;
+
+function Boolean SetRoomTypeRateAtSiteMinder(record SiteMinderBlock SMb,record AgentRoomVc ARr,var Area req)
+begin
+  Boolean res;
+  Date sd,ed;
+  record JobVc Jobr;    
+  record ResVc Resr;
+  record ResTypeVc RTr;
+  record JobPriceVc JPr;
+  row JobPriceVc JPrw;
+  Integer i,rwcnt; 
+  LongInt pos;
+  string 255 tstr;
+  string 255 resusages,resusage;
+  record INVc INr;
+  record BaseCurBlock BCb;
+  vector val vrates;
+  vector string 255 vratesitem;
+  Array string 255 aday;
+
+  Resr.Code = ARr.ResCode;
+  if (ReadFirstMain(Resr,1,true)) then begin
+    BlockLoad(BCb);
+    RTr.Code = Resr.Type;
+    ReadFirstMain(RTr,1,true);
+    
+    sd = ARr.StartDate;
+    if (blankdate(sd) or sd<CurrentDate) then begin sd = CurrentDate; end;
+    ed = ARr.EndDate;
+    if (blankdate(ed) or ed<CurrentDate) then begin ed = CurrentDate; end;
+    ed = AddDay(ed,1);
+
+    resusages = ARr.ResUsage;
+    if (blank(resusages)) then begin
+      resusages = SMb.ResUsages;
+    end;
+    pos = 0;
+    GetNextSubstring(resusages,pos,",",resusage);
+    while (nonblank(resusage)) begin
+      RecordNew(Jobr);
+      Jobr.ResCode = Resr.Code;
+      JobPasteResCode(Jobr,"");
+    
+      Jobr.TransDate = sd;
+      JobPasteTransDate(Jobr);
+      Jobr.EndDate = ed;
+      Jobr.NrOfDays = DateDiff(Jobr.EndDate,Jobr.TransDate);
+      Jobr.Persons = RTr.MaxPersons;
+      tstr = Jobr.ResUsage;
+      Jobr.ResUsage = resusage;
+      if (Jobr.ResUsage!=tstr) then begin
+        JobPasteResUsage(Jobr,tstr);
+      end;
+      if (JobToJobPrices(Jobr,Jobr.Type,JPr)) then begin
+        AddTextToArea("<StatusApplicationControl InvTypeCode=""" & Jobr.Type & """" & " RatePlanCode=""" & Jobr.ResUsage & """/>",req);  
+        OpenXmlTag("Rates",req);
+      
+        rwcnt = MatRowCnt(JPr);
+        if (rwcnt==0) then begin
+          MessageBox(39180," " & ARr.ResCode);
+        end;
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(JPr,i,JPrw);
+          if (nonblankdate(JPrw.StayDay)) then begin
+            res = true;
+            vrates[GetDateId(JPrw.StayDay)] = JPrw.Price;
+            vratesitem[GetDateId(JPrw.StayDay)] = JPrw.ArtCode;
+          end;
+        end;
+        Jobr.EndDate = AddDay(Jobr.EndDate,-1);
+
+        GetVectorTags(vrates,aday);
+        SortStringArray(aday);
+        for (i=0;i<aday.length;i=i+1) begin
+          AddTextToArea("<Rate" & " CurrencyCode=""" & BCb.BaseCur1 & """ Start=""" & DateToString(Jobr.TransDate,"YYYY-MM-DD") & """ End=""" & DateToString(Jobr.EndDate,"YYYY-MM-DD") & """ ",req);
+          switch (aday[i]) begin
+            case "1":
+              AddTextToArea("Mon=""1"" Tue=""0"" Weds=""0"" Thur=""0"" Fri=""0"" Sat=""0"" Sun=""0""",req);  
+            case "2":
+              AddTextToArea("Mon=""0"" Tue=""1"" Weds=""0"" Thur=""0"" Fri=""0"" Sat=""0"" Sun=""0""",req);  
+            case "3":
+              AddTextToArea("Mon=""0"" Tue=""0"" Weds=""1"" Thur=""0"" Fri=""0"" Sat=""0"" Sun=""0""",req);  
+            case "4":
+              AddTextToArea("Mon=""0"" Tue=""0"" Weds=""0"" Thur=""1"" Fri=""0"" Sat=""0"" Sun=""0""",req);  
+            case "5":
+              AddTextToArea("Mon=""0"" Tue=""0"" Weds=""0"" Thur=""0"" Fri=""1"" Sat=""0"" Sun=""0""",req);  
+            case "6":
+              AddTextToArea("Mon=""0"" Tue=""0"" Weds=""0"" Thur=""0"" Fri=""0"" Sat=""1"" Sun=""0""",req);  
+            case "7":
+              AddTextToArea("Mon=""0"" Tue=""0"" Weds=""0"" Thur=""0"" Fri=""0"" Sat=""0"" Sun=""1""",req);  
+          end;
+          AddTextToArea(">",req);  
+          OpenXmlTag("BaseByGuestAmts",req);
+          AddTextToArea("<BaseByGuestAmt AmountAfterTax=""" & ValToString(vrates[aday[i]],M4Val,"",".",0) & """/>",req);      
+          CloseXmlTag("BaseByGuestAmts",req);
+/*          
+          if (ReadFirstItem(vratesitem[aday[i]],INr,true,false)) then begin
+            OpenXmlTag("RateDescription",req);
+            AddXmlTag("Text",INr.Name,req);
+            CloseXmlTag("RateDescription",req);
+          end;
+*/          
+          CloseXmlTag("Rate",req);
+        end;
+
+        CloseXmlTag("Rates",req);
+      end;
+      GetNextSubstring(resusages,pos,",",resusage);
+    end;
+  end;
+    
+  SetRoomTypeRateAtSiteMinder = res;
+  return;
+end;
+
+global
+updating procedure SendRatesToSiteMinder(record AgentRoomVc ARr)
+begin
+  Area req;
+  string 255 timestamp;
+  Integer i;
+  Boolean sendf;
+  record SiteMinderBlock SMb;
+  UUID uid;
+  transaction string 255 gSiteMinderRequestUUID;
+
+  if (ARr.Closed!=0) then begin
+    goto LSendRatesToSiteMinder;
+  end;
+  BlockLoad(SMb);
+  AddTextToArea("<?xml version=""1.0"" encoding=""UTF-8""?>",req);
+  OpenXmlTagWithAttr("soap:Envelope","xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/""",req);
+
+  AddSecurityHeader(SMb,req);
+  AddTextToArea("<soap:Body>" ,req);
+  
+  timestamp = DateToString(CurrentDate,"YYYY-MM-DD") & "T" & TimeToString(CurrentTime) & TimeOffset(SMb.GMTOffset);
+  uid = MakeUUID;
+  OpenXmlTagWithAttr("OTA_HotelRateAmountNotifRQ","xmlns=""http://www.opentravel.org/OTA/2003/05"" Version=""1.0"" TimeStamp=""" & timestamp & """ EchoToken=""" & uid & """",req);
+  AddReuqestor(SMb,req);
+
+  OpenXmlTagWithAttr("RateAmountMessages","HotelCode=""" & SMb.HotelCode & """",req);
+  OpenXmlTag("RateAmountMessage",req);
+
+  sendf = SetRoomTypeRateAtSiteMinder(SMb,ARr,req);
+
+  CloseXmlTag("RateAmountMessage",req);
+  CloseXmlTag("RateAmountMessages",req);
+  CloseXmlTag("OTA_HotelRateAmountNotifRQ",req);
+
+  AddTextToArea("</soap:Body>" ,req);
+  AddTextToArea("</soap:Envelope>" ,req);
+
+  if (SMb.LogCommunication) then begin
+    LogAreaToFile(ProgramFolder & "/SiteMinder/" & "_siteminder_setrates_req.xml",req);
+  end;
+  if (sendf) then begin
+    LogSiteMinderUUID(uid,kSOAPActionRequest,"HotelRateAmountNotifRQ",kSOAPReplyNone,"");
+    gSiteMinderRequestUUID = uid;
+    SendAsyncWebRequest(SMb.Host,443,-1,true,"POST","/pmsxchangev2/services/" & SMb.HotelID,"text/xml; charset=""utf-8""","pmsxchange/HotelRateAmountNotifRQ",req,"SendRatesToSiteMinderReply",30);
+  end;
+LSendRatesToSiteMinder:;  
+  return;
+end;
+
+procedure AddRoomTypeToSiteMinderRates(record SiteMinderBlock SMb,record AgentRoomVc ARr,string resusageonly,var Area req)
+begin
+  Date sd,ed;
+  Date rsd,red;
+  record JobVc Jobr;    
+  record ResVc Resr;
+  record ResTypeVc RTr;
+  record JobPriceVc JPr;
+  row JobPriceVc JPrw;
+  LongInt pos;
+  Integer i,rwcnt; 
+  string 255 tstr,artcode;
+  string 255 resusages,resusage;
+  record INVc INr;
+  record BaseCurBlock BCb;
+  val prevprice,price;
+  string 255 weekdays;
+  vector val vrates;
+  vector string 255 vratesitem;
+  Array string 255 aday;
+
+  Resr.Code = ARr.ResCode;
+  if (ReadFirstMain(Resr,1,true)) then begin    
+    BlockLoad(BCb);
+    RTr.Code = Resr.Type;
+    ReadFirstMain(RTr,1,true);
+    
+    sd = ARr.StartDate;
+    if (blankdate(sd) or sd<CurrentDate) then begin sd = CurrentDate; end;
+    ed = ARr.EndDate;
+    if (blankdate(ed) or ed<CurrentDate) then begin ed = CurrentDate; end;
+    ed = AddDay(ed,1);
+    
+    resusages = ARr.ResUsage;
+    if (blank(resusages)) then begin
+      resusages = SMb.ResUsages;
+    end;
+    if (nonblank(resusageonly)) then begin
+      if (SetInSet(resusageonly,resusages)) then begin
+        resusages = resusageonly;
+      end else begin
+        resusages = "";
+      end;
+    end;
+    pos = 0;
+    GetNextSubstring(resusages,pos,",",resusage);
+    while (nonblank(resusage)) begin    
+      RecordNew(Jobr);
+      Jobr.ResCode = Resr.Code;
+      JobPasteResCode(Jobr,"");
+      Jobr.CUCode = ARr.CUCode;
+      PasteCUCodeToJob2(Jobr,-1,false);    
+      Jobr.TransDate = sd;
+      JobPasteTransDate(Jobr);
+      Jobr.EndDate = ed;
+      Jobr.NrOfDays = DateDiff(Jobr.EndDate,Jobr.TransDate);
+      Jobr.Persons = RTr.MaxPersons;
+      tstr = Jobr.ResUsage;
+      Jobr.ResUsage = resusage;
+      if (Jobr.ResUsage!=tstr) then begin
+        JobPasteResUsage(Jobr,tstr);
+      end;
+      if (JobToJobPrices(Jobr,Jobr.Type,JPr)) then begin
+        rwcnt = MatRowCnt(JPr);
+        if (rwcnt==0) then begin
+          MessageBox(39180," " & resusage);
+          goto LSKIPRate;
+        end;
+        OpenXmlTag("RateAmountMessage",req);
+        AddTextToArea("<StatusApplicationControl InvTypeCode=""" & Jobr.Type & """" & " RatePlanCode=""" & Jobr.ResUsage & """/>",req);  
+        OpenXmlTag("Rates",req);
+
+        rsd = Jobr.TransDate;
+        red = AddDay(Jobr.EndDate,-1);
+        prevprice = blankval;
+        ClearVector(vrates);
+        vrates[1] = blankval; vrates[2] = blankval; vrates[3] = blankval; vrates[4] = blankval; vrates[5] = blankval; vrates[6] = blankval; vrates[7] = blankval;
+        
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(JPr,i,JPrw);
+          if (prevprice==JPrw.Price or blank(prevprice)) then begin
+            vrates[GetDateId(JPrw.StayDay)] = JPrw.Price;
+            vratesitem[GetDateId(JPrw.StayDay)] = JPrw.ArtCode;
+          end else begin
+            GetVectorTags(vrates,aday);
+            if (aday.length>0) then begin
+              AddTextToArea("<Rate" & " CurrencyCode=""" & BCb.BaseCur1 & """ Start=""" & DateToString(rsd,"YYYY-MM-DD") & """ End=""" & DateToString(red,"YYYY-MM-DD") & """ ",req);
+              price = blankval;
+              weekdays = "";
+              artcode = "";
+                      
+              weekdays = "Mon=""";
+              if (blank(vrates[1])) then begin
+                weekdays = weekdays & "0"" ";
+              end else begin
+                weekdays = weekdays & "1"" ";
+                price = vrates[1];
+                artcode = vratesitem[1];
+              end;
+              weekdays = weekdays & "Tue=""";
+              if (blank(vrates[2])) then begin
+                weekdays = weekdays & "0"" ";
+              end else begin
+                weekdays = weekdays & "1"" ";
+                price = vrates[2];
+                artcode = vratesitem[2];
+              end;
+              weekdays = weekdays & "Weds=""";
+              if (blank(vrates[3])) then begin
+                weekdays = weekdays & "0"" ";
+              end else begin
+                weekdays = weekdays & "1"" ";
+                price = vrates[3];
+                artcode = vratesitem[3];
+              end;
+              weekdays = weekdays & "Thur=""";
+              if (blank(vrates[4])) then begin
+                weekdays = weekdays & "0"" ";
+              end else begin
+                weekdays = weekdays & "1"" ";
+                price = vrates[4];
+                artcode = vratesitem[4];
+              end;
+              weekdays = weekdays & "Fri=""";
+              if (blank(vrates[5])) then begin
+                weekdays = weekdays & "0"" ";
+              end else begin
+                weekdays = weekdays & "1"" ";
+                price = vrates[5];
+                artcode = vratesitem[5];
+              end;
+              weekdays = weekdays & "Sat=""";
+              if (blank(vrates[6])) then begin
+                weekdays = weekdays & "0"" ";
+              end else begin
+                weekdays = weekdays & "1"" ";
+                price = vrates[6];
+                artcode = vratesitem[6];
+              end;
+              weekdays = weekdays & "Sun=""";
+              if (blank(vrates[7])) then begin
+                weekdays = weekdays & "0""";
+              end else begin
+                weekdays = weekdays & "1""";
+                price = vrates[7];
+                artcode = vratesitem[7];
+              end;
+        
+              AddTextToArea(weekdays,req);  
+              AddTextToArea(">",req);  
+              OpenXmlTag("BaseByGuestAmts",req);
+              AddTextToArea("<BaseByGuestAmt AmountAfterTax=""" & ValToString(price,M4Val,"",".",0) & """/>",req);      
+              CloseXmlTag("BaseByGuestAmts",req);
+/*              
+              if (ReadFirstItem(artcode,INr,true,false)) then begin
+                OpenXmlTag("RateDescription",req);
+                AddXmlTag("Text",INr.Name,req);
+                CloseXmlTag("RateDescription",req);
+              end;
+*/              
+              CloseXmlTag("Rate",req);
+            end;
+            rsd = JPrw.StayDay;
+            red = rsd;
+            ClearVector(vrates);
+            vrates[1] = blankval; vrates[2] = blankval; vrates[3] = blankval; vrates[4] = blankval; vrates[5] = blankval; vrates[6] = blankval; vrates[7] = blankval;
+            vrates[GetDateId(JPrw.StayDay)] = JPrw.Price;
+            vratesitem[GetDateId(JPrw.StayDay)] = JPrw.ArtCode;
+          end;
+          prevprice = JPrw.Price;
+          red = JPrw.StayDay;
+        end;
+
+        GetVectorTags(vrates,aday);
+        if (aday.length>0) then begin
+          AddTextToArea("<Rate" & " CurrencyCode=""" & BCb.BaseCur1 & """ Start=""" & DateToString(rsd,"YYYY-MM-DD") & """ End=""" & DateToString(red,"YYYY-MM-DD") & """ ",req);
+        
+          price = blankval;
+          weekdays = "";
+          artcode = "";
+        
+          weekdays = "Mon=""";
+          if (blank(vrates[1])) then begin
+            weekdays = weekdays & "0"" ";
+          end else begin
+            weekdays = weekdays & "1"" ";
+            price = vrates[1];
+            artcode = vratesitem[1];
+          end;
+          weekdays = weekdays & "Tue=""";
+          if (blank(vrates[2])) then begin
+            weekdays = weekdays & "0"" ";
+          end else begin
+            weekdays = weekdays & "1"" ";
+            price = vrates[2];
+            artcode = vratesitem[2];
+          end;
+          weekdays = weekdays & "Weds=""";
+          if (blank(vrates[3])) then begin
+            weekdays = weekdays & "0"" ";
+          end else begin
+            weekdays = weekdays & "1"" ";
+            price = vrates[3];
+            artcode = vratesitem[3];
+          end;
+          weekdays = weekdays & "Thur=""";
+          if (blank(vrates[4])) then begin
+            weekdays = weekdays & "0"" ";
+          end else begin
+            weekdays = weekdays & "1"" ";
+            price = vrates[4];
+            artcode = vratesitem[4];
+          end;
+          weekdays = weekdays & "Fri=""";
+          if (blank(vrates[5])) then begin
+            weekdays = weekdays & "0"" ";
+          end else begin
+            weekdays = weekdays & "1"" ";
+            price = vrates[5];
+            artcode = vratesitem[5];
+          end;
+          weekdays = weekdays & "Sat=""";
+          if (blank(vrates[6])) then begin
+            weekdays = weekdays & "0"" ";
+          end else begin
+            weekdays = weekdays & "1"" ";
+            price = vrates[6];
+            artcode = vratesitem[6];
+          end;
+          weekdays = weekdays & "Sun=""";
+          if (blank(vrates[7])) then begin
+            weekdays = weekdays & "0""";
+          end else begin
+            weekdays = weekdays & "1""";
+            price = vrates[7];
+            artcode = vratesitem[7];
+          end;
+        
+          AddTextToArea(weekdays,req);  
+          AddTextToArea(">",req);  
+          OpenXmlTag("BaseByGuestAmts",req);
+          AddTextToArea("<BaseByGuestAmt AmountAfterTax=""" & ValToString(price,M4Val,"",".",0) & """/>",req);      
+          CloseXmlTag("BaseByGuestAmts",req);
+/*          
+          if (ReadFirstItem(artcode,INr,true,false)) then begin
+            OpenXmlTag("RateDescription",req);
+            AddXmlTag("Text",INr.Name,req);
+            CloseXmlTag("RateDescription",req);
+          end;
+*/          
+          CloseXmlTag("Rate",req);
+        end;
+
+
+        CloseXmlTag("Rates",req);
+        CloseXmlTag("RateAmountMessage",req);
+LSKIPRate:;      
+      end;
+      GetNextSubstring(resusages,pos,",",resusage);
+    end;    
+  end;
+  return;
+end;
+
+updating procedure SetRatesAtSiteMinder2(LongInt quenr,string type,string resusage,Date startdate,Date enddate)
+begin
+  Integer i;
+  record SiteMinderBlock SMb;
+  Area req;
+  Boolean sendf;
+  string 255 timestamp;
+  record AgentRoomVc ptARr;   
+  array record AgentRoomVc atmppertypeARr;
+  array record AgentRoomVc apertypeARr;
+  UUID uid;
+  transaction string 255 gSiteMinderRequestUUID;
+  transaction LongInt gSiteMinderSyncQueNr;
+
+  BlockLoad(SMb);
+  if (SMb.Enable==0 or blank(SMb.HotelCode)) then begin
+    goto LSetRatesAtSiteMinder2;
+  end;
+  AddTextToArea("<?xml version=""1.0"" encoding=""UTF-8""?>",req);
+  OpenXmlTagWithAttr("soap:Envelope","xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/""",req);
+
+  AddSecurityHeader(SMb,req);
+  AddTextToArea("<soap:Body>" ,req);
+  
+  timestamp = DateToString(CurrentDate,"YYYY-MM-DD") & "T" & TimeToString(CurrentTime) & TimeOffset(SMb.GMTOffset);
+  uid = MakeUUID;
+  OpenXmlTagWithAttr("OTA_HotelRateAmountNotifRQ","xmlns=""http://www.opentravel.org/OTA/2003/05"" Version=""1.0"" TimeStamp=""" & timestamp & """ EchoToken=""" & uid & """",req);
+  AddReuqestor(SMb,req);
+
+  OpenXmlTagWithAttr("RateAmountMessages","HotelCode=""" & SMb.HotelCode & """",req);
+
+  MakePerTypeDateArray(atmppertypeARr,false,0,"",type,startdate,enddate,false);
+
+
+//FillResourceType  
+
+//  PrintPerTypeDateArray(atmppertypeARr);
+
+  SortPerTypeDateArray(atmppertypeARr);
+//  PrintPerTypeDateArray(atmppertypeARr);
+  
+  SumupPerTypeDateArray(atmppertypeARr,apertypeARr);
+//  PrintPerTypeDateArray(atmppertypeARr);
+//  PrintPerTypeDateArray(apertypeARr);
+
+  for (i=0;i<apertypeARr.length;i=i+1) begin
+    ptARr = apertypeARr[i];
+    AddRoomTypeToSiteMinderRates(SMb,ptARr,resusage,req);
+  end;
+
+
+  CloseXmlTag("RateAmountMessages",req);
+  CloseXmlTag("OTA_HotelRateAmountNotifRQ",req);
+
+  AddTextToArea("</soap:Body>" ,req);
+  AddTextToArea("</soap:Envelope>" ,req);
+
+  if (SMb.LogCommunication!=0) then begin
+    LogAreaToFile(ProgramFolder & "/SiteMinder/" & "_SetRatesAtSiteMinder.xml",req);
+  end;
+  if (apertypeARr.length>0) then begin
+    gSiteMinderSyncQueNr = quenr;
+    LogSiteMinderUUID(uid,kSOAPActionRequest,"HotelAvailNotifRQ",kSOAPReplyNone,"");
+    gSiteMinderRequestUUID = uid;
+    SendAsyncWebRequest(SMb.Host,443,-1,true,"POST","/pmsxchangev2/services/" & SMb.HotelID,"text/xml; charset=""utf-8""","pmsxchange/HotelAvailNotifRQ",req,"SendRatesToSiteMinderReply",30);
+  end;
+LSetRatesAtSiteMinder2:;
+  return;
+end;
+  
+global
+updating procedure SetRatesAtSiteMinder()
+begin
+  Integer i;
+  record SiteMinderBlock SMb;
+  Area req;
+  Boolean sendf;
+  string 255 timestamp;
+  record AgentRoomVc ptARr;   
+  array record AgentRoomVc atmppertypeARr;
+  array record AgentRoomVc apertypeARr;
+  UUID uid;
+  transaction string 255 gSiteMinderRequestUUID;
+
+  BlockLoad(SMb);
+  if (SMb.Enable==0 or blank(SMb.HotelCode)) then begin
+    goto LSetRatesAtSiteMinder;
+  end;
+  AddTextToArea("<?xml version=""1.0"" encoding=""UTF-8""?>",req);
+  OpenXmlTagWithAttr("soap:Envelope","xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/""",req);
+
+  AddSecurityHeader(SMb,req);
+  AddTextToArea("<soap:Body>" ,req);
+  
+  timestamp = DateToString(CurrentDate,"YYYY-MM-DD") & "T" & TimeToString(CurrentTime) & TimeOffset(SMb.GMTOffset);
+  uid = MakeUUID;
+  OpenXmlTagWithAttr("OTA_HotelRateAmountNotifRQ","xmlns=""http://www.opentravel.org/OTA/2003/05"" Version=""1.0"" TimeStamp=""" & timestamp & """ EchoToken=""" & uid & """",req);
+  AddReuqestor(SMb,req);
+
+  OpenXmlTagWithAttr("RateAmountMessages","HotelCode=""" & SMb.HotelCode & """",req);
+
+  MakePerTypeDateArray(atmppertypeARr,false,0,"","","","",false);
+//FillResourceType  
+
+//  PrintPerTypeDateArray(atmppertypeARr);
+
+  SortPerTypeDateArray(atmppertypeARr);
+//  PrintPerTypeDateArray(atmppertypeARr);
+  
+  SumupPerTypeDateArray(atmppertypeARr,apertypeARr);
+//  PrintPerTypeDateArray(atmppertypeARr);
+//  PrintPerTypeDateArray(apertypeARr);
+
+  for (i=0;i<apertypeARr.length;i=i+1) begin
+    ptARr = apertypeARr[i];
+    AddRoomTypeToSiteMinderRates(SMb,ptARr,"",req);
+  end;
+
+
+  CloseXmlTag("RateAmountMessages",req);
+  CloseXmlTag("OTA_HotelRateAmountNotifRQ",req);
+
+  AddTextToArea("</soap:Body>" ,req);
+  AddTextToArea("</soap:Envelope>" ,req);
+
+  if (SMb.LogCommunication!=0) then begin
+    LogAreaToFile(ProgramFolder & "/SiteMinder/" & "_SetRatesAtSiteMinder.xml",req);
+  end;
+  if (apertypeARr.length>0) then begin
+    LogSiteMinderUUID(uid,kSOAPActionRequest,"HotelAvailNotifRQ",kSOAPReplyNone,"");
+    gSiteMinderRequestUUID = uid;
+    SendAsyncWebRequest(SMb.Host,443,-1,true,"POST","/pmsxchangev2/services/" & SMb.HotelID,"text/xml; charset=""utf-8""","pmsxchange/HotelAvailNotifRQ",req,"SendRatesToSiteMinderReply",30);
+  end;
+LSetRatesAtSiteMinder:;
+  return;
+end;
+
+
+global
+updating procedure SendRatesToSiteMinderReply(Area reply,Area replyheader,boolean timeout)
+begin
+  record SiteMinderBlock SMb;
+  xml x;
+  string 255 errstr;
+  transaction string 255 gSiteMinderRequestUUID;
+  transaction LongInt gSiteMinderSyncQueNr;
+  Boolean testf;
+
+  BlockLoad(SMb);
+  if (SMb.LogCommunication!=0) then begin
+    LogAreaToFile(ProgramFolder & "/SiteMinder/" & "__siteminder_setrates_reply.xml",reply);
+  end;
+
+  if (timeout) then begin
+    MessageBox(39172,"");
+//    LogText2(39172,"SendRatesToSiteMinderReply",kVerbosityDebugDetailed);
+    LogSiteMinderUUID(gSiteMinderRequestUUID,kSOAPActionReply,"HotelRateAmountNotifRQ",kSOAPReplyTimeout,"Timeout");
+  end else begin
+    x = ParseXmlArea(reply);
+    testf = XmlNodeExists(x,"SOAP-ENV:Envelope/SOAP-ENV:Body/OTA_HotelRateAmountNotifRS/Success");
+    if (testf==false) then begin
+      testf = XmlNodeExists(x,"soap:Envelope/soap:Body>/OTA_HotelRateAmountNotifRS/Success");
+    end;
+    if (testf) then begin
+      if (gSiteMinderSyncQueNr>0) then begin
+        UpdateSiteMinderSyncQue(gSiteMinderSyncQueNr,kQueueSent);
+      end;
+      LogSiteMinderUUID(gSiteMinderRequestUUID,kSOAPActionReply,"HotelRateAmountNotifRQ",kSOAPReplySuccess,"");
+      LogText2(39170,"SendRatesToSiteMinder",kVerbosityDebugDetailed);
+    end else begin
+      errstr = XmlGet(x,"SOAP-ENV:Envelope/SOAP-ENV:Body/OTA_HotelRateAmountNotifRS/Errors/Error"); 
+      if (blank(errstr)) then begin
+        errstr = XmlGet(x,"soap:Envelope/soap:Body/OTA_HotelRateAmountNotifRS/Errors/Error"); 
+      end;
+      LogSiteMinderUUID(gSiteMinderRequestUUID,kSOAPActionReply,"HotelRateAmountNotifRQ",kSOAPReplyError,errstr);
+      MessageBox(39171," " & errstr);
+      if (gSiteMinderSyncQueNr>0) then begin
+        UpdateSiteMinderSyncQue(gSiteMinderSyncQueNr,kQueueFailed);
+      end;
+    end;
+  end;
+
+  return;
+end;
+
+procedure AddToSumupArray(record AgentRoomVc tmpptARr,array record AgentRoomVc apertyperARr)
+begin
+  Integer i;
+  record AgentRoomVc ptARr;  
+
+  for (i=0;i<apertyperARr.length;i=i+1) begin
+    ptARr = apertyperARr[i];
+    if (DateInRange(tmpptARr.StartDate,ptARr.StartDate,ptARr.EndDate) and ptARr.StdRateID==tmpptARr.StdRateID) then begin
+      goto LAddToSumupArray;
+    end;
+  end;
+  apertyperARr[apertyperARr.length] = tmpptARr;
+LAddToSumupArray:;  
+  return;
+end;
+
+global
+procedure SumupPerTypeDateArray(array record AgentRoomVc atmppertypeARr,array record AgentRoomVc apertyperARr)
+begin
+  Integer i,j;
+  record AgentRoomVc ptARr;  
+  record AgentRoomVc nextptARr;  
+
+  for (i=0;i<atmppertypeARr.length-1;i=i+1) begin
+    ptARr = atmppertypeARr[i];
+    for (j=i+1;j<atmppertypeARr.length;j=j+1) begin
+      nextptARr = atmppertypeARr[j];
+      if (ptARr.DueDays==nextptARr.DueDays and ptARr.StdRateID==nextptARr.StdRateID and nextptARr.EndDate==AddDay(ptARr.EndDate,1)) then begin
+        ptARr.EndDate = nextptARr.EndDate;
+        atmppertypeARr[i] = ptARr;
+      end else begin
+        j = atmppertypeARr.length;
+      end;
+    end;
+  end;
+  for (i=0;i<atmppertypeARr.length;i=i+1) begin
+    ptARr = atmppertypeARr[i];
+    AddToSumupArray(ptARr,apertyperARr);
+  end;
+  return;
+end;
+
+global
+procedure SortPerTypeDateArray(array record AgentRoomVc atmppertypeARr)
+begin
+  Integer i,j;
+  record AgentRoomVc ptARr;  
+  record AgentRoomVc nextptARr;
+  record AgentRoomVc tmpARr;
+  Boolean changedf,testf;  
+
+  changedf = true;
+  while (changedf) begin
+    changedf = false;      
+    for (i=0;i<atmppertypeARr.length-1;i=i+1) begin
+      ptARr = atmppertypeARr[i];
+      nextptARr = atmppertypeARr[i+1];
+      testf = false;
+      if (ptARr.StdRateID>nextptARr.StdRateID) or 
+         (ptARr.StdRateID==nextptARr.StdRateID and ptARr.StartDate>nextptARr.StartDate) then begin testf = true; end;      
+      if (testf) then begin
+        tmpARr = ptARr;
+        ptARr = nextptARr;
+        nextptARr = tmpARr;
+        atmppertypeARr[i] = ptARr;
+        atmppertypeARr[i+1] = nextptARr;
+        changedf = true;
+      end;
+    end;
+  end;
+  return;
+end;
+
+procedure AddToAgentRoomArray(record AgentRoomVc ARr,val avail,array record AgentRoomVc apertypeARr)
+begin
+  record AgentRoomVc ptARr;  
+  record ResVc Resr;
+  
+  Resr.Code = ARr.ResCode;
+  ReadFirstMain(Resr,1,true);
+
+  ptARr = ARr;
+  ptARr.StdRateID = Resr.Type;
+  ptARr.DueDays = avail;
+  apertypeARr[apertypeARr.length] = ptARr;
+  return;
+end;
+
+global
+function Boolean AgentRoomInArray(record AgentRoomVc ARr,array record AgentRoomVc apertypeARr,val q)
+begin
+  Integer i;
+  Boolean res;
+  record AgentRoomVc ptARr;   
+  record ResVc Resr;
+  
+  for (i=0;i<apertypeARr.length;i=i+1) begin
+    ptARr = apertypeARr[i];
+    
+    Resr.Code = ARr.ResCode;
+    ReadFirstMain(Resr,1,true);
+
+    if (ARr.StartDate==ptARr.StartDate and Resr.Type==ptARr.StdRateID) then begin
+      ptARr.DueDays = ptARr.DueDays + q;
+      apertypeARr[i] = ptARr;
+      res = true;
+      goto LAgentRoomInArray;
+    end;
+  end;
+LAgentRoomInArray:;  
+  AgentRoomInArray = res;
+  return;
+end;
+
+procedure ExcludeReservedFromPerTypeDateArray(var array record AgentRoomVc apertypeARr)
+begin
+  Integer i;
+  array record AgentRoomVc atmppertypeARr;
+  record AgentRoomVc ptARr;  
+  Integer rsrved;
+  Date td;
+  Time tt;
+
+  for (i=0;i<apertypeARr.length;i=i+1) begin
+    atmppertypeARr[i] = apertypeARr[i];
+  end;
+  ClearArray(apertypeARr);
+
+  for (i=0;i<atmppertypeARr.length;i=i+1) begin
+    ptARr = atmppertypeARr[i];
+    if (HotelReservationExists("",ptARr.StdRateID,td,tt,td,tt)>0) then begin
+      ptARr.DueDays = ptARr.DueDays - 1;
+    end;
+    if (ptARr.DueDays>0) then begin
+      apertypeARr[apertypeARr.length] = ptARr;
+    end;
+  end;
+  return;
+end;
+
+global
+procedure MakePerTypeDateArray(array record AgentRoomVc apertypeARr,Boolean aincludezeroavailf,Integer aReduceAvail,string rescode,string type,Date startdate,Date enddate,Boolean excludereservedf)
+begin
+  Integer i;
+  record AgentRoomVc ARr;   
+  record AgentRoomVc ptARr;   
+  record ResVc Resr;
+  record ResVc ptResr;
+  Date td,td2,ed;
+  Time tt;
+  Boolean found,testf;
+  LongInt nr;
+  record HotelBlock Hotelb;
+  val q;
+  Boolean includezeroavailf;
+  Integer ReduceAvail;
+  
+  ReduceAvail = aReduceAvail;
+  includezeroavailf = aincludezeroavailf;
+  BlockLoad(Hotelb);
+  found = true;
+  while (LoopMain(ARr,1,found)) begin
+    if (found) then begin
+      testf = true;
+      if (ARr.Closed!=0) then begin testf = false; end;
+      if (blankdate(ARr.StartDate)) then begin testf = false; end;
+      if (blankdate(ARr.EndDate)) then begin testf = false; end;
+      
+      if (nonblankdate(startdate)) then begin
+        if (startdate>ARr.EndDate) then begin testf = false; end;
+      end;
+      if (nonblankdate(enddate)) then begin
+        if (enddate<ARr.StartDate) then begin testf = false; end;
+      end;
+      if (testf) then begin
+        if (nonblank(type)) then begin
+          Resr.Code = ARr.ResCode;
+          ReadFirstMain(Resr,1,true);
+          if (Resr.Type!=type) then begin testf = false; end;
+        end;
+      end;
+      if (testf) then begin
+        if (nonblank(rescode)) then begin
+          if (ARr.ResCode==rescode) then begin 
+            ReduceAvail = aReduceAvail;
+            includezeroavailf = aincludezeroavailf;
+          end else begin
+            ReduceAvail = 0;
+            includezeroavailf = false;
+          end;
+        end;
+        td = startdate;
+        if (blankdate(td)) then begin
+          td = ARr.StartDate;
+        end;
+        if (td<ARr.StartDate) then begin
+          td = ARr.StartDate;
+        end;
+        ed = enddate;
+        if (blankdate(ed)) then begin
+          ed = ARr.EndDate;
+        end;
+        if (ed>ARr.EndDate) then begin
+          ed = ARr.EndDate;
+        end;
+
+        if (td<CurrentDate) then begin
+          td = CurrentDate;
+        end;   
+        while (td<=ed) begin
+          ptARr = ARr;
+          ptARr.StartDate = td;
+          ptARr.EndDate = td;
+          td2 = td;
+          if (excludereservedf) then begin
+//            Resr.Code = ARr.ResCode;
+//            ReadFirstMain(Resr,1,true);
+            nr = HotelReservationExists(ARr.ResCode,"",td2,Hotelb.CheckIn,AddDay(td2,1),Hotelb.CheckOut);
+//LogText(0,"nr " & nr & " td2 " & td2 & " Hotelb.CheckIn " & Hotelb.CheckIn & " Hotelb.CheckOut " & Hotelb.CheckOut);          
+          end;
+
+          if (ReduceAvail) then begin
+            q = 0;
+          end else begin
+            q = 1;
+          end;
+//Trace("ARr.ResCode " & ARr.ResCode & " td " & td," q " & q & " nr " & nr);
+          if (nr<=0) then begin
+            if (AgentRoomInArray(ptARr,apertypeARr,q)==false) then begin
+              AddToAgentRoomArray(ptARr,q,apertypeARr);
+            end;
+          end else begin
+            if (includezeroavailf) then begin
+              if (AgentRoomInArray(ptARr,apertypeARr,0)==false) then begin
+                AddToAgentRoomArray(ptARr,0,apertypeARr);
+              end;
+            end;
+          end;
+          td = AddDay(td,1);
+        end;
+      end;
+    end;
+  end;  
+  return;
+end;
+
+procedure PrintPerTypeDateArray(array record AgentRoomVc apertypeARr)
+begin
+  Integer i;
+  record AgentRoomVc ptARr;   
+
+  LogText(0,"Start PrintPerTypeDateArray");
+  for (i=0;i<apertypeARr.length;i=i+1) begin
+    ptARr = apertypeARr[i];
+//    LogText(0,"ptARr.StdRateID " & ptARr.StdRateID & " ptARr.ResUsage " & ptARr.ResUsage  & " ptARr.StartDate " & ptARr.StartDate  & " ptARr.EndDate " & ptARr.EndDate & " ptARr.DueDays " & ptARr.DueDays);
+    LogText(0,"ptARr.StdRateID " & ptARr.StdRateID & " ptARr.StartDate " & ptARr.StartDate  & " ptARr.EndDate " & ptARr.EndDate & " ptARr.DueDays " & ptARr.DueDays);
+  end;
+  return;
+end;
+
+procedure AddRoomTypeToSiteMinderAvailable(record AgentRoomVc ARr,var Area req)
+begin
+  string 255 tstr;
+
+  OpenXmlTagWithAttr("AvailStatusMessage","BookingLimit=""" & ARr.DueDays & """",req);
+  AddTextToArea("<StatusApplicationControl Start=""" & DateToString(ARr.StartDate,"YYYY-MM-DD") & """ End=""" & DateToString(ARr.EndDate,"YYYY-MM-DD") & """ InvTypeCode=""" & ARr.StdRateID & """/>",req);
+//  AddTextToArea("<StatusApplicationControl Start=""" & DateToString(ARr.StartDate,"YYYY-MM-DD") & """ End=""" & DateToString(ARr.EndDate,"YYYY-MM-DD") & """ InvTypeCode=""" & ARr.StdRateID & """" & " RatePlanCode=""" & ARr.ResUsage & """" & "/>",req);
+  CloseXmlTag("AvailStatusMessage",req);
+  return;
+end;
+
+updating procedure EnableRoomsAtSiteMinder2(Boolean includezeroavailf,LongInt quenr,Integer ReduceAvail,string rescode,string type,Date startdate,Date enddate)
+begin
+  Integer i;
+  record SiteMinderBlock SMb;
+  Area req;
+  Boolean sendf;
+  string 255 timestamp;
+  record AgentRoomVc ptARr;   
+  array record AgentRoomVc atmppertypeARr;
+  array record AgentRoomVc apertypeARr;
+  transaction LongInt gSiteMinderSyncQueNr;
+  UUId uid;
+  transaction string 255 gSiteMinderRequestUUID;
+
+  BlockLoad(SMb);
+  if (SMb.Enable==0 or blank(SMb.HotelCode)) then begin
+    goto LEnableRoomsAtSiteMinder;
+  end;
+  AddTextToArea("<?xml version=""1.0"" encoding=""UTF-8""?>",req);
+  OpenXmlTagWithAttr("soap:Envelope","xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/""",req);
+
+  AddSecurityHeader(SMb,req);
+  AddTextToArea("<soap:Body>" ,req);
+  
+  timestamp = DateToString(CurrentDate,"YYYY-MM-DD") & "T" & TimeToString(CurrentTime) & TimeOffset(SMb.GMTOffset);
+  uid = MakeUUID;
+  OpenXmlTagWithAttr("OTA_HotelAvailNotifRQ","xmlns=""http://www.opentravel.org/OTA/2003/05"" Version=""1.0"" TimeStamp=""" & timestamp & """ EchoToken=""" & uid & """",req);
+  AddReuqestor(SMb,req);
+
+  OpenXmlTagWithAttr("AvailStatusMessages","HotelCode=""" & SMb.HotelCode & """",req);
+
+  MakePerTypeDateArray(atmppertypeARr,includezeroavailf,ReduceAvail,rescode,type,startdate,enddate,true);
+
+//  PrintPerTypeDateArray(atmppertypeARr);
+
+  SortPerTypeDateArray(atmppertypeARr);
+//  PrintPerTypeDateArray(atmppertypeARr);
+  
+  SumupPerTypeDateArray(atmppertypeARr,apertypeARr);
+//  PrintPerTypeDateArray(atmppertypeARr);
+//  PrintPerTypeDateArray(apertypeARr);
+
+  for (i=0;i<apertypeARr.length;i=i+1) begin
+    ptARr = apertypeARr[i];
+    AddRoomTypeToSiteMinderAvailable(ptARr,req);
+  end;
+
+
+  CloseXmlTag("AvailStatusMessages",req);
+  CloseXmlTag("OTA_HotelAvailNotifRQ",req);
+
+  AddTextToArea("</soap:Body>" ,req);
+  AddTextToArea("</soap:Envelope>" ,req);
+
+  if (SMb.LogCommunication!=0) then begin
+    LogAreaToFile(ProgramFolder & "/SiteMinder/" & "_EnableRoomsAtSiteMinder.xml",req);
+  end;
+
+  if (apertypeARr.length>0) then begin
+    gSiteMinderSyncQueNr = quenr;
+    LogSiteMinderUUID(uid,kSOAPActionRequest,"HotelAvailNotifRQ",kSOAPReplyNone,"");
+    gSiteMinderRequestUUID = uid;
+    SendAsyncWebRequest(SMb.Host,443,-1,true,"POST","/pmsxchangev2/services/" & SMb.HotelID,"text/xml; charset=""utf-8""","pmsxchange/HotelAvailNotifRQ",req,"SendSiteMinderRoomAvailableReply",30);
+  end;
+LEnableRoomsAtSiteMinder:;
+  return;
+end;
+
+global
+updating procedure EnableRoomsAtSiteMinder()
+begin
+  Date bd;
+  
+  bd = "";
+  EnableRoomsAtSiteMinder2(false,-1,0,"","",bd,bd);
+//  EnableRoomsAtSiteMinder2(true,-1,"2","DR","01/06/2017","03/06/2017");
+  return;
+end;
+
+global
+updating procedure SendSiteMinderRoomAvailableReply(Area reply,Area replyheader,boolean timeout)
+begin
+  xml x;
+  string 255 path,errstr;
+  record SiteMinderBlock SMb;
+  Boolean testf;
+  transaction LongInt gSiteMinderSyncQueNr;
+  transaction string 255 gSiteMinderRequestUUID;
+  
+  BlockLoad(SMb);
+  if (SMb.LogCommunication!=0) then begin
+    LogAreaToFile(ProgramFolder & "/SiteMinder/" & "_EnableRoomsAtSiteMinder-reply.xml",reply);
+  end;
+
+  if (timeout) then begin
+    LogText2(39172,"EnableRoomsAtSiteMinder",kVerbosityDebugDetailed);
+    LogSiteMinderUUID(gSiteMinderRequestUUID,kSOAPActionReply,"HotelAvailNotifRQ",kSOAPReplyTimeout,"Timeout");
+  end else begin
+    x = ParseXmlArea(reply);
+    testf = XmlNodeExists(x,"SOAP-ENV:Envelope/SOAP-ENV:Body/OTA_HotelAvailNotifRS/Success");
+    if (testf==false) then begin
+      testf = XmlNodeExists(x,"soap:Envelope/soap:Body>/OTA_HotelAvailNotifRS/Success");
+    end;
+    if (testf) then begin
+      LogText2(39170,"EnableRoomsAtSiteMinder",kVerbosityDebugDetailed);
+      LogSiteMinderUUID(gSiteMinderRequestUUID,kSOAPActionReply,"HotelAvailNotifRQ",kSOAPReplySuccess,"");
+      if (gSiteMinderSyncQueNr>0) then begin
+        UpdateSiteMinderSyncQue(gSiteMinderSyncQueNr,kQueueSent);
+      end;
+    end else begin
+      errstr = XmlGet(x,"SOAP-ENV:Envelope/SOAP-ENV:Body/OTA_HotelAvailNotifRS/Errors/Error"); 
+      if (blank(errstr)) then begin
+        errstr = XmlGet(x,"soap:Envelope/soap:Body/OTA_HotelAvailNotifRS/Errors/Error"); 
+      end;
+      LogSiteMinderUUID(gSiteMinderRequestUUID,kSOAPActionReply,"HotelAvailNotifRQ",kSOAPReplyError,errstr);
+      LogText2(39171,"EnableRoomsAtSiteMinder " & errstr,kVerbosityDebugDetailed);
+      if (gSiteMinderSyncQueNr>0) then begin
+        UpdateSiteMinderSyncQue(gSiteMinderSyncQueNr,kQueueFailed);
+      end;
+    end;
+  end;
+  return;
+end;
+
+function string 255 FindAgentAddonItem(record AgentAddonVc AAr,string type)
+begin
+  row AgentAddonVc AArw;
+  Integer i,rwcnt;
+  string 255 res;
+  
+  rwcnt = MatRowCnt(AAr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(AAr,i,AArw);
+    if (AArw.Type==type) then begin
+      res = AArw.ArtCode;
+      i = rwcnt;
+    end;
+  end;
+  FindAgentAddonItem = res;
+  return;
+end;
+
+updating procedure AddSiteMinderServices(record JobVc Jobr,xml x,string rpath)
+begin
+  record SoftFVc SFr;
+  row SoftFVc SFrw;
+  Integer t;
+  string 255 tpath,tstr,sic;
+  record AgentAddonVc AAr;
+  record HotelBlock Hotelb;
+
+  BlockLoad(Hotelb);
+  AAr.CUCode = Jobr.Source;
+  ReadFirstMain(AAr,1,true);
+  SFr.SerNr = Jobr.SerNr;
+  SFr.CustCode = FindJobCustomerCode(Jobr);
+  SFr.Objects = Jobr.Objects;
+  SFr.PriceList = Jobr.PriceList;
+  SFr.CurncyCode = Jobr.CurncyCode;
+  SFr.FrRate = Jobr.FrRate;
+  SFr.ToRateB1 = Jobr.ToRateB1;
+  SFr.ToRateB2 = Jobr.ToRateB2;
+  SFr.BaseRate1 = Jobr.BaseRate1;
+  SFr.BaseRate2 = Jobr.BaseRate2;
+  SFr.InclVAT = Jobr.InclVAT;
+
+  t = 0;
+  tpath = rpath & "/Service[" & t & "]";
+  while (XmlNodeExists(x,tpath)) begin
+    sic = XmlGetAttribute(x,tpath,"ServiceInventoryCode");
+
+    SFrw.ArtCode = FindAgentAddonItem(AAr,sic);
+    if (blank(SFrw.ArtCode)) then begin
+      SFrw.ArtCode = Hotelb.GenItemToInv;
+    end;
+    if (nonblank(SFrw.ArtCode)) then begin
+      tstr = XmlGetAttribute(x,tpath & "/Price/Base","AmountAfterTax");
+      SFrw.Price = ValFromString(tstr,".","");
+      tstr = XmlGetAttribute(x,tpath & "/Price/Total","AmountAfterTax");
+      SFrw.Sum = ValFromString(tstr,".","");
+      SFrw.Quant = SFrw.Sum/SFrw.Price;
+      SFrw.Spec = XmlGet(x,tpath & "/Price/RateDescription/Text");
+      MatRowPut(SFr,MatRowCnt(SFr),SFrw);
+    end;
+    t = t + 1;
+    tpath = rpath & "/Service[" & t & "]";
+  end;
+  if (MatRowCnt(SFr)>0) then begin
+    JobShopBask1VClassSaveRemote(SFr,tstr,t);
+  end;
+  return;
+end;
+
+updating procedure DeleteReservationSiteMinderNote(record JobVc Jobr)
+begin
+  Integer notenr;
+  record NotepadVc Noter;
+  record RLinkVc RLr;
+  
+  notenr = 1;
+  while (ReadRecordLink(Jobr,notenr,Noter,RLr)) begin
+    if (Noter.Classification=="SiteMinder") then begin
+      RecordDelete(Noter);
+    end;
+    notenr = notenr + 1;
+  end;
+  return;
+end;
+
+updating procedure AddSiteMinderGuarantee(var record JobVc Jobr,xml x,string rpath)
+begin
+  string 255 tpath,tstr;
+  record CreditCardVc CCr;
+  record CreditCardVc oldCCr;
+  record CUVc CUr;
+  
+  tpath = rpath & "";
+  CCr.CreditCardNr = XmlGetAttribute(x,rpath & "/GuaranteesAccepted/GuaranteeAccepted/PaymentCard","CardNumber");
+  CCr.ValidThru = XmlGetAttribute(x,rpath & "/GuaranteesAccepted/GuaranteeAccepted/PaymentCard","ExpireDate");
+  tstr = XmlGetAttribute(x,rpath & "/GuaranteesAccepted/GuaranteeAccepted/PaymentCard","CardCode");
+  switch (tstr) begin
+    case "AX": CCr.CredCardType = 3;
+    case "BC": CCr.CredCardType = 19;
+    case "BL": CCr.CredCardType = 15;
+    case "CB": CCr.CredCardType = 8;
+    case "DN": CCr.CredCardType = 4;
+    case "DS": CCr.CredCardType = 7;
+    case "EC": CCr.CredCardType = 20;
+    case "JC": CCr.CredCardType = 9;
+    case "MA": CCr.CredCardType = 5;
+    case "MC": CCr.CredCardType = 2;
+    case "SO": CCr.CredCardType = 21;
+    case "CU": CCr.CredCardType = 22;
+    case "TP": CCr.CredCardType = 23;
+    case "VE": CCr.CredCardType = 6;
+    case "VI": CCr.CredCardType = 1;
+  end;
+  CCr.CUName = XmlGet(x,rpath & "/GuaranteesAccepted/GuaranteeAccepted/PaymentCard/CardHolderName");
+  CUr.Name = CCr.CUName;
+  if (ReadFirstKey("Name",CUr,1,true)) then begin
+    CCr.CUCode = CUr.Code;
+  end;
+  if (nonblank(CCr.CreditCardNr)) then begin
+    oldCCr = CCr;
+    if (ReadFirstMain(oldCCr,1,true)==false) then begin
+      RecordStore(CCr,false);
+    end;
+    Jobr.CreditCard = CCr.CreditCardNr;
+  end;
+  return;
+end;
+
+updating procedure AddSiteMinderProfiles(xml x,string rpath,var record CUVc rsrvCUr)
+begin
+//not Guests. This includes Customers, Travel Agents and Travel Arrangers
+  string 255 tstr;
+  string 255 tpath,npath,firstcu;
+  Integer t,n;
+  record CUVc CUr;
+  record CUVc oldCUr;
+  Boolean existsf;
+
+  t = 0;
+  tpath = rpath & "/ProfileInfo[" & t & "]";
+  while (XmlNodeExists(x,tpath)) begin  
+    RecordNew(CUr);
+
+    
+    CUr.Title = XmlGet(x,tpath & "/Profile/Customer/PersonName/NamePrefix");
+    CUr.Name = XmlGet(x,tpath & "/Profile/Customer/PersonName/GivenName");
+    CUr.Name = CUr.Name & " " & XmlGet(x,tpath & "/Profile/Customer/PersonName/MiddleName");
+    CUr.Name = CUr.Name & " " & XmlGet(x,tpath & "/Profile/Customer/PersonName/Surname");
+
+    CUr.eMail = XmlGet(x,tpath & "/Profile/Customer/Email");
+
+    n = 0;
+    npath = tpath & "/Profile/Customer/Telephone[" & n & "]";
+    while (XmlNodeExists(x,npath)) begin         
+      tstr = XmlGetAttribute(x,npath,"PhoneNumber");
+      switch (XmlGetAttribute(x,npath,"PhoneTechType")) begin
+        case "3":
+          CUr.Fax = XmlGetAttribute(x,npath,"PhoneNumber");
+        case "5":
+          CUr.Mobile = XmlGetAttribute(x,npath,"PhoneNumber");
+        otherwise
+          if (blank(CUr.Phone)) then begin
+            CUr.Phone = XmlGetAttribute(x,npath,"PhoneNumber");
+          end else begin
+            CUr.AltPhone = XmlGetAttribute(x,npath,"PhoneNumber");
+          end;
+      end;
+      n = n + 1;
+      npath = tpath & "/Profile/Customer/Telephone[" & n & "]";
+    end;
+
+    CUr.InvAddr0 = XmlGet(x,tpath & "/Profile/Customer/Address/AddressLine[0]");
+    CUr.InvAddr1 = XmlGet(x,tpath & "/Profile/Customer/Address/AddressLine[1]");
+    CUr.InvAddr2 = XmlGet(x,tpath & "/Profile/Customer/Address/StateProv");
+    CUr.InvAddr3 = XmlGet(x,tpath & "/Profile/Customer/Address/CityName");
+    CUr.InvAddr4 = XmlGet(x,tpath & "/Profile/Customer/Address/PostalCode");
+    CUr.Comment0 = XmlGet(x,tpath & "/Profile/Customer/Address/CountryName");
+    CUr.Comment1 = XmlGet(x,tpath & "/Profile/Customer/Address/CompanyName");
+    CUr.Comment2 = XmlGetAttribute(x,tpath & "/Profile/Customer/CustLoyalty","MembershipID");
+    existsf = false;
+    if (nonblank(CUr.Name)) then begin
+      oldCUr = CUr;
+      existsf = ReadFirstKey("Name",oldCUr,1,true);
+    end;
+    if (existsf==false) then begin
+      if (nonblank(CUr.eMail)) then begin
+        oldCUr = CUr;
+        existsf = ReadFirstKey("eMail",oldCUr,1,true);
+      end;
+    end;
+
+    if (existsf==false) then begin
+      CUr.CUType = 1;
+//      CUr.GuestType = 1;
+      GetNextCustNr(CUr.Code);
+      if (nonblank(CUr.Code)) then begin
+        RecordStore(CUr,false);
+      end;
+    end else begin
+      CUr = oldCUr;
+      if (CUr.CUType==0) then begin
+        CUr.CUType = 1;
+        RecordUpdate(oldCUr,CUr,false);
+      end;
+    end;
+
+    t = t + 1;
+    tpath = rpath & "/ProfileInfo[" & t & "]";
+  end;  
+  rsrvCUr = CUr;
+  return;
+end;
+
+procedure FindSiteMinderRPHs(xml x,string rpath,var array string arphs)
+begin
+  string 255 tpath;
+  Integer t,r;
+  
+  t = 0;
+  tpath = rpath & "/ResGuestRPH[" & t & "]";
+  while (XmlNodeExists(x,tpath)) begin
+    r = arphs.length;  
+    arphs[r] = XmlGetAttribute(x,tpath,"RPH");
+    t = t + 1;
+    tpath = rpath & "/ResGuestRPH[" & t & "]";
+  end;
+  return;
+end;
+
+function Boolean GuestBelongsToReservation(string rph,array string arphs)
+begin
+  Integer i;
+  Boolean res;
+  
+  if (arphs.length==0) then begin
+    res = true;
+    goto LGuestBelongsToReservation;
+  end;
+  for (i=0;i<arphs.length;i=i+1) begin
+    if (rph==arphs[i]) then begin
+      res = true;
+      goto LGuestBelongsToReservation;
+    end;
+  end;
+LGuestBelongsToReservation:;  
+  GuestBelongsToReservation = res;
+  return;
+end;
+
+updating procedure AddSiteMinderGuests(var record JobVc Jobr,xml x,string rpath,array string arphs)
+begin
+  string 255 tstr,rph;
+  string 255 tpath,npath;
+  Integer t,n;
+  record CUVc CUr;
+  record CUVc oldCUr;
+  record CCatVc CCatr;
+  Boolean existsf,testf;
+  row JobVc Jobrw;
+  Integer i,rwcnt;
+
+  t = 0;
+  tpath = rpath & "/ResGuest[" & t & "]";
+  while (XmlNodeExists(x,tpath)) begin  
+    RecordNew(CUr);
+    rph = XmlGetAttribute(x,tpath,"ResGuestRPH");
+
+    if (GuestBelongsToReservation(rph,arphs)==false) then begin
+      goto LSKIPAddSiteMinderGuests;
+    end;
+
+
+    tstr = XmlGetAttribute(x,tpath,"Age");
+
+    tstr = XmlGetAttribute(x,tpath & "/Profiles/ProfileInfo/Profile","ProfileType");
+    
+    CUr.Title = XmlGet(x,tpath & "/Profiles/ProfileInfo/Profile/Customer/PersonName/NamePrefix");
+    CUr.Name = XmlGet(x,tpath & "/Profiles/ProfileInfo/Profile/Customer/PersonName/GivenName");
+    CUr.Name = CUr.Name & " " & XmlGet(x,tpath & "/Profiles/ProfileInfo/Profile/Customer/PersonName/MiddleName");
+    CUr.Name = CUr.Name & " " & XmlGet(x,tpath & "/Profiles/ProfileInfo/Profile/Customer/PersonName/Surname");
+
+    CUr.eMail = XmlGet(x,tpath & "/Profiles/ProfileInfo/Profile/Customer/Email");
+
+    CUr.eMail = XmlGet(x,tpath & "/Profiles/ProfileInfo/Profile/Customer/Email");
+
+    n = 0;
+    npath = tpath & "/Profiles/ProfileInfo/Profile/Customer/Telephone[" & n & "]";
+    while (XmlNodeExists(x,npath)) begin         
+      tstr = XmlGetAttribute(x,npath,"PhoneNumber");
+      switch (XmlGetAttribute(x,npath,"PhoneTechType")) begin
+        case "3":
+          CUr.Fax = XmlGetAttribute(x,npath,"PhoneNumber");
+        case "5":
+          CUr.Mobile = XmlGetAttribute(x,npath,"PhoneNumber");
+        otherwise
+          if (blank(CUr.Phone)) then begin
+            CUr.Phone = XmlGetAttribute(x,npath,"PhoneNumber");
+          end else begin
+            CUr.AltPhone = XmlGetAttribute(x,npath,"PhoneNumber");
+          end;
+      end;
+      n = n + 1;
+      npath = tpath & "/Profiles/ProfileInfo/Profile/Customer/Telephone[" & n & "]";
+    end;
+
+    CUr.InvAddr0 = XmlGet(x,tpath & "/Profiles/ProfileInfo/Profile/Customer/Address/AddressLine[0]");
+    CUr.InvAddr1 = XmlGet(x,tpath & "/Profiles/ProfileInfo/Profile/Customer/Address/AddressLine[1]");
+    CUr.InvAddr2 = XmlGet(x,tpath & "/Profiles/ProfileInfo/Profile/Customer/Address/StateProv");
+    CUr.InvAddr3 = XmlGet(x,tpath & "/Profiles/ProfileInfo/Profile/Customer/Address/CityName");
+    CUr.InvAddr4 = XmlGet(x,tpath & "/Profiles/ProfileInfo/Profile/Customer/Address/PostalCode");
+    CUr.Comment0 = XmlGet(x,tpath & "/Profiles/ProfileInfo/Profile/Customer/Address/CountryName");
+    CUr.Comment1 = XmlGet(x,tpath & "/Profiles/ProfileInfo/Profile/Customer/Address/CompanyName");
+    CUr.Comment2 = XmlGetAttribute(x,tpath & "/Profiles/ProfileInfo/Profile/Customer/CustLoyalty","MembershipID");
+
+    existsf = false;
+//    if (nonblank(CUr.Name)) then begin
+//      oldCUr = CUr;
+//     existsf = ReadFirstKey("Name",oldCUr,1,true);
+//    end;
+    if (nonblank(CUr.eMail)) then begin
+      oldCUr = CUr;
+      existsf = ReadFirstKey("eMail",oldCUr,1,true);
+    end;
+    if (existsf==false) then begin
+      CUr.GuestType = 1;
+      GetNextCustNr(CUr.Code);
+      if (nonblank(CUr.Code)) then begin
+        RecordStore(CUr,false);
+      end;
+    end else begin
+      CUr = oldCUr;
+      if (CUr.GuestType==0) then begin
+        CUr.GuestType = 1;
+        RecordUpdate(oldCUr,CUr,false);
+      end;
+    end;
+    testf = true;
+    rwcnt = MatRowCnt(Jobr);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(Jobr,i,Jobrw);
+      if (Jobrw.GuestCode==CUr.Code) then begin
+        i = rwcnt;
+        testf = false;
+      end;
+    end;
+
+    if (testf) then begin
+      ClearRow(Jobr,Jobrw,1);
+      Jobrw.CUName = CUr.Name;
+      Jobrw.GuestCode = CUr.Code;
+      if (blank(Jobr.LangCode)) then begin
+        Jobr.LangCode = CUr.LangCode;
+      end;
+      Jobr.Newspapers = CUr.Newspaper;        
+      Jobrw.PriceList = CUr.PLCode;
+      if (blank(Jobrw.PriceList)) then begin
+        CCatr.Code = CUr.CustCat;
+        ReadFirstMain(CCatr,1,true);
+        Jobrw.PriceList = CCatr.PLCode;
+      end;
+      Jobrw.CClass = FindHotelClassForClassTerms(CUr.Classification);
+      MatRowPut(Jobr,MatRowCnt(Jobr),Jobrw);
+    end;
+LSKIPAddSiteMinderGuests:;    
+    t = t + 1;
+    tpath = rpath & "/ResGuest[" & t & "]";
+  end;
+  return;
+end;
+
+procedure AddSiteMinderGuestCount(var record JobVc Jobr,xml x,string rpath)
+begin
+  string 255 tstr;
+  string 255 tpath;
+  Integer t;
+
+  Jobr.Children = 0;
+  t = 0;
+  tpath = rpath & "/GuestCounts/GuestCount[" & t & "]";
+
+  while (XmlNodeExists(x,tpath)) begin         
+    tstr = XmlGetAttribute(x,tpath,"AgeQualifyingCode");
+    switch (tstr) begin
+      case "10":
+        tstr = XmlGetAttribute(x,tpath,"Count");
+        Jobr.Persons = StringToLongInt(tstr);
+      case "8":
+        tstr = XmlGetAttribute(x,tpath,"Count");
+        Jobr.Children = Jobr.Children + StringToLongInt(tstr);
+      case "7":
+        tstr = XmlGetAttribute(x,tpath,"Count");
+        Jobr.Children = Jobr.Children + StringToLongInt(tstr);
+    end;
+
+    t = t + 1;
+    tpath = rpath & "/GuestCounts/GuestCount[" & t & "]";
+  end;
+  Jobr.Pax = Jobr.Persons + Jobr.Children;
+  if (Jobr.Children==0) then begin Jobr.Children = -1; end;
+  return;
+end;
+
+updating procedure AddSiteMinderComments(var record JobVc Jobr,xml x,string rsvpath,string rpath)
+begin
+  string 255 tstr;
+  string 255 tpath,npath;
+  Integer t,n;
+  record NotepadVc Noter;
+  
+  RecordNew(Noter);
+  
+  t = 0;
+  tpath = rpath & "/RoomTypes/RoomType/AdditionalDetails/AdditionalDetail[" & t & "]";
+  while (XmlNodeExists(x,tpath)) begin         
+    tstr = XmlGetAttribute(x,tpath,"Type");
+    
+    n = 0;
+    npath = tpath & "/DetailDescription/Text[" & n & "]";
+    while (XmlNodeExists(x,npath)) begin         
+      tstr = XmlGet(x,npath);
+      if (nonblank(tstr)) then begin
+        AddToText(tstr,Noter);
+        AddToText(chr(10),Noter);
+      end;
+      n = n + 1;
+      npath = tpath & "/DetailDescription/Text[" & n & "]";
+    end;
+
+    t = t + 1;
+    tpath = rpath & "/RoomTypes/RoomType/AdditionalDetails/AdditionalDetail[" & t & "]";
+  end;
+  AddToText(chr(10),Noter); 
+
+  t = 0;
+  tpath = rpath & "/RoomTypes/RoomType/RoomDescription[" & t & "]";
+  while (XmlNodeExists(x,tpath)) begin             
+
+    n = 0;
+    npath = tpath & "/Text[" & n & "]";
+    while (XmlNodeExists(x,npath)) begin         
+      tstr = XmlGet(x,npath);
+      if (nonblank(tstr)) then begin
+        AddToText(tstr,Noter);
+        AddToText(chr(10),Noter);
+      end;
+      n = n + 1;
+      npath = tpath & "/Text[" & n & "]";
+    end;
+
+    t = t + 1;
+    tpath = rpath & "/RoomTypes/RoomType/RoomDescription[" & t & "]";
+  end;
+  AddToText(chr(10),Noter); 
+
+
+  t = 0;
+  tpath = rpath & "/Comments/Comment[" & t & "]";
+  while (XmlNodeExists(x,tpath)) begin         
+
+    n = 0;
+    npath = tpath & "/Text[" & n & "]";
+    while (XmlNodeExists(x,npath)) begin         
+      tstr = XmlGet(x,npath);
+      if (nonblank(tstr)) then begin
+        AddToText(tstr,Noter);
+        AddToText(chr(10),Noter);
+      end;
+      n = n + 1;
+      npath = tpath & "/Text[" & n & "]";
+    end;
+    
+    t = t + 1;
+    tpath = rpath & "/Comments/Comment[" & t & "]";
+  end;
+  AddToText(chr(10),Noter); 
+
+
+  t = 0;
+  tpath = rsvpath & "/ResGuests/ResGuest[" & t & "]";
+  while (XmlNodeExists(x,tpath)) begin         
+    tstr = XmlGetAttribute(x,tpath,"ArrivalTime");
+    if (nonblank(tstr)) then begin
+      tstr = "ArrivalTime: " & XmlGetAttribute(x,tpath,"ArrivalTime");
+      Jobr.ConfComment = Jobr.ConfComment & tstr;
+      AddToText(tstr,Noter);
+      AddToText(chr(10),Noter);
+    end;
+    
+    t = t + 1;
+    tpath = rsvpath & "/ResGuests/ResGuest[" & t & "]";
+  end;
+  AddToText(chr(10),Noter); 
+  
+  t = 0;
+  tpath = rsvpath & "/ResGuests/ResGuest/Comments/Comment[" & t & "]";
+  while (XmlNodeExists(x,tpath)) begin         
+    tstr = XmlGet(x,tpath & "/Text");
+    if (nonblank(tstr)) then begin
+      AddToText(tstr,Noter);
+      AddToText(chr(10),Noter);
+    end;
+    
+    t = t + 1;
+    tpath = rsvpath & "/ResGuests/ResGuest/Comments/Comment[" & t & "]";
+  end;
+  AddToText(chr(10),Noter); 
+
+  t = 0;
+  tpath = rsvpath & "/ResGlobalInfo/Comments/Comment[" & t & "]";
+  while (XmlNodeExists(x,tpath)) begin         
+  
+    tstr = XmlGet(x,tpath & "/Text");
+    if (nonblank(tstr)) then begin
+      AddToText(tstr,Noter);
+      AddToText(chr(10),Noter);
+    end;
+    
+    t = t + 1;
+    tpath = rsvpath & "/ResGlobalInfo/Comments/Comment[" & t & "]";
+  end;
+
+  AddToText(chr(10),Noter); 
+
+  tstr = XmlGet(x,rsvpath & "/ResGlobalInfo/Guarantee/GuaranteeDescription/Text");
+  AddToText(tstr,Noter);
+  AddToText(chr(10),Noter); 
+
+  t = 0;
+  tpath = rsvpath & "/ResGlobalInfo/Guarantee/Comments/Comment[" & t & "]";
+  while (XmlNodeExists(x,tpath)) begin         
+    tstr = XmlGetAttribute(x,tpath,"Name");
+    switch (tstr) begin
+      case "PaymentReferenceId":
+        tstr = "PaymentReferenceId: " & XmlGet(x,tpath & "/Text");
+        AddToText(tstr,Noter);
+        AddToText(chr(10),Noter);
+    end;
+    
+    t = t + 1;
+    tpath = rsvpath & "/ResGlobalInfo/Guarantee/Comments/Comment[" & t & "]";
+  end;
+  
+
+  AddToText(chr(10),Noter); 
+
+  if (SizeTextCnt(Noter)>0) then begin
+    Noter.Classification = "SiteMinder";
+    Noter.SerNr = NextSerNr("NotepadVc",CurrentDate,-1,false,"");
+    if (RecordStore(Noter,false)) then begin
+      CreateRecordLink(Jobr,CurrentCompany,Noter,CurrentCompany);  
+    end;
+  end;  
+
+  return;
+end;
+
+updating function LongInt CreateGroupReservation(record SiteMinderBlock SMb,record HotelBlock Hotelb,record CUVc CUr,Date regdate,string refstr,string bookorigin)
+begin
+  record JobVc Jobr;
+  record JobVc oldJobr;
+  
+  Jobr.RefStr = refstr;
+  if (ReadFirstKey("GroupRefStr",Jobr,1,true)) then begin
+    RecordCopy(oldJobr,Jobr);
+    Jobr.BookOrigin = bookorigin;
+    Jobr.CUCode = CUr.Code;
+    PasteCUCodeToJob2(Jobr,-1,false);
+    RecordUpdate(oldJobr,Jobr,false);
+  end else begin
+    RecordNew(Jobr);
+    Jobr.Objects = "";
+    Jobr.ReservationType = kReservationTypeGroup;
+    Jobr.RefStr = refstr;
+    Jobr.BookOrigin = bookorigin;
+    Jobr.RegDate = regdate;
+    Jobr.BookDate = Jobr.RegDate;
+    Jobr.ConfDate = Jobr.RegDate;
+    Jobr.TransDate = Jobr.RegDate;
+    Jobr.CUCode = CUr.Code;
+    PasteCUCodeToJob2(Jobr,-1,false);
+    Jobr.ResStatus = SMb.ResStatus;
+    if (blank(Jobr.ResStatus)) then begin
+      if (nonblank(Hotelb.WebWaitPayStatus)) then begin
+        Jobr.ResStatus = Hotelb.WebWaitPayStatus;
+      end;
+    end;
+    Jobr.SerNr = NextSerNr("JobVc",Jobr.TransDate,-1,false,"");
+    if (Jobr.SerNr>0) then begin
+      RecordStore(Jobr,false);
+    end;
+  end;
+  CreateGroupReservation = Jobr.SerNr;
+  return;
+end;
+ 
+updating procedure ConfirmReservations(record SiteMinderBlock SMb,array record JobVc aconfJobr,vector Boolean vSiteMindeQueConfirm)
+begin
+  Integer r;
+  record JobVc confJobr;
+  Area req;
+  string 255 timestamp,tstr;
+  transaction record RcVc gSiteMindeQueConfirm;
+  array string 255 atags;
+  Integer i,f;
+  UUID uid;
+  transaction string 255 gSiteMinderRequestUUID;
+  
+  if (SMb.Enable!=0 or blank(SMb.HotelCode)) then begin
+    AddTextToArea("<?xml version=""1.0"" encoding=""UTF-8""?>",req);
+    OpenXmlTagWithAttr("soap:Envelope","xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/""",req);
+
+    AddSecurityHeader(SMb,req);
+    AddTextToArea("<soap:Body>" ,req);
+
+    timestamp = DateToString(CurrentDate,"YYYY-MM-DD") & "T" & TimeToString(CurrentTime) & TimeOffset(SMb.GMTOffset);
+
+    uid = MakeUUID;
+    OpenXmlTagWithAttr("OTA_NotifReportRQ","xmlns=""http://www.opentravel.org/OTA/2003/05"" Version=""1.0"" TimeStamp=""" & timestamp & """ EchoToken=""" & uid & """",req);
+    AddTextToArea("<Success/>" ,req);
+    OpenXmlTag("NotifDetails",req);
+    OpenXmlTag("HotelNotifReport",req);
+    OpenXmlTag("HotelReservations",req);
+
+    for (r=0;r<aconfJobr.length;r=r+1) begin
+      confJobr = aconfJobr[r];
+      tstr = "<HotelReservation ";
+      switch (confJobr.Comment) begin
+        case "Book":
+          tstr = tstr & "CreateDateTime=""" & confJobr.CUName & """ ResStatus=""" & confJobr.Comment & """>";
+        case "Modify":
+          tstr = tstr & "LastModifyDateTime=""" & confJobr.SourceName & """ ResStatus=""" & confJobr.Comment & """>";
+        case "Cancel":
+          tstr = tstr & "LastModifyDateTime=""" & confJobr.SourceName & """ ResStatus=""" & confJobr.Comment & """>";
+      end;
+      AddTextToArea(tstr,req);
+      AddTextToArea("<UniqueID Type=""16"" ID=""" & confJobr.AgentRefStr & """/>",req);
+      OpenXmlTag("ResGlobalInfo",req);
+      OpenXmlTag("HotelReservationIDs",req);
+      AddTextToArea("<HotelReservationID ResID_Type=""14"" ResID_Value=""" & confJobr.RefStr & """/>",req);
+      CloseXmlTag("HotelReservationIDs",req);
+      CloseXmlTag("ResGlobalInfo",req);
+      CloseXmlTag("HotelReservation",req);
+    end;
+    
+    CloseXmlTag("HotelReservations",req);
+    CloseXmlTag("HotelNotifReport",req);
+    CloseXmlTag("NotifDetails",req);
+    CloseXmlTag("OTA_NotifReportRQ",req);
+    
+//confJobr.Pax   errors    
+    AddTextToArea("</soap:Body>" ,req);
+    AddTextToArea("</soap:Envelope>" ,req);
+
+
+    GetVectorTags(vSiteMindeQueConfirm,atags);
+    f = 1;
+    for (i=0;i<atags.length;i=i+1) begin
+      switch (f) begin
+        case 1:
+          gSiteMindeQueConfirm.f1 = AddStringToStringList(gSiteMindeQueConfirm.f1,atags[i]);
+          if (len(gSiteMindeQueConfirm.f1)>200) then begin f = 2; end;
+        case 2:
+          gSiteMindeQueConfirm.f2 = AddStringToStringList(gSiteMindeQueConfirm.f2,atags[i]);
+      end;
+    end;
+    if (SMb.LogCommunication!=0) then begin
+      LogAreaToFile(ProgramFolder & "/SiteMinder/" & "_siteminder_confirm_res_req.xml",req);
+    end;
+    LogSiteMinderUUID(uid,kSOAPActionRequest,"NotifReportRQ",kSOAPReplyNone,"");
+    gSiteMinderRequestUUID = uid;
+    SendAsyncWebRequest(SMb.Host,443,-1,true,"POST","/pmsxchangev2/services/" & SMb.HotelID,"text/xml; charset=""utf-8""","pmsxchange/NotifReportRQ",req,"ConfirmSiteMinderReservationsReply",30);    
+  end;
+
+  return;
+end;
+ 
+global
+updating procedure ConfirmSiteMinderReservationsReply(Area reply,Area replyheader,boolean timeout)
+begin
+  Integer rescnt,resroomcnt,cnt;
+  record SiteMinderBlock SMb;
+  xml x;
+  string 255 rsvpath,errstr,qnr;
+  Boolean testf;
+  transaction record RcVc gSiteMindeQueConfirm;
+  LongInt pos;
+  transaction string 255 gSiteMinderRequestUUID;
+
+  BlockLoad(SMb);
+  if (SMb.LogCommunication!=0) then begin
+    LogAreaToFile(ProgramFolder & "/SiteMinder/" & "_siteminder_confirm_res_reply.xml",reply);
+  end;
+
+  if (timeout) then begin
+    LogText2(39172,"ConfirmSiteMinderReservations",kVerbosityDebugDetailed);
+    LogSiteMinderUUID(gSiteMinderRequestUUID,kSOAPActionReply,"NotifReportRQ",kSOAPReplyTimeout,"Timeout");
+  end else begin
+    x = ParseXmlArea(reply);
+    testf = XmlNodeExists(x,"SOAP-ENV:Envelope/SOAP-ENV:Body/OTA_NotifReportRS/Success");
+    if (testf==false) then begin
+      testf = XmlNodeExists(x,"soap:Envelope/soap:Body>/OTA_NotifReportRS/Success");
+    end;
+    if (testf) then begin
+      LogSiteMinderUUID(gSiteMinderRequestUUID,kSOAPActionReply,"NotifReportRQ",kSOAPReplySuccess,"");
+      LogText2(39170,"ConfirmSiteMinderReservations",kVerbosityDebugDetailed);
+      pos = 0;
+      GetNextSubstring(gSiteMindeQueConfirm.f1,pos,",",qnr);
+      while (nonblank(qnr)) begin
+        UpdateSiteMinderSyncQue(StringToLongInt(qnr),kQueueNotSent);
+        GetNextSubstring(gSiteMindeQueConfirm.f1,pos,",",qnr);
+      end;
+      pos = 0;
+      GetNextSubstring(gSiteMindeQueConfirm.f2,pos,",",qnr);
+      while (nonblank(qnr)) begin
+        UpdateSiteMinderSyncQue(StringToLongInt(qnr),kQueueNotSent);
+        GetNextSubstring(gSiteMindeQueConfirm.f2,pos,",",qnr);
+      end;
+      
+    end else begin
+      errstr = XmlGet(x,"SOAP-ENV:Envelope/SOAP-ENV:Body/OTA_NotifReportRS/Errors/Error"); 
+      if (blank(errstr)) then begin
+        errstr = XmlGet(x,"soap:Envelope/soap:Body/OTA_NotifReportRS/Errors/Error"); 
+      end;
+      LogSiteMinderUUID(gSiteMinderRequestUUID,kSOAPActionReply,"NotifReportRQ",kSOAPReplyError,errstr);
+      LogText2(39171,"ConfirmSiteMinderReservations " & errstr,kVerbosityDebugDetailed);
+    end;
+  end;
+
+
+LConfirmSiteMinderReservationsReply:;  
+  return;
+end;
+ 
+updating procedure DeleteDaughters(LongInt grrsrvnr)
+begin
+  record JobVc Jobr;
+  Boolean found;
+  
+  found = true;
+  Jobr.Mother = grrsrvnr;
+  while (LoopKey("MotherKey",Jobr,1,found)) begin
+    if (Jobr.Mother!=grrsrvnr) then begin found = false; end;
+    if (found) then begin
+      DeleteReservationAccount(Jobr.SerNr);
+      DeleteReservationSiteMinderNote(Jobr);
+      RecordDelete(Jobr);
+      StepBack(Jobr);
+    end;
+  end;
+  return;
+end;
+
+updating function Integer CancelDaughters(LongInt grrsrvnr,string bookorigin)
+begin
+  Integer err;
+  record JobVc Jobr;
+  record JobVc oldJobr;
+  Boolean found;
+  record ReservationStatusVc RSr;
+  string 255 tstr;
+  
+  found = true;
+  Jobr.Mother = grrsrvnr;
+  while (LoopKey("MotherKey",Jobr,1,found)) begin
+    if (Jobr.Mother!=grrsrvnr) then begin found = false; end;
+    if (found) then begin
+      RecordCopy(oldJobr,Jobr);
+      FindCancelledReservationState(RSr);
+      Jobr.ResStatus = RSr.Code;
+      Jobr.ResCode = "";
+      Jobr.Resources = "";
+      JobPasteType(Jobr,Jobr.Type);
+      if (nonblank(bookorigin)) then begin
+        Jobr.BookOrigin = bookorigin;
+      end;          
+      if (RecordUpdate(oldJobr,Jobr,true)!=0) then begin
+        err = 1;
+      end;
+    end;
+  end;
+  CancelDaughters = err;
+  return;
+end;
+ 
+global
+updating function LongInt AddJobToSiteMinderSyncQue(record JobVc Jobr,Boolean addroomf,Integer reduce,Boolean testexistingf)
+begin
+  record SiteMinderSyncQueVc SMSQr;
+  record SiteMinderSyncQueVc oldSMSQr;
+  LongInt res;
+  Boolean newf,found,testf;
+
+  newf = true;
+  if (testexistingf) then begin
+    found = true;
+    SMSQr.Type = Jobr.Type;
+    while (LoopKey("PrepType",SMSQr,1,found)) begin
+      if (SMSQr.Type!=Jobr.Type) then begin found = false; end;
+      if (found) then begin
+        testf = true;
+        if (SMSQr.StartDate!=Jobr.TransDate) then begin testf = false; end;
+        if (SMSQr.StartTime!=Jobr.StartTime) then begin testf = false; end;
+        if (SMSQr.EndDate!=Jobr.EndDate) then begin testf = false; end;
+        if (SMSQr.EndTime!=Jobr.EndTime) then begin testf = false; end;
+        if (SMSQr.FileName!="JobVc") then begin testf = false; end;
+        if (testf) then begin
+          newf = false;
+          found = false;
+        end;
+      end;
+    end;
+  end;
+  if (newf) then begin
+    if (addroomf) then begin
+      SMSQr.ResCode = Jobr.ResCode;
+    end;
+    SMSQr.Type = Jobr.Type;
+    SMSQr.ResUsage = "";
+    SMSQr.StartDate = Jobr.TransDate;
+    SMSQr.StartTime = Jobr.StartTime;
+    SMSQr.EndDate = Jobr.EndDate;
+    SMSQr.EndTime = Jobr.EndTime;
+
+    SMSQr.Status = kQueueNotSent;
+    SMSQr.TransDate = CurrentDate;
+    SMSQr.TransTime = CurrentTime;
+    SMSQr.FileName = "JobVc";
+    SMSQr.TransNr = Jobr.SerNr;
+    SMSQr.ReduceAvail = reduce;
+    SMSQr.QueType = kSiteMinderQueueTypeAvailability;
+
+    SMSQr.SerNr = NextSerNr("SiteMinderSyncQueVc",SMSQr.TransDate,-1,false,"");
+    if (SMSQr.SerNr>0) then begin
+      RecordStore(SMSQr,false);
+      res = SMSQr.SerNr;
+    end;
+  end;
+  AddJobToSiteMinderSyncQue = res;
+  return;
+end;
+ 
+updating procedure UpdateSiteMinderSyncQue(LongInt quenr,Integer status)
+begin
+  record SiteMinderSyncQueVc SMSQr;
+  record SiteMinderSyncQueVc oldSMSQr;
+  
+  if (quenr>0) then begin
+    SMSQr.SerNr = quenr;
+    if (ReadFirstMain(SMSQr,1,true)) then begin
+      if (SMSQr.Status!=status and SMSQr.Status!=kQueueSent) then begin
+        oldSMSQr = SMSQr;
+        SMSQr.Status = status;
+        RecordUpdate(oldSMSQr,SMSQr,false);
+      end;
+    end;
+  end;
+  return;
+end;
+ 
+updating procedure AddReservations(record SiteMinderBlock SMb,Area reply)
+begin  
+  LongInt rescnt,pos;
+  Integer t,err,r;
+  string 255 rsvpath,roompath,tstr,tstr2,status,bookorigin,refstr,agentrefstr,agentcommision;
+  string 255 tpath;
+  xml x;
+  record JobVc Jobr;
+  record JobVc oldJobr;
+  record JobVc blankJobr;
+  record JobVc tmpJobr;
+  record ReservationStatusVc RSr;
+  Time gmtoffset,tt;
+  Boolean groupreservationf,testf;
+  LongInt grrsrvnr;
+  record JobVc confJobr;
+  array record JobVc aconfJobr;
+  record HotelBlock Hotelb;
+  record CUVc rsrvCUr;
+  Date regdate,modifydate;
+  Time regtime,modifytime;
+  array string 255 arphs;
+  vector Boolean vSiteMindeQueConfirm;
+  LongInt l;
+  transaction Boolean gUpdateReservationFromPartnerInterface;
+
+  BlockLoad(Hotelb);
+  x = ParseXmlArea(reply);
+  rescnt = 0;
+  rsvpath = "SOAP-ENV:Envelope/SOAP-ENV:Body/OTA_ResRetrieveRS/ReservationsList/HotelReservation[" & rescnt & "]";
+  while (XmlNodeExists(x,rsvpath)) begin
+    RecordClear(confJobr);
+    err = 0;
+
+    status  = XmlGetAttribute(x,rsvpath,"ResStatus");
+
+
+    t = 0;
+    tpath = rsvpath & "/UniqueID[" & t & "]";
+    while (XmlNodeExists(x,tpath)) begin         
+      switch (XmlGetAttribute(x,tpath,"Type")) begin
+        case "14": 
+          refstr = XmlGetAttribute(x,tpath,"ID");
+          confJobr.RefStr = refstr;
+        case "16": 
+          confJobr.AgentRefStr = XmlGetAttribute(x,tpath,"ID");
+//          amessageid[rescnt] = XmlGetAttribute(x,tpath,"ID");
+      end;
+
+      t = t + 1;
+      tpath = rsvpath & "/UniqueID[" & t & "]";
+    end;
+
+    tstr = XmlGetAttribute(x,rsvpath,"CreateDateTime");
+    confJobr.CUName = tstr;
+    
+    pos = 0;
+    GetNextSubstring(tstr,pos,"T",tstr2);
+    regdate = DateFromString(tstr2,"YYYY-MM-DD");
+    GetNextSubstring(tstr,pos,"+",tstr2);
+    regtime = StringToTime(tstr2);
+    GetNextSubstring(tstr,pos,"+",tstr2);
+    gmtoffset = StringToTime(tstr2);
+    regtime = TimeSub(regtime,gmtoffset);
+    if (SMb.GMTOffset>0) then begin
+      tt = TimeAdd(regtime,ValToTime(SMb.GMTOffset));
+      if (tt<regtime) then begin//means next day
+        regdate = AddDay(regdate,1);
+      end;
+    end else begin
+      tt = TimeSub(regtime,ValToTime(-SMb.GMTOffset));
+      if (tt>regtime) then begin//means next day
+        regdate = AddDay(regdate,-1);
+      end;
+    end;
+    confJobr.RegDate = regdate;
+    regtime = tt;
+
+    tstr = XmlGetAttribute(x,rsvpath,"LastModifyDateTime");
+    confJobr.SourceName = tstr;
+    
+    pos = 0;
+    GetNextSubstring(tstr,pos,"T",tstr2);
+    modifydate = DateFromString(tstr2,"YYYY-MM-DD");
+    GetNextSubstring(tstr,pos,"+",tstr2);
+    modifytime = StringToTime(tstr2);
+    GetNextSubstring(tstr,pos,"+",tstr2);
+    gmtoffset = StringToTime(tstr2);
+    modifytime = TimeSub(modifytime,gmtoffset);
+    if (SMb.GMTOffset>0) then begin
+      tt = TimeAdd(modifytime,ValToTime(SMb.GMTOffset));
+      if (tt<modifytime) then begin//means next day
+        modifydate = AddDay(modifydate,1);
+      end;
+    end else begin
+      tt = TimeSub(modifytime,ValToTime(-SMb.GMTOffset));
+      if (tt>modifytime) then begin//means next day
+        modifydate = AddDay(modifydate,-1);
+      end;
+    end;
+    confJobr.ModifyDate = modifydate;
+    modifytime = tt;
+
+
+    t = 0;
+    tpath = rsvpath & "/POS/Source[" & t & "]/BookingChannel";
+    while (XmlNodeExists(x,tpath)) begin
+      if (XmlGetAttribute(x,tpath,"Primary")=="true") then begin
+        bookorigin = XmlGetAttribute(x,rsvpath & "/POS/Source[0]/BookingChannel/CompanyName","Code");
+      end;
+      t = t + 1;
+      tpath = rsvpath & "/POS/Source[" & t & "]/BookingChannel";
+    end;
+    if (blank(bookorigin)) then begin
+      bookorigin = SMb.BookOrigin;
+    end;
+
+    AddSiteMinderProfiles(x,rsvpath & "/ResGlobalInfo/Profiles",rsrvCUr);
+    AddSiteMinderGuarantee(Jobr,x,rsvpath & "/ResGlobalInfo/Guarantee");
+    agentrefstr = XmlGetAttribute(x,roompath & "/ResGlobalInfo/HotelReservationIDs/HotelReservationID","ResID_Value");           
+    agentcommision = XmlGetAttribute(x,roompath & "/ResGlobalInfo/Fees/Fee","Amount");
+
+    t = 0;
+    tpath = rsvpath & "/RoomStays/RoomStay[" & t & "]";
+    while (XmlNodeExists(x,tpath)) begin
+      t = t + 1;
+      tpath = rsvpath & "/RoomStays/RoomStay[" & t & "]";
+      if (t>1) then begin
+        groupreservationf = true;
+      end;
+    end;
+    if (groupreservationf) then begin
+      grrsrvnr = CreateGroupReservation(SMb,Hotelb,rsrvCUr,regdate,refstr,bookorigin);
+      if (grrsrvnr<0) then begin
+        goto LSKIPCreatingNewReservation;
+      end;
+    end;
+    
+    r = 0;
+    roompath = rsvpath & "/RoomStays/RoomStay[" & r & "]";
+    while (XmlNodeExists(x,roompath)) begin
+      RecordNew(Jobr);
+      ClearArray(arphs);
+            
+      Jobr.RefStr = refstr;
+    
+      switch (status) begin
+        case "Book":
+          Jobr.RegDate = regdate;
+          Jobr.BookDate = Jobr.RegDate;
+          Jobr.ConfDate = Jobr.RegDate;
+          Jobr.RegTime = regtime;
+          Jobr.ModifyDate = modifydate;
+          Jobr.ModifyTime = modifytime;
+
+          FindSiteMinderRPHs(x,roompath & "/ResGuestRPHs",arphs);
+          AddSiteMinderGuests(Jobr,x,rsvpath & "/ResGuests",arphs);
+        
+          Jobr.Mother = grrsrvnr;
+        
+          Jobr.Type = XmlGetAttribute(x,roompath & "/RoomTypes/RoomType","RoomTypeCode");
+          JobPasteType(Jobr,"");
+          Jobr.ResUsage = XmlGetAttribute(x,roompath & "/RatePlans/RatePlan","RatePlanCode");
+          JobPasteResUsage(Jobr,"");
+
+          Jobr.Source = SMb.CUCode;
+          PasteSourceToJob(Jobr,"");
+                    
+          Jobr.Comment = XmlGetAttribute(x,tpath,"Configuration");
+          Jobr.AgentRefStr = agentrefstr;
+
+
+          Jobr.AgentCommision = StringToVal(agentcommision,M4Val);
+
+          tstr = XmlGetAttribute(x,roompath & "/TimeSpan","Start");
+          Jobr.TransDate = DateFromString(tstr,"YYYY-MM-DD");
+          tstr = XmlGetAttribute(x,roompath & "/TimeSpan","End");
+          Jobr.EndDate = DateFromString(tstr,"YYYY-MM-DD");            
+          Jobr.NrOfDays = DateDiff(Jobr.EndDate,Jobr.TransDate);
+
+          Jobr.CUCode = rsrvCUr.Code;
+          PasteCUCodeToJob2(Jobr,-1,false);
+
+          tstr = XmlGetAttribute(x,roompath & "/Total","AmountAfterTax");
+
+          Jobr.Sum4 = ValFromString(tstr,".","");
+          Jobr.Sum4 = Jobr.Sum4 / Jobr.NrOfDays;//AgreedPrice
+          
+          Jobr.CurncyCode = XmlGetAttribute(x,roompath & "/Total","CurrencyCode");
+          JobVc_PasteCurncyCode(Jobr,"");
+
+          AddSiteMinderGuestCount(Jobr,x,roompath);
+        
+          Jobr.BookOrigin = bookorigin;
+
+          Jobr.ResStatus = SMb.ResStatus;
+          if (blank(Jobr.ResStatus)) then begin
+            if (nonblank(Hotelb.WebWaitPayStatus)) then begin
+              Jobr.ResStatus = Hotelb.WebWaitPayStatus;
+            end;
+          end;
+
+  //ConfComment
+          Jobr.SerNr = NextSerNr("JobVc",Jobr.TransDate,-1,false,"");            
+  //LogText(0,"Jobr.SerNr " & Jobr.SerNr & " Jobr.RefStr " & Jobr.RefStr);        
+          if (Jobr.SerNr>0) then begin
+            if (RecordStore(Jobr,false)) then begin
+              AddSiteMinderComments(Jobr,x,rsvpath,roompath);
+              AddSiteMinderServices(Jobr,x,roompath & "/Services");
+             
+              l = AddJobToSiteMinderSyncQue(Jobr,false,0,true);
+              vSiteMindeQueConfirm[l] = true;
+              
+              confJobr.SerNr = Jobr.SerNr;
+            end else begin
+              err = 1;
+            end;
+          end;
+         
+  //           roompath
+
+  //RatePlans?            
+        case "Modify":
+          testf = false;
+          Jobr.RefStr = refstr;
+          if (groupreservationf) then begin
+            DeleteDaughters(grrsrvnr);
+            testf = ReadFirstKey("NormalRefStr",Jobr,1,true);
+          end else begin
+            testf = ReadFirstKey("NormalRefStr",Jobr,1,true);
+            if (testf) then begin
+              RecordCopy(oldJobr,Jobr);
+              DeleteReservationAccount(Jobr.SerNr);
+              DeleteReservationSiteMinderNote(Jobr);
+            end;
+          end;
+          if (testf) then begin
+            if (groupreservationf) then begin
+            end else begin
+              Jobr.ResCode = "";
+              Jobr.Resources = "";
+              JobPasteType(Jobr,Jobr.Type);
+              while (MatRowCnt(Jobr)) begin
+                MatRowDelete(Jobr,0);
+              end;
+              if (RecordUpdate(oldJobr,Jobr,true)==0) then begin
+                testf = ReadFirstMain(Jobr,1,true);
+                RecordCopy(oldJobr,Jobr);
+              end else begin
+                testf = false;
+                err = 1;
+              end;
+            end;
+
+            if (testf) then begin
+              gUpdateReservationFromPartnerInterface = true;
+              Jobr.ModifyDate = modifydate;
+              Jobr.ModifyTime = modifytime;
+            
+              FindSiteMinderRPHs(x,roompath & "/ResGuestRPHs",arphs);
+              AddSiteMinderGuests(Jobr,x,rsvpath & "/ResGuests",arphs);
+
+              Jobr.Type = XmlGetAttribute(x,roompath & "/RoomTypes/RoomType","RoomTypeCode");
+              JobPasteType(Jobr,"");
+              Jobr.ResUsage = XmlGetAttribute(x,roompath & "/RatePlans/RatePlan","RatePlanCode");
+              JobPasteResUsage(Jobr,"");
+         
+              Jobr.Source = SMb.CUCode;
+              PasteSourceToJob(Jobr,"");
+          
+              Jobr.CUCode = rsrvCUr.Code;
+              PasteCUCodeToJob2(Jobr,-1,false);
+
+              Jobr.Comment = XmlGetAttribute(x,tpath,"Configuration");
+         
+              Jobr.AgentRefStr = agentrefstr;
+
+
+              Jobr.AgentCommision = StringToVal(agentcommision,M4Val);
+
+              tstr = XmlGetAttribute(x,roompath & "/TimeSpan","Start");
+              Jobr.TransDate = DateFromString(tstr,"YYYY-MM-DD");
+              tstr = XmlGetAttribute(x,roompath & "/TimeSpan","End");
+              Jobr.EndDate = DateFromString(tstr,"YYYY-MM-DD");            
+              Jobr.NrOfDays = DateDiff(Jobr.EndDate,Jobr.TransDate);
+
+
+              tstr = XmlGetAttribute(x,roompath & "/Total","AmountAfterTax");
+              Jobr.Sum4 = ValFromString(tstr,".","");
+              Jobr.Sum4 = Jobr.Sum4 / Jobr.NrOfDays;//AgreedPrice
+          
+              Jobr.CurncyCode = XmlGetAttribute(x,roompath & "/Total","CurrencyCode");
+              JobVc_PasteCurncyCode(Jobr,"");
+
+              AddSiteMinderGuestCount(Jobr,x,roompath);
+
+              if (nonblank(bookorigin)) then begin
+                Jobr.BookOrigin = bookorigin;
+              end;
+              if (groupreservationf) then begin
+                Jobr.SerNr = NextSerNr("JobVc",Jobr.TransDate,-1,false,"");            
+    //LogText(0,"Jobr.SerNr " & Jobr.SerNr & " Jobr.RefStr " & Jobr.RefStr);        
+                if (Jobr.SerNr>0) then begin
+                  if (RecordStore(Jobr,false)) then begin
+                    AddSiteMinderComments(Jobr,x,rsvpath,roompath);
+                    AddSiteMinderServices(Jobr,x,roompath & "/Services");
+                  end else begin
+                    err = 1;
+                  end;
+                end;
+              end else begin
+                if (RecordUpdate(oldJobr,Jobr,true)==0) then begin
+                  AddSiteMinderComments(Jobr,x,rsvpath,roompath);
+                  AddSiteMinderServices(Jobr,x,roompath & "/Services");
+                
+                  if (Jobr.TransDate!=oldJobr.TransDate or Jobr.EndDate!=oldJobr.EndDate) then begin
+                    tmpJobr = Jobr;
+                    if (tmpJobr.TransDate>oldJobr.TransDate) then begin
+                      tmpJobr.TransDate = oldJobr.TransDate;
+                    end;
+                    if (tmpJobr.EndDate<oldJobr.EndDate) then begin
+                      tmpJobr.EndDate = oldJobr.EndDate;
+                    end;      
+  
+                    l = AddJobToSiteMinderSyncQue(tmpJobr,false,0,true);
+                    vSiteMindeQueConfirm[l] = true;
+                  end;
+                  confJobr.SerNr = Jobr.SerNr;
+                end else begin
+                  err = 1;
+                end;
+              end;   
+              gUpdateReservationFromPartnerInterface = false;
+            end;       
+          end;
+        case "Cancel":
+          testf = false;
+          Jobr.RefStr = refstr;
+          if (groupreservationf) then begin
+            if (grrsrvnr>0) then begin
+              err = CancelDaughters(grrsrvnr,bookorigin);
+            end else begin
+              err = 2;
+            end;
+            testf = ReadFirstKey("GroupRefStr",Jobr,1,true);
+          end else begin
+            testf = ReadFirstKey("NormalRefStr",Jobr,1,true);
+          end;
+
+          if (testf) then begin
+            RecordCopy(oldJobr,Jobr);
+            Jobr.ModifyDate = modifydate;
+            Jobr.ModifyTime = modifytime;
+            FindCancelledReservationState(RSr);
+            Jobr.ResStatus = RSr.Code;
+            Jobr.ResCode = "";
+            Jobr.Resources = "";
+            JobPasteType(Jobr,Jobr.Type);
+            if (nonblank(bookorigin)) then begin
+              Jobr.BookOrigin = bookorigin;
+            end;          
+            if (RecordUpdate(oldJobr,Jobr,true)==0) then begin
+              l = AddJobToSiteMinderSyncQue(Jobr,false,0,true);
+              vSiteMindeQueConfirm[l] = true;
+              confJobr.SerNr = Jobr.SerNr;
+            end else begin
+              err = 1;
+            end;
+          end else begin
+            err = 2;
+          end;
+      end;
+      r = r + 1;
+      roompath = rsvpath & "/RoomStays/RoomStay[" & r & "]";
+    end;
+         
+
+    confJobr.Comment = status;
+    confJobr.Pax = err;
+    
+    aconfJobr[rescnt] = confJobr;
+LSKIPCreatingNewReservation:;
+    rescnt = rescnt + 1;
+    rsvpath = "SOAP-ENV:Envelope/SOAP-ENV:Body/OTA_ResRetrieveRS/ReservationsList/HotelReservation[" & rescnt & "]";
+  end;
+  if (aconfJobr.length>0) then begin
+    ConfirmReservations(SMb,aconfJobr,vSiteMindeQueConfirm);
+  end;
+  return;
+end;
+ 
+global
+updating procedure RetriveSiteMinderReservationsReply(Area reply,Area replyheader,boolean timeout)
+begin
+  Integer rescnt,resroomcnt,cnt;
+  record SiteMinderBlock SMb;
+  xml x;
+  string 255 rsvpath,errstr;
+  Boolean testf;
+  transaction string 255 gSiteMinderRequestUUID;
+
+  BlockLoad(SMb);
+  if (SMb.LogCommunication!=0) then begin
+    LogAreaToFile(ProgramFolder & "/SiteMinder/" & "_siteminder_retrive_res_reply.xml",reply);
+  end;
+
+  if (timeout) then begin
+    LogText2(39172,"RetriveSiteMinderReservations",kVerbosityDebugDetailed);
+    LogSiteMinderUUID(gSiteMinderRequestUUID,kSOAPActionReply,"ReadRQ",kSOAPReplyTimeout,"Timeout");
+  end else begin
+    x = ParseXmlArea(reply);
+    testf = XmlNodeExists(x,"SOAP-ENV:Envelope/SOAP-ENV:Body/OTA_ResRetrieveRS/Success");
+    if (testf==false) then begin
+      testf = XmlNodeExists(x,"soap:Envelope/soap:Body>/OTA_ResRetrieveRS/Success");
+    end;
+    if (testf) then begin
+      LogText2(39170,"RetriveSiteMinderReservations",kVerbosityDebugDetailed);
+      AddReservations(SMb,reply);
+      LogSiteMinderUUID(gSiteMinderRequestUUID,kSOAPActionReply,"ReadRQ",kSOAPReplySuccess,"");
+    end else begin
+      errstr = XmlGet(x,"SOAP-ENV:Envelope/SOAP-ENV:Body/OTA_ResRetrieveRS/Errors/Error"); 
+      if (blank(errstr)) then begin
+        errstr = XmlGet(x,"soap:Envelope/soap:Body/OTA_ResRetrieveRS/Errors/Error"); 
+      end;
+      LogText2(39171,"RetriveSiteMinderReservations " & errstr,kVerbosityDebugDetailed);
+      LogSiteMinderUUID(gSiteMinderRequestUUID,kSOAPActionReply,"ReadRQ",kSOAPReplyError,errstr);
+    end;
+  end;
+
+
+LRetriveSiteMinderReservationsReply:;  
+  return;
+end;
+
+updating procedure TreatSiteMinderSyncQue()
+begin
+  record SiteMinderSyncQueVc SMSQr;
+  record SiteMinderSyncQueVc oldSMSQr;
+  Boolean found;
+  Date ed;
+  record HotelBlock Hotelb;
+
+  BlockLoad(Hotelb);  
+  found = true;
+  while (LoopKey("ActStatus",SMSQr,1,found)) begin
+    if (SMSQr.Status!=kQueueNotSent) then begin found = false; end;
+    if (found) then begin
+      oldSMSQr = SMSQr;
+      SMSQr.Status = kQueueBeingSent;      
+      RecordUpdate(oldSMSQr,SMSQr,true);
+      found = false;
+      switch (SMSQr.QueType) begin
+        case kSiteMinderQueueTypeAvailability:
+          ed = SMSQr.EndDate;
+          if (SMSQr.EndTime<=Hotelb.CheckOut) then begin
+            ed = AddDay(ed,-1);
+          end;
+          if (ed<SMSQr.StartDate) then begin ed = SMSQr.StartDate; end;
+          EnableRoomsAtSiteMinder2(true,SMSQr.SerNr,SMSQr.ReduceAvail,SMSQr.ResCode,SMSQr.Type,SMSQr.StartDate,ed);            
+        case kSiteMinderQueueTypePrice:
+          SetRatesAtSiteMinder2(SMSQr.SerNr,SMSQr.Type,SMSQr.ResUsage,SMSQr.StartDate,SMSQr.EndDate);            
+//function Boolean SetRoomTypeRateAtSiteMinder(record SiteMinderBlock SMb,record AgentRoomVc ARr,var Area req)
+      end;
+    end;
+  end;
+  return;
+end;
+
+global
+updating procedure SiteMinderSyncIdleTask(string arg)
+begin
+  Integer oldcomp,compnr;
+
+  
+  compnr = StringToInt(arg);
+  oldcomp = CurrentCompany;
+  if (compnr!=oldcomp) then begin
+    SetCompany(compnr,false);
+  end;  
+  TreatSiteMinderSyncQue;
+  ResetCompany(oldcomp);
+  return;
+end;
+
+updating procedure SetResyncRequired()
+begin
+  record SiteMinderBlock SMb;
+  Date td;
+  Time tt;
+  
+  BlockLoad(SMb);
+  if (SMb.Enable and nonblank(SMb.HotelCode)) then begin
+    SMb.ResyncRequired = 1;
+    BlockStore(SMb);
+    tt = CurrentTime; 
+    if (tt.hour>=0 and tt.hour<=5) then begin
+      tt.minute = tt.minute + 1;
+    end else begin
+      td = AddDay(td,1);
+      tt.hour = 1;
+    end;
+    NewTimedTask("SiteMinderFullResyncInCompany-" & CurrentCompany,"SiteMinder Full Resync","SiteMinderFullResync",CurrentCompany,td,tt,"","");        
+  end;
+  return;
+end;
+
+global
+updating procedure SiteMinderFullResync(string arg)
+begin
+  Integer oldcomp,compnr;
+  record SiteMinderBlock SMb;
+  
+  compnr = StringToInt(arg);
+  oldcomp = CurrentCompany;
+  if (compnr!=oldcomp) then begin
+    SetCompany(compnr,false);
+    EnableRoomsAtSiteMinder;
+    SetRatesAtSiteMinder;
+    BlockLoad(SMb);
+    SMb.ResyncRequired = 0;
+    BlockStore(SMb);
+  end;  
+  ResetCompany(oldcomp);
+  return;
+end;
+
+global
+updating procedure SiteMinder_Update_INVc(record INVc INr,record INVc prevINr)
+begin
+  record ResArtCodeVc RACr;
+  record AgentRoomVc ARr;
+  Boolean found,foundar,testf;
+  record SiteMinderBlock SMb;
+  record HotelBlock Hotelb;
+  record CUVc CUr;
+  record ResVc Resr;
+  record JobVc Jobr;
+  record ResTypeVc RTr;
+  record JobPriceVc JPr;
+  record JobPriceVc prevJPr;  
+  record PLDefVc PLDefr;
+  vector Boolean vtypef,vpackagef;
+  string 255 resusage;
+  
+  if (INr.UPrice1!=prevINr.UPrice1) then begin
+    SetResyncRequired;
+
+    BlockLoad(Hotelb);
+    BlockLoad(SMb);
+    CUr.Code = SMb.CUCode;
+    ReadFirstMain(CUr,1,true);
+    PLDefr.Code = CUr.PLCode;
+    ReadFirstMain(PLDefr,1,true);
+
+    found = true;
+    RACr.ArtCode = INr.Code;
+    while (LoopKey("ArtCode",RACr,1,found)) begin
+      if (RACr.ArtCode!=INr.Code) then begin found = false; end;
+      if (found) then begin
+        ResetLoop(ARr);
+        foundar = true;
+        ARr.ResCode = "";
+        while (LoopMain(ARr,1,foundar)) begin
+          if (foundar) then begin
+            testf = true;
+            if (testf) then begin
+              Resr.Code = ARr.ResCode;
+              testf = ReadFirstMain(Resr,1,true);
+            end;
+            if (testf) then begin
+              if (Resr.Type!=RACr.ResType) then begin testf = false; end;
+            end;
+            if (testf) then begin
+              if (vtypef[RACr.ResType]) then begin testf = false; end;
+            end;
+            if (testf) then begin
+              resusage = ARr.ResUsage;
+              if (blank(resusage)) then begin
+                resusage = SMb.ResUsages;
+              end;
+              if (SetInSet(RACr.ResUsageCode,resusage)==false) then begin testf = false; end;
+            end;
+            if (testf) then begin
+              if (vpackagef[RACr.ResUsageCode]) then begin testf = false; end;
+            end;
+            if (testf) then begin
+
+              RecordClear(Jobr);
+              Jobr.Type = RACr.ResType;
+              JobPasteType(Jobr,"");                
+              Jobr.ResUsage = RACr.ResUsageCode;
+              JobPasteResUsage(Jobr,"");
+              Jobr.CUCode = SMb.CUCode;
+              PasteCUCodeToJob2(Jobr,-1,false);
+              RTr.Code = RACr.ResType;
+              ReadFirstMain(RTr,1,true);
+              Jobr.Persons = RTr.MaxPersons;
+
+              Jobr.TransDate = PLDefr.StartDate;
+              if (blankdate(Jobr.TransDate)) then begin
+                Jobr.TransDate = ARr.StartDate;
+              end;
+              if (Jobr.TransDate<CurrentDate) then begin
+                Jobr.TransDate = CurrentDate;
+              end;
+              JobPasteTransDate(Jobr);
+              Jobr.StartTime = Hotelb.CheckIn;
+              Jobr.EndDate = PLDefr.EndDate;
+              if (blankdate(Jobr.EndDate)) then begin
+                Jobr.EndDate = ARr.EndDate;
+              end;
+              Jobr.EndTime = Hotelb.CheckOut;
+              Jobr.NrOfDays = DateDiff(Jobr.EndDate,Jobr.TransDate);
+
+              if (JobToJobPrices(Jobr,Jobr.Type,JPr)) then begin
+                AddPriceChangeToSiteMinderSyncQue("INVc",INr.Code,"",Jobr.Type,Jobr.ResUsage,Jobr.TransDate,Jobr.StartTime,Jobr.EndDate,Jobr.EndTime);
+                vpackagef[RACr.ResUsageCode] = true;
+                vtypef[RACr.ResUsageCode] = true;
+              end;
+              
+            end;
+          end;
+        end;
+      end;
+
+    end;
+  end;
+  return;
+end;
+
+updating procedure AddPriceChangeToSiteMinderSyncQue(string filename,string tnr,string room,string type,string resusage,Date sd,Time st,Date ed,Time et)
+begin
+  record SiteMinderSyncQueVc SMSQr;
+  record ResVc Resr;
+  record HotelBlock Hotelb;
+  Boolean testf;
+  record SiteMinderBlock SMb;
+
+  BlockLoad(SMb);
+  if (SMb.Enable!=0 and nonblank(SMb.HotelCode)) then begin
+    BlockLoad(Hotelb);
+  
+    SMSQr.ResCode = room;
+    SMSQr.ResUsage = resusage;
+    SMSQr.Type = type;
+    SMSQr.StartDate = sd;
+    if (SMSQr.StartDate<CurrentDate) then begin
+      SMSQr.StartDate = CurrentDate;
+    end;
+    SMSQr.StartTime = st;
+    if (blanktime(SMSQr.StartTime)) then begin
+      SMSQr.StartTime = Hotelb.CheckIn;
+    end;
+    SMSQr.EndDate = ed;
+    SMSQr.EndTime = et;
+    if (blanktime(SMSQr.EndTime)) then begin
+      SMSQr.EndTime = Hotelb.CheckOut;
+    end;
+
+    SMSQr.Status = kQueueNotSent;
+    SMSQr.TransDate = CurrentDate;
+    SMSQr.TransTime = CurrentTime;
+    SMSQr.FileName = filename;
+    SMSQr.TransNr = tnr;
+    SMSQr.ReduceAvail = 0;
+    SMSQr.QueType = kSiteMinderQueueTypePrice;
+
+    testf = true;
+    SMSQr.SerNr = NextSerNr("SiteMinderSyncQueVc",SMSQr.TransDate,-1,false,"");
+    if (SMSQr.EndDate<CurrentDate) then begin
+      testf = false;
+    end;
+    if (SMSQr.EndDate<SMSQr.StartDate) then begin
+      testf = false;
+    end;
+    if (testf) then begin
+      if (SMSQr.SerNr>0) then begin
+        RecordStore(SMSQr,false);
+      end;
+    end;
+  end;
+  return;
+end;
+
+global
+updating procedure SiteMinder_Update_PLVc(record PLVc PLr,record PLVc prevPLr)
+begin
+  record PLDefVc PLDefr;
+  record AgentRoomVc ARr;
+  record ResArtCodeVc RACr;
+  Boolean found,foundar,testf;
+  record SiteMinderBlock SMb;
+  record CUVc CUr;
+  record ResTypeVc RTr;
+  record HotelBlock Hotelb;
+  record ResVc Resr;
+  record JobVc Jobr;
+  record JobPriceVc JPr;
+  record JobPriceVc prevJPr;  
+  Time bt;
+  vector Boolean vtypef,vpackagef;
+  string 255 resusage;
+  
+  if (RecordValid(prevPLr)) then begin
+    testf = false;
+    if (PLr.ExVatPrice!=prevPLr.ExVatPrice or PLr.PLCode!=prevPLr.PLCode or PLr.ArtCode!=prevPLr.ArtCode) then begin
+      testf = true;
+    end;
+  end else begin
+    testf = true;
+  end;
+  if (testf) then begin
+    SetResyncRequired;
+
+    BlockLoad(Hotelb);
+    BlockLoad(SMb);
+    CUr.Code = SMb.CUCode;
+    ReadFirstMain(CUr,1,true);
+    PLDefr.Code = PLr.PLCode;
+    ReadFirstMain(PLDefr,1,true);
+        
+    found = PLr.PLCode==CUr.PLCode;
+    if (found==false) then begin
+      found = PLDefr.PLReplCode==CUr.PLCode;
+    end;
+    RACr.ArtCode = PLr.ArtCode;
+    while (LoopKey("ArtCode",RACr,1,found)) begin
+      if (RACr.ArtCode!=PLr.ArtCode) then begin found = false; end;
+      if (found) then begin
+        ResetLoop(ARr);
+        foundar = true;
+        ARr.ResCode = "";
+        while (LoopMain(ARr,1,foundar)) begin
+          if (foundar) then begin
+            testf = true;
+            if (testf) then begin
+              Resr.Code = ARr.ResCode;
+              testf = ReadFirstMain(Resr,1,true);
+            end;
+            if (testf) then begin
+              if (Resr.Type!=RACr.ResType) then begin testf = false; end;
+            end;
+            if (testf) then begin
+              if (vtypef[RACr.ResType]) then begin testf = false; end;
+            end;
+            if (testf) then begin
+              resusage = ARr.ResUsage;
+              if (blank(resusage)) then begin
+                resusage = SMb.ResUsages;
+              end;
+              if (SetInSet(RACr.ResUsageCode,resusage)==false) then begin testf = false; end;
+            end;
+            if (testf) then begin
+              if (vpackagef[RACr.ResUsageCode]) then begin testf = false; end;
+            end;
+            if (testf) then begin
+
+              RecordClear(Jobr);
+              Jobr.Type = RACr.ResType;
+              JobPasteType(Jobr,"");                
+              Jobr.ResUsage = RACr.ResUsageCode;
+              JobPasteResUsage(Jobr,"");
+              Jobr.CUCode = SMb.CUCode;
+              PasteCUCodeToJob2(Jobr,-1,false);
+              RTr.Code = RACr.ResType;
+              ReadFirstMain(RTr,1,true);
+              Jobr.Persons = RTr.MaxPersons;
+
+              Jobr.TransDate = PLDefr.StartDate;
+              if (blankdate(Jobr.TransDate)) then begin
+                Jobr.TransDate = ARr.StartDate;
+              end;
+              if (Jobr.TransDate<CurrentDate) then begin
+                Jobr.TransDate = CurrentDate;
+              end;
+              JobPasteTransDate(Jobr);
+              Jobr.StartTime = Hotelb.CheckIn;
+              Jobr.EndDate = PLDefr.EndDate;
+              if (blankdate(Jobr.EndDate)) then begin
+                Jobr.EndDate = ARr.EndDate;
+              end;
+              Jobr.EndTime = Hotelb.CheckOut;
+              Jobr.NrOfDays = DateDiff(Jobr.EndDate,Jobr.TransDate);
+
+              if (JobToJobPrices(Jobr,Jobr.Type,JPr)) then begin
+                AddPriceChangeToSiteMinderSyncQue("PLVc",PLr.PLCode & "-" & PLr.ArtCode,"",Jobr.Type,Jobr.ResUsage,Jobr.TransDate,Jobr.StartTime,Jobr.EndDate,Jobr.EndTime);
+                vpackagef[RACr.ResUsageCode] = true;
+                vtypef[RACr.ResUsageCode] = true;
+              end;
+            end;
+          end;
+        end;
+      end;
+    end;
+
+  end;
+  return;
+end;
+
+global
+updating procedure SiteMinder_Update_ResArtCodeVc(record ResArtCodeVc RACr,record ResArtCodeVc prevRACr)
+begin
+  record ResArtCodeVc RAC2r;
+  record PLDefVc PLDefr;
+  record AgentRoomVc ARr;
+  Boolean found,foundar,testf;
+  record SiteMinderBlock SMb;
+  record CUVc CUr;
+  record ResTypeVc RTr;
+  record HotelBlock Hotelb;
+  record ResVc Resr;
+  record JobVc Jobr;
+  record JobPriceVc JPr;
+  vector Boolean vtypef,vpackagef;
+  string 255 resusage;
+  
+  RAC2r = RACr;
+  RAC2r.Comment = prevRACr.Comment;
+  RAC2r.CClassDCode = prevRACr.CClassDCode;
+  RAC2r.PriceRules = prevRACr.PriceRules;
+  if (ComparePosts(RAC2r,prevRACr)==false) then begin
+    SetResyncRequired;
+
+    BlockLoad(Hotelb);
+    BlockLoad(SMb);
+    CUr.Code = SMb.CUCode;
+    ReadFirstMain(CUr,1,true);
+    PLDefr.Code = CUr.PLCode;
+    ReadFirstMain(PLDefr,1,true);
+        
+    ResetLoop(ARr);
+    foundar = true;
+    ARr.ResCode = "";
+    while (LoopMain(ARr,1,foundar)) begin
+      if (foundar) then begin
+        testf = true;
+        if (testf) then begin
+          Resr.Code = ARr.ResCode;
+          testf = ReadFirstMain(Resr,1,true);
+        end;
+        if (testf) then begin
+          if (Resr.Type!=RACr.ResType) then begin testf = false; end;
+        end;
+        if (testf) then begin
+          if (vtypef[RACr.ResType]) then begin testf = false; end;
+        end;
+        if (testf) then begin
+          resusage = ARr.ResUsage;
+          if (blank(resusage)) then begin
+            resusage = SMb.ResUsages;
+          end;
+          if (SetInSet(RACr.ResUsageCode,resusage)==false) then begin testf = false; end;
+        end;
+        if (testf) then begin
+          if (vpackagef[RACr.ResUsageCode]) then begin testf = false; end;
+        end;
+        if (testf) then begin
+
+          RecordClear(Jobr);
+          Jobr.Type = RACr.ResType;
+          JobPasteType(Jobr,"");                
+          Jobr.ResUsage = RACr.ResUsageCode;
+          JobPasteResUsage(Jobr,"");
+          Jobr.CUCode = SMb.CUCode;
+          PasteCUCodeToJob2(Jobr,-1,false);
+          RTr.Code = RACr.ResType;
+          ReadFirstMain(RTr,1,true);
+          Jobr.Persons = RTr.MaxPersons;
+
+          Jobr.TransDate = PLDefr.StartDate;
+          if (blankdate(Jobr.TransDate)) then begin
+            Jobr.TransDate = ARr.StartDate;
+          end;
+          if (Jobr.TransDate<CurrentDate) then begin
+            Jobr.TransDate = CurrentDate;
+          end;
+          JobPasteTransDate(Jobr);
+          Jobr.StartTime = Hotelb.CheckIn;
+          Jobr.EndDate = PLDefr.EndDate;
+          if (blankdate(Jobr.EndDate)) then begin
+            Jobr.EndDate = ARr.EndDate;
+          end;
+          Jobr.EndTime = Hotelb.CheckOut;
+          Jobr.NrOfDays = DateDiff(Jobr.EndDate,Jobr.TransDate);
+
+          if (JobToJobPrices(Jobr,Jobr.Type,JPr)) then begin
+            AddPriceChangeToSiteMinderSyncQue("ResArtCodeVc",PLDefr.Code & "-" & RACr.ArtCode,"",Jobr.Type,Jobr.ResUsage,Jobr.TransDate,Jobr.StartTime,Jobr.EndDate,Jobr.EndTime);
+            vpackagef[RACr.ResUsageCode] = true;
+            vtypef[RACr.ResUsageCode] = true;
+          end;
+        end;
+      end;
+    end;
+
+  end;
+  return;
+end;
+
+updating procedure AddAgentRoomToSiteMinderSyncQue(record AgentRoomVc ARr,Integer reduce)
+begin
+  record SiteMinderSyncQueVc SMSQr;
+  record ResVc Resr;
+  record HotelBlock Hotelb;
+  Boolean testf;
+  record SiteMinderBlock SMb;
+
+  BlockLoad(SMb);
+  if (SMb.Enable!=0 and nonblank(SMb.HotelCode)) then begin
+    BlockLoad(Hotelb);
+    Resr.Code = ARr.ResCode;
+    ReadFirstMain(Resr,1,true);
+  
+    SMSQr.ResCode = ARr.ResCode;
+    SMSQr.ResUsage = "";
+    SMSQr.Type = Resr.Type;
+    SMSQr.StartDate = ARr.StartDate;
+    if (SMSQr.StartDate<CurrentDate) then begin
+      SMSQr.StartDate = CurrentDate;
+    end;
+    SMSQr.StartTime = Hotelb.CheckIn;
+    SMSQr.EndDate = ARr.EndDate;
+    SMSQr.EndTime = Hotelb.CheckOut;
+
+    SMSQr.Status = kQueueNotSent;
+    SMSQr.TransDate = CurrentDate;
+    SMSQr.TransTime = CurrentTime;
+    SMSQr.FileName = "AgentRoomVc";
+    SMSQr.TransNr = ARr.ResCode;
+    SMSQr.ReduceAvail = reduce;
+    SMSQr.QueType = kSiteMinderQueueTypeAvailability;
+
+    testf = true;
+    SMSQr.SerNr = NextSerNr("SiteMinderSyncQueVc",SMSQr.TransDate,-1,false,"");
+    if (SMSQr.EndDate<CurrentDate) then begin
+      testf = false;
+    end;
+    if (SMSQr.EndDate<SMSQr.StartDate) then begin
+      testf = false;
+    end;
+    if (testf) then begin
+      if (SMSQr.SerNr>0) then begin
+        RecordStore(SMSQr,false);
+      end;
+    end;
+  end;
+  return;
+end;
+
+global
+updating procedure SiteMinder_Update_AgentRoomVc(record AgentRoomVc ARr,record AgentRoomVc prevARr)
+begin
+  record AgentRoomVc tmpARr;
+  
+  if (ARr.ResCode!=prevARr.ResCode or ARr.Closed!=prevARr.Closed) then begin
+    if (ARr.ResCode!=prevARr.ResCode) then begin
+      AddAgentRoomToSiteMinderSyncQue(prevARr,1);
+      AddAgentRoomToSiteMinderSyncQue(ARr,0);
+    end else begin
+      AddAgentRoomToSiteMinderSyncQue(ARr,ARr.Closed);
+    end;
+//    SetResyncRequired;
+  end else begin
+    if (ARr.StartDate!=prevARr.StartDate or ARr.EndDate!=prevARr.EndDate) then begin
+      tmpARr = ARr;
+      if (tmpARr.StartDate>prevARr.StartDate) then begin
+        tmpARr.StartDate = prevARr.StartDate;
+      end;
+      if (tmpARr.EndDate<prevARr.EndDate) then begin
+        tmpARr.EndDate = prevARr.EndDate;
+      end;
+      AddAgentRoomToSiteMinderSyncQue(tmpARr,0);
+    end;
+  end;
+  return;
+end;
+
+global
+updating procedure SiteMinder_Save_AgentRoomVc(record AgentRoomVc ARr)
+begin
+  AddAgentRoomToSiteMinderSyncQue(ARr,0);
+  return;
+end;
+
+global
+updating procedure SiteMinder_Update_ResVc(record ResVc Resr,record ResVc prevResr)
+begin
+  record AgentRoomVc ARr;  
+  
+  if (Resr.Type!=prevResr.Type or Resr.Terminated!=prevResr.Terminated) then begin
+    ARr.ResCode = Resr.Code;
+    if (ReadFirstKey("ResCode",ARr,1,true)) then begin
+      SetResyncRequired;
+    end;
+  end;
+  return;
+end;
+

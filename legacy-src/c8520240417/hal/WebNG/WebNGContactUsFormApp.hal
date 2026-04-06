@@ -1,0 +1,301 @@
+external procedure ShowRedirectHtml2(string,boolean,Integer);
+external outer procedure OuterShowSingleContactUsField(record WebNGContactFormFieldVc,Integer);
+external outer procedure OuterAddFieldToMail(record MailVc,record WebNGContactFormFieldVc,Integer,string,string);
+external function string 10 CurrentWebLang();
+external function string 255 ToolWebNGTranslateText2(Longint);
+external procedure ResolveMailboxNumber(var row MailVc);
+external function boolean IsRecaptchaEnabled(integer);
+external function string 255 RecaptchaSiteKey();
+external function boolean CheckRecaptcha(area);
+external function string 255 GetLinkToStruct(LongInt,boolean);
+
+
+function string 255 GetFormValue(string code,Integer i)
+begin
+  string 255 res;
+
+  res = GetSessionString("cu_form_" & code & "_" & i);
+
+  GetFormValue = res;
+  return;
+end;
+
+procedure StoreFormValue(string code,Integer i,string value)
+begin
+
+  PutSessionString("cu_form_" & code & "_" & i,value);
+
+  return;
+end;
+
+function string 255 GetFieldName(Integer i)
+begin
+
+  GetFieldName = "field" & i;
+  return;
+end;
+
+procedure ClearFormValues(string code,Integer cnt)
+begin
+  Integer i;
+
+  for (i=0;i<cnt;i=i+1) begin
+    StoreFormValue(code,i,"");
+  end;
+
+  return;
+end;
+
+function string 255 GetFieldLabel(record WebNGContactFormFieldVc CFFr)
+begin
+  row WebNGContactFormFieldVc CFFrw;
+  string 255 res,lang;
+  Integer i,rwcnt;
+
+  lang = CurrentWebLang;
+  res = CFFr.Comment;
+  if (nonblank(lang)) then begin
+    rwcnt = MatRowCnt(CFFr);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(CFFr,i,CFFrw);
+      if (CFFrw.LangCode==lang) then begin
+        i = rwcnt;
+        res = CFFrw.Text;
+      end;
+    end;
+  end;
+
+  GetFieldLabel = res;
+  return;
+end;
+
+procedure ShowTextField(record WebNGContactFormFieldVc CFFr,Integer i)
+begin
+  string 255 label;
+
+  label = GetFieldLabel(CFFr);
+  if (CFFr.Required==1) then begin
+    label = label & "<span class='mand_icon'>*</span>";
+  end;
+  WebOutString("<div class='cu_row field" & i & "'><div class='cu_label'>" & label & "</div><div class='cu_field'><input type='text' name='" & GetFieldName(i) & "' value='" & GetFormValue(CFFr.Code,i) & "'></div></div>");
+
+  return;
+end;
+
+procedure ShowTextArea(record WebNGContactFormFieldVc CFFr,Integer i)
+begin
+  string 255 label;
+
+  label = GetFieldLabel(CFFr);
+  if (CFFr.Required==1) then begin
+    label = label & "<span class='mand_icon'>*</span>";
+  end;
+  WebOutString("<div class='cu_row field" & i & "'><div class='cu_label'>" & label & "</div><div class='cu_field'><textarea name='field" & i & "'></textarea>" & GetFormValue(CFFr.Code,i) & "</div></div>");
+
+  return;
+end;
+
+procedure ShowSingleContactUsField(record WebNGContactFormFieldVc CFFr,Integer i)
+begin
+
+  switch (CFFr.FieldType) begin
+    case kContactUsFieldTypeText:
+      ShowTextField(CFFr,i);
+    case kContactUsFieldTypeLongText:
+      ShowTextArea(CFFr,i);
+    otherwise
+      OuterShowSingleContactUsField(CFFr,i);
+  end;
+
+  return;
+end;
+
+global
+procedure WebNGContactUsFormElement(record WebNGElementVc WEr)
+begin
+  record WebNGContactFormFieldVc CFFr;
+  record WebNGContactFormVc CFr;
+  Boolean TrHs;
+  Integer i,err;
+
+  CFr.Code = WEr.HALFunc;
+  if (ReadFirstMain(CFr,1,true)) then begin
+    err = StringToInt(GetSessionString("cu_form_" & CFr.Code & "_err"));
+    if (err>0) then begin
+      WebOutString("<div class='cu_form_err'>");
+      if (BitAnd(err,2)==2) then begin
+        WebOutStringFormatNL("<li>" & ToolWebNGTranslateText2(32502) & "</li>");
+      end;
+      if (BitAnd(err,4)==4) then begin
+        WebOutStringFormatNL("<li>" & ToolWebNGTranslateText2(32501) & "</li>");
+      end;
+      if (BitAnd(err,8)==8) then begin
+        WebOutStringFormatNL("<li>" & ToolWebNGTranslateText2(32501) & "</li>");
+      end;
+      // if (BitAnd(err,8)==8) then begin
+      //   WebOutStringFormatNL("<li>" & ToolWebNGTranslateText2(32503) & "</li>");
+      // end;
+      WebOutString("</div>");
+    end;
+
+    if (nonblank(GetSessionString("cu_form_" & CFr.Code & "_ok"))) then begin
+      WebOutString("<div class='cu_form_ok'>" & ToolWebNGTranslateText2(32503) & "</div>");
+    end;
+
+    PutSessionString("cu_form_" & CFr.Code & "_ok","");
+    PutSessionString("cu_form_" & CFr.Code & "_err","");
+
+    WebOutString("<div class='cu_form'><form method='POST' action='/WebUpdatingAction.hal?action=submitcuform'>");
+    WebOutString("<input type='hidden' name='form' value='" & CFr.Code & "'>");
+    WebOutString("<input type='hidden' name='path' value='" & WebGetArg("path") & "'>");
+    CFFr.Code = CFr.Code;
+    TrHs = true;
+    while (LoopKey("Sorting",CFFr,1,TrHs)) begin
+      if (CFFr.Code!=CFr.Code) then begin
+        TrHs = false;
+      end else begin
+        //ShowField
+        ShowSingleContactUsField(CFFr,i);
+        i = i + 1;
+      end;
+    end;
+    if (IsRecaptchaEnabled(kElementTypeContactUsForm)) then begin
+      WebOutTagOpen("<div class='recaptcha'>");
+      WebOutStringFormatNL("<div class=""g-recaptcha"" data-sitekey="""& RecaptchaSiteKey &"""></div>");
+      WebOutTagOpen("</div>");
+    end;
+    WebOutString("<div class='cu_form_submit'><input type='submit' value='" & ToolWebNGTranslateText2(32505) & "'></div>");
+    WebOutString("</form></div>");
+  end;
+
+  return;
+end;
+
+procedure AddTextFieldToMail(var record MailVc Mailr,record WebNGContactFormFieldVc CFFr,Integer i,string value)
+begin
+  Integer lcnt;
+  string 255 tstr;
+
+  lcnt = LineTextCnt(Mailr);
+  tstr = CFFr.Comment & ": " & value;
+  LineTextPut(Mailr,lcnt,tstr);
+
+  return;
+end;
+
+procedure AddTextAreaToMail(var record MailVc Mailr,record WebNGContactFormFieldVc CFFr,Integer i,string fieldname)
+begin
+  record NotePadVc Noter;
+  Integer j,lcnt;
+  string 255 tstr;
+
+  WebGetText(fieldname,Noter);
+
+  lcnt = LineTextCnt(Mailr);
+  tstr = CFFr.Comment;
+  LineTextPut(Mailr,lcnt,tstr);
+
+  lcnt = lcnt + 1;
+
+  for (j=0;j<LineTextCnt(Noter);j=j+1) begin
+    tstr = LineTextGet(Noter,j);
+    LineTextPut(Mailr,lcnt,tstr);
+    lcnt = lcnt + 1;
+  end;
+
+  return;
+end;
+
+procedure AddMailRow(var record MailVc Mailr,Integer type,string addr)
+begin
+  row MailVc Mailrw;
+
+  ClearRow(Mailr,Mailrw,1);
+  Mailrw.RowTyp = type;
+  Mailrw.AddrCode = addr;
+  ResolveMailboxNumber(Mailrw);
+  MatRowPut(Mailr,MatRowCnt(Mailr),Mailrw);
+
+  return;
+end;
+
+updating procedure SetupAndSendMail(record MailVc Mailr,record WebNGContactFormVc CFr)
+begin
+  record MailVc oldMailr;
+
+  AddMailRow(Mailr,kMailRowTypeFrom,CFr.SendFrom);
+  AddMailRow(Mailr,kMailRowTypeTo,CFr.SendTo);
+  Mailr.Header = CFr.Subject;
+  Mailr.SerNr = NextSerNr("MailVc",CurrentDate,-1,false,"");
+
+  if (RecordStore(Mailr,true)) then begin
+    RecordCopy(oldMailr,Mailr);
+    Mailr.SendFlag = 1;
+    RecordUpdate(oldMailr,Mailr,true);
+  end;
+
+  return;
+end;
+
+global
+updating procedure StoreContactUsFormDetails()
+begin
+  record WebNGContactFormFieldVc CFFr;
+  record WebNGContactFormVc CFr;
+  Boolean TrHs;
+  string 255 fn,tstr;
+  Integer err,i;
+  record MailVc Mailr;
+  area WebPostArea;
+
+  CFr.Code = WebGetArg("form");
+  if (ReadFirstMain(CFr,1,true)) then begin
+    CFFr.Code = CFr.Code;
+    TrHs = true;
+    while (LoopKey("Sorting",CFFr,1,TrHs)) begin
+      if (CFFr.Code!=CFr.Code) then begin
+        TrHs = false;
+      end else begin
+        fn = GetFieldName(i);
+        tstr = WebGetArg(fn);
+        StoreFormValue(CFr.Code,i,tstr);
+        switch (CFFr.FieldType) begin
+          case kContactUsFieldTypeText:
+            AddTextFieldToMail(Mailr,CFFr,i,tstr);
+          case kContactUsFieldTypeLongText:
+            AddTextAreaToMail(Mailr,CFFr,i,fn);
+          otherwise
+            OuterAddFieldToMail(Mailr,CFFr,i,fn,tstr);
+        end;
+        if (CFFr.Required==1 and blank(tstr)) then begin
+          err = err + 4;
+        end;
+        i = i + 1;
+      end;
+    end;
+  end else begin
+    err = err + 2;
+  end;
+  if (IsRecaptchaEnabled(kElementTypeContactUsForm2)) then begin
+    WebGetPostData(WebPostArea);
+    if (CheckRecaptcha(WebPostArea)==false) then begin
+      err = err + 8;
+    end;
+  end;
+
+  if (err==0) then begin
+    SetupAndSendMail(Mailr,CFr);
+    ClearFormValues(CFr.Code,i);
+    if (CFr.RedirectTo>0) then begin
+      ShowRedirectHTML2(GetLinkToStruct(CFr.RedirectTo,true),WebSecureMode,kHttpStatusSeeOther);
+    end else begin
+      PutSessionString("cu_form_" & CFr.Code & "_ok","1");
+      ShowRedirectHTML2(WebGetArg("path"),WebSecureMode,kHttpStatusSeeOther);
+    end;
+  end else begin
+    PutSessionString("cu_form_" & CFr.Code & "_err",err);
+    ShowRedirectHTML2(WebGetArg("path"),WebSecureMode,kHttpStatusSeeOther);
+  end;
+
+  return;
+end;

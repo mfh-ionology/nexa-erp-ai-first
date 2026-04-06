@@ -1,0 +1,141 @@
+remote procedure GetCustomerData(string,var record RcVc);
+external function string 20 GetCountryISOCode(string);
+remote function Boolean GetPlanetPassportDataRemote(record RcVc,record IVCashVc,var string,var record RcVc);
+
+global 
+procedure CancelPlanetTaxRefundTouchScreenOClass()
+begin
+  CloseWindow(CurWindow);
+  return;
+end;
+
+global
+procedure OpenPlanetTaxRefundTouchScreenOClass(Integer mwn,LongInt sernr,val sum4,val change,val tot,string curncy,string custcode)
+begin
+  Integer nwn;
+  record RcVc RepSpec;
+  Boolean testf;
+  record IVCashVc IVCashr;
+
+  RepSpec.vals0 = -change;
+  if (RepSpec.vals0==0) then begin
+    RepSpec.vals0 = tot;
+  end;
+  testf = true;
+  if (sum4>0) then begin
+    if (RepSpec.vals0<=0) then begin
+      testf = false;
+    end;
+  end else begin
+    if (RepSpec.vals0>=0) then begin
+      testf = false;
+    end;
+  end;
+  if (testf) then begin
+LOpenPlanetTaxRefundTouchScreenOClass:;
+    nwn = OpenWindow("PlanetTaxRefundTouchScreenOClass",0,mwn,"","",RepSpec);
+    if (nwn>0) then begin
+      DeselectWindow(nwn,false);
+      GetCustomerData(custcode,RepSpec);
+      RepSpec.long1 = sernr;
+      PutWindowRecord(nwn,RepSpec);
+      if (blank(RepSpec.f2)) and (blank(RepSpec.f12)) then begin
+         WindowFieldGoto(nwn,RepSpec,-1,"f2",true);
+      end else begin
+        WindowFieldGoto(nwn,RepSpec,-1,"f1",true);
+      end;
+    end;
+  end else begin
+    GetWindowRecord(mwn,IVCashr);
+    if (IVCashr.OKFlag==1) then begin goto LOpenPlanetTaxRefundTouchScreenOClass; end;
+    CloseWindow(nwn);
+    MessageBox(24195,"");
+  end;
+  return;
+end;
+
+function Boolean PlanetTaxRefundTouchScreenOClassf5EFAfter(Integer wn,Boolean changedf)
+begin
+  record GCSVc GCSr;
+  record CUVc CUr;
+  record RcVc RepSpec,RepSpec2;
+  Boolean res,found;
+  
+  res = true;
+  if (changedf) then begin
+    GetWindowRecord(wn,RepSpec);
+    GetCustomerData(RepSpec.f5,RepSpec2)
+    PutWindowRecord(wn,RepSpec2);
+  end;
+LPlanetTaxRefundTouchScreenOClassf5EFAfter:;  
+  PlanetTaxRefundTouchScreenOClassf5EFAfter = res;
+  return;
+end;
+
+function Boolean PlanetTaxRefundTouchScreenOClassf12EFAfter(Integer wn,Boolean changedf)
+begin
+  record GCSVc GCSr;
+  record IVCashVc IVCashr;
+  record RcVc RepSpec,RepSpec2;
+  Boolean res,found;
+  integer mwn;
+  string 255 message;
+  
+  res = true;
+  if (changedf) then begin
+    mwn = MotherWindow(wn);
+    DeselectWindow(wn,true)
+    GetWindowRecord(wn,RepSpec);
+    GetWindowRecord(mwn,IVCashr);
+    if (GetPlanetPassportDataRemote(RepSpec,IVCashr,message,RepSpec2)) then begin
+      if (nonblank(RepSpec.f1)) then begin 
+        RepSpec2.f1 = RepSpec.f1; 
+      end;
+      if (nonblank(RepSpec.f5)) then begin 
+        RepSpec2.f5 = RepSpec.f5; 
+      end;
+      RecordCopy(RepSpec,RepSpec2);
+      PutWindowRecord(wn,RepSpec);
+    end;
+  
+  end;
+LPlanetTaxRefundTouchScreenOClassf12EFAfter:;  
+  PlanetTaxRefundTouchScreenOClassf12EFAfter = res;
+  return;
+end;
+
+global
+function Boolean PlanetTaxRefundTouchScreenOClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+
+  res = false;
+  switch (fieldname) begin
+    case "f5": res = PlanetTaxRefundTouchScreenOClassf5EFAfter(wn,changed!=0);
+    case "f12": res = PlanetTaxRefundTouchScreenOClassf12EFAfter(wn,changed!=0); 
+  end;
+
+  PlanetTaxRefundTouchScreenOClassAfterEditField = res;
+  return;
+end;
+
+global
+procedure GetPlanetPassportDataDsm()
+begin
+  Integer wn,mwn;
+  record RcVc RepSpec,RepSpec2;
+  record IVCashVc IVCashr;
+  string 255 message;
+
+  wn = CurWindow;
+  mwn = MotherWindow(wn);
+  DeselectWindow(wn,true)
+  GetWindowRecord(wn,RepSpec);
+  GetWindowRecord(mwn,IVCashr);
+  if (GetPlanetPassportDataRemote(RepSpec,IVCashr,message,RepSpec2)) then begin
+    RecordCopy(RepSpec,RepSpec2);
+    PutWindowRecord(wn,RepSpec);
+  end;
+
+  return;
+end;

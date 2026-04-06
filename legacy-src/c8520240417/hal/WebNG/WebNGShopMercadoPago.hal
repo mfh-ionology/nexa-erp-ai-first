@@ -1,0 +1,83 @@
+external procedure LogAreaToFile(string,area);
+external procedure JSONStringStart(var string);
+external procedure JSONStringPut(var string,string,string);
+external procedure JSONNotStringPut(var string,string,string);
+external procedure JSONStringAdd(var string,string,string);
+external procedure JSONStringMemberStart(var string,string);
+external procedure JSONStringMemberEnd(var string);
+external procedure JSONStringArrayStart(var string);
+external procedure JSONStringArrayEnd(var string);
+external procedure JSONStringEnd(var string);
+external procedure JSONNotStringAdd(var string,string,string);
+external function string 255 FormatLink(string,string,boolean,boolean);
+
+global
+function string 255 MercadoPagoGetHost()
+begin
+  string 255 res;
+
+  res = "api.mercadopago.com";
+  
+  MercadoPagoGetHost = res;
+  return;
+end;
+
+global
+function string 255 MercadoPagoGenerateURL(string publickey,string accesstoken,string ivnr,string amount,string currency,string paylinkid,Boolean livef,Boolean paylinkf)
+begin
+  string 255 successUrl,failureUrl,controlstr,host,path,js,url,tstr;
+  area a_req,a_reply;
+  Boolean res;
+  json jsr;
+  
+  host = MercadoPagoGetHost;
+  path = "/checkout/preferences";
+  
+  tstr = "Authorization: Bearer " & accesstoken;
+  SetWebHeaders(tstr);
+
+  if (paylinkf) then begin
+    controlstr = base64encode(ivnr & "-" & amount & "-" & paylinkid);
+    successUrl = FormatLink("https://" & Webhost & "/WebUpdatingPayLink.hal","action=mercadopagofinalize",true,true);
+    failureUrl = FormatLink("https://" & Webhost & "/WebUpdatingPayLink.hal","action=mercadopagocancel",true,true);
+  end else begin
+    //WebShop
+  end;
+  SetAreaZeroSize(a_req);
+  JSONStringStart(js);
+  JSONStringMemberStart(js,"items");
+  JSONStringArrayStart(js);
+  js = js & " " & "{";
+  JSONStringAdd(js,"description","Invoice no. " & ivnr);
+  JSONNotStringAdd(js,"quantity",1);
+  JSONStringAdd(js,"currency_id",currency);
+  JSONNotStringPut(js,"unit_price",amount);
+  js = js & " " & "}";
+  JSONStringArrayEnd(js);
+  js = js & ",";
+  JSONStringMemberStart(js,"back_urls");
+  js = js & " " & "{";
+  JSONStringAdd(js,"success",successUrl);
+  JSONStringPut(js,"failure",failureUrl);
+  js = js & " " & "}";
+  JSONStringAdd(js,"external_reference",controlstr);
+  JSONNotStringPut(js,"auto_return","approved");
+  JSONStringEnd(js);
+  AddTextToArea(js,a_req);
+
+//  LogAreaToFile("_MercadoPago_Request.txt",a_req);
+
+  res = SendWebRequest(host,443,-1,true,"POST",path,"application/json","",false,a_req,a_reply,300);
+  jsr = ParseJSONArea(a_reply);
+
+//  LogAreaToFile("_MercadoPago_Reply.txt",a_reply);
+
+  if (livef) then begin
+    url = JSONGet(jsr,"init_point");
+  end else begin
+    url = JSONGet(jsr,"sandbox_init_point");
+  end;
+  
+  MercadoPagoGenerateURL = url;
+  return;
+end;

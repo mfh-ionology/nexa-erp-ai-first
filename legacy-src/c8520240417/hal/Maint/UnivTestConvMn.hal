@@ -1,0 +1,128 @@
+updating procedure DoUnivTestConv(record RcVc RepSpec)
+begin
+  string 255 frcourse,tocourse,ch;
+  record UnivTestVc oldUTr,UTr;
+  row UnivTestVc UTrw;
+  boolean foundf,testf,updatef;
+  integer i,cnt;
+  
+  frcourse = FirstInRange(RepSpec.f1,100);
+  tocourse = LastInRange(RepSpec.f1,100);
+  
+  foundf = true;
+  UTr.CourseCode = frcourse;
+  while (LoopMain(UTr,1,foundf)) begin
+    if (nonblank(tocourse) and UTr.CourseCode>tocourse) then begin foundf = false; end;
+    testf = foundf;
+    if (UTr.Closed!=0) then begin testf = false; end;
+    if (testf) then begin
+      updatef = false;
+      RecordCopy(oldUTr,UTr);
+      
+      cnt = MatRowCnt(UTr);
+      for (i=0;i<cnt;i=i+1) begin
+        MatRowGet(UTr,i,UTrw);
+            
+        ch = left(UTrw.Alt1,1);
+        if (ch=="-" or ch=="+") then begin
+          if (ch=="+") then begin
+            UTrw.Alt1Correct = 1;
+          end else begin
+            UTrw.Alt1Correct = 0;
+          end;
+          UTrw.Alt1 = right(UTrw.Alt1,len(UTrw.Alt1)-1);
+          updatef = true;
+        end;
+
+        ch = left(UTrw.Alt2,1);
+        if (ch=="-" or ch=="+") then begin
+          if (ch=="+") then begin
+            UTrw.Alt2Correct = 1;
+          end else begin
+            UTrw.Alt2Correct = 0;
+          end;
+          UTrw.Alt2 = right(UTrw.Alt2,len(UTrw.Alt2)-1);
+          updatef = true;
+        end;
+        
+        ch = left(UTrw.Alt3,1);
+        if (ch=="-" or ch=="+") then begin
+          if (ch=="+") then begin
+            UTrw.Alt3Correct = 1;
+          end else begin
+            UTrw.Alt3Correct = 0;
+          end;
+          UTrw.Alt3 = right(UTrw.Alt3,len(UTrw.Alt3)-1);
+          updatef = true;
+        end;
+
+        ch = left(UTrw.Alt4,1);
+        if (ch=="-" or ch=="+") then begin
+          if (ch=="+") then begin
+            UTrw.Alt4Correct = 1;
+          end else begin
+            UTrw.Alt4Correct = 0;
+          end;
+          UTrw.Alt4 = right(UTrw.Alt4,len(UTrw.Alt4)-1);
+          updatef = true;
+        end;
+
+        ch = left(UTrw.Alt5,1);
+        if (ch=="-" or ch=="+") then begin
+          if (ch=="+") then begin
+            UTrw.Alt5Correct = 1;
+          end else begin
+            UTrw.Alt5Correct = 0;
+          end;
+          UTrw.Alt5 = right(UTrw.Alt5,len(UTrw.Alt5)-1);
+          updatef = true;
+        end;
+
+        ch = left(UTrw.Alt6,1);
+        if (ch=="-" or ch=="+") then begin
+          if (ch=="+") then begin
+            UTrw.Alt6Correct = 1;
+          end else begin
+            UTrw.Alt6Correct = 0;
+          end;
+          UTrw.Alt6 = right(UTrw.Alt6,len(UTrw.Alt6)-1);
+          updatef = true;
+        end;
+        
+        MatRowPut(UTr,i,UTrw);
+      end;
+      if (updatef) then begin
+        if (RecordUpdate(oldUTr,UTr,false)==0) then begin end;
+      end;
+    end;
+  end;
+  
+  return;
+end;
+
+global
+updating procedure UnivTestConvMn(record RcVc RepSpec)
+begin
+  integer oldcomp,i,rwcnt;
+  record CompaniesBlock Compb;
+  row CompaniesBlock Comprw;
+
+  if (RepSpec.flags[1]==0) then begin
+    DoUnivTestConv(RepSpec);
+  end else begin
+    oldcomp = CurrentCompany;  
+    BlockLoad(Compb);
+    rwcnt = MatRowCnt(Compb);    
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(Compb,i,Comprw);
+      if (blank(Comprw.TCPIP)) then begin
+        if (SetCompanyCode(Comprw.CompCode,false)) then begin
+          DoUnivTestConv(RepSpec);
+        end;
+      end;
+    end;
+    ResetCompany(oldcomp);
+  end;
+  
+  return;
+end;

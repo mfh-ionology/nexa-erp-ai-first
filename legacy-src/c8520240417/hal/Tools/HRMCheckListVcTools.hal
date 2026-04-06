@@ -1,0 +1,33 @@
+external procedure FindUserMailboxName(string,var string,var string);
+
+global
+updating function Integer CreateMailFromHRMCheckList(record HRMCheckListVc HRMCheckListr,var record MailVc Mailr)
+BEGIN
+  Integer res;
+  row MailVc MArw;
+  string 255 mailboxnr,tstr,warning;
+  string 1 TAB;
+  
+  res = 0;
+  if (ReadFirstMain(HRMCheckListr,0,true)) then begin end;  
+  TAB = chr(9);
+  FindUserMailboxName(CurrentUser,mailboxnr,tstr);
+  if (blank(tstr)) then begin
+    res = 22010;
+    warning = CurrentUser;
+    goto LCreateMailFromHRMCheckList;
+  end;  
+  MArw.RowTyp = 1;
+  MArw.AddrCode = tstr;
+  MatRowPut(Mailr,0,MArw);
+  Mailr.Header = USetStr(43264) & ": " & USetStr(43265) & " - " & HRMCheckListr.Name & USetStr(43266); 
+  Mailr.TransDate = CurrentDate;
+  Mailr.SerNr = NextSerNr("MailVc",Mailr.TransDate,-1,false,"");
+  if (RecordStore(Mailr,false)) then begin
+    CreateRecordLink(Mailr,CurrentCompany,HRMCheckListr,CurrentCompany);  
+    CreateRecordLink(HRMCheckListr,CurrentCompany,Mailr,CurrentCompany);  
+  end;
+LCreateMailFromHRMCheckList:;  
+  CreateMailFromHRMCheckList = res;
+  RETURN;
+END;

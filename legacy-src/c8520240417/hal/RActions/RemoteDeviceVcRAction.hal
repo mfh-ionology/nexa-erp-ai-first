@@ -1,0 +1,48 @@
+global
+function LongInt RemoteDeviceVcRecordCheck(record RemoteDeviceVc RDr,record RemoteDeviceVc RD2r,LongInt stat,LongInt check)
+begin
+  LongInt res;
+  record RemoteDeviceVc lRDr;
+  
+  res = 0;
+  if (blank(RDr.Code)) then begin
+    RecordCheckError(1058,"",-1,"Code");      
+    res = -1;
+    goto LRemoteDeviceVcRecordCheck;
+  end;
+  if (blank(RDr.LocalMachineCode)) then begin
+    RecordCheckError(1058,"",-1,"LocalMachineCode");      
+    res = -1;
+    goto LRemoteDeviceVcRecordCheck;
+  end;
+  if (nonblank(RDr.FailureCode)) then begin
+    if (RDr.FailureCode==RDr.Code) then begin
+      RecordCheckError(2246,"",-1,"FailureCode");      
+      res = -1;
+      goto LRemoteDeviceVcRecordCheck;
+    end;
+    lRDr.Code = RDr.FailureCode;
+    if (ReadFirstMain(lRDr,1,true)==false) then begin
+      RecordCheckError(1290,"",-1,"FailureCode");      
+      res = -1;
+      goto LRemoteDeviceVcRecordCheck;
+    end;
+  end;
+LRemoteDeviceVcRecordCheck:;  
+  RemoteDeviceVcRecordCheck = res;
+  return;
+end;
+
+global
+function LongInt RemoteDeviceVcRecordDefaults(record RemoteDeviceVc RDr,record RemoteDeviceVc RD2r,LongInt stat,LongInt check)
+begin
+  LongInt res;
+  
+  RDr.BaudRate = 9600;
+  RDr.FlowControl = kFlowControlDefault;
+  RDr.ByteSize = 8;
+  RDr.StopBits = 0;
+  RDr.Parity = -1;
+  RemoteDeviceVcRecordDefaults = res;
+  return;
+end;

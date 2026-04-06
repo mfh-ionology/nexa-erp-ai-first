@@ -1,0 +1,45 @@
+external function Integer SerBlockCheckOverlap(LongInt,LongInt,LongInt,LongInt);
+
+global
+updating function LongInt COSerBlockCheck(var record COSerBlock COSerr,record COSerBlock COSer2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  Integer j,i,rwcnt,pmrwcnt;
+  row COSerBlock COSerrw;
+  row COSerBlock COSer2rw;
+  
+  res = 0;
+  rwcnt = MatRowCnt(COSerr);
+  for (i=0; i<rwcnt;i=i+1) begin
+    MatRowGet(COSerr,i,COSerrw);
+    if (COSerrw.TSerStart<=0) then begin
+      RecordCheckError(2210,"",i,"TSerStart");   
+      res = -1;
+      goto LCOSerBlockCheck;        
+    end;
+    if (COSerrw.TSerEnd<=0) then begin
+      RecordCheckError(2210,"",i,"TSerEnd");   
+      res = -1;
+      goto LCOSerBlockCheck;        
+    end;
+    if ((nonblankdate(COSerrw.StartDate)) and (nonblankdate(COSerrw.EndDate))) then begin
+      if (COSerrw.StartDate>COSerrw.EndDate) then begin
+        RecordCheckError(20851,"",i,"EndDate");   
+        res = -1;
+        goto LCOSerBlockCheck;        
+      end;
+    end;
+    for (j=0;j<i;j=j+1) begin
+      MatRowGet(COSerr,j,COSer2rw);
+      res = SerBlockCheckOverlap(COSerrw.TSerStart,COSerrw.TSerEnd,COSer2rw.TSerStart,COSer2rw.TSerEnd);      
+      if (res!=0) then begin
+        RecordCheckError(res,"",i,"TSerStart");   
+        res = -1;
+        goto LCOSerBlockCheck;        
+      end;
+    end;        
+  end;  
+LCOSerBlockCheck:;  
+  COSerBlockCheck = res;
+  return;
+end;

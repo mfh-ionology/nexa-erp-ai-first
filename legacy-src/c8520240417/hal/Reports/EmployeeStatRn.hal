@@ -1,0 +1,342 @@
+external function Boolean WrapAndPrint(Integer,string,Integer);
+external function Boolean FindTheUser(var record UserVc);
+external procedure HTEmployees(string,string,var string);
+external procedure HT2Per2(Integer,Date,Date,var string);
+
+procedure PrintActivities(record RcVc RepSpec,integer recnr)
+begin
+  record ActVc Actr;
+  Boolean foundf,found2f,testf,firstf;
+  record EmplPSVc EmplPSr;
+  Integer count;
+
+  foundf = true; firstf = true; count = 0;
+  Actr.CUCode = RepSpec.f2;
+  while (LoopBackKey("CUCodeActType",Actr,1,foundf)) begin
+    if (Actr.CUCode!=RepSpec.f2) then begin foundf = false; end;
+    if (foundf) then begin
+      testf = true;
+      if (Actr.Invalid!=0) then begin testf = false; end;
+      if (recnr!=0) then begin  
+        if (count>=recnr) then begin
+          testf = false;
+        end;  
+      end; 
+      if (testf) then begin
+        if (firstf) then begin
+          StartFormat(15);
+          OutString(2,0,USetStr(43220),false);
+          EndFormat;
+          firstf = false;
+        end;
+        count = count + 1;
+        StartFormat(15);
+        OutStringID(3,"DblActRec",Actr.TransDate,false,Actr.SerNr);
+        OutString(4,"DblPersAct",Actr.MainPersons,false);
+        WrapAndPrint(8,Actr.Comment,58);
+        EndFormat;
+      end;
+    end;
+  end;
+  Gray_Divider(0,1);
+  return;
+end;
+
+procedure PrintPerformanceAppr(record RcVc RepSpec,integer recnr)
+begin
+  record HRMPAVc HRMPAr;
+  Boolean foundf,testf,firstf;
+  integer count;
+
+  foundf = true; firstf = true; count = 0;
+  while (LoopBackKey("Employee",HRMPAr,1,foundf)) begin
+    testf = true;
+    if (nonblank(RepSpec.f2)) then begin
+      if (HRMPAr.Employee!=RepSpec.f2) then begin testf = false; end;
+    end;
+    if (recnr!=0) then begin  
+       if (count>=recnr) then begin
+        testf = false;
+      end;  
+    end; 
+    if (testf) then begin
+      if (firstf) then begin
+        StartFormat(10);
+        EndFormat;
+        StartFormat(15);
+        OutString(2,0,USetStr(43221),false);
+        EndFormat;
+        firstf = false;
+      end;
+      count = count + 1;
+      StartFormat(15);
+      OutLongInt(2,"DblHRMPAVc",HRMPAr.SerNr,false);
+      OutDate(3,0,HRMPAr.TransDate,false);
+      OutString(8,0,HRMPAr.Comment,false);      
+      EndFormat;
+    end;
+  end;
+  Gray_Divider(15,1);
+  return;
+end;
+
+procedure PrintJobChanges(record RcVc RepSpec,integer recnr)
+begin
+  record HRMCOChangeVc HRMCOChanger;
+  Boolean foundf,testf,firstf;
+  Integer count;
+
+  foundf = true; firstf = true;  count = 0;
+  HRMCOChanger.Employee = RepSpec.f2 ;
+  while (LoopBackKey("Employee",HRMCOChanger,1,foundf)) begin
+    testf = true;
+    if (nonblank(RepSpec.f2)) then begin
+      if (HRMCOChanger.Employee!=RepSpec.f2) then begin testf = false; end;
+    end;
+    if (recnr!=0) then begin  
+       if (count>=recnr) then begin
+        testf = false;
+      end;  
+    end; 
+    if (testf) then begin
+      if (firstf) then begin
+        StartFormat(10);
+        EndFormat;
+        StartFormat(15);
+        OutString(2,0,USetStr(19242),false);
+        EndFormat;
+        firstf = false;
+      end;
+      count = count + 1;
+      StartFormat(15);
+      OutLongInt(2,"DblHRMCOChangeVc",HRMCOChanger.SerNr,false);
+      OutDate(3,0,HRMCOChanger.TransDate,false);
+      OutString(8,0,HRMCOChanger.Comment,false);
+      EndFormat;
+    end;
+  end;
+  Gray_Divider(15,1);
+  return;
+end;
+
+procedure PrintEmplContract(record RcVc RepSpec,integer recnr)
+begin
+  record HRMCOVc HRMCOr;
+  Boolean foundf,testf,firstf;
+  Integer count;
+
+  foundf = true; firstf = true; count = 0;
+  HRMCOr.Employee = RepSpec.f2;
+  while (LoopBackKey("Employee",HRMCOr,1,foundf)) begin
+    testf = true;
+    if (nonblank(RepSpec.f2)) then begin
+      if (HRMCOr.Employee!=RepSpec.f2) then begin testf = false; end;
+    end;
+    if (recnr!=0) then begin  
+       if (count>=recnr) then begin
+        testf = false;
+      end;  
+    end;     
+    if (testf) then begin
+      if (firstf) then begin
+        StartFormat(10);
+        EndFormat;
+        StartFormat(15);
+        OutString(2,0,USetStr(19233),false);
+        EndFormat;
+        firstf = false;
+      end;
+      count = count + 1;
+      StartFormat(15);
+      OutLongInt(2,"DblHRMCOVc",HRMCOr.SerNr,false);
+      OutDate(3,0,HRMCOr.TransDate,false);
+      OutDate(5,0,HRMCOr.StartDate,false);
+      OutDate(6,0,HRMCOr.EndDate,false);
+      OutString(8,0,HRMCOr.Comment,false);
+      EndFormat;
+    end;
+  end;
+  Gray_Divider(15,1);
+  return;
+end;
+
+procedure PrintLA(record RcVc RepSpec,integer recnr)
+begin
+  Boolean foundf,testf,firstf; 
+  record LeaveApplicationVc LAr;
+  Integer count;
+
+  foundf = true; firstf = true; count = 0;
+  LAr.Employee = RepSpec.f2;
+  while (LoopBackKey("Employee",LAr,1,foundf)) begin
+    if (foundf) then begin
+      testf = true;
+      if (DateInRange(LAr.StartDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin  testf = false; end;
+      if (nonblank(RepSpec.f2)) then begin
+        if (LAr.Employee!=RepSpec.f2) then begin testf = false; end;
+      end;
+      if (LAr.OKFlag==0) then begin  testf = false; end;
+      if (recnr!=0) then begin  
+        if (count>=recnr) then begin
+          testf = false;
+        end;  
+      end;
+      if (testf) then begin
+        if (firstf) then begin
+          StartFormat(10);
+          EndFormat;
+          StartFormat(15);
+          OutString(2,0,USetStr(43222),false);
+          EndFormat;
+          firstf = false;
+        end;
+        count = count + 1;
+        StartFormat(10);
+        OutLongInt(2,"DblLeaveAppVc",LAr.SerNr,false);
+        OutDate(5,0,LAr.StartDate,false);
+        OutDate(6,0,LAr.EndDate,false);
+        OutString(7,0,LAr.Days,false);
+        EndFormat;
+      end;
+    end;
+  end;
+  return;
+end;
+
+procedure PrintSoftFactors(record RcVc RepSpec,string compcode,integer recnr)
+begin
+  record SoftFactorVc SoftFactorr;
+  Boolean foundf,testf,firstf;
+  Integer i,j,rwcnt;
+  record UserVc Userr;
+  string 255 code;
+  Integer count;
+
+  foundf = true; firstf = true; count = 0;
+  Userr.CustCode = RepSpec.f2;
+  if (ReadFirstKey("CustCode",Userr,1,true)) then begin
+    code = Userr.Code;
+  end;
+  SoftFactorr.EmployeeCode = code;
+  while (LoopBackKey("EmployeeCode",SoftFactorr,2,foundf)) begin
+    if (nonblank(RepSpec.f2)) then begin
+      if (SoftFactorr.EmployeeCode!=code) then begin
+        foundf = false;
+      end;
+    end;
+    testf = foundf;
+    if (DateInRange(SoftFactorr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin testf = false; end;
+    if (SoftFactorr.OKFlag==0) then begin testf = false; end;
+    Userr.Code = SoftFactorr.EmployeeCode;
+    if (FindTheUser(Userr)==false) then begin testf = false; end;
+    if (Userr.TerminatedFlag!=0) then begin testf = false; end;
+    if (Userr.Closed!=0) then begin testf = false; end;
+    if (recnr!=0) then begin  
+      if (count>=recnr) then begin
+        testf = false;
+      end;  
+    end; 
+    if (testf) then begin
+      if (firstf) then begin
+        StartFormat(10);
+        EndFormat;
+        StartFormat(15);
+        OutString(2,0,USetStr(43223),false);
+        EndFormat;
+        firstf = false;
+      end;
+      count = count + 1;
+      StartFormat(15);
+      OutString(2,0,SoftFactorr.EmployeeCode,false);
+      OutStringID(3,"DblSoftFVc",SoftFactorr.TransDate,false,SoftFactorr.EmployeeCode);
+      OutString(8,0,SoftFactorr.Comment,false);  
+      EndFormat;
+    end;
+  end;
+  Gray_Divider(15,1);
+  return;
+end;
+
+global
+procedure EmployeeStatRn(record RcVc RepSpec)
+BEGIN
+  record CUVc CUr;
+  record EmplPSVc EmplPSr;
+  Boolean testf,found;
+  Integer rw;
+  string 255 tstr,fremp,toemp;
+   
+  StartReportJob(USetStr(43224));
+  fremp = FirstInRange(RepSpec.f2,20);
+  toemp = LastInRange(RepSpec.f2,20);
+  rw = 1;
+  HT2Per2(43232,RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  HTEmployees(fremp,toemp,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  EndHeader;
+
+  SetRepCol(2,15);
+  SetRepCol(3,100);
+  SetRepCol(4,150);
+  SetRepCol(5,200);
+  SetRepCol(6,250);
+  SetRepCol(7,300);
+  SetRepCol(8,350);
+
+  CUr.Code = fremp;
+  found = true;
+  while (LoopMain(CUr,1,found)) begin
+  testf = true;
+    if (nonblank(fremp)) then begin
+      if (CUr.Code>toemp) then begin testf = false; end;
+      if (CUr.Code<fremp) then begin testf = false; end;
+    end;
+    if (CUr.EmployeeType==0) then begin testf = false; end;
+    if (testf) then begin
+      StartFormat(10);
+      OutString(2,0,USetStr(43225),false);
+      OutString(3,0,CUr.Code,false);
+      EndFormat;
+      StartFormat(10);
+      EndFormat;
+      Black_Divider(15,1);
+
+      StartFormat(10);
+      OutString(3,0,USetStr(43226),false);
+      OutString(4,0,USetStr(43227),false);
+      OutString(5,0,USetStr(43228),false);      
+      OutString(6,0,USetStr(43229),false);
+      OutString(7,0,USetStr(43230),false);
+      OutString(8,0,USetStr(43231),false);
+      EndFormat;
+      StartFormat(10);
+      EndFormat;
+      Black_Divider(15,1);
+      RepSpec.f2 = CUr.Code;
+      EmplPSr.Signature = CurrentUser;
+      if (ReadFirstMain(EmplPSr,1,true)) begin
+        if (EmplPSr.Activities) then begin      PrintActivities(RepSpec,EmplPSr.NrOfAct); end;
+        if (EmplPSr.Softfactors) then begin     PrintSoftFactors(RepSpec,CurrentCompany,EmplPSr.NrOfSoftFactors); end;
+        if (EmplPSr.EmplContract) then begin    PrintEmplContract(RepSpec,EmplPSr.NrOfEmplContract); end;
+        if (EmplPSr.EmplContractCh) then begin  PrintJobChanges(RepSpec,EmplPSr.NrOfEmplContractCh); end;
+        if (EmplPSr.PerformanceAppr) then begin PrintPerformanceAppr(RepSpec,EmplPSr.NrOfPerformanceAppr); end;
+        if (EmplPSr.LeaveApp) then begin        PrintLA(RepSpec,EmplPSr.NrOfLeaveApp); end;
+      end else begin
+        PrintActivities(RepSpec,0);
+        PrintEmplContract(RepSpec,0);
+        PrintJobChanges(RepSpec,0);
+        PrintSoftFactors(RepSpec,CurrentCompany,0);
+        PrintPerformanceAppr(RepSpec,0);
+        PrintLA(RepSpec,0);
+      end;  
+      StartFormat(10);
+      EndFormat;
+      Black_Divider(0,1);
+    end;
+  end;
+  EndJob;
+  return;
+end;

@@ -1,0 +1,127 @@
+external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+external function Integer GetIntYc(Date);
+external updating procedure SaveTrans(record TRVc);
+external function string 255 StripCharacter(string,string);
+external procedure TRSumup(var record TRVc,var val);
+external function val MulRateToBase2(var string,val,val,val,val,val,val,roundmode);
+external function roundmode SetRoundModeD(Integer);
+external function Date DateFromString(string,string);
+external function string 255 DateToStr(Date);
+
+procedure AddToTransArr(Date TransDate,string comment,string AccNumber,string RowComment,string Objects,val DebVal,val CredVal,var Array record TRVc aTRr,var Integer arrcnt)
+BEGIN
+  record TRVc TRr;
+  row TRVc TRrw;
+  Integer i,rwcnt;
+
+  for (i=0;i<=arrcnt;i=i+1) begin 
+    TRr = aTRr[i];
+    if (TransDate==TRr.TransDate) then begin
+      rwcnt = MatRowCnt(TRr);
+      ClearRow(TRr,TRrw,1);
+      TRrw.AccNumber = AccNumber; 
+      TRrw.Comment = RowComment;
+      TRrw.Objects = Objects;
+      TRrw.DebVal = DebVal;
+      TRrw.CredVal = CredVal;
+      MatRowPut(TRr,rwcnt,TRrw);
+      aTRr[i] = TRr;
+      goto LAddToTransArr;
+    end;
+  end;
+  RecordNew(TRr);
+  rwcnt = MatRowCnt(TRr);
+  TRr.TransDate = TransDate;
+  TRr.Comment = Comment;
+  ClearRow(TRr,TRrw,1);
+  TRrw.AccNumber = AccNumber;
+  TRrw.Comment = RowComment;
+  TRrw.Objects = Objects;
+  TRrw.DebVal = DebVal;
+  TRrw.CredVal = CredVal;
+  MatRowPut(TRr,rwcnt,TRrw);  
+  aTRr[arrcnt] = TRr;
+  arrcnt = arrcnt + 1;
+ LAddToTransArr:;
+  return;
+end;
+
+function date ConvertStringDate(string datestr)
+begin
+  Date res;
+  string 255 tstr,tstr2;
+
+  if (len(datestr)==11) then begin
+    tstr2 = Right(datestr,len(datestr)-1);
+  end else begin
+    tstr2 = datestr;
+  end;
+  res.year = StringToInt(Right(tstr2,4));
+  tstr = Left(tstr2,5);
+  res.month = StringToInt(Right(tstr,2));
+  res.day = StringToInt(Left(tstr2,2));
+  
+  ConvertStringDate = res;
+  return;
+end;
+
+
+global
+updating procedure VikarinaIn()
+begin
+  string 255 pdate,amount,instr,dateformat,transdate;
+  record PosVc Posr;
+  record TRVc TRr;
+  row TRVc TRrw;
+  Array record TRVc aTRr;
+  record BaseCurBlock BaseCurBl;
+  Boolean testf;
+  Integer r,rwcnt,pos,arrcnt,i;
+  val t;
+  record SysFormatBlock SFb;
+
+  BlockLoad(SFb);
+  BlockLoad(BaseCurBl);
+  RecordNew(TRr);
+  testf = true;
+  while (testf) begin  
+    instr = ImportField; 
+    if (blank(instr)) then begin goto LVikarinaIn; end;  
+    pos = 0;
+    ExtractObjWithSeparator(",",instr,false,pos,pdate);
+    ExtractObjWithSeparator(",",instr,false,pos,TRrw.Objects);
+    ExtractObjWithSeparator(",",instr,false,pos,TRrw.AccNumber);
+    ExtractObjWithSeparator(",",instr,false,pos,TRrw.Comment);
+    ExtractObjWithSeparator(",",instr,false,pos,amount);
+
+    TRr.Comment = "Vikarina Payroll";
+    switch (SFb.dateOrder) begin
+      case 0:  TRr.TransDate = ConvertStringDate(pdate);
+      case 1:  TRr.TransDate = StringToDate(pdate);
+      case 2:  TRr.TransDate = ConvertStringDate(pdate);
+    end;
+    TRrw.Curncy = BaseCurBl.BaseCur1;
+    if (Left(amount,1)=="-") then begin
+      TRrw.CredVal = StringToVal(StripCharacter(amount,"-"),M4Val);
+      TRrw.DebVal = blankval;
+    end else begin
+      TRrw.DebVal = StringToVal(amount,M4Val);
+      TRrw.CredVal = blankval;
+    end;
+    AddToTransArr(TRr.TransDate,TRr.Comment,TRrw.AccNumber,TRrw.Comment,TRrw.Objects,TRrw.DebVal,TRrw.CredVal,aTRr,arrcnt);
+    testf = NextImportLine(false); 
+  end;
+
+  for (i=0;i<=arrcnt;i=i+1) begin
+    TRr = aTRr[i];
+    TRr.Number = NextSerNr("TRVc",TRr.TransDate,-1,false,""); 
+    if (TRr.Number!=-1) then begin
+      TRr.IntYc = GetIntYc(TRr.TransDate);
+      TRSumup(TRr,t);
+      RecordStore(TRr,true);
+    end;
+  end;
+LVikarinaIn:;  
+  return;
+end;
+

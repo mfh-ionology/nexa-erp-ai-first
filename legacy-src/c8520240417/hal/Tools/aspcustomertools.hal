@@ -1,0 +1,1294 @@
+external function Integer GetCompanyCodeFromCode(Integer);
+external procedure SendTextParameter(string,var Area);
+external procedure SendEOLParameter(var Area);
+external updating function Boolean SendServiceRequest_NoPassport(string,Boolean,area,var Area);
+external procedure ReadTXServiceReply(var record TXServiceReplyVc,var Area,Boolean);
+external function string 255 removenextlistitem(var string,string);
+external function Integer GetTheCompCodeFromVATLaw(Integer);
+external updating function Boolean SendServiceRequest_NoPassport_Partner(string,string,Boolean,area,var Area);
+external function Boolean FindService(string,string,Boolean,Boolean,var string,var longint,var longint,var string,var string,Boolean,Boolean);
+external procedure InvalidateServiceInCache(string,string);
+external function Boolean IsCloudController();
+external function Boolean IsCloudNode();
+external updating procedure StartPendingVersionDownloads();
+
+forward function Integer IsCloudNodeInstalled2();
+forward function Boolean SetupRemoteCloudServerAtExistingNode(Integer,Integer,Integer,string);
+
+external outer procedure SetCloudControllerStatusOnClient(date,time,string,string,LongInt);
+
+external procedure UpdateToVersion(record HansaVersionVc);
+external procedure UpdateWantedStatusOnServers(array uuid,Integer);
+external procedure DoUpdateBrowses(string);
+external function string 255 StateName(LongInt);
+
+procedure AddLineToArea(string line,area req)
+begin
+  AddTextToArea(line,req);
+  AddTextToArea(chr(10),req);
+  return;
+end;
+
+function string 255 ReadStringFromFile(string filename)
+begin
+  string 255 res;
+  area a;
+
+  AddFileToArea(filename,a,false);
+  res = Trim(GetStringFromArea(a,0,GetAreaLength(a)));
+  ReadStringFromFile = res;
+
+  return;
+end;
+
+function LongInt ReadLongFromFile(string filename)
+begin
+  LongInt res;
+  ReadLongFromFile = StringToLongInt(ReadStringFromFile(filename));
+  return;
+end;
+
+global
+updating procedure RegisterWithCloudController2(string address,var string vserver,var string vport,var string vpath,var Boolean failf,string hostn,string wantednodename)
+begin
+  Area a_req,a_reply,a_pem,a_cert,a_pem_d,a_cert_d;
+  LongInt rerror,pemlen,certlen,sp;
+  String 255 rerrordesc;
+  record TXServiceReplyVc TXSrvReplyr;
+  Boolean testf;
+  record HostingPartnerBlock HPb;
+//  transaction string 255 cnport,cnsslport,cnhttpport,apikey,vcode,cucode;
+  transaction string 255 cnport,cnsslport,cnhttpport,lcsport,lcshttpport,lcssslport;
+  transaction string 255 cucode,cuname,exename,lcsfolder,lcsbindip;
+  transaction string 255 apikey,vcode,sslpwd,pollingport,pollingflag,assignedcncode,assignedccaddr,pollingportlist;
+  Integer retries;
+
+  BlockLoad(HPb);
+
+LRegisterWithCloudController_TryAgain:;
+  failf = false;
+
+  LogText(0,"Registering Cloud Node with address=" & address & ", port=" & cnport & ", name=" & wantednodename);
+  SendTextParameter(address,a_req);
+  SendTextParameter(cnport,a_req);
+  SendTextParameter(cnsslport,a_req);
+  SendTextParameter(cucode,a_req);
+  SendTextParameter(cuname,a_req);
+  SendTextParameter(cnhttpport,a_req);
+  SendTextParameter(hostn,a_req);
+  SendTextParameter(ProgramPlatform,a_req);
+  SendTextParameter(wantednodename,a_req);
+  if (HPb.HostingPartner>0) then begin
+    testf = SendServiceRequest_NoPassport_Partner("CLOUDCONTROLLER_REGISTERNODE",HPb.HostingPartner,false,a_req,a_reply);
+  end else begin
+    //fallback on enabler registration country
+    testf = SendServiceRequest_NoPassport("CLOUDCONTROLLER_REGISTERNODE",false,a_req,a_reply);
+  end;
+  if ((testf==false) and (GetAreaLength(a_reply)<=0)) then begin
+    LogText(0,"SendServiceRequest2 timed out or failed to establish a connection, testf=" & testf);
+  end;
+    
+  if ((testf==false) or (GetAreaLength(a_reply)<=0)) then begin
+    failf = true;
+  end else begin
+    ReadTXServiceReply(TXSrvReplyr,a_reply,true);
+    rerror = TXSrvReplyr.ErrorCode;
+    rerrordesc = TXSrvReplyr.ErrorDescription;
+    switch (rerror) begin
+      case 0:
+      case -1:
+        LogText(0,"RegisterWithCloudController failed: Unknown SendServiceRequest2 error");
+        failf = true;
+      otherwise
+        rerrordesc = rerrordesc & USetStr(rerror);
+        LogText(0,"RegisterWithCloudController failed with error #" & rerror & ": " & rerrordesc);
+        failf = true;
+    end;
+  end;
+    
+  if (failf) then begin
+    LogText(0,"RegisterWithCloudController failed, retrying...");
+    retries = retries + 1;
+    if (retries<10) then begin
+      goto LRegisterWithCloudController_TryAgain;
+    end;
+  end;
+    
+  apikey = GetTabTextFromArea(0,0,a_reply);
+  vserver = GetTabTextFromArea(0,1,a_reply);
+  vport = GetTabTextFromArea(0,2,a_reply);
+  vpath = GetTabTextFromArea(0,3,a_reply);
+  vcode = GetTabTextFromArea(0,4,a_reply);
+  sslpwd = GetTabTextFromArea(0,5,a_reply);
+  pemlen = StringToLongInt(GetTabTextFromArea(0,6,a_reply));
+  certlen = StringToLongInt(GetTabTextFromArea(0,7,a_reply));
+  pollingport = GetTabTextFromArea(0,8,a_reply);
+  pollingflag = GetTabTextFromArea(0,9,a_reply);
+  assignedcncode = GetTabTextFromArea(0,10,a_reply);
+  assignedccaddr = GetTabTextFromArea(0,11,a_reply);
+  pollingportlist = GetTabTextFromArea(0,12,a_reply);
+
+  sp = GetAreaLength(a_reply) - 3;
+  sp = sp - certlen;
+  GetAreaFromArea(a_reply,sp,certlen,a_cert);
+  sp = sp - pemlen;
+  GetAreaFromArea(a_reply,sp,pemlen,a_pem);
+  AreaBase64Decode(a_pem,a_pem_d);
+  AreaBase64Decode(a_cert,a_cert_d);
+  CreateFolder("cloudnode");
+  WriteAreaToFile(a_pem_d,"cloudnode/privkey.pem",0);
+  WriteAreaToFile(a_cert_d,"cloudnode/cert.pem",0);
+
+
+//  LogText(0,"RegisterWithCloudController apikey=" & apikey & ", vserver=" & vserver & ", vport=" & vport & ", vpath=" & vpath);
+
+  if (blank(apikey)==true) then begin
+    LogText(0,"RegisterWithCloudController failed registering node");
+    failf = true;
+    goto LRegisterWithCloudController;
+  end;
+
+LRegisterWithCloudController:;
+  return;
+end;
+
+updating procedure RegisterWithCloudController(string address,var string vserver,var string vport,var string vpath,var Boolean failf,string hostn)
+begin
+  RegisterWithCloudController2(address,vserver,vport,vpath,failf,hostn,"");
+end;
+
+function string 255 NodeEXEName()
+begin
+  string 255 exefil;
+
+  switch (ProgramPlatform) begin
+    case kPlatformUnknown:    exefil = "hansa-debug-optimized-server";
+    case kPlatformMac:        exefil = "hansa-macosx-optimized-server";
+    case kPlatformWindows32:  exefil = "hansa-windows-optimized-server.exe";
+    case kPlatformWindows64:  exefil = "hansa-windows-optimized-server64.exe";
+    case kPlatformLinux32:    exefil = "hansa-debug-optimized-server";
+    case kPlatformLinux64:    exefil = "hansa-debug-optimized-server64";
+    case kPlatformLinuxArm64: exefil = "hansa-debug-optimized-serverarm64";
+  end;
+  NodeEXEName = exefil;
+  return;
+end;
+
+updating procedure MakeAutoStartingCloudNode(string workdir,Boolean startf)
+begin
+  string 255 arglist;
+  LongInt procflags;
+  area a_script;
+
+  if (WindowsMode) then begin
+    LogText(0,"Installing Windows Service Standard Cloud Node");
+    InstallWindowsService("Standard Cloud Node","Standard Cloud Node",CurrentPath & "\\cloudnode\\hansa-cloudnode.exe",true);
+    goto LMakeAutoStartingCloudNode;
+  end;
+
+  if (FileExists("cloudnode/run-cloudnode.sh")==false) then begin
+    LogText(0,"Creating Cloud Node run script");
+    AddLineToArea("#!/bin/sh",a_script);
+    AddLineToArea("if /usr/bin/tty -s; then",a_script);
+    AddLineToArea("  nohup $0 < /dev/null >>run-cloudnode.log &",a_script);
+    AddLineToArea("  exit",a_script);
+    AddLineToArea("fi;",a_script);
+    AddLineToArea("echo $$ > run-cloudnode.pid",a_script);
+    AddLineToArea("while true; do",a_script);
+    AddLineToArea("  ./hansa-cloudnode",a_script);
+    AddLineToArea("  sleep 1",a_script);
+    AddLineToArea("done;",a_script);
+    WriteAreaToFile(a_script,"cloudnode/run-cloudnode.sh",0);
+  end;
+
+  if (FileExists("cloudnode/stop-cloudnode.sh")==false) then begin
+    LogText(0,"Creating Cloud Node stop script");
+    SetAreaZeroSize(a_script);
+    AddLineToArea("#!/bin/sh",a_script);
+    AddLineToArea("kill -KILL `cat run-cloudnode.pid`",a_script);
+    AddLineToArea("sleep 1",a_script);
+    AddLineToArea("kill -INT `cat hansa.pid`",a_script);
+    AddLineToArea("rm -f run-cloudnode.pid",a_script);
+    WriteAreaToFile(a_script,"cloudnode/stop-cloudnode.sh",0);
+  end;
+
+  procflags = 0;
+  StartExternalProcess("/bin/chmod","a+x run-cloudnode.sh stop-cloudnode.sh",workdir,"",procflags);
+  Sleep(2); // ugly, to make chmod execute before we go ahead
+
+  if (startf) then begin
+    LogText(0,"Starting Cloud Node");
+    StartExternalProcess(ProgramFolder & "/cloudnode/run-cloudnode.sh","",workdir,"run-cloudnode.sh",procflags);
+  end;
+LMakeAutoStartingCloudNode:;
+end;
+
+updating procedure StopAndRemoveCloudNode()
+begin
+  string 255 arglist;
+  LongInt procflags,pid;
+
+  if (WindowsMode and ServerMode) then begin
+    LogText(0,"Removing Cloud Node service");
+    procflags = 0;
+    arglist = "-remove \"Standard Cloud Node\"";
+    StartExternalProcess(CurExeName,arglist,"","hansa-cloudnode",procflags);
+    LogText(0,"Removing service for this server");
+    RemoveMyWindowsService;
+  end;
+
+  pid = ReadLongFromFile("cloudnode/run-cloudnode.pid");
+  if (PidIsRunning(pid)==true) then begin
+    StopExternalProcess(pid);
+  end;
+
+  pid = ReadLongFromFile("cloudnode/hansa.pid");
+  if (PidIsRunning(pid)==true) then begin
+    LogText(0,"Stopping Cloud Node with process id " & pid);
+    StopExternalProcess(pid);
+  end;
+end;
+
+function string 255 HostingPartner()
+begin
+  record HostingPartnerBlock HPb;
+  record CloudSettingsBlock CSb;
+  string 255 res;
+
+  res = kHostingPartnerEurope;
+  if (DatabaseIsOpen) then begin
+    if (IsCloudNode or IsCloudController) then begin
+      BlockLoad(CSb);
+      res = CSb.HostingPartner;
+    end else begin
+      BlockLoad(HPb);
+      res = HPb.HostingPartner;
+    end;
+  end;
+  HostingPartner = res;
+  return;
+end;
+
+global
+function string 255 VersionPackagesServerAndPort()
+begin
+  string 255 hostname,funcname,msg,errordesc,address;
+  LongInt port,httpport;
+  Boolean res;
+
+  res = FindService("CLOUDCONTROLLER_VERSIONS",HostingPartner,false,false,hostname,port,httpport,funcname,msg,true,false);
+
+  if (blank(hostname)) then begin
+    address = "downloads.hansaworld.com";
+  end else begin
+    address = hostname & ":" & httpport;
+  end;
+
+  VersionPackagesServerAndPort = address;
+  return;
+end;
+
+global
+function string 255 VersionPackagesServer()
+begin
+  string 255 hostname,funcname,msg,errordesc;
+  LongInt port,httpport;
+  Boolean res;
+
+  res = FindService("CLOUDCONTROLLER_VERSIONS",HostingPartner,false,false,hostname,port,httpport,funcname,msg,true,false);
+
+  if (blank(hostname)) then begin
+    hostname = "downloads.hansaworld.com";
+  end;
+
+  VersionPackagesServer = hostname;
+  return;
+end;
+
+global
+function LongInt VersionPackagesPort()
+begin
+  string 255 hostname,funcname,msg,errordesc;
+  LongInt port,httpport;
+  Boolean res;
+
+  res = FindService("CLOUDCONTROLLER_VERSIONS",HostingPartner,false,false,hostname,port,httpport,funcname,msg,true,false);
+
+  if (httpport<=0) then begin
+    httpport = 80;
+  end;
+
+  VersionPackagesPort = httpport;
+  return;
+end;
+
+global
+procedure VersionPackagesServerConnectionFailed()
+begin
+  InvalidateServiceInCache("CLOUDCONTROLLER_VERSIONS",HostingPartner);
+  return;
+end;
+
+global
+updating procedure StartCloudNode()
+begin
+  MakeAutoStartingCloudNode("cloudnode/",true);
+  return;
+end;
+
+function string 255 CloudServerBackupFolder()
+begin
+  record BackupBlock Bb;
+  string 255 res;
+
+  BlockLoad(Bb);
+  res = Bb.Path;
+  if (blank(res)) then begin res = "Backup"; end;
+
+  CloudServerBackupFolder = res;
+  return;
+end;
+
+updating procedure ConfigureCloudNode(Boolean autostartf,var Boolean failf)
+begin
+  string 255 exefil;
+  string 255 workdir;
+  string 255 arglist;
+  LongInt procflags;
+  transaction string 255 cnport,cnsslport,cnhttpport,lcsport,lcshttpport,lcssslport;
+  transaction string 255 cucode,cuname,exename,lcsfolder,lcsbindip;
+  transaction string 255 apikey,vcode,sslpwd,pollingport,pollingflag,assignedcncode,assignedccaddr,pollingportlist;
+  transaction Longint contractno;
+  transaction Integer regincountry;
+  area a_conf;
+
+  SendTextParameter(vcode,a_conf);
+  SendTextParameter(apikey,a_conf);
+  SendTextParameter(exename,a_conf);
+  SendTextParameter(cuname,a_conf);
+  SendTextParameter(cucode,a_conf);
+  SendTextParameter(lcsport,a_conf);
+  SendTextParameter(lcssslport,a_conf);
+  SendTextParameter(lcshttpport,a_conf);
+  SendTextParameter(lcsfolder,a_conf);
+  SendTextParameter(lcsbindip,a_conf);
+  SendTextParameter(sslpwd,a_conf);
+  SendTextParameter(cnport,a_conf);
+  SendTextParameter(cnsslport,a_conf);
+  SendTextParameter(cnhttpport,a_conf);
+  SendTextParameter(autostartf,a_conf);
+  SendTextParameter(pollingport,a_conf);
+  SendTextParameter(pollingflag,a_conf);
+  SendTextParameter(assignedcncode,a_conf);
+  SendTextParameter(assignedccaddr,a_conf);
+  SendTextParameter(pollingportlist,a_conf);
+  SendTextParameter(regincountry,a_conf);
+  SendTextParameter(contractno,a_conf);
+  SendTextParameter(CloudServerBackupFolder,a_conf);
+
+  SendEOLParameter(a_conf);
+  WriteAreaToFile(a_conf,"cloudnode/cloudnodeconfig.txt",0);
+
+  procflags = 0;
+  workdir = "cloudnode/";
+  if (WindowsMode) then begin
+    exefil = workdir & "hansa-cloudnode.exe";
+  end else begin
+    exefil = "./hansa-cloudnode";
+  end;
+
+  arglist = "--port " & cnport;
+  arglist = arglist & " --httpport=" & cnhttpport;
+  arglist = arglist & " --httpsport=" & cnsslport;
+  arglist = arglist & " --verbosity=debug";
+  WriteStringToFile(arglist,"cloudnode/parameters.txt",0);
+
+  arglist = " --autoconfigure-cloudnode";
+  
+  LogText(0,"Configuring Cloud Node: " & exefil & " " & arglist & " in " & workdir);
+  Delete_File("cloudnode/tmp/cloudnode_configured");
+  StartExternalProcess(exefil,arglist,workdir,"hansa-cloudnode",procflags);
+  while (FileExists("cloudnode/tmp/cloudnode_configured")==false) begin
+    Sleep(1);
+  end;
+
+  if (autostartf) then begin
+    StartCloudNode;
+  end else begin
+    MakeAutoStartingCloudNode("cloudnode/",false);
+  end;
+
+LConfigureCloudNode:;
+  return;
+end;
+
+procedure ExtractCloudNodePackage()
+begin
+  string 255 folder,tmpfolder;
+
+  tmpfolder = "cloudnode_temp/";
+  folder = "cloudnode/";
+  
+  switch (ProgramPlatform) begin
+    case kPlatformWindows32:
+      RenameFile(tmpfolder & "/newver/" & NodeEXEName,tmpfolder & "/newver/hansa-cloudnode.exe");
+      Sleep(2);
+    case kPlatformWindows64:
+      RenameFile(tmpfolder & "/newver/" & NodeEXEName,tmpfolder & "/newver/hansa-cloudnode.exe");
+      Sleep(2);
+    otherwise
+      RenameFile(tmpfolder & "/newver/" & NodeEXEName,tmpfolder & "/newver/hansa-cloudnode");
+  end;
+
+  Delete_File(tmpfolder & "/newver/hansa-debug-server");
+  Delete_File(tmpfolder & "/newver/hansa-debug-server64");
+  Delete_File(tmpfolder & "/newver/hansa-debug-serverarm64");
+  Delete_File(tmpfolder & "/newver/hansa-windows-optimized-server.exe");
+  Delete_File(tmpfolder & "/newver/hansa-windows-optimized-server64.exe");
+  Delete_File(tmpfolder & "/newver/hansa-macosx-optimized-server");
+  Delete_File(tmpfolder & "/newver/hansa-debug-optimized-server");
+  Delete_File(tmpfolder & "/newver/hansa-debug-optimized-server64");
+  Delete_File(tmpfolder & "/newver/hansa-debug-optimized-serverarm64");
+  Delete_File(tmpfolder & "/newver/hansa-slave");
+  Delete_File(tmpfolder & "/newver/hansa-debug-slave");
+  Delete_File(tmpfolder & "/newver/hansa-debug-optimized-slave");
+  Delete_File(tmpfolder & "/newver/hansa-debug-slave64");
+  Delete_File(tmpfolder & "/newver/hansa-debug-slavearm64");
+  Delete_File(tmpfolder & "/newver/hansa-debug-optimized-slave64");
+  Delete_File(tmpfolder & "/newver/hansa-debug-optimized-slavearm64");
+  Delete_File(tmpfolder & "/newver/hansa-windows-optimized-slave.exe");
+  Delete_File(tmpfolder & "/newver/hansa-windows-optimized-slave64.exe");
+  Delete_File(tmpfolder & "/newver/hansa-macosx-optimized-slave");
+  Delete_File(tmpfolder & "/newver/hansa-debug-slavearm64");
+  Delete_File(tmpfolder & "/newver/hansa-debug-optimized-slavearm64");
+
+  MoveFile("privkey.pem",folder,tmpfolder & "/newver");
+  MoveFile("cert.pem",folder,tmpfolder & "/newver");
+  DeleteFolder(folder);
+  CopyFolder(tmpfolder & "/newver",folder);
+  DeleteFolder(tmpfolder);
+end;
+
+procedure ExtractCloudNodePackage2(Area a_package)
+begin
+  string 255 tmpfolder;
+
+  tmpfolder = "cloudnode_temp/";
+
+  DeleteFolder(tmpfolder);
+  CreateFolderHierarchy(tmpfolder);
+  RestoreArchiveFromArea(tmpfolder,a_package);
+  ExtractCloudNodePackage;
+end;
+
+global
+updating procedure AutoSetupCloudNodeLower(Integer cc_country,Integer svrportno,Integer svrsslportno,Integer svrhttpportno,string wantednodename)
+begin
+  string 255 address,tmpdir,portstr;
+  Boolean failf;
+  record HostingPartnerBlock HPb;
+  transaction LongInt hacretries,port;
+  transaction string 255 server,path;
+  transaction string 255 cnport,cnsslport,cnhttpport,lcsport,lcshttpport,lcssslport;
+  transaction string 255 cucode,cuname,exename,lcsfolder,lcsbindip;
+  transaction string 255 apikey,vcode,sslpwd,pollingport,pollingflag,assignedcncode,assignedccaddr,pollingportlist;
+
+  BlockLoad(HPb);
+
+  cnport = "1301"; // ASP hosting std. ports for cloud node
+  cnsslport = "499";
+  cnhttpport = "1081";
+  lcsport = svrportno;
+  lcshttpport = svrsslportno;
+  lcssslport = svrhttpportno;
+  //cucode = IEb.CustomerCode;
+  //cuname = CYb.CompName;
+  exename = CurExeName;
+  lcsfolder = ProgramFolder;
+  //lcsbindip = PSb.BindToAddr;
+
+  address = PublicHostName;
+  if (HPb.HostingPartner>0) then begin
+    LogText(0,"Registering host " & address & " with cloud controller using partner " & HPb.HostingPartner);
+  end else begin
+    LogText(0,"Registering host " & address & " with cloud controller using country " & cc_country);
+  end;
+  RegisterWithCloudController2(address,server,portstr,path,failf,LocalHostName,wantednodename);
+  port = StringToLongInt(portstr);
+
+  LogText(0,"Starting download of Cloud Node package http://" & server & ":" & port & path);
+  tmpdir = "cloudnode_temp";
+  DeleteFolder(tmpdir);
+  HttpAsyncDownloadHA(server,port,path,30,tmpdir,"AutoSetupCloudNodeDownloadCallback");
+
+LAutoSetupCloudNode:;
+  return;
+end;
+
+global
+updating procedure AutoSetupCloudNodeDownloadCallback(Boolean successf,LongInt httpres,Boolean timeout,string indir)
+begin
+  transaction LongInt hacretries,port;
+  transaction string 255 server,path;
+  string 255 destpath,destname,tmpdir;
+  Boolean failf;
+
+  tmpdir = "cloudnode_temp";
+
+  hacretries = hacretries + 1;
+  if (timeout==true) then begin
+    LogText(0,"ERROR: Downloading Cloud Node version package timed out");
+    goto LAutoSetupCloudNodeDownloadCallback_Retry;
+  end;
+
+  switch (httpres) begin
+    case kHttpStatusNotFound:
+      LogText(0,"ERROR: Downloading Cloud Node version package failed (httpres=404 not found)");
+      goto LAutoSetupCloudNodeDownloadCallback_Retry;
+    case kHttpStatusOK:
+    otherwise
+      LogText(0,"ERROR: Downloading Cloud Node version package failed (httpres=" & httpres & ")");
+      goto LAutoSetupCloudNodeDownloadCallback_Retry;
+  end;
+
+  if (successf==false) then begin
+    LogText(0,"ERROR: Downloading Cloud Node version package failed");
+    goto LAutoSetupCloudNodeDownloadCallback_Retry;
+  end;
+
+  ExtractCloudNodePackage;
+  ConfigureCloudNode(false,failf);
+  
+  LogText(0,"Cloud Node configured successfully");
+  ChangeVmLong("autosetupcloudnode",-1);
+  goto LAutoSetupCloudNodeDownloadCallback;
+
+LAutoSetupCloudNodeDownloadCallback_Retry:;
+  if (hacretries<300) then begin
+    LogText(0,"Downloading http://" & server & ":" & port & path & ", attempt " & hacretries & ", retrying");
+    HttpAsyncDownloadHA(server,port,path,30,tmpdir,"AutoSetupCloudNodeDownloadCallback");
+  end;
+
+LAutoSetupCloudNodeDownloadCallback:;
+  DeleteFolder(tmpdir);
+  return;
+end;
+
+global
+updating procedure AutoSetupCloudNode(string cucode2,Integer cc_country,Integer svrportno,Integer svrsslportno,Integer svrhttpportno,string wantednodename)
+begin
+  record InternetEnablerBlock IEb;
+  LongInt old_country;
+  string 255 cucode;
+  
+  BlockLoad(IEb);
+  old_country = IEb.RegInCountry;
+
+  cucode = cucode2;
+  if (blank(cucode)) then begin
+    LogText(0,"Customer Code can't be blank");
+    goto LAutoSetupCloudNode;
+  end;
+
+  IEb.RegInCountry = GetCompanyCodeFromCode(cc_country);
+  if (cucode!="999999999") then begin // Or else there will be no calls to lookup...
+    IEb.CustomerCode = cucode;
+  end;
+  BlockStore(IEb);
+
+  IncreaseVmLong("autosetupcloudnode",1);
+  AutoSetupCloudNodeLower(cc_country,svrportno,svrsslportno,svrhttpportno,wantednodename);
+  while (IncreaseVmLong("autosetupcloudnode",1)==false) begin
+    Sleep(1);
+  end;
+LAutoSetupCloudNode:;
+  return;
+end;
+
+global
+updating procedure SetupCloudNodeAtServer(Integer cnportno,Integer cnsslportno,Integer cnhttpportno,Integer svrportno,Integer svrsslportno,Integer svrhttpportno,string svripaddr)
+begin
+  string 255 server;
+  LongInt port;
+  string 255 path,vserver,vpath,vdestpath,vport;
+  area a_req;
+  Boolean failf;
+  record InternetEnablerBlock IEb;
+  record CYBlock CYb;
+  record ProgramStatusBlock PSb;
+  transaction string 255 cnport,cnsslport,cnhttpport,lcsport,lcshttpport,lcssslport;
+  transaction string 255 cucode,cuname,exename,lcsfolder,lcsbindip;
+  transaction string 255 apikey,vcode,sslpwd;
+  transaction Longint contractno;
+  transaction Integer regincountry;
+
+  if (SetupRemoteCloudServerAtExistingNode(svrportno,svrsslportno,svrhttpportno,svripaddr)) then begin
+    goto LSetupCloudNodeAtServer;
+  end;
+
+  BlockLoad(IEb);
+  BlockLoad(CYb);
+  BlockLoad(PSb);
+
+  StopAndRemoveCloudNode;
+
+  cnport = cnportno;
+  cnsslport = cnsslportno;
+  cnhttpport = cnhttpportno;
+  lcsport = svrportno;
+  lcshttpport = svrsslportno;
+  lcssslport = svrhttpportno;
+  cucode = IEb.CustomerCode;
+  cuname = CYb.CompName;
+  exename = CurExeName;
+  lcsfolder = ProgramFolder;
+  lcsbindip = PSb.BindToAddr;
+  regincountry = IEb.RegInCountry;
+  contractno = IEb.Contract;
+
+//address = svripaddr;
+
+  vdestpath = "cloudnode_temp";
+  DeleteFolder(vdestpath);
+  CreateFolder(vdestpath);
+
+  RegisterWithCloudController(svripaddr,vserver,vport,vpath,failf,"");
+
+  LogText(0,"Starting download of Cloud Node package http://" & vserver & ":" & vport & vpath);
+  HttpAsyncDownloadHA(vserver,StringToInt(vport),vpath,30,vdestpath,"SetupCloudNodeAtServerReply");
+
+LSetupCloudNodeAtServer:;
+  return;
+end;
+
+global
+function Boolean SetupRemoteCloudServerAtExistingNode(Integer svrportno,Integer svrsslportno,Integer svrhttpportno,string svripaddr)
+begin
+  record InternetEnablerBlock IEb;
+  record CYBlock CYb;
+  record ProgramStatusBlock PSb;
+  Boolean res;
+  record HostingPartnerBlock HPb;
+
+  if (IsCloudNodeInstalled2) then begin
+    BlockLoad(IEb);
+    BlockLoad(CYb);
+    BlockLoad(PSb);
+    BlockLoad(HPb);
+    if (CreateLCSAtExistingNode(HPb.HostingPartner,svrportno,svrhttpportno,svrsslportno,IEb.CustomerCode,CYb.CompName,CurExeName,ProgramFolder,PSb.BindToAddr,IEb.RegInCountry,IEb.Contract)) then begin
+      res = true;
+      QuitApplication(0,false);
+    end;
+  end;
+
+  SetupRemoteCloudServerAtExistingNode = res;
+  return;
+end;
+
+global
+updating procedure SetupCloudNodeAtServerReply(Boolean successf,LongInt httpres,Boolean timeout,string indir)
+begin
+  Boolean failf;
+  transaction string 255 cnport,cnsslport,cnhttpport,lcsport,lcshttpport,lcssslport;
+  transaction string 255 cucode,cuname,exename,lcsfolder,lcsbindip;
+  transaction string 255 apikey,vcode,sslpwd,pollingport,pollingflag,assignedcncode,assignedccaddr,pollingportlist;
+
+  if (timeout==true) then begin
+    LogText(0,"SetupCloudNodeAtServerReply timed out attempting to download Cloud Node package");
+    goto LSetupCloudNodeAtServerReply;
+  end;
+
+  switch (httpres) begin
+    case kHttpStatusNotFound:
+      LogText(0,"SetupCloudNodeAtServerReply failed downloading Cloud Node package (status=404 not found)");
+      goto LSetupCloudNodeAtServerReply;
+    case kHttpStatusOK:
+      if (successf!=true) then begin
+        LogText(0,"SetupCloudNodeAtServerReply failed downloading Cloud Node package (successf==false)");
+        goto LSetupCloudNodeAtServerReply;
+      end;
+    otherwise
+      LogText(0,"SetupCloudNodeAtServerReply failed downloading Cloud Node package (status=" & httpres & ")");
+      goto LSetupCloudNodeAtServerReply;
+  end;
+
+  LogText(0,"Extracting Cloud Node package");
+  ExtractCloudNodePackage;
+  LogText(0,"Configuring Cloud Node");
+  ConfigureCloudNode(true,failf);
+  QuitApplication(0,false);
+
+LSetupCloudNodeAtServerReply:;
+  return;
+end;
+
+global
+function Integer IsCloudNodeInstalled()
+begin
+  Integer res; // 0 = not installed, 1 = installed but not running, 2 = installed and running
+
+  if (DirExists("cloudnode")==false) then begin goto LIsCloudNodeInstalled; end;
+//  if (FileExists("cloudnode/HANSA.HDB")==false) then begin goto LIsCloudNodeInstalled; end;
+  if (FileExists("cloudnode/cloudnodeconfig.txt")==false) then begin goto LIsCloudNodeInstalled; end;
+
+  res = 1;
+  if (FileExists("cloudnode/hansa.pid")==false) then begin goto LIsCloudNodeInstalled; end;
+  if (PidIsRunning(ReadLongFromFile("cloudnode/hansa.pid"))==false) then begin goto LIsCloudNodeInstalled; end;
+
+  res = 2;
+
+LIsCloudNodeInstalled:;
+  IsCloudNodeInstalled = res;
+  return;
+end;
+
+global
+function Integer IsCloudNodeInstalled2()
+begin
+  Integer res;
+  record HostingPartnerBlock HPb;
+
+  BlockLoad(HPb);
+  if (FindCloudNodeForPartner(HPb.HostingPartner)) then begin
+    res = 1;
+    goto LIsCloudNodeInstalled2;
+  end;
+
+  res = 2;
+
+LIsCloudNodeInstalled2:;
+  IsCloudNodeInstalled2 = res;
+  return;
+end;
+
+global
+procedure RunRecCntRnEnablerAction()
+begin
+  record RcVc RepSpec;
+
+  Delete_File("RecCntRn.TXT");
+
+  RepSpec.Media = mtFile;
+  RepSpec.repname = "RecCntRn";
+  RepSpec.f1 = ""; // register
+  RepSpec.long1 = 0; // min no. of records
+  RepSpec.flags[0] = 0; // include simple registers
+  RepSpec.IncDaughter = 1; // include all companies
+
+  RunReport(RepSpec,0);
+  return;
+end;
+
+
+global
+procedure GetCustConfigEnablerAction()
+begin
+
+  CreateFile("CustConfig.txt");
+  CloseFile;
+  OpenExportFile("CustConfig.txt",0);
+  NewLine;
+  BlockExport("ModuleBlock");
+  CloseFile;
+
+  return;
+end;
+
+global
+updating procedure StoreASPEvent(LongInt evtype,string comment,string usercode,uuid svruuid,string controller)
+begin
+  record ASPEventsVc AEr;
+
+  AEr.TransDate = CurrentDate;
+  AEr.TransTime = CurrentTime;
+  AEr.Comment = comment;
+  AEr.EventType = evtype;
+  AEr.UserCode = usercode;
+  AEr.ServerUUID = svruuid;
+  AEr.Controller = controller;
+  RecordStore(AEr,false);
+
+  return;
+end;
+
+
+global
+function Boolean CheckVersion(record HansaVersionVc HVr)
+begin
+  Boolean res;
+  Boolean foundexef;
+
+  res = false;
+  
+  if (blank(HVr.Code)) then begin
+    LogText(0,"CheckVersion(\"" & HVr.Code & "\") failed, version code is blank");
+    goto LCheckVersion;
+  end;
+
+  if (HVr.Closed!=0) then begin
+    LogText2(0,"CheckVersion(\"" & HVr.Code & "\") failed, version is closed",kVerbosityDebugDetailed);
+    goto LCheckVersion;
+  end;
+
+  if (DirExists(HVr.ProgramFolder)==false) then begin
+    if (HVr.CurrentState!=kHansaVersionStateInstalling) then begin
+      LogText2(0,"CheckVersion failed, " & HVr.ProgramFolder & " does not exist",kVerbosityDebugDetailed);
+    end;
+    goto LCheckVersion;
+  end;
+
+  if (DirExists(HVr.ProgramFolder & "/hob")==false) then begin
+    LogText(0,"CheckVersion failed, " & HVr.ProgramFolder & "/hob does not exist");
+    goto LCheckVersion;
+  end;
+
+  if (FileExists(HVr.ProgramFolder & "/hob/startup.hob")==false) then begin
+    LogText(0,"CheckVersion failed, " & HVr.ProgramFolder & "/hob/startup.hob does not exist");
+    goto LCheckVersion;
+  end;
+
+  // HVr.AdditionalPlatform should *not* be checked here, the version is OK (and possibly in use) without it
+  switch (ProgramPlatform) begin
+    case kPlatformMac:
+      if (FileExists(HVr.ProgramFolder & "/hansa-macosx-optimized-server")) then begin foundexef = true; end;
+    case kPlatformWindows32:
+      if (FileExists(HVr.ProgramFolder & "/hansa-windows-optimized-server.exe")) then begin foundexef = true; end;
+    case kPlatformWindows64:
+      if (FileExists(HVr.ProgramFolder & "/hansa-windows-optimized-server64.exe")) then begin foundexef = true; end;
+    case kPlatformLinux32:
+      if (FileExists(HVr.ProgramFolder & "/hansa-server")) then begin foundexef = true; end;
+      if (FileExists(HVr.ProgramFolder & "/hansa-debug-server")) then begin foundexef = true; end;
+      if (FileExists(HVr.ProgramFolder & "/hansa-debug-optimized-server")) then begin foundexef = true; end;
+    case kPlatformLinux64:
+      if (FileExists(HVr.ProgramFolder & "/hansa-server64")) then begin foundexef = true; end;
+      if (FileExists(HVr.ProgramFolder & "/hansa-debug-server64")) then begin foundexef = true; end;
+      if (FileExists(HVr.ProgramFolder & "/hansa-debug-optimized-server64")) then begin foundexef = true; end;
+    case kPlatformLinuxArm64:
+      if (FileExists(HVr.ProgramFolder & "/hansa-serverarm64")) then begin foundexef = true; end;
+      if (FileExists(HVr.ProgramFolder & "/hansa-debug-serverarm64")) then begin foundexef = true; end;
+      if (FileExists(HVr.ProgramFolder & "/hansa-debug-optimized-serverarm64")) then begin foundexef = true; end;
+    otherwise
+      if (FileExists(HVr.ProgramFolder & "/hansa-server")) then begin foundexef = true; end;
+      if (FileExists(HVr.ProgramFolder & "/hansa-debug-server")) then begin foundexef = true; end;
+      if (FileExists(HVr.ProgramFolder & "/hansa-debug-optimized-server")) then begin foundexef = true; end;
+  end;
+
+  if (foundexef==false) then begin
+    LogText(0,"CheckVersion failed, " & HVr.ProgramFolder & " does not have any valid server executables");
+    goto LCheckVersion;
+  end;
+
+  res = true;
+
+LCheckVersion:;
+  CheckVersion = res;
+  return;
+end;
+
+global
+procedure SetCloudControllerStatus(LongInt status,string message)
+begin
+  if (IsCloudController) then begin
+    allclientsremoteasync.SetCloudControllerStatusOnClient(CurrentDate,CurrentTime,CurrentUser,message,status);
+  end;
+  return;
+end;
+
+global
+updating procedure DoUpdateHVr(record HansaVersionVc OldHVr,record HansaVersionVc HVr)
+begin
+  RecordUpdate(OldHVr,HVr,true);
+  return;
+end;
+
+global
+updating procedure DoDeleteHVr(record HansaVersionVc HVr)
+begin
+  RecordDelete(HVr);
+  return;
+end;
+
+global
+updating procedure DoStoreHVr(record HansaVersionVc HVr)
+begin
+  RecordStore(HVr,true);
+  return;
+end;
+
+global
+updating procedure SetHansaVersionState(var record HansaVersionVc HVr,LongInt state)
+begin
+  record HansaVersionVc HV2r;
+  record HansaVersionVc OldHV2r;
+
+  RecordCopy(HV2r,HVr);
+
+  if (ReadFirstMain(HV2r,1,true)) then begin
+    if (HV2r.CurrentState<>state) then begin
+      LogText(0,"SetHansaVersionState(" & HV2r.Code & ") " & StateName(HV2r.CurrentState) & " -> " & StateName(state));
+      RecordCopy(OldHV2r,HV2r);
+      HV2r.CurrentState = state;
+      RecordUpdate(OldHV2r,HV2r,true);
+    end else begin
+      //LogText(0,"SetHansaVersionState(" & HV2r.Code & "," & StateName(state) & ") already has state");
+    end;
+  end else begin
+    RecordCopy(HV2r,HVr);
+    HV2r.CurrentState = state;
+    if (RecordStore(HV2r,false)==false) then begin
+      LogText(0,"SetHansaVersionState(" & HV2r.Code & "," & StateName(state) & ") failed");
+//    end else begin
+//      LogText(0,"SetHansaVersionState(" & HV2r.Code & "," & StateName(state) & ") new");
+    end;
+  end;
+
+  HVr.CurrentState = state;
+  return;
+end;
+
+global
+procedure SetDownloadingVersion(string vercode,Boolean dlf)
+begin
+  string 255 verdlstr;
+
+  if (nonblank(vercode)) then begin
+    verdlstr = "IsDownloading:" & vercode;
+    SetGlobalBoolean(verdlstr,dlf);
+  end;
+  return;
+end;
+
+global
+procedure SetShouldDownloadVersion(string vercode,Boolean dlf)
+begin
+  string 255 verdlstr;
+
+  if (nonblank(vercode)) then begin
+    verdlstr = "ShouldDownload:" & vercode;
+    SetGlobalBoolean(verdlstr,dlf);
+  end;
+  return;
+end;
+
+global
+procedure UpdateClientBrowsesIfNeeded(string vcname)
+begin
+  string 255 gtag;
+
+  gtag = "%UCB_" & vcname;
+  if (GetGlobalBoolean(gtag)==true) then begin
+    allclientsremoteasync.DoUpdateBrowses(vcname);
+    SetGlobalBoolean(gtag,false);
+  end;
+  return;
+end;
+
+global
+procedure Do_HttpAsyncDownloadHACallback(string indir,record HansaVersionVc HVr,record HansaVersionVc OldHVr,Boolean update_after_download,string server,string destpath)
+begin
+  LongInt old_version_build,new_version_build;
+  Boolean okverf,foundf;
+  record LocalCloudServerVc LCSr;
+  record HansaVersionVc HV2r;
+  array uuid lcsuuidarr;
+  record CloudSettingsBlock CSb;
+  string 255 url,updatetmpfolder;
+  Integer stat;
+
+  //LogText(0,"Do_HttpAsyncDownloadHACallback(" & HVr.Code & ") " & StateName(HVr.CurrentState) & " -> " & StateName(kHansaVersionStateNormal));
+
+  HVr.CurrentState = kHansaVersionStateNormal;
+
+  updatetmpfolder = HVr.ProgramFolder & ".tmpupdate";
+  DeleteFolder(updatetmpfolder);
+
+  if (nonblank(OldHVr.Code)) then begin
+    old_version_build = (OldHVr.Version * 1000000) + (OldHVr.SubVersion * 10000) + OldHVr.RunningBuild;
+    new_version_build = (HVr.Version * 1000000) + (HVr.SubVersion * 10000) + HVr.RunningBuild;
+    okverf = CheckVersion(OldHVr);
+
+    if ((old_version_build<new_version_build) or (OldHVr.ForceReplaceVersionf!=0) or (okverf==false)) then begin
+      DeleteFolder(HVr.ProgramFolder);
+          
+      switch (ProgramPlatform) begin
+        case kPlatformMac:
+          Delete_File(indir & "/newver/hansa-debug-server");
+          Delete_File(indir & "/newver/hansa-debug-server64");
+          Delete_File(indir & "/newver/hansa-debug-serverarm64");
+          Delete_File(indir & "/newver/hansa-windows-optimized-server.exe");
+          Delete_File(indir & "/newver/hansa-windows-optimized-server64.exe");
+          Delete_File(indir & "/newver/hansa-debug-optimized-server");
+          Delete_File(indir & "/newver/hansa-debug-optimized-server64");
+          Delete_File(indir & "/newver/hansa-debug-optimized-serverarm64");
+          Delete_File(indir & "/newver/hansa-slave");
+          Delete_File(indir & "/newver/hansa-debug-slave");
+          Delete_File(indir & "/newver/hansa-debug-optimized-slave");
+          Delete_File(indir & "/newver/hansa-debug-slave64");
+          Delete_File(indir & "/newver/hansa-debug-slavearm64");
+          Delete_File(indir & "/newver/hansa-debug-optimized-slave64");
+          Delete_File(indir & "/newver/hansa-debug-optimized-slavearm64");
+          Delete_File(indir & "/newver/hansa-windows-optimized-slave.exe");
+          Delete_File(indir & "/newver/hansa-windows-optimized-slave64.exe");
+        case kPlatformWindows32:
+          Delete_File(indir & "/newver/hansa-debug-server");
+          Delete_File(indir & "/newver/hansa-debug-server64");
+          Delete_File(indir & "/newver/hansa-debug-serverarm64");
+          Delete_File(indir & "/newver/hansa-windows-optimized-server64.exe");
+          Delete_File(indir & "/newver/hansa-macosx-optimized-server");
+          Delete_File(indir & "/newver/hansa-debug-optimized-server");
+          Delete_File(indir & "/newver/hansa-debug-optimized-server64");
+          Delete_File(indir & "/newver/hansa-debug-optimized-serverarm64");
+          Delete_File(indir & "/newver/hansa-slave");
+          Delete_File(indir & "/newver/hansa-debug-slave");
+          Delete_File(indir & "/newver/hansa-debug-optimized-slave");
+          Delete_File(indir & "/newver/hansa-debug-slave64");
+          Delete_File(indir & "/newver/hansa-debug-slavearm64");
+          Delete_File(indir & "/newver/hansa-debug-optimized-slave64");
+          Delete_File(indir & "/newver/hansa-debug-optimized-slavearm64");
+          Delete_File(indir & "/newver/hansa-windows-optimized-slave64.exe");
+          Delete_File(indir & "/newver/hansa-macosx-optimized-slave");
+        case kPlatformWindows64:
+          Delete_File(indir & "/newver/hansa-debug-server");
+          Delete_File(indir & "/newver/hansa-debug-server64");
+          Delete_File(indir & "/newver/hansa-debug-serverarm64");
+          Delete_File(indir & "/newver/hansa-windows-optimized-server.exe");
+          Delete_File(indir & "/newver/hansa-macosx-optimized-server");
+          Delete_File(indir & "/newver/hansa-debug-optimized-server");
+          Delete_File(indir & "/newver/hansa-debug-optimized-server64");
+          Delete_File(indir & "/newver/hansa-debug-optimized-serverarm64");
+          Delete_File(indir & "/newver/hansa-slave");
+          Delete_File(indir & "/newver/hansa-debug-slave");
+          Delete_File(indir & "/newver/hansa-debug-optimized-slave");
+          Delete_File(indir & "/newver/hansa-debug-slave64");
+          Delete_File(indir & "/newver/hansa-debug-slavearm64");
+          Delete_File(indir & "/newver/hansa-debug-optimized-slave64");
+          Delete_File(indir & "/newver/hansa-debug-optimized-slavearm64");
+          Delete_File(indir & "/newver/hansa-windows-optimized-slave.exe");
+          Delete_File(indir & "/newver/hansa-macosx-optimized-slave");
+        case kPlatformLinux32:
+          if (HVr.AdditionalPlatform!=kPlatformLinux64) then begin
+            Delete_File(indir & "/newver/hansa-debug-server64");
+            Delete_File(indir & "/newver/hansa-debug-optimized-server64");
+            Delete_File(indir & "/newver/hansa-debug-slave64");
+            Delete_File(indir & "/newver/hansa-debug-optimized-slave64");
+          end;
+          if (HVr.AdditionalPlatform!=kPlatformLinuxArm64) then begin
+            Delete_File(indir & "/newver/hansa-debug-serverarm64");
+            Delete_File(indir & "/newver/hansa-debug-optimized-serverarm64");
+            Delete_File(indir & "/newver/hansa-debug-slavearm64");
+            Delete_File(indir & "/newver/hansa-debug-optimized-slavearm64");
+          end;
+          Delete_File(indir & "/newver/hansa-windows-optimized-server.exe");
+          Delete_File(indir & "/newver/hansa-windows-optimized-server64.exe");
+          Delete_File(indir & "/newver/hansa-macosx-optimized-server");
+          Delete_File(indir & "/newver/hansa-windows-optimized-slave.exe");
+          Delete_File(indir & "/newver/hansa-windows-optimized-slave64.exe");
+          Delete_File(indir & "/newver/hansa-macosx-optimized-slave");
+        case kPlatformLinux64:
+          if (HVr.AdditionalPlatform!=kPlatformLinux32) then begin
+            Delete_File(indir & "/newver/hansa-debug-server");
+            Delete_File(indir & "/newver/hansa-debug-optimized-server");
+            Delete_File(indir & "/newver/hansa-slave");
+            Delete_File(indir & "/newver/hansa-debug-slave");
+            Delete_File(indir & "/newver/hansa-debug-optimized-slave");
+          end;
+          if (HVr.AdditionalPlatform!=kPlatformLinuxArm64) then begin
+            Delete_File(indir & "/newver/hansa-debug-serverarm64");
+            Delete_File(indir & "/newver/hansa-debug-optimized-serverarm64");
+            Delete_File(indir & "/newver/hansa-debug-slavearm64");
+            Delete_File(indir & "/newver/hansa-debug-optimized-slavearm64");
+          end;
+          Delete_File(indir & "/newver/hansa-windows-optimized-server.exe");
+          Delete_File(indir & "/newver/hansa-windows-optimized-server64.exe");
+          Delete_File(indir & "/newver/hansa-macosx-optimized-server");
+          Delete_File(indir & "/newver/hansa-windows-optimized-slave.exe");
+          Delete_File(indir & "/newver/hansa-windows-optimized-slave64.exe");
+          Delete_File(indir & "/newver/hansa-macosx-optimized-slave");
+        case kPlatformLinuxArm64:
+          if (HVr.AdditionalPlatform!=kPlatformLinux64) then begin
+            Delete_File(indir & "/newver/hansa-debug-server64");
+            Delete_File(indir & "/newver/hansa-debug-optimized-server64");
+            Delete_File(indir & "/newver/hansa-debug-slave64");
+            Delete_File(indir & "/newver/hansa-debug-optimized-slave64");
+          end;
+          if (HVr.AdditionalPlatform!=kPlatformLinux32) then begin
+            Delete_File(indir & "/newver/hansa-debug-server");
+            Delete_File(indir & "/newver/hansa-debug-optimized-server");
+            Delete_File(indir & "/newver/hansa-slave");
+            Delete_File(indir & "/newver/hansa-debug-slave");
+            Delete_File(indir & "/newver/hansa-debug-optimized-slave");
+          end;
+          Delete_File(indir & "/newver/hansa-windows-optimized-server.exe");
+          Delete_File(indir & "/newver/hansa-windows-optimized-server64.exe");
+          Delete_File(indir & "/newver/hansa-macosx-optimized-server");
+          Delete_File(indir & "/newver/hansa-windows-optimized-slave.exe");
+          Delete_File(indir & "/newver/hansa-windows-optimized-slave64.exe");
+          Delete_File(indir & "/newver/hansa-macosx-optimized-slave");
+        otherwise
+      end;
+      
+      switch (ProgramPlatform) begin
+        case kPlatformWindows32:
+          DeleteFolder(indir & "/newver/ps-x64");
+        case kPlatformWindows64:
+          DeleteFolder(indir & "/newver/ps-x86");
+        otherwise
+          DeleteFolder(indir & "/newver/ps-x64");
+          DeleteFolder(indir & "/newver/ps-x86");
+      end;
+
+      CopyFolder(indir & "/newver",updatetmpfolder);
+      RenameFile(updatetmpfolder,HVr.ProgramFolder);
+
+      LogText(0,"Updating version " & OldHVr.Code & " from build " & old_version_build & " to build " & new_version_build);
+      if (update_after_download) then begin
+        SetCloudControllerStatus(kJobStatusFinished,"Downloaded and unpacked version " & HVr.Code);
+      end;
+      HVr.ForceReplaceVersionf = 0;
+      qupdating.DoUpdateHVr(OldHVr,HVr);
+      HVr.Code = OldHVr.Code;
+    end;
+  end else begin
+    qupdating.DoDeleteHVr(HVr);
+    new_version_build = (HVr.Version * 1000000) + (HVr.SubVersion * 10000) + HVr.RunningBuild;
+
+    CopyFolder(indir & "/newver",updatetmpfolder);
+    DeleteFolder(HVr.ProgramFolder);
+    RenameFile(updatetmpfolder,HVr.ProgramFolder);
+
+    LogText(0,"Saving version " & HVr.Code & " build " & new_version_build);
+    qupdating.DoStoreHVr(HVr);
+  end;
+
+  okverf = CheckVersion(HVr);
+  if (okverf==false) then begin
+    qupdating.SetHansaVersionState(HVr,kHansaVersionStateError);
+  end else begin
+    if (update_after_download) then begin
+      queued.UpdateToVersion(HVr);
+    end else begin
+      LCSr.HansaVersion = HVr.Code;
+      foundf = true;
+      while (LoopKey("HansaVersion",LCSr,1,foundf)) begin
+        if (LCSr.HansaVersion!=HVr.Code) then begin foundf = false; end;
+        if ((foundf==true) and (LCSr.WantedStatus==kWantedStatusStopAndRefresh)) then begin
+          lcsuuidarr[lcsuuidarr.length] = LCSr.UUID;
+        end;
+      end;
+      if (lcsuuidarr.length>0) then begin
+        BlockLoad(CSb);
+        url = Trim(CSb.CCAddr) & ":" & CSb.CCHTTPSPort;
+        stat = CallService(url).UpdateWantedStatusOnServers(lcsuuidarr,kWantedStatusRun);
+// error handling
+      end;
+    end;
+  end;
+
+  SetShouldDownloadVersion(HVr.Code,false);
+  SetDownloadingVersion(HVr.Code,false);
+
+  DeleteFolder(destpath);
+  qupdating.StartPendingVersionDownloads;
+  
+  UpdateClientBrowsesIfNeeded("HansaVersionVc");
+  return;
+end;
+
+global
+procedure CallDownloadHA(string xserver,LongInt xport,string xpath,string xdestpath,string xhacretries,record HansaVersionVc xHVr,record HansaVersionVc xOldHVr,Boolean xupdate_after_download)
+begin
+  transaction record HansaVersionVc HVr;
+  transaction record HansaVersionVc OldHVr;
+  transaction Boolean update_after_download;
+  transaction string 255 server,path,destpath;
+  transaction LongInt port,hacretries;
+  Integer waitsecs;
+  
+  if (QuitingApplication) then begin goto LCallDownloadHA; end;
+  
+  // because transaction strings isn't brought forward with threadasync... which probably is a bug ::lvg190904
+  HVr = xHVr;
+  OldHVr = xOldHVr;
+  update_after_download = xupdate_after_download;
+  server = xserver;
+  path = xpath;
+  destpath = xdestpath;
+  port = xport;
+  hacretries = xhacretries;
+  
+LCallDownloadHA_again:;
+  waitsecs = 30;
+  while (waitsecs>0) begin
+    Sleep(1);
+    if (QuitingApplication) then begin goto LCallDownloadHA; end;
+    waitsecs = waitsecs - 1;
+  end;
+  if (IncreaseVmLong("downloadversions",3)) then begin // max 3 at the time
+    LogText(0,"Downloading http://" & server & ":" & port & path & ", attempt " & hacretries & ", retrying");
+    HttpAsyncDownloadHA(server,port,path,30,destpath,"HttpAsyncDownloadHACallback");
+  end else begin
+    goto LCallDownloadHA_again;
+  end;
+  
+LCallDownloadHA:;
+  return;
+end;
+
+global
+updating procedure HttpAsyncDownloadHACallback(Boolean successf,LongInt httpres,Boolean timeout,string indir)
+begin
+  transaction record HansaVersionVc HVr;
+  transaction record HansaVersionVc OldHVr;
+  transaction Boolean update_after_download;
+  transaction string 255 server,path,destpath;
+  transaction LongInt port,hacretries;
+
+  ChangeVmLong("downloadversions",-1);
+  hacretries = hacretries + 1;
+  if (timeout==true) then begin
+    LogText(0,"HttpAsyncDownloadHACallback(" & HVr.Code & ") timed out");
+    VersionPackagesServerConnectionFailed;
+    goto LHttpAsyncDownloadHACallback_Retry;
+  end;
+
+  switch (httpres) begin
+    case kHttpStatusNotFound:
+      LogText(0,"HttpAsyncDownloadHACallback(" & HVr.Code & ") failed (httpres=404 not found)");
+//      VersionPackagesServerConnectionFailed; // no need to clear the lookup cache if the file wasn't found
+      goto LHttpAsyncDownloadHACallback_Retry; // why retry, the file isn't there...
+    case kHttpStatusOK:
+    otherwise
+      LogText(0,"HttpAsyncDownloadHACallback(" & HVr.Code & ") failed (httpres=" & httpres & ")");
+      VersionPackagesServerConnectionFailed;
+      goto LHttpAsyncDownloadHACallback_Retry;
+  end;
+
+  if (successf==false) then begin
+    LogText(0,"HttpAsyncDownloadHACallback(" & HVr.Code & ") failed");
+    VersionPackagesServerConnectionFailed;
+    goto LHttpAsyncDownloadHACallback_Retry;
+  end;
+
+  threadasync.Do_HttpAsyncDownloadHACallback(indir,HVr,OldHVr,update_after_download,server,destpath);
+  goto LHttpAsyncDownloadHACallback;
+
+LHttpAsyncDownloadHACallback_Retry:;
+  if (hacretries<5) then begin
+    if (IsCloudController) then begin
+      if (GetGlobalBoolean("update_after_download")) then begin
+        SetCloudControllerStatus(kJobStatusRunning,"Downloading new version for Cloud Controller, retrying");
+      end;
+    end;
+    threadasync.CallDownloadHA(server,port,path,destpath,hacretries,HVr,OldHVr,update_after_download);
+  end else begin
+    SetShouldDownloadVersion(HVr.Code,false); // false should be OK, during update the CC should be forcing the update anyhow
+    SetDownloadingVersion(HVr.Code,false);
+    if (httpres==kHttpStatusNotFound) then begin
+      SetHansaVersionState(HVr,kHansaVersionStateUnavailable);
+    end;
+    hacretries = -1;
+  end;
+
+LHttpAsyncDownloadHACallback:;
+  return;
+end;

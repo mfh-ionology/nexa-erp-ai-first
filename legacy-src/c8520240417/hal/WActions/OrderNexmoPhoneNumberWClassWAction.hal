@@ -1,0 +1,171 @@
+external function Boolean NexmoSendRequest(string,string,string,string,string,area,Boolean/*,Integer*/,string/*,var Integer*/,var string,var string,var json);
+remote procedure DoOrderNexmoPhoneNumberWClassOrder(string,string,string,Integer,var string);
+remote procedure LoadNexmoPhoneNumbers(record RcVc,var array string);
+
+global
+procedure UpdateList(Integer wn,record RcVc RepSpec,array string numbersarr)
+begin
+  string 255 number,cost,type;
+  LongInt pos;
+  Integer i;
+
+  ClearStringList(wn);
+  for (i = 0; i<numbersarr.length; i = i + 1) begin
+    pos = -1;
+    GetNextSubstring(numbersarr[i],pos,";",number);
+    GetNextSubstring(numbersarr[i],pos,";",cost);
+    GetNextSubstring(numbersarr[i],pos,";",type);
+
+    AddListRow(wn,"numbers",1,number,0);
+    AddListData(wn,"numbers","number","+" & number);
+    AddListData(wn,"numbers","type",type);
+    AddListData(wn,"numbers","cost",cost);
+  end;
+
+  PutWindowRecord(wn,RepSpec);
+
+  return;
+end;
+
+global
+procedure CallLoadNexmoPhoneNumbers(Integer wn,record RcVc RepSpec)
+begin
+  array string 255 numbersarr;
+
+  LoadNexmoPhoneNumbers(RepSpec,numbersarr);
+  UpdateList(wn,RepSpec,numbersarr);
+  return;
+end;
+
+global
+procedure OrderNexmoPhoneNumberWClassReload()
+begin
+  record RcVc RepSpec;
+  Integer wn;
+
+  wn = FindWindow("OrderNexmoPhoneNumberWClass");
+  if (wn<=0) then begin
+    goto LOrderNexmoPhoneNumberWClassReload;
+  end;
+
+  DeSelectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+
+  if (blank(RepSpec.f5)) then begin
+    GetWindowRecord(MotherWindow(wn),RepSpec);
+  end;
+
+  if (blank(RepSpec.f5) or blank(RepSpec.f6)) then begin
+    goto LOrderNexmoPhoneNumberWClassReload;
+  end;
+
+  ClearStringList(wn);
+  AddListRow(wn,"numbers",1,"tagLOADING%",0);
+  AddListData(wn,"numbers","number",USetStr(41501));
+  PutWindowRecord(wn,RepSpec);
+
+  queued.CallLoadNexmoPhoneNumbers(wn,RepSpec);
+  WindowFieldGoto(wn,RepSpec,-1,"f1",false);
+
+LOrderNexmoPhoneNumberWClassReload:;
+  return;
+end;
+
+global
+function Boolean OrderNexmoPhoneNumberWClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record RcVc RepSpec;
+
+  res = true;
+  switch (fieldname) begin
+    case "flags[0]":
+      if (changed!=0) then begin
+        OrderNexmoPhoneNumberWClassReload;
+      end;
+    case "f5":
+      if (changed!=0) then begin
+        OrderNexmoPhoneNumberWClassReload;
+      end;
+    case "f6":
+      if (changed!=0) then begin
+        OrderNexmoPhoneNumberWClassReload;
+      end;
+    case "f7":
+      if (changed!=0) then begin
+        OrderNexmoPhoneNumberWClassReload;
+      end;
+  end;
+
+OrderNexmoPhoneNumberWClassAfterEditField = res;
+  return;
+end;
+
+global
+function Boolean OrderNexmoPhoneNumberWClassOnOpenWindow(Integer wn)
+begin
+  OrderNexmoPhoneNumberWClassReload;
+  OrderNexmoPhoneNumberWClassOnOpenWindow = false;
+  return;
+end;
+
+global
+procedure OrderNexmoPhoneNumberWClassOrder()
+begin
+  string 255 number,msg;
+  Boolean res;
+  record RcVc RepSpec;
+  Integer wn;
+  LongInt line;
+
+  wn = CurWindow;
+
+  DeSelectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+
+  line = SelectedListLine(wn);
+  if (line<0) then begin
+    goto LOrderNexmoPhoneNumberWClassOrder;
+  end;
+  
+  number = GetListTag(wn,line);
+  if (blank(number)) then begin
+    MessageBox(41504,"");
+    goto LOrderNexmoPhoneNumberWClassOrder;
+  end;
+
+  DoOrderNexmoPhoneNumberWClassOrder(RepSpec.f5,RepSpec.f6,number,RepSpec.flags[0],msg);
+  if (nonblank(msg)) then begin
+    MessageBox(41504,msg);
+    goto LOrderNexmoPhoneNumberWClassOrder;
+  end;
+
+  CheckmarkBox(41505,"");
+  RepSpec.f3 = number;
+  RepSpec.f4 = "+" & number;
+  PutWindowRecord(MotherWindow(wn),RepSpec);
+  CloseWindow(wn);
+
+LOrderNexmoPhoneNumberWClassOrder:;
+  return;
+end;
+
+
+global
+updating function Boolean OrderNexmoPhoneNumberWClassOnOKWindow(Integer wn)
+begin
+  OrderNexmoPhoneNumberWClassOrder;
+  OrderNexmoPhoneNumberWClassOnOKWindow = true;
+  return;
+end;
+
+global
+procedure OrderNexmoPhoneNumberWClassSignup()
+begin
+  record RcVc RepSpec;
+  Integer nwn;
+  //OpenWebBrowser("https://www.nexmo.com/sign-up");
+  nwn = OpenWindow("WebPageClass",1,0,"https://www.nexmo.com/sign-up","",RepSpec);
+
+  return;
+end;

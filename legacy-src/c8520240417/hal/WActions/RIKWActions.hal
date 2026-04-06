@@ -1,0 +1,247 @@
+external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+remote procedure EInvReceiverStatusReqSingleRegNr(string,var integer);
+
+global
+procedure SendEstAddressLookup(Integer wn,string regno,string namestr,Integer stat)
+begin
+  record RcVc RepSpec;
+  
+  ReportDefaults(RepSpec,"EstAddrLookupRClass");
+  RepSpec.repname = "EstAddrLookupRn";
+  RepSpec.Media = mtScreen;
+  RepSpec.f2 = regno;
+  RepSpec.f3 = namestr;
+  RepSpec.flags[0] = 0;
+  RepSpec.flags[1] = stat;
+  RepSpec.ArtMode = wn;
+  RunReport(RepSpec,0);
+LSendEstAddressLookup:;
+  return;
+end;
+
+global
+function Boolean EstAddrLookupRClassOnOKWindow(Integer wn)
+begin
+  record RcVc RepSpec,OldRepSpec;
+
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,OldRepSpec);
+  ReportDefaults(RepSpec,"EstAddrLookupRClass");
+  RepSpec.repname = "EstAddrLookupRn";
+  RepSpec.Media = mtScreen;
+  RepSpec.f2 = OldRepSpec.f2;
+  RepSpec.f3 = OldRepSpec.f3;
+  RepSpec.flags[0] = 0;
+  RepSpec.flags[1] = OldRepSpec.flags[1];
+  RepSpec.ArtMode = OldRepSpec.ArtMode;
+  RunReport(RepSpec,0);
+  CloseWindow(wn);
+  EstAddrLookupRClassOnOKWindow = true;
+  return;
+end;
+
+procedure FormatCUAddrRows(var record CUVc CUr)
+begin
+
+  if(blank(CUr.InvAddr0)) then begin
+    CUr.InvAddr0 = CUr.InvAddr1;
+    CUr.InvAddr1 = CUr.InvAddr2;
+    CUr.InvAddr2 = CUr.InvAddr3;
+    CUr.InvAddr3 = "";
+  end;
+  if(blank(CUr.InvAddr1)) then begin
+    CUr.InvAddr1 = CUr.InvAddr2;
+    CUr.InvAddr2 = CUr.InvAddr3;
+    CUr.InvAddr3 = "";
+  end;
+  if(blank(CUr.InvAddr2)) then begin
+    CUr.InvAddr2 = CUr.InvAddr3;
+    CUr.InvAddr3 = "";
+  end;
+  return;
+end;
+
+updating procedure UpdCustomer(string CUCode,string tstr)
+begin
+  record CUVc CUr,oldCUr;
+  string 255 res;
+  string 255 name,regno,vatno,addr1,addr2,addr3,wnstr,country;
+  Integer pos,einvStat;
+
+  CUr.Code = CUCode;
+  if (ReadFirstMain(CUr,1,true)) begin
+    RecordCopy(oldCUr,CUr);
+    pos = 0;
+    ExtractObjWithSeparator(";",tstr,true,pos,wnstr);
+    ExtractObjWithSeparator(";",tstr,true,pos,name);
+    ExtractObjWithSeparator(";",tstr,true,pos,regno);
+    ExtractObjWithSeparator(";",tstr,true,pos,vatno);
+    ExtractObjWithSeparator(";",tstr,true,pos,addr1);
+    ExtractObjWithSeparator(";",tstr,true,pos,addr2);
+    ExtractObjWithSeparator(";",tstr,true,pos,addr3);
+    ExtractObjWithSeparator(";",tstr,true,pos,country);
+    CUr.Name = URLDecode(name);
+    CUr.VATNr = vatno;
+    CUr.InvAddr0 = URLDecode(addr1);
+    CUr.InvAddr1 = URLDecode(addr2);
+    CUr.InvAddr2 = URLDecode(addr3);
+    CUr.InvAddr3 = URLDecode(country);
+    FormatCUAddrRows(CUr);
+    threadremote.EInvReceiverStatusReqSingleRegNr(CUr.RegNr1,einvStat);
+    CUr.EInvReceiverFlag = StringToInt(einvStat);
+    if (RecordUpdate(oldCUr,CUr,false)==0) then begin
+    end;
+  end;
+  return;
+end;
+
+global
+procedure DblAddrUpdCU(string dblstr,string l,Integer currepwn)
+begin
+  record CUVc CUr;
+  record RcVc RepSpec;
+  string 255 tstr,res;
+  string 255 name,regno,vatno,addr1,addr2,addr3,wnstr,country;
+  Integer wn,nwn;
+  Integer pos,einvStat;
+
+  tstr = l;
+  pos = 0;
+  ExtractObjWithSeparator(";",tstr,false,pos,wnstr);
+  wn = StringToInt(wnstr);
+  if (wn>0 and GetWindowClass(wn)=="CUDClass") then begin
+    DeselectWindow(wn,false);
+    GetWindowRecord(wn,CUr);
+    ExtractObjWithSeparator(";",tstr,false,pos,name);
+    ExtractObjWithSeparator(";",tstr,false,pos,regno);
+    ExtractObjWithSeparator(";",tstr,false,pos,vatno);
+    ExtractObjWithSeparator(";",tstr,false,pos,addr1);
+    ExtractObjWithSeparator(";",tstr,false,pos,addr2);
+    ExtractObjWithSeparator(";",tstr,false,pos,addr3);
+    ExtractObjWithSeparator(";",tstr,false,pos,country);
+    if (blank(CUr.Name)) then begin
+      CUr.Name = URLDecode(name);
+    end;
+    CUr.RegNr1 = regno;
+    CUr.VATNr = vatno;
+    if (nonblank(addr1) or nonblank(addr2) or nonblank(addr3) or nonblank(country)) then begin
+      CUr.InvAddr0 = URLDecode(addr1);
+      CUr.InvAddr1 = URLDecode(addr2);
+      CUr.InvAddr2 = URLDecode(addr3);
+      CUr.InvAddr3 = URLDecode(country);
+      FormatCUAddrRows(CUr);
+    end;
+    threadremote.EInvReceiverStatusReqSingleRegNr(CUr.RegNr1,einvStat);
+    CUr.EInvReceiverFlag = StringToInt(einvStat);
+    PutWindowRecord(wn,CUr);
+  end;
+  return;
+end;
+
+global
+procedure DblAddrUpdCUName(string dblstr,string l,Integer currepwn)
+begin
+  record CUVc CUr;
+  record RcVc RepSpec;
+  string 255 tstr,res;
+  string 255 name,regno,vatno,addr1,addr2,addr3,wnstr;
+  Integer wn,nwn;
+  Integer pos;
+
+  tstr = l;
+  pos = 0;
+  ExtractObjWithSeparator(";",tstr,false,pos,wnstr);
+  wn = StringToInt(wnstr);
+  if (wn>0 and GetWindowClass(wn)=="CUDClass") then begin
+    DeselectWindow(wn,false);
+    GetWindowRecord(wn,CUr);
+    ExtractObjWithSeparator(";",tstr,false,pos,name);
+    CUr.Name = URLDecode(name);
+    PutWindowRecord(wn,CUr);
+  end;
+  return;
+end;
+
+global
+procedure DblAddrCreateCU(string dblstr,string l,Integer currepwn)
+begin
+  record CUVc CUr,lCUr;
+  record RcVc RepSpec;
+  string 255 tstr,res;
+  string 255 name,regno,vatno,addr1,addr2,addr3,wnstr,country;
+  Integer wn,nwn;
+  Integer pos,einvStat;
+
+  tstr = l;
+  pos = 0;
+  ExtractObjWithSeparator(";",tstr,false,pos,wnstr);
+  ExtractObjWithSeparator(";",tstr,false,pos,name);
+  ExtractObjWithSeparator(";",tstr,false,pos,regno);
+  ExtractObjWithSeparator(";",tstr,false,pos,vatno);
+  ExtractObjWithSeparator(";",tstr,false,pos,addr1);
+  ExtractObjWithSeparator(";",tstr,false,pos,addr2);
+  ExtractObjWithSeparator(";",tstr,false,pos,addr3);
+  ExtractObjWithSeparator(";",tstr,false,pos,country);
+  lCUr.RegNr1 = regno;
+  if (ReadFirstKey("RegNr1",lCUr,1,true)) then begin
+    nwn = OpenWindow("UpdEstAddrVcCancelDsmYesNoWClass",0,0,"","",RepSpec);
+    DeselectWindow(nwn,false);
+    RepSpec.f1 = lCUr.Code;
+    RepSpec.f2 = tstr;
+    PutWindowRecord(nwn,RepSpec);
+  end else begin
+    RecordNew(CUr);
+    CUr.Name = URLDecode(name);
+    CUr.RegNr1 = regno;
+    CUr.VATNr = vatno;
+    CUr.InvAddr0 = URLDecode(addr1);
+    CUr.InvAddr1 = URLDecode(addr2);
+    CUr.InvAddr2 = URLDecode(addr3);
+    CUr.InvAddr3 = URLDecode(country);
+    FormatCUAddrRows(CUr);
+    CUr.CUType = 1;
+    CUr.VEType = 1;
+    threadremote.EInvReceiverStatusReqSingleRegNr(CUr.RegNr1,einvStat);
+    CUr.EInvReceiverFlag = StringToInt(einvStat);
+    nwn = OpenWindow("CUDClass",1,0,"","",CUr);
+  end;
+  return;
+end;
+
+global
+procedure DblOpenCUInfoInWeb(string dblstr,string l,Integer currepwn)
+begin
+  string 255 link;
+  string 255 element;
+  
+  if (nonblank(l)) then begin
+    link = l;
+  end;
+  if (nonblank(link)) then begin
+    OpenWebBrowser(link);
+  end;
+  return;
+end;
+
+global
+updating procedure UpdEstAddrVcCancelDsmYesNoWClassYES()
+begin
+  Integer wn;
+  record RcVc RepSpec;
+
+  wn = CurWindow;
+  GetWindowRecord(wn,RepSpec);
+  CloseWindow(wn);      
+  UpdCustomer(RepSpec.f1,RepSpec.f2);
+  return;
+end;
+
+global
+procedure UpdEstAddrVcCancelDsmYesNoWClassNO()
+begin
+  Integer wn;
+
+  wn = CurWindow;
+  CloseWindow(wn);
+  return;
+end;

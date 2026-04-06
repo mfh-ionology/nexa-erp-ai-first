@@ -1,0 +1,2326 @@
+forward procedure ASPFileManagerOClassReload();
+//remote procedure CallCreateHansaWorldID(record CUVc,string,var Integer,var uuid,Boolean);
+remote procedure CallLogoutHansaWorldID(uuid,string,var Integer);
+remote procedure CallCheckHansaWorldID(uuid,string,var Integer,var record CUVc);
+remote procedure CallLoginHansaWorldID(var record CUVc,string,var Integer,var uuid);
+external outer function Boolean IsCloudControllerClient();
+remote procedure RestartRemoteCloudServers(array uuid);
+remote updating procedure ExportRemoteCloudServersDatabases(array uuid);
+remote updating procedure ExportRemoteCloudServerCompany(uuid,LongInt,string);
+remote updating procedure ExportRemoteCloudServerRegister(uuid,string,LongInt,string);
+remote updating procedure StartRemoteCloudServers(array uuid,Boolean);
+remote updating procedure StopRemoteCloudServers(array uuid,Boolean);
+remote procedure StopRemoteCloudServers2(array uuid);
+remote procedure SoftStopRemoteCloudServers(array uuid,string,Integer);
+remote updating procedure RestartCloudServers(array uuid);
+remote updating procedure StartCloudServers(array uuid);
+remote updating procedure StopCloudServers(array uuid,Boolean);
+remote updating procedure CloseCloudServers(array uuid);
+remote updating procedure RemoveCloudServers(array uuid);
+remote updating procedure SendVersionToAllNodes(record HansaVersionVc);
+remote procedure ClearQuickRestartsOnNode(record RemoteCloudServerVc);
+remote procedure DownloadNewVersionsForCx(Boolean,Boolean);
+remote procedure UpdateToVersion(record HansaVersionVc);
+remote updating procedure StartRemoveNodesStats(Boolean);
+remote updating procedure UpdateAllNodesToVersion(record HansaVersionVc);
+remote updating procedure DownloadVersionOnAllNodes(record HansaVersionVc);
+remote updating procedure UpdateCloudToVersion(record HansaVersionVc);
+external remote function Boolean FindCloudServerAddr(record RemoteCloudServerVc,var string);
+external function string 255 removenextlistitem(var string,string);
+remote procedure GetVersionUpdateServerList(string,var array uuid,var array string,var array string,var array string);
+remote updating procedure UpdateServersOnVersion(string,LongInt);
+remote procedure CheckScript(record RcVc,var record RcVc,var Boolean);
+remote procedure RunScriptOnHosts(array string,record RcVc,var record RcVc,var Boolean);
+remote function Boolean GetKeyForHostingConfiguration(record HostingConfigurationVc,var record Attach2Vc);
+remote updating function Integer ChangeHostType(record CloudNodeVc,string,var string);
+remote updating function Integer AssignHostIP(record CloudNodeVc,string,var string);
+remote function Boolean GetEC2ElasticIPs(record HostingConfigurationVc,var area);
+remote function Boolean AllocateEC2ElasticIP(record HostingConfigurationVc,string);
+remote updating function Integer ConfigHostFirewall(string,string,string,Integer,var string);
+remote updating function Boolean SendVersionRecordToNode(string,string);
+external procedure PasteFromSysList(Integer,Integer);
+remote updating procedure DoLaunchRemoteCloudServerSystem(record RcVc,Integer,var string);
+remote function Boolean GetKeyForHostingConfigurationToArea(record HostingConfigurationVc,string,var area);
+remote procedure CountConnections(uuid,var LongInt);
+
+external outer function val NodeMonthlyCost(record CloudNodeVc);
+external outer procedure EC2InstanceMonthlyCost2(record EC2InstanceVc,var val);
+external outer procedure InstallFlexBIOnRemoteCloudServer(record RemoteCloudServerVc,var string);
+
+remote function Boolean ASPRebuildNodeVClassCheckNode(var record RcVc,var string);
+
+global
+function Boolean IsAllowedHansaMailFunction(record RemoteCloudServerVc RCSr)
+begin
+  Boolean res;
+
+  if (Left(RCSr.Name,9)=="HansaMail") then begin
+    res = UserCanAction("ASPHansaMailAdmin",false);
+    if (res==false) then begin
+      MessageBox(0,"You are not allowed to perform this action on HansaMail servers.");
+      LogText(0,"User " & CurrentUser & " attempted to perform a non-allowed HansaMail function");
+    end;
+  end else begin
+    res = true;
+  end;
+
+  IsAllowedHansaMailFunction = res;
+  return;
+end;
+
+procedure AddLineToArea(string line,area req)
+begin
+  AddTextToArea(line,req);
+  AddTextToArea(chr(10),req);
+  return;
+end;
+
+procedure DebugRemoteCloudServer(record RemoteCloudServerVc RCSr)
+begin
+  record CloudNodeVc CNr;
+  record HostingConfigurationVc HCr;
+  area a_ec2_key,a_script;
+  string 255 keyfile,scriptfile;
+
+  keyfile = "/tmp/ccdebugnode-k.dat";
+  scriptfile = "/tmp/ccdebug.sh";
+
+  CNr.Code = RCSr.Controller;
+  if (ReadFirstMain(CNr,1,true)==false) then begin
+    MessageBox(0,"Fatal error: The Cloud Node " & CNr.Code & " doesn't exist");
+    goto LDebugRemoteCloudServer;
+  end;
+
+  HCr.SerNr = CNr.HostingConfig;
+  if (ReadFirstMain(HCr,1,true)==false) then begin
+    MessageBox(0,"Fatal error: Hosting configuration with SerNr=" & HCr.SerNr & " " & CNr.HostingConfig & " (" & CNr.HostingConfigComment & ") not found");
+    goto LDebugRemoteCloudServer;
+  end;
+
+  if (GetKeyForHostingConfigurationToArea(HCr,keyfile,a_ec2_key)==false) then begin
+    MessageBox(0,"Fatal error: Couldn't get key for configuration with SerNr=" & HCr.SerNr & ", " & CNr.HostingConfig & " (" & CNr.HostingConfigComment & ")");
+    goto LDebugRemoteCloudServer;
+  end;
+
+  Delete_File(keyfile);
+  WriteAreaToFile(a_ec2_key,keyfile,0);
+  AddLineToArea("/usr/bin/osascript -e 'tell application \"Terminal\" to do script \"ssh -o ServerAliveInterval=60 -o StrictHostKeyChecking=no -o PasswordAuthentication=no -ti " & keyfile & " " & CNr.AdminUser & "@" & CNr.HostName & " '\\'' which yum && sudo yum -y install gdb screen || sudo apt -y install gdb ; sudo screen -rx $(ps u |grep \\\"SCREEN gdb -p $(sudo cat " & RCSr.DataFolder & "/hansa.pid)\\\"|grep -v sudo|grep -v grep|awk \\\"{print \\\\$2}\\\") || sudo screen gdb -p $(sudo cat " & RCSr.DataFolder & "/hansa.pid)'\\'' ; rm -f " & keyfile & "\"'",a_script);
+  
+  AddLineToArea("open -a terminal",a_script);
+  AddLineToArea("rm -f $0",a_script);
+  Delete_File(scriptfile);
+  WriteAreaToFile(a_script,scriptfile,0);
+  RunProgram("/bin/bash",scriptfile);
+
+LDebugRemoteCloudServer:;
+end;
+
+
+global
+updating procedure ClearQuickRestartsRcsLsm()
+begin
+  Integer wn;
+  record RemoteCloudServerVc RCSr;
+  
+  wn = CurWindow;
+  GetWindowRecord(wn,RCSr);
+  ClearQuickRestartsOnNode(RCSr);
+  return;
+end;
+
+global
+updating procedure UpdateAllNodesToSelectedVersionLsm()
+begin
+  record HansaVersionVc HVr;
+  Integer wn;
+
+  wn = CurWindow;
+  if (GetRecordFromBrowse(HVr,wn,1)) begin
+    UpdateAllNodesToVersion(HVr);
+  end;
+
+  return;
+end;
+
+global
+updating procedure SendVersionToAllNodesLsm()
+begin
+  Integer wn;
+  record HansaVersionVc HVr;
+  
+  wn = CurWindow;
+  GetWindowRecord(wn,HVr);
+  SendVersionToAllNodes(HVr);
+  
+  return;
+end;
+
+global
+updating procedure DownloadNewVersionsForCxLsm()
+begin
+  Integer wn;
+  transaction Boolean checkonlyf;
+
+  wn = CurWindow;
+
+  checkonlyf = true;
+  DownloadNewVersionsForCx(true,true);
+
+  return;
+end;
+
+global
+updating procedure DevelopmentTestFuncLsm()
+begin
+  Integer wn;
+  record HansaVersionVc HVr;
+  string 255 str;
+
+  HVr.Version = 80;
+  HVr.SubVersion = 2;
+  HVr.ProgramType = typStdAccountsServer;
+  HVr.ProductCode = "StandardServer";
+
+  if (ReadLastKey("DbVersion",HVr,2,true)==false) then begin
+    str = "version not available";
+  end else begin
+    str = "Found " & HVr.Code;
+  end;
+  MessageBox(0,str);
+
+  return;
+end;
+
+procedure GetSelectedServers(var array uuid recarr)
+begin
+  record LocalCloudServerVc LCSr;
+  LongInt i;
+  Integer wn;
+
+  wn = CurWindow;
+  i = 1;
+  while (GetRecordFromBrowse(LCSr,wn,i)) begin
+    recarr[i-1] = LCSr.UUID;
+    i = i + 1;
+  end;
+end;
+
+global
+updating procedure SendSelectedVersionsToAllNodesLsm()
+begin
+  record HansaVersionVc HVr;
+  LongInt i;
+  Integer wn;
+
+  wn = CurWindow;
+  i = 1;
+  while (GetRecordFromBrowse(HVr,wn,i)) begin
+    DownloadVersionOnAllNodes(HVr);
+    i = i + 1;
+  end;
+end;
+
+global
+updating procedure UpdateCloudToVersionLsm()
+begin
+  Integer wn;
+  record HansaVersionVc HVr;
+  
+  wn = CurWindow;
+  GetWindowRecord(wn,HVr);
+  UpdateCloudToVersion(HVr);
+  
+  return;
+end;
+
+global
+function Boolean CheckCloudControllerVersion(string vercode,var string msg)
+begin
+  Boolean res;
+
+  if (left(vercode,7)!="STDERP_") then begin
+    msg = "Please select a version of Standard ERP and try again.";
+    goto LCheckCloudControllerVersion;
+  end;
+
+  if (right(vercode,4)!="-ASP") then begin
+    msg = "Please select an ASP version of Standard ERP and try again.";
+    goto LCheckCloudControllerVersion;
+  end;
+
+  res = true;
+LCheckCloudControllerVersion:;
+  CheckCloudControllerVersion = res;
+  return;
+end;
+
+global
+updating procedure UpdateCloudToSelectedVersionLsm()
+begin
+  record HansaVersionVc HVr;
+  Integer wn;
+  string 255 msg;
+
+  wn = CurWindow;
+  if (!GetRecordFromBrowse(HVr,wn,1)) then begin
+    MessageBox(0,"Please select the version that you want to update to and try again.");
+    goto LUpdateCloudToSelectedVersionLsm;
+  end;
+
+  if (CheckCloudControllerVersion(HVr.Code,msg)==false) then begin
+    MessageBox(0,msg);
+    goto LUpdateCloudToSelectedVersionLsm;
+  end;
+
+  UpdateCloudToVersion(HVr);
+
+LUpdateCloudToSelectedVersionLsm:;
+end;
+
+global
+updating procedure UpdateToSelectedVersionLsm()
+begin
+  record HansaVersionVc HVr;
+  Integer wn;
+
+  wn = CurWindow;
+  if (GetRecordFromBrowse(HVr,wn,1)) then begin
+    UpdateToVersion(HVr);
+  end else begin
+    MessageBox(0,"Please select the version that you want to update to and try again.");
+  end;
+end;
+
+global
+updating procedure RestartCloudServerLsm()
+begin
+  array uuid recarr;
+  
+  GetSelectedServers(recarr);
+  if (!BlankUUID(recarr[0])) then begin
+    RestartCloudServers(recarr);
+    UpdateBrowses("LocalCloudServerVc");
+  end;
+end;
+
+global
+updating procedure StartCloudServerLsm()
+begin
+  array uuid recarr;
+  
+  GetSelectedServers(recarr);
+  if (!BlankUUID(recarr[0])) then begin
+    StartCloudServers(recarr);
+    UpdateBrowses("LocalCloudServerVc");
+  end;
+end;
+
+global
+updating procedure StopCloudServerLsm()
+begin
+  array uuid recarr;
+  
+  GetSelectedServers(recarr);
+  if (!BlankUUID(recarr[0])) then begin
+    StopCloudServers(recarr,false);
+    UpdateBrowses("LocalCloudServerVc");
+  end;
+end;
+
+global
+updating procedure CloseCloudServerLsm()
+begin
+  array uuid recarr;
+  
+  GetSelectedServers(recarr);
+  if (!BlankUUID(recarr[0])) then begin
+    CloseCloudServers(recarr);
+    UpdateBrowses("LocalCloudServerVc");
+  end;
+end;
+
+global
+updating procedure RemoveCloudServerLsm()
+begin
+  array uuid recarr;
+  
+  GetSelectedServers(recarr);
+  if (!BlankUUID(recarr[0])) then begin
+    RemoveCloudServers(recarr);
+    UpdateBrowses("LocalCloudServerVc");
+  end;
+end;
+
+procedure GetRemoteSelectedServers(var array uuid recarr)
+begin
+  array record RemoteCloudServerVc RCSarr;
+  record RemoteCloudServerVc RCSr;
+  LongInt i;
+  Integer wn;
+
+  wn = CurWindow;
+  ClearArray(recarr);
+  GetAllRecordsFromBrowse(RCSarr,wn);
+
+  for (i = 0; i<RCSarr.length; i = i + 1) begin
+    RCSr = RCSarr[i];
+    recarr[i] = RCSr.UUID;
+  end;
+end;
+
+function Boolean GetRemoteSelectedServersWithStatus(var array uuid recarr,LongInt required_status)
+begin
+  array record RemoteCloudServerVc RCSarr;
+  record RemoteCloudServerVc RCSr;
+  LongInt i;
+  Integer wn;
+  Boolean statusokf;
+
+  wn = CurWindow;
+  ClearArray(recarr);
+  GetAllRecordsFromBrowse(RCSarr,wn);
+
+  for (i = 0; i<RCSarr.length; i = i + 1) begin
+    RCSr = RCSarr[i];
+    if (RCSr.CurrentStatus==required_status) then begin
+      recarr[recarr.length] = RCSr.UUID;
+    end else begin
+      statusokf = false;
+    end;
+  end;
+
+  GetRemoteSelectedServersWithStatus = statusokf;
+  return;
+end;
+
+global
+updating procedure DownloadClientForRemoteCloudServerLsm()
+begin
+  array uuid recarr;
+  Integer mwn,i;
+  string 255 addr;
+  LongInt port;
+  record RemoteCloudServerVc RCSr;
+  string 255 name;
+
+  mwn = CurWindow;
+  i = 1;
+  while (GetRecordFromBrowse(RCSr,mwn,i)) begin
+    if ((RCSr.CurrentStatus!=kStatusRunning) and
+        (RCSr.CurrentStatus!=kStatusMaintenance) and
+        (RCSr.CurrentStatus!=kStatusRunningPendingStop) and
+        (RCSr.CurrentStatus!=kStatusRunningTest)) then begin
+      MessageBox(0,"Please start " & RCSr.Name & " before trying to launch a client for the server.");
+    end else begin
+      name = RCSr.Name;
+      if (WindowsMode) then begin
+        name = ReplaceStringWithString(name,"ò","o");
+        name = ReplaceStringWithString(name,"ó","o");
+        name = ReplaceStringWithString(name,"ô","o");
+        name = ReplaceStringWithString(name,"œ","oe");
+        name = ReplaceStringWithString(name,"ø","o");
+        name = ReplaceStringWithString(name,"ō","o");
+        name = ReplaceStringWithString(name,"õ","o");
+        name = ReplaceStringWithString(name,"ö","o");
+        name = ReplaceStringWithString(name,"Ô","o");
+        name = ReplaceStringWithString(name,"Ò","O");
+        name = ReplaceStringWithString(name,"Ó","O");
+        name = ReplaceStringWithString(name,"Œ","OE");
+        name = ReplaceStringWithString(name,"Ø","O");
+        name = ReplaceStringWithString(name,"Ō","O");
+        name = ReplaceStringWithString(name,"Õ","O");
+        name = ReplaceStringWithString(name,"Ö","O");
+        name = ReplaceStringWithString(name,"à","a");
+        name = ReplaceStringWithString(name,"á","a");
+        name = ReplaceStringWithString(name,"â","a");
+        name = ReplaceStringWithString(name,"æ","ae");
+        name = ReplaceStringWithString(name,"ã","a");
+        name = ReplaceStringWithString(name,"å","a");
+        name = ReplaceStringWithString(name,"ā","a");
+        name = ReplaceStringWithString(name,"ä","a");
+        name = ReplaceStringWithString(name,"À","A");
+        name = ReplaceStringWithString(name,"Á","A");
+        name = ReplaceStringWithString(name,"Â","a");
+        name = ReplaceStringWithString(name,"Æ","AE");
+        name = ReplaceStringWithString(name,"Ã","A");
+        name = ReplaceStringWithString(name,"Å","A");
+        name = ReplaceStringWithString(name,"Ā","A");
+        name = ReplaceStringWithString(name,"Ä","A");
+        name = ReplaceStringWithString(name,"ü","u");
+        name = ReplaceStringWithString(name,"û","u");
+        name = ReplaceStringWithString(name,"ù","u");
+        name = ReplaceStringWithString(name,"ú","u");
+        name = ReplaceStringWithString(name,"ū","u");
+        name = ReplaceStringWithString(name,"Ü","U");
+        name = ReplaceStringWithString(name,"Û","U");
+        name = ReplaceStringWithString(name,"Ù","U");
+        name = ReplaceStringWithString(name,"Ú","U");
+        name = ReplaceStringWithString(name,"Ū","U");
+        name = ReplaceStringWithString(name,"'","");
+        name = ReplaceStringWithString(name,"*","");
+        name = ReplaceStringWithString(name,".","");
+        name = ReplaceStringWithString(name,":","");
+        name = ReplaceStringWithString(name,",","");
+        name = ReplaceStringWithString(name,";","");
+        name = ReplaceStringWithString(name,"#","");
+        name = ReplaceStringWithString(name,"€","");
+        name = ReplaceStringWithString(name,"%","");
+        name = ReplaceStringWithString(name,"&","");
+        name = ReplaceStringWithString(name,"/","");
+        name = ReplaceStringWithString(name,"\\","");
+        name = ReplaceStringWithString(name,"(","");
+        name = ReplaceStringWithString(name,")","");
+        name = ReplaceStringWithString(name,"=","");
+        name = ReplaceStringWithString(name,"<","");
+        name = ReplaceStringWithString(name,">","");
+        name = ReplaceStringWithString(name,"[","");
+        name = ReplaceStringWithString(name,"]","");
+        name = ReplaceStringWithString(name,"{","");
+        name = ReplaceStringWithString(name,"}","");
+        name = ReplaceStringWithString(name,"|","");
+      end;
+
+      if (LaunchClient(name)==false) then begin
+        if (FindCloudServerAddr(RCSr,addr)) then begin
+          InstallClientToServer(addr,RCSr.HTTPPort,RCSr.Port,name,RCSr.EncryptionKey);
+        end;
+      end;
+    end;
+    i = i + 1;
+  end;
+end;
+
+global
+updating procedure InspectRemoteCloudServerHalLogLsm()
+begin
+  array uuid recarr;
+  Integer i;
+  record RcVc RepSpec;
+
+  GetRemoteSelectedServers(recarr);
+  for (i=0;i<recarr.length;i=i+1) begin
+    RepSpec.Media = mtScreen;
+    RepSpec.repname = "InspectRemoteCloudServerLogRn";
+    RepSpec.f1 = recarr[i];
+    RepSpec.f2 = "hal.log";
+    RepSpec.NoTimeoutLimit = 1;
+    RunReport(RepSpec,0);
+  end;
+end;
+
+global
+updating procedure DebugRemoteCloudServerLsm()
+begin
+  record RemoteCloudServerVc RCSr;
+  Integer wn;
+
+  wn = CurWindow;
+  if (GetRecordFromBrowse(RCSr,wn,1)) then begin
+    if (IsAllowedHansaMailFunction(RCSr)==false) then begin
+      goto LDebugRemoteCloudServerLsm;
+    end;
+    DebugRemoteCloudServer(RCSr);
+  end else begin
+    MessageBox(0,"Please select the server that you want to debug to and try again.");
+  end;
+LDebugRemoteCloudServerLsm:;
+  return;
+end;
+
+global
+updating procedure InspectRemoteCloudServerKnownSessionsDatLsm()
+begin
+  array uuid recarr;
+  Integer i;
+  record RcVc RepSpec;
+
+  GetRemoteSelectedServers(recarr);
+  for (i=0;i<recarr.length;i=i+1) begin
+    RepSpec.Media = mtScreen;
+    RepSpec.repname = "InspectRemoteCloudServerLogRn";
+    RepSpec.f1 = recarr[i];
+    RepSpec.f2 = "known_sessions.dat";
+    RepSpec.NoTimeoutLimit = 1;
+    RunReport(RepSpec,0);
+  end;
+end;
+
+global
+updating procedure InspectRemoteCloudServerTimingsLogLsm()
+begin
+  array uuid recarr;
+  Integer i;
+  record RcVc RepSpec;
+
+  GetRemoteSelectedServers(recarr);
+  for (i=0;i<recarr.length;i=i+1) begin
+    RepSpec.Media = mtScreen;
+    RepSpec.repname = "InspectRemoteCloudServerLogRn";
+    RepSpec.f1 = recarr[i];
+    RepSpec.f2 = "timings.log";
+    RepSpec.NoTimeoutLimit = 1;
+    RunReport(RepSpec,0);
+  end;
+end;
+
+global
+updating procedure InspectRemoteCloudServerCloningLogLsm()
+begin
+  array uuid recarr;
+  Integer i;
+  record RcVc RepSpec;
+
+  GetRemoteSelectedServers(recarr);
+  for (i=0;i<recarr.length;i=i+1) begin
+    RepSpec.Media = mtScreen;
+    RepSpec.repname = "InspectRemoteCloudServerLogRn";
+    RepSpec.f1 = recarr[i];
+    RepSpec.f2 = "cloning.log";
+    RepSpec.NoTimeoutLimit = 1;
+    RunReport(RepSpec,0);
+  end;
+end;
+
+global
+updating procedure InspectRemoteCloudServerLogLsm()
+begin
+  array uuid recarr;
+  Integer i;
+  record RcVc RepSpec;
+
+  GetRemoteSelectedServers(recarr);
+  for (i=0;i<recarr.length;i=i+1) begin
+    RepSpec.Media = mtScreen;
+    RepSpec.repname = "InspectRemoteCloudServerLogRn";
+    RepSpec.f1 = recarr[i];
+    RepSpec.f2 = "hansa.log";
+    RepSpec.NoTimeoutLimit = 1;
+    RunReport(RepSpec,0);
+  end;
+end;
+
+global
+updating procedure ExportRemoteCloudServerRegisterLsm()
+begin
+  Integer nwn,mwn;
+  array uuid recarr;
+  LongInt i;
+  record RcVc RepSpec;
+  record RemoteCloudServerVc RCSr;
+  
+  mwn = CurWindow;
+  i = 1;
+  while (GetRecordFromBrowse(RCSr,mwn,i)) begin i = i + 1; end;
+
+  GetRemoteSelectedServersWithStatus(recarr,kStatusStopped);
+
+  if (i==0) then begin
+    MessageBox(0,"Select a stopped server to perform this operation on.");
+    goto LExportRemoteCloudServerRegisterLsm;
+  end;
+
+  if (recarr.length!=(i-1)) then begin
+    MessageBox(0,"Selected servers must be stopped before performing this operation.");
+    goto LExportRemoteCloudServerRegisterLsm;
+  end;
+
+  if (recarr.length!=1) then begin
+    MessageBox(0,"This operation can't be done on more than one server at a time.");
+    goto LExportRemoteCloudServerRegisterLsm;
+  end;
+  GetRecordFromBrowse(RCSr,mwn,1);
+  if (IsAllowedHansaMailFunction(RCSr)==false) then begin
+    goto LExportRemoteCloudServerRegisterLsm;
+  end;
+
+  RepSpec.RecordUUID = recarr[0];
+  OpenWindow("ASPExportRegWClass",1,mwn,"","",RepSpec);
+
+LExportRemoteCloudServerRegisterLsm:;
+  return;
+end;
+
+global
+updating procedure ExportRemoteCloudServerDatabaseLsm()
+begin
+  array uuid recarr;
+  LongInt i;
+  Integer wn;
+  record RemoteCloudServerVc RCSr;
+  
+  wn = CurWindow;
+  i = 1;
+  while (GetRecordFromBrowse(RCSr,wn,i)) begin i = i + 1; end;
+
+  GetRemoteSelectedServersWithStatus(recarr,kStatusStopped);
+
+  if (i==0) then begin
+    MessageBox(0,"Select at least one stopped server to perform this operation on.");
+    goto LExportRemoteCloudServerDatabaseLsm;
+  end;
+
+  if (recarr.length!=(i-1)) then begin
+    MessageBox(0,"Selected servers must be stopped before performing this operation.");
+    goto LExportRemoteCloudServerDatabaseLsm;
+  end;
+  GetRecordFromBrowse(RCSr,wn,1);
+  if (IsAllowedHansaMailFunction(RCSr)==false) then begin
+    goto LExportRemoteCloudServerDatabaseLsm;
+  end;
+
+  ExportRemoteCloudServersDatabases(recarr);
+  UpdateBrowses("RemoteCloudServerVc");
+
+LExportRemoteCloudServerDatabaseLsm:;
+end;
+
+global
+updating procedure ImportRemoteCloudServerBackupLsm()
+begin
+  Integer nwn,mwn;
+  array uuid recarr;
+  record RcVc RepSpec;
+  LongInt i;
+  record RemoteCloudServerVc RCSr;
+  
+  mwn = CurWindow;
+  i = 1;
+  while (GetRecordFromBrowse(RCSr,mwn,i)) begin i = i + 1; end;
+
+  GetRemoteSelectedServersWithStatus(recarr,kStatusStopped);
+
+  if (recarr.length!=(i-1)) then begin
+    MessageBox(0,"Selected servers must be stopped before performing this operation.");
+    goto LImportRemoteCloudServerBackupLsm;
+  end;
+
+  if (recarr.length!=1) then begin
+    MessageBox(0,"This operation can't be done on more than one server at a time.");
+    goto LImportRemoteCloudServerBackupLsm;
+  end;
+  GetRecordFromBrowse(RCSr,mwn,1);
+  if (IsAllowedHansaMailFunction(RCSr)==false) then begin
+    goto LImportRemoteCloudServerBackupLsm;
+  end;
+
+  RepSpec.RecordUUID = recarr[0];
+  OpenWindow("ASPImportTBWClass",1,mwn,"","",RepSpec);
+
+LImportRemoteCloudServerBackupLsm:;
+end;
+
+global
+updating procedure ASPExportRegWClassStartExport()
+begin
+  Integer wn;
+  string 255 vcname;
+  record RcVc RepSpec;
+  LongInt compno;
+
+  wn = CurWindow;
+  DeSelectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+
+  vcname = StringSetFromString(kSetAllRegisters,RepSpec.f1);
+  compno = RepSpec.long1;
+
+  if (nonblank(vcname)) then begin
+    ExportRemoteCloudServerRegister(RepSpec.RecordUUID,vcname,compno,RepSpec.f2);
+    CloseWindow(wn);
+  end;
+
+  return;
+end;
+
+
+global
+updating procedure RestartRemoteCloudServerLsm()
+begin
+  array uuid recarr;
+  
+  GetRemoteSelectedServers(recarr);
+  if (recarr.length==0) then begin
+    MessageBox(0,"To perform this operation at least one server must be selected.");
+    goto LRestartRemoteCloudServerLsm;
+  end;
+  if (!BlankUUID(recarr[0])) then begin
+    threadremoteasync.RestartRemoteCloudServers(recarr);
+  end;
+LRestartRemoteCloudServerLsm:;
+  return;
+end;
+
+global
+updating procedure StartRemoteCloudServerLsm()
+begin
+  array uuid recarr;
+  
+  GetRemoteSelectedServers(recarr);
+  if (recarr.length==0) then begin
+    MessageBox(0,"To perform this operation at least one server must be selected.");
+    goto LStartRemoteCloudServerLsm;
+  end;
+  if (!BlankUUID(recarr[0])) then begin
+    StartRemoteCloudServers(recarr,false);
+  end;
+LStartRemoteCloudServerLsm:;
+  return;
+end;
+
+global
+updating procedure StartMaintenanceRemoteCloudServerLsm()
+begin
+  array uuid recarr;
+  
+  GetRemoteSelectedServers(recarr);
+  if (recarr.length==0) then begin
+    MessageBox(0,"To perform this operation at least one server must be selected.");
+    goto LStartMaintenanceRemoteCloudServerLsm;
+  end;
+  if (!BlankUUID(recarr[0])) then begin
+    StartRemoteCloudServers(recarr,true);
+  end;
+LStartMaintenanceRemoteCloudServerLsm:;
+end;
+
+global
+updating procedure StopRemoteCloudServerLsm()
+begin
+  array uuid recarr;
+
+  GetRemoteSelectedServers(recarr);
+  if (recarr.length==0) then begin
+    MessageBox(0,"To perform this operation at least one server must be selected.");
+    goto LStopRemoteCloudServerLsm;
+  end;
+  if (!BlankUUID(recarr[0])) then begin
+    threadremoteasync.StopRemoteCloudServers2(recarr);
+  end;
+LStopRemoteCloudServerLsm:;
+  return;
+end;
+
+global
+updating procedure ForceStopRemoteCloudServerLsm()
+begin
+  array uuid recarr;
+
+  GetRemoteSelectedServers(recarr);
+  if (recarr.length==0) then begin
+    MessageBox(0,"To perform this operation at least one server must be selected.");
+    goto LForceStopRemoteCloudServerLsm;
+  end;
+  if (!BlankUUID(recarr[0])) then begin
+    threadremoteasync.StopRemoteCloudServers(recarr,true);
+  end;
+
+LForceStopRemoteCloudServerLsm:;
+  return;
+end;
+
+global
+procedure StopRemoteCloudServers2_Reply(array uuid recarr,LongInt usercnt)
+begin
+  record RcVc RepSpec;
+  Integer nwn,i;
+
+  if (usercnt==-1) begin
+    MessageBox(0,"Failed communicating with node, please try again");
+    goto LStopRemoteCloudServers2_Reply;
+  end;
+
+  RepSpec.f1 = "The server will restart in 3 minutes";
+  RepSpec.long1 = 3; // 3 minutes default
+  nwn = OpenWindow("ASPStopServersOClass",1,0,"","",RepSpec);
+  PutWindowString(nwn,"UserCount",usercnt);
+  for (i = 0; i<recarr.length; i = i + 1) begin
+    PutWindowString(nwn,"UUID" & i,recarr[i]);
+  end;
+  ReRunWindowDef(nwn);
+  WindowFieldGoto(nwn,RepSpec,-1,"f1",false);
+
+
+LStopRemoteCloudServers2_Reply:;
+end;
+
+global
+updating procedure ASPStopServersOClassStopImmediately()
+begin
+  record RcVc RepSpec;
+  Integer i;
+  array uuid recarr;
+  Integer wn;
+  string 255 tstr;
+
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+
+  tstr = GetWindowString(wn,"UUID" & i);
+  while(nonblank(tstr)) begin
+    i = i + 1;
+    recarr[recarr.length] = StringToUUID(tstr);
+    tstr = GetWindowString(wn,"UUID" & i);
+  end;
+
+  if (recarr.length>0) then begin
+    asyncremote.StopRemoteCloudServers(recarr,false);
+  end;
+
+  CloseWindow(wn);
+  return;
+end;
+
+global
+updating procedure ASPStopServersOClassShowUsers()
+begin
+  record RcVc RepSpec;
+  Integer wn;
+  string 255 tstr;
+  Integer i;
+
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+
+  tstr = GetWindowString(wn,"UUID" & i);
+  while(nonblank(tstr)) begin
+    i = i + 1;
+    RepSpec.Media = mtScreen;
+    RepSpec.repname = "InspectRemoteCloudServerLogRn";
+    RepSpec.f1 = tstr;
+    RepSpec.f2 = "known_sessions.dat";
+    RepSpec.NoTimeoutLimit = 1;
+    RunReport(RepSpec,0);
+    tstr = GetWindowString(wn,"UUID" & i);
+  end;
+end;
+
+global
+procedure ASPStopServersOClassStop()
+begin
+  record RcVc RepSpec;
+  Integer i;
+  array uuid recarr;
+  Integer wn;
+  string 255 tstr;
+
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+
+  tstr = GetWindowString(wn,"UUID" & i);
+  while(nonblank(tstr)) begin
+    i = i + 1;
+    recarr[recarr.length] = StringToUUID(tstr);
+    tstr = GetWindowString(wn,"UUID" & i);
+  end;
+
+  if (recarr.length>0) then begin
+    threadremoteasync.SoftStopRemoteCloudServers(recarr,RepSpec.f1,RepSpec.long1);
+  end;
+
+  CloseWindow(wn);
+  return;
+end;
+
+global
+updating function Boolean ASPStopServersOClassOnOKWindow(Integer wn)
+begin
+  ASPStopServersOClassStop;
+
+LASPStopServersOClassOnOKWindow:;
+  ASPStopServersOClassOnOKWindow = true;
+  return;
+end;
+
+global
+updating procedure RemoveAllNodesStatsLsm()
+begin
+  StartRemoveNodesStats(true);
+end;
+
+
+global
+updating procedure RemoveClosedNodesStatsLsm()
+begin
+  StartRemoveNodesStats(false);
+end;
+
+
+global
+function Integer LocalCloudServerLClassRowColor(record LocalCloudServerVc LCSr)
+begin
+  Integer res;
+
+
+  if (LCSr.Closed!=0) then begin
+    res = kRowColorNone;
+    goto LLocalCloudServerLClassRowColor;
+  end;
+
+  switch (LCSr.CurrentStatus) begin
+    case kStatusConfigInError:      res = kRowColorRed;
+    case kStatusStopped:            res = kRowColorNone;
+    case kStatusRunningPreparingUpdate: res = kRowColorYellow;
+    case kStatusRunningUpdate:      res = kRowColorGreen;
+    case kStatusRunningPreparingTest: res = kRowColorYellow;
+    case kStatusRunningTest:        res = kRowColorGreen;
+    case kStatusRunningReserve:     res = kRowColorGreen;
+    case kStatusRunningPreparingReserve:     res = kRowColorGreen;
+    case kStatusRunning:            res = kRowColorGreen;
+    case kStatusStopping:           res = kRowColorYellow;
+    case kStatusStarting:           res = kRowColorYellow;
+    case kStatusImportingBackup:    res = kRowColorYellow;
+    case kStatusImportedBackup:     res = kRowColorYellow;
+    case kStatusMaintenance:        res = kRowColorYellow;
+    case kStatusDeleted:            res = kRowColorNone;
+    case kStatusUpdatingVersion:    res = kRowColorYellow;
+    case kStatusExportingDatabase:  res = kRowColorYellow;
+    case kStatusExportedDatabase:   res = kRowColorNone;
+    case kStatusExportingRegister:  res = kRowColorYellow;
+    case kStatusExportedRegister:   res = kRowColorNone;
+    case kStatusExportingCompany:   res = kRowColorYellow;
+    case kStatusExportedCompany:    res = kRowColorNone;
+    case kStatusRunningPendingStop: res = kRowColorYellow;
+    case kStatusRebuildingDatabase: res = kRowColorYellow;
+  end;
+
+  switch (LCSr.WantedStatus) begin
+    case kWantedStatusRestart:
+      res = kRowColorYellow;
+    case kWantedStatusStop:
+      if ((LCSr.CurrentStatus!=kStatusStopped) and (LCSr.CurrentStatus!=kStatusConfigInError)) then begin
+        res = kRowColorYellow;
+      end;
+    case kWantedStatusStopAndRefresh:
+      if ((LCSr.CurrentStatus!=kStatusStopped) and (LCSr.CurrentStatus!=kStatusConfigInError)) then begin
+        res = kRowColorYellow;
+      end;
+    case kWantedStatusForceStop:
+      if ((LCSr.CurrentStatus!=kStatusStopped) and (LCSr.CurrentStatus!=kStatusConfigInError)) then begin
+        res = kRowColorYellow;
+      end;
+    case kWantedStatusChangeVersion:
+      res = kRowColorYellow;
+    case kWantedStatusRun:
+      if ((LCSr.CurrentStatus!=kStatusRunning) and
+          (LCSr.CurrentStatus!=kStatusRunningPreparingUpdate) and
+          (LCSr.CurrentStatus!=kStatusRunningPreparingTest) and
+          (LCSr.CurrentStatus!=kStatusRunningUpdate) and
+          (LCSr.CurrentStatus!=kStatusRunningTest) and
+          (LCSr.CurrentStatus!=kStatusRunningPreparingReserve) and
+          (LCSr.CurrentStatus!=kStatusRunningReserve) and
+          (LCSr.CurrentStatus!=kStatusConfigInError)) then begin
+        res = kRowColorYellow;
+      end;
+    case kWantedStatusRunUnjournaled:
+      if ((LCSr.CurrentStatus!=kStatusRunning) and
+          (LCSr.CurrentStatus!=kStatusRunningPreparingUpdate) and
+          (LCSr.CurrentStatus!=kStatusRunningPreparingTest) and
+          (LCSr.CurrentStatus!=kStatusRunningUpdate) and
+          (LCSr.CurrentStatus!=kStatusRunningTest) and
+          (LCSr.CurrentStatus!=kStatusRunningPreparingReserve) and
+          (LCSr.CurrentStatus!=kStatusRunningReserve) and
+          (LCSr.CurrentStatus!=kStatusConfigInError)) then begin
+        res = kRowColorYellow;
+      end;
+    case kWantedStatusOnDemand:
+    case kWantedStatusMaintenence:
+      if ((LCSr.CurrentStatus!=kStatusMaintenance) and (LCSr.CurrentStatus!=kStatusConfigInError)) then begin
+        res = kRowColorYellow;
+      end;
+    case kWantedStatusManual:
+    case kWantedStatusImportBackup:
+      if (LCSr.CurrentStatus!=kStatusConfigInError) then begin
+        res = kRowColorYellow;
+      end;
+    case kStatusDeleted:
+    case kWantedStatusUpdateVersion:
+      if ((LCSr.CurrentStatus!=kStatusUpdatingVersion) and (LCSr.CurrentStatus!=kStatusConfigInError)) then begin
+        res = kRowColorYellow;
+      end;
+    case kWantedStatusExportDatabase:
+      if (LCSr.CurrentStatus!=kStatusStopped) then begin
+        res = kRowColorYellow;
+      end;
+    case kWantedStatusExportCompany:
+      if (LCSr.CurrentStatus!=kStatusStopped) then begin
+        res = kRowColorYellow;
+      end;
+    case kWantedStatusExportRegister:
+      if (LCSr.CurrentStatus!=kStatusStopped) then begin
+        res = kRowColorYellow;
+      end;
+    case kWantedStatusResetToBackup:
+      if (LCSr.CurrentStatus!=kStatusConfigInError) then begin
+        res = kRowColorYellow;
+      end;
+    case kWantedStatusRebuildDatabase:
+      if ((LCSr.CurrentStatus!=kStatusRebuildingDatabase) and (LCSr.CurrentStatus!=kStatusConfigInError)) then begin
+        res = kRowColorYellow;
+      end;
+  case kWantedStatusClearRegister:
+    if ((LCSr.CurrentStatus!=kStatusClearingRegister) and (LCSr.CurrentStatus!=kStatusConfigInError)) then begin
+      res = kRowColorYellow;
+    end;
+  end;
+
+LLocalCloudServerLClassRowColor:;
+  LocalCloudServerLClassRowColor = res;
+  return;
+end;
+
+global
+function Integer RemoteCloudServerLClassRowColor(record RemoteCloudServerVc RCSr)
+begin
+  Integer res;
+  record CloudNodeVc CNr;
+
+  if (RCSr.Closed!=0) then begin
+    res = kRowColorNone;
+    goto LRemoteCloudServerLClassRowColor;
+  end;
+
+  CNr.Code = RCSr.Controller;
+  if (ReadFirstMain(CNr,1,true)) then begin
+    if (CNr.ReachableFlag<>1) then begin
+      res = kRowColorGray;
+      goto LRemoteCloudServerLClassRowColor;
+    end;
+  end;
+
+//  if (RCSr.NodeReachableFlag!=1) then begin
+//    res = kRowColorGray;
+//    goto LRemoteCloudServerLClassRowColor;
+//  end;
+
+  switch (RCSr.CurrentStatus) begin
+    case kStatusConfigInError:      res = kRowColorRed;
+    case kStatusStopped:            res = kRowColorNone;
+    case kStatusRunningPreparingUpdate: res = kRowColorYellow;
+    case kStatusRunningUpdate:      res = kRowColorGreen;
+    case kStatusRunningPreparingTest: res = kRowColorYellow;
+    case kStatusRunningTest:        res = kRowColorGreen;
+    case kStatusRunningPreparingReserve:     res = kRowColorGreen;
+    case kStatusRunningReserve:     res = kRowColorGreen;
+    case kStatusRunning:            res = kRowColorGreen;
+    case kStatusStopping:           res = kRowColorYellow;
+    case kStatusStarting:           res = kRowColorYellow;
+    case kStatusImportingBackup:    res = kRowColorYellow;
+    case kStatusImportedBackup:     res = kRowColorYellow;
+    case kStatusMaintenance:        res = kRowColorYellow;
+    case kStatusDeleted:            res = kRowColorNone;
+    case kStatusUpdatingVersion:    res = kRowColorYellow;
+    case kStatusExportingDatabase:  res = kRowColorYellow;
+    case kStatusExportedDatabase:   res = kRowColorNone;
+    case kStatusExportingRegister:  res = kRowColorYellow;
+    case kStatusExportedRegister:   res = kRowColorNone;
+    case kStatusExportingCompany:   res = kRowColorYellow;
+    case kStatusExportedCompany:    res = kRowColorNone;
+    case kStatusRunningPendingStop: res = kRowColorYellow;
+    case kStatusRebuildingDatabase: res = kRowColorYellow;
+  end;
+
+  switch (RCSr.WantedStatus) begin
+    case kWantedStatusContinousUpdateVersion:
+      if (RCSr.WantedSubStatus==kWantedSubStatusFinishContinousUpdate) then begin
+        goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+      end;
+      if ((RCSr.CurrentStatus!=kStatusRunning) and
+          (RCSr.CurrentStatus!=kStatusRunningPreparingUpdate) and
+          (RCSr.CurrentStatus!=kStatusRunningUpdate) and
+          (RCSr.CurrentStatus!=kStatusRunningPreparingTest) and
+          (RCSr.CurrentStatus!=kStatusRunningTest) and
+          (RCSr.CurrentStatus!=kStatusRunningPreparingReserve) and
+          (RCSr.CurrentStatus!=kStatusRunningReserve)) then begin
+        goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+      end;
+
+    case kWantedStatusRestart:      goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+    case kWantedStatusStop:
+      if (RCSr.CurrentStatus!=kStatusStopped) then begin
+        goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+      end;
+    case kWantedStatusStopAndRefresh:
+      if (RCSr.CurrentStatus!=kStatusStopped) then begin
+        goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+      end;
+    case kWantedStatusForceStop:
+      if (RCSr.CurrentStatus!=kStatusStopped) then begin
+        goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+      end;
+    case kWantedStatusRun:
+      if ((RCSr.CurrentStatus!=kStatusRunning) and
+          (RCSr.CurrentStatus!=kStatusRunningPreparingUpdate) and
+          (RCSr.CurrentStatus!=kStatusRunningUpdate) and
+          (RCSr.CurrentStatus!=kStatusRunningPreparingTest) and
+          (RCSr.CurrentStatus!=kStatusRunningTest) and
+          (RCSr.CurrentStatus!=kStatusRunningPreparingReserve) and
+          (RCSr.CurrentStatus!=kStatusRunningReserve)) then begin
+        goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+      end;
+    case kWantedStatusRunUnjournaled:
+      if ((RCSr.CurrentStatus!=kStatusRunning) and
+          (RCSr.CurrentStatus!=kStatusRunningPreparingUpdate) and
+          (RCSr.CurrentStatus!=kStatusRunningUpdate) and
+          (RCSr.CurrentStatus!=kStatusRunningPreparingTest) and
+          (RCSr.CurrentStatus!=kStatusRunningTest) and
+          (RCSr.CurrentStatus!=kStatusRunningPreparingReserve) and
+          (RCSr.CurrentStatus!=kStatusRunningReserve)) then begin
+        goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+      end;
+    case kWantedStatusOnDemand:
+    case kWantedStatusMaintenence:
+      if (RCSr.CurrentStatus!=kStatusMaintenance) then begin
+        goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+      end;
+    case kWantedStatusManual:
+    case kWantedStatusImportBackup:  goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+//wtf?    case kStatusDeleted:
+    case kWantedStatusUpdateVersion:
+      if (RCSr.CurrentStatus!=kStatusUpdatingVersion) then begin
+        goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+      end;
+    case kWantedStatusLaunchReserveSystem:  goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+    case kWantedStatusLaunchUpdateSystem:   goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+    case kWantedStatusLaunchTestSystem:     goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+    case kWantedStatusCreateStartedServer:  goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+    case kWantedStatusImportBackupAndRun:   goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+    case kWantedStatusCreateServer:         goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+    case kWantedStatusExportDatabase:
+      if (RCSr.CurrentStatus!=kStatusStopped) then begin
+        goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+      end;
+    case kWantedStatusExportCompany:
+      if (RCSr.CurrentStatus!=kStatusStopped) then begin
+        goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+      end;
+    case kWantedStatusExportRegister:
+      if (RCSr.CurrentStatus!=kStatusStopped) then begin
+        goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+      end;
+    case kWantedStatusResetToBackup: goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+    case kWantedStatusRebuildDatabase:
+      if (RCSr.CurrentStatus!=kStatusRebuildingDatabase) then begin
+        goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+      end;
+    case kWantedStatusClearRegister:
+      if (RCSr.CurrentStatus!=kStatusClearingRegister) then begin
+        goto LRemoteCloudServerLClassRowColor_YellowIfOK;
+      end;
+  end;
+
+  goto LRemoteCloudServerLClassRowColor;
+
+LRemoteCloudServerLClassRowColor_YellowIfOK:
+  if ((RCSr.CurrentStatus!=kStatusConfigInError)) then begin
+    res = kRowColorYellow;
+  end else begin
+    res = kRowColorRed;
+  end;
+
+LRemoteCloudServerLClassRowColor:;
+  RemoteCloudServerLClassRowColor = res;
+  return;
+end;
+
+global
+function Boolean RemoteCloudServerDClassOnOKWindow(Integer wn)
+begin
+  record RemoteCloudServerVc RCSr;
+  record RemoteCloudServerVc OldRCSr;
+
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RCSr);
+  GetPrevWindowRecord(wn,OldRCSr);
+  if (RCSr.Closed!=0) then begin goto LRemoteCloudServerDClassOnOKWindow; end;
+  if ((OldRCSr.BackupFolder!=RCSr.BackupFolder) or (OldRCSr.BackupTime!=RCSr.BackupTime)) then begin
+    if ((OldRCSr.CurrentStatus==kStatusRunning) and
+        (RCSr.WantedStatus!=kWantedStatusStop) and
+        (RCSr.WantedStatus!=kWantedStatusStopAndRefresh) and
+        (RCSr.WantedStatus!=kWantedStatusForceStop)) then begin
+      MessageBox(0,"The cloud server must to be restarted for the new backup settings to take effect.");
+    end;
+  end;
+
+LRemoteCloudServerDClassOnOKWindow:;
+  RemoteCloudServerDClassOnOKWindow = true;
+  return;
+end;
+
+global
+function Boolean ASPHansaVersionUpdateWClassOnOpenWindow(Integer wn)
+begin
+  string 255 tag;
+  record RcVc RepSpec;
+  array uuid serveridarr;
+  array string 255 servernamearr,servernodearr,serverstatusarr;
+  Integer i;
+
+  GetWindowRecord(wn,RepSpec);
+  GetVersionUpdateServerList(RepSpec.f1,serveridarr,servernamearr,servernodearr,serverstatusarr);
+
+  ClearStringList(wn);
+  for (i = 0; i<serveridarr.length; i = i + 1) begin
+    tag = serveridarr[i];
+    AddListRow(wn,"servers",1,tag,0);
+    AddListData(wn,"servers","name",servernamearr[i]);
+    AddListData(wn,"servers","node",servernodearr[i]);
+    AddListData(wn,"servers","status",serverstatusarr[i]);
+  end;
+
+  ASPHansaVersionUpdateWClassOnOpenWindow = false;
+  return;
+end;
+
+global
+procedure UpdateCloudServersToSelectedVersionLsm()
+begin
+  Integer wn,mwn;
+  array uuid recarr;
+  record RcVc RepSpec;
+  record HansaVersionVc HVr;
+
+  wn = CurWindow;
+  if (GetRecordFromBrowse(HVr,wn,1)) then begin
+    mwn = CurWindow;
+    RepSpec.f1 = HVr.Code;
+    if (InString(HVr.Code,"LATEST")>0) then begin
+      MessageBox(0,"Latest build versions can't be refreshed");
+      goto LImportRemoteCloudServerBackupLsm;
+    end;
+    OpenWindow("ASPHansaVersionUpdateWClass",1,mwn,"","",RepSpec);
+  end;
+
+LImportRemoteCloudServerBackupLsm:;
+  return;
+end;
+
+global
+updating procedure ASPHansaVersionUpdateWClassUpdateVersion()
+begin
+  Integer wn;
+  record RcVc RepSpec;
+
+  wn = CurWindow;
+  GetWindowRecord(wn,RepSpec);
+  UpdateServersOnVersion(RepSpec.f1,RepSpec.flags[0]);
+  CloseWindow(wn);
+end;
+
+
+global
+function Boolean ASPHansaVersionUpdateWClassListDblClick(Integer wn)
+begin
+  LongInt line;
+  record RemoteCloudServerVc RCSr;
+
+  line = SelectedListLine(wn);
+  if (line>=0) then begin
+    RCSr.UUID = StringToUUID(GetListTag(wn,line));
+    if (ReadFirstMain(RCSr,1,true)==true) then begin
+      OpenWindow("RemoteCloudServerDClass",1,wn,"","",RCSr);
+    end;
+  end;
+
+  return;
+end;
+
+global
+procedure ASPRunScriptOnHostWClassRun()
+begin
+  Integer wn;
+  record RcVc RepSpec,ResRepSpec;
+  record CloudNodeVc CNr;
+  Boolean res,res2;
+  LongInt i;
+  array string 255 nodearr;
+
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+
+  ThreadRemote.CheckScript(RepSpec,ResRepSpec,res);
+  if (res==false) then begin
+    ResRepSpec.Media = mtScreen;
+    ResRepSpec.repname = "ASPScriptRn";
+    ResRepSpec.f2 = "Check Script Result";
+    RepSpec.NoTimeoutLimit = 1;
+    RunReport(ResRepSpec,0);
+    goto LASPRunScriptOnHostWClassRun;
+  end;
+
+  i = 1;
+  res = true;
+  while (GetRecordFromBrowse(CNr,RepSpec.long1,i)) begin
+    nodearr[nodearr.length] = CNr.Code;
+    i = i + 1;
+  end;
+
+  if (nodearr.length>0) then begin
+    ThreadRemote.RunScriptOnHosts(nodearr,RepSpec,ResRepSpec,res);
+    if (res==false or LineTextCnt(ResRepSpec)>0) then begin
+      ResRepSpec.Media = mtScreen;
+      ResRepSpec.repname = "ASPScriptRn";
+      ResRepSpec.f2 = "Run Script on Nodes Result";
+      RepSpec.NoTimeoutLimit = 1;
+      RunReport(ResRepSpec,0);
+    end;
+  end else begin
+    MessageBox(0,"At least one node must be selected.");
+  end;
+LASPRunScriptOnHostWClassRun:;
+  return;
+end;
+
+global
+updating procedure ASPChangeAmazonHostTypeWClassChange()
+begin
+  record CloudNodeVc CNr;
+  record RcVc RepSpec;
+  Integer wn;
+  Boolean foundf;
+  Integer res;
+  string 255 msg;
+
+  wn = CurWindow;
+  DeSelectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+
+  if (blank(RepSpec.f2)) then begin
+    MessageBox(0,"Instance Type can't be blank.");
+    goto LASPChangeAmazonHostTypeWClassChange;
+  end;
+  
+  CNr.Code = RepSpec.f1;
+  if (ReadFirstMain(CNr,1,true)==false) then begin
+    MessageBox(0,"The selected cloud node doesn't exist (maybe it was deleted?).");
+    CloseWindow(wn);
+    goto LASPChangeAmazonHostTypeWClassChange;
+  end;
+
+  if (CNr.AmazonInstanceType==RepSpec.f2) then begin
+    MessageBox(0,"The selected instance type is the same as the current instance type.");
+    goto LASPChangeAmazonHostTypeWClassChange;
+  end;
+
+  res = ChangeHostType(CNr,RepSpec.f2,msg);
+  if (res>0) begin
+    MessageBox(0,msg);
+    goto LASPChangeAmazonHostTypeWClassChange;
+  end;
+
+  CloseWindow(wn);
+
+LASPChangeAmazonHostTypeWClassChange:;
+  return;
+end;
+
+global
+updating function Boolean ASPChangeAmazonHostTypeWClassOnOKWindow(Integer wn)
+begin
+  ASPChangeAmazonHostTypeWClassChange;
+  ASPChangeAmazonHostTypeWClassOnOKWindow = true;
+  return;
+end;
+
+global 
+updating procedure ASPAssignHostIPWClassAssign()
+begin
+  record CloudNodeVc CNr;
+  record RcVc RepSpec;
+  Integer wn;
+  Boolean foundf;
+  Integer res;
+  string 255 msg;
+
+  wn = CurWindow;
+  DeSelectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+
+  if (blank(RepSpec.f2)) then begin
+    MessageBox(0,"Address can't be blank.");
+    goto LASPAssignHostIPWClassChange;
+  end;
+  
+  CNr.Code = RepSpec.f1;
+  if (ReadFirstMain(CNr,1,true)==false) then begin
+    MessageBox(0,"The selected cloud node doesn't exist (maybe it was deleted?).");
+    CloseWindow(wn);
+    goto LASPAssignHostIPWClassChange;
+  end;
+
+  if (CNr.HostName==RepSpec.f2) then begin
+    MessageBox(0,"The selected address is the same as the current address.");
+    goto LASPAssignHostIPWClassChange;
+  end;
+
+  res = AssignHostIP(CNr,RepSpec.f2,msg);
+  if (res>0) begin
+    MessageBox(0,msg);
+    goto LASPAssignHostIPWClassChange;
+  end;
+
+  CloseWindow(wn);
+
+LASPAssignHostIPWClassChange:;
+end;
+
+global
+updating function Boolean ASPAssignHostIPWClassOnOKWindow(Integer wn)
+begin
+  ASPAssignHostIPWClassAssign;
+  ASPAssignHostIPWClassOnOKWindow = true;
+  return;
+end;
+
+
+function Boolean DoPasteElasticIP(Integer wn)
+begin
+  record RcVc RepSpec;
+  Integer line,mwn;
+  string 255 address;
+  Boolean res;
+
+  DeselectWindow(wn,false);
+  line = SelectedListLine(wn);
+  if (line>=0) then begin
+    address = GetListTag(wn,line);
+    if (nonblank(address) and address<>"tagLOADING%") then begin
+      mwn = MotherWindow(wn);
+      CloseWindow(wn);
+      PasteString(mwn,address);
+      res = true;
+    end;
+  end;
+
+  DoPasteElasticIP = res;
+end;
+
+global
+function Boolean ASPEC2ElasticIPSClassOnOKWindow(Integer wn)
+begin
+  ASPEC2ElasticIPSClassOnOKWindow = DoPasteElasticIP(wn);
+  return;
+end;
+
+global
+function Boolean ASPEC2ElasticIPSClassListDblClick(Integer wn)
+begin
+  DoPasteElasticIP(wn);
+
+  ASPEC2ElasticIPSClassListDblClick = true;
+  return;
+end;
+
+global
+procedure ASPEC2ElasticIPSClassReload()
+begin
+  string 255 tag;
+  record RcVc RepSpec;
+  record HostingConfigurationVc HCr;
+  array string 255 filearr;
+  Integer wn,mwn;
+  area a_addresses;
+  LongInt l,lcnt;
+  Boolean res;
+  string 255 errmsg;
+
+  wn = FindWindow("ASPEC2ElasticIPSClass");
+  if (wn<=0) then begin
+    goto LASPEC2ElasticIPSClassReload;
+  end;
+
+  mwn = MotherWindow(wn);
+  GetWindowRecord(mwn,RepSpec);
+  DeSelectWindow(wn,true);
+
+  ClearStringList(wn);
+  tag = "tagLOADING%";
+  AddListRow(wn,"elasticips",1,tag,0);
+  AddListData(wn,"elasticips","elasticip","Loading available Elastic IP addresses...");
+  PutWindowRecord(wn,RepSpec);
+
+  HCr.SerNr = RepSpec.SerNr;
+  res = GetEC2ElasticIPs(HCr,a_addresses);
+  ClearStringList(wn);
+  lcnt = CountLinesInArea(a_addresses);
+  if (res==false) then begin
+    for (l = 0; l<lcnt; l = l + 1) begin
+      tag = Trim(GetLineFromArea(a_addresses,l));
+      if (nonblank(tag)) then begin
+        errmsg = errmsg & tag & chr(10) & chr(13);
+      end;
+    end;
+    MessageBox(0,errmsg);
+  end else begin
+    for (l = 0; l<lcnt; l = l + 1) begin
+      tag = Trim(GetLineFromArea(a_addresses,l));
+      if (nonblank(tag)) then begin
+        AddListRow(wn,"elasticips",1,tag,0);
+        AddListData(wn,"elasticips","elasticip",tag);
+      end;
+    end;
+    PutWindowRecord(wn,RepSpec);
+    SetSelectedListLine(wn,0);
+  end;
+
+LASPEC2ElasticIPSClassReload:;
+end;
+
+global
+function Boolean ASPEC2ElasticIPSClassOnOpenWindow(Integer wn)
+begin
+  ASPEC2ElasticIPSClassReload;
+
+  ASPEC2ElasticIPSClassOnOpenWindow = false;
+  return;
+end;
+
+global
+updating procedure ASPEC2ElasticIPSClassAllocate()
+begin
+  string 255 tag;
+  record RcVc RepSpec;
+  record HostingConfigurationVc HCr;
+  Integer wn;
+
+  wn = CurWindow;
+  DeSelectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+
+  ClearStringList(wn);
+  tag = "tagLOADING%";
+  AddListRow(wn,"elasticips",1,tag,0);
+  AddListData(wn,"elasticips","elasticip","Allocating new Elastic IP address...");
+  PutWindowRecord(wn,RepSpec);
+  HCr.SerNr = RepSpec.SerNr;
+  if (AllocateEC2ElasticIP(HCr,RepSpec.f1)==true) then begin
+    ASPEC2ElasticIPSClassReload;
+  end else begin
+    ClearStringList(wn);
+    tag = "tagLOADING%";
+    AddListRow(wn,"elasticips",1,tag,0);
+    AddListData(wn,"elasticips","elasticip","Failed allocating new Elastic IP address");
+    PutWindowRecord(wn,RepSpec);
+  end;
+end;
+
+
+global procedure DoOpenASPConfigHostFirewallWClassOnClient(Integer res,string msg,record RcVc RepSpec)
+begin
+  Integer nwn;
+
+  if (res>0) begin
+    MessageBox(0,msg);
+    goto LDoOpenASPConfigHostFirewallWClassOnClient;
+  end;
+
+  nwn = OpenWindow("ASPConfigHostFirewallWClass",1,0,"","",RepSpec);
+  WindowFieldGoto(nwn,RepSpec,-1,"f2",false);
+
+LDoOpenASPConfigHostFirewallWClassOnClient:;
+  return;
+end;
+
+global procedure OpenASPConfigHostFirewallWClassOnClient(Integer res,string msg,record RcVc RepSpec)
+begin
+  qupdating.DoOpenASPConfigHostFirewallWClassOnClient(res,msg,RepSpec);
+  return;
+end;
+
+global
+updating procedure ASPConfigHostFirewallWClassApply()
+begin
+  record RcVc RepSpec;
+  Integer wn;
+  Integer res;
+  string 255 msg;
+
+  wn = CurWindow;
+  DeSelectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+
+  res = ConfigHostFirewall(RepSpec.f1,RepSpec.f2,RepSpec.f3,RepSpec.flags[0],msg);
+  if (res>0) begin
+    MessageBox(0,msg);
+  end;
+  CloseWindow(wn);
+end;
+
+global
+updating function Boolean ASPConfigHostFirewallWClassOnOKWindow(Integer wn)
+begin
+  ASPConfigHostFirewallWClassApply;
+  ASPConfigHostFirewallWClassOnOKWindow = true;
+  return;
+end;
+
+
+global
+function Boolean CloudNodeDClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record CloudNodeVc CNr;
+  record HostingConfigurationVc HCr;
+
+  res = true;
+  switch (fieldname) begin
+    case "HostingConfig":
+      if (changed!=0) then begin
+        GetWindowRecord(wn,CNr);
+        HCr.SerNr = CNr.HostingConfig;
+        if (ReadFirstMain(HCr,1,true)) then begin
+          if (HCr.Discontinued!=0) then begin
+            MessageBox(0,"Warning: Hosting Configuration " & HCr.SerNr & " is discontinued, please select a different hosting configuration.");
+          end;
+          CNr.HostingConfigComment = HCr.Comment;
+          PutWindowRecord(wn,CNr);
+        end;
+      end;
+  end;
+
+  CloudNodeDClassAfterEditField = res;
+  return;
+end;
+
+global
+updating function Boolean ASPRunScriptOnHostWClassOnOKWindow(Integer wn)
+begin
+  ASPRunScriptOnHostWClassRun;
+  ASPRunScriptOnHostWClassOnOKWindow = true;
+  return;
+end;
+
+global
+updating procedure ASPSendVersionToNodeWClassSend()
+begin
+  Integer wn;
+  record RcVc RepSpec;
+  Boolean res;
+
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+
+  res = SendVersionRecordToNode(RepSpec.f1,RepSpec.f2);
+  if (res) then begin
+    MessageBox(0,"Version " & RepSpec.f1 & " sent to node " & RepSpec.f2);
+    CloseWindow(wn);
+  end else begin
+    MessageBox(0,"Version " & RepSpec.f1 & " couldn't be sent to node " & RepSpec.f2 & ", check node state and try again");
+  end;
+end;
+
+global
+updating function Boolean ASPSendVersionToNodeWClassOnOKWindow(Integer wn)
+begin
+  ASPSendVersionToNodeWClassSend;
+  ASPSendVersionToNodeWClassOnOKWindow = true;
+  return;
+end;
+
+global
+updating procedure SendVersionToNodeLsm()
+begin
+  Integer wn,nwn;
+  record HansaVersionVc HVr;
+  record RcVc RepSpec;
+  LongInt i;
+
+  wn = CurWindow;
+
+  i = 1;
+  while (GetRecordFromBrowse(HVr,wn,i)) begin
+    i = i + 1;
+  end;
+  i = i - 1;
+
+  if (i>1) then begin
+    MessageBox(0,"This operation can only be performed on a single version.");
+    goto LSendVersionToNodeLsm;
+  end;
+
+  if (i==0) then begin
+    MessageBox(0,"This operation requires one selected version.");
+    goto LSendVersionToNodeLsm;
+  end;
+
+  GetRecordFromBrowse(HVr,wn,1);
+  RepSpec.f1 = HVr.Code;
+  nwn = OpenWindow("ASPSendVersionToNodeWClass",1,wn,"","",RepSpec);
+  WindowFieldGoto(nwn,RepSpec,-1,"f2",false);
+
+LSendVersionToNodeLsm:;
+  return;
+end;
+
+
+global
+function Boolean CNHostNameSClassOnOpenWindow(Integer wn)
+begin
+  record CNHostNameBlock CNHb;
+  row CNHostNameBlock CNHbrw;
+  Integer rwcnt,i;
+  array string 20 alist;
+  record CloudNodeVc CNr;
+
+
+  BlockLoad(CNHb);
+  rwcnt = MatRowCnt(CNHb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(CNHb,i,CNHbrw);
+    CNr.Code = CNHbrw.HostName;
+    if (ReadFirstMain(CNr,1,true)==false) then begin
+      SetListString(wn,len(CNHbrw.HostName),CNHbrw.HostName,false);    
+    end;
+  end;
+
+  CNHostNameSClassOnOpenWindow = false;
+  return;
+end;
+
+global
+function Boolean CNHostNameSClassOnOKWindow(Integer wn)
+begin
+  PasteFromSysList(wn,-2);
+  CNHostNameSClassOnOKWindow = false;
+  return;
+end;
+
+global
+function Boolean CloudSettingsTClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+Boolean res;
+  record CloudSettingsBlock CSb;
+  record HostingConfigurationVc HCr;
+
+  res = true;
+  switch (fieldname) begin
+    case "HostingConfig":
+      if (changed!=0) then begin
+        GetWindowRecord(wn,CSb);
+        HCr.SerNr = CSb.xHostingConfig;
+        if (ReadFirstMain(HCr,1,true)) then begin
+          CSb.xHostingConfigComment = HCr.Comment;
+          PutWindowRecord(wn,CSb);
+        end;
+      end;
+  end;
+
+  CloudSettingsTClassAfterEditField = res;
+  return;
+end;
+
+global
+function Boolean CloudWatchpointDClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record CloudWatchpointVc CWPr;
+  row CloudWatchpointVc CWPrw;
+  record CUVc CUr;
+  record RemoteCloudServerVc RCSr;
+
+  res = true;
+  switch (fieldname) begin
+    case "ContactCode":
+      if (changed!=0 and rownr>-1) then begin
+        GetWindowRecord(wn,CWPr);
+        MatRowGet(CWPr,rownr,CWPrw);
+        CUr.Code = CWPrw.ContactCode;
+        if (ReadFirstMain(CUr,1,true)) then begin
+          CWPrw.ContactName = CUr.Name;
+          CWPrw.Mobile = CUr.Mobile;
+          MatRowPut(CWPr,rownr,CWPrw);
+          PutWindowRecord(wn,CWPr);
+        end;
+      end;
+    case "Watchpoint":
+      if (changed!=0) then begin
+        ReRunWindowDef(wn);
+      end;
+    case "RemoteCloudServer":
+      if (changed!=0) then begin
+        GetWindowRecord(wn,CWPr);
+        if (!blankUUID(CWPr.RemoteCloudServer)) then begin
+          RCSr.UUID = CWPr.RemoteCloudServer;
+          if (ReadFirstMain(RCSr,1,true)) then begin
+            CWPr.ServerName = RCSr.Name;
+            PutWindowRecord(wn,CWPr);
+          end;
+        end;
+      end;
+  end;
+
+  CloudWatchpointDClassAfterEditField = res;
+  return;
+end;
+
+global
+procedure ToggleClosed()
+begin
+  Integer wn;
+
+  wn = CurWindow;
+  if (wn>0) then begin
+    if (GetWindowSubset(wn)=="0") then begin
+      SetWindowSubset(wn,"1");
+    end else begin
+      SetWindowSubset(wn,"0");
+    end;
+  end;
+end;
+
+global
+function Boolean RemoteCloudServerLClassOnOpenWindow(Integer wn)
+begin
+  SetWindowSubset(wn,"0");
+
+  RemoteCloudServerLClassOnOpenWindow = false;
+end;
+
+global
+function Boolean RemoteCloudServerSClassOnOpenWindow(Integer wn)
+begin
+  SetWindowSubset(wn,"0");
+
+  RemoteCloudServerSClassOnOpenWindow = false;
+end;
+
+global
+function Boolean LocalCloudServerLClassOnOpenWindow(Integer wn)
+begin
+  SetWindowSubset(wn,"0");
+
+  LocalCloudServerLClassOnOpenWindow = false;
+end;
+
+
+
+global
+updating procedure ExportRemoteCloudServerCompanyLsm()
+begin
+  Integer nwn,mwn;
+  array uuid recarr;
+  LongInt i;
+  record RcVc RepSpec;
+  record RemoteCloudServerVc RCSr;
+
+  mwn = CurWindow;
+  i = 1;
+  while (GetRecordFromBrowse(RCSr,mwn,i)) begin i = i + 1; end;
+
+  GetRemoteSelectedServersWithStatus(recarr,kStatusStopped);
+
+  if (i==0) then begin
+    MessageBox(0,"Select a stopped server to perform this operation on.");
+    goto LExportRemoteCloudServerCompanyLsm;
+  end;
+
+  if (recarr.length!=(i-1)) then begin
+    MessageBox(0,"Selected servers must be stopped before performing this operation.");
+    goto LExportRemoteCloudServerCompanyLsm;
+  end;
+
+  if (recarr.length!=1) then begin
+    MessageBox(0,"This operation can't be done on more than one server at a time.");
+    goto LExportRemoteCloudServerCompanyLsm;
+  end;
+  GetRecordFromBrowse(RCSr,mwn,1);
+  if (IsAllowedHansaMailFunction(RCSr)==false) then begin
+    goto LExportRemoteCloudServerCompanyLsm;
+  end;
+
+  RepSpec.RecordUUID = recarr[0];
+  OpenWindow("ASPExportCompOClass",1,mwn,"","",RepSpec);
+
+
+LExportRemoteCloudServerCompanyLsm:;
+end;
+
+global
+updating procedure ASPExportCompOClassStartExport()
+begin
+  Integer wn;
+  record RcVc RepSpec;
+  LongInt compno;
+
+  wn = CurWindow;
+  GetWindowRecord(wn,RepSpec);
+
+  compno = RepSpec.long1;
+
+  ExportRemoteCloudServerCompany(RepSpec.RecordUUID,compno,RepSpec.f2);
+  CloseWindow(wn);
+
+  return;
+end;
+
+global
+procedure TestCreateIDLsm()
+begin
+  record CUVc CUr;
+  Integer result;
+  uuid session;
+
+  CUr.Name = "Samuel Jackson";
+  CUr.eMail = "boreno@gmail.com";
+  CUr.Password = CalcPassword("TheVeryLongAndSecretPassword","",0);
+
+  //threadremote.CallCreateHansaWorldID(CUr,"Test Service",result,session,false);
+  Trace("","Result: " & StringFromSet(610,result) & ", Session: " & session);
+end;
+
+global
+procedure TestLogoutIDLsm()
+begin
+  record HWIDSessionsVc HWIDSr;
+  Integer result;
+
+  if (GetRecordFromBrowse(HWIDSr,CurWindow,1)) then begin
+    threadremote.CallLogoutHansaWorldID(HWIDSr.UUID,"Test Service",result);
+//    Trace("","Result: " & StringFromSet(610,result));
+  end else begin
+    MessageBox(0,"This operation requires one selected session.");
+  end;
+end;
+
+global
+procedure TestCheckIDLsm()
+begin
+  record CUVc CUr;
+  record HWIDSessionsVc HWIDSr;
+  Integer result;
+
+  if (GetRecordFromBrowse(HWIDSr,CurWindow,1)) then begin
+    threadremote.CallCheckHansaWorldID(HWIDSr.UUID,"Test Service",result,CUr);
+    Trace("","Result: " & StringFromSet(610,result) & ", Name: " & CUr.Name);
+  end else begin
+    MessageBox(0,"This operation requires one selected session.");
+  end;
+  return;
+end;
+
+
+global
+procedure TestLoginIDLsm()
+begin
+  record CUVc CUr;
+  Integer result;
+  uuid session;
+
+  CUr.eMail = "boreno@gmail.com";
+  CUr.Password = CalcPassword("TheVeryLongAndSecretPassword","",0);
+
+  threadremote.CallLoginHansaWorldID(CUr,"Test Service",result,session);
+//  Trace("","Result: " & StringFromSet(610,result) & ", Session: " & session & ", Name: " & CUr.Name);
+  return;
+end;
+
+global
+updating procedure ASPFileManagerLsm()
+begin
+  record RcVc RepSpec;
+  record RemoteCloudServerVc RCSr;
+  Integer wn,fmwn;
+  
+  fmwn = FindWindow("ASPFileManagerOClass");
+  if (fmwn>0) then begin
+    Beep;
+    goto LASPFileManagerLsm;
+  end;
+
+  wn = CurWindow;
+  if (GetRecordFromBrowse(RCSr,wn,2)) then begin
+    MessageBox(0,"This operation can only be performed on a single cloud server.");
+    goto LASPFileManagerLsm;
+  end;
+  if (GetRecordFromBrowse(RCSr,wn,1)) then begin
+    RepSpec.RecordUUID = RCSr.UUID;
+  end else begin
+    MessageBox(0,"To perform this operation at least one server must be selected.");
+    goto LASPFileManagerLsm;
+  end;
+
+  if (IsAllowedHansaMailFunction(RCSr)==false) then begin
+    Beep;
+    goto LASPFileManagerLsm;
+  end;
+
+  OpenWindow("ASPFileManagerOClass",1,wn,"","",RepSpec);
+
+LASPFileManagerLsm:;
+  return;
+end;
+
+global
+updating procedure ASPCountConnectionsLsm()
+begin
+  record RcVc RepSpec;
+  record RemoteCloudServerVc RCSr;
+  Integer wn;
+  LongInt cnt;
+
+  wn = CurWindow;
+  if (GetRecordFromBrowse(RCSr,wn,2)) then begin
+    MessageBox(0,"This operation can only be performed on a single cloud server.");
+    goto LASPCountConnectionsLsm;
+  end;
+  if (GetRecordFromBrowse(RCSr,wn,1)) then begin
+    RepSpec.RecordUUID = RCSr.UUID;
+  end else begin
+    MessageBox(0,"To perform this operation at least one server must be selected.");
+    goto LASPCountConnectionsLsm;
+  end;
+
+  ThreadRemote.CountConnections(RCSr.UUID,cnt);
+  switch (cnt) begin // why not.
+    case 0:
+      MessageBox(0,"There are no active connections on the selected server.");
+    case 1:
+      MessageBox(0,"There is " & cnt & " active connection on the selected server.");
+    otherwise
+      MessageBox(0,"There are " & cnt & " active connections on the selected server.");
+  end;
+
+LASPCountConnectionsLsm:;
+  return;
+end;
+
+
+global
+procedure SWMDClassOpenRecord()
+begin
+  record RemoteCloudServerVc RCSr;
+  record CloudNodeVc CNr;
+  record SWMVc SWMr;
+  Integer wn;
+
+  wn = CurWindow;
+  GetWindowRecord(wn,SWMr);
+
+  if (!blankUUID(SWMr.RemoteCloudServer)) then begin
+    RCSr.UUID = SWMr.RemoteCloudServer;
+    if (ReadFirstMain(RCSr,1,true)) then begin
+      OpenWindow("RemoteCloudServerDClass",1,wn,"","",RCSr);
+    end;
+  end else begin
+    CNr.Code = SWMr.Controller;
+    if (ReadFirstMain(CNr,1,true)) then begin
+      OpenWindow("CloudNodeDClass",1,wn,"","",CNr);
+    end;
+  end;
+
+
+  return;
+end;
+
+global
+function Boolean EC2InstanceTypeSClassOnOpenWindow(Integer wn)
+begin
+  Integer mwn;
+  record RcVc RepSpec;
+  string 255 region;
+  
+  mwn = MotherWindow(wn);
+  switch (GetWindowClass(mwn)) begin
+    case "ASPLaunchNewHostWClass":
+      GetWindowRecord(mwn,RepSpec);
+      region = RepSpec.f8;
+    case "ASPRebuildNodeVClass":
+      GetWindowRecord(mwn,RepSpec);
+      region = RepSpec.f8;
+    otherwise
+  end;
+  
+  SetWindowSubset(wn,region);
+  EC2InstanceTypeSClassOnOpenWindow = false;
+  return;
+end;
+
+global procedure ASPRebuildNodeVClassWindowFieldGoto(Integer wn,record RcVc RepSpec,LongInt lp,string fld,Boolean self)
+begin
+  WindowFieldGoto(wn,RepSpec,lp,fld,self);
+  return;
+end;
+
+
+function Boolean ASPRebuildNodeVClassTest(Integer wn,var record RcVc RepSpec,var string actfld,var string errmsg)
+begin
+  Boolean res;
+  record HostingConfigurationVc HCr;
+  record CloudNodeVc CNr;
+  record EC2InstanceTypeVc EC2ITr;
+  record EC2InstanceVc EC2Ir;
+  val cost0,cost1;
+  
+  CNr.Code = RepSpec.f1;
+  actfld = "f1";
+  
+  if (blank(CNr.Code)) then begin
+    errmsg = "Cloud Node may not be blank";
+    goto LASPRebuildNodeVClassTest;
+  end;
+  if (ReadFirstMain(CNr,1,true)==false) then begin
+    errmsg = "Cloud Node " & RepSpec.f1 & " not found";
+    goto LASPRebuildNodeVClassTest;
+  end;
+  HCr.SerNr = CNr.HostingConfig;
+  if (ReadFirstMain(HCr,1,true)==false) then begin
+    errmsg = "Hosting configuration with SerNr=" & HCr.SerNr & " " & CNr.HostingConfig & " (" & CNr.HostingConfigComment & ") not found";
+    goto LASPRebuildNodeVClassTest;
+  end;
+  if (HCr.HostingType!=kHostingTypeAmazon) then begin
+    errmsg = "Cloud Node " & RepSpec.f1 & " is not hosted on Amazon AWS";
+    goto LASPRebuildNodeVClassTest;
+  end;
+  if (blank(HCr.AmazonRegion)) then begin
+    errmsg = "Hosting configuration with SerNr=" & HCr.SerNr & " " & CNr.HostingConfig & " (" & CNr.HostingConfigComment & ") has no AWS region";
+    goto LASPRebuildNodeVClassTest;
+  end;
+  if (blank(HCr.AmazonZone)) then begin
+    errmsg = "Hosting configuration with SerNr=" & HCr.SerNr & " " & CNr.HostingConfig & " (" & CNr.HostingConfigComment & ") has no AWS availability zone";
+    goto LASPRebuildNodeVClassTest;
+  end;
+
+  actfld = "";
+  
+  if (nonblank(RepSpec.f2)) then begin
+    EC2ITr.InstanceType = RepSpec.f2;
+    EC2ITr.Region = HCr.AmazonRegion;
+    if (ReadFirstMain(EC2ITr,2,true)==false) then begin
+      errmsg = "Invalid instance type: " & RepSpec.f2;
+      actfld = "f2";
+      goto LASPRebuildNodeVClassTest;
+    end;
+
+    EC2Ir.Type = EC2ITr.InstanceType;
+    EC2Ir.AvailabilityZone = HCr.AmazonZone;
+    CallCloud("ConsCC").EC2InstanceMonthlyCost2(EC2Ir,cost1);
+  end;
+  
+  if (nonblank(CNr.AmazonInstanceType)) then begin
+    EC2Ir.Type = CNr.AmazonInstanceType;
+    EC2Ir.AvailabilityZone = HCr.AmazonZone;
+    CallCloud("ConsCC").EC2InstanceMonthlyCost2(EC2Ir,cost0);
+  end;
+
+  res = true;
+  RepSpec.SerNr = HCr.SerNr;
+  RepSpec.f3 = HCr.Comment;
+  RepSpec.f5 = CNr.Comment;
+  RepSpec.f6 = CNr.Classification;
+  RepSpec.f8 = HCr.AmazonRegion;
+  RepSpec.f4 = CNr.AmazonInstanceType;
+  RepSpec.vals0 = cost0;
+  RepSpec.vals1 = cost1;
+
+LASPRebuildNodeVClassTest:;
+  ASPRebuildNodeVClassTest = res;
+  return;
+end;
+
+global
+function Boolean ASPRebuildNodeVClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record RcVc RepSpec;
+  string 255 actfld,errmsg;
+
+  res = true;
+  if (fieldname=="f1" or fieldname=="f2") then begin
+    if (changed!=0) then begin
+      GetWindowRecord(wn,RepSpec);
+      if (ASPRebuildNodeVClassTest(wn,RepSpec,actfld,errmsg)==false) then begin
+        MessageBox(0,errmsg);
+        queued.ASPRebuildNodeVClassWindowFieldGoto(wn,RepSpec,-1,actfld,true);
+        goto LASPRebuildNodeVClassAfterEditField;
+      end;
+
+      PutWindowRecord(wn,RepSpec);
+      queued.ASPRebuildNodeVClassWindowFieldGoto(wn,RepSpec,-1,"f2",false);
+    end;
+  end;
+  
+LASPRebuildNodeVClassAfterEditField:;
+  ASPRebuildNodeVClassAfterEditField = res;
+  return;
+end;
+  
+global
+procedure ASPRebuildNodeVClassNodeStatus()
+begin
+  record RcVc RepSpec,RepSpec2;
+  Integer wn;
+  
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+  
+  if (blank(RepSpec.f1)) then begin
+    MessageBox(0,"Cloud Node may not be blank");
+    goto LASPRebuildNodeVClassNodeStatus;
+  end;
+
+  RepSpec2.Media = mtScreen;
+  RepSpec2.NoTimeoutLimit = 1;
+  RepSpec2.f1 = RepSpec.f1;
+  RepSpec2.flags[0] = 90;
+  RepSpec2.repname = "NodeHostingStatsRn";
+  RunReport(RepSpec2,0);
+  
+LASPRebuildNodeVClassNodeStatus:;
+  return;
+end;
+
+global
+function Boolean ASPRebuildNodeVClassOnOKWindow(Integer wn)
+begin
+  Boolean res;
+  record RcVc RepSpec;
+  record CloudNodeVc CNr;
+  record HostingConfigurationVc HCr;
+  string 255 actfld,errmsg;
+
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+  res = ASPRebuildNodeVClassTest(wn,RepSpec,actfld,errmsg);
+  if (res==false) then begin
+    MessageBox(0,errmsg);
+    queued.ASPRebuildNodeVClassWindowFieldGoto(wn,RepSpec,-1,actfld,true);
+    goto LASPRebuildNodeVClassOnOKWindow;
+  end;
+  
+  res = ASPRebuildNodeVClassCheckNode(RepSpec,errmsg);
+  if (res==false) then begin
+    MessageBox(0,errmsg);
+    goto LASPRebuildNodeVClassOnOKWindow;
+  end;
+
+LASPRebuildNodeVClassOnOKWindow:;
+  ASPRebuildNodeVClassOnOKWindow = res;
+  return;
+end;
+
+global
+updating procedure InstallFlexBILsm()
+begin
+  record RemoteCloudServerVc RCSr;
+  Integer wn;
+  string 255 msg;
+
+  wn = CurWindow;
+  if (GetRecordFromBrowse(RCSr,wn,1)) then begin
+    if (IsAllowedHansaMailFunction(RCSr)==false) then begin
+      goto LInstallFlexBILsm;
+    end;
+    InstallFlexBIOnRemoteCloudServer(RCSr,msg);
+    if (nonblank(msg)) then begin MessageBox(0,msg); end;
+  end else begin
+    MessageBox(0,"Please select the server that you want to install FlexBI on and try again.");
+  end;
+  
+LInstallFlexBILsm:;
+  return;
+end;

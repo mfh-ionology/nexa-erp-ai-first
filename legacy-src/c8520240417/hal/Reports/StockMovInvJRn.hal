@@ -1,0 +1,254 @@
+external procedure HTSaleMan(string,var string);
+external procedure HTLocations(string, string, var string);
+external procedure HTCustCat(string,var string);
+external procedure HT2Per(Date, Date , var string);
+external function roundmode SetRoundModeD(Integer);
+external function val CalculateSumExVatDecimals(val,string,Integer,Integer,Integer);
+external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
+external procedure MulVATIV(string,val,var val,var val,Integer,Integer);
+external procedure SetupVATBase(var record SMVc,var Integer);
+external procedure AddVATBase(var record SMVc,string,val,val,Integer,Integer,Integer);
+external function roundmode GetVATRoundModeRB();
+
+global
+procedure StockMovInvJRn(record RcVc RepSpec)
+begin
+  record StockMovVc SMr;
+  row StockMovVc SMrw;
+  record ORVc ORr;
+  row ORVc ORrw;
+  record IVVc TotalCurrencyValr;
+  row IVVc TotalCurrencyValrw;
+  Boolean TrHs,testf,check,hastotals;
+  integer rw,rwcnt,i,totinv;
+  string 255 tstr;
+  record CUVc CUr;
+  val exclvat,inclvat,q,v,totsum,totbasesum;
+  val vatval,t,vatv,t1;
+  record SMVc VATr;
+  row SMVc VATrw;  
+  Integer vatcnt;
+
+  hastotals = false;
+  totinv = 0;
+  RecordNew(TotalCurrencyValr);
+  
+  StartReportJob(USetStr(40630));
+  rw = 1;
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  if (RepSpec.f2<>"") then begin
+    tstr = USetStr(1113);
+    tstr = tstr & RepSpec.f2;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (RepSpec.AccStr<>"") then begin
+    HTSaleMan(RepSpec.AccStr,tstr);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.LastAcc)) then begin
+    HTLocations(RepSpec.LastAcc,RepSpec.LastAcc,tstr);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (RepSpec.ArtMode==0) then begin
+    tstr = USetStr(40637);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end else begin
+    tstr = USetStr(40638);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  EndHeader;
+  
+  StartFormat(15);
+  OutString(0,0,USetStr(40631),false);
+  if (HasLocalization("PRT")) then begin
+    OutString(60,0,USetStr(40632),false);
+  end;
+  OutString(140,0,USetStr(40633),false);
+  OutString(200,0,USetStr(40634),false);
+  OutString(390,0,USetStr(40635),true);
+  OutString(446,0,USetStr(40636),true);
+  EndFormat;
+  RecordClear(VATr);
+  SetupVATBase(VATr,vatcnt);
+  Gray_Divider(0,1);
+  TrHs = true;  
+  SMr.InvDate = RepSpec.sStartDate;
+  while (LoopKey("InvDate",SMr,1,TrHs)) begin
+    testf = true;
+    if (DateInRange(SMr.InvDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin
+      TrHs = false;
+    end;
+    if (nonblank(RepSpec.LastAcc)) then begin
+      if (RepSpec.LastAcc!=SMr.FrLocation and RepSpec.LastAcc!=SMr.ThrouLocation and RepSpec.LastAcc!=SMr.ToLocation) then begin
+        testf = false;
+      end;
+    end;
+    ORr.SerNr = SMr.OrderNr;
+    ReadFirstMain(ORr,1,true);
+    if (nonblank(RepSpec.f2) and RepSpec.f2!=ORr.CustCode) then begin
+      testf = false;
+    end;
+    if (blank(SMr.InvoiceNr)) then begin
+      testf = false;
+    end;
+    if (testf and TrHs) then begin
+      exclvat = 0;
+      inclvat = 0;
+      totinv = totinv + 1;
+      rwcnt = MatRowCnt(SMr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(SMr,i,SMrw);
+        MatRowGet(ORr,SMrw.OrderRowNr-1,ORrw);
+        if (nonblank(ORrw.ArtCode) or blank(ORrw.Quant)==false or blank(ORrw.Sum)==false) then begin
+          q = SMrw.Quant;
+          AddVATBase(VATr,ORrw.VATCode,ORrw.Price * q,blankval,vatcnt,ORr.InclVAT,ORr.NoTAXonVAT);  
+          MatRowGet(VATr,vatcnt-1,VATrw);
+          MulVATIV(ORrw.VATCode,ORrw.Price * q,vatv,t1,ORr.InclVAT,ORr.NoTAXonVAT);
+          if (vatv!=0) then begin
+            vatval = Round(vatv,GetVATRoundModeRB);           
+          end;
+          switch (ORr.InclVAT) begin
+            case 1:
+              exclvat = exclvat + (ORrw.Price * q) - vatval - (((ORrw.Price*q)-vatval)*ORrw.vRebate/100);
+              inclvat = inclvat + (ORrw.Price * q) - ((ORrw.Price*q)*ORrw.vRebate/100);
+            case 2:
+              exclvat = exclvat + (ORrw.Price * q) - vatval - (((ORrw.Price*q)-vatval)*ORrw.vRebate/100);
+              inclvat = inclvat + (ORrw.Price * q) - ((ORrw.Price*q)*ORrw.vRebate/100);
+            otherwise
+              exclvat = exclvat + (ORrw.Price * q) - ((ORrw.Price*q)*ORrw.vRebate/100);
+              inclvat = inclvat + (ORrw.Price * q) + vatval - (((ORrw.Price*q)+vatval)*ORrw.vRebate/100);
+          end;
+        end;
+      end;
+      StartFormat(15);
+      OutStringID(0,"DblStockMov",SMr.InvoiceNr,false,SMr.SerNr);
+      if (HasLocalization("PRT")) then begin
+        OutString(60,0,SMr.InvoiceOfficialSerNr,false);
+      end;
+      OutString(140,0,SMr.InvDate,false);
+      CUr.Code = ORr.CustCode;
+      ReadFirstMain(CUr,1,true);
+      OutString(200,0,CUr.Name,false);
+        OutString(390,0,exclvat,true);
+        OutString(446,0,inclvat,true);
+        OutString(450,0,ORr.CurncyCode,false);
+      EndFormat;
+      
+      check = false;
+      rwcnt = MatRowCnt(TotalCurrencyValr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(TotalCurrencyValr,i,TotalCurrencyValrw);
+        if (TotalCurrencyValrw.CurncyCode==ORr.CurncyCode) then begin
+          TotalCurrencyValrw.Sum = TotalCurrencyValrw.Sum + exclvat;
+          TotalCurrencyValrw.Price = TotalCurrencyValrw.Price + inclvat;
+          check = true;
+        end;
+        MatRowPut(TotalCurrencyValr,i,TotalCurrencyValrw);
+      end;
+      if (check==false) then begin
+        MatRowGet(TotalCurrencyValr,MatRowCnt(TotalCurrencyValr),TotalCurrencyValrw);
+        TotalCurrencyValrw.CurncyCode = ORr.CurncyCode;
+        TotalCurrencyValrw.Sum = exclvat;
+        TotalCurrencyValrw.Price = inclvat;
+        MatRowPut(TotalCurrencyValr,MatRowCnt(TotalCurrencyValr),TotalCurrencyValrw);
+      end;
+      
+      hastotals = true;
+      if (RepSpec.ArtMode==1) then begin
+        StartFormat(15);
+        EndFormat;
+        totsum = 0;
+        totbasesum = 0;
+        StartFormat(15);
+        OutString(20,0,USetStr(40643),false);
+        OutString(70,0,USetStr(40644),false);
+        OutString(150,0,USetStr(40645),false);
+        OutString(310,0,USetStr(40648),false);
+        OutString(390,0,USetStr(40646),true);
+        OutString(446,0,USetStr(40647),true);
+        EndFormat;
+        Gray_Divider(20,460);
+        rwcnt = MatRowCnt(SMr);
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(SMR,i,SMrw);
+          MatRowGet(ORr,SMrw.OrderRowNr-1,ORrw);
+          if (nonblank(ORrw.ArtCode) or blank(ORrw.Quant)==false or blank(ORrw.Sum)==false) then begin
+            
+            StartFormat(15);
+            q = SMrw.Quant;
+            if (q==-1) then begin
+              q = 0.00;
+            end;
+            
+            OutString(20,0,ORrw.ArtCode,false);
+            OutString(70,0,q,false);
+            OutString(150,0,ORrw.Spec,false);
+            OutString(310,0,ORrw.VATCode,false);
+            
+            v = MulRateToBase1(ORr.CurncyCode,ORrw.Price - ((ORrw.Price)*ORrw.vRebate/100),ORr.FrRate,ORr.ToRateB1,ORr.ToRateB2,ORr.BaseRate1,ORr.BaseRate2,SetRoundModeD(5));
+            if (v<0) then begin v = -v; end;
+            if (v==0) then begin v = 0.00000; end;
+            v = CalculateSumExVatDecimals(v,ORrw.VATCode,ORr.InclVAT,ORr.NoTAXonVAT,5);
+            
+            OutString(390,0,v,true);
+            totbasesum = totbasesum + v;
+            
+            v = MulRateToBase1(ORr.CurncyCode,ORrw.Price*q - ((ORrw.Price*q)*ORrw.vRebate/100),ORr.FrRate,ORr.ToRateB1,ORr.ToRateB2,ORr.BaseRate1,ORr.BaseRate2,SetRoundModeD(5));
+            if (v<0) then begin v = -v; end;
+            if (v==0) then begin v = 0.00000; end;
+            v = CalculateSumExVatDecimals(v,ORrw.VATCode,ORr.InclVAT,ORr.NoTAXonVAT,5);
+            
+            OutString(446,0,v,true);
+            totsum = totsum + v;
+            EndFormat;
+          end;
+        end;
+        Gray_Divider(20,460);
+        StartFormat(15);
+        EndFormat;
+        Gray_Divider(300,460);
+        StartFormat(15);
+        OutString(310,0,USetStr(40642),false);
+        OutString(390,0,totbasesum,true);
+        OutString(446,0,totsum,true);
+        EndFormat;
+        Gray_Divider(300,460);
+        StartFormat(15);
+        EndFormat;
+        Gray_Divider(0,1);
+      end;
+    end;
+  end;
+  
+  if (hastotals) then begin
+    if (RepSpec.ArtMode==0) then begin
+      Gray_Divider(0,1);
+    end;
+    StartFormat(15);
+    EndFormat;
+    StartFormat(15);
+    OutString(20,0,USetStr(40641) & ":  " & totinv,false);
+    OutString(390,0,USetStr(40639),true);
+    OutString(446,0,USetStr(40640),true);
+    EndFormat;
+    Gray_Divider(300,1);
+    rwcnt = MatRowCnt(TotalCurrencyValr);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(TotalCurrencyValr,i,TotalCurrencyValrw);
+      StartFormat(15);
+      OutString(390,0,TotalCurrencyValrw.Sum,true);
+      OutString(446,0,TotalCurrencyValrw.Price,true);
+      OutString(450,0,TotalCurrencyValrw.CurncyCode,false);
+      EndFormat;
+    end;
+  end;
+  EndJob;
+  return;
+end;

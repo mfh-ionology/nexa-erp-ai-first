@@ -1,0 +1,75 @@
+
+global
+function Integer ActiveTextToSpeechEngine()
+begin
+  record TTSSettingsBlock TTSb;  
+  BlockLoad(TTSb);
+  
+  ActiveTextToSpeechEngine = TTSb.Provider;
+end;
+
+global
+procedure TalkBotCallAnna()
+begin
+  string 255 codes,code,talkbotext;
+  LongInt pos;
+  record SipTrunk2Vc STr;
+  record PBXConnectionVc PBXCr;
+  Boolean foundf,testf;
+
+
+// Find the first PBX Connection with a SIP Trunk mapped to a Talk Bot
+// TODO: Offer user to select which one to call
+  while (LoopKey("PBXConnection",STr,1,true)) begin
+    testf = true;
+    if (STr.Closedf!=0) then begin testf = false; end;
+    if (testf) then begin
+      if (nonblank(STr.TalkBotExtension)) then begin
+        PBXCr.Code = STr.PBXConnection;
+        if (ReadFirstMain(PBXCr,1,true)==true) then begin
+          goto LTalkBotCallAnna_found;
+        end;
+      end;
+    end;
+  end;
+  MessageBox(0,"Couldn't find any Talk Bot to call"); // TODO: proper message
+  goto LTalkBotCallAnna;
+
+LTalkBotCallAnna_found:;
+  codes = CurUserPBXConnections;
+  GetNextSubstring(codes,pos,",",code);
+  talkbotext = STr.TalkBotExtension;
+  if (code==PBXCr.Code) then begin
+    talkbotext = talkbotext & "@" & PBXCr.PBXHost;
+  end;
+  SoftphoneCall(talkbotext);
+
+LTalkBotCallAnna:;
+  return;
+end;
+
+global
+procedure Client_SetChatBotContextValue(string ctxkey,string key,string value)
+begin
+  LogText(0,"Client_SetChatBotContextValue(" & ctxkey & "," & key & "," & value & ")")
+  SetChatBotContextValue(ctxkey,key,value);
+end;
+
+global
+procedure Client_SwitchLanguage(string ctxkey,string language)
+begin
+  string 255 wsid;
+  
+  LogText(0,"Client_SwitchLanguage(" & ctxkey & "," & language & ")")
+  
+  SetChatBotContextValue(ctxkey,"currentLanguage",language);
+  
+  wsid = GetChatBotContextValue(ctxkey,"WebSocket:" & kWatsonServiceStreamSTT);
+  
+  if (wsid<>"") then begin
+    SetChatBotContextValue(ctxkey,"WebSocket:" & kWatsonServiceStreamSTT,"");
+    SetChatBotContextValue(ctxkey,"WebSocketURL:" & kWatsonServiceStreamSTT,"");
+    SetChatBotContextValue(ctxkey,"WebSocketCT:" & kWatsonServiceStreamSTT,"");
+    CloseWebSocket(wsid);
+  end;
+end;

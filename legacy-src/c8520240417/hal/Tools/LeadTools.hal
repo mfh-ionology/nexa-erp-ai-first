@@ -1,0 +1,109 @@
+external function Boolean InterNetAddrTest(string);
+external procedure FindUserMailboxName(string,var string,var string);
+external function Boolean CurUserHasMailbox(var string);
+
+global
+function Boolean CreateMailFromLead(record CUVc Leadr,var record MailVc Mailr,Boolean readf)
+begin
+  Boolean res;
+  string 255 tstr;
+  row MailVc marw;
+  string 255 mailboxnr;
+  
+  if (readf) then begin
+    if (ReadFirstMain(Leadr,0,true)) then begin end;  
+  end;
+  RecordNew(Mailr);
+
+  if ((CurUserHasMailbox(tstr)==false) or (blank(Leadr.eMail))) then begin
+    MessageBox(2289,"");
+    goto LCreateMailFromLead;
+  end else begin
+    FindUserMailboxName(CurrentUser,mailboxnr,tstr);
+    MatRowGet(Mailr,0,marw);
+    marw.AddrCode = tstr;
+    MatRowPut(Mailr,0,marw);
+  end;
+  if (InterNetAddrTest(Leadr.eMail)==false) then begin
+    MessageBox(1353,Leadr.eMail);
+    goto LCreateMailFromLead;
+  end;
+  ClearRow(Mailr,marw,1);
+  marw.RowTyp = 0;
+  marw.AddrCode = Leadr.eMail;
+  MatRowPut(Mailr,1,marw);
+  res = true;
+LCreateMailFromLead:;  
+  CreateMailFromLead = res;
+  return;
+end;
+
+global
+function Boolean CreateOpportunityFromLead(record CUVc Leadr,var record OYVc OYr,Boolean readf)
+begin
+  Boolean res;
+
+  if (readf) then begin
+    if (ReadFirstMain(Leadr,0,true)) then begin end;  
+  end;
+  RecordNew(OYr);
+  OYr.CustCode = Leadr.Code;
+  OYr.Addr1 = Leadr.InvAddr0;
+  OYr.Addr2 = Leadr.InvAddr1;
+  OYr.Addr3 = Leadr.InvAddr2;
+  OYr.InvAddr3 = Leadr.InvAddr3;
+  OYr.InvAddr4 = Leadr.InvAddr4;
+  OYr.Phone = Leadr.Phone;
+  OYr.Fax = Leadr.Fax;
+  OYr.CustContact = Leadr.Person;
+  OYr.CurncyCode = Leadr.CurncyCode;
+  res = true;
+LCreateOpportunityFromLead:;  
+  CreateOpportunityFromLead = res;
+  return;
+end;
+
+global
+updating function LongInt CreateCustomerFromLead(var record CUVc Leadr)
+begin
+  LongInt res;
+  record CUVc oldLeadr;
+  record CustomerSettingBlock CSb;
+
+  res = 1;
+  if (ReadFirstMain(Leadr,0,true)==false) then begin 
+    goto LCreateCustomerFromLead;
+  end;  
+  if (Leadr.CUType!=0) then begin
+    res = 40330;
+    goto LCreateCustomerFromLead;
+  end;
+  BlockLoad(CSb);
+  RecordCopy(oldLeadr,Leadr);
+  Leadr.CUType = 1;
+  if (blank(Leadr.CustCat)) then begin
+    Leadr.CustCat = CSb.DefCustCat;
+  end;
+  if (blank(Leadr.PayDeal)) then begin
+    Leadr.PayDeal = CSb.DefPayDeal;
+  end;
+  if (blank(Leadr.Region)) then begin
+    Leadr.Region = CSb.Region;
+  end;
+  if (blank(Leadr.CreditLimit)) then begin
+    Leadr.CreditLimit = CSb.CreditLimit;
+  end;
+  if (Leadr.CreditLimitDays<0) then begin
+    Leadr.CreditLimitDays = CSb.CreditLimitDays;
+  end;
+  Leadr.NoLetterPosting = CSb.NoLetterPosting;
+  Leadr.NoMailPosting = CSb.NoMailPosting;
+  Leadr.OnAccount = CSb.OnAccount;
+  Leadr.AllowLogin = CSb.AllowLogin;
+
+  res = RecordUpdate(oldLeadr,Leadr,true);
+  
+LCreateCustomerFromLead:;  
+  CreateCustomerFromLead = res;
+  return;
+end;

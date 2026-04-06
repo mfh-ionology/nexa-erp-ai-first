@@ -1,0 +1,310 @@
+
+procedure OutputQueue(record PBXQueueVc PBXQr)
+begin
+  string 255 stringout;
+  
+  StartFormat(15);
+  OutString(40,"DblPBXQueueVc",PBXQr.Code,false);
+  OutString(120,0,"" & PBXQr.Comment & " (" & PBXQr.QueueID & ")",false);
+  stringout = "Phones: " & PBXQr.Extension;
+  if (nonblank(PBXQr.FallBackNumber)) then begin
+      stringout = stringout & " Fallback: " & PBXQr.FallBackNumber;
+  end;
+  if (PBXQr.NoGeneralSIPFallback) then begin
+    stringout = stringout & " (use only fallback)";
+  end;
+  OutString(50,0,stringout,false);
+  EndFormat;
+  StartFormat(15);
+  OutString(50,0,"Open time: " & PBXQr.OpenTime & "-" & PBXQr.CloseTime & "," & PBXQr.OpenTime2 & "-" & PBXQr.CloseTime2,false);
+  if (PBXQr.Closed) then begin
+    stringout = stringout & "RECORD CLOSED ";
+  end;
+  stringout = "";
+  if (PBXQr.ExcludeBankHolidaysf) then begin
+    stringout = stringout & "Closed on bank holidays ";
+  end;
+  if (PBXQr.AlwaysClosedf) then begin
+    stringout = stringout & "Always closed ";
+  end;
+  OutString(50,0,stringout,false);
+  EndFormat;
+  
+  return;
+end;
+
+procedure OutpuSIPTrunk(record SipTrunk2Vc STr,boolean includeclosedf)
+begin
+  row SipTrunk2Vc STrw;
+  Boolean TrHs,testf;
+  integer rwcnt,i;
+  record PBXQueueVc PBXQr;
+  string 255 stringout;
+  
+  rwcnt = MatRowCnt(STr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(STr,i,STrw);
+    if (nonblank(STrw.Extension)) then begin
+      stringout = stringout & STrw.Extension & ", ";
+    end;
+  end;
+  StartFormat(15);
+  OutString(20,"DblSipTrunk2Vc",STr.Code,false);
+  OutString(100,0,STr.Comment,false);
+  if (i>0) then begin
+      OutString(30,0,"Phone nr: " & stringout,false);
+  end;
+  if (nonblank(STr.DefaultCallerId)) then begin
+      OutString(30,0,"Caller ID: " & STr.DefaultCallerId,false);
+  end else begin
+      OutString(30,0,"no default number set",false);
+  end;
+  if (STr.Closedf) then begin
+    OutString(0,0,"CLOSED",true);
+  end;
+  EndFormat;
+  StartFormat(15);
+  EndFormat;
+  
+  TrHs = true;
+  PBXQr.SipTrunk = STr.Code;
+  while(LoopKey("SipTrunk",PBXQr,1,TrHs)) begin
+    testf = true;
+    if (PBXQr.Closed!=0 and includeclosedf==false) then begin testf = false; end;
+    if (PBXQr.SipTrunk!=STr.Code) then begin TrHs = false; testf = false; end;
+    if (testf) then begin
+      OutputQueue(PBXQr);
+    end;
+  end;
+  Gray_Divider(0,1);
+  StartFormat(15);
+  EndFormat;
+  
+  return;
+end;
+
+procedure FillGlobalUserArray(string pbxcode,var array record GlobalUserVc GUra,var vector integer namev,var integer alen)
+begin
+  record GlobalUserVc GUr;
+  boolean TrHs;
+  longint pos;
+  
+  TrHs = true;
+  GUr.Closed = 0;
+  while(LoopKey("AstPBXConnection:" & pbxcode,GUr,1,TrHs)) begin
+    if (GUr.Closed==0) then begin
+      namev[GUr.Name] = alen;
+      GUra[alen] = GUr;
+      alen = alen + 1;
+    end;
+  end;
+  
+  return;
+end;
+
+procedure FillPersonArray(string pbxcode,var array record UserVc USra,var vector integer namev,var integer alen)
+begin
+  record UserVc USr;
+  boolean TrHs;
+  longint pos;
+  
+  TrHs = true;
+  while(LoopKey("AstPBXConnection:" & pbxcode,USr,1,TrHs)) begin
+    if (USr.Closed==0) then begin
+      if (namev[USr.Name]==0) then begin
+        namev[USr.Name] = alen;
+        pos = alen;
+        alen = alen + 1;
+      end else begin
+        pos = namev[USr.Name];
+      end;
+      StartFormat(15);
+      OutString(170,"DblUserVc",USr.Code,false);
+      EndFormat;
+      USra[pos] = USr;
+    end;
+  end;
+  
+  return;
+end;
+
+procedure FillAsteriskUserArray(string pbxcode,var array record AsteriskUser2Vc AsteriskUserra,var vector integer namev,var integer alen)
+begin
+  record AsteriskUser2Vc AsteriskUserr;
+  boolean TrHs,foundf;
+  longint pos;
+  
+  TrHs = true;
+  AsteriskUserr.PBXConnection = pbxcode;
+  while(LoopKey("PBXConnection",AsteriskUserr,1,TrHs)) begin
+    foundf = true;
+    if (AsteriskUserr.Closedf<>0) then begin foundf = false; end;
+    if (AsteriskUserr.PBXConnection<>pbxcode) then begin foundf = false; TrHs = false; end;
+    if (foundf) then begin
+      if (namev[AsteriskUserr.Name]==0) then begin
+        namev[AsteriskUserr.Name] = alen;
+        pos = alen;
+        alen = alen + 1;
+      end else begin
+        pos = namev[AsteriskUserr.Name];
+      end;
+      StartFormat(15);
+      OutString(210,"DblAsteriskUser2Vc",AsteriskUserr.SerNr,false);
+      EndFormat;
+      AsteriskUserra[pos] = AsteriskUserr;
+    end;
+  end;
+  
+  return;
+end;
+
+global
+procedure CheckAstName(var string asteriskusername,string asteriskusername2,var boolean usererrf)
+begin
+  
+  if (nonblank(asteriskusername) and asteriskusername<>asteriskusername2) then begin
+    usererrf = true;
+  end;
+  asteriskusername = asteriskusername2;
+
+  return;
+end;
+
+global
+procedure OutputPBXUsers(string name,record GlobalUserVc GUr,record UserVc USr,record AsteriskUser2Vc AsteriskUserr)
+begin
+  string 255 asteriskusername;
+  boolean usererrf;
+    
+  StartFormat(15);
+  OutString(20,0,name,false);
+  if (ReadFirstMain(GUr,0,true)) then begin
+    OutString(130,"DblGlobalUserVc",GUr.Code,false);
+    CheckAstName(asteriskusername,GUr.AstUserName,usererrf);
+  end;
+  /*
+LogText(0,"TelephonySetupOverviewRn get here2");
+  if (ReadFirstMain(USr,0,true)) then begin
+LogText(0,"TelephonySetupOverviewRn get inside here2");
+    OutString(170,"DblUserVc",USr.Code,false);
+    CheckAstName(asteriskusername,USr.AstUserName,usererrf);
+  end;
+  */
+  /*
+LogText(0,"TelephonySetupOverviewRn get here3");
+  if (ReadFirstMain(AsteriskUserr,0,true)) then begin
+LogText(0,"TelephonySetupOverviewRn get here3 name=" & AsteriskUserr.Name);
+    OutString(210,"DblAsteriskUser2Vc",AsteriskUserr.SerNr,false);
+    CheckAstName(asteriskusername,AsteriskUserr.UserName,usererrf);
+  end;
+*/
+  EndFormat;
+  return;
+end;
+
+global
+procedure TelephonySetupOverviewRn(record RcVc RepSpec)
+begin
+  record PBXConnectionVc PBXCr;
+  record SipTrunk2Vc STr;
+  array record SipTrunk2Vc STra;
+  row SipTrunk2Vc STrw;
+  Boolean TrHs,foundf,testf,includeclosedf;
+  integer cnt,i,rwcnt,arrid,alen,length;
+  string 255 phonenr,pbxcode;
+  vector integer namev;
+  array record GlobalUserVc GUra;
+  array record UserVc USra;
+  array record AsteriskUser2Vc AsteriskUserra;
+  array string 255 atags;
+  
+  includeclosedf = RepSpec.flags[1];
+  StartReportJob("Telephony Setup Overview");
+  if (nonblank(RepSpec.f1) and blank(RepSpec.f2)) then begin
+    PBXCr.Code = RepSpec.f1;
+    if (ReadFirstMain(PBXCr,1,true)) then begin
+      TrHs = true;
+      cnt = 0;
+      STr.PBXConnection = PBXCr.Code;
+      while(LoopKey("PBXConnection",STr,1,TrHs)) begin
+        testf = true;
+        if (STr.Closedf!=0 and includeclosedf==false) then begin testf = false; end;
+        if (STr.PBXConnection!=PBXCr.Code) then begin TrHs = false; testf = false; end;
+        if (testf) then begin
+          STra[cnt] = STr;
+          cnt = cnt + 1;
+        end;
+      end;
+      pbxcode = PBXCr.Code;
+      Header(1,"PBX: " & PBXCr.Comment,1);
+    end else begin
+      Header(1,"no match found for PBX " & RepSpec.f1,1);
+    end;
+  end;
+  
+  if (nonblank(RepSpec.f2)) then begin
+    phonenr = RepSpec.f2;
+    TrHs = true;
+    foundf = false;
+    cnt = 0;
+    while(LoopMain(STr,1,TrHs)) begin
+      rwcnt = MatRowCnt(STr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(STr,i,STrw);
+        if (InString(STrw.Extension,phonenr)) then begin
+          foundf = true;
+          STra[cnt] = STr;
+          cnt = cnt + 1;
+          TrHs = false;
+        end;
+      end;
+      if (foundf==false and InString(STr.DefaultCallerId,phonenr)) then begin
+        foundf = true;
+        STra[cnt] = STr;
+        cnt = cnt + 1;
+        TrHs = false;
+      end;
+    end;
+    if (foundf) then begin
+      pbxcode = STr.PBXConnection;
+      Header(1,phonenr & " found in SIP trunk: " & STr.Code,1);
+    end else begin
+      Header(1,"no match found for number " & RepSpec.f2,1);
+    end;
+  end;
+  EndHeader;
+  
+  for (i=0;i<cnt;i=i+1) begin
+    STr = STra[i];
+    OutpuSIPTrunk(STr,includeclosedf);
+  end;
+  if (nonblank(pbxcode)) then begin
+    alen = 1;
+    FillGlobalUserArray(pbxcode,GUra,namev,alen);
+    FillPersonArray(pbxcode,USra,namev,alen);
+    FillAsteriskUserArray(pbxcode,AsteriskUserra,namev,alen);
+    GetVectorTags(namev,atags);
+    SortStringArray(atags);
+    length = atags.length;
+    StartFormat(15);
+    OutString(130,0,"Global user",false);
+    OutString(170,0,"Person",false);
+    OutString(210,0,"Asterisk User",false);
+    EndFormat;
+    for(i=0;i<length;i=i+1) begin
+      arrid = namev[atags[i]];
+      OutputPBXUsers(atags[i],GUra[arrid],USra[arrid],AsteriskUserra[arrid]);
+    end;
+  end;
+  
+  if (blank(RepSpec.f1) and blank(RepSpec.f2)) then begin
+    StartFormat(15);
+    OutString(120,0,"Specify a PBX connection or a phone number.",false);
+    EndFormat;
+  end;
+  StartFormat(15);
+  EndFormat;
+  EndJob;
+    
+  return;
+end;

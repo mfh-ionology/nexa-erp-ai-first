@@ -1,0 +1,211 @@
+external procedure NextM4Number(string,var string);
+external procedure NextM4Number(string,var string);
+external function Boolean SerNrTestVATDeclVc(LongInt,Date,var Boolean);
+external procedure BlockLoadLocking(var record DBLockBlock);
+
+global
+procedure GetNextVATDeclNr(var string vatdeclnr)
+begin
+  record SRBlock SRb;
+  record VATDeclVc VATDr;
+
+  BlockLoad(SRb);
+  NextM4Number(SRb.LastVATDeclCode,vatdeclnr);
+  if (nonblank(vatdeclnr)) then begin
+    VATDr.Code = vatdeclnr;
+    if (ReadFirstMain(VATDr,1,true)==false and nonblank(SRb.LastVATDeclCode)) then begin
+      SRb.LastVATDeclCode = vatdeclnr;
+    end else begin
+      if (CountRecords("VATDeclVc")==0) then begin 
+        vatdeclnr = "1";
+        goto LGetNextVATDeclNr;
+      end;    
+      VATDr.Code = "ÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖÖ";
+      if (ReadLastMain(VATDr,1,false)) then begin
+        NextM4Number(VATDr.Code,vatdeclnr);
+        SRb.LastVATDeclCode = vatdeclnr;
+      end else begin
+        vatdeclnr = "1";
+      end;
+    end;
+  end;
+LGetNextVATDeclNr:;
+  return;
+end;
+
+global
+updating function LongInt VATDeclVcRecordSaveAfter(var record VATDeclVc VATDr,record VATDeclVc VATD2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  record SRBlock SRb;
+
+  BlockLoad(SRb);
+  SRb.LastVATDeclCode = VATDr.Code;
+  BlockStore(SRb);
+  VATDeclVcRecordSaveAfter = res;
+  return;
+end;
+
+global
+function LongInt VATDeclVcRecordDefaults(var record VATDeclVc VATDr,record VATDeclVc VATD2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  LongInt vatdeclnr;
+  string 255 tstr;
+  record TaxRepCUBlock TaxRepCUb;
+  
+  if (HasLocalization("POL")) then begin
+    BlockLoad(TaxRepCUb);
+    VATDr.PeriodType = TaxRepCUb.SendPeriod;
+  end;
+  VATDr.TransDate = CurrentDate;
+  if (SingleUserMode) then begin
+    GetNextVATDeclNr(tstr);
+    VATDr.Code = tstr;    
+    vatdeclnr = NextSerNr("VATDeclVc",VATDr.TransDate,-1,false,"");
+    if (StringToLongInt(VATDr.Code)<vatdeclnr) then begin
+      VATDr.Code = vatdeclnr;
+    end;
+  end else begin
+    VATDr.Code = "";
+  end;
+
+  VATDeclVcRecordDefaults = res; 
+  return;
+end;
+
+global
+function LongInt VATDeclVcRecordDuplicate(var record VATDeclVc VATDr,record VATDeclVc VATD2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  LongInt vatdeclnr;
+  string 255 tstr;
+  
+  VATDr.OKFlag = 0;
+  VATDr.TaxServStatus = 0;
+  VATDr.TaxServID = "";
+  VATDr.TaxServTimestamp = "";
+  VATDr.TransDate = CurrentDate;
+  if (SingleUserMode) then begin
+    GetNextVATDeclNr(tstr);
+    VATDr.Code = tstr;    
+    vatdeclnr = NextSerNr("VATDeclVc",VATDr.TransDate,-1,false,"");
+    if (StringToLongInt(VATDr.Code)<vatdeclnr) then begin
+      VATDr.Code = vatdeclnr;
+    end;
+  end else begin
+    VATDr.Code = "";
+  end;
+  VATDeclVcRecordDuplicate = res; 
+  return;
+end;
+
+function Boolean HasVersionForPeriod(date sdate,date edate)
+begin
+  Boolean res;
+  record VATDeclVc VATDecl2r;
+  Boolean testf;
+
+  testf = true;
+  VATDecl2r.StartDate = sdate;
+  while (LoopKey("StartDate",VATDecl2r,1,testf)) begin
+    if (VATDecl2r.StartDate!=sdate) then begin
+      testf = false;
+    end else begin
+      if (VATDecl2r.EndDate==edate and VATDecl2r.Version==0) then begin
+        res = true;
+        testf = false;
+      end;
+    end;
+  end;
+
+  HasVersionForPeriod = res;
+  return;
+end;
+
+global
+function LongInt VATDeclVcRecordCheck(record VATDeclVc VATDr,record VATDeclVc VATD2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  Boolean gentrans;
+  string 255 tstr;
+  record VATDeclVc lVATDr;
+  LongInt vatdeclnr;
+  Integer insertmode,updatemode;
+
+  res = 0;
+  if (blank(VATDr.Code)) then begin
+    GetNextVATDeclNr(tstr);
+    lVATDr.Code = tstr;
+    if (ReadFirstMain(lVATDr,1,true)) then begin
+      RecordCheckError(1547," " & tstr,-1,"Code");      
+      res = -1;
+      goto LVATDeclVcRecordCheck;
+    end;
+    VATDr.Code = tstr;
+    vatdeclnr = NextSerNr("VATDeclVc",VATDr.TransDate,-1,false,"");
+    if (StringToLongInt(VATDr.Code)<vatdeclnr) then begin
+      VATDr.Code = vatdeclnr;
+    end;    
+  end;  
+  lVATDr.Code = tstr;
+  if (ReadFirstMain(lVATDr,1,true)) then begin
+    RecordCheckError(1547," " & tstr,-1,"Code");      
+    res = -1;
+    goto LVATDeclVcRecordCheck;
+  end;
+  if (blank(VATDr.Code)) then begin
+    RecordCheckError(1058,"",-1,"Code");      
+    res = -1; 
+    goto LVATDeclVcRecordCheck;
+  end;
+  if (SerNrTestVATDeclVc(StringToLongInt(VATDr.Code),VATDr.TransDate,gentrans)==false) then begin
+    RecordCheckError(1557,"",-1,"Code");      
+    res = -1; 
+    goto LVATDeclVcRecordCheck;
+  end;
+  if (HasLocalization("POL")) then begin
+    insertmode = 1;
+    updatemode = 2;
+    if (VATDr.Version==0) then begin
+      if ((stat==insertmode) or (stat==updatemode and (VATDr.Version!=VATD2r.Version or VATDr.StartDate!=VATD2r.StartDate or VATDr.EndDate!=VATD2r.EndDate))) then begin
+        if (HasVersionForPeriod(VATDr.StartDate,VATDr.EndDate)) then begin
+          RecordCheckError(42670,"",-1,"StartDate");
+          res = -1;
+          goto LVATDeclVcRecordCheck;
+        end;
+      end;
+    end;
+  end;
+LVATDeclVcRecordCheck:;
+  VATDeclVcRecordCheck = res;
+  return;
+end;
+
+global
+function LongInt VATDeclVcRecordRemoveTest(record VATDeclVc VATDr,record VATDeclVc VATD2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  record DBLockBlock DBLb;
+
+  if (VATDr.TaxServStatus!=0) then begin
+    if (stat>0) then begin
+      MessageBox(1560,"");
+    end;
+    res = 0;
+    goto LVATDeclVcRecordRemoveTest;
+  end;
+  if (VATDr.OKFlag!=0) then begin
+    BlockLoadLocking(DBLb);
+    if (VATDr.TransDate>DBLb.DeleteBeforeDate) then begin
+      if (stat>0) then begin
+        MessageBox(1560,"");
+      end;
+      res = 0;
+      goto LVATDeclVcRecordRemoveTest;
+    end;
+  end;
+LVATDeclVcRecordRemoveTest:;
+  VATDeclVcRecordRemoveTest = res;
+  return;
+end;

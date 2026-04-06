@@ -1,0 +1,147 @@
+global
+function Boolean ShowStateTaxWindow()
+begin
+  Boolean res;
+  record StateTaxBlock StateTaxb;
+  row StateTaxBlock StateTaxbrw;
+  Integer rwcnt;
+
+  if (HasLocalization("USA")==false) then begin
+    goto LShowStateTaxWindow_out;
+  end;
+
+  if (IsLoggedIn==false) then begin
+    goto LShowStateTaxWindow_out;
+  end;
+
+  if (SettingUpNewDatabase) then begin
+    goto LShowStateTaxWindow_out;
+  end;
+
+  BlockLoad(StateTaxb);
+  rwcnt = MatRowCnt(StateTaxb);
+  MatRowGet(StateTaxb,rwcnt-1,StateTaxbrw);
+  if (StateTaxbrw.Code!="1") then begin
+    res = true;
+  end;
+
+LShowStateTaxWindow_out:;
+  ShowStateTaxWindow = res;
+  return;
+end;
+
+function Boolean VATCodeExists(string vatcode,var string errormsg)
+begin
+  Boolean res;
+  record VATCodeBlock VATCodeb;
+  row VATCodeBlock VATCbrw;
+  Integer i,rwcnt;
+
+  res = true;
+  BlockLoad(VATCodeb);
+  rwcnt = MatRowCnt(VATCodeb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(VATCodeb,i,VATCbrw);
+    if (VATCbrw.VATCode==vatcode) then begin
+      errormsg = USetStr(42300) & " " & vatcode;
+      res = false;
+      goto LVATCodeExists;
+    end;
+  end;
+  
+LVATCodeExists:;
+  VATCodeExists = res;
+  return
+end;
+
+updating procedure StateTaxApply(row StateTaxBlock StateTaxbrw)
+begin
+  Boolean res;
+  record TaxTemplateVc TaxTemplater;
+  row TaxTemplateVc TaxTemplaterw;
+  record VATCodeBlock VATCodeb;
+  row VATCodeBlock VATCbrw;
+  record CYBlock CYb;
+  Integer rwcnt;
+
+  BlockLoad(VATCodeb);
+  BlockLoad(CYb);
+  
+  CYb.Addr3 = StateTaxbrw.Code;
+  BlockStore(CYb);
+  rwcnt = MatRowCnt(VATCodeb);
+  ClearRow(VATCodeb,VATCbrw,1);
+  VATCbrw.VATCode = StateTaxbrw.Code;
+  VATCbrw.InclinTotal = kTaxTransInclinTotalYes;
+  VATCbrw.VATRateTier = StringFromStringSet(633,"VATRateTierBasic");
+  VATCbrw.ExVatpr = StateTaxbrw.Tax;
+  VATCbrw.Comment = StateTaxbrw.Description;
+  VATCbrw.SalesVATAcc = StateTaxbrw.SalesVATAcc;
+  VATCbrw.PurchVATAcc = StateTaxbrw.PurchVATAcc;
+  MatRowInsert(VATCodeb,rwcnt,VATCbrw);
+  BlockStore(VATCodeb);
+      
+  TaxTemplater.Code = "DF";
+  TaxTemplaterw.VATCode = StateTaxbrw.Code;
+  TaxTemplaterw.VATRate = StateTaxbrw.Tax;
+  TaxTemplaterw.Comment = StateTaxbrw.Description;
+  if (ReadFirstMain(TaxTemplater,1,true)) then begin
+    rwcnt = MatRowCnt(TaxTemplater);
+    MatRowInsert(TaxTemplater,rwcnt,TaxTemplaterw);
+  end else begin
+    RecordNew(TaxTemplater);
+    TaxTemplater.Code = "DF";
+    TaxTemplater.Comment = "Default Tax Template";
+    MatRowInsert(TaxTemplater,0,TaxTemplaterw);
+  end;  
+  RecordStore(TaxTemplater,true);
+  
+  return;
+end;
+
+global
+updating procedure StateTaxApplyDsm()
+begin
+  record StateTaxBlock StateTaxb;
+  row StateTaxBlock StateTaxbrw;
+  record RcVc RepSpec;
+  Integer wn;
+  Integer i,rwcnt;
+  string 255 errormsg;
+
+  wn = CurWindow;
+  DeSelectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+  
+  if (blank(RepSpec.f1)) then begin
+    errormsg = USetStr(42301);
+    goto LStateTaxApplyDsm;
+  end;
+  
+  BlockLoad(StateTaxb);
+
+  rwcnt = MatRowCnt(StateTaxb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(StateTaxb,i,StateTaxbrw);
+    if (StateTaxbrw.Description==RepSpec.f1) then begin 
+      if (VATCodeExists(StateTaxbrw.Code,errormsg)==false) then begin goto LStateTaxApplyDsm; end;
+      StateTaxApply(StateTaxbrw);
+    end;
+  end;
+
+LStateTaxApplyDsm:;
+
+  if (nonblank(errormsg)) then begin
+    MessageBox(errormsg,errormsg);
+  end else begin
+    CheckmarkBox(42302,"");
+    StateTaxbrw.Code = "1";
+    StateTaxbrw.Tax = blankval;
+    StateTaxbrw.Description = "";
+    MatRowInsert(StateTaxb,rwcnt,StateTaxbrw);
+    BlockStore(StateTaxb);
+    CloseWindow(wn);
+  end;
+  
+  return;
+end;

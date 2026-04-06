@@ -1,0 +1,303 @@
+external function val MulWithRateToBase2(var string,Date,val,roundmode);
+
+function Boolean FindHRMCOChangeInPeriod(LongInt conr,var record HRMCOChangeVc resHRMCOCr,record RcVc RepSpec)
+begin
+  Boolean res,found,testf;
+  record HRMCOChangeVc HRMCOCr;
+  record HRMCOVc HRMCOr;
+  
+  RecordClear(resHRMCOCr);
+  found = true;
+  HRMCOCr.TransDate = RepSpec.sStartDate;
+  HRMCOCr.HRMCOSerNr = conr;
+  while (LoopKey("HRMCONrDate",HRMCOCr,1,found)) begin
+    if (found) then begin
+      testf = true;
+      if (HRMCOCr.TransDate>RepSpec.d1) then begin
+        testf = false;
+      end;
+      if (testf) then begin
+        HRMCOr.SerNr = conr;
+        ReadFirstMain(HRMCOr,1,true);
+        if (HRMCOr.SerNr!=HRMCOCr.HRMCOSerNr) then begin testf = false; end;
+        if (HRMCOCr.OKFlag==0) then begin testf = false; end;
+        if (testf) then begin
+          testf = false;
+          if (nonblank(HRMCOCr.TrialEndDate) and HRMCOCr.TrialEndDate!=HRMCOr.TrialEndDate) then begin testf = true; end;
+          if (nonblank(HRMCOCr.Class) and HRMCOCr.Class!=HRMCOr.Class) then begin testf = true; end;
+          if (nonblank(HRMCOCr.JobTitle) and HRMCOCr.JobTitle!=HRMCOr.JobTitle) then begin testf = true; end;
+          if (nonblank(HRMCOCr.Comment) and HRMCOCr.Comment!=HRMCOr.Comment) then begin testf = true; end;
+          if (nonblank(HRMCOCr.SalaryType) and HRMCOCr.SalaryType!=HRMCOr.SalaryType) then begin testf = true; end;
+          if (nonblank(HRMCOCr.GrossSalary) and HRMCOCr.GrossSalary!=HRMCOr.GrossSalary) then begin testf = true; end;
+          if (nonblank(HRMCOCr.CurncyCode) and HRMCOCr.CurncyCode!=HRMCOr.CurncyCode) then begin testf = true; end;
+          if (nonblank(HRMCOCr.DepCode) and HRMCOCr.DepCode!=HRMCOr.DepCode) then begin testf = true; end;
+          if (nonblank(HRMCOCr.LeaveScheme) and HRMCOCr.LeaveScheme!=HRMCOr.LeaveScheme) then begin testf = true; end;
+          if (testf) then begin
+            resHRMCOCr.TrialEndDate = HRMCOCr.TrialEndDate;
+            resHRMCOCr.Class = HRMCOCr.Class;
+            resHRMCOCr.JobTitle = HRMCOCr.JobTitle;
+            resHRMCOCr.Comment = HRMCOCr.Comment;
+            resHRMCOCr.SalaryType = HRMCOCr.SalaryType;
+            resHRMCOCr.GrossSalary = HRMCOCr.GrossSalary;
+            resHRMCOCr.CurncyCode = HRMCOCr.CurncyCode;
+            resHRMCOCr.DepCode = HRMCOCr.DepCode;
+            resHRMCOCr.LeaveScheme = HRMCOCr.LeaveScheme;
+          end;
+          RecordCopy(resHRMCOCr,HRMCOCr);
+          res = true;
+        end;
+      end;
+    end;
+  end;
+  FindHRMCOChangeInPeriod = res;
+  return;
+end;
+
+function string 60 GetCompName(record CompaniesBlock Compb,string compcode)
+begin
+  string 60 res;
+  row CompaniesBlock Compbrw;
+  Integer i,rwcnt;
+
+  rwcnt = MatRowCnt(Compb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(Compb,i,Compbrw);
+    if (Compbrw.CompCode==compcode) then begin
+      res = Compbrw.CompName;
+      goto LGetCompName;
+    end;
+  end;
+LGetCompName:;
+  GetCompName = res;
+  return;
+end;
+
+procedure GetContractAmounts(var vector val vAmount,var vector val vNetAmount,var vector Integer vContractCount,record RcVc RepSpec)
+begin
+  record HRMCOChangeVc HRMCOCr;
+  record HRMCOVc HRMCOr;
+  Boolean hrmcocf,testf;
+  Integer multiply;
+  val gross,net;
+
+  while (LoopMain(HRMCOr,1,true)) begin
+    testf = true;
+    if (HRMCOr.StartDate>RepSpec.d1) then begin testf = false; end;
+    if ((nonblankdate(HRMCOr.EndDate)) and (HRMCOr.EndDate<RepSpec.d1)) then begin testf = false; end;
+    if (HRMCOr.OKFlag==0) then begin testf = false; end;
+    if (HRMCOr.TerminatedFlag==1) then begin testf = false; end;
+    if (testf) then begin
+      hrmcocf = FindHRMCOChangeInPeriod(HRMCOr.SerNr,HRMCOCr,RepSpec);
+      if (hrmcocf) then begin
+        LGetContractAmounts:;
+        if (HRMCOCr.GrossSalary>0) then begin
+          switch (HRMCOCr.SalaryType) begin
+            case kHRMCOSalaryTypeMonthly:     multiply = 12;
+            case kHRMCOSalaryTypeYearly:      multiply = 1;
+            case kHRMCOSalaryTypeWeekly:      multiply = 52;
+            case kHRMCOSalaryTypeFortnightly: multiply = 26;
+          end;
+          gross = (HRMCOCr.GrossSalary*multiply);
+          if (RepSpec.flags[1]==1) then begin
+            gross = gross/12;
+          end; 
+          if (blank(HRMCOCr.CurncyCode)) then begin
+            HRMCOCr.CurncyCode = HRMCOr.CurncyCode;
+          end;
+          vAmount[CurrentCompany & ":" & HRMCOCr.CurncyCode] = vAmount[CurrentCompany & ":" & HRMCOCr.CurncyCode] + gross;
+          if (HRMCOCr.TaxLoad>0)then begin
+            net = gross - (gross * (HRMCOCr.TaxLoad/100));
+          end else begin
+            net = gross - (gross * (HRMCOr.TaxLoad/100));
+          end;
+          vNetAmount[CurrentCompany & ":" & HRMCOCr.CurncyCode] = vNetAmount[CurrentCompany & ":" & HRMCOCr.CurncyCode] + net;
+          vContractCount[CurrentCompany & ":" & HRMCOCr.CurncyCode] = vContractCount[CurrentCompany & ":" & HRMCOCr.CurncyCode] + 1;
+        end else begin
+          HRMCOCr.GrossSalary = HRMCOr.GrossSalary;
+          goto LGetContractAmounts;
+        end;
+      end else begin
+        if (HRMCOr.GrossSalary>0) then begin
+           switch (HRMCOr.SalaryType) begin
+            case kHRMCOSalaryTypeMonthly:     multiply = 12;
+            case kHRMCOSalaryTypeYearly:      multiply = 1;
+            case kHRMCOSalaryTypeWeekly:      multiply = 52;
+            case kHRMCOSalaryTypeFortnightly: multiply = 26;
+          end;
+          gross = (HRMCOr.GrossSalary*multiply);
+          if (RepSpec.flags[1]==1) then begin
+            gross = gross/12;
+          end; 
+          net = gross - (gross * (HRMCOr.TaxLoad/100));
+          vAmount[CurrentCompany & ":" & HRMCOr.CurncyCode] = vAmount[CurrentCompany & ":" & HRMCOr.CurncyCode] + gross;
+          vNetAmount[CurrentCompany & ":" & HRMCOr.CurncyCode] = vNetAmount[CurrentCompany & ":" & HRMCOr.CurncyCode] + net ;
+          vContractCount[CurrentCompany & ":" & HRMCOr.CurncyCode] = vContractCount[CurrentCompany & ":" & HRMCOr.CurncyCode] + 1;
+        end;
+      end;
+    end;
+  end;
+  return;
+end;
+
+global
+procedure PayrollSummaryRn(record RcVc RepSpec)
+begin
+  Integer rw,oldcomp,i,rwcnt;
+  string 255 tstr,compcode,curcode,taxload;
+  record CompaniesBlock Compb;
+  row CompaniesBlock Compbrw;
+  Boolean testf;
+  vector val vAmount,vNetAmount;
+  vector Integer vContractCount;
+  vector val vCurTotal,vCurNetTotal;
+  array string 255 aAmount,aCurTotal,aNetAmount,aCurNetTotal;
+  val v,vtot,vnet,vnettot;
+  record BaseCurBlock BCb;
+  Boolean firstf;
+  LongInt pos,pos1;
+
+  StartReportJob(USetStr(43570));
+  Header(rw,USetStr(43572) & ": " & RepSpec.d1,1); rw = rw + 1;
+  EndHeader;
+  
+  SetRepCol(2,150);
+  SetRepCol(3,200);
+  SetRepCol(4,280);
+  SetRepCol(5,370);
+  SetRepCol(6,470);
+
+  StartFormat(15);
+  OutString(0,0,"Company",false);
+  OutString(2,0,"Contracts",true);
+  OutString(3,0,"Gross Worth",true);
+  OutString(240,0,"Net Worth",true);
+  OutString(4,0,"Currency",true);
+  OutString(5,0,"Gross Worth in Base 2",true);
+  OutString(440,0,"Net Worth in Base 2",true);
+  OutString(1,0,"Currency",true);
+  EndFormat;
+  Black_Divider(0,1);
+  
+  BlockLoad(Compb);
+
+  if (RepSpec.flags[0]) then begin
+    oldcomp = CurrentCompany;  
+    rwcnt = MatRowCnt(Compb);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(Compb,i,Compbrw);
+      if (blank(Compbrw.TCPIP)) then begin
+        if (SetCompanyCode(Compbrw.CompCode,false)) then begin
+          GetContractAmounts(vAmount,vNetAmount,vContractCount,RepSpec);
+        end;
+      end;
+    end;
+    ResetCompany(oldcomp);
+  end else begin
+    GetContractAmounts(vAmount,vNetAmount,vContractCount,RepSpec);
+  end;
+
+  if (RepSpec.flags[0]) then begin
+    GetVectorTags(vAmount,aAmount);
+    SortStringArray(aAmount);
+    GetVectorTags(vNetAmount,aNetAmount);
+    SortStringArray(aNetAmount);
+    for (i=0;i<aAmount.length;i=i+1) begin
+      pos = 0;
+      GetNextSubString(aAmount[i],pos,":",compcode);
+      GetNextSubString(aAmount[i],pos,":",curcode);
+      BlockLoad(BCb);
+      StartFormat(15);
+      OutString(0,0,GetCompName(Compb,compcode),false);
+      OutString(2,0,vContractCount[aAmount[i]],true);
+      OutVal(3,0,vAmount[aAmount[i]],M4Val,true);
+      pos1 = 0;
+      GetNextSubString(aNetAmount[i],pos1,":",compcode);
+      GetNextSubString(aNetAmount[i],pos1,":",curcode);
+      OutVal(240,0,vNetAmount[aNetAmount[i]],M4Val,true);
+      OutString(4,0,curcode,true);
+      v = MulWithRateToBase2(curcode,CurrentDate,vAmount[aAmount[i]],DefaultCurRoundOff);
+      vnet = MulWithRateToBase2(curcode,CurrentDate,vNetAmount[aNetAmount[i]],DefaultCurRoundOff);
+      OutVal(5,0,v,M4Val,true);
+      OutVal(440,0,vnet,M4Val,true);
+      OutString(1,0,BCb.BaseCur2,true);
+      vtot = vtot + v;
+      vnettot = vnettot + vnet;
+      if (curcode!=BCb.BaseCur2) then begin
+        vCurTotal[curcode] = vCurTotal[curcode] + vAmount[aAmount[i]];
+        vCurNetTotal[curcode] = vCurNetTotal[curcode] + vNetAmount[aNetAmount[i]];
+      end;
+      EndFormat;
+    end;
+  end else begin
+    GetVectorTags(vAmount,aAmount);
+    SortStringArray(aAmount);
+    GetVectorTags(vNetAmount,aNetAmount);
+    SortStringArray(aNetAmount);
+    for (i=0;i<aAmount.length;i=i+1) begin
+      pos = 0;
+      GetNextSubString(aAmount[i],pos,":",compcode);
+      GetNextSubString(aAmount[i],pos,":",curcode);
+      BlockLoad(BCb);
+      BlockLoad(Compb);
+      StartFormat(15);
+      if (firstf==false) then begin
+        OutString(0,0,GetCompName(Compb,compcode),false);
+        firstf = true;
+      end;
+      OutString(2,0,vContractCount[aAmount[i]],true);
+      OutVal(3,0,vAmount[aAmount[i]],M4Val,true);
+      pos = 0;
+      GetNextSubString(aNetAmount[i],pos,":",compcode);
+      GetNextSubString(aNetAmount[i],pos,":",curcode);
+      OutVal(240,0,vNetAmount[aNetAmount[i]],M4Val,true);
+      OutString(4,0,curcode,true);
+      v = MulWithRateToBase2(curcode,CurrentDate,vAmount[aAmount[i]],DefaultCurRoundOff);
+      vnet = MulWithRateToBase2(curcode,CurrentDate,vNetAmount[aNetAmount[i]],DefaultCurRoundOff);
+      OutVal(5,0,v,M4Val,true);
+      OutVal(440,0,vnet,M4Val,true);
+      OutString(1,0,BCb.BaseCur2,true);
+      vtot = vtot + v;
+      vnettot = vnettot + vnet;
+      if (curcode!=BCb.BaseCur2) then begin
+        vCurTotal[curcode] = vCurTotal[curcode] + vAmount[aAmount[i]];
+        vCurNetTotal[curcode] = vCurNetTotal[curcode] + vNetAmount[aNetAmount[i]];
+      end;
+      EndFormat;
+    end;
+  end;
+
+  Black_Divider(0,1);
+  StartFormat(15);
+  OutVal(5,0,vtot,M4Val,true);
+  OutString(1,0,BCb.BaseCur2,true);
+  EndFormat;
+  
+  GetVectorTags(vCurTotal,aCurTotal);
+  SortStringArray(aCurTotal);
+  GetVectorTags(vCurNetTotal,aCurNetTotal);
+  SortStringArray(aCurNetTotal);
+  StartFormat(30);
+  EndFormat;
+  Black_Divider(0,3);
+  StartFormat(15);
+  OutString(0,0,"Currency",false);
+  OutString(2,0,"Gross Total",true);
+  OutString(3,0,"Net Total",true);
+  EndFormat;
+  StartFormat(0);
+  Black_Divider(0,3);
+  EndFormat;
+  for (i=0;i<aCurTotal.length;i=i+1) begin 
+    StartFormat(15);
+    OutString(0,0,aCurTotal[i],false);
+    OutString(2,0,vCurTotal[aCurTotal[i]],true);
+    OutString(3,0,vCurNetTotal[aCurNetTotal[i]],true);
+    EndFormat;
+  end;
+  StartFormat(0);
+  Black_Divider(0,3);
+  EndFormat;
+
+  EndJob;
+  return;
+end;

@@ -1,0 +1,101 @@
+external procedure PasteFromSysList(Integer,Integer);
+remote procedure FillEsterometroArray(var Array string,record RcVc,integer);
+remote updating procedure EsterometroMn(record RcVc);
+
+global
+function Boolean EsterometroFNSClassOnOKWindow(Integer wn)
+begin
+  PasteFromSysList(wn,30);
+  EsterometroFNSClassOnOKWindow = false;
+  return;
+end;
+
+global
+function Boolean EsterometroPosSClassOnOKWindow(Integer wn)
+begin
+  PasteFromSysList(wn,30);
+  EsterometroPosSClassOnOKWindow = false;
+  return;
+end;
+
+global
+function Boolean EsterometroFNSClassOnOpenWindow(Integer wn)
+begin
+  Array string 255 astr;
+  Integer i,mwn;
+  record RcVc RepSpec;
+  
+  mwn = MotherWindow(wn);
+  GetWindowRecord(mwn,RepSpec);
+  FillEsterometroArray(astr,RepSpec,2);
+  for (i=0;i<astr.length;i=i+1) begin
+    SetListString(wn,len(astr[i]),astr[i],false);    
+  end;
+  EsterometroFNSClassOnOpenWindow = false;
+  return;
+end;
+
+global
+function Boolean EsterometroPosSClassOnOpenWindow(Integer wn)
+begin
+  Array string 255 astr;
+  Integer i,mwn;
+  record RcVc RepSpec;
+  
+  mwn = MotherWindow(wn);
+  GetWindowRecord(mwn,RepSpec);
+  FillEsterometroArray(astr,RepSpec,1);
+  for (i=0;i<astr.length;i=i+1) begin
+    SetListString(wn,len(astr[i]),astr[i],false);    
+  end;
+  EsterometroPosSClassOnOpenWindow = false;
+  return;
+end;
+
+global
+function Boolean EsterometroVClassActiveEditField(Integer wn,string fieldname,Integer fn,Integer wnst,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record RcVc RepSpec;
+
+  res = true;
+  GetWindowRecord(wn,RepSpec);
+  switch (fieldname) begin
+    case "f1":
+      if (RepSpec.flags[2]==0) then begin
+        res = false;
+      end;
+    case "f2":
+      if (RepSpec.flags[2]==0) then begin
+        res = false;
+      end;
+  end;
+  
+  EsterometroVClassActiveEditField = res;
+  return;
+end;
+
+global
+updating function Boolean EsterometroVClassOnOKWindow(Integer wn)
+begin
+  record RcVc RepSpec;
+  Integer mwn;
+  Boolean testf;
+  
+  testf = true;
+  DeselectWindow(wn,false);
+  mwn = MotherWindow(wn);
+  GetWindowRecord(wn,RepSpec);
+  if (RepSpec.flags[2]!=0 and (blank(RepSpec.f1) or blank(RepSpec.f2))) then begin
+    testf = false;
+  end;
+  if (testf) then begin
+    EsterometroMn(RepSpec);
+    CloseWindow(wn);
+  end else begin
+    beep;
+  end;
+
+  EsterometroVClassOnOKWindow = false;
+  return;
+end;

@@ -1,0 +1,47 @@
+global
+procedure INMissingIRRn(record RcVc RepSpec)
+begin
+  record INVc INr;
+  record ITVc ITr;
+  record ItemResourceVc IRr;
+  Boolean foundf,TrHs;
+  Integer i,rwcnt;
+
+  StartReportJob(USetStr(30172));
+  EndHeader;
+  SetRepCol(2,200);
+  StartFormat(15);
+	OutString(0,0,USetStr(9788),false);
+  OutString(2,0,USetStr(9778),false);
+  EndFormat;
+  Black_Divider(0,1);
+
+  TrHs = true;
+  while (LoopMain(INr,1,TrHs)) begin
+    if (TrHs) then begin
+      IRr.ArtCode = INr.Code;
+      foundf = ReadFirstKey("ArtCode",IRr,1,true);
+      if (!foundf and nonblank(INr.Group)) then begin
+        IRr.ITCode = INr.Group;
+        foundf = ReadFirstKey("ITCode",IRr,1,true);
+        ITr.Code = INr.Group;
+        ReadFirstMain(ITr,1,true);
+      end;
+      if (foundf) then begin
+        if (nonblankdate(RepSpec.d1) and IRr.StartDate>RepSpec.d1) then begin
+          foundf = false;
+        end;
+      end;
+      if (!foundf) then begin
+        StartFormat(15);
+	      OutString(0,"DblINVc",INr.Code,false);
+        OutString(2,0,INr.Name,false);
+        EndFormat;
+        Gray_Divider(0,1);
+      end;
+    end;
+  end;
+
+  EndJob;
+  return;
+end;

@@ -1,0 +1,155 @@
+global
+function Integer AccessDClassSelectSetToPaste(Integer wn,string fieldname)
+begin
+  Integer res,rownr;
+  record AccessVc Accessr;
+  row AccessVc Accessrw;
+  
+  res = -1;
+  GetWindowRecord(wn,Accessr);
+  rownr = WindowActiveRow(wn);
+  switch (fieldname) begin
+    case "AccLevel":
+      res = 1;
+      if (rownr>=0) then begin
+        MatRowGet(Accessr,rownr,Accessrw);
+//        switch (StringSetFromString(465,Accessr.WindowClass)) begin
+        switch (Accessrw.AccType) begin
+          case 1: res = 586;
+          case 6: res = 352;
+          case 9: res = 352;
+        end;
+      end;
+  end;
+  AccessDClassSelectSetToPaste = res;
+  return;
+end;
+
+function string 255 AccessTypeWeightStr(LongInt Type,string Name)
+begin
+  string 255 res;
+
+  if (Name=="") then begin
+    res = "00";
+  end else begin
+    switch (Type) begin
+      case kAccessTypeModule: res = "01";
+      case kAccessTypeRegister: res = "02";
+      case kAccessTypeSetting: res = "03";
+      case kAccessTypeReport: res = "04";
+      case kAccessTypeDocument: res = "05";
+      case kAccessTypeExport: res = "06";
+      case kAccessTypeImport: res = "07";
+      case kAccessTypeMaintenance: res = "08";
+      case kAccessTypeAction: res = "09";
+      case kAccessTypeDisplayGroup: res = "10";
+      // case kAccessTypeSpecial: res = "99";
+      otherwise res = "00";
+    end;
+  end;
+
+  AccessTypeWeightStr = res;
+end;
+
+function string 255 AccessLevelWeightStr(LongInt Type)
+begin
+  string 255 res;
+
+  switch (Type) begin
+    case kAccessLevelFull: res = "00";
+    case kAccessLevelReadNew: res = "01";
+    case kAccessLevelBrowseNew: res = "02";
+    case kAccessLevelReadOnly: res = "03";
+    case kAccessLevelBrowse: res = "04";
+    case kAccessLevelDisableBrowse: res = "05";
+    case kAccessLevelReportNoDD: res = "06";
+    case kAccessLevelNone: res = "07";
+    otherwise res = "99";
+  end;
+
+  AccessLevelWeightStr = res;
+end;
+
+function string 255 AccessRowWeightStr(row AccessVc Accessrw)
+begin
+  string 255 res;
+
+  res = res & AccessTypeWeightStr(Accessrw.AccType,Accessrw.AccName) & ":";
+  res = res & AccessLevelWeightStr(Accessrw.AccLevel) & ":";
+  res = res & Accessrw.AccName;
+
+  AccessRowWeightStr = res;
+end;
+
+global
+function LongInt AccessDClassCompRows(row AccessVc Accessrw,row AccessVc Access2rw)
+begin
+  LongInt res;
+  string 255 ws1,ws2;
+
+  ws1 = AccessRowWeightStr(Accessrw);
+  ws2 = AccessRowWeightStr(Access2rw);
+
+  res = 0;
+
+  if (ws1>ws2) then begin
+    res = 1;
+  end;
+
+  if (ws1<ws2) then begin
+    res = -1;
+  end;
+
+  AccessDClassCompRows = res;
+end;
+
+procedure WarnFirstDuplicateLine(Integer wn,record AccessVc Accessr)
+begin
+  row AccessVc Accessrw,Access2rw;
+  LongInt i,j,rwcnt;
+
+  rwcnt = MatRowCnt(Accessr);
+  for (i = 0; i<rwcnt; i = i + 1) begin
+    MatRowGet(Accessr,i,Accessrw);
+    for (j = i + 1; j<rwcnt; j = j + j) begin
+      MatRowGet(Accessr,j,Access2rw);
+      if ((Accessrw.AccType==Access2rw.AccType) and (Accessrw.AccName==Access2rw.AccName)) then begin
+        WindowFieldGoto(wn,Accessr,j,"AccType",false);
+        Beep;
+        goto LWarnFirstDuplicateLine_out;
+      end;
+    end;
+  end;
+LWarnFirstDuplicateLine_out:;
+end;
+
+global
+updating procedure AccessDClassSortSm()
+begin
+  record AccessVc Accessr;
+  row AccessVc Accessrw,Access2rw;
+  LongInt i;
+
+  GetWindowRecord(CurWindow,Accessr);
+
+  MatRowGet(Accessr,0,Accessrw);
+  SortRowsWithFunction(Accessr,"AccessDClassCompRows",false);
+
+  if (Accessrw.AccType==kAccessTypeModule) then begin
+    if (Accessrw.AccLevel==kAccessLevelFull) then begin
+      MatRowInsert(Accessr,0,Accessrw);
+      for (i = 1; i<MatRowCnt(Accessr); i = i + 1) begin
+        MatRowGet(Accessr,i,Access2rw)
+        if (CompareRows(Accessr,Accessrw,Access2rw)==true) then begin
+          MatRowDelete(Accessr,i);
+          goto LAccessDClassSortSm_deleted;
+        end;
+      end;
+    end;
+  end;
+
+LAccessDClassSortSm_deleted:;
+  PutWindowRecord(CurWindow,Accessr);
+
+  WarnFirstDuplicateLine(CurWindow,Accessr);
+end;

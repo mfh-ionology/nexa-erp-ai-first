@@ -1,0 +1,92 @@
+external function Boolean SetInSet2(string,string);
+
+global
+updating function LongInt RoutingVcRecordCheck(var record RoutingVc Router,record RoutingVc Route2r,LongInt stat,LongInt check)
+begin
+  LongInt res;
+  Integer i,j,rwc,rwcnt;
+  row RoutingVc Routerw;
+  Integer insertmode,updatemode;
+  record MachineGroupsBlock MachineGroupsBl;
+  row MachineGroupsBlock MachineGroupsBlrw;
+
+  res = 0;
+  insertmode = 1;//Rs_insert
+  updatemode = 2;//Rs_update
+
+  if (blank(Router.Code)) then begin
+    RecordCheckError(1959,"",-1,"Code");
+    res = -1;
+    goto LRoutingVcRecordCheck;
+  end;
+  rwcnt = MatRowCnt(Router);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(Router,i,Routerw);
+    if (Routerw.Sequence<=0) then begin
+      RecordCheckError(20775,"",i,"Sequence");      
+      res = -1; 
+      goto LRoutingVcRecordCheck;
+    end;
+/*    
+    if (Routerw.SubSequence<=0) then begin
+      RecordCheckError(20775,"",i,"SubSequence");      
+      res = -1; 
+      goto LRoutingVcRecordCheck;
+    end;
+*/    
+    BlockLoad(MachineGroupsBl);
+    rwc = MatRowCnt(MachineGroupsBl);
+    for (j=0;j<rwc;j=j+1) begin
+      MatRowGet(MachineGroupsBl,j,MachineGroupsBlrw);
+      if (MachineGroupsBlrw.Code == Routerw.MachineGroup) then begin
+        if (SetInSet2(Routerw.Machine,MachineGroupsBlrw.DefStr)==false) then begin
+          RecordCheckError(1750,"",i,"Machine");
+          res = -1;
+          goto LRoutingVcRecordCheck;
+        end;
+      end;
+    end;
+  end;
+LRoutingVcRecordCheck:;  
+  RoutingVcRecordCheck = res;
+  return;
+end;
+
+global
+function LongInt RoutingVcRecordUpdate(var record RoutingVc Router,record RoutingVc Route2r,LongInt stat,LongInt check)
+begin
+  LongInt res;
+  
+  Router.LastChangeDate= CurrentDate;
+  if BlankDate(Router.RegDate) then begin
+    Router.RegDate = CurrentDate;  
+  end;
+  RoutingVcRecordUpdate = res;
+  return;
+end;
+
+global
+function LongInt RoutingVcRecordSave(var record RoutingVc Router,record RoutingVc Route2r,LongInt stat,LongInt check)
+begin
+  LongInt res;
+  
+  Router.LastChangeDate = CurrentDate;
+  if BlankDate(Router.RegDate) then begin
+    Router.RegDate = CurrentDate;  
+  end;
+  RoutingVcRecordSave = res;
+  return;
+end;
+
+
+global
+function LongInt RoutingVcRecordDefaults(var record RoutingVc Router,record RoutingVc Route2r,LongInt stat,LongInt check)
+begin
+  LongInt res;
+  
+  Router.RegDate = CurrentDate;
+  RoutingVcRecordDefaults = res;
+  return;
+end;
+
+

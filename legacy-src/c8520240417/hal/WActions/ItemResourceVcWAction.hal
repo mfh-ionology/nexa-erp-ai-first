@@ -1,0 +1,57 @@
+
+function Boolean ItemResourceDClassArtCodeEFAfter(Integer wn,Boolean changedf)
+begin
+  Boolean res;
+  record ItemResourceVc IRr;
+  record INVc INr;
+  record ITVc ITr;
+  
+  if (changedf) then begin
+    res = true;
+    GetWindowRecord(wn,IRr);
+    INr.Code = IRr.ArtCode;
+    if (ReadFirstMain(INr,1,true)) then begin
+      IRr.Name = INr.Name;
+      ITr.Code = INr.Group;
+      if (ReadFirstMain(ITr,1,true)) then begin
+        IRr.ITName = ITr.Comment;
+      end;
+      PutWindowRecord(wn,IRr);        
+    end;
+  end;
+  ItemResourceDClassArtCodeEFAfter = res;
+  return;
+end;
+
+function Boolean ItemResourceDClassITCodeEFAfter(Integer wn,Boolean changedf)
+begin
+  Boolean res;
+  record ItemResourceVc IRr;
+  record ITVc ITr;
+  
+  if (changedf) then begin
+    res = true;
+    GetWindowRecord(wn,IRr);
+    ITr.Code = IRr.ITCode;
+    if (ReadFirstMain(ITr,1,true)) then begin
+      IRr.ITName = ITr.Comment;
+      IRr.ITCode = ITr.Code;
+      PutWindowRecord(wn,IRr);        
+    end;
+  end;
+  ItemResourceDClassITCodeEFAfter = res;
+  return;
+end;
+
+global
+function Boolean ItemResourceDClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
+begin
+  Boolean res;
+
+  switch (fieldname) begin
+    case "ArtCode": res = ItemResourceDClassArtCodeEFAfter(wn,changed);
+    case "ITCode": res = ItemResourceDClassITCodeEFAfter(wn,changed);
+  end;
+  ItemResourceDClassAfterEditField = res;
+  return;
+end;

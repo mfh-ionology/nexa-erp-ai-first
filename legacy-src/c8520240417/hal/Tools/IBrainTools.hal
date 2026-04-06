@@ -1,0 +1,231 @@
+external procedure LogAreaToFile(string,area);
+
+global
+function Boolean CheckIBrainConf(record IBrainSettingsBlock IBrainb,var LongInt err)
+begin
+  Boolean res;
+
+  res = true;
+
+  if (blank(IBrainb.Secret)) then begin
+    res = false;
+    err = 43001;
+    goto LCheckIBrainConf;
+  end;
+  if (blank(IBrainb.AppleShipTo)) then begin
+    res = false;
+    err = 43002;
+    goto LCheckIBrainConf;
+  end;
+
+LCheckIBrainConf:;
+  CheckIBrainConf = res;
+  return;
+end;
+
+global
+procedure IBrainLog(string filename,area logarea)
+begin
+  record IBrainSettingsBlock IBrainb;
+  string 255 folder;
+
+  BlockLoad(IBrainb);
+  if (IBrainb.LogCommunication==0) then begin goto LIBrainLog; end;
+
+  folder = "iBrainLogs";
+  if (DirExists(folder)==false) then begin
+    CreateFolder(folder);
+  end;
+  LogAreaToFile(folder & "/" & filename,logarea);
+LIBrainLog:;
+  return;
+end;
+
+global
+function string 255 IBrainAPIURL()
+begin
+  string 255 res;
+
+  res = "api.ibrain.com.mx";
+
+  IBrainAPIURL = res;
+  return;
+end;
+
+global
+function string 255 IBrainRequestHeaders(record IBrainSettingsBlock IBrainb)
+begin
+  string 255 res;
+
+  res = "accept: application/json" & chr(13) & chr(10);
+  res = res & "iBrain-Secret: " & IBrainb.Secret & chr(13) & chr(10);
+  res = res & "Apple-ShipTo: "  & IBrainb.AppleShipTo & chr(13) & chr(10);
+
+  IBrainRequestHeaders = res;
+  return;
+end;
+
+global
+updating procedure StoreLastSVONr(string suffix,LongInt LastSVONr)
+begin
+  record IBrainSerBlock IBrainSerb;
+  row IBrainSerBlock IBrainSerbrw;
+  Integer rwcnt,i;
+
+  BlockLoad(IBrainSerb);
+  rwcnt = MatRowCnt(IBrainSerb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(IBrainSerb,i,IBrainSerbrw);
+    if (IBrainSerbrw.TSerSuffix==suffix) then begin 
+      IBrainSerbrw.LastSVONr = LastSVONr;
+      MatRowPut(IBrainSerb,i,IBrainSerbrw);
+      BlockStore(IBrainSerb);
+      goto LStoreLastSVONr;
+    end;
+  end;
+LStoreLastSVONr:;
+  return;
+end;
+
+global
+function Boolean IBrainServiceOrderExists(string custordnr)
+begin
+  Boolean res;
+  record SVOVc SVOr;
+  
+  res = false;
+
+  SVOr.CustOrdNr = custordnr;
+  if (ReadFirstKey("CustOrdNr",SVOr,1,true)) then begin
+    res = true;
+  end;
+
+  IBrainServiceOrderExists = res;
+  return;
+end;
+
+global
+function Boolean IBrainCustExists(var record CUVc CUr,string custname,string email,string alternativeEmail,string phone,string additionalPhone)
+begin
+  Boolean res;
+
+  CUr.Name = custname;
+  res = ReadFirstKey("Name",CUr,1,true);
+  if (res==false) then begin
+    CUr.eMail = email;
+    res = ReadFirstKey("eMail",CUr,1,true);
+  end;
+  if (res==false) then begin
+    CUr.eMail = alternativeEmail;
+    res = ReadFirstKey("eMail",CUr,1,true);
+  end;
+  if (res==false) then begin
+    CUr.Phone = phone;
+    res = ReadFirstKey("Phone",CUr,1,true);
+  end;
+  if (res==false) then begin
+    CUr.Phone = additionalPhone;
+    res = ReadFirstKey("Phone",CUr,1,true);
+  end;
+
+  IBrainCustExists = res;
+  return;
+end;
+
+global
+updating function Boolean CreateIBrainCust(var record CUVc CUr,area areply)
+begin
+  Boolean res;
+  json js;
+  string 255 node;
+
+  js = ParseJSONArea(areply);
+  node = "client";
+
+  RecordNew(CUr);
+  CUr.Name      = JSONGet(js,node & "/name");
+  CUr.InvAddr0  = JSONGet(js,node & "/address");
+  CUr.InvAddr2  = JSONGet(js,node & "/city");
+  CUr.InvAddr3  = JSONGet(js,node & "/countryId");
+  CUr.InvAddr4  = JSONGet(js,node & "/zipCode");
+  CUr.Phone     = JSONGet(js,node & "/phone");
+  CUr.AltPhone  = JSONGet(js,node & "/additionalPhone");
+  CUr.eMail     = JSONGet(js,node & "/email");
+  res = RecordStore(CUr,true);
+
+  CreateIBrainCust = res;
+  return;
+end;
+
+global
+procedure ParseServiceOrderDateTime(var Date svodate,var Time svotime,string datetime)
+begin
+  string 255 datestr,timestr;
+  string 255 year,month,day;
+  LongInt pos;
+
+  datestr = Left(datetime,10);
+  timestr = Mid(datetime,11,8);
+  
+  // It's done like this because primitive StringToDate doesn't always work properly
+  pos = 0;
+  GetNextSubString(datestr,pos,"-",year);
+  GetNextSubString(datestr,pos,"-",month);
+  GetNextSubString(datestr,pos,"-",day);
+
+  svodate.year = StringToInt(year);
+  svodate.month = StringToInt(month);
+  svodate.day = StringToInt(day);
+
+  svotime = StringToTime(timestr);
+  return;
+end;
+
+global
+function LongInt IBrainLastSVONr(string aasp,var LongInt tserstart,var string tsersuffix)
+begin
+  LongInt res;
+  record IBrainSerBlock IBrainSerb;
+  row IBrainSerBlock IBrainSerbrw;
+  Integer rwcnt,i;
+
+  BlockLoad(IBrainSerb);
+  rwcnt = MatRowCnt(IBrainSerb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(IBrainSerb,i,IBrainSerbrw);
+    if (IBrainSerbrw.TSerComment==aasp) then begin 
+      res = IBrainSerbrw.LastSVONr;
+      tserstart = IBrainSerbrw.TSerStart;
+      tsersuffix = IBrainSerbrw.TSerSuffix;
+      goto LIBrainLastSVONr;
+    end;
+  end;
+LIBrainLastSVONr:;
+  IBrainLastSVONr = res;
+  return;
+end;
+
+global
+function Boolean IBrainAASPExists(string aasp,var LongInt err)
+begin
+  Boolean res;
+  record IBrainSerBlock IBrainSerb;
+  row IBrainSerBlock IBrainSerbrw;
+  Integer rwcnt,i;
+
+  res = false;
+
+  BlockLoad(IBrainSerb);
+  rwcnt = MatRowCnt(IBrainSerb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(IBrainSerb,i,IBrainSerbrw);
+    if (IBrainSerbrw.TSerComment==aasp) then begin 
+      res = true;
+      goto LIBrainAASPExists;
+    end;
+  end;
+LIBrainAASPExists:;
+  if (!res) then begin err = 43010; end;
+  IBrainAASPExists = res;
+  return;
+end;

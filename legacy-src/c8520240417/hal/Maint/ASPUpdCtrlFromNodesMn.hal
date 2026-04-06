@@ -1,0 +1,70 @@
+external procedure GetCloudServerData(var array record LocalCloudServerVc);
+external procedure CopyLCSDataToRCS(record LocalCloudServerVc,record RemoteCloudServerVc);
+external function string 255 NodeURL(record CloudNodeVc);
+
+
+global
+updating procedure GetDataFromCN(record CloudNodeVc CNr)
+begin
+  string 255 cnurl;
+  record CloudNodeVc OldCNr;
+  LongInt stat,i;
+  array record LocalCloudServerVc lcsarr;
+  record LocalCloudServerVc LCSr;
+  record RemoteCloudServerVc RCSr;
+  record RemoteCloudServerVc OldRCSr;
+  
+  cnurl = NodeURL(CNr);
+  stat = CallService(cnurl).GetCloudServerData(lcsarr);
+  
+  switch (stat) begin
+    case kCallServiceOK:
+      // nothing
+    case kCallServiceCommError:
+      LogText(0,"UCFN: got comm error from: " & CNr.Code);
+      goto LGetDataFromCN;
+    case kCallServiceAuthError:
+      LogText(0,"UCFN: got auth error from: " & CNr.Code);
+      goto LGetDataFromCN;
+    case kCallServiceParamError:
+      LogText(0,"UCFN: got param error from: " & CNr.Code);
+      goto LGetDataFromCN;
+    case kCallServiceNoFuncError:
+      LogText(0,"UCFN: got no service error from: " & CNr.Code);
+      goto LGetDataFromCN;
+  end;
+  
+  LogText(0,"UCFN: got " & lcsarr.length & " records from " & CNr.Code);
+  
+  for (i = 0; i<lcsarr.length; i = i + 1) begin
+    LCSr = lcsarr[i];
+    RCSr.UUID = LCSr.UUID;
+    
+    if (ReadFirstMain(RCSr,1,true)) then begin
+      RecordCopy(OldRCSr,RCSr);
+      CopyLCSDataToRCS(LCSr,RCSr);
+      RCSr.Controller = CNr.Code;
+      RecordUpdate(OldRCSr,RCSr,true);
+    end else begin
+      CopyLCSDataToRCS(LCSr,RCSr);
+      RCSr.UUID = LCSr.UUID;
+      RCSr.Controller = CNr.Code;
+      RecordInsert(RCSr,false);
+    end;
+  end;
+  
+  // add garbage collection for "unfound" RCS records
+  
+LGetDataFromCN:;
+  return;
+end;
+
+global
+updating procedure ASPUpdCtrlFromNodesMn(record RcVc RepSpec)
+begin
+  record CloudNodeVc CNr;
+  
+  while (LoopMain(CNr,1,true)) begin
+    GetDataFromCN(CNr);
+  end;
+end;

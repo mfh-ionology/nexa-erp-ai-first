@@ -1,0 +1,195 @@
+remote function string 255 GetWebHostAndPort3(boolean);
+remote function LongInt SendCaseToAtradiusWebRequest(record IVVc,var string,var LongInt,var integer);
+remote function Boolean DoAtradiusRefreshAccessToken;
+
+function Boolean IsTokenValid(record AtradiusBlock AtradiusBl)
+begin
+  Boolean res;
+
+  res = false;
+  if (blank(AtradiusBl.AuthCode)) then begin
+    res = false;
+    goto LIsTokenValid;
+  end else begin
+    if (nonblank(AtradiusBl.AccessToken)) then begin
+      if (AtradiusBl.AccessTokenExpires>CurrentUnixUTCTime) then begin
+        res = true;
+        goto LIsTokenValid;
+      end else begin
+        if (nonblank(AtradiusBl.RefreshToken)) then begin
+          if ((AtradiusBl.RefreshTokenCreated+AtradiusBl.RefreshTokenLifespan)>CurrentUnixUTCTime) then begin
+            res = DoAtradiusRefreshAccessToken;
+            goto LIsTokenValid;
+          end else begin
+            res = false;
+            goto LIsTokenValid;
+          end;
+        end else begin
+          res = false;
+          goto LIsTokenValid;
+        end;
+      end;
+    end else begin
+      res = false;
+      goto LIsTokenValid;
+    end;
+  end;  
+LIsTokenValid:;
+IsTokenValid = res;
+end;
+
+function LongInt ValidIV(record IVVc IVr)
+begin
+  LongInt err;
+  record CUVc CUr;
+
+  err = 0;
+  CUr.Code = IVr.CustCode;
+  ReadFirstMain(CUr,1,true);
+
+  if (IVr.DebtCollectionFlag==1) then begin err = 43379;  goto LValidIV; end;
+  if (IVr.OKFlag!=1) then begin err = 2072;  goto LValidIV; end;
+  if (IVr.InvType!=kInvoiceTypeNormal) and (IVr.InvType!=kInvoiceTypeNormalSpecialSales) and 
+     (IVr.InvType!=kInvoiceTypeCredit) and (IVr.InvType!=kInvoiceTypeCreditSpecialSales) then begin
+    err = 44021;  goto LValidIV; 
+  end;
+  if (IVr.PayDate>=CurrentDate) then begin  err = 43369;  goto LValidIV; end;
+  if (IVr.SerNr==-1) then begin err = 43375;  goto LValidIV; end;
+  if (blank(IVr.CurncyCode)) then begin  goto LValidIV; end;
+  if (blank(CUr.Name)) then begin err = 43373;  goto LValidIV; end;
+  if (blank(CUr.InvAddr0)) then begin err = 43373;  goto LValidIV; end;
+  if (blank(CUr.InvAddr3)) then begin  err = 43373; goto LValidIV; end;
+  if (blank(CUr.CountryCode)) then begin err = 43373;  goto LValidIV; end;
+  if (blank(CUr.CurncyCode)) then begin err = 43364;  goto LValidIV; end;
+  if (len(CUr.CountryCode)!=2) then begin err = 43376;  goto LValidIV; end;
+  if (blank(CUr.Phone)) then begin err = 43373;  goto LValidIV; end;
+  if (blankdate(IVr.InvDate)) then begin err = 43374;  goto LValidIV; end;
+  if (blankdate(IVr.PayDate)) then begin err = 43374;  goto LValidIV; end;
+LValidIV:;
+  ValidIV = err;
+  return;
+end;
+
+function LongInt ValidAtradiusSetUp(record AtradiusBlock AtradiusBl,Boolean additionalcheck)
+begin
+  LongInt err;
+
+  err = 0;
+  if (AtradiusBl.Enable!=1) then begin
+    err = 43365;
+    goto LValidAtradiusSetUp;
+  end;
+  if (blank(AtradiusBl.ClientID)) then begin
+    err = 43366;
+    goto LValidAtradiusSetUp;
+  end;
+  if (blank(AtradiusBl.ClientSecret)) then begin
+    err = 43367;
+    goto LValidAtradiusSetUp;
+  end;
+  if (blank(AtradiusBl.Username)) then begin
+    err = 43368;
+    goto LValidAtradiusSetUp;
+  end;
+  if (additionalcheck) then begin
+    if (blank(AtradiusBl.AuthCode)) then begin
+      err = 43377;
+      goto LValidAtradiusSetUp;
+    end;
+    if (blank(AtradiusBl.AccessToken)) then begin
+      err = 43378;
+      goto LValidAtradiusSetUp;
+    end;
+    if (blank(AtradiusBl.RefreshToken)) then begin
+      err = 43378;
+      goto LValidAtradiusSetUp;
+    end;
+  end;
+LValidAtradiusSetUp:;
+  ValidAtradiusSetUp = err;
+  return;
+end;
+
+global 
+procedure SendCaseToAtradiusWebRequestDsm()
+begin
+  record IVVc IVr;
+  Integer wn,status;
+  string 255 errmsg,url;
+  LongInt err,reference;
+  record AtradiusBlock AtradiusBl;
+
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,IVr);
+  BlockLoad(AtradiusBl);
+  err = ValidAtradiusSetUp(AtradiusBl,true);
+  if (err==0) then begin
+    err = ValidIV(IVr);
+    if (err==0) then begin
+      if (IsTokenValid(AtradiusBl)) then begin
+        err = SendCaseToAtradiusWebRequest(IVr,errmsg,reference,status);
+      end else begin
+        url = "https://sso-uat.atradiuscollections.com/atrcolb2cssouat.onmicrosoft.com/B2C_1_Signup_SignIn/oauth2/v2.0/authorize?";
+        url = url & "client_id=" & AtradiusBl.ClientID;
+        url = url & "&response_type=code";
+        url = url & "&redirect_uri=" & URLEncode("https://" & GetWebHostAndPort3(true) & "/WebAtradiusGetAccessCode.hal"); 
+        url = url & "&response_mode=query";
+        url = url & "&scope=" & "https://sso-uat.atradiuscollections.com/api/case/case-creation%20openid%20offline_access";
+        OpenWebBrowser(url);
+        goto LSendCaseToAtradiusWebRequestDsm2;
+      end;
+    end else begin
+      goto LSendCaseToAtradiusWebRequestDsm;
+    end; 
+  end else begin
+    goto LSendCaseToAtradiusWebRequestDsm;
+  end;
+LSendCaseToAtradiusWebRequestDsm:;
+
+  if (err!=0 or nonblank(errmsg)) then begin
+    if (err!=0) then begin
+      MessageBox(err,"");
+    end else begin
+      MessageBox(0,errmsg);
+    end;
+  end else begin
+    CheckmarkBox(43372," " & reference);
+  end;
+LSendCaseToAtradiusWebRequestDsm2:;
+  return;
+end;
+
+global
+procedure Atradius_InitiateGetAccessCodeRequestDsm()
+begin
+  record IVVc IVr;
+  Integer wn;
+  record AtradiusBlock AtradiusBl;
+  LongInt err;
+  string 255 url;
+
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,AtradiusBl);
+  BlockLoad(AtradiusBl);
+
+  err = ValidAtradiusSetUp(AtradiusBl,false);
+  if (err!=0) then begin
+    goto LAtradius_InitiateGetAccessCodeRequestDsm;
+  end;
+
+  url = "https://sso-uat.atradiuscollections.com/atrcolb2cssouat.onmicrosoft.com/B2C_1_Signup_SignIn/oauth2/v2.0/authorize?";
+  url = url & "client_id=" & AtradiusBl.ClientID;
+  url = url & "&response_type=code";
+  url = url & "&redirect_uri=" & URLEncode("https://" & GetWebHostAndPort3(true) & "/WebAtradiusGetAccessCode.hal"); 
+  url = url & "&response_mode=query";
+  url = url & "&scope=" & "https://sso-uat.atradiuscollections.com/api/case/case-creation%20openid%20offline_access";
+
+  OpenWebBrowser(url);
+LAtradius_InitiateGetAccessCodeRequestDsm:;
+  if (err!=0) then begin
+    MessageBox(0,USetStr(err));
+  end;
+  return;
+end;

@@ -1,0 +1,1143 @@
+external function Boolean SetInSet2(string,string);
+external procedure HT2Per(Date,Date,var string);
+external function Time ValToTime(val);
+external function val CalcTimeDiff(Date,Time,Date,Time);
+external function LongInt DateDiff(Date,Date);
+external function Time AddTime_Minutes(Time,Time);
+external function LongInt TimeDiffInSeconds(Time,Time);
+external function Integer SecondsToTime(LongInt,var Time);
+
+function Boolean TestSelection(record RcVc RepSpec,record ActVc Actr,Integer action)
+begin
+  Boolean testf;
+  
+  testf = true;
+  switch (action) begin
+    case 0:
+      if (nonblank(RepSpec.FirstAcc)) then begin
+        if (Actr.ActState!=RepSpec.FirstAcc) then begin testf = false; end;
+      end;      
+      if (nonblank(RepSpec.f3)) then begin
+        if (Actr.ActType!=RepSpec.f3) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f5)) then begin
+        if (Actr.MainPersons!=RepSpec.f5) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f7)) then begin
+        if (Actr.PrioLevel!=StringToLongInt(RepSpec.f7)) then begin testf = false; end;
+      end;
+    case 1:
+      if (nonblank(RepSpec.LastAcc)) then begin
+        if (Actr.ActState!=RepSpec.LastAcc) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f4)) then begin
+        if (Actr.ActType!=RepSpec.f4) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f6)) then begin
+        if (Actr.MainPersons!=RepSpec.f6) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f8)) then begin
+        if (Actr.PrioLevel!=StringToLongInt(RepSpec.f8)) then begin testf = false; end;
+      end;
+  end;
+  TestSelection = testf;
+  return;
+end;
+
+function Time TimeDiff(Time etime,Time stime)
+begin
+  Time res;
+  LongInt seconds;
+  Integer days;
+  
+  seconds = TimeDiffInSeconds(stime,etime);
+  days = SecondsToTime(seconds,res);
+  TimeDiff = res;
+  return;
+end;
+
+function Time CalcDuration(Date ed,Time et,Date sd,Time st)
+begin
+  Time res;
+  Time t;
+  Integer days;
+  LongInt seconds;
+  
+  if (ed==sd) then begin
+    res = TimeDiff(et,st);  
+  end else begin
+    t.hour = 23; t.minute = 59; t.second = 59;
+    seconds = TimeDiffInSeconds(st,t);
+    t.hour = 0; t.minute = 0; t.second = 0;
+    seconds = seconds + TimeDiffInSeconds(t,et);
+    if (seconds>24*60*60) then begin
+      t.hour = 23; t.minute = 59; t.second = 59;
+      res = t;
+    end else begin
+      res = TimeDiff(st,t);  
+      t.hour = 0; t.minute = 0; t.second = 0;
+      t = TimeDiff(t,et);
+      res = AddTime_Minutes(res,t);
+      days = DateDiff(ed,sd);
+      if (days>1) then begin
+        t.hour = 23; t.minute = 59; t.second = 59;
+        res = t;
+      end;
+    end;  
+  end; 
+  CalcDuration = res;
+  return;
+end;
+
+function Duration CalcDuration2(Date ed,Time et,Date sd,Time st)
+begin
+  Duration res;
+  Time t,rest;
+  LongInt hours,days;
+  LongInt seconds,dayseconds;
+  string 255 tstr;
+  val v;
+  
+  days = 0;
+  dayseconds = 86400;//24*60*60
+  res.hour = 24*(DateDiff(ed,sd)-1);
+  if (ed==sd) then begin
+    rest = TimeDiff(et,st);  
+    res.hour = res.hour + rest.hour;
+    res.minute = res.minute + rest.minute;
+    res.second = res.second + rest.second;
+  end else begin
+    t.hour = 23; t.minute = 59; t.second = 59;
+    seconds = TimeDiffInSeconds(st,t);    
+    t.hour = 0; t.minute = 0; t.second = 0;
+    seconds = seconds + TimeDiffInSeconds(t,et);
+    if (seconds>dayseconds) then begin
+      days = Mod(seconds,dayseconds);
+      seconds = seconds - days*dayseconds;
+      if (seconds<0) then begin seconds = 0; end;
+    end;
+
+    res.hour = res.hour + days*24;
+    SecondsToTime(seconds,rest);   
+    res.hour = res.hour + rest.hour;
+    res.minute = res.minute + rest.minute;
+    res.second = res.second + rest.second;
+  end;
+  CalcDuration2 = res;
+  return;
+end;
+
+function string 255 DurationToStr(var Duration d)
+begin
+  string 255 res;
+  LongInt day,hour;
+
+  if ((d.hour==-1) and (d.minute==-1) and (d.second==-1)) then begin
+    goto LDurationToStr;
+  end;
+  if (d.hour<=0) then begin d.hour = 0; end;
+  if (d.minute<=0) then begin d.minute = 0; end;
+  if (d.second<=0) then begin d.second = 0; end;
+    
+  day = d.hour / 24;
+  hour = Mod(d.hour,24);
+  
+  if (day>0) then begin
+    res = res & day;
+    res = res & "d ";
+  end;
+  
+  if (hour<10) then begin
+    res = res & "0";
+  end;
+  res = res & hour;
+  res = res & ":";
+  if (d.minute<10) then begin
+    res = res & "0";
+  end;
+  res = res & d.minute;
+  res = res & ":";
+  if (d.second<10) then begin
+    res = res & "0";
+  end;
+  res = res & d.second;
+LDurationToStr:;
+  DurationToStr = res;
+  return;
+end;
+
+procedure PrintProjectData(record ActVc Actr,Integer pos1)
+begin
+ StartFormat(15);
+  OutStringID(pos1,"DblActVc",Actr.Comment,false,Actr.SerNr);
+  OutString(2,0,Actr.MainPersons,false);
+  OutString(3,"DblActStateVc",Actr.ActState,false);
+  OutString(4,0,Left(Actr.ActStateComment,20),false);
+  OutString(5,"DblActTypeVc",Actr.ActType,false);
+  OutString(6,0,Left(Actr.ActTypeComment,20),false);
+  EndFormat;
+  return;
+end;
+
+procedure PrintHeader(LongInt sid)
+begin
+  StartFormat(15);
+  OutString(15,0,USetStr(sid),false);
+  EndFormat;
+  Gray_Divider(15,300);
+  StartFormat(15);
+  OutString(40,0,USetStr(38460),false);
+  OutString(90,0,USetStr(38462),false);
+  OutString(160,0,USetStr(38461),false);
+  OutString(200,0,USetStr(38463),false);
+  OutString(245,0,USetStr(38464),false);
+  OutString(285,0,USetStr(38465),false);
+  EndFormat;
+  Gray_Divider(15,300);
+  return;
+end;
+
+function Boolean PrintStatusNoSelection(LongInt sid,record RcVc RepSpec,record ActVc PActr,string fieldname,Integer pos,array record RHistVc aRHr,array record ActVc aActr,var Boolean printactf,
+                                        var vector val vFActState,var vector val vFActType,var vector val vFMainPers,
+                                        var vector val vTActState,var vector val vTActType,var vector val vTMainPers,
+                                        Integer trend,vector val vtrend)
+begin
+  Boolean res;
+  Boolean printheaderf,testf;
+  Time tt;
+  Duration dt;
+  string 255 tstr;
+  Integer i,rwcnt,ri;
+  record ResolveConflictVc RCr;
+  row ResolveConflictVc RCrw;
+  row ResolveConflictVc lastRCrw;
+  record RHistVc lastRHr;
+  record RHistVc compRHr;
+  record RHistVc RHr;
+  record RHistVc RH2r;
+  record ActVc compActr;
+  record ActVc Actr;
+  record ActVc Act2r;
+  
+  printheaderf = true;
+  ClearRow(RCr,lastRCrw,1);
+  if (pos==0) then begin
+    switch (fieldname) begin
+      case "ActType":
+        lastRCrw.RemoteValue = PActr.ActType;
+        lastRCrw.FieldName = "ActType";
+      case "MainPersons":
+        lastRCrw.RemoteValue = PActr.MainPersons;
+        lastRCrw.FieldName = "MainPersons";
+      case "PrioLevel":
+        if (PActr.PrioLevel>=0) then begin
+          lastRCrw.RemoteValue = PActr.PrioLevel;
+          lastRCrw.FieldName = "PrioLevel";
+        end;
+      otherwise
+        lastRCrw.RemoteValue = PActr.ActState;
+        lastRCrw.FieldName = "ActState";
+    end;
+    lastRHr.TransDate = PActr.TransDate;
+    lastRHr.TransTime = PActr.StartTime;
+  end else begin
+    RecordCopy(compRHr,aRHr[0]);
+    RecordCopy(compActr,aActr[0]);
+    lastRHr = compRHr;
+
+    for (i=0;i<aRHr.length-1;i=i+1) begin    
+      RecordCopy(RHr,aRHr[i]);
+      RecordCopy(Actr,aActr[i]);
+      RecordCopy(RH2r,aRHr[i+1]);
+      RecordCopy(Act2r,aActr[i+1]);
+      ClearRow(RCr,lastRCrw,1);
+      lastRHr = RHr;
+
+      testf = true;
+      if (nonblank(RepSpec.Period2Str2)) then begin
+        if (DateInRange(RHr.TransDate,RepSpec.sStartDate2,RepSpec.sEndDate2)==false) then begin testf = false; end;
+      end;
+      if (testf) then begin      
+        RecordClear(RCr);
+/*        
+        StartFormat(15);
+         OutString(285,0,Actr.ActState,false);
+        EndFormat;
+*/        
+        if (GetRecordDifferences(compActr,Act2r,RCr)) then begin
+          rwcnt = MatRowCnt(RCr);
+          for (ri=0;ri<rwcnt;ri=ri+1) begin
+            MatRowGet(RCr,ri,RCrw);
+            testf = true;
+            if (nonblank(RepSpec.TransStr)) then begin
+              if (RHr.User!=RepSpec.TransStr) then begin testf = false; end;
+            end;
+            if (testf) then begin
+              if (RCrw.FieldName==fieldname) then begin
+                switch (RepSpec.ArtMode) begin
+                  case 0: res = true;
+                  case 1:
+                    if (printactf) then begin
+                      PrintProjectData(PActr,0);
+                      printactf = false;
+                    end;
+                    if (printheaderf) then begin
+                      PrintHeader(sid);
+                      printheaderf = false;
+                    end;
+//                    tt = CalcDuration(RHr.TransDate,RHr.TransTime,compRHr.TransDate,compRHr.TransTime);
+                    dt = CalcDuration2(RHr.TransDate,RHr.TransTime,compRHr.TransDate,compRHr.TransTime);
+                    tstr = DurationToStr(dt);          
+                    StartFormat(15);
+                     OutString(40,0,RCrw.LocalValue,false);
+                     OutString(90,0,tstr,false);
+                     OutString(160,0,RCrw.RemoteValue,false);
+                     OutString(200,0,RHr.TransDate,false);
+                     OutString(245,0,RHr.TransTime,false);
+                     OutString(285,0,RHr.User,false);
+                    EndFormat;
+
+                    switch (trend) begin
+                      case 0: vtrend[DateToString(RHr.TransDate,"YYYY/MM")] = vtrend[DateToString(RHr.TransDate,"YYYY/MM")] + 1;
+                      case 1: vtrend[DateToString(RHr.TransDate,"MM/DD")] = vtrend[DateToString(RHr.TransDate,"MM/DD")] + 1; 
+//                      case 2: vtrend[GetDay(RHr.TransDate)] = vtrend[GetDay(RHr.TransDate)] + 1;
+                    end;
+                    
+                    res = true;
+                    switch (RCrw.FieldName) begin
+                      case "ActState": vFActState[RCrw.LocalValue] = vFActState[RCrw.LocalValue] + 1;
+                      case "ActType": vFActType[RCrw.LocalValue] = vFActType[RCrw.LocalValue] + 1;
+                      case "MainPersons": vFMainPers[RCrw.LocalValue] = vFMainPers[RCrw.LocalValue] + 1;
+                    end;
+                    switch (RCrw.FieldName) begin
+                      case "ActState": vTActState[RCrw.RemoteValue] = vTActState[RCrw.RemoteValue] + 1;
+                      case "ActType": vTActType[RCrw.RemoteValue] = vTActType[RCrw.RemoteValue] + 1;
+                      case "MainPersons": vTMainPers[RCrw.RemoteValue] = vTMainPers[RCrw.RemoteValue] + 1;
+                    end;
+                end;
+                ri = rwcnt;
+                RecordCopy(compRHr,RHr);
+                RecordCopy(compActr,Act2r);
+                CopyRow(RCr,RCrw,lastRCrw);
+                lastRHr = RHr;
+              end;
+            end;
+          end;
+        end;
+      end;
+    end;
+    testf = true;
+    if (testf) then begin
+      switch (fieldname) begin
+        case "ActType":
+          lastRCrw.RemoteValue = PActr.ActType;
+          lastRCrw.FieldName = "ActType";
+        case "MainPersons":
+          lastRCrw.RemoteValue = PActr.MainPersons;
+          lastRCrw.FieldName = "MainPersons";
+        case "PrioLevel":
+          if (PActr.PrioLevel>=0) then begin
+            lastRCrw.RemoteValue = PActr.PrioLevel;
+            lastRCrw.FieldName = "PrioLevel";
+          end;
+        otherwise
+          lastRCrw.RemoteValue = PActr.ActState;
+          lastRCrw.FieldName = "ActState";
+      end;
+    end;
+  end;
+  if (nonblank(lastRCrw.RemoteValue)) then begin
+    testf = true;
+    if (nonblank(RepSpec.TransStr)) then begin
+      if (lastRCrw.RemoteValue!=RepSpec.TransStr) then begin testf = false; end;
+    end;
+    if (nonblank(RepSpec.Period2Str2)) then begin
+      if (DateInRange(lastRHr.TransDate,RepSpec.sStartDate2,RepSpec.sEndDate2)==false) then begin testf = false; end;
+    end;
+    if (testf) then begin
+      switch (RepSpec.ArtMode) begin
+        case 0: res = true;
+        case 1:
+          if (printactf) then begin
+            PrintProjectData(PActr,0);
+            printactf = false;
+          end;
+          if (printheaderf) then begin
+            PrintHeader(sid);
+            printheaderf = false;
+          end;
+//          tt = CalcDuration(CurrentDate,CurrentTime,lastRHr.TransDate,lastRHr.TransTime);
+          dt = CalcDuration2(CurrentDate,CurrentTime,lastRHr.TransDate,lastRHr.TransTime);
+          tstr = DurationToStr(dt);          
+          switch (lastRCrw.FieldName) begin
+            case "ActState": vFActState[lastRCrw.RemoteValue] = vFActState[lastRCrw.RemoteValue] + 1;
+            case "ActType": vFActType[lastRCrw.RemoteValue] = vFActType[lastRCrw.RemoteValue] + 1;
+            case "MainPersons": vFMainPers[lastRCrw.RemoteValue] = vFMainPers[lastRCrw.RemoteValue] + 1;
+          end;
+          StartFormat(15);
+           OutString(40,0,lastRCrw.RemoteValue,false);
+           OutString(90,0,tstr,false);
+          EndFormat;
+          res = true;
+      end;
+    end;
+  end;
+  PrintStatusNoSelection = res;
+  return;
+end;
+
+function LongInt PrintStatusWithSelection(record RcVc RepSpec,record ActVc PActr,Integer pos,array record RHistVc aRHr,array record ActVc aActr,
+                                          vector val vFActState,vector val vFActType,vector val vFMainPers,
+                                          vector val vTActState,vector val vTActType,vector val vTMainPers,
+                                          Integer trend,vector val vtrend)
+begin
+  LongInt res;
+  Boolean printactf,printheaderf,testf;
+  Date td;
+  Time tt;
+  Integer i,rwcnt,ri;
+  record ResolveConflictVc RCr;
+  row ResolveConflictVc RCrw;
+  row ResolveConflictVc lastRCrw;
+  record RHistVc lastRHr;
+  record RHistVc compRHr;
+  record RHistVc RHr;
+  record RHistVc RH2r;
+  record ActVc compActr;
+  record ActVc Actr;
+  record ActVc Act2r;
+  vector Boolean vselectionf;
+  vector LongInt vdiff;
+  Duration dt;
+  string 255 tstr;
+  Boolean FActStatef,FActTypef,FMainPersonsf;
+  Boolean TActStatef,TActTypef,TMainPersonsf;
+  
+  if (nonblank(RepSpec.FirstAcc)) then begin vselectionf["ActState_From"] = true; end;
+  if (nonblank(RepSpec.f3)) then begin vselectionf["ActType_From"] = true; end;
+  if (nonblank(RepSpec.f5)) then begin vselectionf["MainPersons_From"] = true; end;
+  if (nonblank(RepSpec.f7)) then begin vselectionf["PrioLevel_From"] = true; end;
+
+  if (nonblank(RepSpec.LastAcc)) then begin vselectionf["ActState_To"] = true; end;
+  if (nonblank(RepSpec.f4)) then begin vselectionf["ActType_To"] = true; end;
+  if (nonblank(RepSpec.f6)) then begin vselectionf["MainPersons_To"] = true; end;
+  if (nonblank(RepSpec.f8)) then begin vselectionf["PrioLevel_To"] = true; end;
+
+  res = 0;
+  printactf = true;
+  printheaderf = true;
+
+
+  if (pos<=1) then begin
+    lastRHr.TransDate = PActr.TransDate;
+    lastRHr.TransTime = PActr.StartTime;
+    testf = TestSelection(RepSpec,PActr,0);
+    if (testf) then begin
+      testf = TestSelection(RepSpec,PActr,1);
+    end;
+    if (testf) then begin
+      RecordCopy(Actr,PActr);
+      RecordCopy(compActr,PActr);
+      if (nonblank(RepSpec.FirstAcc)) then begin compActr.ActState = ""; end;
+      if (nonblank(RepSpec.f3)) then begin compActr.ActType = ""; end;
+      if (nonblank(RepSpec.f5)) then begin compActr.MainPersons = ""; end;
+      if (nonblank(RepSpec.f7)) then begin compActr.PrioLevel = ""; end;
+      compRHr.TransDate = compActr.TransDate;
+      compRHr.TransTime = compActr.StartTime;
+      RecordClear(RCr);
+      if (GetRecordDifferences(Actr,compActr,RCr)) then begin
+        rwcnt = MatRowCnt(RCr);
+        for (ri=0;ri<rwcnt;ri=ri+1) begin
+          MatRowGet(RCr,ri,RCrw);
+          testf = true;
+          if (nonblank(RepSpec.TransStr)) then begin
+            if (RHr.User!=RepSpec.TransStr) then begin testf = false; end;
+          end;
+          if (nonblank(RepSpec.Period2Str2)) then begin
+            if (DateInRange(compRHr.TransDate,RepSpec.sStartDate2,RepSpec.sEndDate2)==false) then begin testf = false; end;
+          end;
+          if (testf) then begin
+            if (printactf) then begin
+              PrintProjectData(PActr,0);
+              printactf = false;
+            end;
+            if (printheaderf) then begin
+              PrintHeader(38456);
+              printheaderf = false;
+            end;
+
+//            tt = CalcDuration(Actr.EndDate,CurrentTime,Actr.TransDate,Actr.StartTime);
+            dt = CalcDuration2(Actr.EndDate,CurrentTime,Actr.TransDate,Actr.StartTime);
+            tstr = DurationToStr(dt);          
+            StartFormat(15);
+            OutString(40,0,RCrw.LocalValue,false);
+            OutString(90,0,tstr,false);
+            OutString(160,0,RCrw.RemoteValue,false);
+            OutString(200,0,RHr.TransDate,false);
+            OutString(245,0,RHr.TransTime,false);
+            OutString(285,0,RHr.User,false);
+//                     OutString(385,0,PActr.SerNr,false);
+            EndFormat;
+            switch (trend) begin
+              case 0: vtrend[DateToString(compRHr.TransDate,"YYYY/MM")] = vtrend[DateToString(compRHr.TransDate,"YYYY/MM")] + 1;
+              case 1: vtrend[DateToString(compRHr.TransDate,"MM/DD")] = vtrend[DateToString(compRHr.TransDate,"MM/DD")] + 1; 
+//                      case 2: vtrend[GetDay(compRHr.TransDate)] = vtrend[GetDay(compRHr.TransDate)] + 1;
+            end;
+            switch (RCrw.FieldName) begin
+              case "ActState": vFActState[RCrw.LocalValue] = vFActState[RCrw.LocalValue] + 1;
+              case "ActType": vFActType[RCrw.LocalValue] = vFActType[RCrw.LocalValue] + 1;
+              case "MainPersons": vFMainPers[RCrw.LocalValue] = vFMainPers[RCrw.LocalValue] + 1;
+            end;
+            switch (RCrw.FieldName) begin
+              case "ActState": vTActState[RCrw.RemoteValue] = vTActState[RCrw.RemoteValue] + 1;
+              case "ActType": vTActType[RCrw.RemoteValue] = vTActType[RCrw.RemoteValue] + 1;
+              case "MainPersons": vTMainPers[RCrw.RemoteValue] = vTMainPers[RCrw.RemoteValue] + 1;
+            end;
+            res = res + 1;
+          end;
+
+            vdiff[RCrw.FieldName] = ri;
+/*
+                StartFormat(15);
+                 OutString(0,0,"1.jarek",false);
+                 OutString(40,0,RCrw.LocalValue,false);
+                 OutString(140,0,RCrw.RemoteValue,false);
+                EndFormat;
+*/
+        end;
+      end;
+    end;
+  end else begin
+    RecordCopy(compRHr,aRHr[0]);
+    RecordCopy(compActr,aActr[0]);
+    lastRHr = compRHr;
+    for (i=0;i<aRHr.length;i=i+1) begin    
+      RecordCopy(RHr,aRHr[i]);
+      RecordCopy(Actr,aActr[i]);
+//      RecordCopy(RH2r,aRHr[i+1]);
+      testf = TestSelection(RepSpec,Actr,0);
+
+      if (i<aRHr.length-1) then begin
+        RecordCopy(Act2r,aActr[i+1]);
+        if (testf) then begin
+          testf = TestSelection(RepSpec,Act2r,1);
+        end;
+      end;
+        
+      ClearRow(RCr,lastRCrw,1);
+      if (nonblank(RepSpec.Period2Str2)) then begin
+        if (i==aRHr.length-1) then begin testf = false; end;//last one is current value
+        if (DateInRange(RHr.TransDate,RepSpec.sStartDate2,RepSpec.sEndDate2)==false) then begin testf = false; end;
+      end;
+
+      if (testf) then begin
+        RecordClear(RCr);
+
+        if (GetRecordDifferences(Actr,Act2r,RCr)) then begin
+          rwcnt = MatRowCnt(RCr);
+          for (ri=0;ri<rwcnt;ri=ri+1) begin
+            MatRowGet(RCr,ri,RCrw);
+            testf = true;
+            if (nonblank(RepSpec.TransStr)) then begin
+              if (RHr.User!=RepSpec.TransStr) then begin testf = false; end;
+            end;
+            if (testf) then begin
+              switch (RCrw.FieldName) begin
+                case "ActState": 
+                  vFActState[RCrw.LocalValue] = vFActState[RCrw.LocalValue] + 1;
+                  FActStatef = true;
+                case "ActType": 
+                  vFActType[RCrw.LocalValue] = vFActType[RCrw.LocalValue] + 1;
+                  FActTypef = true;
+                case "MainPersons": 
+                  vFMainPers[RCrw.LocalValue] = vFMainPers[RCrw.LocalValue] + 1;
+                  FMainPersonsf = true;
+                  vFMainPers[RCrw.LocalValue & "_" & PActr.ActType] = vFMainPers[RCrw.LocalValue & "_" & PActr.ActType] + 1;
+              end;
+              switch (RCrw.FieldName) begin
+                case "ActState": 
+                  vTActState[RCrw.RemoteValue] = vTActState[RCrw.RemoteValue] + 1;
+                  TActStatef = true;
+                case "ActType": 
+                  vTActType[RCrw.RemoteValue] = vTActType[RCrw.RemoteValue] + 1;
+                  TActTypef = true;
+                  if (RepSpec.flags[3]!=0) then begin
+//                    vTActType[RCrw.RemoteValue & "_" & PActr.MainPersons] = vTActType[RCrw.RemoteValue & "_" & PActr.MainPersons] + 1;
+                  end;
+                case "MainPersons": 
+                  vTMainPers[RCrw.RemoteValue] = vTMainPers[RCrw.RemoteValue] + 1;
+                  TMainPersonsf = true;
+              end;
+              if (vselectionf[RCrw.FieldName & "_From"] or vselectionf[RCrw.FieldName & "_To"]) then begin
+                if (RepSpec.ArtMode==1) then begin
+                  if (printactf) then begin
+                    PrintProjectData(PActr,0);
+                    printactf = false;
+                  end;
+                  if (printheaderf) then begin
+                    PrintHeader(38456);
+                    printheaderf = false;
+                  end;
+
+//                  tt = CalcDuration(Actr.EndDate,Actr.EndTime,Actr.TransDate,Actr.StartTime);
+                  dt = CalcDuration2(Actr.EndDate,Actr.EndTime,Actr.TransDate,Actr.StartTime);
+                  tstr = DurationToStr(dt);          
+//                  if (tt.hour!=0 or tt.minute!=0 or tt.second!=0) then begin
+                  if (true) then begin
+                    StartFormat(15);
+                     OutString(40,0,RCrw.LocalValue,false);
+                     OutString(90,0,tstr,false);
+                     OutString(160,0,RCrw.RemoteValue,false);
+                     OutString(200,0,RHr.TransDate,false);
+                     OutString(245,0,RHr.TransTime,false);
+                     OutString(285,0,RHr.User,false);
+//                     OutString(385,0,PActr.SerNr,false);
+                    EndFormat;
+                    switch (trend) begin
+                      case 0: vtrend[DateToString(RHr.TransDate,"YYYY/MM")] = vtrend[DateToString(RHr.TransDate,"YYYY/MM")] + 1;
+                      case 1: vtrend[DateToString(RHr.TransDate,"MM/DD")] = vtrend[DateToString(RHr.TransDate,"MM/DD")] + 1; 
+//                      case 2: vtrend[GetDay(RHr.TransDate)] = vtrend[GetDay(RHr.TransDate)] + 1;
+                    end;
+                    
+                    res = res + 1;
+                  end;
+                end;
+
+            
+  //              vdiff[RCrw.FieldName] = ri;
+  /*            
+                  StartFormat(15);
+                   OutString(0,0,"2.jarek",false);
+                   OutString(40,0,RCrw.FieldName,false);
+                   OutString(140,0,RCrw.LocalValue,false);
+                   OutString(240,0,RCrw.RemoteValue,false);
+                  EndFormat;
+  */                
+              end;
+            end;
+          end;
+        end;      
+      end;
+    end;
+  end;
+  if (printactf==false) then begin
+    if (FActStatef==false) then begin
+      vFActState[PActr.ActState] = vFActState[PActr.ActState] + 1;
+    end;
+    if (FActTypef==false) then begin
+      vFActType[PActr.ActType] = vFActType[PActr.ActType] + 1;
+    end;
+    if (FMainPersonsf==false) then begin
+      vFMainPers[PActr.MainPersons] = vFMainPers[PActr.MainPersons] + 1;
+      vFMainPers[PActr.MainPersons & "_" & PActr.ActType] = vFMainPers[PActr.MainPersons & "_" & PActr.ActType] + 1;
+    end;
+    if (TActStatef==false) then begin
+      vTActState[PActr.ActState] = vTActState[PActr.ActState] + 1;
+    end;
+    if (TActTypef==false) then begin
+      vTActType[PActr.ActType] = vTActType[PActr.ActType] + 1;
+      if (RepSpec.flags[3]!=0) then begin
+        vTActType[PActr.ActType & "_" & PActr.MainPersons] = vTActType[PActr.ActType & "_" & PActr.MainPersons] + 1;
+      end;
+    end;
+    if (TMainPersonsf==false) then begin
+      vTMainPers[PActr.MainPersons] = vTMainPers[PActr.MainPersons] + 1;
+    end;
+  end;
+  PrintStatusWithSelection = res;
+  return;
+end;
+
+function LongInt ShowProjectChanges(record RcVc RepSpec,record ActVc PActr,Boolean selectionf,
+                                    vector val vFActState,vector val vFActType,vector val vFMainPers,
+                                    vector val vTActState,vector val vTActType,vector val vTMainPers,
+                                    Integer trend,vector val vtrend)
+begin
+  LongInt res;
+  record RHistVc RHr;
+  record RHistVc lastRHr;
+  record ActVc Actr;
+  record ActVc lastActr;
+  record ActVc prevActr;
+  Boolean found,printactf;
+  string 255 rhlink;
+  array record RHistVc aRHr;
+  array record ActVc aActr;
+  Integer i,pos;
+  Date td;
+  Time tt;
+
+/*
+      StartFormat(15);
+       OutString(0,0,"AA",false);
+       OutString(15,0,pos,false);
+//       OutString(30,0,Actr.ActType,false);
+       OutString(100,0,PActr.ActState,false);
+  OutString(270,0,PActr.SerNr,false);
+  OutString(300,0,PActr.Comment,false);
+      EndFormat;
+*/  
+  res = 0;
+  found = true;
+  rhlink = BuildRecordIdStr(PActr,CurrentCompany);
+  RHr.RecidStr = rhlink;
+  while (LoopKey("RecidStr",RHr,1,found)) begin
+    if (CompareRecordIdStrings(RHr.RecidStr,rhlink)!=0) then begin found = false; end;
+    if (found) then begin
+//      if (RHr.logtype==kRegisterLogging_LogWhenFieldChanged_KeepRecord)
+      if (ReadOriginalRecord(RHr,Actr)) then begin
+//        if (ComparePosts(Actr,PActr)==false) then begin
+          pos = aRHr.length;
+          aRHr[pos] = RHr;
+
+          Actr.TransDate = RHr.TransDate;
+          Actr.StartTime = RHr.TransTime;
+          Actr.EndDate = RHr.TransDate;
+          Actr.EndTime = RHr.TransTime;
+
+          if (lastActr.SerNr>0) then begin
+            Actr.TransDate = lastActr.EndDate;
+            if (blankdate(Actr.TransDate)) then begin 
+              Actr.TransDate = lastActr.TransDate;
+            end;
+            Actr.StartTime = lastActr.EndTime;
+            if (blanktime(Actr.StartTime)) then begin 
+              Actr.StartTime = lastActr.StartTime;
+            end;
+          end;
+
+
+          aActr[pos] = Actr;
+          td = Actr.EndDate;
+          tt = Actr.EndTime;
+      
+/*          
+      StartFormat(15);
+       OutString(0,0,"CC0",false);
+       OutString(25,0,pos,false);
+       OutString(55,0,RHr.SerNr,false);
+       OutString(100,0,Actr.ActState,false);
+  OutString(130,0,RHr.TransDate,false);
+  OutString(170,0,RHr.TransTime,false);
+  OutString(220,0,Actr.TransDate,false);
+  OutString(270,0,Actr.StartTime,false);
+  OutString(320,0,Actr.EndDate,false);
+  OutString(370,0,Actr.EndTime,false);
+      EndFormat;
+*/      
+        lastRHr = RHr;
+        lastActr = Actr;
+
+
+//        end;
+      end;
+  
+    end;
+  end;
+  pos = aRHr.length;
+
+  if (pos>0) then begin
+    pos = aRHr.length;
+    RHr.User = CurrentUser;
+    RHr.TransDate = CurrentDate;
+    RHr.TransTime = CurrentTime;
+    aRHr[pos] = RHr;
+    Actr = PActr;
+    if (nonblankdate(td)) then begin Actr.TransDate = td; end;
+    if (nonblanktime(tt)) then begin Actr.StartTime = tt; end;
+    Actr.EndDate = RHr.TransDate;
+    Actr.EndTime = RHr.TransTime;
+    aActr[pos] = Actr;
+    pos = aRHr.length;
+  end;
+  
+/*
+
+      StartFormat(15);
+       OutString(0,0,"CC1",false);
+       OutString(25,0,pos,false);
+       OutString(55,0,RHr.SerNr,false);
+       OutString(100,0,Actr.ActState,false);
+  OutString(130,0,RHr.TransDate,false);
+  OutString(170,0,RHr.TransTime,false);
+  OutString(220,0,Actr.TransDate,false);
+  OutString(270,0,Actr.StartTime,false);
+  OutString(320,0,Actr.EndDate,false);
+  OutString(370,0,Actr.EndTime,false);
+      EndFormat;
+*/
+
+  if (selectionf) then begin
+    res = PrintStatusWithSelection(RepSpec,PActr,pos,aRHr,aActr,vFActState,vFActType,vFMainPers,vTActState,vTActType,vTMainPers,trend,vtrend);
+    printactf = res==0;
+  end else begin
+    printactf = true;
+    if (PrintStatusNoSelection(38456,RepSpec,PActr,"ActState",pos,aRHr,aActr,printactf,vFActState,vFActType,vFMainPers,vTActState,vTActType,vTMainPers,trend,vtrend)) then begin
+      res = 1;
+    end;
+    if (PrintStatusNoSelection(38458,RepSpec,PActr,"ActType",pos,aRHr,aActr,printactf,vFActState,vFActType,vFMainPers,vTActState,vTActType,vTMainPers,trend,vtrend)) then begin
+      res = 1;
+    end;
+    if (PrintStatusNoSelection(38459,RepSpec,PActr,"MainPersons",pos,aRHr,aActr,printactf,vFActState,vFActType,vFMainPers,vTActState,vTActType,vTMainPers,trend,vtrend)) then begin
+      res = 1;
+    end;
+    if (PrintStatusNoSelection(38466,RepSpec,PActr,"PrioLevel",pos,aRHr,aActr,printactf,vFActState,vFActType,vFMainPers,vTActState,vTActType,vTMainPers,trend,vtrend)) then begin
+      res = 1;
+    end;
+  end;
+  
+  switch (RepSpec.ArtMode) begin
+    case 0:
+    case 1:
+      if (printactf==false) then begin
+        Gray_Divider(0,1);
+      end;
+  end;
+LShowProjectChanges:;  
+  ShowProjectChanges = res;
+  return;
+end;
+
+function LongInt ProjectSubtasks(record RcVc RepSpec,record ActVc pActr,Boolean selectionf,
+                                 vector val vFActState,vector val vFActType,vector val vFMainPers,
+                                 vector val vTActState,vector val vTActType,vector val vTMainPers,
+                                 Integer trend,vector val vtrend)
+begin
+  LongInt cnt;
+  record ActVc Actr;
+  Boolean found,firstf;
+
+  cnt = 0;
+  firstf = true;
+  found = true;
+  Actr.Mother = pActr.SerNr;
+  while (LoopKey("Mother",Actr,1,found)) begin
+    if (Actr.Mother!=pActr.SerNr) then begin found = false; end;
+    if (found) then begin
+      switch (RepSpec.ArtMode) begin
+        case 0:
+        case 1:
+          if (firstf) then begin
+            StartFormat(15);
+            OutString(15,0,USetStr(38457),false);
+            EndFormat;
+            Gray_Divider(15,70);
+            firstf = false;
+          end;
+          PrintProjectData(Actr,15);
+      end;
+      cnt = cnt + ShowProjectChanges(RepSpec,Actr,selectionf,vFActState,vFActType,vFMainPers,vTActState,vTActType,vTMainPers,trend,vtrend);
+    end;
+  end;
+  ProjectSubtasks = cnt;
+  return;
+end;
+
+global
+procedure ActProjStatRn(record RcVc RepSpec)
+begin
+  record ActVc Actr;
+  Boolean found,testf,selectionf;
+  LongInt frpr,totcnt,totactcnt,cnt,pos;
+  string 255 index,tstr,tstr1,tstr2,tstr3;
+  Integer i,rw,d;
+  vector val vFActState;
+  vector val vFActType;
+  vector val vFMainPers;
+  vector val vTActState;
+  vector val vTActType;
+  vector val vTMainPers;
+  array string 255 atag;
+  record ActStateVc ASr;
+  record ActTypeVc ATr;
+  Integer trend;
+  vector val vtrend;
+  
+  In3Period(RepSpec.Period2Str2,RepSpec.sStartDate2,RepSpec.sEndDate2);
+  frpr = FirstInRange(RepSpec.f1,20);
+  rw = 1;
+  StartReportJob(USetStr(38450));
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1); 
+  rw = rw + 1; 
+  HT2Per(RepSpec.sStartDate2,RepSpec.sEndDate2,tstr);
+  if (nonblankdate(RepSpec.sStartDate2)) then begin
+    Header(rw,tstr,1);
+    rw = rw + 1; 
+  end;
+  EndHeader;
+  SetRepCol(2,100);
+  SetRepCol(3,200);
+  SetRepCol(4,245);
+  SetRepCol(5,320);
+  SetRepCol(6,365);
+
+  if (RepSpec.flags[7]!=0) then begin
+    d = DateDiff(RepSpec.sEndDate2,RepSpec.sStartDate2) + 1;
+    if (d<15) then begin trend = 2; end;
+    if (d<91) then begin trend = 1; end;
+  end;
+  
+  selectionf = false;
+  if (nonblank(RepSpec.FirstAcc)) then begin selectionf = true; end;
+  if (nonblank(RepSpec.LastAcc)) then begin selectionf = true; end;
+  if (nonblank(RepSpec.f3)) then begin selectionf = true; end;
+  if (nonblank(RepSpec.f4)) then begin selectionf = true; end;
+  if (nonblank(RepSpec.f5)) then begin selectionf = true; end;
+  if (nonblank(RepSpec.f6)) then begin selectionf = true; end;
+  if (nonblank(RepSpec.f7)) then begin selectionf = true; end;
+  if (nonblank(RepSpec.f8)) then begin selectionf = true; end;
+  switch (RepSpec.ArtMode) begin
+    case 0:
+      testf = selectionf;
+      if (testf==false) then begin
+        goto LActProjStatRn;
+      end;
+    case 1:
+      StartFormat(15);
+      OutString(0,0,USetStr(38451),false);
+      OutString(2,0,USetStr(38452),false);
+      OutString(3,0,USetStr(38453),false);
+      OutString(5,0,USetStr(38455),false);
+      EndFormat;
+      Gray_Divider(0,1);
+  end;
+  totcnt = 0;
+  totactcnt = 0;
+  index = "TodoFlag";
+  if (nonblank(RepSpec.f1)) then begin
+    index = "SerNr";
+  end;
+  found = true;
+  Actr.SerNr = frpr;
+  Actr.TodoFlag = kTodoFlagProject;
+  Actr.TransDate = RepSpec.sStartDate;
+  while (LoopKey(index,Actr,2,found)) begin
+    if (nonblank(RepSpec.f1)) then begin
+      if (Actr.SerNr!=frpr) then begin found = false; end;
+    end else begin
+      if (Actr.TodoFlag!=kTodoFlagProject) then begin found = false; end;
+      if (DateInRange(Actr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin
+        found = false;
+      end;
+    end;
+    if (found) then begin
+      testf = true;
+//      if (Actr.SerNr!=8) then begin testf = false; end;
+      if (nonblank(RepSpec.AccStr)) then begin
+        if (Actr.Supervisor!=RepSpec.AccStr) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.ObjStr)) then begin
+        if (SetInSet2(RepSpec.ObjStr,Actr.Objects)==false) then begin testf = false; end;
+      end;
+
+      if (testf) then begin
+        cnt = ShowProjectChanges(RepSpec,Actr,selectionf,vFActState,vFActType,vFMainPers,vTActState,vTActType,vTMainPers,trend,vtrend);
+        if (cnt>0) then begin totactcnt = totactcnt + 1; end;
+        totcnt = totcnt + cnt;
+        if (RepSpec.flags[0]!=0) then begin
+          cnt = ProjectSubtasks(RepSpec,Actr,selectionf,vFActState,vFActType,vFMainPers,vTActState,vTActType,vTMainPers,trend,vtrend);
+          if (cnt>0) then begin totactcnt = totactcnt + 1; end;
+          totcnt = totcnt + cnt;
+        end;
+      end;
+    end;
+  end;
+  Gray_Divider(0,1);
+  if (totactcnt>=0) then begin
+    StartFormat(15);
+    OutString(0,0,USetStr(38468),false);
+    OutLongInt(1,0,totactcnt,true);
+    EndFormat;
+  end;
+  StartFormat(15);
+  EndFormat;
+  if (RepSpec.flags[1]!=0) then begin
+    GetVectorTags(vFActState,atag);
+    SortStringArray(atag);
+    Gray_Divider(0,200);
+    StartFormat(15);
+    OutString(0,0,USetStr(38460) & " " & USetStr(38456),false);
+    OutString(200,0,USetStr(38469),true);
+    EndFormat;
+    Gray_Divider(0,200);
+    for (i=0;i<atag.length;i=i+1) begin
+      StartFormat(15);
+      OutString(0,0,atag[i],false);
+      OutLongInt(200,0,vFActState[atag[i]],true);
+      EndFormat;
+      Gray_Divider(0,200);
+    end;
+  end;
+  StartFormat(15);
+  EndFormat;
+  if (RepSpec.flags[2]!=0) then begin
+    GetVectorTags(vFActType,atag);
+    SortStringArray(atag);
+    Gray_Divider(0,200);
+    StartFormat(15);
+    OutString(0,0,USetStr(38460) & " " & USetStr(38458),false);
+    OutString(200,0,USetStr(38469),true);
+    EndFormat;
+    Gray_Divider(0,200);
+    for (i=0;i<atag.length;i=i+1) begin
+      ASr.Code = atag[i];
+      ReadFirstMain(ASr,1,true);
+      StartFormat(15);
+      OutString(0,0,atag[i],false);
+      OutString(60,0,ASr.Comment,false);
+      OutLongInt(200,0,vFActType[atag[i]],true);
+      EndFormat;
+      Gray_Divider(0,200);
+    end;
+  end;
+  StartFormat(15);
+  EndFormat;
+  if (RepSpec.flags[3]!=0) then begin
+    GetVectorTags(vFMainPers,atag);
+    SortStringArray(atag);
+    Gray_Divider(0,200);
+    StartFormat(15);
+    OutString(0,0,USetStr(38460) & " " & USetStr(38459),false);
+    OutString(200,0,USetStr(38469),true);
+    EndFormat;
+    Gray_Divider(0,200);
+    tstr = "";
+    for (i=0;i<atag.length;i=i+1) begin
+      pos = 0;
+      GetNextSubstring(atag[i],pos,"_",tstr1);
+      GetNextSubstring(atag[i],pos,"_",tstr2);
+      GetNextSubstring(atag[i],pos,"_",tstr3);
+      if (tstr1!=tstr and nonblank(tstr)) then begin
+        Gray_Divider(0,200);
+      end;
+      ATr.Code = atag[i];
+      ReadFirstMain(ATr,1,true);
+      StartFormat(15);
+      if (blank(tstr2)) then begin
+        OutString(0,0,atag[i],false);
+      end else begin
+        OutString(15,0,tstr2,false);
+      end;
+      OutString(60,0,ATr.Comment,false);
+      OutLongInt(200,0,vFMainPers[atag[i]],true);
+      EndFormat;
+      if (tstr1!=tstr) then begin
+        Gray_Divider(15,200);
+      end;
+      tstr = tstr1;
+    end;
+  end;
+  StartFormat(15);
+  EndFormat;
+  Black_Divider(0,200);
+  StartFormat(15);
+  EndFormat;
+  if (RepSpec.flags[4]!=0) then begin
+    GetVectorTags(vTActState,atag);
+    SortStringArray(atag);
+    Gray_Divider(0,200);
+    StartFormat(15);
+    OutString(0,0,USetStr(38461) & " " & USetStr(38456),false);
+    OutString(200,0,USetStr(38469),true);
+    EndFormat;
+    Gray_Divider(0,200);
+    for (i=0;i<atag.length;i=i+1) begin
+      StartFormat(15);
+      OutString(0,0,atag[i],false);
+      OutLongInt(200,0,vTActState[atag[i]],true);
+      EndFormat;
+      Gray_Divider(0,200);
+    end;
+  end;
+  StartFormat(15);
+  EndFormat;
+  if (RepSpec.flags[5]!=0) then begin
+    GetVectorTags(vTActType,atag);
+    SortStringArray(atag);
+    Gray_Divider(0,200);
+    StartFormat(15);
+    OutString(0,0,USetStr(38461) & " " & USetStr(38458),false);
+    OutString(200,0,USetStr(38469),true);
+    EndFormat;
+    Gray_Divider(0,200);
+    tstr = "";
+    for (i=0;i<atag.length;i=i+1) begin
+      pos = 0;
+      GetNextSubstring(atag[i],pos,"_",tstr1);
+      GetNextSubstring(atag[i],pos,"_",tstr2);
+      GetNextSubstring(atag[i],pos,"_",tstr3);
+      if (tstr1!=tstr and nonblank(tstr)) then begin
+        Gray_Divider(0,200);
+      end;
+      ASr.Code = atag[i];
+      ReadFirstMain(ASr,1,true);
+      StartFormat(15);
+      if (blank(tstr2)) then begin
+        OutString(0,0,atag[i],false);
+      end else begin
+        OutString(15,0,tstr2,false);
+      end;
+      OutString(60,0,ASr.Comment,false);
+      OutLongInt(200,0,vTActType[atag[i]],true);
+      EndFormat;
+      tstr = tstr1;
+    end;
+  end;
+  StartFormat(15);
+  EndFormat;
+  if (RepSpec.flags[6]!=0) then begin
+    GetVectorTags(vTMainPers,atag);
+    SortStringArray(atag);
+    Gray_Divider(0,200);
+    StartFormat(15);
+    OutString(0,0,USetStr(38461) & " " & USetStr(38459),false);
+    OutString(200,0,USetStr(38469),true);
+    EndFormat;
+    Gray_Divider(0,200);
+    for (i=0;i<atag.length;i=i+1) begin
+      ATr.Code = atag[i];
+      ReadFirstMain(ATr,1,true);
+      StartFormat(15);
+      OutString(0,0,atag[i],false);
+      OutString(60,0,ATr.Comment,false);
+      OutLongInt(200,0,vTMainPers[atag[i]],true);
+      EndFormat;
+      Gray_Divider(0,200);
+    end;
+  end;
+  StartFormat(15);
+  EndFormat;
+  if (RepSpec.flags[7]!=0) then begin
+    GetVectorTags(vtrend,atag);
+    SortStringArray(atag);
+    StartFormat(15);
+    OutString(0,0,USetStr(38470+trend),false);
+    OutString(200,0,USetStr(38469),true);
+    EndFormat;
+    Gray_Divider(0,200);
+    for (i=0;i<atag.length;i=i+1) begin
+      StartFormat(15);
+      switch (trend) begin
+        case 0: OutString(0,0,atag[i],false);
+        case 1: OutString(0,0,atag[i],false);
+      end;
+      OutLongInt(200,0,vtrend[atag[i]],true);
+      EndFormat;
+    end;
+    Gray_Divider(0,200);
+  end;
+  switch (RepSpec.ArtMode) begin
+    case 0:
+      if (totcnt>=0) then begin
+        StartFormat(15);
+        OutString(0,0,USetStr(38467),false);
+        OutLongInt(1,0,totcnt,true);
+        EndFormat;
+      end;
+  end;
+LActProjStatRn:;  
+  EndJob;
+  return;
+end;
+  

@@ -1,0 +1,771 @@
+external function Boolean GetWHTaxRowNr(string,var row WHTaxBlock,var Integer);
+external procedure IVVc_PastePrice(var record IVVc,record IVVc,Integer,var string);
+external function Boolean IVVc_PasteQuantity(var record IVVc,Integer);
+external function Boolean IVVc_PasteArtCode(var record IVVc,Integer,var string,var string,Boolean,var Integer);
+external procedure IVVc_PastePayDeal(var record IVVc,string,string);
+external function Boolean PasteCust2InInv(var record IVVc,record LocalMachineBlock,string,Boolean,var string,var string,var string,var string,var string);
+external function Boolean FindWHVETax(string,Date,var record WHVEVc);
+external function roundmode SetRoundModeD(Integer);
+external procedure GetPayType(String,var Integer);
+external function string 20 GetCountryISOCode(string);
+external procedure GetVATproc(string,Integer,var val);
+external Function Boolean IsPaymentType(String,Integer);
+external procedure JSONStringAdd(var string,string,string);
+external procedure JSONStringPut(var string,string,string);
+external procedure JSONStringMemberStart(var string,string);
+external procedure JSONStringMemberEnd(var string);
+external procedure JSONStringArrayStart(var string);
+external procedure JSONStringArrayEnd(var string);
+external procedure JSONNotStringAdd(var string,string,string);
+external procedure JSONNotStringPut(var string,string,string);
+external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
+external function val FindVAT(string,val,Integer,Integer); 
+
+global
+function longint GetOriginNr(Integer ToType,LongInt CheckNr)
+begin
+  Record CheckVc Checkr;
+  Record OwnCheckVc OwnCheckr;
+ 
+  switch (ToType) begin
+    case 0:
+      Checkr.SerNr= CheckNr;
+      if (ReadFirstMain(Checkr,1,true)) then begin
+        GetOriginNr = Checkr.FromNo;
+      end;
+    case 1:
+      OwnCheckr.SerNr = CheckNr;
+      if (ReadFirstMain(OwnCheckr,1,true)) then begin
+        GetOriginNr = OwnCheckr.FromNo;
+      end;
+    case 2:
+      Checkr.SerNr = CheckNr;
+      if (ReadFirstMain(Checkr,1,true)) then begin
+        GetOriginNr = Checkr.FromNo;
+      end;
+    case 3:
+      Checkr.SerNr = CheckNr;
+      if (ReadFirstMain(Checkr,1,true)) then begin
+        GetOriginNr = Checkr.ToNo;
+      end;
+    case 4:
+      OwnCheckr.SerNr = CheckNr;
+      if (ReadFirstMain(OwnCheckr,1,true)) then begin
+        GetOriginNr = OwnCheckr.FromNo;
+      end;
+  end;
+  return;
+end;
+/*
+global
+procedure GetEndorsedSupplier(LongInt CheckNr,var string sup)
+begin
+  Record ChqLinkVc ChqLinkr;
+  Record OPVc OPr;
+  row OPVc OPrw;
+
+  sup = "";
+  ChqLinkr.RFlag = 2;
+  ChqLinkr.ChqNr = CheckNr;
+  if readfirstmain(ChqLinkr,2,true) then begin 
+    OPr.SerNr = ChqLinkr.OriginNr;
+    if readfirstmain(OPr,1,true) then begin 
+      if matrowcnt(OPr) > 0 then begin
+        MatRowGet(OPr,0,OPrw);
+        sup = OPrw.VECode;
+      end; 
+    end; 
+  end;
+  return;
+end;
+*/
+
+function LongInt NextWHTaxNoForWHTax(string whtax)
+begin
+  LongInt res;
+  Boolean found;
+  record WHCertificateVc oldWHCertr;
+  
+  found = true;
+  oldWHCertr.WHTax = whtax;
+  while (LoopBackKey("WHTax",oldWHCertr,1,found)) begin
+    if (oldWHCertr.WHTax!=whtax) then begin found = false; end;
+    if (found) then begin
+      res = oldWHCertr.WHTaxSerNr + 1;
+      found = false;
+    end;
+  end;
+  NextWHTaxNoForWHTax = res;
+  return;
+end;
+
+function LongInt NextWHTaxNo(string whtax,row WHTaxBlock curWHTaxrw,record WHTaxBlock WHTaxb,var integer certrow)
+begin
+  LongInt res;
+  LongInt nr;
+  Boolean found;
+  record WHCertificateVc oldWHCertr;
+  row WHTaxBlock WHTaxbrw;
+  Integer i,rwcnt;
+
+  certrow = -1;
+  if (curWHTaxrw.CertificateNr!=-1) then begin 
+    if (curWHTaxrw.LastCertificateNr==-1) then begin 
+      res = curWHTaxrw.CertificateNr;
+    end else begin
+      res = curWHTaxrw.LastCertificateNr + 1;
+    end;
+  end else begin
+    rwcnt = MatRowCnt(WHTaxb);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(WHTaxb,i,WHTaxbrw);
+      if (WHTaxbrw.Code==curWHTaxrw.WHTax) and nonblank(curWHTaxrw.WHTax) then begin
+        if (WHTaxbrw.LastCertificateNr==-1) then begin 
+          res = WHTaxbrw.CertificateNr;
+        end else begin
+         res = WHTaxbrw.LastCertificateNr + 1;
+        end;
+        certrow = i;
+        i = rwcnt;
+      end;
+    end;
+  end;
+
+  /*
+  res = NextWHTaxNoForWHTax(whtax);
+  if (nonblank(curWHTaxrw.WHTax)) then begin
+    if (GetWHTaxRow(curWHTaxrw.WHTax,WHTaxbrw)) then begin
+      nr = NextWHTaxNoForWHTax(WHTaxbrw.Code);
+      if (res<nr) then begin
+        res = nr;
+      end;
+    end;
+  end;
+
+ 
+  rwcnt = MatRowCnt(WHTaxb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(WHTaxb,i,WHTaxbrw);
+    if (WHTaxbrw.WHTax==curWHTaxrw.Code) then begin
+      nr = NextWHTaxNoForWHTax(WHTaxbrw.Code);
+      if (res<nr) then begin
+        res = nr;
+      end;
+    end;
+  end;
+  
+  if (res<curWHTaxrw.CertificateNr) then begin
+    res = curWHTaxrw.CertificateNr;
+  end;
+  */
+  
+  if (res<0) then begin
+    res = 1;       
+  end;
+  NextWHTaxNo = res;
+  return;
+end;
+
+procedure AddWHCertificateRow(record WHCertificateVc WHCertr,row OPVc OPrw,Integer oprownr)
+begin
+  row WHCertificateVc WHCertrw;
+  record VIVc VIr;
+  
+  VIr.SerNr = OPrw.VISerNr;
+  ReadFirstMain(VIr,1,true);
+  ClearRow(WHCertr,WHCertrw,1);
+  WHCertrw.OPRow = oprownr;
+  WHCertrw.InvoiceNr = VIr.InvoiceNr;
+  WHCertrw.BaseAmount = OPrw.WHTaxBase;
+  WHCertrw.Amount = Round(OPrw.BankVal,SetRoundModeD(2));
+//not wrking  WHCertrw.AccBaseAmount = OPrw.WHTaxAccumBase;
+  MatRowPut(WHCertr,MatRowCnt(WHCertr),WHCertrw);
+  return;
+end;
+
+updating procedure SaveWHCertificate(record OPVc OPr,row OPVc OPrw,Integer oprownr,var record WHCertificateVc WHCertr)
+begin
+  record WHTaxBlock WHTaxb;  
+  row WHTaxBlock WHTaxbrw;  
+  record WHCertificateVc oldWHCertr;
+  record UserVc Userr;
+  record CUVc VEr;
+  Boolean found;
+  LongInt nextwhtaxsernr;
+  record WHVEVc WHVEr;
+  row WHVEVc WHVErw;
+  Integer i,rwcnt;
+  string 255 wxtaxcomment,tstr;
+  record WHCalcFormVc WHCalcFr;
+  Boolean whcertf;
+  Integer sharerow,rownr;
+  row WHTaxBlock shareWHTaxbrw; 
+
+  BlockLoad(WHTaxb);
+  if (GetWHTaxRowNr(OPrw.WHTax,WHTaxbrw,rownr)) then begin
+    if (nonblank(WHTaxbrw.WHCalcForm)) then begin    
+      WHCalcFr.PayCode = WHTaxbrw.WHCalcForm;
+      ReadFirstMain(WHCalcFr,1,true);
+      if (WHCalcFr.TaxCalc==kWHTaxCalcMonthly) or (WHCalcFr.TaxCalc==kWHTaxCalcYearly) or (WHCalcFr.TaxCalc==kWHTaxCalcPerPayment) then begin
+        WHCertr.OPNr = OPr.SerNr;
+        WHCertr.WHTax = OPrw.WHTax;
+        whcertf = ReadFirstKey("OPWH",WHCertr,2,true);
+      end;
+      if (whcertf) then begin
+        RecordCopy(oldWHCertr,WHCertr);
+        AddWHCertificateRow(WHCertr,OPrw,oprownr);
+        WHCertr.Amount = WHCertr.Amount + Round(OPrw.BankVal,SetRoundModeD(2));
+        WHCertr.CalcBase = WHCertr.CalcBase + OPrw.WHTaxBase;
+//not wrking        WHCertr.AccBaseAmount = WHCertr.AccBaseAmount + OPrw.WHTaxAccumBase;
+        RecordUpdate(oldWHCertr,WHCertr,false);
+      end else begin
+        WHCertr.DocName = WHTaxbrw.DocName;
+        WHCertr.CalcForm = WHTaxbrw.WHCalcForm;
+        WHCertr.VECode = OPrw.VECode;
+        VEr.Code = OPrw.VECode;
+        if (ReadFirstMain(VEr,1,true)) then begin
+          WHCertr.VEName = VEr.Name;
+        end;
+        Userr.Code = CurrentUser;
+        if (ReadFirstMain(Userr,1,true)) then begin
+          WHCertr.UserName = Userr.Name;
+        end;
+        wxtaxcomment = WHTaxbrw.Comment;
+        if (FindWHVETax(OPrw.VECode,OPr.TransDate,WHVEr)) then begin
+          rwcnt = MatRowCnt(WHVEr);
+          for (i=0;i<rwcnt;i=i+1) begin
+            MatRowGet(WHVEr,i,WHVErw);
+            if (WHVErw.WHTax==OPrw.WHTax) then begin
+              if (blankdate(WHVErw.StartDate)) or (OPr.TransDate>=WHVErw.StartDate) then begin
+                WHCertr.Comment = WHVErw.Comment;
+                i = rwcnt;
+              end;
+              if (WHVErw.TAXPrc!=0) then begin
+                if (nonblank(WHVErw.Comment)) then begin
+                  wxtaxcomment = WHVErw.Comment;
+                end;
+              end;
+            end;
+          end;
+          WHCertr.PayMode = OPrw.PayMode;
+          WHCertr.WHTaxComment = wxtaxcomment;
+          WHCertr.OPNr = OPr.SerNr;
+          WHCertr.OPTransDate = OPr.TransDate;
+          WHCertr.OPRefStr = OPr.PayNumber;
+          WHCertr.OPComment = OPr.BankName;
+          WHCertr.BankCurncy = OPrw.BankCurncy;
+          WHCertr.Amount = Round(OPrw.BankVal,SetRoundModeD(2));
+          WHCertr.CalcBase = OPrw.WHTaxBase;
+//not wrking          WHCertr.AccBaseAmount = OPrw.WHTaxAccumBase;
+          WHCertr.TaxPrc = OPrw.WHTaxPrc;
+          if (WHCalcFr.TaxCalc==kWHTaxCalcPerInvoice or WHCalcFr.TaxCalc==kWHTaxCalcOnPurchaseInvoice) then begin
+            WHCertr.OPRow = oprownr;
+          end else begin
+            AddWHCertificateRow(WHCertr,OPrw,oprownr);
+          end;
+          WHCertr.SerNr = NextSerNr("WHCertificateVc",CurrentDate,-1,false,"");            
+          WHCertr.WHTax = OPrw.WHTax;
+          WHCertr.WHTaxSerNr = NextWHTaxNo(WHCertr.WHTax,WHTaxbrw,WHTaxb,sharerow);
+          if (WHCertr.SerNr>0) then begin
+            if (RecordStore(WHCertr,false)) then begin
+              if (sharerow==-1) and (rownr!=-1) then begin 
+                WHTaxbrw.LastCertificateNr = WHCertr.WHTaxSerNr;
+                MatRowPut(WHTaxb,rownr,WHTaxbrw);
+              end else begin
+                MatRowGet(WHTaxb,sharerow,shareWHTaxbrw);
+                shareWHTaxbrw.LastCertificateNr = WHCertr.WHTaxSerNr;
+                MatRowPut(WHTaxb,sharerow,shareWHTaxbrw);
+              end;
+              BlockStore(WHTaxb);
+              CreateRecordLink(WHCertr,CurrentCompany,OPr,CurrentCompany);  
+              CreateRecordLink(OPr,CurrentCompany,WHCertr,CurrentCompany);  
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+  return;
+end;
+
+function string 255 CommentFromDocType(string doccode)
+begin
+  string 255 comment;
+  Integer i,rwcnt;
+  record CUDocTypeBlock CUDTb;
+  row CUDocTypeBlock CUDTbrw;
+  
+  BlockLoad(CUDTb);
+  rwcnt = MatRowCnt(CUDTb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(CUDTb,i,CUDTbrw);
+    if (doccode==CUDTbrw.DocType) then begin 
+      comment = CUDTbrw.Comment;
+      i = rwcnt;
+    end;  
+  end;
+  CommentFromDocType = comment;
+  return;
+end;
+
+function string 255 SituationType(record CUVc CUr)
+begin
+  string 255 res;
+
+  if (CUr.ExportFlag==3) then begin 
+    res = "CONTRIBUYENTE";
+  end;
+  if  (CUr.ExportFlag==1) then begin 
+    res = "NO_CONTRIBUYENTE";
+  end;
+  if  (CUr.ExportFlag==2) then begin 
+    res = "NO_RESIDENTE";
+  end;
+
+  SituationType = res;
+  return;
+end;
+
+procedure GetWHTaxRow(string whtax,record WHTaxBlock WHTb,row WHTaxBlock WHTbrw)
+begin
+  Integer i,rwcnt;
+  
+  rwcnt = MatRowCnt(WHTb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(WHTb,i,WHTbrw);
+    if (whtax==WHTbrw.Code) then begin
+      goto LGetWHTaxRow;
+    end;
+  end;
+LGetWHTaxRow:;
+  return;
+end;
+
+function string 255 NameStringWithSpecialChar(string tstr)
+begin
+  string 255 res,c;
+  Integer i;
+
+  for (i=0;i<BytesInString(tstr);i=i+1) begin
+    c = mid(tstr,i,1);
+    if (asc(c)!=34) then begin
+      res = res & c;
+    end else begin
+      res =  res & chr(92) & c ;
+    end;
+  end;
+  NameStringWithSpecialChar = res;
+  return;
+end;
+
+global
+updating procedure AttachFileToOP(record OPVc OPr,area req)
+begin
+  string 255 filename;
+ 
+  filename = CreateTempFile("OP" & OPr.SerNr,".json");
+  WriteAreaToFile(req,filename,0);
+  if (FileExists(filename)) then begin
+    RecordLinkFile(filename,0,OPr,CurrentCompany);
+    Delete_File(filename);
+  end;
+  return;
+end;
+
+function string 10 TimeToString(time t)
+begin
+  string 10 res;
+
+  res = res & Right("0" & t.hour & ":",3);
+  res = res & Right("0" & t.minute & ":",3);
+  res = res & Right("0" & t.second,2);
+
+  TimeToString = res;
+  return;
+end;
+
+function string 255 IntToBool(Boolean int)
+begin
+  string 255 res;
+
+  if int == false then begin
+    res = "false"; 
+  end else begin
+    res = "true";
+  end;
+  IntToBool = res;
+  return;
+end;
+
+function Boolean CreateJsonWHCertificate(record OPVc OPr,row OPVc OPrw,record WHCertificateVc WHCr)
+begin
+  json js;
+  record VIVc VIr;
+  row VIVc VIrw;
+  record CUVc CUr;
+  record PDVc PDr;
+  record BrazilEInvTypeVc EInvTyper;
+  record CurncyCodeVc Curncyr;
+  record WHTaxBlock WHTb;
+  row WHTaxBlock WHTbrw;
+  Integer rwcnt,i;
+  string 255 jsr,tstr,tipoComprobante,tag,fname;
+  val vatprc,t,v;
+  area req;
+  Boolean flag;
+
+  BlockLoad(WHTb);
+  SetAreaZeroSize(req);
+  JSONStringArrayStart(jsr);
+  jsr = jsr & " " & "{";
+  JSONStringMemberStart(jsr,"atributos");
+  jsr = jsr & " " & "{";
+  JSONStringAdd(jsr,"fechaCreacion",DateToString(OPr.TransDate,"YYYY-MM-DD"));
+  JSONStringPut(jsr,"fechaHoraCreacion",DateToString(OPr.TransDate,"YYYY-MM-DD") & " " &  TimeToString(CurrentTime));
+  JSONStringMemberEnd(jsr);
+  jsr = jsr & ",";
+  JSONStringMemberStart(jsr,"informado");
+  jsr = jsr & " " & "{";
+  CUr.Code = OPrw.VECode;
+  ReadFirstMain(CUr,1,true);
+  JSONStringAdd(jsr,"situacion",SituationType(CUr));
+  if (CUr.ExportFlag==3) then begin
+    JSONStringAdd(jsr,"ruc",CUr.VATNr);
+    JSONStringAdd(jsr,"dv",Right(CUr.VATNr,1));
+  end else begin
+    JSONStringAdd(jsr,"tipoIdentificacion",CommentFromDocType(Cur.DocType));
+    JSONStringAdd(jsr,"identificacion",CUr.VATNr);
+  end;  
+  JSONStringAdd(jsr,"nombre",NameStringWithSpecialChar(CUr.Name));
+  if (nonblank(CUr.InvAddr0)) then begin tstr = CUr.InvAddr0; end;
+  if (nonblank(CUr.InvAddr1)) then begin tstr = tstr & " " & CUr.InvAddr1; end;
+  if (nonblank(CUr.InvAddr2)) then begin tstr = tstr & " " & CUr.InvAddr2; end;
+  if (nonblank(CUr.InvAddr3)) then begin tstr = tstr & " " & CUr.InvAddr3; end;
+  if (nonblank(CUr.InvAddr4)) then begin tstr = tstr & " " & CUr.InvAddr4; end;
+  if (CUr.ExportFlag==3) then begin
+    tag = "domicilio";
+  end else begin
+    tag = "direccion";
+  end;
+
+  JSONStringAdd(jsr,"correoElectronico",CUr.eMail);
+  JSONStringAdd(jsr,"pais",GetCountryISOCode(CUr.CountryCode));
+  JSONStringAdd(jsr,"telefono",StripNonDigits(CUr.Phone));
+  JSONStringPut(jsr,tag,tstr);
+  JSONStringMemberEnd(jsr);
+  jsr = jsr & ",";
+  JSONStringMemberStart(jsr,"transaccion");
+  jsr = jsr & " " & "{";
+  VIr.SerNr = OPrw.VISerNr;
+  if (ReadFirstMain(VIr,1,true)) then begin end;
+  PDr.Code = VIr.PayDeal;
+  ReadFirstMain(PDr,1,true);
+  switch (PDr.PDType) begin
+    case kInvoiceTypeCash: tstr = "CONTADO" ;
+    otherwise tstr = "CREDITO";
+  end;
+  JSONStringAdd(jsr,"condicionCompra",tstr);
+  if (nonblank(PDr.Installment)) then begin 
+    JSONStringAdd(jsr,"cuotas",PDr.Installment);
+  end else begin
+    JSONNotStringAdd(jsr,"cuotas",1);
+  end;
+  EInvTyper.Code = VIr.EInvType;
+  if (ReadFirstMain(EInvTyper,1,true)) then begin end;
+  if (nonblank(EInvTyper.OperationType)) then begin 
+    switch (EInvTyper.OperationType) begin
+      case "101": tipoComprobante = "5";
+      case "108": tipoComprobante = "11";
+      case "109": tipoComprobante = "1";
+      otherwise tipoComprobante = "";
+    end;
+  end;  
+  JSONNotStringAdd(jsr,"tipoComprobante",tipoComprobante);
+  JSONStringAdd(jsr,"numeroComprobanteVenta",VIr.InvoiceNr);
+  JSONStringAdd(jsr,"fechaCreacion",DateToString(VIr.InvDate,"YYYY-MM-DD"));
+  if (tipoComprobante!="") then begin
+    JSONStringPut(jsr,"numeroTimbrado",VIr.TaxAuthID);
+  end else begin
+    JSONStringPut(jsr,"numeroTimbrado","0");
+  end;
+  JSONStringMemberEnd(jsr);
+  jsr = jsr & ",";
+  rwcnt = MatRowCnt(VIr); 
+  JSONStringMemberStart(jsr,"detalle");
+  JSONStringArrayStart(jsr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    jsr = jsr & " " & "{";
+    MatRowGet(VIr,i,VIrw);
+    if (VIrw.qty<=0) then begin
+      VIrw.qty = 1;
+    end;
+    JSONNotStringAdd(jsr,"cantidad",VIrw.qty);
+    GetVATproc(VIrw.VATCode,0,vatprc);
+    JSONStringAdd(jsr,"tasaAplica",ValToString(vatprc,M45Val,"",".",0));
+    v = FindVAT(VIrw.VATCode,VIrw.Sum,0,VIr.NoTAXonVAT);
+	  t = MulRateToBase1(VIr.CurncyCode,VIrw.Sum + v,VIr.FrRate,VIr.ToRateB1,VIr.ToRateB2,VIr.BaseRate1,VIr.BaseRate2,DefaultCurRoundOff);
+    JSONNotStringAdd(jsr,"precioUnitario",t/VIrw.qty);
+    JSONStringPut(jsr,"descripcion",VIrw.Comment);
+    JSONStringMemberEnd(jsr);
+    if (rwcnt!=1) and  (i!=rwcnt) then begin
+      jsr = jsr & ",";
+    end;
+  end;
+  JSONStringArrayEnd(jsr);
+  jsr = jsr & ",";
+  JSONStringMemberStart(jsr,"retencion");
+  jsr = jsr & " " & "{";
+  JSONStringAdd(jsr,"fecha",DateToString(WHCr.OPTransDate,"YYYY-MM-DD"));
+  Curncyr.CurncyCode = WHCr.BankCurncy;
+  ReadFirstMain(Curncyr,1,true);
+  JSONStringAdd(jsr,"moneda",Curncyr.TaxOfficeCode);
+   if (Curncyr.TaxOfficeCode!="PYG") then begin 
+    JSONStringAdd(jsr,"tipoCambio",OPrw.BaseRate1BankVal);
+  end;
+  flag = IsPaymentType(WHCr.PayMode,kPayModeTypeWithholding);
+  JSONNotStringAdd(jsr,"retencionRenta",IntToBool(flag));
+  GetWHTaxRow(WHCr.WHTax,WHTb,WHTbrw);
+  if (flag) then begin
+    JSONStringAdd(jsr,"conceptoRenta",WHTbrw.Comment);
+  end else begin
+    JSONStringAdd(jsr,"conceptoRenta"," ");
+  end;
+  flag = IsPaymentType(WHCr.PayMode,kPayModeTypeVATWithholding);
+  JSONNotStringAdd(jsr,"retencionIva",IntToBool(flag));
+  if (flag) then begin
+    JSONStringAdd(jsr,"conceptoIva",WHTbrw.Comment);
+  end else begin
+    JSONStringAdd(jsr,"conceptoIva"," ");
+  end;
+  JSONNotStringAdd(jsr,"rentaPorcentaje",ValToString(WHCr.TaxPrc,M4Val,"",".",0));
+  JSONNotStringAdd(jsr,"rentaCabezasBase",0);
+  JSONNotStringAdd(jsr,"rentaCabezasCantidad",0);
+  JSONNotStringAdd(jsr,"rentaToneladasBase",0);
+  JSONNotStringAdd(jsr,"rentaToneladasCantidad",0);
+  JSONNotStringAdd(jsr,"ivaPorcentaje5",0);
+  JSONNotStringPut(jsr,"ivaPorcentaje10",ValToString(WHCr.TaxPrc,M4Val,"",".",0));
+  JSONStringMemberEnd(jsr);
+  JSONStringMemberEnd(jsr);
+  JSONStringArrayEnd(jsr);
+
+  AddTextToArea(jsr,req);
+  qupdating.AttachFileToOP(OPr,req); 
+  return;
+end;
+
+global
+updating procedure SaveWHCertificates(record OPVc OPr,Boolean updcheqlinkf)
+begin
+  LongInt res;
+  Integer j,rows;
+  row OPVc OPrw;
+  record WHCertificateVc WHCertr;
+  
+  rows = MatRowCnt(OPr);
+  for (j=0;j<rows;j=j+1) begin
+    MatRowGet(OPr,j,OPrw); 
+    if (nonblank(OPrw.WHTax)) then begin
+      SaveWHCertificate(OPr,OPrw,j,WHCertr);
+      CreateJsonWHCertificate(OPr,OPrw,WHCertr);
+    end;
+  end;
+  return;
+end;
+
+global
+updating procedure SaveChequeLink2(record IPVc IPr)
+begin
+  // Fix data corruption with missing FromFileName field values that prevent the linked Receipt from being opened from Cheques.
+  LongInt res;
+  Integer j,rows,LastChqNr;
+  row IPVc IPrw;
+  Record CheckVc Checkr;
+  Record CheckVc oldCheckr;
+
+  LastChqNr = -1;    
+  rows = MatRowCnt(IPr);
+  for (j=0;j<rows;j=j+1) begin
+    MatRowGet(IPr,j,IPrw);
+    if (IPrw.ChequeNr<>-1) then begin
+      if (IPrw.ChequeNr<>LastChqNr) then begin
+        Checkr.SerNr = IPrw.ChequeNr;
+        if (ReadFirstMain(Checkr,1,true)) then begin
+          if ((Checkr.FromNo<=0 or Checkr.FromNo==IPr.SerNr) and (blank(Checkr.FromFileName)) and (Checkr.ToType==0)) then begin
+            RecordCopy(oldCheckr,Checkr);
+            Checkr.FromFileName = "IPVc";
+            Checkr.FromNo = IPr.SerNr;
+            Checkr.ToType = 0;
+            if (RecordUpdate(oldCheckr,Checkr,false)==0) then begin end; 
+          end;
+        end;
+      end;  
+      LastChqNr = IPrw.ChequeNr;    
+    end; 
+  end;
+  Return;
+end;
+
+global
+updating
+procedure SaveChequeLink3(record ChqDepVc ChqDepr)
+begin
+  LongInt res;
+  Integer j,rows;
+  row ChqDepVc ChqDeprw;
+  Record CheckVc Checkr;
+  Record CheckVc oldCheckr;
+
+  rows = MatRowCnt(ChqDepr);
+  for (j=0;j<rows;j=j+1) begin
+    MatRowGet(ChqDepr,j,ChqDeprw);
+    if (ChqDeprw.ChqNr<>-1) then begin
+      Checkr.SerNr = ChqDeprw.ChqNr;
+      if (ReadFirstMain(Checkr,1,true)) then begin
+        RecordCopy(oldCheckr,Checkr);
+        Checkr.ToNo = ChqDepr.SerNr;
+        Checkr.ToType = 3;
+        if (RecordUpdate(oldCheckr,Checkr,false)==0) then begin end; 
+      end;
+    end; 
+  end;
+  Return;
+end;
+
+global
+function Integer CreateDebitNoteCheckRemote(record CheckVc Checkr,var record IVVc IVr,var string rlink)
+begin
+  Integer res,rownr;
+  record CheckSetBlock CSb;
+  string 255 warning,errstr,prepstr,invdatewarn,transdatewarn;
+  row IVVc IVrw;
+  Integer sernrf;
+  record IVVc IV2r;
+  record LocalMachineBlock LMb;
+  
+  BlockLoad(CSb);
+  RecordNew(IVr);
+  IVr.CustCode = Checkr.CUCode;
+  if (PasteCust2InInv(IVr,LMb,"",true,warning,errstr,prepstr,invdatewarn,transdatewarn)) then begin
+    IVr.PayDeal = CSb.DNPayDeal;
+    IVVc_PastePayDeal(IVr,"","");
+    ClearRow(IVr,IVrw,1);
+    switch (Checkr.Openf) begin
+      case kCheckTypeBounced:
+        IVrw.ArtCode = CSb.BouncedArtCode;
+      case kCheckTypeBouncedfromEndorsed:
+        IVrw.ArtCode = CSb.BouncedArtCode;
+      case kCheckTypeCancelled:
+        IVrw.ArtCode = CSb.CancelledArtCode;      
+    end;
+    MatRowPut(IVr,0,IVrw);
+    if (IVVc_PasteArtCode(IVr,0,invdatewarn,warning,false,sernrf)) then begin    
+    end;
+    MatRowGet(IVr,0,IVrw);
+    IVrw.Quant = 1;
+    MatRowPut(IVr,0,IVrw);
+    IVVc_PasteQuantity(IVr,0);        
+
+    MatRowGet(IVr,0,IVrw);
+    IVrw.Price = Checkr.Amount;
+    MatRowPut(IVr,0,IVrw);
+    IVVc_PastePrice(IVr,IV2r,0,warning);
+
+    if (nonblank(CSb.BankFeeArtCode)) then begin
+      rownr = MatRowCnt(IVr);
+      ClearRow(IVr,IVrw,kInvoiceRowTypeNormal);
+      IVrw.ArtCode = CSb.BankFeeArtCode;      
+      MatRowPut(IVr,rownr,IVrw);
+      if (IVVc_PasteArtCode(IVr,rownr,invdatewarn,warning,false,sernrf)) then begin    
+      end;
+      MatRowGet(IVr,rownr,IVrw);
+      IVrw.Quant = 1;
+      MatRowPut(IVr,rownr,IVrw);
+      IVVc_PasteQuantity(IVr,rownr);        
+    end;
+
+    rlink = GetRecordLink(Checkr);
+  end;
+  CreateDebitNoteCheckRemote = res;
+  return;
+end;
+
+global
+updating procedure UpdateOwnChequeStatusHistory(record OwnCheckVc OwnCheckr,string filename,LongInt transnr,Boolean unokf)
+begin
+  record OwnCheckStatusHistVc OCSHr;
+  record OwnCheckStatusHistVc tOCSHr;
+  Boolean newf;
+  
+  OCSHr.FileName = filename;
+  OCSHr.TransNr = transnr;
+  if (ReadFirstKey("FNTransNr",OCSHr,2,true)) then begin
+    if (unokf) then begin
+      RecordDelete(OCSHr);
+    end else begin
+      newf = true;
+    end;
+  end else begin
+    newf = true;
+  end;
+  if (newf) then begin
+    OCSHr.Openf = OwnCheckr.Openf;
+    OCSHr.CheckSerNr = OwnCheckr.SerNr;
+    OCSHr.CheckNr = OwnCheckr.CheckNr;
+    OCSHr.FileName = filename;
+    OCSHr.TransNr = transnr;
+    switch (OwnCheckr.Openf) begin
+      case kCheckTypeCancelled: OCSHr.StatusDate = OwnCheckr.CancelledDate;
+      case kCheckTypeBounced: OCSHr.StatusDate = OwnCheckr.BouncedDate;
+    end;
+    if (blankdate(OCSHr.StatusDate)) then begin
+      OCSHr.StatusDate = CurrentDate;
+    end;
+    RecordCopy(tOCSHr,OCSHr);
+    if (ReadFirstKey("CheckSerNr",tOCSHr,2,true)==false) then begin
+      OCSHr.SerNr = NextSerNr("OwnCheckStatusHistVc",OCSHr.StatusDate,-1,false,"");            
+      RecordStore(OCSHr,false);
+    end;
+  end;
+  return;
+end;
+
+global
+updating procedure UpdateChequeStatusHistory(record CheckVc Checkr,string filename,LongInt transnr,Boolean unokf)
+begin
+  record CheckStatusHistVc CSHr;
+  record CheckStatusHistVc tCSHr;
+  Boolean newf;
+  
+  CSHr.FileName = filename;
+  CSHr.TransNr = transnr;
+  if (ReadFirstKey("FNTransNr",CSHr,2,true)) then begin
+    if (unokf) then begin
+      RecordDelete(CSHr);
+    end else begin
+      newf = true;
+    end;
+  end else begin
+    newf = true;
+  end;
+  if (newf) then begin
+    CSHr.Openf = Checkr.Openf;
+    CSHr.CheckSerNr = Checkr.SerNr;
+    CSHr.CheckNr = Checkr.CheckNr;
+    CSHr.FileName = filename;
+    CSHr.TransNr = transnr;
+    switch (Checkr.Openf) begin
+      case kCheckTypeCancelled: CSHr.StatusDate = Checkr.CancelledDate;
+      case kCheckTypeBounced: CSHr.StatusDate = Checkr.BouncedDate;
+      case kCheckTypeBouncedfromEndorsed: CSHr.StatusDate = Checkr.BouncedDate;
+    end;
+    if (blankdate(CSHr.StatusDate)) then begin
+      CSHr.StatusDate = CurrentDate;
+    end;
+    RecordCopy(tCSHr,CSHr);
+    if (ReadFirstKey("CheckSerNr",tCSHr,2,true)==false) then begin
+      CSHr.SerNr = NextSerNr("CheckStatusHistVc",CSHr.StatusDate,-1,false,"");            
+      RecordStore(CSHr,false);
+    end;
+  end;
+  return;
+end;

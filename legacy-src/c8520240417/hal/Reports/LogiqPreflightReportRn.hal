@@ -1,0 +1,66 @@
+procedure PrintRowHeader()
+begin
+  StartFormat(15);
+  OutString(0,0,USetStr(44043),false);
+  OutString(2,0,USetStr(44044),false);
+  EndFormat;
+  Black_Divider(0,1);
+  return;
+end;
+
+procedure PrintData(json js,string node)
+begin
+  string 255 chldnode;
+  Integer cnt,i;
+
+  cnt = JSONCountChildren(js,node & "/fields");
+  for (i=0;i<cnt;i=i+1) begin
+    chldnode = node & "/fields/[" & i & "]";
+    StartFormat(15);
+    OutString(0,0,StringFromStringSet(773,JSONGet(js,node & "/name")),false);
+    OutString(2,0,StringFromStringSet(773,JSONGet(js,chldnode & "/name")),false);
+    EndFormat;
+  end;
+
+  return;
+end;
+
+global
+procedure LogiqPreflightReportRn(record RcVc RepSpec)
+begin
+  json js;
+  string 255 node,chldnode,msg;
+  Integer cnt,i;
+
+  StartReportJob(USetStr(44040));
+  Header(0,"",1); 
+  EndHeader;
+
+  js = ParseJSONString(RepSpec.f1);
+
+  StartFormat(15);
+  OutString(0,0,USetStr(44041) & ": ",false);
+  OutString(50,"DblIVVc",RepSpec.long1,false);
+  EndFormat;
+  StartFormat(30);
+  OutString(0,0,"Customer:",false);
+  OutStringID(50,"DblCUVc",RepSpec.f2 & " - " & RepSpec.f3,false,RepSpec.f2);
+  EndFormat;
+  StartFormat(30);
+  OutString(0,0,USetStr(44042),false);
+  EndFormat;
+  
+  SetRepCol(2,80);
+  SetRepCol(3,150);
+  
+  PrintRowHeader;
+  node = "errors";
+  cnt = JSONCountChildren(js,node);
+  for (i=0;i<cnt;i=i+1) begin
+    chldnode = node & "/[" & i & "]/record";
+    PrintData(js,chldnode);
+  end;
+  
+  EndJob;
+  return;
+end;       

@@ -1,0 +1,318 @@
+external function Integer DateGetIntMonth(Date);
+external function val MulWithRateToBase2(var string,Date,val,roundmode);
+external function Boolean IsHansaMailVersion();
+external function roundmode SetRoundModeD(Integer);
+external outer function Boolean HansaMailExcludeDaughterCompanyCOCUServiceWorth(Integer,string);
+
+global
+procedure COVIworthPerCrncyRn_Run(record RcVc RepSpec,string compcode,var LongInt cocutotal,var LongInt cocucnt,var vector val v_totalAmt,var vector Integer v_cucount)
+begin
+  record BaseCurBlock BCb;
+  Boolean found,testf;
+  LongInt afr,ato,pos;
+  string 255 tstr,cucur;
+  Date existedondate;
+  Integer i;
+  array record SoftFVc aSFr;
+  record SoftFVc SFr;
+  vector LongInt v_cucnt;
+  vector val v_cutot;
+  vector string 255 v_cucur;
+  array string 255 atotalAmt;
+  val TotalCOWorth,payval;
+  record COVIVc COVIr;
+
+  cocucnt = 0;
+  BlockLoad(BCb);
+  afr = FirstInRange(RepSpec.f1,11);
+  ato = LastInRange(RepSpec.f1,11);
+
+  existedondate = RepSpec.d1;
+  if (nonblankdate(RepSpec.d2)) then begin
+    existedondate = RepSpec.d2;
+  end;
+  COVIr.SerNr = afr;
+  found = true;
+
+  while (LoopMain(COVIr,1,found)) begin
+    if (nonblank(RepSpec.f1)) then begin
+      if (COVIr.SerNr>ato) then begin
+        found = false;
+      end;
+    end;
+    if (found==false) then begin
+      goto LLOOP;
+    end;
+    testf = true;
+    if (nonblankdate(existedondate)) then begin
+      testf = false;
+      if (nonblankdate(COVIr.TerminationDate)) then begin
+        if (COVIr.TerminationDate>=existedondate) then begin
+          testf = true; 
+        end;
+      end else begin
+        if (COVIr.endDate>=existedondate) then begin
+          testf = true; 
+        end;
+        if (blankdate(COVIr.endDate)) then begin
+          testf = true; 
+        end;
+      end;
+      
+      if (nonblankdate(COVIr.startDate)) then begin
+        if (COVIr.startDate>existedondate) then begin
+          testf = false;
+        end;
+      end;
+    end;
+    if (nonblankdate(RepSpec.d2)) then begin
+      if (nonblankdate(RepSpec.d1)) then begin
+        if (nonblankdate(COVIr.endDate)) then begin
+          if (COVIr.endDate<=RepSpec.d1) then begin
+            testf = false; 
+          end;
+        end;
+        if (nonblankdate(COVIr.TerminationDate)) then begin
+          if (COVIr.TerminationDate<=RepSpec.d1) then begin
+            testf = false; 
+          end;
+        end;
+        if (nonblankdate(COVIr.CancelDate)) then begin
+          if (COVIr.CancelDate<=RepSpec.d1) then begin
+            testf = false; 
+          end;
+        end;
+      end;
+    end;
+    if (RepSpec.flags[2]==0) then begin 
+      if (COVIr.OKFlag!=0) then begin
+        if (RepSpec.flags[1]==0) then begin testf = false; end;
+      end;
+      if (COVIr.OKFlag==0) then begin
+        if (RepSpec.flags[3]==0) then begin testf = false; end;
+      end;
+    end else begin
+      if (COVIr.Accepted==0) then begin testf = false; end;
+    end;
+    if (nonblank(RepSpec.FirstAcc)) then begin
+      if (SetInSet(COVIr.ContractClass,RepSpec.FirstAcc)==false) then begin
+        testf = false;
+      end;
+    end;    
+    if (nonblank(RepSpec.f2)) then begin
+      if (COVIr.VECode!=RepSpec.f2) then begin
+        testf = false;
+      end;
+    end;
+    if (testf and found) then begin
+      SFr.SerNr = COVIr.SerNr;
+      SFr.CustCode = COVIr.VECode;
+      SFr.Comment = COVIr.Addr0;
+      switch (COVIr.perType) begin
+        case 0: payval = COVIr.PayVal*(12.00/COVIr.perLength); // MONTHLY
+        case 1: payval = COVIr.PayVal; // DAILY - for now
+      end;
+      SFr.Sum4 = payval;
+      SFr.CurncyCode = COVIr.CurncyCode;
+      if (RepSpec.IncDaughter==0) then begin
+        aSFr[aSFr.length] = SFr;     
+      end;
+      v_totalAmt[SFr.CurncyCode & "|" & compcode] = v_totalAmt[SFr.CurncyCode & "|" & compcode] + SFr.Sum4;
+      v_cucount[SFr.CurncyCode & "|" & compcode] = v_cucount[SFr.CurncyCode & "|" & compcode] + 1;
+      cocucnt = cocucnt + 1;
+    end;
+LLOOP:;    
+  end;
+
+  if (RepSpec.IncDaughter==0) then begin
+    SortRecordArray(aSFr,"CurncyCode");
+    for (i=0;i<aSFr.length;i=i+1) begin
+      SFr = aSFr[i];
+      StartFormat(15);
+      OutStringID(0,"DblCOVIVcComp",SFr.SerNr,false,RepSpec.flags[29]);
+      OutStringID(50,"DBlCUVcComp",SFr.CustCode,false,RepSpec.flags[29]);
+      OutString(100,0,left(SFr.Comment,40),false);
+      OutVal(430,0,SFr.Sum4,M4Val,true);
+      OutString(1,0,SFr.CurncyCode,true);
+      
+      EndFormat;      
+    end;
+    Black_Divider(0,1);
+    StartFormat(15); 
+    OutString(200,0,USetStr(2751),false); 
+    OutString(430,0,USetStr(8259) & " incl. Discount",true);   
+    OutString(1,0,USetStr(14265),true); 
+    Gray_Divider(1,0);
+    EndFormat; 
+    GetVectorTags(v_totalAmt,atotalAmt);
+    for (i=0;i<atotalAmt.length;i=i+1) begin
+      pos = 0;
+      StartFormat(15);
+      OutString(200,0,v_cucount[atotalAmt[i]],false);
+      GetNextSubstring(atotalAmt[i],pos,"|",tstr);
+      OutVal(430,0,v_totalAmt[atotalAmt[i]],M4Val,true);
+      OutString(1,0,tstr,true);
+      EndFormat;  
+    end;
+    StartFormat(15);
+    OutString(100,0,USetStr(8330),false);
+    OutString(200,0,cocucnt,false);
+    EndFormat;  
+  end;
+  cocutotal = cocutotal + cocucnt;
+  return;
+end;
+
+global
+procedure COVIworthPerCrncyRn(record RcVc RepSpec)
+begin
+  Integer rw,j,i,rwcnt,oldcomp;
+  string 255 tstr,curcode,compcode;
+  Boolean testf,firstf;
+  record CompaniesBlock Compb;
+  row CompaniesBlock Compbrw;
+  record RcVc orgRepSpec;
+  LongInt cocutotal,cocucnt,cocutotalb2;
+  vector val v_totalAmt,v_curtotal,v_curtotalb2;
+  vector Integer v_cucount,v_curtotalcnt;
+  array string 255 atotalAmt,acurtotal;
+  LongInt pos;
+  val v,totalb2;
+
+  cocutotal = 0;
+  if (RepSpec.IncDaughter!=0) then begin
+    StartReportJob(USetStr(8264) & " " & USetStr(8255) & " Consolidated");
+  end else begin
+    StartReportJob(USetStr(8264) & " " & USetStr(8255));
+  end;
+  rw = 1;
+  if (blankdate(RepSpec.d1)) then begin
+    RepSpec.d1 = CurrentDate;
+  end;
+  tstr = USetStr(8261) & " " & RepSpec.d1;
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  if (nonblankdate(RepSpec.d2)) then begin
+    tstr = USetStr(8262) & " " & RepSpec.d2;
+    Header(rw,tstr,1);
+  end;
+  EndHeader;
+  StartFormat(15);
+  if (RepSpec.IncDaughter!=0) then begin
+    OutString(0,0,USetStr(31210),false);
+  end else begin
+    OutString(0,0,USetStr(19190),false);
+  end;
+  if (RepSpec.IncDaughter!=0) then begin
+    OutString(100,0,USetStr(2751),false);   
+  end else begin
+    OutString(50,0,USetStr(8257),false);   
+  end;  
+  if (RepSpec.IncDaughter==0) then begin
+    OutString(430,0,USetStr(8259) & " incl. Discount",true);   
+    OutString(1,0,USetStr(14265),true);  
+  end else begin
+    OutString(250,0,USetStr(8259) & " in Base 2",true);   
+    OutString(430,0,USetStr(8259) & " incl. Discount",true);  
+    OutString(1,0,USetStr(14265),true); 
+  end;
+  EndFormat;
+  Gray_Divider(0,1);
+  if (RepSpec.IncDaughter!=0 or RepSpec.flags[29]!=0) then begin
+    RecordCopy(orgRepSpec,RepSpec);
+    oldcomp = CurrentCompany;
+    BlockLoad(Compb);
+    rwcnt = MatRowCnt(Compb);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(Compb,i,Compbrw);
+      testf = true;
+      if (IsHansaMailVersion) then begin
+        if (HansaMailExcludeDaughterCompanyCOCUServiceWorth(RepSpec.IncDaughter,Compbrw.CompCode)) then begin testf = false; end;
+      end;
+      if (testf) then begin
+        if (RepSpec.flags[29]==0 or RepSpec.flags[29]==StringToInt(Compbrw.CompCode)) then begin
+          if (SetCompanyCode(Compbrw.CompCode,false)) then begin
+            RecordCopy(RepSpec,orgRepSpec);
+            if (RepSpec.IncDaughter!=0) then begin
+              COVIworthPerCrncyRn_Run(RepSpec,Compbrw.CompCode,cocutotal,cocucnt,v_totalAmt,v_cucount);
+              GetVectorTags(v_totalAmt,atotalAmt);
+              firstf = true; 
+              for (j=0;j<atotalAmt.length;j=j+1) begin
+                pos = 0;
+                GetNextSubstring(atotalAmt[j],pos,"|",curcode);
+                GetNextSubstring(atotalAmt[j],pos,"|",compcode);
+                if (compcode==Compbrw.CompCode) then begin
+                  StartFormat(15);
+                  if (firstf) then begin
+                    OutStringID(0,"DblConsCOCUSWorthRn",Compbrw.CompName,false,StringToInt(Compbrw.CompCode) & "|" );
+                    firstf = false;
+                  end;
+                  if (v_cucount[atotalAmt[j]]!=blankval) then begin
+                    OutString(100,0,v_cucount[atotalAmt[j]],false);
+                  end else begin
+                    OutString(100,0,0,false);
+                  end;
+                  if (curcode!="EUR") then begin
+                    v = MulWithRateToBase2(curcode,CurrentDate,v_totalAmt[atotalAmt[j]],DefaultCurRoundOff);
+                  end else begin
+                    v = v_totalAmt[atotalAmt[j]];
+                  end;
+                  OutVal(250,0,v,M4UVal,true);                 
+                  OutVal(430,0,v_totalAmt[atotalAmt[j]],M4UVal,true);
+                  OutString(1,0,curcode,true);
+                  v_curtotal[curcode] = v_curtotal[curcode] + v_totalAmt[atotalAmt[j]];
+                  v_curtotalcnt[curcode] = v_curtotalcnt[curcode] + v_cucount[atotalAmt[j]];
+                  v_curtotalb2[curcode] = v_curtotalb2[curcode] + v;
+                  totalb2 = totalb2 + v;
+                  EndFormat;
+                end;
+              end;
+              if (totalb2!=blankval) then begin
+                Gray_Divider(0,1);
+                StartFormat(15);
+                OutVal(250,0,totalb2,M4UVal,true);
+                totalb2 = 0;
+                EndFormat;
+                StartFormat(15);
+                EndFormat;
+              end;
+            end else begin
+              COVIworthPerCrncyRn_Run(RepSpec,Compbrw.CompCode,cocutotal,cocucnt,v_totalAmt,v_cucount);
+            end;
+          end;
+        end;
+      end;
+    end;    
+    ResetCompany(oldcomp);
+  end else begin
+    COVIworthPerCrncyRn_Run(RepSpec,CurrentCompany,cocutotal,cocucnt,v_totalAmt,v_cucount);
+  end; 
+  if (RepSpec.IncDaughter!=0) then begin
+    Black_Divider(0,1);
+    StartFormat(15);
+    OutString(100,0,USetStr(2751),true); 
+    OutString(250,0,USetStr(8259) & " in Base 2",true);   
+    OutString(430,0,USetStr(8259) & " incl. Discount",true);   
+    OutString(1,0,USetStr(14265),true);
+    Gray_Divider(1,0);
+    EndFormat; 
+    GetVectorTags(v_curtotal,acurtotal);
+    for (i=0;i<acurtotal.length;i=i+1) begin
+      StartFormat(15);
+      OutVal(100,0,v_curtotalcnt[acurtotal[i]],M4Val,true);
+      OutVal(250,0,Round(v_curtotalb2[acurtotal[i]],SetRoundModeD(2)),M4Val,true);
+      OutVal(430,0,v_curtotal[acurtotal[i]],M4Val,true);
+      OutString(1,0,acurtotal[i],true);
+      EndFormat;
+      cocutotalb2 = cocutotalb2 + Round(v_curtotalb2[acurtotal[i]],SetRoundModeD(2));
+    end;
+    Gray_Divider(1,0);
+    StartFormat(15);
+    OutString(50,0,USetStr(8330),false);
+    OutVal(100,0,cocutotal,M4Val,true);
+    OutVal(250,0,cocutotalb2,M4Val,true);
+    EndFormat;
+  end;
+  EndJob;
+  return;
+end;

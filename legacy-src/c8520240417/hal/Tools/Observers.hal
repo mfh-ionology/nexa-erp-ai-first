@@ -1,0 +1,105 @@
+
+global
+procedure TestObserveActVc(record ActVc Actr,record ActVc oldActr,LongInt action,string context)
+begin
+  StopAlert("hej " & context);
+end;
+
+global
+procedure LoadObservations()
+begin
+  record RegisterObservationVc ROr;
+  row RegisterObservationVc ROrw;
+  LongInt ronr,i,rwcnt;
+
+  LogText2(0,"Loading Observations",kVerbosityDebugDetailed);
+
+  while (LoopMain(ROr,0,true)) begin
+    switch (ROr.Register) begin
+      case "ProjActVc": ROr.Register = "ActVc";
+    end;
+    ronr = CreateDataObserver(ROr.Register,ROr.Action,ROr.HalFunction,"RO:" & ROr.SerNr); //ROr.Action
+    DataObserverSetEMail(ronr,ROr.Target);
+    rwcnt = MatRowCnt(ROr);
+    for (i = 0; i<rwcnt; i = i + 1) begin
+      MatRowGet(ROr,i,ROrw);
+      switch (ROrw.Type) begin
+        case kObsRowTypWatch:
+          DataObserverWatchField(ronr,ROrw.Field);
+        case kObsRowTypPredicate:
+          DataObserverAddPredicate(ronr,ROrw.Field,ROrw.Parameter1);
+        case kObsRowTypInListPredicate:
+          DataObserverAddInListPredicate(ronr,ROrw.Field,ROrw.Parameter1);
+        case kObsRowTypRangePredicate:
+          DataObserverAddRangePredicate(ronr,ROrw.Field,ROrw.Parameter1,ROrw.Parameter2);
+      end;
+    end;
+  end;
+end;
+
+global
+updating function LongInt RegisterObservationVcRecordCheck(var record RegisterObservationVc ROr,record RegisterObservationVc RO2r,LongInt stat,LongInt long4)
+begin
+  row RegisterObservationVc ROrw;
+  Integer rwcnt,i;
+  LongInt res;
+
+  res = 0;
+  if (ROr.SerNr==-1) then begin
+    ROr.SerNr = NextSerNr("RegisterObservationVc",CurrentDate,-1,false,"");
+  end;
+
+  rwcnt = MatRowCnt(ROr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(ROr,i,ROrw);
+    switch (ROrw.Type) begin
+      case kObsRowTypWatch:
+        if (nonblank(ROrw.Parameter1)) then begin
+          RecordCheckError(41603,"",i,"Parameter1");      
+          res = -1;
+          goto L99;
+        end;
+        if (nonblank(ROrw.Parameter2)) then begin
+          RecordCheckError(41603,"",i,"Parameter2");      
+          res = -1;
+          goto L99;
+        end;
+      case kObsRowTypPredicate:
+        if (blank(ROrw.Parameter1)) then begin
+          RecordCheckError(41605,"",i,"Parameter1");      
+          res = -1;
+          goto L99;
+        end;
+        if (nonblank(ROrw.Parameter2)) then begin
+          RecordCheckError(41604,"",i,"Parameter2");      
+          res = -1;
+          goto L99;
+        end;
+      case kObsRowTypInListPredicate:
+        if (blank(ROrw.Parameter1)) then begin
+          RecordCheckError(41605,"",i,"Parameter1");      
+          res = -1;
+          goto L99;
+        end;
+        if (nonblank(ROrw.Parameter2)) then begin
+          RecordCheckError(41604,"",i,"Parameter2");      
+          res = -1;
+          goto L99;
+        end;
+      case kObsRowTypRangePredicate:
+        if (blank(ROrw.Parameter1)) then begin
+          RecordCheckError(1058,"",i,"Parameter1");      
+          res = -1;
+          goto L99;
+        end;
+        if (blank(ROrw.Parameter2)) then begin
+          RecordCheckError(1058,"",i,"Parameter2");      
+          res = -1;
+          goto L99;
+        end;
+    end;
+  end;
+L99:;
+  RegisterObservationVcRecordCheck = res;
+  return;
+end;

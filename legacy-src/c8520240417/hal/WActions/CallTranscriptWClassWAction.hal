@@ -1,0 +1,90 @@
+external procedure GetChatStylesheet(var area);
+
+function string 255 JSCallHal(string procname,string args)
+begin
+  string 255 res;
+
+  if (GuiType==kGuiiPhone) then begin // iOS only for now but we should make this the only way on all platforms
+    res = "window.location.href='m4callhal:" & procname & ":" & args & "'";
+  end else begin
+    // This method is deprecated, we should use URL schemes instead, see above
+    res = "HansaWorld.callHal('" & procname & "','" & args & "')";
+  end;
+  
+  JSCallHal = res;
+  return;
+end;
+
+global
+procedure DoAddTranscriptText(Integer wn,string text,Boolean replyf)
+begin
+  string 255 replystr;
+  
+  if (GetWindowString(wn,"##first")=="") then begin
+    Sleep(1);
+    PutWindowString(wn,"##first","false");
+  end;
+  
+  if (replyf) then begin
+    replystr = "true";
+  end else begin
+    replystr = "false";
+  end;
+
+  CallWebPageJavascript(wn,"$CALLTRANSCRIPT","AddChatBubble(\"" & text & "\"," & replystr & ");");
+  return;
+end;
+
+global
+procedure AddTranscriptText(Integer wn,string text,Boolean replyf)
+begin
+  threadasync.DoAddTranscriptText(wn,text,replyf);
+  return;
+end;
+
+procedure GetTranscriptJS(var string js)
+begin
+  js = "<script>";
+  
+  js = js & "function AddChatBubble(tstr,repf){";
+  js = js & "bubble = document.createElement('div');";
+  js = js & "var cls = 'lb';";
+  js = js & "if (repf){";
+  js = js & "cls = 'rb';";
+  js = js & "}";
+  js = js & "bubble.className = cls;";
+  js = js & "document.getElementById('chat_content').appendChild(bubble);";
+  js = js & "bubble.innerHTML = tstr;";
+  js = js & "document.getElementById('chat_content').scrollTo(0,document.getElementById('chat_content').scrollHeight);";
+  js = js & "}";
+
+//  js = js & "window.onload = function() {";
+//  js = js & "};";
+
+  js = js & "</script>";
+  return;
+end;
+
+global
+function Boolean CallTranscriptWClassOnOpenWindow(Integer wn)
+begin
+  area a_css;
+  string 255 html,js;
+
+  GetChatStylesheet(a_css);
+  GetTranscriptJS(js);
+  
+  html = "<html><head>";
+  html = html & GetStringFromArea(a_css,0,GetAreaLength(a_css));
+  html = html & js;
+  html = html & "<body style='height:100%;overflow:hidden'>";
+  html = html & "<div id='chat_content' style='height:370px;overflow:scroll;padding-bottom:20px;margin-bottom:7px'>";
+  html = html & "</div>";
+  html = html & "<div style='clear:both'></div>";
+  html = html & "</body></html>";
+
+  SetWebPageData(wn,"$CALLTRANSCRIPT",html);
+  CallTranscriptWClassOnOpenWindow = false;
+  return;
+end;
+

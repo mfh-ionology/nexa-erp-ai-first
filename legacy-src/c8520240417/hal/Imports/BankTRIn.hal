@@ -1,0 +1,4848 @@
+external procedure IPSumup(var record IPVc);
+external procedure IPVc_PasteBankVal(var record IPVc,Integer);
+external procedure IPVc_PasteRecVal(var record IPVc,Integer);
+external function Boolean IPVc_PasteCustCode(var record IPVc,Integer,var LongInt);
+external function Boolean PasteInvIn2IPr(var record IPVc,Integer,Date,var val,Boolean,var Boolean);
+external function string 255 StripCharacter(string,string);
+external function Boolean IsDigit(string);
+external function val ValFromString(string,string,string);
+external function Date DateFromString(string,string);
+external function boolean IsNumeric(string);
+external procedure StripSpace(var string,string);
+external function Boolean FindStringInString(string,string);
+external function string 20 StripDigits(string);
+external function val StringToValue(string,Integer,string,string);
+
+procedure GetBankTransactionSettings(string code,var record RcVc RepSpec)
+begin
+  record BankTRSetVc BankTRSetr;
+
+  BankTRSetr.Code = code;
+  if (ReadFirstMain(BankTRSetr,1,true)) then begin
+    RepSpec.Stext =  BankTRSetr.DateFormat;
+    RepSpec.AccStr = BankTRSetr.FieldSeparator;  
+    RepSpec.FirstAcc = BankTRSetr.DecimSeparator;
+    RepSpec.LastAcc = BankTRSetr.ThousSeparator;
+    RepSpec.f1 = BankTRSetr.Column1;
+    RepSpec.f2 = BankTRSetr.Column2;
+    RepSpec.f3 = BankTRSetr.Column3;
+    RepSpec.f4 = BankTRSetr.Column4;
+    RepSpec.f5 = BankTRSetr.Column5;
+    RepSpec.f6 = BankTRSetr.Column6;
+    RepSpec.f7 = BankTRSetr.Column7;
+    RepSpec.f8 = BankTRSetr.Column8;
+    RepSpec.f9 = BankTRSetr.Column9;
+    RepSpec.f10 = BankTRSetr.Column10;
+    RepSpec.flags[0] = BankTRSetr.SkipFirstLineFlag;
+  end;
+
+ return;
+end;
+
+function Boolean IsDebitType(string type,val sum)
+begin
+  Boolean res;
+
+  switch (Left(type,1)) begin
+    case "D": res = true;
+    case "C": res = false;
+    otherwise
+      if (sum<0) then begin
+        res = true;
+      end;
+  end;
+
+  IsDebitType = res;
+  return;
+end;
+
+function Boolean BankAccountNumberMatches(string pmbanknr,string bankacc)
+begin
+  Boolean res;
+  Integer i;
+  string 255 tstr;
+  
+  while (i<len(bankacc)) begin
+    if (IsDigit(Mid(bankacc,i,1))) then begin
+      tstr = right(bankacc,len(bankacc)-i);
+      i = len(bankacc);
+    end;
+    i = i + 1;
+  end;
+  if (Right(pmbanknr,len(tstr))==tstr) then begin
+    res = true;
+  end;
+  BankAccountNumberMatches = res;
+  return;
+end;
+
+global
+function Boolean GetBankAccPMRow(record PMBlock PMb,string sortcode,string bankacc,var row PMBlock PMbrw)
+begin
+  Boolean res;
+  Integer i,rwcnt;
+  
+  ClearRow(PMb,PMbrw,1);
+  res = true;
+  BlockLoad(PMb);
+  rwcnt = MatRowCnt(PMb);
+  for (i=0 ;i<rwcnt;i=i+1) begin
+    MatRowGet(PMb,i,PMbrw);
+    if (PMbrw.SortCode==sortcode or blank(sortcode)) and (BankAccountNumberMatches(PMbrw.BankNr,bankacc)) then begin
+      goto LGetBankAccPMRow;
+    end;
+  end;
+  res = false;
+  ClearRow(PMb,PMbrw,1);
+LGetBankAccPMRow:;
+  GetBankAccPMRow = res;
+  return;
+end;
+
+function string 255 GetBankAccountNr(record PMBlock PMb,string accnr,var row PMBlock PMbrw)
+begin
+  string 255 res;
+  Integer i,rwcnt;
+  
+  ClearRow(PMb,PMbrw,1);
+
+  BlockLoad(PMb);
+  rwcnt = MatRowCnt(PMb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(PMb,i,PMbrw);
+    if (PMbrw.AccNr==accnr) then begin
+      res = PMbrw.BankNr;
+      goto LGetBankAccountNr;
+    end;
+  end;
+LGetBankAccountNr:;
+ GetBankAccountNr = res;
+  return;
+end;
+
+global
+function Boolean GetYodleeIDPMRow(record PMBlock PMb,string sortcode,string accountid,var row PMBlock PMbrw)
+begin
+  Boolean res;
+  Integer i,rwcnt;
+  
+  ClearRow(PMb,PMbrw,1);
+  res = true;
+  BlockLoad(PMb);
+  rwcnt = MatRowCnt(PMb);
+  for (i=0 ;i<rwcnt;i=i+1) begin
+    MatRowGet(PMb,i,PMbrw);
+    if (PMbrw.YodleeaccountId==accountid) then begin
+      goto LGetYodleeIDPMRow;
+    end;
+  end;
+  res = false;
+LGetYodleeIDPMRow:;
+  GetYodleeIDPMRow = res;
+  return;
+end;
+
+global
+updating procedure CreateReceipt(record SRBlock SRb,string paymode,record BankTRVc BTRr,boolean emSzmalf)
+begin
+  record CUVc CUr;
+  record IPVc IPr;
+  row IPVc IPrw;
+  LongInt pos,err;
+  string 255 tstr,custcode;
+  record IVVc IVr;
+  record ARVc ARr;
+  Integer rownr;
+  val chk,btv;
+  Boolean testf,found,installmentf,cufound,empty;
+  
+  empty = true;
+  btv = BTRr.Sum;
+  if (emSzmalf) then begin
+    tstr = ValToString(btv,M4Val,"",".",0);
+    btv = StringToVal(StripCharacter(tstr,"-"),M4Val);
+  end;
+  RecordNew(IPr);
+  IPr.TransDate = BTRr.TransDate;
+  IPr.SerNr = NextSerNr("IPVc",IPr.TransDate,SRb.LastPayNr,false,"");
+  IPr.RegDate = CurrentDate;
+  IPr.OKFlag = 0;
+  IPr.PayMode = paymode;
+  IPr.Comment = BTRr.Comment;
+  pos = 0;
+  GetNextSubstring(BTRr.PayReference,pos,",",tstr);
+  tstr = Trim(tstr);
+  while (nonblank(tstr) and btv>0) begin
+    testf = false;
+    if (nonblank(tstr)) then begin
+      IVr.OfficialSerNr = tstr;
+      testf = ReadFirstKey("OfficialSerNr",IVr,1,true);
+    end;
+    if (testf==false) then begin
+      IVr.SerNr = StripNonDigits(tstr);
+      testf = ReadFirstKey("SerNr",IVr,1,true);
+    end;
+    if (testf) then begin
+      if (nonblank(BTRr.PayRegNr1)) then begin
+        if (IVr.RegNr1!=BTRr.PayRegNr1) then begin
+          testf = false;
+        end;
+        if (!testf) then begin
+          CUr.Code = IVr.CustCode;
+          ReadFirstMain(CUr,1,true);
+          testf = (CUr.RegNr1==BTRr.PayRegNr1);
+        end;
+      end else begin //ddc:: 210430 Maybe it should also check bank account if it doesn't find customer with reg.no.?
+        if (nonblank(BTRr.PayBankAcc)) then begin
+          CUr.Code = IVr.CustCode;
+          ReadFirstMain(CUr,1,true);
+          if (nonblank(CUr.IBANCode)) then begin
+            if (CUr.IBANCode!=BTRr.PayBankAcc) then begin
+              testf = false;
+            end;
+          end;
+          if (nonblank(CUr.BankAccount)) then begin
+            if (CUr.BankAccount!=BTRr.PayBankAcc) then begin
+              testf = false;
+            end;
+          end;
+        end else begin
+          testf = false;
+        end;
+      end;
+    end;
+
+    if (testf) then begin
+      empty = false;
+      rownr = MatRowCnt(IPr);
+      custcode = IVr.CustCode;
+      ClearRow(IPr,IPrw,1);
+      IPrw.InvoiceNr = IVr.SerNr;
+      MatRowPut(IPr,rownr,IPrw);
+      PasteInvIn2IPr(IPr,rownr,IPr.TransDate,chk,false,installmentf);
+      MatRowGet(IPr,rownr,IPrw);
+      if (btv!=IPrw.InvVal) then begin
+        IPrw.RecCurncy = BTRr.CurncyCode;
+        if (emSzmalf) then begin
+          IPrw.RecVal = 0;
+          IPrw.SplitVAT = btv;
+          IPrw.InvoiceNr = StripNonDigits(BTRr.Comment);
+        end else begin
+          IPrw.RecVal = btv;
+        end;
+        MatRowPut(IPr,rownr,IPrw);
+        IPVc_PasteRecVal(IPr,rownr);
+      end;
+      MatRowGet(IPr,rownr,IPrw);
+      IPrw.rkRecNumber = BTRr.Comment;
+      MatRowPut(IPr,rownr,IPrw);
+      MatRowGet(IPr,rownr,IPrw);
+      if (!emSzmalf) then begin
+        btv = btv - IPrw.InvVal;
+      end;
+    end;
+    GetNextSubstring(BTRr.PayReference,pos,",",tstr);
+    tstr = Trim(tstr);
+  end;
+  if (!empty) then begin
+    goto LCreateReceipt;
+  end;
+  if (btv>0) then begin
+    cufound = true;
+    if (blank(custcode)) then begin
+      if (nonblank(BTRr.PayRegNr1)) then begin
+        CUr.RegNr1 = BTRr.PayRegNr1;
+        cufound = ReadFirstKey("RegNr1",CUr,1,true);
+        custcode = CUr.Code;
+        if (blank(CUr.RegNr1)) then begin cufound = false; custcode = ""; end;
+        if (cufound==false) then begin
+          CUr.IBANCode = BTRr.PayBankAcc;
+          cufound = ReadFirstKey("ActIBAN",CUr,1,true);
+          custcode = CUr.Code;
+        end;
+        if (cufound==false) then begin
+          CUr.BankAccount = BTRr.PayBankAcc;
+          cufound = ReadFirstKey("BankAccount",CUr,1,true);
+          custcode = CUr.Code;
+        end;
+        if (cufound==false and nonblank(BTRr.PayRegNr1)) then begin
+          CUr.VATNr = BTRr.PayRegNr1;
+          cufound = ReadFirstKey("VATNr",CUr,1,true);
+          custcode = CUr.Code;
+        end;
+      end else begin
+        CUr.Name = BTRr.PayName;
+        cufound = ReadFirstKey("Name",CUr,1,true);
+        custcode = CUr.Code;
+      end;
+    end;
+    if (cufound) then begin
+      found = true;
+      ARr.CustCode = custcode;
+      while (LoopKey("CustCode",ARr,1,found)) begin
+        if (ARr.CustCode!=custcode) then begin found = false; end;
+        if (found) then begin
+          testf = true;
+          IVr.SerNr = ARr.InvoiceNr;
+          testf = ReadFirstKey("SerNr",IVr,1,true);
+          if (testf) then begin
+            rownr = MatRowCnt(IPr);
+            custcode = IVr.CustCode;
+            ClearRow(IPr,IPrw,1);
+            IPrw.InvoiceNr = IVr.SerNr;
+            MatRowPut(IPr,rownr,IPrw);
+            PasteInvIn2IPr(IPr,rownr,IPr.TransDate,chk,false,installmentf);
+            MatRowGet(IPr,rownr,IPrw);
+            if (btv!=IPrw.InvVal) then begin
+              IPrw.RecCurncy = BTRr.CurncyCode;
+              if (emSzmalf) then begin
+                IPrw.RecVal = 0;
+                IPrw.SplitVAT = btv;
+                IPrw.InvoiceNr = StripNonDigits(BTRr.Comment);
+              end else begin
+                IPrw.RecVal = btv;
+              end;
+              MatRowPut(IPr,rownr,IPrw);
+              IPVc_PasteRecVal(IPr,rownr);
+            end;
+            MatRowGet(IPr,rownr,IPrw);
+            IPrw.rkRecNumber = BTRr.Comment;
+            MatRowPut(IPr,rownr,IPrw);
+            MatRowGet(IPr,rownr,IPrw);
+            if(!emSzmalf) then begin
+              btv = btv - IPrw.InvVal;
+            end;  
+            if (btv<=0) then begin found = false; end;
+          end;
+        end;
+      end;
+    end;
+  end;
+  if (btv>0 and cufound) then begin
+    rownr = MatRowCnt(IPr);
+    ClearRow(IPr,IPrw,1);
+    IPrw.CustCode = custcode;
+    MatRowPut(IPr,rownr,IPrw);
+    IPVc_PasteCustCode(IPr,rownr,err);
+    MatRowGet(IPr,rownr,IPrw);
+    IPrw.RecCurncy = BTRr.CurncyCode;
+    if (emSzmalf) then begin
+      IPrw.RecVal = 0;
+      IPrw.SplitVAT = btv;
+    end else begin
+      IPrw.RecVal = btv;
+    end;
+    MatRowPut(IPr,rownr,IPrw);
+    IPVc_PasteRecVal(IPr,rownr);
+    MatRowGet(IPr,rownr,IPrw);
+    IPrw.rkRecNumber = BTRr.Comment;
+    MatRowPut(IPr,rownr,IPrw);
+  end;
+  
+LCreateReceipt:;
+  if (cufound or !empty) then begin
+    IPSumup(IPr);
+    RecordStore(IPr,false);
+  end;
+  return;
+end;
+
+updating procedure ImpSwedBankLTU(record RcVc RepSpec)
+begin
+  record BankTRVc oBTRr;
+  record BankTRVc BTRr;
+  string 255 acctkey,balkey,ntrykey,nkey;
+  string 255 sortcode,bankacc,inputLine;
+  xml xdata;
+  Integer n;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record SRBlock SRb;
+  Boolean dayf;
+  
+  BlockLoad(PMb);
+  BlockLoad(CYb);
+  BlockLoad(SRb);
+
+  xdata = ParseXmlFile(GetImportFileName);
+
+  acctkey = "Document/Rpt/Acct/";
+  sortcode = XmlGet(xdata,"Document/BkToCstmrAcctRpt/Rpt/Acct/Svcr/FinInstnId/BIC");
+  bankacc = XmlGet(xdata,"Document/BkToCstmrAcctRpt/Rpt/Acct/Id/IBAN");
+  dayf = false;
+  if (blank(sortcode) and blank(bankacc)) then begin
+    acctkey = "Document/Rpt/Stmt/";
+    sortcode = XmlGet(xdata,"Document/BkToCstmrStmt/Stmt/Acct/Svcr/FinInstnId/BIC");
+    bankacc = XmlGet(xdata,"Document/BkToCstmrStmt/Stmt/Acct/Id/IBAN");
+    dayf = true;
+
+  end;
+
+ // GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+
+  acctkey = "Document/BkToCstmrAcctRpt/Rpt/Acct/";
+  balkey = "Document/BkToCstmrAcctRpt/Rpt/Bal/";
+  nkey = "Document/BkToCstmrAcctRpt/Rpt/Ntry";
+
+  if (dayf) then begin  
+    acctkey = "Document/BkToCstmrStmt/Stmt/Acct/";
+    balkey = "Document/BkToCstmrStmt/Stmt/Bal/";
+    nkey = "Document/BkToCstmrStmt/Stmt/Ntry";
+  end;
+
+  n = 0;
+  while (XmlNodeExists(xdata,nkey & "[" & n & "]")) begin
+    ntrykey = nkey & "[" & n & "]/";
+    RecordNew(BTRr);
+    BTRr.CurncyCode = XmlGetAttribute(xdata,ntrykey & "Amt","Ccy");
+    BTRr.Sum = ValFromString(XmlGet(xdata,ntrykey & "Amt"),".","");
+    BTRr.TypeRef = XmlGet(xdata,ntrykey & "CdtDbtInd");
+    BTRr.TransDate = DateFromString(XmlGet(xdata,ntrykey & "BookgDt/Dt"),"YYYY-MM-DD");
+
+    BTRr.TRNumber = XmlGet(xdata,ntrykey & "AcctSvcrRef");
+    BTRr.Comment = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+
+//    BTRr.Comment = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/CdtrAcct/Id/IBAN");
+//    BTRr.Comment = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/CdtrAcct/Id/IBAN");
+
+//    BTRr.Reference = XmlGet(xdata,ntrykey & "MEMO");
+    
+    switch (Left(BTRr.TypeRef,1)) begin
+      case "D":
+        BTRr.PayBankAcc = bankacc;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+        
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+
+
+        BTRr.RcpBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/CdtrAcct/Id/IBAN");
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Nm");
+        BTRr.RcpRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Id/OrgId/Othr/Id");
+        BTRr.RcpReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+
+      case "C":
+        BTRr.RcpBankAcc = bankacc;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = CYb.CompName;
+        BTRr.RcpVATNr = CYb.VATNr;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+
+        BTRr.PayBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/DbtrAcct/Id/IBAN");
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Nm");
+        BTRr.PayRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Id/OrgId/Othr/Id");
+        BTRr.PayReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+        CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+    oBTRr.TRNumber = BTRr.TRNumber;
+    if (ReadFirstKey("TRNumber",oBTRr,1,true)==false) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+
+    n = n + 1;
+  end;
+  
+  while (TestEOF==false) begin
+    inputLine = ImportField;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+updating procedure ImpSEBLVA(record RcVc RepSpec)
+begin
+  record BankTRVc oBTRr;
+  record BankTRVc BTRr;
+  string 255 acctkey,balkey,ntrykey,nkey;
+  string 255 sortcode,bankacc,inputLine;
+  xml xdata;
+  Integer n;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record SRBlock SRb;
+  
+  BlockLoad(PMb);
+  BlockLoad(CYb);
+  BlockLoad(SRb);
+	
+  xdata = ParseXmlFile(GetImportFileName);
+
+  acctkey = "FIDAVISTA/Statement/AccountSet";
+  bankacc = XmlGet(xdata,"FIDAVISTA/Statement/AccountSet/IBAN");
+
+  GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+
+  nkey = "FIDAVISTA/Statement/AccountSet/CcyStmt/TrxSet";
+
+  n = 0;
+  while (XmlNodeExists(xdata,nkey & "[" & n & "]")) begin
+    ntrykey = nkey & "[" & n & "]/";
+    RecordNew(BTRr);
+
+    BTRr.CurncyCode = XmlGet(xdata,"FIDAVISTA/Statement/AccountSet/CcyStmt/Ccy");
+    BTRr.Sum = ValFromString(XmlGet(xdata,ntrykey & "CPartySet/Amt"),".","");
+    BTRr.TypeRef = XmlGet(xdata,ntrykey & "CorD");
+    BTRr.TransDate = DateFromString(XmlGet(xdata,ntrykey & "BookDate"),"YYYY-MM-DD");
+
+    BTRr.TRNumber = XmlGet(xdata,ntrykey & "DocNo");
+    BTRr.Comment = XmlGet(xdata,ntrykey & "TypeName");
+    
+    switch (Left(BTRr.TypeRef,1)) begin
+      case "D":
+        BTRr.PayBankAcc = bankacc;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+        
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+
+
+        BTRr.RcpBankAcc = XmlGet(xdata,ntrykey & "CPartySet/AccNo");
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = XmlGet(xdata,ntrykey & "CPartySet/AccHolder/Name");
+        BTRr.RcpRegNr1 = XmlGet(xdata,ntrykey & "CPartySet/AccHolder/LegalId");
+        BTRr.RcpReference = XmlGet(xdata,ntrykey & "BankRef");
+
+      case "C":
+        BTRr.RcpBankAcc = bankacc;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = CYb.CompName;
+        BTRr.RcpVATNr = CYb.VATNr;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+
+        BTRr.PayBankAcc = XmlGet(xdata,ntrykey & "CPartySet/AccNo");
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = XmlGet(xdata,ntrykey & "CPartySet/AccHolder/Name");
+        BTRr.PayRegNr1 = XmlGet(xdata,ntrykey & "CPartySet/AccHolder/LegalId");
+        BTRr.PayReference = XmlGet(xdata,ntrykey & "BankRef");
+        CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+
+      
+    end;
+    
+    oBTRr.TRNumber = BTRr.TRNumber;
+    if (ReadFirstKey("TRNumber",oBTRr,1,true)==false) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+
+    n = n + 1;
+  end;
+  
+  while (TestEOF==false) begin
+    inputLine = ImportField;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+updating procedure ImpSwedBankEST(record RcVc RepSpec)
+begin
+  record BankTRVc oBTRr;
+  record BankTRVc BTRr;
+  string 255 acctkey,balkey,ntrykey,nkey;
+  string 255 sortcode,bankacc,inputLine;
+  xml xdata;
+  Integer n;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record SRBlock SRb;
+  
+  BlockLoad(PMb);
+  BlockLoad(CYb);
+  BlockLoad(SRb);
+	
+  xdata = ParseXmlFile(GetImportFileName);
+
+  acctkey = "Document/Rpt/Acct/";
+  bankacc = XmlGet(xdata,"Document/BkToCstmrAcctRpt/Rpt/Acct/Id/IBAN");
+  sortcode = XmlGet(xdata,"Document/BkToCstmrAcctRpt/Rpt/Acct/Svcr/FinInstnId/BIC");
+
+  GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+
+  acctkey = "Document/BkToCstmrAcctRpt/Rpt/Acct/";
+  balkey = "Document/BkToCstmrAcctRpt/Rpt/Bal/";
+  nkey = "Document/BkToCstmrAcctRpt/Rpt/Ntry";
+
+  n = 0;
+  while (XmlNodeExists(xdata,nkey & "[" & n & "]")) begin
+    ntrykey = nkey & "[" & n & "]/";
+    RecordNew(BTRr);
+
+    BTRr.CurncyCode = XmlGetAttribute(xdata,ntrykey & "Amt","Ccy");
+    BTRr.Sum = ValFromString(XmlGet(xdata,ntrykey & "Amt"),".","");
+    BTRr.TypeRef = XmlGet(xdata,ntrykey & "CdtDbtInd");
+    BTRr.TransDate = DateFromString(XmlGet(xdata,ntrykey & "BookgDt/Dt"),"YYYY-MM-DD");
+
+    BTRr.TRNumber = XmlGet(xdata,ntrykey & "AcctSvcrRef");
+    BTRr.Comment = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+    
+    switch (Left(BTRr.TypeRef,1)) begin
+      case "D":
+        BTRr.PayBankAcc = bankacc;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+        
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+
+        BTRr.RcpBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/CdtrAcct/Id/IBAN");
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Nm");
+        BTRr.RcpRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Id/OrgId/Othr/Id");
+        BTRr.RcpReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+
+
+      case "C":
+        BTRr.RcpBankAcc = bankacc;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = CYb.CompName;
+        BTRr.RcpVATNr = CYb.VATNr;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+
+        BTRr.PayBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/DbtrAcct/Id/IBAN");
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Nm");
+        BTRr.PayRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Id/OrgId/Othr/Id");
+        BTRr.PayReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+        CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+
+      
+    end;
+    
+    oBTRr.TRNumber = BTRr.TRNumber;
+    if (ReadFirstKey("TRNumber",oBTRr,1,true)==false) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+
+    n = n + 1;
+  end;
+  
+  while (TestEOF==false) begin
+    inputLine = ImportField;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+
+updating procedure ImpSEBEST(record RcVc RepSpec)
+begin
+  record BankTRVc oBTRr;
+  record BankTRVc BTRr;
+  string 255 acctkey,balkey,ntrykey,nkey;
+  string 255 sortcode,bankacc,inputLine;
+  xml xdata;
+  Integer n;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record SRBlock SRb;
+  
+  BlockLoad(PMb);
+  BlockLoad(CYb);
+  BlockLoad(SRb);
+	
+  xdata = ParseXmlFile(GetImportFileName);
+
+  acctkey = "Document/Stmt/Acct/";
+  sortcode = XmlGet(xdata,"Document/BkToCstmrStmt/Stmt/Acct/Svcr/FinInstnId/BIC");
+  bankacc = XmlGet(xdata,"Document/BkToCstmrStmt/Stmt/Acct/Id/IBAN");
+
+  GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+
+  acctkey = "Document/BkToCstmrStmt/Stmt/Acct/";
+  balkey = "Document/BkToCstmrStmt/Stmt/Bal/";
+  nkey = "Document/BkToCstmrStmt/Stmt/Ntry";
+
+  n = 0;
+  while (XmlNodeExists(xdata,nkey & "[" & n & "]")) begin
+    ntrykey = nkey & "[" & n & "]/";
+    RecordNew(BTRr);
+
+    BTRr.CurncyCode = XmlGetAttribute(xdata,ntrykey & "Amt","Ccy");
+    BTRr.Sum = ValFromString(XmlGet(xdata,ntrykey & "Amt"),".","");
+    BTRr.TypeRef = XmlGet(xdata,ntrykey & "CdtDbtInd");
+    BTRr.TransDate = DateFromString(XmlGet(xdata,ntrykey & "BookgDt/Dt"),"YYYY-MM-DD");
+
+    BTRr.TRNumber = XmlGet(xdata,ntrykey & "AcctSvcrRef");
+    BTRr.Comment = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+    
+    switch (Left(BTRr.TypeRef,1)) begin
+      case "D":
+        BTRr.PayBankAcc = bankacc;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+        
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+        BTRr.RcpName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Nm");
+        BTRr.RcpRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Id/OrgId/Othr/Id");
+        BTRr.RcpBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/CdtrAcct/Id/IBAN");
+
+      case "C":
+        BTRr.RcpBankAcc = bankacc;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = CYb.CompName;
+        BTRr.RcpVATNr = CYb.VATNr;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+
+        BTRr.PayBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/DbtrAcct/Id/IBAN");
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Nm");
+        BTRr.PayRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Id/OrgId/Othr/Id");
+        BTRr.PayReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+        CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+
+      
+    end;
+    
+    oBTRr.TRNumber = BTRr.TRNumber;
+    if (ReadFirstKey("TRNumber",oBTRr,1,true)==false) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+
+    n = n + 1;
+  end;
+  
+  while (TestEOF==false) begin
+    inputLine = ImportField;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+
+updating procedure ImpSwedBankLVA(record RcVc RepSpec)
+begin
+  record BankTRVc oBTRr;
+  record BankTRVc BTRr;
+  string 255 acctkey,balkey,ntrykey,nkey;
+  string 255 sortcode,bankacc,inputLine;
+  xml xdata;
+  Integer n;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record SRBlock SRb;
+  
+  BlockLoad(PMb);
+  BlockLoad(CYb);
+  BlockLoad(SRb);
+	
+  xdata = ParseXmlFile(GetImportFileName);
+
+  acctkey = "FIDAVISTA/Statement/AccountSet";
+  bankacc = XmlGet(xdata,"FIDAVISTA/Statement/AccountSet/AccNo");
+
+  GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+
+  nkey = "FIDAVISTA/Statement/AccountSet/CcyStmt/TrxSet";
+
+  n = 0;
+  while (XmlNodeExists(xdata,nkey & "[" & n & "]")) begin
+    ntrykey = nkey & "[" & n & "]/";
+    RecordNew(BTRr);
+
+    BTRr.CurncyCode = XmlGet(xdata,"FIDAVISTA/Statement/AccountSet/CcyStmt/Ccy");
+    BTRr.Sum = ValFromString(XmlGet(xdata,ntrykey & "CPartySet/Amt"),".","");
+    BTRr.TypeRef = XmlGet(xdata,ntrykey & "CorD");
+    BTRr.TransDate = DateFromString(XmlGet(xdata,ntrykey & "BookDate"),"YYYY-MM-DD");
+
+    BTRr.TRNumber = XmlGet(xdata,ntrykey & "DocNo");
+    BTRr.Comment = XmlGet(xdata,ntrykey & "PmtInfo");
+    
+    switch (Left(BTRr.TypeRef,1)) begin
+      case "D":
+        BTRr.PayBankAcc = bankacc;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+        
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+
+
+        BTRr.RcpBankAcc = XmlGet(xdata,ntrykey & "CPartySet/AccNo");
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = XmlGet(xdata,ntrykey & "CPartySet/AccHolder/Name");
+        BTRr.RcpRegNr1 = XmlGet(xdata,ntrykey & "CPartySet/AccHolder/LegalId");
+        BTRr.RcpReference = XmlGet(xdata,ntrykey & "BankRef");
+
+      case "C":
+        BTRr.RcpBankAcc = bankacc;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = CYb.CompName;
+        BTRr.RcpVATNr = CYb.VATNr;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+
+        BTRr.PayBankAcc = XmlGet(xdata,ntrykey & "CPartySet/AccNo");
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = XmlGet(xdata,ntrykey & "CPartySet/AccHolder/Name");
+        BTRr.PayRegNr1 = XmlGet(xdata,ntrykey & "CPartySet/AccHolder/LegalId");
+        BTRr.PayReference = XmlGet(xdata,ntrykey & "BankRef");
+        CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+
+      
+    end;
+    
+    oBTRr.TRNumber = BTRr.TRNumber;
+    if (ReadFirstKey("TRNumber",oBTRr,1,true)==false) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+
+    n = n + 1;
+  end;
+  
+  while (TestEOF==false) begin
+    inputLine = ImportField;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+updating procedure ImpSEBLTU(record RcVc RepSpec)
+begin
+  record BankTRVc oBTRr;
+  record BankTRVc BTRr;
+  string 255 acctkey,balkey,ntrykey,nkey;
+  string 255 sortcode,bankacc,inputLine;
+  xml xdata;
+  Integer n;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record SRBlock SRb;
+  
+  BlockLoad(PMb);
+  BlockLoad(CYb);
+  BlockLoad(SRb);
+	
+  xdata = ParseXmlFile(GetImportFileName);
+
+  sortcode = XmlGet(xdata,"Document/BkToCstmrStmt/Stmt/Acct/Svcr/FinInstnId/BIC");
+  bankacc = XmlGet(xdata,"Document/BkToCstmrStmt/Stmt/Acct/Id/IBAN");
+
+  GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+
+  acctkey = "Document/BkToCstmrStmt/Stmt/Acct/";
+  balkey = "Document/BkToCstmrStmt/Stmt/Bal/";
+  nkey = "Document/BkToCstmrStmt/Stmt/Ntry";
+
+
+  n = 0;
+  while (XmlNodeExists(xdata,nkey & "[" & n & "]")) begin
+    ntrykey = nkey & "[" & n & "]/";
+    RecordNew(BTRr);
+
+    BTRr.CurncyCode = XmlGetAttribute(xdata,ntrykey & "Amt","Ccy");
+    BTRr.Sum = ValFromString(XmlGet(xdata,ntrykey & "Amt"),".","");
+    BTRr.TypeRef = XmlGet(xdata,ntrykey & "CdtDbtInd");
+    BTRr.TransDate = DateFromString(XmlGet(xdata,ntrykey & "BookgDt/Dt"),"YYYY-MM-DD");
+
+    BTRr.TRNumber = XmlGet(xdata,ntrykey & "AcctSvcrRef");
+    BTRr.Comment = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+    
+    switch (Left(BTRr.TypeRef,1)) begin
+      case "D":
+        BTRr.PayBankAcc = bankacc;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+        
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+
+
+        BTRr.RcpBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/CdtrAcct/Id/IBAN");
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Nm");
+        BTRr.RcpRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Id/OrgId/Othr/Id");
+        BTRr.RcpReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+
+      case "C":
+        BTRr.RcpBankAcc = bankacc;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = CYb.CompName;
+        BTRr.RcpVATNr = CYb.VATNr;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+
+        BTRr.PayBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/DbtrAcct/Id/IBAN");
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Nm");
+        BTRr.PayRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Id/OrgId/Othr/Id");
+        BTRr.PayReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+        CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+
+      
+    end;
+    
+    oBTRr.TRNumber = BTRr.TRNumber;
+    if (ReadFirstKey("TRNumber",oBTRr,1,true)==false) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+
+    n = n + 1;
+  end;
+  
+  while (TestEOF==false) begin
+    inputLine = ImportField;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+updating procedure ImpLuminorLTU(record RcVc RepSpec)
+begin
+  record BankTRVc oBTRr;
+  record BankTRVc BTRr;
+  string 255 acctkey,balkey,ntrykey,nkey;
+  string 255 sortcode,bankacc,inputLine;
+  xml xdata;
+  Integer n;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record SRBlock SRb;
+  
+  BlockLoad(PMb);
+  BlockLoad(CYb);
+  BlockLoad(SRb);
+
+  xdata = ParseXmlFile(GetImportFileName);
+
+  acctkey = "Document/Stmt/Acct/";
+  sortcode = XmlGet(xdata,"Document/BkToCstmrStmt/Stmt/Acct/Svcr/FinInstnId/BIC");
+  bankacc = XmlGet(xdata,"Document/BkToCstmrStmt/Stmt/Acct/Id/IBAN");
+
+  GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+
+  acctkey = "Document/BkToCstmrStmt/Stmt/Acct/";
+  balkey = "Document/BkToCstmrStmt/Stmt/Bal/";
+  nkey = "Document/BkToCstmrStmt/Stmt/Ntry";
+
+
+  n = 0;
+  while (XmlNodeExists(xdata,nkey & "[" & n & "]")) begin
+    ntrykey = nkey & "[" & n & "]/";
+    RecordNew(BTRr);
+
+    BTRr.CurncyCode = XmlGetAttribute(xdata,ntrykey & "Amt","Ccy");
+    BTRr.Sum = ValFromString(XmlGet(xdata,ntrykey & "Amt"),".","");
+    BTRr.TypeRef = XmlGet(xdata,ntrykey & "CdtDbtInd");
+    BTRr.TransDate = DateFromString(XmlGet(xdata,ntrykey & "BookgDt/DtTm"),"YYYY-MM-DD");
+
+    BTRr.TRNumber = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/Refs/AcctSvcrRef");
+    BTRr.Comment = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+    
+    switch (Left(BTRr.TypeRef,1)) begin
+      case "D":
+        BTRr.PayBankAcc = bankacc;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+        
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+
+
+        BTRr.RcpBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/CdtrAcct/Id/IBAN");
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Nm");
+        BTRr.RcpRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Id/OrgId/Othr/Id");
+        BTRr.RcpReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+
+      case "C":
+        BTRr.RcpBankAcc = bankacc;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = CYb.CompName;
+        BTRr.RcpVATNr = CYb.VATNr;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+
+        BTRr.PayBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/DbtrAcct/Id/IBAN");
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Nm");
+        BTRr.PayRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Id/OrgId/Othr/Id");
+        BTRr.PayReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+        CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+
+      
+    end;
+    
+    oBTRr.TRNumber = BTRr.TRNumber;
+    if (ReadFirstKey("TRNumber",oBTRr,1,true)==false) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+
+    n = n + 1;
+  end;
+  
+  while (TestEOF==false) begin
+    inputLine = ImportField;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+updating procedure ImpPayseraLTU(record RcVc RepSpec)
+begin
+  record BankTRVc oBTRr;
+  record BankTRVc BTRr;
+  string 255 acctkey,balkey,ntrykey,nkey;
+  string 255 sortcode,bankacc,inputLine;
+  xml xdata;
+  Integer n;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record SRBlock SRb;
+  
+  BlockLoad(PMb);
+  BlockLoad(CYb);
+  BlockLoad(SRb);
+
+  xdata = ParseXmlFile(GetImportFileName);
+
+  acctkey = "Document/Stmt/Acct/";
+  sortcode = XmlGet(xdata,"Document/BkToCstmrStmt/Stmt/Acct/Svcr/FinInstnId/BIC");
+  bankacc = XmlGet(xdata,"Document/BkToCstmrStmt/Stmt/Acct/Id/IBAN");
+
+  GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+
+  acctkey = "Document/BkToCstmrStmt/Stmt/Acct/";
+  balkey = "Document/BkToCstmrStmt/Stmt/Bal/";
+  nkey = "Document/BkToCstmrStmt/Stmt/Ntry";
+
+
+  n = 0;
+  while (XmlNodeExists(xdata,nkey & "[" & n & "]")) begin
+    ntrykey = nkey & "[" & n & "]/";
+    RecordNew(BTRr);
+
+    BTRr.CurncyCode = XmlGetAttribute(xdata,ntrykey & "Amt","Ccy");
+    BTRr.Sum = ValFromString(XmlGet(xdata,ntrykey & "Amt"),".","");
+    BTRr.TypeRef = XmlGet(xdata,ntrykey & "CdtDbtInd");
+    BTRr.TransDate = DateFromString(XmlGet(xdata,ntrykey & "BookgDt/DtTm"),"YYYY-MM-DD");
+
+    BTRr.TRNumber = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/Refs/TxId");
+    BTRr.Comment = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+    
+    switch (Left(BTRr.TypeRef,1)) begin
+      case "D":
+        BTRr.PayBankAcc = bankacc;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+        
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+
+
+        BTRr.RcpBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/CdtrAcct/Id/IBAN");
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Nm");
+        BTRr.RcpRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Id/OrgId/Othr/Id");
+        BTRr.RcpReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+
+      case "C":
+        BTRr.RcpBankAcc = bankacc;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = CYb.CompName;
+        BTRr.RcpVATNr = CYb.VATNr;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+
+        BTRr.PayBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/DbtrAcct/Id/IBAN");
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Nm");
+        BTRr.PayRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Id/OrgId/Othr/Id");
+        BTRr.PayReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+        CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+
+      
+    end;
+    
+    oBTRr.TRNumber = BTRr.TRNumber;
+    if (ReadFirstKey("TRNumber",oBTRr,1,true)==false) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+
+    n = n + 1;
+  end;
+  
+  while (TestEOF==false) begin
+    inputLine = ImportField;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+global
+updating procedure ImpRaiffeisenBankHRV(record RcVc RepSpec)
+begin
+  record BankTRVc oBTRr;
+  record BankTRVc BTRr;
+  string 255 acctkey,balkey,ntrykey,nkey;
+  string 255 sortcode,bankacc,inputLine,tstr;
+  xml xdata;
+  Integer n;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record SRBlock SRb;
+
+  BlockLoad(PMb);
+  BlockLoad(CYb);
+  BlockLoad(SRb);
+
+  xdata = ParseXmlFile(GetImportFileName);
+
+//acctkey = "Document/Stmt/Acct/";
+//sortcode = XmlGet(xdata,"Document/BkToCstmrStmt/Stmt/Acct/Svcr/FinInstnId/BIC");
+  bankacc = XmlGet(xdata,"Document/BkToCstmrStmt/Stmt/Acct/Id/IBAN");
+//asuumption that file is for ONE   IBAN account
+
+  GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+
+  acctkey = "Document/BkToCstmrStmt/Stmt/Acct/";
+  balkey = "Document/BkToCstmrStmt/Stmt/Bal/";
+  nkey = "Document/BkToCstmrStmt/Stmt/Ntry";
+
+  n = 0;
+  while (XmlNodeExists(xdata,nkey & "[" & n & "]")) begin
+    ntrykey = nkey & "[" & n & "]/";
+    RecordNew(BTRr);
+
+    BTRr.CurncyCode = XmlGetAttribute(xdata,ntrykey & "Amt","Ccy");
+    BTRr.Sum = ValFromString(XmlGet(xdata,ntrykey & "Amt"),".","");
+    BTRr.TypeRef = XmlGet(xdata,ntrykey & "CdtDbtInd");
+    tstr = XmlGet(xdata,ntrykey & "BookgDt/DtTm");
+    if (blank(tstr)) then begin
+      tstr = XmlGet(xdata,ntrykey & "BookgDt/Dt");
+    end;
+    BTRr.TransDate = DateFromString(tstr,"YYYY-MM-DD");
+
+    BTRr.TRNumber = XmlGet(xdata,ntrykey & "AcctSvcrRef");
+    BTRr.Comment = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Strd/AddtlRmtInf");
+    BTRr.Reference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+    tstr = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/AddtlTxInf");
+    if (nonblank(tstr)) then begin
+      BTRr.Reference = BTRr.Reference & " " & tstr;
+    end;
+//  if (blank(BTRr.Reference)) then begin
+//    BTRr.Reference = BTRr.Comment;
+//  end;
+
+    switch (Left(BTRr.TypeRef,1)) begin
+      case "D":
+        BTRr.PayBankAcc = bankacc;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+        BTRr.RcpBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/CdtrAcct/Id/IBAN");
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Nm");
+//      BTRr.RcpRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Id/OrgId/Othr/Id");
+        BTRr.RcpReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Strd/CdtrRefInf/Ref");
+      case "C":
+        BTRr.RcpBankAcc = bankacc;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = CYb.CompName;
+        BTRr.RcpVATNr = CYb.VATNr;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+        BTRr.PayBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/DbtrAcct/Id/IBAN");
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Nm");
+//      BTRr.PayRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Id/OrgId/Othr/Id");
+        BTRr.PayReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Strd/CdtrRefInf/Ref");
+        CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+
+    oBTRr.TRNumber = BTRr.TRNumber;
+    if (ReadFirstKey("TRNumber",oBTRr,1,true)==false) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+    n = n + 1;
+  end;
+
+  while (TestEOF==false) begin
+    inputLine = ImportField;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+global
+updating procedure ImpZGBHRV(record RcVc RepSpec)
+begin
+record BankTRVc oBTRr;
+  record BankTRVc BTRr;
+  string 255 acctkey,balkey,ntrykey,nkey;
+  string 255 bankacc,inputLine,tstr;
+  xml xdata;
+  Integer n;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record SRBlock SRb;
+
+  BlockLoad(PMb);
+  BlockLoad(CYb);
+  BlockLoad(SRb);
+
+  xdata = ParseXmlFile(GetImportFileName);
+
+  bankacc = XmlGet(xdata,"Izvodi/Izvod/IBAN/IBANBroj");
+
+  GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+
+  acctkey = "Izvodi/Izvod/Sekcije/Sekcija/Partija";
+  balkey = "Izvodi/Izvod/Sekcije/Sekcija/PrethodnoStanje";
+  nkey = "Izvodi/Izvod/Sekcije/Sekcija/Prometi/Promet";
+
+  n = 0;
+  while (XmlNodeExists(xdata,nkey & "[" & n & "]")) begin
+    ntrykey = nkey & "[" & n & "]/";
+    RecordNew(BTRr);
+
+    BTRr.CurncyCode = XmlGetAttribute(xdata,ntrykey & "Amt","Ccy");
+    BTRr.Sum = ValFromString(XmlGet(xdata,ntrykey & "Amt"),".","");
+    BTRr.TypeRef = XmlGet(xdata,ntrykey & "CdtDbtInd");
+    tstr = XmlGet(xdata,ntrykey & "BookgDt/DtTm");
+    if (blank(tstr)) then begin
+      tstr = XmlGet(xdata,ntrykey & "BookgDt/Dt");
+    end;
+    BTRr.TransDate = DateFromString(tstr,"YYYY-MM-DD");
+
+    BTRr.TRNumber = XmlGet(xdata,ntrykey & "AcctSvcrRef");
+    BTRr.Comment = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Strd/AddtlRmtInf");
+    BTRr.Reference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+    tstr = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/AddtlTxInf");
+    if (nonblank(tstr)) then begin
+      BTRr.Reference = BTRr.Reference & " " & tstr;
+    end;
+//  if (blank(BTRr.Reference)) then begin
+//    BTRr.Reference = BTRr.Comment;
+//  end;
+
+    switch (Left(BTRr.TypeRef,1)) begin
+      case "D":
+        BTRr.PayBankAcc = bankacc;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+        BTRr.RcpBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/CdtrAcct/Id/IBAN");
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Nm");
+//      BTRr.RcpRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Id/OrgId/Othr/Id");
+        BTRr.RcpReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Strd/CdtrRefInf/Ref");
+      case "C":
+        BTRr.RcpBankAcc = bankacc;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = CYb.CompName;
+        BTRr.RcpVATNr = CYb.VATNr;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+        BTRr.PayBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/DbtrAcct/Id/IBAN");
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Nm");
+//      BTRr.PayRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Id/OrgId/Othr/Id");
+        BTRr.PayReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Strd/CdtrRefInf/Ref");
+        CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+
+    oBTRr.TRNumber = BTRr.TRNumber;
+    if (ReadFirstKey("TRNumber",oBTRr,1,true)==false) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+    n = n + 1;
+  end;
+
+  while (TestEOF==false) begin
+    inputLine = ImportField;
+    if (NextImportLine(true)) then begin
+  end;
+
+  end;
+  return;
+end;
+
+global
+updating procedure ImpErsteHRV(record RcVc RepSpec)
+begin
+  record BankTRVc oBTRr;
+  record BankTRVc BTRr;
+  string 255 acctkey,balkey,ntrykey,nkey;
+  string 255 sortcode,bankacc,inputLine,tstr;
+  xml xdata;
+  Integer n;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record SRBlock SRb;
+
+  BlockLoad(PMb);
+  BlockLoad(CYb);
+  BlockLoad(SRb);
+
+  xdata = ParseXmlFile(GetImportFileName);
+
+//acctkey = "Document/Rpt/Acct/";
+//sortcode = XmlGet(xdata,"Document/BkToCstmrAcctRpt/Rpt/Acct/Svcr/FinInstnId/BIC");
+  bankacc = XmlGet(xdata,"Document/BkToCstmrAcctRpt/Rpt/Acct/Id/IBAN");
+//asuumption that file is for ONE   IBAN account
+
+  GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+
+  acctkey = "Document/BkToCstmrAcctRpt/Rpt/Acct/";
+  balkey = "Document/BkToCstmrAcctRpt/Rpt/Bal/";
+  nkey = "Document/BkToCstmrAcctRpt/Rpt/Ntry";
+
+  n = 0;
+  while (XmlNodeExists(xdata,nkey & "[" & n & "]")) begin
+    ntrykey = nkey & "[" & n & "]/";
+    RecordNew(BTRr);
+
+    BTRr.CurncyCode = XmlGetAttribute(xdata,ntrykey & "Amt","Ccy");
+    BTRr.Sum = ValFromString(XmlGet(xdata,ntrykey & "Amt"),".","");
+    BTRr.TypeRef = XmlGet(xdata,ntrykey & "CdtDbtInd");
+    tstr = XmlGet(xdata,ntrykey & "BookgDt/DtTm");
+    if (blank(tstr)) then begin
+      tstr = XmlGet(xdata,ntrykey & "BookgDt/Dt");
+    end;
+    BTRr.TransDate = DateFromString(tstr,"YYYY-MM-DD");
+
+    BTRr.TRNumber = XmlGet(xdata,ntrykey & "AcctSvcrRef");
+    BTRr.Comment = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Strd/AddtlRmtInf");
+    BTRr.Reference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+    tstr = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/AddtlTxInf");
+    if (nonblank(tstr)) then begin
+      BTRr.Reference = BTRr.Reference & " " & tstr;
+    end;
+//  if (blank(BTRr.Reference)) then begin
+//    BTRr.Reference = BTRr.Comment;
+//  end;
+
+    switch (Left(BTRr.TypeRef,1)) begin
+      case "D":
+        BTRr.PayBankAcc = bankacc;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+        BTRr.RcpBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/CdtrAcct/Id/IBAN");
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Nm");
+//      BTRr.RcpRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Id/OrgId/Othr/Id");
+        BTRr.RcpReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Strd/CdtrRefInf/Ref");
+      case "C":
+        BTRr.RcpBankAcc = bankacc;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = CYb.CompName;
+        BTRr.RcpVATNr = CYb.VATNr;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+        BTRr.PayBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/DbtrAcct/Id/IBAN");
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Nm");
+//      BTRr.PayRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Id/OrgId/Othr/Id");
+        BTRr.PayReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Strd/CdtrRefInf/Ref");
+        CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+
+    oBTRr.TRNumber = BTRr.TRNumber;
+    if (ReadFirstKey("TRNumber",oBTRr,1,true)==false) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+    n = n + 1;
+  end;
+
+  while (TestEOF==false) begin
+    inputLine = ImportField;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+global
+updating procedure ImpAddikoHRV(record RcVc RepSpec)
+begin
+  record BankTRVc oBTRr;
+  record BankTRVc BTRr;
+  string 255 acctkey,balkey,ntrykey,nkey;
+  string 255 sortcode,bankacc,inputLine,tstr;
+  xml xdata;
+  Integer n;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record SRBlock SRb;
+
+  BlockLoad(PMb);
+  BlockLoad(CYb);
+  BlockLoad(SRb);
+
+  xdata = ParseXmlFile(GetImportFileName);
+
+//acctkey = "Document/Stmt/Acct/";
+//sortcode = XmlGet(xdata,"Document/BkToCstmrStmt/Stmt/Acct/Svcr/FinInstnId/BIC");
+  bankacc = XmlGet(xdata,"Document/BkToCstmrStmt/Stmt/Acct/Id/IBAN");
+//asuumption that file is for ONE   IBAN account
+
+  GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+
+  acctkey = "Document/BkToCstmrStmt/Stmt/Acct/";
+  balkey = "Document/BkToCstmrStmt/Stmt/Bal/";
+  nkey = "Document/BkToCstmrStmt/Stmt/Ntry";
+
+  n = 0;
+  while (XmlNodeExists(xdata,nkey & "[" & n & "]")) begin
+    ntrykey = nkey & "[" & n & "]/";
+    RecordNew(BTRr);
+
+    BTRr.CurncyCode = XmlGetAttribute(xdata,ntrykey & "Amt","Ccy");
+    BTRr.Sum = ValFromString(XmlGet(xdata,ntrykey & "Amt"),".","");
+    BTRr.TypeRef = XmlGet(xdata,ntrykey & "CdtDbtInd");
+    tstr = XmlGet(xdata,ntrykey & "BookgDt/DtTm");
+    if (blank(tstr)) then begin
+      tstr = XmlGet(xdata,ntrykey & "BookgDt/Dt");
+    end;
+    BTRr.TransDate = DateFromString(tstr,"YYYY-MM-DD");
+
+    BTRr.TRNumber = XmlGet(xdata,ntrykey & "AcctSvcrRef");
+    BTRr.Comment = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Strd/AddtlRmtInf");
+    BTRr.Reference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Strd/CdtrRefInf/Ref");
+ //   tstr = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/AddtlTxInf");
+ //   if (nonblank(tstr)) then begin
+ //     BTRr.Reference = BTRr.Reference & " " & tstr;
+ //   end;
+    if (blank(BTRr.Reference)) then begin
+      BTRr.Reference = BTRr.Comment;
+    end;
+
+    switch (Left(BTRr.TypeRef,1)) begin
+      case "D":
+        BTRr.PayBankAcc = bankacc;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+        BTRr.RcpBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/CdtrAcct/Id/IBAN");
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Nm");
+        BTRr.RcpReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Strd/CdtrRefInf/Ref");
+      case "C":
+        BTRr.RcpBankAcc = bankacc;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = CYb.CompName;
+        BTRr.RcpVATNr = CYb.VATNr;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+        BTRr.PayBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/DbtrAcct/Id/IBAN");
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Nm");
+        BTRr.PayReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Strd/CdtrRefInf/Ref");
+        CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+
+    oBTRr.TRNumber = BTRr.TRNumber;
+    if (ReadFirstKey("TRNumber",oBTRr,1,true)==false) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+    n = n + 1;
+  end;
+
+  while (TestEOF==false) begin
+    inputLine = ImportField;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+updating procedure ImpSEBFIN(record RcVc RepSpec)
+begin
+  record BankTRVc oBTRr;
+  record BankTRVc BTRr;
+  string 255 acctkey,balkey,ntrykey,nkey;
+  string 255 sortcode,bankacc,inputLine;
+  xml xdata;
+  Integer n;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record SRBlock SRb;
+  
+  BlockLoad(PMb);
+  BlockLoad(CYb);
+  BlockLoad(SRb);
+	
+  xdata = ParseXmlFile(GetImportFileName);
+
+  acctkey = "Document/Stmt/Acct/";
+  sortcode = XmlGet(xdata,"Document/BkToCstmrStmt/Stmt/Acct/Svcr/FinInstnId/BIC");
+  bankacc = XmlGet(xdata,"Document/BkToCstmrStmt/Stmt/Acct/Id/IBAN");
+
+  GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+
+  acctkey = "Document/BkToCstmrStmt/Stmt/Acct/";
+  balkey = "Document/BkToCstmrStmt/Stmt/Bal/";
+  nkey = "Document/BkToCstmrStmt/Stmt/Ntry";
+
+  n = 0;
+  while (XmlNodeExists(xdata,nkey & "[" & n & "]")) begin
+    ntrykey = nkey & "[" & n & "]/";
+    RecordNew(BTRr);
+
+    BTRr.CurncyCode = XmlGetAttribute(xdata,ntrykey & "Amt","Ccy");
+    BTRr.Sum = ValFromString(XmlGet(xdata,ntrykey & "Amt"),".","");
+    BTRr.TypeRef = XmlGet(xdata,ntrykey & "CdtDbtInd");
+    BTRr.TransDate = DateFromString(XmlGet(xdata,ntrykey & "BookgDt/Dt"),"YYYY-MM-DD");
+
+    BTRr.TRNumber = XmlGet(xdata,ntrykey & "AcctSvcrRef");
+    BTRr.Reference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/Refs/AcctSvcrRef");
+    switch (Left(BTRr.TypeRef,1)) begin
+      case "D":
+        BTRr.PayBankAcc = bankacc;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+        
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Nm");
+        BTRr.RcpRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Cdtr/Id/OrgId/Othr/Id");
+        BTRr.RcpBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/CdtrAcct/Id/IBAN");
+
+        if (nonblank(XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Strd/CdtrRefInf/Ref"))) then begin
+          BTRr.RcpReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Strd/CdtrRefInf/Ref");
+        end else begin
+          BTRr.RcpReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+        end;
+        if (nonblank(XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd"))) then begin
+          BTRr.Comment =XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+        end else begin
+          BTRr.Comment = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Strd/CdtrRefInf/Ref");
+        end;
+
+      case "C":
+        BTRr.RcpBankAcc = bankacc;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = CYb.CompName;
+        BTRr.RcpVATNr = CYb.VATNr;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+
+        BTRr.PayBankAcc = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/DbtrAcct/Id/IBAN");
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Nm");
+        BTRr.PayRegNr1 = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RltdPties/Dbtr/Id/OrgId/Othr/Id");
+
+        if nonblank(XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Strd/CdtrRefInf/Ref")) then begin
+          BTRr.PayReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Strd/CdtrRefInf/Ref");
+        end else begin
+          BTRr.PayReference = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+        end;
+        if (nonblank(XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd"))) then begin
+          BTRr.Comment =XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Ustrd");
+        end else begin
+          BTRr.Comment = XmlGet(xdata,ntrykey & "NtryDtls/TxDtls/RmtInf/Strd/CdtrRefInf/Ref");
+        end;
+        CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+    
+    oBTRr.TRNumber = BTRr.TRNumber;
+    if (ReadFirstKey("TRNumber",oBTRr,1,true)==false) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+
+    n = n + 1;
+  end;
+  
+  while (TestEOF==false) begin
+    inputLine = ImportField;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+updating procedure ImpSEBSWEDEN(record RcVc RepSpec,Integer format)
+begin
+  record BankTRVc oBTRr;
+  record BankTRVc BTRr;
+  string 255 acctkey,balkey,ntrykey,nkey,nkey2,ntrykey2;
+  string 255 sortcode,bankacc,inputLine;
+  xml xdata,xdata2;
+  Integer n,j, cnt2;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record SRBlock SRb;
+  string 255 x,z,currency,a,b,reference;
+  val y,sum;
+  area data2area;
+  string 255 formatkey1,formatkey2;
+
+  switch (format) begin
+    case kReceiptBankSEBSweden:
+      formatkey1 = "BkToCstmrStmt";
+      formatkey2 = "Stmt";
+    case kReceiptBankSEBSweden054:
+      formatkey1 = "BkToCstmrDbtCdtNtfctn";
+      formatkey2 = "Ntfctn";
+  end;
+
+  BlockLoad(PMb);
+  BlockLoad(CYb);
+  BlockLoad(SRb);
+	
+  xdata = ParseXmlFile(GetImportFileName);
+  acctkey = "Document/" & formatkey2 & "/Acct/";
+  sortcode = XmlGet(xdata,"Document/" & formatkey1 & "/" & formatkey2 & "/Acct/Svcr/FinInstnId/BIC");
+  bankacc = XmlGet(xdata,"Document/" & formatkey1 & "/" & formatkey2 & "/Acct/Id/Othr/Id");
+  if (blank(bankacc)) then begin
+    bankacc = XmlGet(xdata,"Document/" & formatkey1 & "/" & formatkey2 & "/Acct/Id/IBAN");
+  end;
+  GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+  acctkey = "Document/" & formatkey1 & "/" & formatkey2 & "/Acct/";
+  balkey = "Document/" & formatkey1 & "/" & formatkey2 & "/Bal/";
+  nkey = "Document/" & formatkey1 & "/" & formatkey2 & "/Ntry";
+  n = 0;
+  while (XmlNodeExists(xdata,nkey & "[" & n & "]")) begin
+    ntrykey = nkey & "[" & n & "]";
+    RecordNew(BTRr);
+
+    if (nonblank( XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/Refs/AcctSvcrRef"))) then begin
+      BTRr.Reference =  XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/Refs/AcctSvcrRef");
+    end else begin
+      BTRr.Reference =XmlGet(xdata,ntrykey & "/AcctSvcrRef");
+    end;
+    BTRr.TypeRef = XmlGet(xdata,ntrykey & "/CdtDbtInd");
+    switch (Left(BTRr.TypeRef,1)) begin
+      case "D":
+        BTRr.PayBankAcc = bankacc;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+        BTRr.TRNumber = XmlGet(xdata,ntrykey & "/AcctSvcrRef");
+        BTRr.TransDate = DateFromString(XmlGet(xdata,ntrykey & "/BookgDt/Dt"),"YYYY-MM-DD");  
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+        reference = XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/RmtInf/Strd/RfrdDocInf/Nb");
+        if (nonblank(XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/RmtInf/Strd/AddtlRmtInf"))) then begin
+          reference = reference & " " & XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/RmtInf/Strd/AddtlRmtInf");
+        end;
+        BTRr.PayReference = reference;
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/RltdPties/Cdtr/Nm");
+        BTRr.RcpRegNr1 = XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/RltdPties/Cdtr/Id/OrgId/Othr/Id");
+        BTRr.RcpBankAcc = XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/RltdPties/CdtrAcct/Id/Othr/Id");
+        BTRr.CurncyCode = XmlGetAttribute(xdata,ntrykey & "/NtryDtls/TxDtls/AmtDtls/TxAmt/Amt","Ccy"); 
+        BTRr.Sum = ValFromString(XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/AmtDtls/TxAmt/Amt"),".","");
+        BTRr.RcpReference = XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/RmtInf/Strd/CdtrRefInf/Ref");
+        BTRr.Comment = XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/RmtInf/Strd/CdtrRefInf/Ref");
+        if (blank(BTRr.Comment)) then begin
+           BTRr.Comment = XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/RmtInf/Ustrd");
+        end;
+      case "C":
+        BTRr.RcpBankAcc = bankacc;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+      j = 0;    
+      while (XmlNodeExists(xdata,ntrykey & "/NtryDtls/TxDtls" & "[" & j & "]")) begin
+        ntrykey2 = ntrykey & "/NtryDtls/TxDtls" &  "[" & j & "]";  
+        BTRr.TransDate = DateFromString(XmlGet(xdata,ntrykey & "/BookgDt/Dt"),"YYYY-MM-DD");
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = CYb.CompName;
+        BTRr.RcpVATNr = CYb.VATNr;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+  
+        BTRr.PayBankAcc = XmlGet(xdata,ntrykey2 & "/RltdPties/DbtrAcct/Id/Othr/Id");
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = XmlGet(xdata,ntrykey2 & "/RltdPties/Dbtr/Nm");
+        BTRr.PayRegNr1 = XmlGet(xdata,ntrykey2 & "/RltdPties/Dbtr/Id/OrgId/Othr/Id");
+
+        if (nonblank(XmlGet(xdata,ntrykey2 & "/RmtInf/Strd/RfrdDocInf/Nb"))) then begin
+          reference = XmlGet(xdata,ntrykey2 & "/RmtInf/Strd/RfrdDocInf/Nb");
+          if (nonblank(XmlGet(xdata,ntrykey2 & "/RmtInf/Strd/AddtlRmtInf"))) then begin
+            reference = reference & " " & XmlGet(xdata,ntrykey2 & "/RmtInf/Strd/AddtlRmtInf");
+          end;
+        end else begin
+          reference = XmlGet(xdata,ntrykey2 & "/RmtInf/Strd/CdtrRefInf/Ref");
+        end;
+        BTRr.PayReference = reference;
+        BTRr.Comment = reference;
+        BTRr.CurncyCode = XmlGetAttribute(xdata,ntrykey2 & "/AmtDtls/TxAmt/Amt","Ccy");
+
+        /*
+         <Strd>
+          <RfrdDocInf>
+            <Tp>
+              <CdOrPrtry>
+                <Cd>CINV</Cd>
+              </CdOrPrtry>
+            </Tp>
+            <Nb>15257</Nb>
+          </RfrdDocInf>
+          <RfrdDocAmt>
+            <RmtdAmt Ccy="SEK">158657.00</RmtdAmt>
+          </RfrdDocAmt>
+        </Strd>
+
+        Reference / Tr. number = what we use currently <AcctSvcrRef> + <Nb> from each <Strd> section, so we can make this number unique
+        Type = if <Cd>CINV</Cd>  enter CRDT
+                    if <Cd>CREN</Cd> enter DEBIT
+        Sum = from <Strd> section <RmtdAmt
+        Currency = from <Strd> section <RmtdAmt
+        Comment = <Nb> from each <Strd> section
+
+        if type = CRDT
+        - P.name from <Dbtr><Nm>
+        - P.Bank acc. from DbtrAcct><Id><Othr><Id>
+        - P.Reference from <Strd> section <Nb>
+
+        if type = DEBIT
+        - R.name from <Dbtr><Nm>
+        - R.Bank acc. from DbtrAcct><Id><Othr><Id>
+        - R.Reference from <Strd> section <Nb>
+
+        In our example:
+
+        transaction 1
+        Reference = STOIIQ0I230102135810870220000001_15257
+        Tr. number = STOIIQ0I230102135810870220000001_15257
+        Type =CRDT       
+        Sum = 158657.00
+        Currency = SEK
+        Comment = 15257
+        P.name = BLOMSTERBODA Sverige AB STÄNGSELBODAVÄGEN 1
+        P.Bank acc. = 51820892
+        P.Reference = 15257
+        ….
+        transaction 4
+
+        Reference = STOIIQ0I230102135810870220000001_90717
+        Tr. number = STOIIQ0I230102135810870220000001_90717
+        Type =DEBIT       
+        Sum = 158657.00
+        Currency = SEK
+        Comment = 90717
+        R.name = BLOMSTERBODA Sverige AB STÄNGSELBODAVÄGEN 1
+        R.Bank acc. = 51820892
+        R.Reference = 90717
+
+        */
+       
+        BTRr.Sum = ValFromString(XmlGet(xdata,ntrykey2 & "/AmtDtls/TxAmt/Amt"),".","");
+        BTRr.TRNumber = XmlGet(xdata,ntrykey2 & "/Refs/AcctSvcrRef");
+        BTRr.Reference = BTRr.TRNumber;
+
+        CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+        j = j + 1;
+        oBTRr.TRNumber = BTRr.TRNumber;
+        if (ReadFirstKey("TRNumber",oBTRr,1,true)==false) then begin
+          BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+          if (BTRr.SerNr>0) then begin
+            RecordStore(BTRr,false);
+          end;
+        end;
+      end;
+    end;
+    oBTRr.TRNumber = BTRr.TRNumber;
+    if (ReadFirstKey("TRNumber",oBTRr,1,true)==false) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+    n = n + 1;
+  end;
+  while (TestEOF==false) begin
+    inputLine = ImportField;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+updating procedure ImpSEBNorway(record RcVc RepSpec)
+begin
+  record BankTRVc oBTRr;
+  record BankTRVc BTRr;
+  string 255 acctkey,balkey,ntrykey,nkey,nkey2,ntrykey2;
+  string 255 sortcode,bankacc,inputLine;
+  xml xdata,xdata2;
+  Integer n,j, cnt2;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record SRBlock SRb;
+  string 255 x,z,currency,a,b,reference;
+  val y,sum;
+  area data2area;
+  string 255 formatkey1,formatkey2;
+
+  formatkey1 = "BkToCstmrStmt";
+  formatkey2 = "Stmt";
+  
+  BlockLoad(PMb);
+  BlockLoad(CYb);
+  BlockLoad(SRb);
+	
+  xdata = ParseXmlFile(GetImportFileName);
+  acctkey = "Document/" & formatkey2 & "/Acct/";
+  sortcode = XmlGet(xdata,"Document/" & formatkey1 & "/" & formatkey2 & "/Acct/Svcr/FinInstnId/BIC");
+  bankacc = XmlGet(xdata,"Document/" & formatkey1 & "/" & formatkey2 & "/Acct/Id/Othr/Id");
+  if (blank(bankacc)) then begin
+    bankacc = XmlGet(xdata,"Document/" & formatkey1 & "/" & formatkey2 & "/Acct/Id/IBAN");
+  end;
+  GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+  acctkey = "Document/" & formatkey1 & "/" & formatkey2 & "/Acct/";
+  balkey = "Document/" & formatkey1 & "/" & formatkey2 & "/Bal/";
+  nkey = "Document/" & formatkey1 & "/" & formatkey2 & "/Ntry";
+  n = 0;
+  while (XmlNodeExists(xdata,nkey & "[" & n & "]")) begin
+    ntrykey = nkey & "[" & n & "]";
+    RecordNew(BTRr);
+
+    if (nonblank( XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/Refs/AcctSvcrRef"))) then begin
+      BTRr.Reference =  XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/Refs/AcctSvcrRef");
+    end else begin
+      BTRr.Reference =XmlGet(xdata,ntrykey & "/AcctSvcrRef");
+    end;
+    BTRr.TypeRef = XmlGet(xdata,ntrykey & "/CdtDbtInd");
+    switch (Left(BTRr.TypeRef,1)) begin
+      case "D":
+        BTRr.PayBankAcc = bankacc;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+        BTRr.TRNumber = XmlGet(xdata,ntrykey & "/AcctSvcrRef");
+        BTRr.TransDate = DateFromString(XmlGet(xdata,ntrykey & "/BookgDt/Dt"),"YYYY-MM-DD");  
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+        reference = XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/RmtInf/Strd/RfrdDocInf/Nb");
+        if (nonblank(XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/RmtInf/Strd/AddtlRmtInf"))) then begin
+          reference = reference & " " & XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/RmtInf/Strd/AddtlRmtInf");
+        end;
+        BTRr.PayReference = reference;
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/RltdPties/Cdtr/Nm");
+        BTRr.RcpRegNr1 = XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/RltdPties/Cdtr/Id/OrgId/Othr/Id");
+        BTRr.RcpBankAcc = XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/RltdPties/CdtrAcct/Id/Othr/Id");
+        BTRr.CurncyCode = XmlGetAttribute(xdata,ntrykey & "/NtryDtls/TxDtls/AmtDtls/TxAmt/Amt","Ccy"); 
+        BTRr.Sum = ValFromString(XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/AmtDtls/TxAmt/Amt"),".","");
+        BTRr.RcpReference = XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/RmtInf/Strd/CdtrRefInf/Ref");
+        BTRr.Comment = XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/RmtInf/Strd/CdtrRefInf/Ref");
+        if (blank(BTRr.Comment)) then begin
+           BTRr.Comment = XmlGet(xdata,ntrykey & "/NtryDtls/TxDtls/RmtInf/Ustrd");
+        end;
+      case "C":
+        BTRr.RcpBankAcc = bankacc;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+      j = 0;    
+      while (XmlNodeExists(xdata,ntrykey & "/NtryDtls/TxDtls" & "[" & j & "]")) begin
+        ntrykey2 = ntrykey & "/NtryDtls/TxDtls" &  "[" & j & "]";  
+        BTRr.TransDate = DateFromString(XmlGet(xdata,ntrykey & "/BookgDt/Dt"),"YYYY-MM-DD");
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = CYb.CompName;
+        BTRr.RcpVATNr = CYb.VATNr;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+  
+        BTRr.PayBankAcc = XmlGet(xdata,ntrykey2 & "/RltdPties/DbtrAcct/Id/Othr/Id");
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = XmlGet(xdata,ntrykey2 & "/RltdPties/Dbtr/Nm");
+        BTRr.PayRegNr1 = XmlGet(xdata,ntrykey2 & "/RltdPties/Dbtr/Id/OrgId/Othr/Id");
+
+        if (nonblank(XmlGet(xdata,ntrykey2 & "/RmtInf/Strd/RfrdDocInf/Nb"))) then begin
+          reference = XmlGet(xdata,ntrykey2 & "/RmtInf/Strd/RfrdDocInf/Nb");
+          if (nonblank(XmlGet(xdata,ntrykey2 & "/RmtInf/Strd/AddtlRmtInf"))) then begin
+            reference = reference & " " & XmlGet(xdata,ntrykey2 & "/RmtInf/Strd/AddtlRmtInf");
+          end;
+        end else begin
+          reference = XmlGet(xdata,ntrykey2 & "/RmtInf/Strd/CdtrRefInf/Ref");
+        end;
+        BTRr.PayReference = reference;
+        BTRr.Comment = reference;
+        BTRr.CurncyCode = XmlGetAttribute(xdata,ntrykey2 & "/AmtDtls/TxAmt/Amt","Ccy");
+        BTRr.Sum = ValFromString(XmlGet(xdata,ntrykey2 & "/AmtDtls/TxAmt/Amt"),".","");
+        BTRr.TRNumber = XmlGet(xdata,ntrykey2 & "/Refs/AcctSvcrRef");
+        BTRr.Reference = BTRr.TRNumber;
+
+        CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+        j = j + 1;
+        oBTRr.TRNumber = BTRr.TRNumber;
+        if (ReadFirstKey("TRNumber",oBTRr,1,true)==false) then begin
+          BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+          if (BTRr.SerNr>0) then begin
+            RecordStore(BTRr,false);
+          end;
+        end;
+      end;
+    end;
+    oBTRr.TRNumber = BTRr.TRNumber;
+    if (ReadFirstKey("TRNumber",oBTRr,1,true)==false) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+    n = n + 1;
+  end;
+  while (TestEOF==false) begin
+    inputLine = ImportField;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+updating procedure ImpDanskeSWE(record RcVc RepSpec)
+begin
+  record BankTRVc BTRr;
+  string 255 ntrykey,nkey,nkey2,ntrykey2,tstr;
+  string 255 sortcode,bankacc,inputLine,name,reference;
+  xml xdata;
+  Integer n,j;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record SRBlock SRb;
+
+  BlockLoad(PMb);
+  BlockLoad(CYb);
+  BlockLoad(SRb);
+	
+  xdata = ParseXmlFile(GetImportFileName);
+  bankacc = XmlGet(xdata,"Document/BkToCstmrDbtCdtNtfctn/Ntfctn/Acct/Id/Othr/Id");
+  GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+  nkey = "Document/BkToCstmrDbtCdtNtfctn/Ntfctn/Ntry";
+  n = 0;
+  while (XmlNodeExists(xdata,nkey & "[" & n & "]")) begin
+    ntrykey = nkey & "[" & n & "]";
+    RecordNew(BTRr);
+    j = 0;    
+    while (XmlNodeExists(xdata,ntrykey & "/NtryDtls/TxDtls" & "[" & j & "]")) begin
+      ntrykey2 = ntrykey & "/NtryDtls/TxDtls" &  "[" & j & "]";  
+      BTRr.TransDate = DateFromString(XmlGet(xdata,ntrykey2 & "/RltdDts/AccptncDtTm"),"YYYY-MM-DD");
+      reference = XmlGet(xdata,ntrykey2 & "/RmtInf/Strd/CdtrRefInf/Ref");
+      BTRr.Reference = reference;
+      BTRr.TRNumber = reference;
+      if (nonblank(reference)) then begin
+        BTRr.Comment = reference;
+      end else begin
+        BTRr.Comment = XmlGet(xdata,ntrykey2 & "/RmtInf/Ustrd");
+      end;
+      name = XmlGet(xdata,ntrykey2 & "/RltdPties/Dbtr/Nm");
+     // if (nonblank(XmlGet(xdata,ntrykey2 & "/RltdPties/Dbtr/PstlAdr/PstCd"))) then begin tstr = name & " " & XmlGet(xdata,ntrykey2 & "/RltdPties/Dbtr/Nm"); end;
+     // if (nonblank(XmlGet(xdata,ntrykey2 & "/RltdPties/Dbtr/PstlAdr/TwnNm"))) then begin tstr = name & " " & XmlGet(xdata,ntrykey2 & "/RltdPties/Dbtr/PstlAdr/TwnNm"); end;      
+      if (XMLGetChildname(xdata,ntrykey2 & "/AmtDtls",0))=="PrtryAmt" and  ((XmlGet(xdata,ntrykey2 & "/AmtDtls/PrtryAmt/Tp"))=="DBIT") then begin
+        BTRr.TypeRef = "D";
+        BTRr.Sum = ValFromString(XmlGet(xdata,ntrykey2 & "/AmtDtls/PrtryAmt/Amt"),".","");
+        BTRr.CurncyCode = XmlGetAttribute(xdata,ntrykey2 & "/AmtDtls/PrtryAmt/Amt","Ccy"); 
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayBankAcc = bankacc;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = name;
+        BTRr.RcpReference = XmlGet(xdata,ntrykey2 & "/RmtInf/Strd/CdtrRefInf/Ref");
+        BTRr.RcpRegNr1 = XmlGet(xdata,ntrykey2 & "/RltdPties/Dbtr/Id/OrgId/Othr/Id");
+      end else begin
+        BTRr.TypeRef = "C";
+        BTRr.Sum = ValFromString(XmlGet(xdata,ntrykey2 & "/AmtDtls/TxAmt/Amt"),".","");
+        BTRr.CurncyCode = XmlGetAttribute(xdata,ntrykey2 & "/AmtDtls/TxAmt/Amt","Ccy"); 
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = name;
+        BTRr.PayReference = XmlGet(xdata,ntrykey2 & "/RmtInf/Strd/CdtrRefInf/Ref");
+        BTRr.PayRegNr1 = XmlGet(xdata,ntrykey2 & "/RltdPties/Dbtr/Id/OrgId/Othr/Id");
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpBankAcc = bankacc;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+        BTRr.RcpName = CYb.CompName;
+        BTRr.RcpReference = XmlGet(xdata,ntrykey2 & "/RmtInf/Strd/CdtrRefInf/Ref");
+        BTRr.RcpVATNr = CYb.VATNr;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+        CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+      end;
+        BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+        if (BTRr.SerNr>0) then begin
+          RecordStore(BTRr,false);
+        end;
+      j = j + 1;
+    end;
+    n = n + 1;
+  end;
+  while (TestEOF==false) begin
+    inputLine = ImportField;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+updating procedure XMLBankTRIn(record RcVc RepSpec)
+begin
+  switch (RepSpec.flags[20]) begin
+    case kReceiptBankSwedBankLithuania: ImpSwedBankLTU(RepSpec);
+    case kReceiptBankSEBLithuania:      ImpSEBLTU(RepSpec);
+    case kReceiptBankLuminorLithuania:  ImpLuminorLTU(RepSpec);
+    case kReceiptBankPayseraLithuania:  ImpPayseraLTU(RepSpec);
+    case kReceiptBankRaiffeisenCroatia: ImpRaiffeisenBankHRV(RepSpec);
+    case kReceiptBankZGBCroatia:        ImpZGBHRV(RepSpec);
+    case kReceiptBankErsteCroatia:      ImpErsteHRV(RepSpec);
+    case kReceiptBankAddikoCroatia:     ImpAddikoHRV(RepSpec);
+    case kReceiptBankSEBLatvia:         ImpSEBLVA(RepSpec);
+    case kReceiptBankSwedBankLatvia:    ImpSwedBankLVA(RepSpec);
+    case kReceiptBankSEBEstonia:        ImpSEBEST(RepSpec);
+    case kReceiptBankSwedBankEstonia:   ImpSwedBankEST(RepSpec);
+    case kReceiptBankSEBFinland:        ImpSEBFIN(RepSpec);
+    case kReceiptBankSEBSweden:         ImpSEBSWEDEN(RepSpec,kReceiptBankSEBSweden);
+    case kReceiptBankSEBSweden054:      ImpSEBSWEDEN(RepSpec,kReceiptBankSEBSweden054);
+    case kReceiptBankSEBNorway:         ImpSEBNorway(RepSpec);
+    case kReceiptBankDanskeSweden54:    ImpDanskeSWE(RepSpec);
+    case kReceiptBankNKBMSlovenia:      ImpRaiffeisenBankHRV(RepSpec); //same format as Croatia Raiffeisen
+    otherwise
+      while (TestEOF==false) begin
+        if (NextImportLine(true)) then begin
+        end;
+      end;
+  end;
+  return;
+end;
+
+updating procedure OFXBankTRIn(record RcVc RepSpec)
+begin
+  record CYBlock CYb;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  xml xdata;
+  string 255 tstr,xkeytr,xkey;
+  string 255 crncy,sortcode,bankacc,typeref;
+  record BankTRVc BTRr;
+  LongInt l;
+  Boolean debitf;
+  val sum;
+  
+  BlockLoad(CYb);
+  BlockLoad(PMb);
+  xdata = ParseXMLFile(GetImportFileName);
+  xkey = "OFX/BANKMSGSRSV1/STMTTRNRS/STMTRS/";
+  crncy = XmlGet(xdata,xkey & "CURDEF");
+
+  sortcode = XmlGet(xdata,xkey & "BANKACCTFROM/BANKID");
+  bankacc = XmlGet(xdata,xkey & "BANKACCTFROM/ACCTID");
+  GetBankAccPMRow(PMb,sortcode,bankacc,PMbrw);
+
+  xkey = "OFX/BANKMSGSRSV1/STMTTRNRS/STMTRS/BANKTRANLIST";
+  
+  l = 0;
+  while (XmlNodeExists(xdata,xkey & "/STMTTRN[" & l & "]")) begin
+    xkeytr = xkey & "/STMTTRN[" & l & "]/";
+
+    typeref = XmlGet(xdata,xkeytr & "TRNTYPE");
+    sum = ValFromString(XmlGet(xdata,xkeytr & "TRNAMT"),".","");
+    debitf = IsDebitType(typeref,sum);
+    if (debitf) begin
+      tstr = "D"; 
+      sum = sum*-1;
+    end else begin
+      tstr = "C";
+    end;
+
+    RecordNew(BTRr);
+    BTRr.CurncyCode = crncy;
+    BTRr.TypeRef = tstr;
+    BTRr.TransDate = DateFromString(XmlGet(xdata,xkeytr & "DTPOSTED"),"YYYYMMDD");
+    BTRr.Sum = sum;
+    BTRr.OffReference = XmlGet(xdata,xkeytr & "CHECKNUM");
+    BTRr.Reference = XmlGet(xdata,xkeytr & "NAME");
+    BTRr.Comment = XmlGet(xdata,xkeytr & "MEMO");
+
+    if (debitf) then begin
+      BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = RepSpec.f20;
+      end;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.PayName = CYb.CompName;
+      BTRr.PayReference = BTRr.Reference;
+      BTRr.PayVATNr = CYb.VATNr;
+      BTRr.PayRegNr1 = CYb.OrgNr;
+    end else begin
+      BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = RepSpec.f20;
+      end;
+      BTRr.RcpTransDate = BTRr.TransDate;
+      BTRr.RcpName = CYb.CompName;
+      BTRr.RcpReference = BTRr.Reference;
+      BTRr.RcpVATNr = CYb.VATNr;
+      BTRr.RcpRegNr1 = CYb.OrgNr;
+    end;
+    
+    BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+    if (BTRr.SerNr>0) then begin
+      RecordStore(BTRr,false);
+    end;
+    l = l + 1;
+  end;
+
+  while (TestEOF==false) begin
+    tstr = ImportField;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+function string 255 ImportAmountColumn(record RcVc RepSpec,string inline,var record BankTRVc BTRr,integer column)
+begin
+  string 255 data;
+  longint pos;
+  Integer i;
+
+  pos = 0;
+  while (i<column) begin
+    GetNextSubstring(inline,pos,RepSpec.AccStr,data);
+    i = i + 1;
+  end;
+  data = StripCharacter(data,"""");
+  BTRr.Sum = ValFromString(data,RepSpec.FirstAcc,"");
+  if (BTRr.Sum>=0) then begin
+    BTRr.TypeRef = "C";
+  end else begin
+    data = StripCharacter(BTRr.Sum,"-");
+    BTRr.Sum = ValFromString(data,RepSpec.FirstAcc,"");
+    BTRr.TypeRef = "D";
+  end;
+  return;
+end;
+
+function string 255 ImportColumn(record CYBlock CYb,string inline,Integer col,Integer amtcol,string specbankacc,string fsep,string coldata,string dateformat,string decsep,string thosep,var record BankTRVc BTRr)
+begin
+  string 255 data,bankacc,name;
+  Integer i;
+  LongInt pos;
+
+  if (col==amtcol) then begin goto LImportColumn; end;
+
+  pos = 0;
+  while (i<col) begin
+    GetNextSubstring(inline,pos,fsep,data);
+    i = i + 1;
+  end;
+  data = StripCharacter(data,"""");
+  if (nonblank(data)) then begin
+    switch (SetFromString(621,coldata)) begin
+      case kBankTRFileColumnDate:
+        BTRr.TransDate = DateFromString(data,dateformat);
+      case kBankTRFileColumnTime:
+  //      BTRr.TransTime = TimeFromString(data,"HHMMSS");
+      case kBankTRFileColumnReference:
+        BTRr.Reference = data;
+      case kBankTRFileColumnType:
+        BTRr.TypeRef = data;
+      case kBankTRFileColumnCreditAmount:
+        BTRr.Sum = StringToVal(data,M4Val);
+        BTRr.TypeRef = "C";
+      case kBankTRFileColumnDebitAmount:
+        BTRr.Sum = StringToVal(data,M4Val);
+        BTRr.TypeRef = "D";
+      case kBankTRFileColumnStatus:
+      case kBankTRFileColumnCurrency:
+        BTRr.CurncyCode = data;
+      case kBankTRFileColumnReceipID:
+        BTRr.OrdNumber = data;
+      case kBankTRFileColumnBalance:
+      case kBankTRFileColumnComment:
+        BTRr.Comment = data;
+      case kBankTRFileColumnBankAcc:
+        bankacc = data;
+      case kBankTRFileColumnTransNumber:
+         BTRr.TRNumber = data;
+      case kBankTRFileColumnVatNr:
+        switch (Left(BTRr.TypeRef,1)) begin
+          case "D":  BTRr.PayVATNr = data;
+          case "C":  BTRr.RcpVATNr = data;
+        end;
+      case kBankTRFileColumnName:
+        switch (Left(BTRr.TypeRef,1)) begin
+          case "D":  BTRr.RcpName = data;
+          case "C":  BTRr.PayName = data;
+        end;
+    end;
+    switch (Left(BTRr.TypeRef,1)) begin
+      case "D":
+        BTRr.PayBankAcc = bankacc;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = specbankacc;
+        end;
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayReference = BTRr.Reference;
+        if (HasLocalization("ARG")==false) then begin
+          BTRr.PayVATNr = CYb.VATNr;
+          BTRr.PayName = CYb.CompName;
+        end;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+      case "C":
+        BTRr.RcpBankAcc = bankacc;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = specbankacc;
+        end;
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpReference = BTRr.Reference;
+        if (HasLocalization("ARG")==false) then begin
+          BTRr.RcpVATNr = CYb.VATNr;
+          BTRr.RcpName = CYb.CompName;
+        end;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+    end;
+  end;
+LImportColumn:;
+  return;
+end;
+
+updating procedure ImpSEBSWE(record RcVc RepSpec)
+begin
+  record BankTRVc BTRr;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  record SRBlock SRb;
+  row PMBlock PMbrw;
+  string 255 tstr,inputLine,data;
+  LongInt pos;
+  string 255 bic,bankacc,crncy,entrydate,valuedate;
+  string 255 amount,text,reference,structured,additional;
+  
+  
+  BlockLoad(PMb);
+  BlockLoad(CYb)
+  BlockLoad(SRb);
+  
+  NextImportLine(true);
+  
+  while (TestEOF==false) begin 
+    inputLine = ImportField;
+    RecordNew(BTRr);
+    
+    pos = 0;
+    GetNextSubstring(inputLine,pos,"|",bic);
+    GetNextSubstring(inputLine,pos,"|",bankacc);
+    GetNextSubstring(inputLine,pos,"|",crncy);
+    GetNextSubstring(inputLine,pos,"|",entrydate);
+    GetNextSubstring(inputLine,pos,"|",valuedate);
+    GetNextSubstring(inputLine,pos,"|",amount);
+    GetNextSubstring(inputLine,pos,"|",text);
+    GetNextSubstring(inputLine,pos,"|",reference);
+    GetNextSubstring(inputLine,pos,"|",structured);
+    GetNextSubstring(inputLine,pos,"|",additional);
+    
+    BTRr.CurncyCode = crncy;
+    BTRr.TransDate = StringToDate(entrydate);
+    BTRr.Sum = StringToVal(StripCharacter(amount,"-"),M4Val);
+    BTRr.Reference = reference;
+    BTRr.Comment = additional;
+    GetBankAccPMRow(PMb,bic,bankacc,PMbrw);
+        
+    if (left(amount,1)=="-") then begin
+      BTRr.PayBankAcc = bankacc;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.PayName = CYb.CompName;
+//      BTRr.RcpBankAcc = ;
+//      BTRr.RcpName = ;
+      BTRr.RcpReference = BTRr.Reference;
+      BTRr.RcpTransDate = BTRr.TransDate;
+      BTRr.PayVATNr = CYb.VATNr;
+      BTRr.PayRegNr1 = CYb.OrgNr;
+      BTRr.TypeRef = "D";
+    end else begin
+      BTRr.RcpBankAcc = bankacc;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+//      BTRr.PayBankAcc = ;
+//      BTRr.PayName = ;
+      BTRr.PayReference = BTRr.Reference;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.RcpTransDate = BTRr.TransDate;
+      BTRr.RcpName = CYb.CompName;
+      BTRr.RcpVATNr = CYb.VATNr;
+      BTRr.RcpRegNr1 = CYb.OrgNr;
+      BTRr.TypeRef = "C";
+      CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+    
+    if (BTRr.Sum!=0) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  
+  return;
+end;
+
+updating procedure ImpBankUSA(record RcVc RepSpec,Integer bank)
+begin
+  record BankTRVc BTRr;
+  record CYBlock CYb;
+  record BaseCurBlock BCb;
+  row PMBlock PMbrw;
+  string 255 tstr,inputLine,SumType;
+  string 255 entrydate,reference,additional;
+  string 255 amount,text,type;
+  LongInt pos;
+  Date tmpdate;
+  Boolean successf;
+  
+  BlockLoad(CYb)
+  BlockLoad(BCb);
+  
+  if (bank!=kReceiptBankWellsFargoUSA) then begin
+    NextImportLine(true);
+  end;
+  if (bank==kReceiptBankOfAmericaUSA) then begin
+    NextImportLine(true);
+  end;
+  
+  while (TestEOF==false) begin 
+    inputLine = ImportField;
+    pos = 0;
+    RecordNew(BTRr);
+    
+    switch (bank) begin
+      case kReceiptBankOfAmericaUSA:
+        GetNextSubstring(inputLine,pos,",",entrydate);
+        GetNextSubstring(inputLine,pos,",",reference);
+        GetNextSubstring(inputLine,pos,",",text);
+        GetNextSubstring(inputLine,pos,",",additional);
+        GetNextSubstring(inputLine,pos,",",amount);
+      case kReceiptBankAllyUSA:
+        GetNextSubstring(inputLine,pos,",",entrydate);
+        GetNextSubstring(inputLine,pos,",",tstr);
+        GetNextSubstring(inputLine,pos,",",amount);
+        GetNextSubstring(inputLine,pos,",",tstr);
+        GetNextSubstring(inputLine,pos,",",text);
+      case kReceiptBankWellsFargoUSA:
+        GetNextSubstring(inputLine,pos,",",entrydate);
+        GetNextSubstring(inputLine,pos,",",amount);
+        GetNextSubstring(inputLine,pos,",",text);
+      case kReceiptBankChaseUSA:
+        GetNextSubstring(inputLine,pos,",",entrydate);
+        GetNextSubstring(inputLine,pos,",",tstr);
+        GetNextSubstring(inputLine,pos,",",text);
+        GetNextSubstring(inputLine,pos,",",additional);
+        GetNextSubstring(inputLine,pos,",",tstr);
+        GetNextSubstring(inputLine,pos,",",amount);
+      case kReceiptBankAmexUSA:
+        GetNextSubstring(inputLine,pos,",",entrydate);
+        GetNextSubstring(inputLine,pos,",",reference);
+        GetNextSubstring(inputLine,pos,",",text);
+        GetNextSubstring(inputLine,pos,",",tstr);
+        GetNextSubstring(inputLine,pos,",",tstr);
+        GetNextSubstring(inputLine,pos,",",amount);
+        GetNextSubstring(inputLine,pos,",",tstr);
+        GetNextSubstring(inputLine,pos,",",type);
+      otherwise
+        goto LImpBankUSA;
+    end;
+    BTRr.Type = 0;
+    switch (bank) begin
+      case kReceiptBankOfAmericaUSA:  tmpdate = DateFromString(entrydate,"MM/DD/YYYY");
+      case kReceiptBankAllyUSA:       tmpdate = DateFromString(entrydate,"YYYY-MM-DD");
+      case kReceiptBankWellsFargoUSA: tmpdate = DateFromString(entrydate,"MM/DD/YYYY");
+      case kReceiptBankChaseUSA:      tmpdate = DateFromString(entrydate,"MM/DD/YYYY");
+      case kReceiptBankAmexUSA:       tmpdate = DateFromString(entrydate,"MM/DD/YY");
+    end;
+    BTRr.TransDate = tmpdate;
+    if (bank==kReceiptBankAmexUSA) then begin
+      reference = StripCharacter(reference,"'");
+    end;
+    BTRr.Reference = reference;
+    BTRr.CurncyCode = BCb.BaseCur1;
+    BTRr.Sum = StringToVal(StripCharacter(amount,"-"),M4Val);
+    if (left(amount,1)=="-" or left(type,1)=="D") then begin 
+      SumType = "D";
+    end else begin 
+      SumType = "C";
+    end;
+    BTRr.TypeRef = SumType;
+    switch (SumType) begin
+      case "D": 
+        BTRr.PayBankAcc = RepSpec.f1;
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.RcpReference = BTRr.Reference;
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+      case "C": 
+        BTRr.RcpBankAcc = RepSpec.f20;
+        BTRr.PayReference = BTRr.Reference;
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = CYb.CompName;
+        BTRr.RcpVATNr = CYb.VATNr;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+        BTRr.RcpBankAcc = RepSpec.f1;
+    end;  
+    BTRr.Comment = text;
+    if (blankdate(BTRr.TransDate)) then begin 
+      BTRr.TransDate = CurrentDate;    
+    end;
+    if (BTRr.Sum!=0) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+        successf = true;
+      end;
+    end;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+LImpBankUSA:;
+  if (successf) then begin
+    CheckMarkBox(15092,"");
+  end;
+  return;
+end;
+
+updating procedure ImpBankNedbankSouthAfrica(record RcVc RepSpec)
+begin
+  record BankTRVc BTRr;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  record SRBlock SRb;
+  record BaseCurBlock BCb;
+  row PMBlock PMbrw;
+  string 255 tstr,inputLine,inputLine2;
+  LongInt pos;
+  string 255 bankacc,transdate,fee;
+  string 255 amount,desc,text,reference,balance;
+  
+  BlockLoad(PMb);
+  BlockLoad(CYb)
+  BlockLoad(SRb);
+  BlockLoad(BCb);
+  
+  NextImportLine(true);
+  inputLine = ImportField;
+  tstr = inputLine;
+  pos = 0;
+  GetNextSubstring(tstr,pos,",",bankacc);
+  GetNextSubstring(tstr,pos,",",bankacc);
+
+  while (TestEOF==false) begin 
+    inputLine = ImportField;
+    tstr = StripCharacter(inputLine,"""");
+    RecordNew(BTRr);
+    pos = 0;
+    GetNextSubstring(tstr,pos,",",transdate);
+    GetNextSubstring(tstr,pos,",",desc);
+    GetNextSubstring(tstr,pos,",",amount);
+    GetNextSubstring(tstr,pos,",",balance);
+    BTRr.CurncyCode = BCb.BaseCur1;
+    BTRr.TransDate = DateFromString(transdate,"DD/MM/YYYY");
+    BTRr.Comment = desc;
+    BTRr.Sum = StringToVal(StripCharacter(amount,"-"),M4Val);
+    BTRr.Reference = reference;
+    
+    GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+        
+    if (left(amount,1)=="-") then begin
+      BTRr.PayBankAcc = bankacc;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.PayName = CYb.CompName;
+      BTRr.PayVATNr = CYb.VATNr;
+      BTRr.PayRegNr1 = CYb.OrgNr;
+      BTRr.TypeRef = "D";
+      BTRr.RcpBankAcc = CYb.Bank1;
+      BTRr.RcpReference = BTRr.Reference;
+      BTRr.RcpTransDate = BTRr.TransDate;
+    end else begin
+      BTRr.RcpBankAcc = bankacc;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.PayBankAcc = CYb.Bank1;
+      BTRr.PayReference = BTRr.Reference;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.RcpTransDate = BTRr.TransDate;
+
+      BTRr.RcpName = CYb.CompName;
+      BTRr.RcpVATNr = CYb.VATNr;
+      BTRr.RcpRegNr1 = CYb.OrgNr;
+      BTRr.PayName = desc;
+      BTRr.TypeRef = "C";
+      CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+    
+    if (BTRr.Sum!=0) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  
+  return;
+end;
+
+function integer ConvertMonthName(string month)
+begin
+  integer res;
+  switch (month) begin
+    case "Jan": res = 1;
+    case "Feb": res = 2;
+    case "Mar": res = 3;
+    case "Apr": res = 4;
+    case "May": res = 5;
+    case "Jun": res = 6;
+    case "Jul": res = 7;
+    case "Aug": res = 8;
+    case "Sep": res = 9;
+    case "Oct": res = 10;
+    case "Nov": res = 11;
+    case "Dec": res = 12;
+  end;
+  ConvertMonthName = res;
+  return;
+end;
+
+updating procedure ImpBankWindhoekNamibia(record RcVc RepSpec)
+begin
+  record BankTRVc BTRr;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  record SRBlock SRb;
+  record BaseCurBlock BCb;
+  row PMBlock PMbrw;
+  string 255 tstr,inputLine;
+  LongInt pos;
+  string 255 bankacc,transdate;
+  string 255 amount,desc,reference,balance,transtype,skip,offreference;
+  
+  BlockLoad(PMb);
+  BlockLoad(CYb)
+  BlockLoad(SRb);
+  BlockLoad(BCb);
+  
+  inputLine = ImportField;
+  tstr = StripCharacter(inputLine,"""");
+  pos = 0;
+  GetNextSubstring(tstr,pos,",",skip);
+  GetNextSubstring(tstr,pos,",",bankacc);
+  GetNextSubstring(tstr,pos,",",skip);
+  GetNextSubstring(tstr,pos,",",skip);
+  GetNextSubstring(tstr,pos,",",skip);  
+  GetNextSubstring(tstr,pos,",",skip);
+  GetNextSubstring(tstr,pos,",",skip);
+  GetNextSubstring(tstr,pos,",",skip);
+  while (TestEOF==false) begin 
+    inputLine = ImportField;
+    tstr = StripCharacter(inputLine,"""");
+    pos = 0;
+    GetNextSubstring(tstr,pos,",",skip);
+    GetNextSubstring(tstr,pos,",",offreference);
+    GetNextSubstring(tstr,pos,",",skip);
+    GetNextSubstring(tstr,pos,",",transdate);//4
+    GetNextSubstring(tstr,pos,",",transtype);//5
+    GetNextSubstring(tstr,pos,",",skip);
+    GetNextSubstring(tstr,pos,",",desc);//7
+    GetNextSubstring(tstr,pos,",",skip);
+    GetNextSubstring(tstr,pos,",",amount);//9
+    GetNextSubstring(tstr,pos,",",balance);//10
+    GetNextSubstring(tstr,pos,",",reference);//11
+
+    if (transtype=="CR" or transtype=="DR") then begin
+      RecordNew(BTRr);
+      BTRr.CurncyCode = BCb.BaseCur1;
+      BTRr.TransDate = DateFromString(transdate,"YYYYMMDD");
+      BTRr.Comment = desc;
+      BTRr.OffReference = offreference;
+      BTRr.Balance = StringToVal(balance,M4Val);
+      BTRr.Sum = StringToVal(StripCharacter(amount,"-"),M4Val);
+      BTRr.Reference = reference;
+      GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+      if (transtype=="DR") then begin
+        BTRr.PayBankAcc = bankacc;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+        BTRr.TypeRef = "D";
+        BTRr.RcpBankAcc = CYb.Bank1;
+        BTRr.RcpReference = BTRr.Reference;
+        BTRr.RcpTransDate = BTRr.TransDate;
+      end else begin
+        BTRr.OffReference = offreference;
+        BTRr.RcpBankAcc = bankacc;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+        BTRr.PayBankAcc = CYb.Bank1;
+        BTRr.PayReference = BTRr.Reference;
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.RcpTransDate = BTRr.TransDate;
+  
+        BTRr.RcpName = CYb.CompName;
+        BTRr.RcpVATNr = CYb.VATNr;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+        BTRr.PayName = desc;
+        BTRr.TypeRef = "C";
+        CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+      end;
+      if (BTRr.Sum!=0) then begin
+        BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+        if (BTRr.SerNr>0) then begin
+          RecordStore(BTRr,false);
+        end;
+      end;
+    end;  
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+updating procedure ImpBankNedbankNamibia(record RcVc RepSpec)
+begin
+  record BankTRVc BTRr;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  record SRBlock SRb;
+  record BaseCurBlock BCb;
+  row PMBlock PMbrw;
+  LongInt pos;
+  Integer i;
+  string 255 bankacc,exptransdate,debitamount,creditamount,currency;
+  string 255 tstr,inputLine,amount,desc,reference,balance,skip;
+  string 255 day, month,year,mmonth;
+  date transdate;
+
+  BlockLoad(PMb);
+  BlockLoad(CYb)
+  BlockLoad(SRb);
+  BlockLoad(BCb);
+  
+  for (i=0;i<13;i=i+1) begin
+    if (i==6) then begin
+      inputLine = ImportField;
+      pos = 0;
+      GetNextSubstring(inputLine,pos,",",tstr);
+      GetNextSubstring(inputLine,pos,",",bankacc);
+      bankacc = StripNonDigits(bankacc);
+    end;
+    if (i==7) then begin
+      inputLine = ImportField;
+      pos = 0;
+      GetNextSubstring(inputLine,pos,",",tstr);
+      GetNextSubstring(inputLine,pos,",",currency);
+    end;
+    NextImportLine(true);
+  end;
+  while (TestEOF==false) begin 
+    inputLine = ImportField;
+    pos = 0;
+    GetNextSubstring(inputLine,pos,",",exptransdate);
+    GetNextSubstring(inputLine,pos,",",skip);
+    GetNextSubstring(inputLine,pos,",",reference);
+    GetNextSubstring(inputLine,pos,",",desc);
+    GetNextSubstring(inputLine,pos,",",skip); 
+    GetNextSubstring(inputLine,pos,"",amount);   
+    creditamount = blankval;
+    debitamount = blankval;
+    if (left(amount,1)==",") then begin
+      pos = 2;
+      GetNextSubstring(amount,pos,"\"",creditamount);
+      GetNextSubstring(amount,pos,"\"",skip);
+      GetNextSubstring(amount,pos,"\"",balance);
+    end else begin
+      pos = 0;
+      GetNextSubstring(amount,pos,"\"",debitamount);
+      GetNextSubstring(amount,pos,"\"",balance);
+      GetNextSubstring(amount,pos,"\"",skip);
+      GetNextSubstring(amount,pos,"\"",skip);
+    end;  
+    RecordNew(BTRr);
+    BTRr.Balance = StringToValue(balance,M4Rate,",",".");
+    StripSpace(BTRr.CurncyCode,currency);
+    pos = 0;
+    GetNextSubstring(exptransdate,pos,"-",day);   
+    GetNextSubstring(exptransdate,pos,"-",mmonth);
+    StripSpace(month,mmonth);
+    GetNextSubstring(exptransdate,pos,"-",year);
+    transdate.day = StringToInt(day);
+    transdate.month = ConvertMonthName(month);
+    transdate.year = 2000 + StringToInt(year);
+    BTRr.TransDate = transdate;
+    BTRr.Comment = desc;
+    BTRr.Reference = reference;
+    GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+    if (nonblank(debitamount))then begin
+      BTRr.Sum = StringToValue(debitamount,M4Rate,",",".");
+      BTRr.PayBankAcc = bankacc;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.PayName = CYb.CompName;
+      BTRr.PayVATNr = CYb.VATNr;
+      BTRr.PayRegNr1 = CYb.OrgNr;
+      BTRr.TypeRef = "D";
+
+      BTRr.RcpReference = BTRr.Reference;
+      BTRr.RcpTransDate = BTRr.TransDate;
+    end else begin
+      BTRr.Sum = StringToValue(creditamount,M4Rate,",",".");
+      BTRr.RcpBankAcc = bankacc;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.PayReference = BTRr.Reference;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.RcpTransDate = BTRr.TransDate;
+
+      BTRr.RcpName = CYb.CompName;
+      BTRr.RcpVATNr = CYb.VATNr;
+      BTRr.RcpRegNr1 = CYb.OrgNr;
+      BTRr.PayName = desc;
+      BTRr.TypeRef = "C";
+      CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+    
+    if (BTRr.Sum!=0) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+updating procedure ImpBankMillenniumPOR(record RcVc RepSpec)
+begin
+  record BankTRVc BTRr;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  record SRBlock SRb;
+  record BaseCurBlock BCb;
+  row PMBlock PMbrw;
+  LongInt pos;
+  Integer i;
+  string 255 bankacc,transdate,currency,amount,desc,reference,skip,balance;
+
+  BlockLoad(PMb);
+  BlockLoad(CYb)
+  BlockLoad(SRb);
+  BlockLoad(BCb);
+  
+  for (i=0;i<7;i=i+1) begin
+    NextImportLine(true);
+  end;
+  while (TestEOF==false) begin 
+    skip = ImportField;
+    skip = ImportField;
+    bankacc = ImportField;
+    currency = ImportField;
+    skip = ImportField;
+    transdate = ImportField;
+    desc = ImportField;
+    amount = ImportField;
+    balance = ImportField;
+    reference = ImportField;
+    RecordNew(BTRr);
+    BTRr.Sum = StringToValue(StripCharacter(amount,"-"),M4Rate,"",",");
+    BTRr.CurncyCode = currency;
+    BTRr.TransDate = DateFromString(transdate,"DD-MM-YYYY");
+    BTRr.Comment = desc;
+    BTRr.Reference = reference;
+    BTRr.Balance = StringToVal(balance,M4Val);
+
+    GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+    if (left(amount,1)=="-") then begin
+      BTRr.PayBankAcc = bankacc;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.PayName = CYb.CompName;
+      BTRr.PayVATNr = CYb.VATNr;
+      BTRr.PayRegNr1 = CYb.OrgNr;
+      BTRr.TypeRef = "D";
+      if (FindStringInString(desc,"TRF. P/O ")) then begin
+        BTRr.RcpName = ReplaceStringWithString(desc,"TRF. P/O ","");
+        if (left(BTRr.RcpName,1)==" ") then begin   
+          BTRr.RcpName = Right(BTRr.RcpName,len(BTRr.RcpName)-1); 
+        end;
+      end;  
+      //BTRr.RcpBankAcc = CYb.Bank1;
+      BTRr.RcpReference = BTRr.Reference;
+      BTRr.RcpTransDate = BTRr.TransDate;
+    end else begin
+      BTRr.RcpBankAcc = bankacc;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      //BTRr.PayBankAcc = CYb.Bank1;
+      BTRr.PayReference = BTRr.Reference;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.RcpTransDate = BTRr.TransDate;
+
+      BTRr.RcpName = CYb.CompName;
+      BTRr.RcpVATNr = CYb.VATNr;
+      BTRr.RcpRegNr1 = CYb.OrgNr;
+      if (FindStringInString(desc,"TRF. P/O ")) then begin
+        BTRr.PayName = ReplaceStringWithString(desc,"TRF. P/O ","");
+        if (left(BTRr.PayName,1)==" ") then begin
+          BTRr.PayName = Right(BTRr.PayName,len(BTRr.PayName)-1);
+        end;
+      end;  
+      BTRr.TypeRef = "C";
+      CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+    if (BTRr.Sum!=0) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+updating procedure ImpBankStandardSouthAfrica(record RcVc RepSpec)
+begin
+  record BankTRVc BTRr;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  record SRBlock SRb;
+  record BaseCurBlock BCb;
+  row PMBlock PMbrw;
+  string 255 tstr,inputLine;
+  string 255 valuedate,desc,amount;
+  string 255 ref,custref,bankacc;
+  LongInt pos;
+  Integer i;
+  
+  BlockLoad(PMb);
+  BlockLoad(CYb)
+  BlockLoad(SRb);
+  BlockLoad(BCb);
+  
+  for (i=0;i<15;i=i+1) begin
+    if (i==4) then begin
+      inputLine = ImportField;
+      pos = 0;
+      GetNextSubstring(inputLine,pos,",",tstr);
+      GetNextSubstring(inputLine,pos,",",bankacc);
+      bankacc = StripNonDigits(bankacc);
+    end;
+    NextImportLine(true);
+  end;
+  
+  while (TestEOF==false) begin 
+    inputLine = ImportField;
+    RecordNew(BTRr);
+    
+    pos = 0;
+    GetNextSubstring(inputLine,pos,",",tstr);         // Date
+    GetNextSubstring(inputLine,pos,",",valuedate);    // Value Date
+    GetNextSubstring(inputLine,pos,",",tstr);         // Statement number
+    GetNextSubstring(inputLine,pos,",",desc);         // Description
+    GetNextSubstring(inputLine,pos,",",amount);       // Amount
+    GetNextSubstring(inputLine,pos,",",tstr);         // Balance
+    GetNextSubstring(inputLine,pos,",",tstr);         // Type
+    GetNextSubstring(inputLine,pos,",",ref);          // Originator Reference
+    GetNextSubstring(inputLine,pos,",",custref);      // Customer Reference
+
+    BTRr.CurncyCode = BCb.BaseCur1;
+    BTRr.TransDate = DateFromString(valuedate,"YYYY/MM/DD");
+    BTRr.Comment = desc;
+    tstr = StripCharacter(amount,"-");
+    tstr = StripCharacter(tstr,"+");
+    BTRr.Sum = StringToVal(tstr,M4Val);
+    BTRr.Reference = ref;
+    
+    GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+    
+    if (left(amount,1)=="-") then begin
+      BTRr.PayBankAcc = bankacc;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.PayName = CYb.CompName;
+      BTRr.PayVATNr = CYb.VATNr;
+      BTRr.PayRegNr1 = CYb.OrgNr;
+      BTRr.TypeRef = "D";
+      BTRr.RcpBankAcc = CYb.Bank1;
+      BTRr.RcpReference = custref;
+      BTRr.RcpTransDate = BTRr.TransDate;
+    end else begin
+      BTRr.RcpBankAcc = bankacc;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.PayBankAcc = CYb.Bank1;
+      BTRr.PayReference = custref;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.RcpTransDate = BTRr.TransDate;
+
+      BTRr.RcpName = CYb.CompName;
+      BTRr.RcpVATNr = CYb.VATNr;
+      BTRr.RcpRegNr1 = CYb.OrgNr;
+      BTRr.PayName = desc;
+      BTRr.TypeRef = "C";
+      CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+    
+    if (BTRr.Sum!=0) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  
+  return;
+end;
+
+updating procedure ImpBankFNBSouthAfrica(record RcVc RepSpec)
+begin
+  record BankTRVc BTRr;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  record SRBlock SRb;
+  record BaseCurBlock BCb;
+  row PMBlock PMbrw;
+  string 255 tstr,tstr2,inputLine;
+  LongInt pos;
+  string 255 bankacc,transdate,fee;
+  string 255 amount,desc,text,reference;
+  
+  
+  BlockLoad(PMb);
+  BlockLoad(CYb)
+  BlockLoad(SRb);
+  BlockLoad(BCb);
+  
+  NextImportLine(true);
+  inputLine = ImportField;
+  bankacc = Right(inputLine,11);
+  NextImportLine(true);
+  NextImportLine(true);
+  
+  while (TestEOF==false) begin 
+    inputLine = ImportField;
+    tstr = StripCharacter(inputLine,"""");
+    RecordNew(BTRr);
+
+    pos = 0;
+    GetNextSubstring(tstr,pos,",",transdate);
+    GetNextSubstring(tstr,pos,",",fee);
+    GetNextSubstring(tstr,pos,",",amount);
+    GetNextSubstring(tstr,pos,",",desc);
+    GetNextSubstring(tstr,pos,",",tstr2);
+    GetNextSubstring(tstr,pos,",",text);
+
+    BTRr.CurncyCode = BCb.BaseCur1;
+    BTRr.TransDate = DateFromString(transdate,"YYYY/MM/DD");
+    BTRr.Sum = StringToVal(StripCharacter(amount,"-"),M4Val);
+    // BTRr.Reference = reference;
+    BTRr.Comment = desc;
+    GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+        
+    if (left(amount,1)=="-") then begin
+      BTRr.PayBankAcc = bankacc;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.PayName = CYb.CompName;
+      BTRr.RcpReference = BTRr.Reference;
+      BTRr.RcpTransDate = BTRr.TransDate;
+      BTRr.PayVATNr = CYb.VATNr;
+      BTRr.PayRegNr1 = CYb.OrgNr;
+      BTRr.TypeRef = "D";
+      // BTRr.RcpBankAcc = bankacc;
+    end else begin
+      BTRr.RcpBankAcc = bankacc;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      // BTRr.PayBankAcc = bankacc;
+      BTRr.PayReference = BTRr.Reference;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.RcpTransDate = BTRr.TransDate;
+      BTRr.RcpName = CYb.CompName;
+      BTRr.RcpVATNr = CYb.VATNr;
+      BTRr.RcpRegNr1 = CYb.OrgNr;
+      BTRr.PayName = desc;
+      BTRr.TypeRef = "C";
+      CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+    
+    if (BTRr.Sum!=0) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  
+  return;
+end;
+
+updating procedure ImpBankArgentina(record RcVc RepSpec)
+begin
+  record BankTRVc BTRr;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  record SRBlock SRb;
+  record BaseCurBlock BCb;
+  row PMBlock PMbrw;
+  string 255 tstr,inputLine;
+  LongInt pos,pos1;
+  string 255 bankacc,transdate,transnr,reference;
+  string 255 comment,name,vatnr,amount,curr,balance;
+  string 255 branchorigin,branchdesc;
+  string 255 comments,other,corrname;
+
+  BlockLoad(PMb);
+  BlockLoad(CYb)
+  BlockLoad(SRb);
+  BlockLoad(BCb);
+
+  while (TestEOF==false) begin
+    inputLine = ImportField;
+    tstr = StripCharacter(inputLine,"""");
+    RecordNew(BTRr);
+
+    pos = 0;
+    GetNextSubstring(tstr,pos,",",transdate);
+    GetNextSubstring(tstr,pos,",",branchorigin);
+    GetNextSubstring(tstr,pos,",",branchdesc);
+    GetNextSubstring(tstr,pos,",",reference);
+    GetNextSubstring(tstr,pos,",",transnr);
+    GetNextSubstring(tstr,pos,",",comments);
+    GetNextSubstring(tstr,pos,",",amount);
+    GetNextSubstring(tstr,pos,",",balance);
+
+    pos1 = 0;
+    GetNextSubstring(comments,pos1,"-",comment);
+    GetNextSubstring(comments,pos1,"/",name);
+    GetNextSubstring(comments,pos1,"/",other);
+    GetNextSubstring(comments,pos1,"/",vatnr);
+
+    BTRr.CurncyCode = curr;
+    BTRr.TransDate = DateFromString(transdate,"DD/MM/YYYY");
+    BTRr.Sum = StringToVal(StripCharacter(amount,"-"),M4Val);
+    BTRr.Reference = reference;
+    BTRr.Comment = comment;
+    BTRr.TRNumber = transnr;
+    GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+    bankacc = GetBankAccountNr(PMb,RepSpec.f13,PMbrw);
+    corrname = Left(name,len(name)-1);
+    name = Right(corrname,len(corrname)-1);
+
+    if (left(amount,1)=="-") then begin
+      BTRr.PayBankAcc = bankacc;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.RcpBankAcc = bankacc;
+      BTRr.RcpVATNr = vatnr;
+      BTRr.RcpReference = reference;
+      BTRr.RcpTransDate = BTRr.TransDate;
+      BTRr.RcpName = name;
+
+      BTRr.PayRegNr1 = CYb.OrgNr;
+      BTRr.PayVATNr = CYb.VATNr;
+      BTRr.PayName = CYb.CompName;
+      BTRr.PayRegNr1 = CYb.OrgNr;
+      BTRr.PayBankAcc = CYb.Bank1;
+      BTRr.PayReference = BTRr.Reference;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.TypeRef = "D";
+    end else begin
+      BTRr.RcpBankAcc = CYb.Bank1;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.PayBankAcc = bankacc;
+      BTRr.RcpVATNr = CYb.VATNr;
+      BTRr.RcpName = CYb.CompName;
+      BTRr.RcpRegNr1 = CYb.OrgNr;
+      BTRr.RcpReference = BTRr.Reference;
+      BTRr.RcpTransDate = BTRr.TransDate;
+      BTRr.PayTransDate = transdate;
+      BTRr.PayReference = reference;
+      BTRr.PayName = name;
+      BTRr.PayVATNr = vatnr;
+      BTRr.TypeRef = "C";
+      CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+    
+    if (BTRr.Sum!=0) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  
+  return;
+end;
+
+procedure AddStrToStr(var string res,string tstr)
+begin
+
+  if (blank(res)) then begin
+    res = tstr;
+  end else begin
+    res = res & " " & tstr;
+  end;
+
+  return;
+end;
+
+procedure GetDataFromNarrative(string narrative,var string reference,var string pname)
+begin
+  
+Longint pos;
+string 255 tstr;
+Boolean foundf,loopf;
+
+  pos = 0;
+  loopf = true;
+  pname = "";
+  reference = "";
+  while (loopf) begin
+    GetNextSubstring(narrative,pos," ",tstr);  
+    if (IsNumeric(tstr)==true) then begin 
+      foundf = true;
+      while (foundf) begin
+        GetNextSubstring(narrative,pos," ",tstr);  
+        if (IsNumeric(tstr)==true) then begin AddStrToStr(reference,tstr); end;
+        if (nonblank(tstr)) then begin
+          AddStrToStr(pname,tstr);
+        end else begin
+          foundf = false; loopf = false;
+        end;
+      end;
+    end;   
+  end;
+return;
+end;
+
+updating procedure ImpBankWestpacAUS(record RcVc RepSpec)
+begin
+  record BankTRVc BTRr;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  record SRBlock SRb;
+  record BaseCurBlock BCb;
+  record SysFormatBlock SFb;
+  row PMBlock PMbrw;
+  string 255 tstr,inputLine;
+  LongInt pos;
+  string 255 dateformat,bankacc,pname,reference;
+  string 255 damount,camount,narrative,account,transdate,balance,category,tstr2,nar2,other,bankaccountnr;
+  Boolean loopf,foundf,anotherf,blankf,skipf;
+
+  BlockLoad(SFb);
+  BlockLoad(PMb);
+  BlockLoad(CYb)
+  BlockLoad(SRb);
+  BlockLoad(BCb);
+
+  skipf = true;
+  while (TestEOF==false) begin
+    if (skipf) then begin NextImportLine(true); skipf = false; end; 
+    RecordNew(BTRr);
+    inputLine = ImportField; 
+    pos = 0;
+    GetNextSubstring(inputLine,pos,",",account);  
+    GetNextSubstring(inputLine,pos,chr(34),transdate); 
+    GetNextSubstring(inputLine,pos,chr(34),narrative);
+    GetNextSubstring(inputLine,pos,",",other);
+    GetNextSubstring(inputLine,pos,",",damount);
+    GetNextSubstring(inputLine,pos,",",camount);
+    GetNextSubstring(inputLine,pos,",",balance);
+    GetNextSubstring(inputLine,pos,",",category);
+    GetNextSubstring(inputLine,pos,",",tstr2);
+
+    transdate = Left(transdate,len(transdate)-1);
+    switch (category) begin
+      case "PAYMENT":
+      if (FindStringInString(narrative,"PAYMENT BY AUTHORITY TO")) then begin
+        pos = 24;
+        GetNextSubstring(narrative,pos,",",tstr); 
+        pname = tstr;
+        while (GetNextSubstring(narrative,pos,",",tstr)) begin
+          reference = tstr;
+        end;
+      end else begin
+        GetDataFromNarrative(narrative,reference,pname);
+      end; 
+
+      if (blank(reference)) then begin
+        pos =0;
+        while (GetNextSubstring(narrative,pos," ",tstr)) begin
+          reference = tstr; 
+        end;
+      end;
+
+      case "DEP":  
+      if (FindStringInString(narrative,"DEPOSIT-OSKO PAYMENT")) then begin
+        pos = 0;
+        foundf = false;
+        loopf = true;
+        pname = "";
+        reference =  "";
+        while (loopf) begin 
+          GetNextSubstring(narrative,pos," ",tstr);  
+          if (IsNumeric(tstr)==true) then begin foundf = true; end;
+          if (foundf) then begin
+            anotherf = true;
+            while (anotherf) begin
+              GetNextSubstring(narrative,pos," ",tstr);
+              if ((IsNumeric(tstr)==true)) then begin anotherf = false; end;
+              if (anotherf and nonblank(tstr) and ((IsNumeric(tstr)==false))) then begin
+                AddStrToStr(pname,tstr);
+              end else begin
+                if (nonblank(tstr) and (IsNumeric(tstr)==true)) then begin
+                  AddStrToStr(reference,tstr);
+                  loopf = false;
+                end else begin
+                  loopf = false;
+                end;  
+              end;  
+            end;        
+          end;
+        end;  
+      end;
+      if (FindStringInString(narrative,"DEPOSIT ")) then begin
+        pname = "";
+        blankf = false;
+        loopf = true;
+        pos = 8;
+        while (loopf) begin
+          GetNextSubstring(narrative,pos," ",tstr)
+          if (blankf and blank(tstr)) then begin loopf = false; end;
+          if (blank(tstr)) then begin blankf = true; end;
+          if (loopf and nonblank(tstr)) then begin
+            AddStrToStr(pname,tstr);
+          end;
+        end;
+        reference = StripNonDigits(narrative);
+      end;
+
+      case "FEE":
+        GetDataFromNarrative(narrative,reference,pname);
+        reference = "Bank Fee";
+        bankaccountnr = Right(account,6);
+    end;
+
+    switch (SFb.dateOrder) begin
+      case 0: dateformat = "MM-DD-YYYY";
+      case 1: dateformat = "DD-MM-YYYY";
+      case 2: dateformat = "YYYY-MM-DD";
+    end;
+
+    BTRr.TransDate = DateFromString(transdate,dateformat);
+    BTRr.CurncyCode = BCb.BaseCur1;
+    BTRr.Reference = reference;
+    BTRr.Comment = narrative; 
+    BTRr.Balance = StringToVal(balance,M4Val);
+    if (nonblank(damount)) then begin
+      BTRr.PayBankAcc = Right(account,6);
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.PayName = CYb.CompName;
+      BTRr.PayReference = BTRr.Reference;
+      BTRr.PayRegNr1 = CYb.OrgNr;
+      BTRr.PayVATNr = CYb.VATNr;
+      BTRr.Sum = StringToVal(damount,M4Val);
+      BTRr.RcpTransDate = BTRr.TransDate;
+      BTRr.RcpBankAcc =  bankaccountnr;
+      BTRr.RcpReference = reference;
+      BTRr.RcpName = pname;
+      BTRr.TypeRef = "D";
+    end else begin
+      BTRr.PayBankAcc = "";
+      BTRr.PayTransDate = transdate;
+      BTRr.PayReference = reference;
+      BTRr.PayName = pname;
+      BTRr.Sum = StringToVal(camount,M4Val);
+      BTRr.RcpBankAcc = Right(account,6);
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.RcpTransDate = BTRr.TransDate;
+      BTRr.RcpVATNr = CYb.VATNr;
+      BTRr.RcpName = CYb.CompName;
+      BTRr.RcpRegNr1 = CYb.OrgNr;
+      BTRr.RcpReference = reference;
+      BTRr.TypeRef = "C";
+      CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+    if (BTRr.Sum!=0) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin 
+        RecordStore(BTRr,false);
+      end;
+    end;
+    if (NextImportLine(true)) then begin end;
+  end;
+return;
+end;
+
+function string 255 FindPName(string comment)
+begin
+string 255 pname,tstr;
+longint pos;
+Boolean loopf;
+
+  pos = 0;
+  GetNextSubstring(comment,pos," ",tstr);
+  GetNextSubstring(comment,pos," ",tstr);
+  GetNextSubstring(comment,pos," ",tstr);
+  loopf = true;
+  while (loopf) begin 
+    GetNextSubstring(comment,pos," ",tstr);
+    if (IsNumeric(tstr)==false) then  begin 
+      loopf = true; 
+    end else begin
+      loopf = false;
+    end;
+    if (loopf) then begin
+      if (blank(pname)) then begin
+        pname = tstr;
+      end else begin
+        pname = pname & " " & tstr;
+      end;
+    end;
+  end;
+
+ FindPName = pname;
+end;
+
+updating procedure ImpBankCBANetBankAUS(record RcVc RepSpec)
+begin
+  record BankTRVc BTRr;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  record SRBlock SRb;
+  record BaseCurBlock BCb;
+  record SysFormatBlock SFb;
+  row PMBlock PMbrw;
+  string 255 tstr,inputLine;
+  string 255 transdate,amount,comment,balance,dateformat;
+  string 255 tstr2,tstr3,pname,bankacc,ref;
+  LongInt pos;
+
+  BlockLoad(SFb);
+  BlockLoad(PMb);
+  BlockLoad(CYb)
+  BlockLoad(SRb);
+  BlockLoad(BCb);
+
+  while (TestEOF==false) begin
+    RecordNew(BTRr);
+    pname = "";
+    ref = "";
+    inputLine = ImportField; 
+    tstr = StripCharacter(inputLine,"""");
+    pos = 0;
+
+    GetNextSubstring(tstr,pos,",",transdate);  
+    GetNextSubstring(tstr,pos,",",amount);
+    GetNextSubstring(tstr,pos,",",comment);
+    GetNextSubstring(tstr,pos,",",balance);
+
+    switch (SFb.dateOrder) begin
+      case 0: dateformat = "MM-DD-YYYY";
+      case 1: dateformat = "DD-MM-YYYY";
+      case 2: dateformat = "YYYY-MM-DD";
+    end;
+
+    BTRr.TransDate = DateFromString(transdate,dateformat);
+    BTRr.CurncyCode = BCb.BaseCur1;
+    BTRr.Sum = StringToVal(StripCharacter(amount,"-"),M4Val);
+    BTRr.Comment = comment; 
+    BTRr.Balance = StringToVal(balance,M4Val);
+    if (left(amount,1)=="-") then begin
+      pos = 0;
+      while (GetNextSubstring(comment,pos," ",ref)) begin
+        BTRr.Reference = ref;
+      end;
+      if (FindStringInString(comment, "Direct Debit")) then begin 
+        pname = FindPName(comment);
+      end else begin 
+        pos = 0;
+        GetNextSubstring(comment,pos," ",tstr2);
+        GetNextSubstring(comment,pos," ",tstr3);
+        pname = tstr2 & " " & tstr3;
+      end;
+        if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+        BTRr.RcpBankAcc = CYb.Bank1;
+        BTRr.RcpReference = BTRr.Reference;
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = pname;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+        BTRr.PayReference = BTRr.Reference;
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.TypeRef = "D";
+    end else begin
+      if (FindStringInString(comment, "Transfer from xx")) then begin 
+        pos = 16;
+        GetNextSubstring(comment,pos," ",bankacc);
+        BTRr.PayBankAcc = bankacc;
+        BTRr.Reference = "Transfer from xx" & bankacc;
+      end else begin
+        pos = 0;
+        while (GetNextSubstring(comment,pos," ",ref)) begin
+          BTRr.Reference = ref;
+        end;
+        BTRr.PayBankAcc = "";
+      end;
+      if (FindStringInString(comment, "Direct Credit")) then begin
+        pname = FindPName(comment);
+      end else begin 
+        pname = "";
+      end;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.RcpVATNr = CYb.VATNr;
+      BTRr.RcpName = CYb.CompName;
+      BTRr.RcpRegNr1 = CYb.OrgNr;
+      BTRr.RcpReference = BTRr.Reference;
+      BTRr.RcpTransDate = BTRr.TransDate;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.PayReference =  BTRr.Reference;
+      BTRr.PayName = pname;
+      BTRr.TypeRef = "C";
+      CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+    GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+    bankacc = GetBankAccountNr(PMb,RepSpec.f13,PMbrw);
+
+    if (BTRr.Sum!=0) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  
+  return;
+end;
+
+updating procedure ImpBankCBACommBizAUS(record RcVc RepSpec)
+begin
+  record BankTRVc BTRr;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  record SRBlock SRb;
+  record BaseCurBlock BCb;
+  record SysFormatBlock SFb;
+  row PMBlock PMbrw;
+  string 255 tstr,inputLine;
+  string 255 transdate,balance,debit,credit,description,currency,dateformat,ref,pname;
+  LongInt pos;
+  Boolean loopf2,digitf;
+
+  BlockLoad(SFb);
+  BlockLoad(PMb);
+  BlockLoad(CYb)
+  BlockLoad(SRb);
+  BlockLoad(BCb);
+
+   while (TestEOF==false) begin
+    RecordNew(BTRr);
+    inputLine = ImportField; 
+    tstr = StripCharacter(inputLine,"""");
+    pname = "";
+    ref = "";
+    pos = 0;
+    GetNextSubstring(tstr,pos,",",transdate);  
+    GetNextSubstring(tstr,pos,",",description);  
+    GetNextSubstring(tstr,pos,",",currency);  
+    GetNextSubstring(tstr,pos,",",debit);  
+    GetNextSubstring(tstr,pos,",",credit);  
+    GetNextSubstring(tstr,pos,",",balance);  
+
+    if (FindStringInString(transdate,"Process date")) then begin goto LImpBankCBACommBizAUS; end;
+    pos = 0;
+    while (GetNextSubstring(description,pos," ",tstr)) begin
+      //gets the last one
+      ref = tstr;
+    end;
+
+    switch (SFb.dateOrder) begin
+      case 0: dateformat = "MM-DD-YYYY";
+      case 1: dateformat = "DD-MM-YYYY";
+      case 2: dateformat = "YYYY-MM-DD";
+    end;
+
+    BTRr.TransDate = DateFromString(transdate,dateformat);
+    BTRr.CurncyCode = currency;
+    BTRr.Comment = description; 
+    BTRr.Balance = StringToVal(balance,M4Val);
+    BTRr.Reference = ref;
+    if (blank(credit)) then begin
+      BTRr.Sum = StringToVal(debit,M4Val);
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = RepSpec.f20;
+      end;
+      BTRr.RcpBankAcc = CYb.Bank1;
+      BTRr.RcpReference = BTRr.Reference;
+      BTRr.RcpTransDate = BTRr.TransDate;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.PayName = CYb.CompName;
+      BTRr.PayReference = BTRr.Reference;
+      BTRr.PayRegNr1 = CYb.OrgNr;
+      BTRr.PayVATNr = CYb.VATNr;
+      BTRr.PayRegNr1 = CYb.OrgNr;
+      BTRr.TypeRef = "D";
+    end else begin
+      BTRr.Sum = StringToVal(credit,M4Val);
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = RepSpec.f20;
+      end;
+      BTRr.RcpVATNr = CYb.VATNr;
+      BTRr.RcpName = CYb.CompName;
+      BTRr.RcpRegNr1 = CYb.OrgNr;
+      BTRr.RcpReference = BTRr.Reference;
+      BTRr.RcpTransDate = BTRr.TransDate;
+      BTRr.PayTransDate = BTRr.TransDate;
+      loopf2 = true; 
+      digitf = false; 
+      pos = 0;
+      while (loopf2) begin
+        GetNextSubstring(description,pos," ",tstr);
+        if (blank(tstr)) then begin loopf2 = false; end;
+        if (tstr==ref) then begin loopf2 = false; end;
+        if (IsDigit(tstr)) then begin digitf = true; goto Lskip; end;
+        if (loopf2 and nonblank(tstr) and digitf) then begin
+          AddStrToStr(pname,tstr);
+        end;
+      Lskip:;
+      end;
+      BTRr.PayName = pname;
+      BTRr.PayReference =  BTRr.Reference;
+      BTRr.TypeRef = "C";
+      CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+
+    if (BTRr.Sum!=0) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+LImpBankCBACommBizAUS:;
+    if (NextImportLine(true)) then begin end;
+  end;
+  
+  return;
+end;
+
+updating procedure ImpBankEmiratesNBDBankUAE(record RcVc RepSpec)
+begin
+  record BankTRVc BTRr;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  record SRBlock SRb;
+  record BaseCurBlock BCb;
+  row PMBlock PMbrw;
+  string 255 tstr,inputLine;
+  string 255 transdate,debitamount,creditamount,accountnr,reference,skip,comment;
+  val damount,camount;
+  LongInt pos;
+
+  BlockLoad(PMb);
+  BlockLoad(CYb)
+  BlockLoad(SRb);
+  BlockLoad(BCb);
+
+  NextImportLine(true);
+  while (TestEOF==false) begin
+    RecordNew(BTRr);
+    inputLine = ImportField; 
+    tstr = StripCharacter(inputLine,"""");
+
+    pos = 0;
+    GetNextSubstring(tstr,pos,",",accountnr);  
+    GetNextSubstring(tstr,pos,",",transdate);  
+    GetNextSubstring(tstr,pos,",",skip);  
+    GetNextSubstring(tstr,pos,",",comment);
+    GetNextSubstring(tstr,pos,",",reference);
+    GetNextSubstring(tstr,pos,",",debitamount);
+    GetNextSubstring(tstr,pos,",",creditamount);
+
+    BTRr.TransDate = DateFromString(transdate,"DD-MM-YYYY");
+    BTRr.CurncyCode = BCb.BaseCur1;
+    BTRr.Comment = comment;
+    BTRr.Reference = reference;
+    GetBankAccPMRow(PMb,"",accountnr,PMbrw);
+    damount = StringToVal(debitamount,M4Val);
+    camount = StringToVal(creditamount,M4Val);
+    if (damount>0) then begin
+      BTRr.Sum = damount;
+      BTRr.PayBankAcc = accountnr;
+        if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+        BTRr.RcpBankAcc = CYb.Bank1;
+        BTRr.RcpReference = BTRr.Reference;
+        BTRr.RcpTransDate = BTRr.TransDate;
+
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayReference = BTRr.Reference;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+        BTRr.TypeRef = "D";
+    end else begin
+      BTRr.Sum = camount;
+      BTRr.RcpBankAcc = accountnr;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.RcpVATNr = CYb.VATNr;
+      BTRr.RcpName = CYb.CompName;
+      BTRr.RcpRegNr1 = CYb.OrgNr;
+      BTRr.RcpReference = BTRr.Reference;
+      BTRr.RcpTransDate = BTRr.TransDate;
+
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.PayReference =  BTRr.Reference;
+      BTRr.TypeRef = "C";
+      CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+
+    if (BTRr.Sum!=0) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  
+  return;
+end;
+
+updating procedure ImpBankAbsaBankSouthAfrica(record RcVc RepSpec)
+begin
+  record BankTRVc BTRr;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  record SRBlock SRb;
+  record BaseCurBlock BCb;
+  record SysFormatBlock SFb;
+  row PMBlock PMbrw;
+  string 255 tstr,tstr2,inputLine;
+  LongInt pos;
+  string 255 amount,bankacc,transdate,desc,skip,skip2;
+  Boolean blankf,loopf;
+  
+  BlockLoad(SFb);
+  BlockLoad(PMb);
+  BlockLoad(CYb)
+  BlockLoad(SRb);
+  BlockLoad(BCb);
+
+  while (TestEOF==false) begin 
+    inputLine = ImportField;
+    RecordNew(BTRr);
+    pos = 0;
+    GetNextSubstring(inputLine,pos,",",transdate);
+    GetNextSubstring(inputLine,pos,"",tstr);
+    if (left(tstr,1)=="\"") then begin 
+      pos = 1;
+      GetNextSubstring(tstr,pos,"\"",desc);
+      GetNextSubstring(tstr,pos,"\"",skip);
+      pos = 0;
+      GetNextSubstring(skip,pos,",",skip2);
+      GetNextSubstring(skip,pos,",",amount);
+    end else begin
+      pos = 0;
+      GetNextSubstring(tstr,pos,",",desc);   
+      GetNextSubstring(tstr,pos,",",amount);
+      GetNextSubstring(tstr,pos,",",skip);   
+    end;
+ 
+    RecordNew(BTRr);
+    BTRr.Sum = StringToVal(StripCharacter(amount,"-"),M4Val);
+    BTRr.CurncyCode = BCb.BaseCur1;;
+    BTRr.TransDate = DateFromString(transdate,"YYYYMMDD");
+    BTRr.Comment = desc;
+
+    GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+    if (left(amount,1)=="-") then begin
+      BTRr.PayBankAcc = bankacc;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.PayName = CYb.CompName;
+      BTRr.PayVATNr = CYb.VATNr;
+      BTRr.PayRegNr1 = CYb.OrgNr;
+      BTRr.TypeRef = "D";
+      BTRr.RcpBankAcc = CYb.Bank1;
+      BTRr.RcpReference = BTRr.Reference;
+      BTRr.RcpTransDate = BTRr.TransDate;
+    end else begin
+      BTRr.RcpBankAcc = bankacc;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.PayBankAcc = CYb.Bank1;
+      BTRr.PayReference = BTRr.Reference;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.RcpTransDate = BTRr.TransDate;
+
+      BTRr.RcpName = CYb.CompName;
+      BTRr.RcpVATNr = CYb.VATNr;
+      BTRr.RcpRegNr1 = CYb.OrgNr;
+      BTRr.PayName = desc;
+      BTRr.TypeRef = "C";
+      CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+    
+    if (BTRr.Sum!=0) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  
+  return;
+end;
+
+updating procedure ImpBankBarclaysUK(record RcVc RepSpec)
+begin
+  record BankTRVc BTRr;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  record SRBlock SRb;
+  record BaseCurBlock BCb;
+  record SysFormatBlock SFb;
+  row PMBlock PMbrw;
+  string 255 tstr,tstr2,inputLine;
+  LongInt pos;
+  string 255 amount,bankacc,transdate,transnr,reference,bankdesc;
+  string 255 account,memo,pname,accountp1,accountp2,dateformat;
+  Boolean blankf,loopf;
+  
+  BlockLoad(SFb);
+  BlockLoad(PMb);
+  BlockLoad(CYb)
+  BlockLoad(SRb);
+  BlockLoad(BCb);
+
+  while (TestEOF==false) begin
+    RecordNew(BTRr);
+
+    inputLine = ImportField; 
+    inputLine = ImportField;
+    tstr = StripCharacter(inputLine,"""");
+
+    pos = 0;
+    GetNextSubstring(tstr,pos,",",transnr);  
+    GetNextSubstring(tstr,pos,",",transdate);  
+    GetNextSubstring(tstr,pos,",",account);  
+    GetNextSubstring(tstr,pos,",",amount);
+    GetNextSubstring(tstr,pos,",",tstr2);
+    GetNextSubstring(tstr,pos,",",memo);
+
+    pname = "";
+    bankdesc = "";
+
+    blankf = false;
+    loopf = true;
+    pos = 0;
+    while (loopf) begin
+      GetNextSubstring(memo,pos," ",tstr)
+      if (blankf and blank(tstr)) then begin loopf = false; end;
+      if (blank(tstr)) then begin blankf = true; end;
+      if (loopf and nonblank(tstr)) then begin
+        AddStrToStr(pname,tstr);
+      end;
+    end;
+
+    blankf = false;
+    loopf = true;
+    while (loopf) begin
+      GetNextSubstring(memo,pos," ",tstr)
+      if (blankf and blank(tstr)) then begin loopf = false; end;
+      if (blank(tstr)) then begin blankf = true; end;
+      if (loopf and nonblank(tstr)) then begin
+        AddStrToStr(bankdesc,tstr);
+      end;
+    end;
+
+    pos = 0;
+    GetNextSubstring(account,pos,"  ",accountp1);
+    GetNextSubstring(account,pos,"  ",accountp2);
+
+  
+    switch (SFb.dateOrder) begin
+      case 0: dateformat = "MM-DD-YYYY";
+      case 1: dateformat = "DD-MM-YYYY";
+      case 2: dateformat = "YYYY-MM-DD";
+    end;
+
+    BTRr.TransDate = DateFromString(transdate,dateformat);
+    BTRr.CurncyCode = BCb.BaseCur1;
+    BTRr.Sum = StringToVal(StripCharacter(amount,"-"),M4Val);
+    BTRr.Reference = StripNonDigits(memo);
+    BTRr.Comment = memo; 
+    if (nonblank(transnr)) then begin
+      BTRr.TRNumber = transnr;
+    end;
+
+    GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+    bankacc = GetBankAccountNr(PMb,RepSpec.f13,PMbrw);
+
+    if (left(amount,1)=="-") then begin
+      BTRr.PayBankAcc = bankacc;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.RcpBankAcc = CYb.Bank1;
+      BTRr.RcpReference =  BTRr.Reference;
+      BTRr.RcpTransDate = BTRr.TransDate;
+      BTRr.RcpName = pname;
+
+      BTRr.PayRegNr1 = CYb.OrgNr;
+      BTRr.PayVATNr = CYb.VATNr;
+      BTRr.PayName = CYb.CompName;
+      BTRr.PayRegNr1 = CYb.OrgNr;
+      BTRr.PayBankAcc = accountp2;
+      BTRr.PayReference = BTRr.Reference;
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.TypeRef = "D";
+    end else begin
+      BTRr.RcpBankAcc = accountp2;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.PayBankAcc = CYb.Bank1;
+      BTRr.RcpVATNr = CYb.VATNr;
+      BTRr.RcpName = CYb.CompName;
+      BTRr.RcpRegNr1 = CYb.OrgNr;
+      BTRr.RcpReference = BTRr.Reference;
+      BTRr.RcpTransDate = BTRr.TransDate;
+      BTRr.PayTransDate = transdate;
+      BTRr.PayReference =  BTRr.Reference;
+      BTRr.PayName = pname;
+      BTRr.TypeRef = "C";
+      CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+    
+    if (BTRr.Sum!=0) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  
+  return;
+end;
+
+updating procedure ImpBankASBCCNZ(record RcVc RepSpec)
+begin
+  record BankTRVc BTRr;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  record SRBlock SRb;
+  record BaseCurBlock BCb;
+  row PMBlock PMbrw;
+  string 255 tstr,inputLine;
+  string 255 transdate,amount,balance,dateformat;
+  string 255 ccnr,accountname,particulars,code,reference,transtype;
+  LongInt pos;
+  integer i;
+  string 255 ccused,processdate,desc;
+
+  BlockLoad(PMb);
+  BlockLoad(CYb);
+  BlockLoad(SRb);
+  BlockLoad(BCb);
+
+  for (i=0;i<3;i=i+1) begin
+    NextImportLine(true);
+  end;
+  while (TestEOF==false) begin
+    RecordNew(BTRr);
+    inputLine = ImportField; 
+    tstr = StripCharacter(inputLine,""""); 
+    pos = 0;
+    GetNextSubstring(tstr,pos,",",ccnr);  
+    GetNextSubstring(tstr,pos,",",ccused);  
+    GetNextSubstring(tstr,pos,",",reference);  
+    GetNextSubstring(tstr,pos,",",transdate);
+    GetNextSubstring(tstr,pos,",",amount);
+    GetNextSubstring(tstr,pos,",",processdate);
+    GetNextSubstring(tstr,pos,",",desc);
+    StripSpace(ccnr,ccnr);
+
+    BTRr.TransDate = DateFromString(transdate,"DD/MM/YY");
+    BTRr.CurncyCode = BCb.BaseCur1;
+    BTRr.Sum = StringToVal(StripCharacter(amount,"-"),M4Val);
+    BTRr.Comment = desc; 
+    BTRr.Balance = StringToVal(balance,M4Val);
+    BTRr.Reference = reference;
+    GetBankAccPMRow(PMb,"",ccnr,PMbrw);
+
+    if (left(amount,1)!="-") then begin
+      pos = 0;
+      BTRr.PayBankAcc = ccnr;
+        if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+        BTRr.RcpReference = BTRr.Reference;
+        BTRr.RcpTransDate = BTRr.TransDate;
+
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayReference = BTRr.Reference;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+        BTRr.TypeRef = "D";
+    end else begin
+      BTRr.RcpBankAcc = ccnr;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.RcpVATNr = CYb.VATNr;
+      BTRr.RcpName = CYb.CompName;
+      BTRr.RcpRegNr1 = CYb.OrgNr;
+      BTRr.RcpReference = BTRr.Reference;
+      BTRr.RcpTransDate = BTRr.TransDate;
+
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.PayReference =  BTRr.Reference;
+      BTRr.TypeRef = "C";
+      CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+
+    if (BTRr.Sum!=0) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  return;
+end;
+
+updating procedure ImpBankBNZNZ(record RcVc RepSpec)
+begin
+  record BankTRVc BTRr;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  record SRBlock SRb;
+  record BaseCurBlock BCb;
+  row PMBlock PMbrw;
+  string 255 tstr,inputLine;
+  string 255 transdate,amount;
+  string 255 particulars,code,reference,otherparty,transtype;
+  string 255 thisparty,payee,serial,transcode,batchnr,origbank,processdate;
+  LongInt pos;
+
+  BlockLoad(PMb);
+  BlockLoad(CYb)
+  BlockLoad(SRb);
+  BlockLoad(BCb);
+  NextImportLine(true);
+
+  while (TestEOF==false) begin
+    RecordNew(BTRr);
+    inputLine = ImportField; 
+    tstr = StripCharacter(inputLine,"""");
+    pos = 0;
+ 
+    GetNextSubstring(tstr,pos,",",transdate);  
+    GetNextSubstring(tstr,pos,",",amount);
+    GetNextSubstring(tstr,pos,",",payee);
+    GetNextSubstring(tstr,pos,",",particulars);
+    GetNextSubstring(tstr,pos,",",code);
+    GetNextSubstring(tstr,pos,",",reference);
+    GetNextSubstring(tstr,pos,",",transtype);
+    GetNextSubstring(tstr,pos,",",thisparty);
+    thisparty = StripCharacter(thisparty,"-");
+    GetNextSubstring(tstr,pos,",",otherparty);
+    otherparty = StripCharacter(otherparty,"-");
+    GetNextSubstring(tstr,pos,",",serial);
+    GetNextSubstring(tstr,pos,",",transcode);
+    GetNextSubstring(tstr,pos,",",batchnr);
+    GetNextSubstring(tstr,pos,",",origbank);
+    GetNextSubstring(tstr,pos,",",processdate);
+
+    BTRr.TransDate = DateFromString(transdate,"DD/MM/YY");
+    BTRr.CurncyCode = BCb.BaseCur1;
+    BTRr.Sum = StringToVal(StripCharacter(amount,"-"),M4Val);
+    BTRr.Comment = particulars; 
+    BTRr.Reference = reference;
+    GetBankAccPMRow(PMb,"",thisparty,PMbrw);
+    thisparty = Right(thisparty,9);
+    if (left(amount,1)=="-") then begin
+      pos = 0;
+      BTRr.PayBankAcc = thisparty;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+        BTRr.RcpBankAcc = otherparty;
+        BTRr.RcpReference = BTRr.Reference;
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = payee;
+
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayReference = BTRr.Reference;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+        BTRr.TypeRef = "D";
+    end else begin
+      BTRr.RcpBankAcc = Right(thisparty,9);
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.RcpVATNr = CYb.VATNr;
+      BTRr.RcpName = CYb.CompName;
+      BTRr.RcpRegNr1 = CYb.OrgNr;
+      BTRr.RcpReference = BTRr.Reference;
+      BTRr.RcpTransDate = BTRr.TransDate;
+
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.PayName = payee;
+      BTRr.PayReference =  BTRr.Reference;
+      BTRr.PayBankAcc = otherparty;
+
+      BTRr.TypeRef = "C";
+      CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+
+    if (BTRr.Sum!=0) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  
+  return;
+end;
+
+updating procedure ImpBankASBNZ(record RcVc RepSpec)
+begin
+  record BankTRVc BTRr;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  record SRBlock SRb;
+  record BaseCurBlock BCb;
+  row PMBlock PMbrw;
+  string 255 tstr,inputLine;
+  string 255 transdate,amount,balance,dateformat;
+  string 255 accountnr,accountname,particulars,code,reference,otherparty,transtype;
+  LongInt pos;
+
+  BlockLoad(PMb);
+  BlockLoad(CYb)
+  BlockLoad(SRb);
+  BlockLoad(BCb);
+
+  while (TestEOF==false) begin
+    RecordNew(BTRr);
+    inputLine = ImportField; 
+    tstr = StripCharacter(inputLine,"""");
+    pos = 0;
+    GetNextSubstring(tstr,pos,",",accountnr);  
+    GetNextSubstring(tstr,pos,",",accountname);  
+    GetNextSubstring(tstr,pos,",",transdate);  
+    GetNextSubstring(tstr,pos,",",amount);
+    GetNextSubstring(tstr,pos,",",particulars);
+    GetNextSubstring(tstr,pos,",",code);
+    GetNextSubstring(tstr,pos,",",reference);
+    GetNextSubstring(tstr,pos,",",otherparty);
+    GetNextSubstring(tstr,pos,",",transtype);
+    GetNextSubstring(tstr,pos,",",balance);
+
+    if (FindStringInString(accountnr,"Created")) then begin goto LImpBankASBNZ; end;
+    if (FindStringInString(accountnr,"Transaction(s)")) then begin goto LImpBankASBNZ; end;
+    if (FindStringInString(accountnr,"Account")) then begin goto LImpBankASBNZ; end;
+
+    BTRr.TransDate = DateFromString(transdate,"YYYY-MM-DD");
+    BTRr.CurncyCode = BCb.BaseCur1;
+    BTRr.Sum = StringToVal(StripCharacter(amount,"-"),M4Val);
+    BTRr.Comment = particulars & " " & code & " " & reference & " " & otherparty; 
+    BTRr.Balance = StringToVal(balance,M4Val);
+    BTRr.Reference = reference;
+    GetBankAccPMRow(PMb,"",accountnr,PMbrw);
+
+    if (left(amount,1)=="-") then begin
+      pos = 0;
+      BTRr.PayBankAcc = accountnr;
+        if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.PayBankAcc)) then begin
+        BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+        BTRr.RcpBankAcc = CYb.Bank1;
+        BTRr.RcpReference = BTRr.Reference;
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = StripDigits(otherparty);
+
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayReference = BTRr.Reference;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+        BTRr.TypeRef = "D";
+    end else begin
+      BTRr.RcpBankAcc = accountnr;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = RepSpec.f20;
+      end;
+      if (blank(BTRr.RcpBankAcc)) then begin
+        BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+      end;
+      BTRr.RcpVATNr = CYb.VATNr;
+      BTRr.RcpName = CYb.CompName;
+      BTRr.RcpRegNr1 = CYb.OrgNr;
+      BTRr.RcpReference = BTRr.Reference;
+      BTRr.RcpTransDate = BTRr.TransDate;
+
+      BTRr.PayTransDate = BTRr.TransDate;
+      BTRr.PayName = StripDigits(otherparty);
+      BTRr.PayReference =  BTRr.Reference;
+      BTRr.TypeRef = "C";
+      CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+    end;
+
+    if (BTRr.Sum!=0) then begin
+      BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+      if (BTRr.SerNr>0) then begin
+        RecordStore(BTRr,false);
+      end;
+    end;
+LImpBankASBNZ:;
+    if (NextImportLine(true)) then begin
+    end;
+  end;
+  
+  return;
+end;
+
+procedure StripZeroBeforeAmount(string amount,var string newamount)
+begin
+  Integer i;
+  string 255 tstr;
+
+  while (i<len(amount)) begin      
+      if(Mid(amount,i,1)!="0")then begin
+      tstr = right(amount,len(amount)-i);
+      i = len(amount);
+      newamount = tstr;
+    end;
+    i = i + 1;
+  end;
+  return;
+end;
+
+updating procedure ImpBankMT940PEKAOSAPOL(record RcVc RepSpec)
+begin
+  record BankTRVc BTRr;
+  record CYBlock CYb;
+  record PMBlock PMb;
+  record SRBlock SRb;
+  record BaseCurBlock BCb;
+  row PMBlock PMbrw;
+  LongInt pos;
+  Integer i;
+  string 255 additionalref,otherbankacc,fullcomment,newamount,name,comment,oneline,lastcurrletter,type,bankacc,transdate,currency,amount,desc,reference,skip,inputLine,tstr;
+  Boolean firstf,addfirstf;
+
+  SetImportCodePage("CP852");
+
+  BlockLoad(PMb);
+  BlockLoad(CYb)
+  BlockLoad(SRb);
+  BlockLoad(BCb);
+  NextImportLine(true);
+
+  while (TestEOF==false) begin
+    if (Left(inputLine,5)==":28C:") then begin additionalref = Mid(inputLine,5,len(inputLine)-5);end;
+    if (Left(inputLine,4)!=":61:") then begin
+      NextImportLine(true);
+      inputLine = ImportField; 
+      if (Left(inputLine,3)==":25") then begin
+        pos = 0;
+        GetNextSubString(inputLine,pos,"/",skip);
+        GetNextSubString(inputLine,pos,"/",bankacc);
+      end;
+    end else begin
+      transdate =  Mid(inputLine,4,6);
+      type =  Mid(inputLine,14,1);
+      lastcurrletter = Mid(inputLine,15,1);
+      pos = 16;
+      GetNextSubString(inputLine,pos,"N",amount);
+      StripZeroBeforeAmount(amount,newamount)
+      if (FindStringInString(inputLine,"NONREF")==false) then begin
+        GetNextSubString(inputLine,pos,"N",reference);
+      end else begin
+        reference = additionalref;
+      end;
+      NextImportLine(true);
+      inputLine = ImportField; 
+      if (Left(inputLine,3)==":86") then begin
+        firstf = true;
+        if (firstf) then begin
+          oneline = inputLine;
+          firstf = false;
+        end;
+        NextImportLine(true);
+        inputLine = ImportField; 
+        if (Left(inputLine,1)=="^") begin
+          goto LImpBankMT940PEKAOSAPOL;
+        end;  
+        while (Left(inputLine,1)=="^") begin
+          NextImportLine(true);
+          inputLine = ImportField; 
+          if (Left(inputLine,1)==":") begin
+            goto LImpBankMT940PEKAOSAPOLSkip;
+          end; 
+LImpBankMT940PEKAOSAPOL:;
+          oneline = oneline & " " & inputLine;
+          LImpBankMT940PEKAOSAPOLSkip:;
+        end;
+        pos = 0;
+        addfirstf = true;
+        name = ""; fullcomment = "";
+        while (GetNextSubstring(oneline,pos,chr(94),tstr)) begin
+          if (Left(tstr,2)>"19") and (Left(tstr,2)<"26") then begin
+            comment = Right(tstr,Len(tstr)-2);
+            if (addfirstf) then begin
+              fullcomment = comment;
+              addfirstf = false;
+            end else begin
+              fullcomment = fullcomment & comment;
+            end;
+          end;
+          if (Left(tstr,2)>"31") and (Left(tstr,2)<"34") then begin
+            name = name &  Right(tstr,Len(tstr)-2);
+          end;
+          if (Left(tstr,2)=="38") then begin
+            otherbankacc = Right(tstr,Len(tstr)-2);
+          end;
+          if (blank(otherbankacc)) then begin
+            if (Left(tstr,2)=="29") then begin
+              otherbankacc = Right(tstr,Len(tstr)-2);
+            end;
+          end;  
+        end;
+      end;
+      RecordNew(BTRr);
+      BTRr.OffReference = additionalref;
+      BTRr.CurncyCode = BCb.BaseCur1;
+      BTRr.TransDate = StringToDateFmt(transdate,m4_ymd);
+      BTRr.Comment = fullcomment;
+      BTRr.Sum = StringToValue(newamount,M4Rate,"",",");
+      BTRr.Reference = reference;
+      GetBankAccPMRow(PMb,"",bankacc,PMbrw);
+      if (type=="D") then begin
+         BTRr.PayBankAcc = bankacc;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.PayBankAcc)) then begin
+          BTRr.PayBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;
+         BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.PayName = CYb.CompName;
+        BTRr.PayVATNr = CYb.VATNr;
+        BTRr.PayRegNr1 = CYb.OrgNr;
+        BTRr.TypeRef = "D";
+        BTRr.RcpName = name;
+        if (nonblank(otherbankacc)) then begin
+          BTRr.RcpBankAcc = otherbankacc;
+        end else begin
+          BTRr.RcpBankAcc = CYb.Bank1;
+        end;
+        BTRr.RcpReference = BTRr.Reference;
+        BTRr.RcpTransDate = BTRr.TransDate;
+       end else begin
+         BTRr.RcpBankAcc = bankacc;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = RepSpec.f20;
+        end;
+        if (blank(BTRr.RcpBankAcc)) then begin
+          BTRr.RcpBankAcc = PMbrw.SortCode & PMbrw.BankNr;
+        end;      
+        if (nonblank(otherbankacc)) then begin
+          BTRr.PayBankAcc = otherbankacc;
+        end else begin
+          BTRr.PayBankAcc = CYb.Bank1;
+        end;
+        BTRr.PayName = name;
+       // BTRr.PayReference = BTRr.Reference;
+        BTRr.PayTransDate = BTRr.TransDate;
+        BTRr.RcpTransDate = BTRr.TransDate;
+        BTRr.RcpName = CYb.CompName;
+        BTRr.RcpVATNr = CYb.VATNr;
+        BTRr.RcpRegNr1 = CYb.OrgNr;
+        BTRr.TypeRef = "C";
+        CreateReceipt(SRb,PMbrw.Code,BTRr,false);
+       end;
+      
+      if (BTRr.Sum!=0) then begin
+        BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+        if (BTRr.SerNr>0) then begin
+          RecordStore(BTRr,false);
+        end;
+      end;
+    end;  
+  end;
+  return;
+end;
+
+global
+updating procedure TXTBankTRIn(record RcVc RepSpec)
+begin
+  string 255 inline;
+  record BankTRVc BTRr;
+  Integer col,amtcol;
+  record CYBlock CYb;
+  record BankTRSetVc BankTRSetr;
+
+  switch (RepSpec.flags[20]) begin
+    case kReceiptBankMillenniumPOR:       ImpBankMillenniumPOR(RepSpec);
+    otherwise
+      while (TestEOF==false) begin
+        if (NextImportLine(true)) then begin 
+        end;
+      end;
+  end;
+  return;
+end;
+
+global
+updating procedure MT940BankTRIn(record RcVc RepSpec)
+begin
+  string 255 inline;
+  record BankTRVc BTRr;
+  Integer col,amtcol;
+  record CYBlock CYb;
+  record BankTRSetVc BankTRSetr;
+
+  switch (RepSpec.flags[20]) begin
+    case kReceiptBankMT940PEAKOSAPoland: ImpBankMT940PEKAOSAPOL(RepSpec);
+    otherwise
+      while (TestEOF==false) begin
+        if (NextImportLine(true)) then begin 
+        end;
+      end;
+  end;
+  return;
+end;
+
+global
+updating procedure CSVBankTRIn(record RcVc RepSpec)
+begin
+  string 255 inline;
+  record BankTRVc BTRr;
+  Integer col,amtcol;
+  record CYBlock CYb;
+  record BankTRSetVc BankTRSetr;
+
+  if (nonblank(RepSpec.f11)) then begin
+    GetBankTransactionSettings(RepSpec.f11,RepSpec);
+  end;
+
+  switch (RepSpec.flags[20]) begin
+  //  case kReceiptBankSEBSweden:         ImpSEBSWE(RepSpec);
+    case kReceiptBankChaseUSA:            ImpBankUSA(RepSpec,kReceiptBankChaseUSA);
+    case kReceiptBankOfAmericaUSA:        ImpBankUSA(RepSpec,kReceiptBankOfAmericaUSA);
+    case kReceiptBankAllyUSA:             ImpBankUSA(RepSpec,kReceiptBankAllyUSA);
+    case kReceiptBankWellsFargoUSA:       ImpBankUSA(RepSpec,kReceiptBankWellsFargoUSA);
+    case kReceiptBankAmexUSA:             ImpBankUSA(RepSpec,kReceiptBankAmexUSA);
+    case kReceiptBankFNBSouthAfrica:      ImpBankFNBSouthAfrica(RepSpec);
+    case kReceiptBankSantanderArgentina:  ImpBankArgentina(RepSpec);
+    case kReceiptBankBarclaysUK:          ImpBankBarclaysUK(RepSpec);
+    case kReceiptBankWestpacAUS:          ImpBankWestpacAUS(RepSpec);
+    case kReceiptBankCBANetBankAUS:       ImpBankCBANetBankAUS(RepSpec);
+    case kReceiptBankASBNZ:               ImpBankASBNZ(RepSpec);
+    case kReceiptBankASBCCNZ:             ImpBankASBCCNZ(RepSpec);
+    case kReceiptBankBNZNZ:               ImpBankBNZNZ(RepSpec);
+    case kReceiptBankCBACommBizAUS:       ImpBankCBACommBizAUS(RepSpec);
+    case kReceiptBankNedbankNamibia:      ImpBankNedbankNamibia(RepSpec);
+    case kReceiptBankWindhoekNamibia:     ImpBankWindhoekNamibia(RepSpec);
+    case kReceiptBankNedbankSouthAfrica:  ImpBankNedbankSouthAfrica(RepSpec);
+    case kReceiptBankStandardSouthAfrica: ImpBankStandardSouthAfrica(RepSpec);
+    case kReceiptBankAbsaBankSouthAfrica: ImpBankAbsaBankSouthAfrica(RepSpec);
+    case kReceiptBankEmiratesNBDBankUAE:  ImpBankEmiratesNBDBankUAE(RepSpec);
+    otherwise
+      BlockLoad(CYb);
+      if (RepSpec.flags[0]!=0) then begin
+        NextImportLine(true);
+      end;
+      while (TestEOF==false) begin
+        inline = ImportField;
+        RecordNew(BTRr);
+        col = 1;
+        amtcol = 0;
+        if (SetFromString(621,RepSpec.f1)==kBankTRFileColumnAmount) then begin amtcol = 1; end;
+        if (SetFromString(621,RepSpec.f2)==kBankTRFileColumnAmount) then begin amtcol = 2; end;
+        if (SetFromString(621,RepSpec.f3)==kBankTRFileColumnAmount) then begin amtcol = 3; end;
+        if (SetFromString(621,RepSpec.f4)==kBankTRFileColumnAmount) then begin amtcol = 4; end;
+        if (SetFromString(621,RepSpec.f5)==kBankTRFileColumnAmount) then begin amtcol = 5; end;
+        if (SetFromString(621,RepSpec.f6)==kBankTRFileColumnAmount) then begin amtcol = 6; end;
+        if (SetFromString(621,RepSpec.f7)==kBankTRFileColumnAmount) then begin amtcol = 7; end;
+        if (SetFromString(621,RepSpec.f8)==kBankTRFileColumnAmount) then begin amtcol = 8; end;
+        if (SetFromString(621,RepSpec.f9)==kBankTRFileColumnAmount) then begin amtcol = 9; end;
+        if (SetFromString(621,RepSpec.f10)==kBankTRFileColumnAmount) then begin amtcol = 10; end;
+
+        if (amtcol==0) and ((SetFromString(621,RepSpec.f1)==kBankTRFileColumnCreditAmount) or (SetFromString(621,RepSpec.f2)==kBankTRFileColumnCreditAmount) or
+                            (SetFromString(621,RepSpec.f3)==kBankTRFileColumnCreditAmount) or (SetFromString(621,RepSpec.f4)==kBankTRFileColumnCreditAmount) or 
+                            (SetFromString(621,RepSpec.f5)==kBankTRFileColumnCreditAmount) or (SetFromString(621,RepSpec.f6)==kBankTRFileColumnCreditAmount) or 
+                            (SetFromString(621,RepSpec.f7)==kBankTRFileColumnCreditAmount) or (SetFromString(621,RepSpec.f8)==kBankTRFileColumnCreditAmount) or 
+                            (SetFromString(621,RepSpec.f9)==kBankTRFileColumnCreditAmount) or (SetFromString(621,RepSpec.f10)==kBankTRFileColumnCreditAmount)) then begin
+                            goto LSkipAmoutCol;        
+        end;
+
+        if (amtcol!=0) then begin
+          ImportAmountColumn(RepSpec,inline,BTRr,amtcol); 
+LSkipAmoutCol:;
+          ImportColumn(CYb,inline,col,amtcol,RepSpec.f20,RepSpec.AccStr,RepSpec.f1,RepSpec.Stext,RepSpec.FirstAcc,RepSpec.LastAcc,BTRr); col = col + 1;      
+          ImportColumn(CYb,inline,col,amtcol,RepSpec.f20,RepSpec.AccStr,RepSpec.f2,RepSpec.Stext,RepSpec.FirstAcc,RepSpec.LastAcc,BTRr); col = col + 1;
+          ImportColumn(CYb,inline,col,amtcol,RepSpec.f20,RepSpec.AccStr,RepSpec.f3,RepSpec.Stext,RepSpec.FirstAcc,RepSpec.LastAcc,BTRr); col = col + 1;
+          ImportColumn(CYb,inline,col,amtcol,RepSpec.f20,RepSpec.AccStr,RepSpec.f4,RepSpec.Stext,RepSpec.FirstAcc,RepSpec.LastAcc,BTRr); col = col + 1;
+          ImportColumn(CYb,inline,col,amtcol,RepSpec.f20,RepSpec.AccStr,RepSpec.f5,RepSpec.Stext,RepSpec.FirstAcc,RepSpec.LastAcc,BTRr); col = col + 1;
+          ImportColumn(CYb,inline,col,amtcol,RepSpec.f20,RepSpec.AccStr,RepSpec.f6,RepSpec.Stext,RepSpec.FirstAcc,RepSpec.LastAcc,BTRr); col = col + 1;
+          ImportColumn(CYb,inline,col,amtcol,RepSpec.f20,RepSpec.AccStr,RepSpec.f7,RepSpec.Stext,RepSpec.FirstAcc,RepSpec.LastAcc,BTRr); col = col + 1;
+          ImportColumn(CYb,inline,col,amtcol,RepSpec.f20,RepSpec.AccStr,RepSpec.f8,RepSpec.Stext,RepSpec.FirstAcc,RepSpec.LastAcc,BTRr); col = col + 1;
+          ImportColumn(CYb,inline,col,amtcol,RepSpec.f20,RepSpec.AccStr,RepSpec.f9,RepSpec.Stext,RepSpec.FirstAcc,RepSpec.LastAcc,BTRr); col = col + 1;
+          ImportColumn(CYb,inline,col,amtcol,RepSpec.f20,RepSpec.AccStr,RepSpec.f10,RepSpec.Stext,RepSpec.FirstAcc,RepSpec.LastAcc,BTRr); col = col + 1;
+        end;
+        if (BTRr.Sum!=0) then begin
+          BTRr.SerNr = NextSerNr("BankTRVc",BTRr.TransDate,-1,false,"");
+          if (BTRr.SerNr>0) then begin
+            RecordStore(BTRr,false);
+          end;
+        end;
+        if (NextImportLine(true)) then begin end;
+      end;
+    end;
+
+  return;
+end;
+
+global
+updating procedure BankTRIn(record RcVc RepSpec)
+begin
+  LongInt transnrbefore,transnrafter;
+
+  transnrbefore = CountRecords("BankTRVc");
+  switch (RepSpec.ArtMode) begin
+    case 0: OFXBankTRIn(RepSpec);
+    case 1: CSVBankTRIn(RepSpec);
+    case 2: XMLBankTRIn(RepSpec);
+    case 3: TXTBankTRIn(RepSpec);
+    case 4: MT940BankTRIn(RepSpec);
+  end;
+  
+  transnrafter = CountRecords("BankTRVc");
+  CheckMarkBox(1658,". " & transnrafter-transnrbefore & " " & USetStr(43236) & " " & USetStr(43235));
+  return;
+end;

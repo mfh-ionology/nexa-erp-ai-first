@@ -1,0 +1,85 @@
+function Boolean CUExistsOnJob(string cucode,string jobnr)
+begin
+  Boolean res;
+  record CUVc CUr;
+  record JobVc Jobr;
+  row JobVc Jobrw;
+  Integer i,rwcnt;
+
+  res = false;
+  Jobr.SerNr = jobnr;
+  if (ReadFirstMain(Jobr,1,true)) then begin
+    if (Jobr.CUCode==cucode) then begin res = true; end;
+    if (Jobr.Source==cucode) then begin res = true; end;
+    if (res==false) then begin
+      rwcnt = MatRowCnt(Jobr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(Jobr,i,Jobrw);
+        if (Jobrw.GuestCode==cucode) then begin res = true; end;
+      end;
+    end;
+  end;
+
+  CUExistsOnJob = res;
+  return;
+end;
+
+
+global
+function longint RepItemsVcRecordDefaults(record RepItemsVc RepItemsr, record RepItemsVc RI2r, longint long1, longint long2)
+begin
+  longint res;
+  RepItemsr.SerNr = -1;
+  RepItemsVcRecordDefaults = res;
+  return;
+end;
+
+global
+function LongInt RepItemsVcRecordCheck(record RepItemsVc RepItemsr, record RepItemsVc RI2r, longint long1, longint long2)
+BEGIN
+  row RepItemsVc RepItemsrw;
+  LongInt res;
+  Integer i,rwcnt;
+
+  res = 0;  
+  rwcnt = MatRowCnt(RepItemsr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(RepItemsr,i,RepItemsrw);
+    if (blank(RepItemsrw.Qty)) then begin
+      RecordCheckError(1058,"",i,"Qty");
+      res = -1;
+      goto LRepItemsVcRecordCheck;
+    end;
+    if (nonblank(RepItemsrw.CUCode)) then begin
+      if (CUExistsOnJob(RepItemsrw.CUCode,RepItemsr.SerNr)==false) then begin
+        RecordCheckError(44765,"",i,"CUCode");
+        res = -1;
+        goto LRepItemsVcRecordCheck;
+      end;
+    end;
+  end;
+ 
+LRepItemsVcRecordCheck:;  
+  RepItemsVcRecordCheck = res;
+  RETURN;
+END;
+
+global
+function longint RepItemsVcRecordSave(var record RepItemsVc RepItemsr, record RepItemsVc RI2r, longint long1, longint long2)
+begin
+  if (RepItemsr.SerNr==-1) then begin
+    RepItemsr.SerNr= NextSerNr("RepItemsVc",CurrentDate,-1,false,"");
+  end;
+  return;
+end;
+
+global
+function longint RepItemsVcRecordUpdate(var record RepItemsVc RepItemsr, record RepItemsVc RI2r, longint long1, longint long2)
+begin
+  if (RepItemsr.SerNr==-1) then begin
+    RepItemsr.SerNr= NextSerNr("RepItemsVc",CurrentDate,-1,false,"");
+  end;
+  return;
+end;
+
+

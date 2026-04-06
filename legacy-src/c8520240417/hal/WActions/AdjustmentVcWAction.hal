@@ -1,0 +1,31 @@
+function Boolean AdjustmentDClassStartDateEFAfter(Integer wn,Integer changedf)
+begin
+  record AdjustmentVc Adjustmentr;
+  Boolean res;
+  Date ed;
+  
+  res = true;
+  if (changedf!=0) then begin
+    GetWindowRecord(wn,Adjustmentr);
+    ed = Adjustmentr.StartDate;
+    if (ed.day!=1)then begin ed.day=1; end;
+    Adjustmentr.StartDate = ed;
+    ed.day = DaysInMonth(ed.year,ed.month);
+    Adjustmentr.EndDate = ed;
+    PutWindowRecord(wn,Adjustmentr);
+  end;
+  AdjustmentDClassStartDateEFAfter = res;
+  return;
+end;
+
+global
+function Boolean AdjustmentDClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  res = false;
+  switch (fieldname) begin
+    case "StartDate": res = AdjustmentDClassStartDateEFAfter(wn,changed);
+  end;
+  AdjustmentDClassAfterEditField = res;
+  return;
+end;

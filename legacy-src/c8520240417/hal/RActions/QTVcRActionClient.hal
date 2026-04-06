@@ -1,0 +1,103 @@
+remote function string 255 AddBranchObjectToObjectList(string,string);
+remote updating procedure SMSWhenQT(record QTVc,Integer);
+
+global
+function LongInt QTVcRecordDefaultsClient(LongInt wn,var record QTVc QTr,record QTVc QT2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  record LocalMachineBlock LMb;
+
+  BlockLoad(LMb);  
+  if (blank(QTr.Location)) then begin
+    QTr.Location = LMb.DefLocation;
+  end;
+  QTr.BranchID = LMb.BranchID;
+  QTr.Objects = AddBranchObjectToObjectList(LMb.BranchID,QTr.Objects);
+  if (blank(QTr.PriceList)) then begin
+    QTr.PriceList = LMb.PLCode;
+  end;
+  QTVcRecordDefaultsClient = res;
+  return;
+end;
+
+global
+function LongInt QTVcRecordDuplicateClient(LongInt wn,var record QTVc QTr,record QTVc QT2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  record LocalMachineBlock LMb;
+
+  BlockLoad(LMb);  
+  QTr.BranchID = LMb.BranchID;
+  QTr.Objects = AddBranchObjectToObjectList(LMb.BranchID,QTr.Objects);
+  QTVcRecordDuplicateClient = res;
+  return;
+end;
+
+global
+updating function LongInt QTVcRecordSaveClient(LongInt wn,var record QTVc QTr,record QTVc QT2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  
+  if (QTr.Rejected==2) then begin
+    SMSWhenQT(QTr,2);  
+  end;
+  UpdateBrowses("PipelineWClass");
+  QTVcRecordSaveClient = res;
+  return;
+end;
+
+global
+updating function LongInt QTVcRecordUpdateClient(LongInt wn,var record QTVc QTr,record QTVc QT2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  
+  if (QTr.Rejected==2) and (QT2r.Rejected!=2) then begin
+    SMSWhenQT(QTr,2);  
+  end;
+  UpdateBrowses("PipelineWClass");
+  QTVcRecordUpdateClient = res;
+  return;
+end;
+
+global
+function LongInt QTVcRecordRemoveClient(LongInt wn,var record QTVc QTr,record QTVc QT2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+
+  UpdateBrowses("PipelineWClass");
+  QTVcRecordRemoveClient = res;
+  return;
+end;
+
+procedure RetainQTStatus(record QTVc QTr,record QTVc QT2r)
+begin
+  Integer i,rwcnt;
+  row QTVc QTrw;
+  row QTVc QT2rw;
+  Integer rwcnt2;
+  
+  QTr.RegTime = QT2r.RegTime;
+  rwcnt = MatRowCnt(QTr);
+  rwcnt2 = MatRowCnt(QT2r);
+  for (i=0;i<rwcnt;i=i+1) begin
+    if (i<rwcnt2) then begin
+      MatRowGet(QTr,i,QTrw);
+      MatRowGet(QT2r,i,QT2rw);
+      QTrw.Invd = QT2rw.Invd;
+      QTrw.Invoiced = QT2rw.Invoiced;
+      QTrw.InvDate = QT2rw.InvDate;
+      MatRowPut(QTr,i,QTrw);
+    end;
+  end;
+  return;
+end;
+
+global
+function LongInt QTVcRecordProtectFields(var record QTVc QTr,record QTVc QT2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  
+  RetainQTStatus(QT2r,QTr);
+  QTVcRecordProtectFields = res;
+  return;
+end;

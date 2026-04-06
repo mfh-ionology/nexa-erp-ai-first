@@ -1,0 +1,80 @@
+begin
+  string 255 thehob;
+  
+//  SetLangMode(LangEnglish,"ENG",0);
+  
+  SetBuildProductCode("StandardERP"); // Do not translate
+  SetBuildProgramType(typStandardERP);
+  
+  Exec_File("amaster/datadef.hal");
+  
+  thehob = "hob/startlib.hob";
+  Delete_File(thehob);
+  Compile_File("alocalizations/Tools/WindowTagTools.hal",thehob);
+  Compile_File("hal/Startup/GreyFieldsList.hal",thehob);
+  Compile_File("english/sku.hal",thehob);
+  Compile_File("hal/Tools/sets_nts.hal",thehob);
+  
+  // https://ccadb-public.secure.force.com/mozilla/IncludedRootsPEMTxt?TrustBitsInclude=Websites
+  // DigiCert SHA2 Secure Server CA cert expires 2023-03-08 was not part of that... downloaded from digicert.com and added manually to IncludedRootsPEM.txt
+  // Go Daddy Class 2 Certification Authority cert expires 2034-06-29 was not part of that either, added https://certs.godaddy.com/repository/gd_bundle-g2.crt manually
+  AddDataFileToHOB("aca/IncludedRootsPEM.txt","HTTPS_Root_PEMs.txt",thehob,kCodeLevelSystem);
+  
+  thehob = "hob/startup.hob";
+  Delete_File(thehob);
+  if (ProgramType==typStandardERP) then begin
+    Compile_File("hal/Startup/IntStartup.hal",thehob);
+  end;
+  
+  Delete_File("hob/server.hob");
+  Delete_File("hob/client.hob");
+  Delete_File("hob/common.hob");
+  Delete_File("hob/clcrm.hob");
+  Delete_File("hob/internal.hob");
+  Delete_File("hob/internal0.hob");
+  
+  Delete_File("hob/serverloc.hob");
+  Delete_File("hob/clientloc.hob");
+  Delete_File("hob/commonloc.hob");
+
+  Exec_File("alocalizations/client.hal");
+  Exec_File("alocalizations/common.hal");
+  Exec_File("alocalizations/server-reports.hal");
+  Exec_File("alocalizations/server.hal");
+
+  Exec_File("hal/server.hal");
+  Exec_File("hal/server-reports.hal");
+  Exec_File("hal/client.hal");
+  Exec_File("hal/clcrm.hal");
+  Exec_File("hal/common.hal");
+
+  if (TestEnablerFile("EnAInternal") and TestEnablerFile("EnAHansaMail")) then begin
+    CompilerError("Do not compile with both hansamail and internal turned on");
+  end;
+
+  if (TestEnablerFile("EnASPDocumentation")==false) then begin
+    Delete_File("hob/internalsmartapp.hob");
+  end;
+
+  if (TestEnablerFile("EnAInternal")) then begin
+    Exec_File("ainternal/internal.hal");
+  end else begin
+    Delete_File("hob/intdatadef.hob");
+    Delete_File("hob/internal.hob");
+    Delete_File("hob/internal0.hob");
+  end;
+
+  if (TestEnablerFile("EnAHansaMail")) then begin
+    Exec_File("ahansamail/hansamail.hal");
+  end else begin
+    Delete_File("hob/hmdatadef.hob");
+    Delete_File("hob/hmsueng.hob");
+    Delete_File("hob/hmcleng.hob");
+    Delete_File("hob/hmclient.hob");
+    Delete_File("hob/hmclient0.hob");
+    Delete_File("hob/hmserver.hob");
+    Delete_File("hob/hmserver0.hob");
+  end;
+
+  return;
+end;

@@ -1,0 +1,106 @@
+external function Boolean HasValidToken(date,time,LongInt);
+external procedure EbayRefreshAccessToken();
+external function string 255 ContentLangHeader();
+external function string 255 AuthHeader(Integer);
+external function string 255 EbayHost();
+external procedure EbayLog(string,area);
+external function Boolean ParseHTTPHeader(area,string,var Integer,var string,var string);
+
+global
+procedure PrintOffers(record RcVc RepSpec)
+begin
+  record EbayBlock EBb;
+  area areq,areply;
+  string 255 path,tstr,root;
+  transaction string 255 gEbayAction;
+  Boolean printf,expiredtokenf;
+  json js;
+  Integer rw,cnt,i;
+  string 255 offerId,sku,marketplaceId,status;
+
+  //https://developer.ebay.com/api-docs/sell/inventory/resources/offer/methods/getOffers
+
+  BlockLoad(EBb);
+  if (HasValidToken(EBb.AccessTokenDate,EBb.AccessTokenTime,EBb.AccessTokenLifespan)==false) then begin
+    EbayRefreshAccessToken;
+    expiredtokenf = true;
+    goto LPrintOffers;
+  end;
+
+  tstr = ContentLangHeader & chr(13) & chr(10);
+  tstr = tstr & AuthHeader(1);
+  SetWebHeaders(tstr);
+
+  path = "/sell/inventory/v1/offer?sku=" & RepSpec.f1;
+  gEbayAction = "getOffers";
+
+  EbayLog("request",areq);
+  printf = true;
+  if (SendWebRequest(EbayHost,443,-1,true,"GET",path,"application/json","",false,areq,areply,30)) then begin
+    EbayLog("reply",areply);
+
+    StartReportJob(USetStr(42760));
+    rw = 1;
+    Header(rw,USetStr(8279) & ": " & RepSpec.f1,1);
+    EndHeader;
+
+    SetRepCol(2,60);
+    SetRepCol(3,120);
+    SetRepCol(4,200);
+    SetRepCol(5,350);
+
+    StartFormat(15);
+    OutString(0,0,USetStr(42761),false);
+    OutString(2,0,USetStr(42762),false);
+    OutString(3,0,USetStr(42763),false);
+    OutString(4,0,USetStr(42764),false);
+    EndFormat;
+    Black_Divider(0,1);
+
+    js = ParseJSONArea(areply);
+    if (JSONNodeExists(js,"error")) then begin
+      OutString(0,0,JSONGet(js,"error_description"),false);
+      printf = false;
+    end;
+    if (JSONNodeExists(js,"errors")) then begin
+      OutString(0,0,JSONGet(js,"errors/[0]/message"),false);
+      printf = false;
+    end;
+
+    if (printf) then begin
+      cnt = StringToInt(JSONGet(js,"total"));
+      for (i=0;i<cnt;i=i+1) begin
+        root = "offers/[" & i & "]";   
+        offerId = JSONGet(js,root & "/offerId");
+        sku = JSONGet(js,root & "/sku");
+        marketplaceId = JSONGet(js,root & "/marketplaceId");
+        status = JSONGet(js,root & "/status");
+
+        StartFormat(15);
+        OutString(0,0,offerId,false);
+        OutString(2,0,sku,false);
+        OutString(3,0,marketplaceId,false);
+        OutString(4,0,status,false);
+        switch (status) begin
+          case "PUBLISHED":   OutStringID(5,"DblEbayWithdrawOffer",USetStr(42767),false,offerId);
+          case "UNPUBLISHED": OutStringID(5,"DblEbayPublishOffer",USetStr(42765),false,offerId);
+        end;
+        OutStringID(1,"DblEbayDeleteOffer",USetStr(42766),true,offerId);
+        EndFormat;
+      end;
+    end;
+  end;
+LPrintOffers:;
+  if (expiredtokenf) then begin
+    MessageBox(42788,"");
+  end;
+  EndJob;
+  return;
+end;
+
+global
+procedure EbayGetOffersRn(record RcVc RepSpec)
+begin
+  PrintOffers(RepSpec);
+  return;
+end;

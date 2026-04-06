@@ -1,0 +1,199 @@
+external function string 255 FormatLink(string,string,boolean,boolean);
+external outer function Boolean IsMarketplaceServer();
+external procedure FindPaymentGateway(string,string,Integer,var record CCAccountIDVc,Integer,Integer);
+external function boolean GetShoppingBasket(var record WebNGShopBasketVc,integer);
+external function boolean LoginState();
+external function Boolean BuildWebNGInvoice(var record IVVc,integer,string,boolean,string);
+external procedure FindCCAccountID(string,string,Integer,var record CCAccountIDVc,Integer);
+external procedure ShowRedirectHtml(string,boolean);
+external function Boolean BuildWebNGInvoice(var record IVVc,integer,string,boolean,string);
+external procedure WebNGInsertCustOrderNr_IVVc(var record IVVc);
+external procedure RedirectToShopPage(string);
+external function boolean PayMethodSupported2(string,var string,var string,var string);
+external function string 255 RoundToTwoDecimals(val);
+external updating function Boolean FinishCCPayments(record WebNGPaySessionVc,record WebNGShopCompBlock,string,var string,string);
+external procedure RedirectToShopPageWithArg(string,string);
+external function string 255 ToolWebNGTranslateText(integer);
+external function boolean WebShopFindPaymentGateway(integer,var record CCAccountIDVc,var boolean);
+external function Boolean GetWebPayMethod(Integer,var record WebPayMethodVc);
+external procedure RedirectToPaymentCompletedPage(record WebNGPaySessionVc);
+external function boolean GetPaySession(string,var record WebNGPaySessionVc);
+
+global
+function string 255 PaymarkGetHost(Boolean liveflag)
+begin
+  string 255 res;
+
+  res = "demo.paymarkclick.co.nz";
+  if (liveflag) then begin
+    res = "secure.paymarkclick.co.nz";
+  end;
+  
+  PaymarkGetHost = res;
+  return;
+end;
+
+global
+function string 255 PaymarkGenerateURL(string accountid,string password,string username,string invsernr,string amount,string refid,Boolean livef,boolean paylinkf)
+begin
+  string 255 url,url1,ref,host,path;
+  area request,reply;
+  Boolean res;
+  xml xdata;
+  
+  host = PaymarkGetHost(livef);
+  path = "/api/webpayments/paymentservice/rest/WPRequest";
+  if (paylinkf) then begin
+    ref = refid & "-" & invsernr;
+    url1 = FormatLink("https://" & Webhost & "/WebUpdatingPayLink.hal","action=paymarkfinalize",true,true);
+  end else begin
+    ref = refid;
+    url1 = FormatLink("http://" & Webhost & "/WebUpdatingAction.hal","action=payproceed&paymethod=paymark",true,true);
+  end;
+  AddTextToArea("cmd=_xclick&",request);
+  AddTextToArea("username=" & username & "&",request);
+  AddTextToArea("account_id=" & accountid & "&",request);
+  AddTextToArea("password=" & password & "&",request);
+  AddTextToArea("type=purchase&",request);
+  AddTextToArea("amount=" & amount & "&",request);
+  AddTextToArea("reference=" & ref & "&",request);
+  AddTextToArea("return_url=" & URLEncode(url1),request);
+  res = SendWebRequest(host,443,-1,true,"POST",path,"application/x-www-form-urlencoded","",false,request,reply,300);
+  xdata = ParseXMLArea(reply);
+  url = XmlGet(xdata,"string");
+  
+  PaymarkGenerateURL = url;
+  return;
+end;
+
+global
+function boolean PaymentConfirmPaymark(string AccountRef,string AccessKey,string trans,boolean LiveFlag,var json js)
+begin
+  boolean res;
+  string 255 host,path,auth;
+  area request,reply;
+  
+  auth = "Authorization: Basic " & base64encode(AccountRef & ":" & AccessKey);
+  host = PaymarkGetHost(LiveFlag);
+  path = "/api/transaction/search/" & trans;
+  res = SendWebRequest(host,443,-1,true,"GET",path,"application/json" & chr(13) & chr(10) & auth,"",false,request,reply,30);
+  js = ParseJSONArea(reply);
+  //DOCS: http://docs.dev.paymark.nz/click/#header-overview-4
+  
+  PaymentConfirmPaymark = res;
+  return;
+end;
+
+function boolean WebShopGetPaymarkPaymentGateway(string accountid,var record CCAccountIDVc CCAccountIDr,var boolean livef)
+begin
+  record CCMerchantIDVc CCMerchantIDr;
+  boolean TrHs,res;
+  
+  TrHs = true;
+  while (LoopMain(CCAccountIDr,1,TrHs)) begin
+    if(CCAccountIDr.ProfileID==accountid) then begin
+      TrHs = false;
+    end;
+  end;
+  TrHs = true;
+  while (LoopMain(CCMerchantIDr,1,TrHs)) begin
+    if(CCMerchantIDr.Code==CCAccountIDr.MerchantID) then begin
+      livef = CCMerchantIDr.LiveFlag;
+      TrHs = false;
+      res = true;
+    end;
+  end;
+
+  WebShopGetPaymarkPaymentGateway = res;
+  return
+end;
+
+global
+updating procedure ShopHandlePaymarkProceed()
+begin
+  string 255 tdate,ttime,trans,datetime,payamount,status,extradata,error,orderid,paysessionid,accountid,paydeal;
+  LongInt pos;
+  Boolean res,livef;
+  record IVVc IVr,oldIVr;
+  record CCAccountIDVc CCAccountIDr;
+  record WebNGPaySessionVc WPSr;
+  record WebNGShopCompBlock WSCb;
+  record WebPayMethodVc WPMr;
+  json js;
+  
+  livef = false;  //we havo no idea weather we are using live of test environment
+  status = WebGetArg("status");
+  if (status=="SUCCESSFUL") then begin
+    accountid = WebGetArg("AccountId");
+    trans = WebGetArg("TransactionId");
+    paysessionid = JSONGet(js,"reference");
+    if (WebShopGetPaymarkPaymentGateway(accountid,CCAccountIDr,livef)) then begin
+      res = PaymentConfirmPaymark(CCAccountIDr.AccountRef,CCAccountIDr.AccessKey,trans,livef,js);
+      if (res) then begin
+        datetime = JSONGet(js,"transactionDate");
+        payamount = JSONGet(js,"amount");
+        status = JSONGet(js,"status");
+        extradata = JSONGet(js,"receiptNumber");
+        paysessionid = JSONGet(js,"reference");
+        pos = 0;
+        GetNextSubstring(datetime,pos,"T",tdate);
+        GetNextSubstring(datetime,pos,"T",ttime);
+        if (status=="SUCCESSFUL") then begin
+          //TODO NRR anything special here?? transaction verified/confirmed
+        end else begin
+          LogText(0,"Paymark payment returned success, payment verification failed: transaction=" & trans & ", receiptNumber=" & extradata);
+//if this occurs often, recommended design create activity so the customer knows to follow up on this and manualy check payment
+        end;
+      end else begin
+        LogText(0,"Paymark payment returned success, payment verification call failed: transaction=" & trans & ", receiptNumber=" & extradata);
+      end;
+    end else begin
+      error = "payment gateway not found";
+    end;
+  end else begin
+    error = "Payment did not return successful";
+  end;
+  if (blank(error)) then begin
+    if (GetPaySession(paysessionid,WPSr)) then begin
+      BlockLoad(WSCb);
+      GetWebPayMethod(kWebPaymentMethodPaymark,WPMr);
+      if (FinishCCPayments(WPSr,WSCb,"",WPMr.PayDeal,WPMr.PayMode)) then begin
+        RedirectToPaymentCompletedPage(WPSr);
+      end else begin
+        LogText(0,"FAILED TO FINISH PAYMENT AFTER CUSTOMER PAID!!");
+      end;
+    end else begin
+      LogText(0,"FAILED TO FINISH PAYMENT AFTER CUSTOMER PAID!! paysession not found");
+    end;
+  end else begin
+    RedirectToShopPageWithArg("payment/error","errmsg=" & ToolWebNGTranslateText(25022) & " " & error);
+  end;
+  
+  return;
+end;
+
+global
+procedure RedirectToPaymark(record WebNGPaySessionVc WPSr)
+begin
+  record CCAccountIDVc CCAccountIDr;
+  longint invsernr;
+  string 255 invser,error,link,amount;
+  boolean livef;
+  
+  amount = ValToString(WPSr.InclAmount,M4Val,"",".",0);
+  if (WebShopFindPaymentGateway(kCCPartnerPaymark,CCAccountIDr,livef)) then begin
+    link = PaymarkGenerateURL(CCAccountIDr.ProfileID,CCAccountIDr.AccessKey,CCAccountIDr.AccountRef,0,amount,WPSr.UUID,livef,false);
+    if (nonblank(link)) then begin
+      ShowRedirectHtml(link,true);
+    end else begin
+      error = "Failed create payment link";
+    end;
+  end else begin
+    error = "Failed to find gateway";
+  end;
+  if (nonblank(error)) then begin
+    RedirectToShopPageWithArg("payment/error","errmsg=" & ToolWebNGTranslateText(25022) & error);
+  end;
+  
+  return;
+end;

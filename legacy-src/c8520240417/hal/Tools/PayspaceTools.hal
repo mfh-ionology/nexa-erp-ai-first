@@ -1,0 +1,93 @@
+function string 255 PayspaceHost()
+begin
+  string 255 res;
+  record PayspaceBlock PayspaceBl;
+
+  BlockLoad(PayspaceBl);
+
+  if (PayspaceBl.ModeType==1) then begin
+    res = "api.payspace.com";
+  end else begin 
+    res = "apistaging.payspace.com"; 
+  end;
+  PayspaceHost = res;
+  return;
+end;
+
+global
+function string 255 GetPaySpaceToken()
+begin
+  record PayspaceBlock PayspaceBl;
+  string 255 res;
+  Area req,reply;
+  string 255 js,path;
+  json jsr;
+  
+  BlockLoad(PayspaceBl);
+
+  if (PayspaceBl.ModeType==0) then begin
+    path = "staging-identity.yourhcm.com";
+  end else begin 
+    path = "identity.yourhcm.com"; 
+  end;
+  
+  // SetAreaZeroSize(req);
+  // SetAreaZeroSize(reply);  
+
+  AddTextToArea("client_id=" & PayspaceBl.ClientId & "&",req);
+  AddTextToArea("client_secret=" & PayspaceBl.ClientSecret & "&",req);
+  AddTextToArea("scope=api.full_access",req);
+
+  SendWebRequest(path,443,-1,true,"POST","/connect/token","application/x-www-form-urlencoded","",false,req,reply,30);
+  jsr = ParseJSONArea(reply);
+
+  GetPaySpaceToken = JSONGet(jsr,"access_token");
+  return;
+end;
+
+global
+function string 255 ColumnName(string type)
+begin 
+  string 255 res;
+
+  switch (type) begin
+    case "Medical Allowance":           res = "d";
+    case "Basic Pay":                   res = "d";
+    case "PAYE - Pay As You Earn":      res = "c";
+    case "Net Pay":                     res = "c";
+    case "UIF Employer":                res = "c";
+    case "Skills Development Levy":     res = "c";
+    case "UIF Employee":                res = "c";
+    case "UIF Income":                  res = "d";
+    case "Tax Paid":                    res = "c";
+  end;
+  ColumnName = res;
+end;
+
+global
+procedure DoPayspaceWebRequest(string year,string month,var area reply)
+begin
+  string 255 tstr;
+  string 255 path,token;
+  area req;
+  json js;
+  record PayspaceBlock PayspaceBl;
+
+  BlockLoad(PayspaceBl);
+
+  path = "/odata/v1.0/" & PayspaceBl.CompanyNr & "/EmployeePayslip/" & year & "/" & month;
+  
+  token = GetPaySpaceToken;
+  if (blank(token)) then begin goto LDoPayspaceWebRequest; end;
+
+  tstr = "Authorization: Bearer " & token;
+  tstr = tstr & chr(13) & chr(10);
+  tstr = tstr & "content-type: application/json";
+  SetWebHeaders(tstr); 
+
+  if (SendWebRequest(PayspaceHost,443,-1,true,"GET",path,"application/json","",false,req,reply,20)) then begin end;
+
+LDoPayspaceWebRequest:;
+  return;
+end;
+

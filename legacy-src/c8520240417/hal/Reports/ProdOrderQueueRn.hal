@@ -1,0 +1,171 @@
+
+external procedure HTItem(string,var string);
+external procedure HTArtGroup(string, var string);
+external procedure HTItemClass(string,var string);
+external function Boolean HasItemClassification();
+external function Boolean HasItemGroups();
+external function Boolean ItemInItemGroupOrClass(string,string,string);
+external procedure HT2Per(Date, Date , var string);
+
+procedure FindOutItemGroupAndClass(record ProdOrderVc ProdOrderr,var boolean testf,record RcVc RepSpec)
+begin
+  integer rwcnt,i;
+  row ProdOrderVc Prodorderrw;
+
+  rwcnt = MatRowCnt(ProdOrderr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(ProdOrderr,i,ProdOrderrw);
+    if (ProdOrderrw.OutQty>0) then begin
+      testf = ItemInItemGroupOrClass(ProdOrderrw.Item,RepSpec.f3,RepSpec.f6);
+      if (nonblank(RepSpec.f5)) then begin 
+        if (RepSpec.f5!=ProdOrderrw.Item) then begin testf = false; end; 
+      end; 
+      if (testf) then begin 
+        i = rwcnt;
+      end;
+    end;
+  end;
+  return;
+end;
+
+procedure PrintProdOrders(record RcVc RepSpec)
+begin
+  record ProdOrderVc ProdOrderr;
+  boolean foundf,testf;
+  integer qty;
+  string 255 tstr;
+
+  foundf = true;
+  ProdOrderr.DoneFlag = 0;
+  ProdOrderr.QueuePos = 0;
+  while (LoopKey("DoneQueue",ProdOrderr,2,foundf)) begin
+    if (foundf) then begin
+      if (ProdOrderr.DoneFlag<>0) then begin foundf = false; end;
+      if (ProdOrderr.QueuePos<0) then begin foundf = false; end;
+    end;
+    if (foundf) then begin
+      testf = true;
+      if (nonblank(RepSpec.f1)) then begin
+        if (RepSpec.f1!=ProdOrderr.Location) then begin testf = false; end;
+      end;
+       if (nonblank(RepSpec.f2)) then begin
+        if (ProdOrderr.Recipe!=RepSpec.f2) then begin testf = false; end;
+      end;
+      if (nonblank(RepSpec.f3) or nonblank(RepSpec.f5) or nonblank(RepSpec.f6)) then begin
+        FindOutItemGroupAndClass(ProdOrderr,testf,RepSpec)
+      end;
+      if (nonblank(RepSpec.f4)) then begin
+        if (RepSpec.f4!=ProdOrderr.Machine) then begin testf = false; end;
+      end;
+      if (RepSpec.ArtMode==0) then begin
+        if (ProdOrderr.StatusFlag<1) then begin testf = false; end;
+        if (ProdOrderr.StatusFlag>2) then begin testf = false; end;
+      end;
+      if (RepSpec.ArtMode==1) then begin
+        if (ProdOrderr.StatusFlag!=2) then begin testf = false; end;
+      end;
+      if (RepSpec.ArtMode==2) then begin
+        if (ProdOrderr.StatusFlag!=1) then begin testf = false; end;
+      end;
+      if (testf) then begin
+        StartFormat(15);
+        OutString(0,"DblProdOrderVc",ProdOrderr.SerNr,false);
+        OutString(50,0,ProdOrderr.Recipe,false);
+        OutString(130,0,ProdOrderr.RecName,false);
+        OutString(270,0,ProdOrderr.Machine,false);
+        OutString(320,0,ProdOrderr.QueuePos,false);
+        OutVal(400,0,ProdOrderr.Qty-ProdOrderr.Finished,M40Val,true);
+        OutString(1,0,ProdOrderr.DueDate,true);
+        EndFormat;
+        qty = qty + 1;
+      end;
+    end;
+  end;
+  Gray_Divider(0,1);
+  StartFormat(15);
+  OutString(450,0,USetStr(15037),true);
+  OutVal(1,0,qty,M40Val,true);
+  
+  return;
+end;
+
+procedure PrintHeaders(record RcVc RepSpec)
+begin
+  string 255 tstr;
+  Integer rw;
+
+  rw = 1;
+  if (nonblank(RepSpec.f1)) then begin
+    tstr = USetStr(15018) & RepSpec.f1;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f2)) then begin
+    tstr = USetStr(15019) & RepSpec.f2;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f5)) then begin
+    HTItem(RepSpec.f5,tstr);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (HasItemGroups) then begin
+    HTArtGroup(RepSpec.f3,tstr);
+    if (nonblank(tstr)) then begin
+      Header(rw,tstr,1);
+      rw = rw + 1;
+    end;
+  end;
+  if (HasItemClassification) then begin
+    HTItemClass(RepSpec.f6,tstr);
+    if (nonblank(tstr)) then begin
+      Header(rw,tstr,1);
+      rw = rw + 1;
+    end;
+  end;
+  if (nonblank(RepSpec.f4)) then begin
+    tstr = USetStr(15021) & RepSpec.f4;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  switch (RepSpec.ArtMode) begin
+    case 0: tstr = USetStr(15044);
+    case 1: tstr = USetStr(15042);
+    case 2: tstr = USetStr(15041);
+  end;
+  Header(rw,tstr,1);
+  EndHeader;
+  return;
+end;
+
+global
+procedure ProdOrderQueue2Rn(record RcVc RepSpec)
+begin
+
+  StartReportJob(USetStr(15030));
+  PrintHeaders(RepSpec);
+
+  SetRepCol(2,50);
+  SetRepCol(3,130);
+  SetRepCol(4,270);
+  SetRepCol(5,320);
+  SetRepCol(6,400);
+
+  StartFormat(15);
+  OutString(0,0,USetStr(15031),false);
+  OutString(2,0,USetStr(15032),false);
+  OutString(3,0,USetStr(15034),false);
+  OutString(4,0,USetStr(15033),false);
+  OutString(5,0,USetStr(15045),false);
+  OutString(6,0,USetStr(15035),true);
+  OutString(1,0,USetStr(15043),true);
+  EndFormat;
+  Gray_Divider(0,1);
+
+  PrintProdOrders(RepSpec);  
+  
+  EndFormat;
+  EndJob;
+  Return;
+end;

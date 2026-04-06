@@ -1,0 +1,201 @@
+remote procedure DoSubmitNobbModule(record NobbModuleVc,record NobbSettingsBlock,var string);
+remote updating function Boolean GetAuthToken(var record NobbSettingsBlock);
+remote procedure DoSubmitNobbItem(record INVc,record NobbSettingsBlock,var string);
+remote procedure NobbGTINCheck(string,record NobbSettingsBlock,var Integer);
+remote procedure DoCreateNobbPackage(record NobbItemStatusVc);
+remote procedure DoCreateNobbImage(record NobbItemStatusVc);
+
+global
+procedure SubmitNobbModuleLsm()
+begin
+  Integer wn;
+  record NobbModuleVc NobbModuler;
+  record NobbSettingsBlock NSb;
+  string 255 text,err;
+  area a_text;
+
+  BlockLoad(NSb);
+
+  if (NSb.Enable==0) then begin
+    MessageBox(43849,"");
+    goto LSubmitNobbModuleLsm;
+  end;
+
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,NobbModuler);
+  if (blank(NobbModuler.Brand)) then begin
+    MessageBox(1058,"");
+    WindowFieldGoto(wn,NobbModuler,-1,"Brand",false);
+    goto LSubmitNobbModuleLsm;
+  end;
+  if (blank(NobbModuler.CorporateBrand)) then begin
+    MessageBox(1058,"");
+    WindowFieldGoto(wn,NobbModuler,-1,"CorporateBrand",false);
+    goto LSubmitNobbModuleLsm;
+  end;
+  if (blank(NobbModuler.Code)) then begin
+    MessageBox(1058,"");
+    WindowFieldGoto(wn,NobbModuler,-1,"Code",false);
+    goto LSubmitNobbModuleLsm;
+  end;
+  if (blank(NobbModuler.Manufacturer)) then begin
+    MessageBox(1058,"");
+    WindowFieldGoto(wn,NobbModuler,-1,"Manufacturer",false);
+    goto LSubmitNobbModuleLsm;
+  end;
+  if (blank(NobbModuler.ProductGroupNumber)) then begin
+    MessageBox(1058,"");
+    WindowFieldGoto(wn,NobbModuler,-1,"ProductGroupNumber",false);
+    goto LSubmitNobbModuleLsm;
+  end;
+  GetAreaFromTextField(NobbModuler,a_text);
+  text = AreaToString(a_text);
+  if (blank(text)) then begin
+    MessageBox(1058,"");
+    WindowFieldGoto(wn,NobbModuler,-1,"Math",false);
+    goto LSubmitNobbModuleLsm;
+  end;
+
+  if (blank(NSb.Token)) then begin
+    if (qupdating.GetAuthToken(NSb)==false) then begin
+      MessageBox(43840,"");
+      goto LSubmitNobbModuleLsm;
+    end;
+  end;
+
+  DoSubmitNobbModule(NobbModuler,NSb,err);
+  if (nonblank(err)) then begin
+    MessageBox(0,err);
+  end else begin
+    CheckMarkBox(43841,"");
+    ReOpenWindow(wn,"NobbModuleDClass",0,0,"","",NobbModuler);
+    UpdateBrowses("NobbModuleVc");
+  end;
+LSubmitNobbModuleLsm:;
+  return;
+end;
+
+global
+procedure RegisterNobbItemLsm()
+begin
+  Integer wn;
+  record INVc INr;
+  record NobbSettingsBlock NSb;
+  record NobbModuleVc NobbModuler;
+  string 255 err;
+  Integer status;
+
+  BlockLoad(NSb);
+
+  if (NSb.Enable==0) then begin
+    MessageBox(43849,"");
+    goto LRegisterNobbItemLsm;
+  end;
+
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,INr);
+
+  if (WindowState(wn)!=Rs_normal) then begin
+    MessageBox(1356,"");
+    goto LRegisterNobbItemLsm;
+  end;
+  if (blank(INr.NobbModule)) then begin
+    MessageBox(1058,"");
+    WindowFieldGoto(wn,INr,-1,"NobbModule",false);
+    goto LRegisterNobbItemLsm;
+  end;
+  NobbModuler.Code = INr.NobbModule;
+  if (ReadFirstMain(NobbModuler,1,true)==false) then begin
+    MessageBox(43850,"");
+    WindowFieldGoto(wn,INr,-1,"NobbModule",false);
+    goto LRegisterNobbItemLsm;
+  end;
+  if (NobbModuler.Status!=kNobbModuleStatusApproved) then begin
+    MessageBox(43851,"");
+    WindowFieldGoto(wn,INr,-1,"NobbModule",false);
+    goto LRegisterNobbItemLsm;
+  end;
+  if (blank(INr.Code)) then begin
+    MessageBox(1058,"");
+    WindowFieldGoto(wn,INr,-1,"Code",false);
+    goto LRegisterNobbItemLsm;
+  end;
+  if (blank(INr.Name)) then begin
+    MessageBox(1058,"");
+    WindowFieldGoto(wn,INr,-1,"Name",false);
+    goto LRegisterNobbItemLsm;
+  end;
+  if (blank(INr.UPrice1)) then begin
+    MessageBox(1058,"");
+    WindowFieldGoto(wn,INr,-1,"UPrice1",false);
+    goto LRegisterNobbItemLsm;
+  end;
+  if (blank(INr.GTINNumber)) then begin
+    MessageBox(1058,"");
+    WindowFieldGoto(wn,INr,-1,"GTINNumber",false);
+    goto LRegisterNobbItemLsm;
+  end;
+
+  if (blank(NSb.Token)) then begin
+    if (qupdating.GetAuthToken(NSb)==false) then begin
+      MessageBox(43840,"");
+      goto LRegisterNobbItemLsm;
+    end;
+  end;
+
+  NobbGTINCheck(INr.GTINNumber,NSb,status);
+  switch (status) begin
+    case 404: DoSubmitNobbItem(INr,NSb,err); //main supplier
+    case 403: err = USetStr(43852);          //alternate supplier
+    case 400: err = USetStr(43854);
+    case 200: err = UsetStr(43853);
+  end;
+
+  if (nonblank(err)) then begin
+    MessageBox(0,err);
+  end else begin
+    CheckMarkBox(43841,"");
+    // ReOpenWindow(wn,"NobbModuleDClass",0,0,"","",NobbModuler);
+  end;
+LRegisterNobbItemLsm:;
+  return;
+end;
+
+global
+procedure NobbPackageCreateLsm()
+begin
+  Integer wn;
+  record NobbItemStatusVc NISr;
+
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,NISr);
+
+  //DO PROPER RECORD CHECKS
+
+  DoCreateNobbPackage(NISr);
+  return;
+end;
+
+global
+procedure NobbImageCreateLsm()
+begin
+  Integer wn;
+  record NobbItemStatusVc NISr;
+
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,NISr);
+
+  //DO PROPER RECORD CHECKS
+
+  DoCreateNobbImage(NISr);
+  return;
+end;
+
+/*
+  SpecialMenu("Create Item",' ',0,"NobbItemCreateLsm");
+  SpecialMenu("Create Price",' ',0,"NobbPriceCreateLsm");
+*/

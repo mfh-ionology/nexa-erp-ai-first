@@ -1,0 +1,36 @@
+
+global
+procedure OrderNexmoPhoneNumberDsm()
+begin
+  Integer wn,nwn;
+  record RcVc RepSpec;
+
+  wn = CurWindow;
+  DeSelectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+
+  nwn = OpenWindow("OrderNexmoPhoneNumberWClass",1,wn,"","",RepSpec);
+  PutWindowRecord(nwn,RepSpec);
+
+LOrderNexmoPhoneNumberDsm:;
+end;
+
+global
+procedure NexmoSIPTrunkVClassReportDefaults(Integer wn)
+begin
+  record RcVc RepSpec;
+  record NexmoCredBlock NCb;
+  record PBXConnectionVc PBXCr;
+
+  DeSelectWindow(wn,true);
+  GetWindowRecord(wn,RepSpec);
+  ReportDefaults(RepSpec,"NexmoSIPTrunkVClass");
+  LoopMain(PBXCr,0,true);
+  RepSpec.f1 = PBXCr.Code;
+  BlockLoad(NCb);
+  RepSpec.f5 = NCb.Key;
+  RepSpec.f6 = NCb.Secret;
+  RepSpec.flags[1] = 1;
+  PutWindowRecord(wn,RepSpec);
+  SelectWindow(wn);
+end;

@@ -1,0 +1,278 @@
+external procedure AddTransAutoTransRows(record TRVc);
+external procedure TRSumup(var record TRVc,var val);
+external procedure AddEuroCurncyTrRow(record TRVc,string,string,string,string,val,Boolean,Boolean,var val,string,val,val,val,val,val,val,val,LongInt,Boolean,string);
+external function Boolean CheckTTRPerRow(string,string,string,Boolean,var string,Integer);
+external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
+external updating procedure DeleteTransaction(LongInt,Integer);
+external function Boolean TransInFiscal(Date);
+external function Boolean SerNrTestLoanAgreementVc(LongInt,Date,var Boolean);
+external function string 255 CheckTrans(var record TRVc,Integer,Boolean);
+external updating procedure SaveTrans(record TRVc);
+external updating procedure DeleteTransaction(LongInt,Integer);
+external procedure LoanAgreementVc_PasteCurncyCode(var record LoanAgreementVc);
+external procedure AddLoanAgreementTypeMatrix(var record LoanAgreementVc,record LoanAgreementTypeVc);
+external updating procedure GenerateLoanAgreementSchedule(record LoanAgreementVc);
+
+global
+function LongInt LoanAgreementVcRecordDefaults(var record LoanAgreementVc LoanAgreementr,record LoanAgreementVc LoanAgreement2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  record LoanAgreementTypeVc LoanAgreementTyper;
+  record LoanManSettingsBlock LoanManSettingsb;
+  record LoanAgreementAccUsageBlock LoanAgreementAccUsageb;
+  
+  BlockLoad(LoanManSettingsb);
+  BlockLoad(LoanAgreementAccUsageb);
+  LoanAgreementr.SerNr = -1;
+  LoanAgreementr.SalesMan = CurrentUser;
+  LoanAgreementr.TransDate = CurrentDate;
+  LoanAgreementr.startDate = CurrentDate;
+  LoanAgreementr.AgreedDate = CurrentDate;
+  LoanAgreementr.FirstIntDate = LoanAgreementr.startDate;
+  LoanAgreementr.FirstInvDate = AddMonth(LoanAgreementr.startDate,1);
+  LoanAgreementr.MonthlyPaymentDay = LoanManSettingsb.MonthlyPaymentDay;
+  LoanAgreementr.Type = LoanManSettingsb.DefaultType;
+  LoanAgreementTyper.Code = LoanAgreementr.Type;
+  if (ReadFirstMain(LoanAgreementTyper,1,true)) then begin
+    LoanAgreementr.DepositSum = LoanAgreementTyper.DepositSum;
+    LoanAgreementr.DepositPrc = LoanAgreementTyper.DepositPrc;
+    LoanAgreementr.PayDeal = LoanAgreementTyper.PayDeal;
+    LoanAgreementr.RateType = LoanAgreementTyper.RateType;
+  end;
+  LoanAgreementr.LoanAgreementAcc = LoanAgreementAccUsageb.LoanAgreementAcc;
+  LoanAgreementr.ARAcc = LoanAgreementAccUsageb.ARAcc;
+  // if (LoanAgreementr.RateType==0) then begin
+  //   LoanAgreementr.IntRate = GetIntRate(LoanAgreementr.Type,LoanAgreementr.TransDate);
+  // end;
+  LoanAgreementVc_PasteCurncyCode(LoanAgreementr);
+  
+  AddLoanAgreementTypeMatrix(LoanAgreementr,LoanAgreementTyper);
+  if (SingleUserMode) then begin
+    LoanAgreementr.SerNr = NextSerNr("LoanAgreementVc",LoanAgreementr.TransDate,-1,false,"");
+  end;
+  LoanAgreementVcRecordDefaults = res;
+  return;
+end;
+
+global
+function LongInt LoanAgreementVcRecordDuplicate(var record LoanAgreementVc LoanAgreementr,record LoanAgreementVc LoanAgreement2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  record LoanAgreementAccUsageBlock LoanAgreementAccUsageb;
+  row LoanAgreementVc LoanAgreementrw;
+  val blval;
+  Integer i,rwcnt;
+  
+  BlockLoad(LoanAgreementAccUsageb);
+  LoanAgreementr.SerNr = -1;
+  LoanAgreementr.SalesMan = CurrentUser;
+  LoanAgreementr.TransDate = CurrentDate;
+  LoanAgreementVc_PasteCurncyCode(LoanAgreementr);
+  LoanAgreementr.LoanAgreementAcc = LoanAgreementAccUsageb.LoanAgreementAcc;
+  LoanAgreementr.ARAcc = LoanAgreementAccUsageb.ARAcc;
+  if (SingleUserMode) then begin
+    LoanAgreementr.SerNr = NextSerNr("LoanAgreementVc",LoanAgreementr.TransDate,-1,false,"");
+  end;
+  rwcnt = MatRowCnt(LoanAgreementr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(LoanAgreementr,i,LoanAgreementrw);
+    LoanAgreementrw.InvoicedOn = -1;
+    LoanAgreementrw.InvoicedSum = blval;
+    MatRowPut(LoanAgreementr,i,LoanAgreementrw);
+  end;
+  LoanAgreementVcRecordDuplicate = res;
+  return;
+end;
+
+global
+function Integer MakeTransFromLoanAgreement(record TRVc gTRp,record LoanAgreementVc LoanAgreementr,Boolean rpt,var string errfield)
+begin
+  Integer res;
+  record TRGenBlock TRGenRec;
+  record IVVc IVr;
+  record LoanAgreementAccUsageBlock LoanAgreementAccUsageb;
+  record AccVc Accr;
+  record TRVc lTRr;
+  string 255 ftxt,otxt,taccnumber;
+  string 255 tstr;
+  val t,v;
+  Boolean dc1,dc2;
+  val rs,totsum;
+  string 10 controlacc,aracc;
+
+  res = 1085;
+  BlockLoad(TRGenRec);
+  BlockLoad(LoanAgreementAccUsageb);
+  RecordNew(gTRp);
+  if (rpt==false) then begin
+    if (TRGenRec.LoanAgreementGenTrans==0) then begin
+      res = 0;
+      goto LMakeTransFromLoanAgreement;
+    end;
+    if ((nonblankdate(TRGenRec.CredManStartDate)) and
+        (LoanAgreementr.TransDate<TRGenRec.CredManStartDate) ) then begin
+      res = 0;
+      goto LMakeTransFromLoanAgreement;
+    end;
+  end;
+  gTRp.IntYc = CredManYc;
+  gTRp.Number = LoanAgreementr.SerNr;
+  gTRp.RefStr = "";
+  if (rpt==false) then begin
+    lTRr.IntYc = gTRp.IntYc;
+    lTRr.Number = gTRp.Number;
+    if (ReadFirstMain(lTRr,2,true)) then begin
+      res = 1032;
+      goto LMakeTransFromLoanAgreement;
+    end;
+  end;
+  gTRp.RegDate = CurrentDate;
+  gTRp.RegTime = CurrentTime;
+  gTRp.TransDate = LoanAgreementr.TransDate;
+  if (rpt==false) then begin
+    if (TransInFiscal(gTRp.TransDate)==false) then begin
+      res = 0;
+      goto LMakeTransFromLoanAgreement;
+    end;
+  end;
+  ftxt = LoanAgreementr.Addr0;
+  gTRp.Comment = ftxt;
+  dc1 = true;
+  dc2 = false;
+  v = LoanAgreementr.InvSum4;
+  rs = MulRateToBase1(LoanAgreementr.CurncyCode,v,LoanAgreementr.FrRate,LoanAgreementr.ToRateB1,LoanAgreementr.ToRateB2,LoanAgreementr.BaseRate1,LoanAgreementr.BaseRate2,DefaultCurRoundOff);
+  controlacc = LoanAgreementr.LoanAgreementAcc;
+  if (blank(controlacc)) then begin
+    controlacc = LoanAgreementAccUsageb.LoanAgreementAcc;
+  end;
+  otxt = LoanAgreementr.Objects;
+  Accr.AccNumber = controlacc;
+  if (ReadFirstMain(Accr,1,true)==false) then begin
+    res = 1007;
+    errfield = "LoanAgreementAcc";
+    goto LMakeTransFromLoanAgreement;
+  end;
+  if (nonblank(Accr.Curncy)) then begin
+    if (Accr.Curncy!=LoanAgreementr.CurncyCode) then begin
+      res = 1217;
+      errfield = "LoanAgreementAcc";
+      goto LMakeTransFromLoanAgreement;
+    end;
+  end;
+  if (CheckTTRPerRow("LoanAgreementVc",controlacc,otxt,dc1,taccnumber,1)) then begin end;
+  AddEuroCurncyTrRow(gTRp,controlacc,otxt,"",ftxt,rs,false,dc1,totsum,LoanAgreementr.CurncyCode,LoanAgreementr.FrRate,LoanAgreementr.ToRateB1,LoanAgreementr.ToRateB2,LoanAgreementr.BaseRate1,LoanAgreementr.BaseRate2,v,blankval,-1,false,taccnumber);
+  aracc = LoanAgreementr.ARAcc;
+  if (blank(controlacc)) then begin
+    controlacc = LoanAgreementAccUsageb.ARAcc;
+  end;
+  otxt = LoanAgreementr.ARAccObject;
+  Accr.AccNumber = aracc;
+  if (ReadFirstMain(Accr,1,true)==false) then begin
+    res = 1007;
+    errfield = "ARAccObject";
+    goto LMakeTransFromLoanAgreement;
+  end;
+  if (nonblank(Accr.Curncy)) then begin
+    if (Accr.Curncy!=LoanAgreementr.CurncyCode) then begin
+      res = 1217;
+      errfield = "ARAccObject";
+      goto LMakeTransFromLoanAgreement;
+    end;
+  end;
+  if (CheckTTRPerRow("LoanAgreementVc",aracc,otxt,dc2,taccnumber,1)) then begin end;
+  AddEuroCurncyTrRow(gTRp,aracc,otxt,"",ftxt,rs,false,dc2,totsum,Accr.Curncy,LoanAgreementr.FrRate,LoanAgreementr.ToRateB1,LoanAgreementr.ToRateB2,LoanAgreementr.BaseRate1,LoanAgreementr.BaseRate2,v,blankval,-1,false,taccnumber);
+  TRSumup(gTRp,t);
+  AddTransAutoTransRows(gTRp);
+  res = 0;
+LMakeTransFromLoanAgreement:;
+  MakeTransFromLoanAgreement = res;
+  return;
+end;
+
+global
+updating function LongInt LoanAgreementVcRecordUpdateAfter(var record LoanAgreementVc LoanAgreementr,record LoanAgreementVc LoanAgreement2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  Boolean unokf;
+
+  if (LoanAgreement2r.Status==kLoanAgreementStatusActive) then begin
+    if (LoanAgreementr.Status<kLoanAgreementStatusActive or LoanAgreementr.Status==kLoanAgreementStatusCanceled) then begin
+      DeleteTransaction(LoanAgreementr.SerNr,CredManYc);
+      // UpdateARFromCredMan(LoanAgreementr,true,false);
+      // CredManIPrsStats(LoanAgreementr,true);
+    end;
+  end;
+  // if ((LoanAgreementr.OKFlag==1) and (CredMan2r.OKFlag==0)) then begin
+  //   UpdateARFromCredMan(LoanAgreementr,false,false);
+  //   CredManIPrsStats(LoanAgreementr,false);
+  // end;
+  LoanAgreementVcRecordUpdateAfter = res;
+  return;
+end;
+
+global
+updating function LongInt LoanAgreementVcRecordCheck(var record LoanAgreementVc LoanAgreementr,record LoanAgreementVc LoanAgreement2r,LongInt stat,LongInt long4)
+begin
+  LongInt res,oldnr;
+  Integer insertmode,updatemode;
+  Integer i,rwcnt,errcode;
+  Boolean transf,gentrans,unokf;
+  record TRVc gTRp;
+  string 255 errstr;
+  
+  res = 0;
+  insertmode = 1;
+  updatemode = 2;
+  oldnr = LoanAgreementr.SerNr;
+  if (LoanAgreementr.SerNr<=0) then begin
+    LoanAgreementr.SerNr = NextSerNr("LoanAgreementVc",LoanAgreementr.TransDate,-1,false,"");
+  end;
+  if (SerNrTestLoanAgreementVc(LoanAgreementr.SerNr,LoanAgreementr.TransDate,gentrans)==false) then begin
+    RecordCheckError(1557,"",-1,"SerNr");
+    res = -1;
+    goto LLoanAgreementVcRecordCheck;
+  end;
+  if (GetDay(LoanAgreementr.FirstInvDate)!=LoanAgreementr.MonthlyPaymentDay) then begin
+    RecordCheckError(43950,"",-1,"FirstInvDate");
+    res = -1;
+    goto LLoanAgreementVcRecordCheck;
+  end;
+  if (blank(LoanAgreementr.Type)) then begin
+     RecordCheckError(1058,"",-1,"Type");
+    res = -1;
+    goto LLoanAgreementVcRecordCheck;
+  end;
+L12:;
+  transf = false;
+  switch (LoanAgreementr.Status) begin
+    case kLoanAgreementStatusSigned: GenerateLoanAgreementSchedule(LoanAgreementr);
+    case kLoanAgreementStatusActive:
+      if (stat==insertmode) then begin transf = true; end;
+      if (stat==updatemode) then begin
+        if (LoanAgreement2r.Status!=kLoanAgreementStatusActive) then begin transf = true; end;
+      end;
+  end;
+  if (gentrans==false) then begin transf = false; end;
+  if (transf) then begin
+    errcode = MakeTransFromLoanAgreement(gTRp,LoanAgreementr,false,errstr);
+    if (errcode!=0) then begin
+      RecordCheckError(errcode,"",-1,errstr);
+      res = -1;
+      goto LLoanAgreementVcRecordCheck;
+    end;
+    if ((gTRp.Number>0) and (gTRp.IntYc==CredManYc)) then begin
+      errstr = CheckTrans(gTRp,2,true);
+      if (nonblank(errstr)) then begin
+        RecordCheckError(1085,errstr,-1,"SerNr");
+        res = -1;
+        goto LLoanAgreementVcRecordCheck;
+      end;
+      SaveTrans(gTRp);
+    end;
+  end;
+
+LLoanAgreementVcRecordCheck:;
+  if (res!=0) then begin LoanAgreementr.SerNr = oldnr; end;
+  LoanAgreementVcRecordCheck = res;
+  return;
+end;

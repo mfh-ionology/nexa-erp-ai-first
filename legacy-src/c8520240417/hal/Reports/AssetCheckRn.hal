@@ -1,0 +1,128 @@
+external procedure GetAccBalance(string,string,Date,record ObjBalVc,Integer,Integer,Integer,string,Integer,var val);
+external function Boolean GetObjBal(string,string,var record ObjBalVc);
+external function Date DateFromString(string,string);
+external procedure GetAccTurnover(string,string,Date,Date,record ObjBalVc,string,Integer,Integer,Integer,var val,var val);
+external procedure AT2DeprCalculation(record RcVc,Integer,var val,var val,var val,var val,var val,var val,var val,var val,var val,boolean);
+external procedure HT2Per(Date, Date , var string);
+
+procedure GetDepAcc(string acc,var string code,var string assetdepacc,string nlclass)
+begin
+  record AC2Block AC2Bl;
+  row AC2Block ACrw;
+  Integer i,rwcnt;
+
+  BlockLoad(AC2bl);
+  rwcnt = MatRowCnt(AC2bl);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(AC2bl,i,ACrw);
+    if (ACrw.Asset1Acc==acc) then begin
+      // if (nonblank(nlclass)) then begin 
+      //   if (ACrw.Code!=nlclass) then begin goto LSkip; end; 
+      // end;
+      assetdepacc = ACrw.Depr1Acc;
+      code = ACrw.Code;
+      i = rwcnt; 
+    end;
+    LSkip:;
+  end;
+return;
+end;
+
+function Boolean LastDayOfMonth(date td)
+begin
+  Boolean res;
+
+  if (td.day==DaysInMonth(GetYear(td),GetMonth(td))) then begin res = true; end;
+
+  LastDayOfMonth = res;
+  return;
+end;
+
+global
+procedure AssetCheckingRn(record RcVc RepSpec)
+begin
+  record ObjBalVc ObjBalr;
+  Date td;
+  val totalval;
+  val v,v2,v3,v4;
+  val t,t1,t2,t3;
+  record RcVc DepRepSpec;
+  val totinitdprval,totpurchval,totstartval,totdprbef,totdprv,totresval,totwrofsum,totrevbef,totthestartval,depr;
+  Integer rw;
+  string 255 tstr,depcode,assetdepacc,nlclass;
+  record TRVc TRr;
+  Boolean testf,Objbalsf;
+  
+  StartReportJob(USetStr(42862));
+  rw = 1;
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  if (nonblank(RepSpec.f12)) then begin
+    tstr = USetStr(42851) & " " & RepSpec.f12;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.f12)) then begin
+    OutString(0,0,USetStr(42855),false);
+   // goto LAssetCheckingRn;
+  end;
+  if (nonblank(RepSpec.f13)) then begin
+    OutString(0,0,USetStr(42867),false);
+   
+  end;
+  EndHeader;
+
+  SetRepCol(2,350);
+  SetRepCol(3,420);
+
+  StartFormat(15);
+  OutString(0,0,USetStr(28301),false);
+  OutString(2,0,USetStr(42852),true);
+  OutString(3,0,USetStr(42853),true);
+  OutString(1,0,USetStr(42854),true);
+  EndFormat;
+  Gray_Divider(0,1);
+
+  DepRepSpec.sStartDate = RepSpec.sStartDate;
+  DepRepSpec.sEndDate = RepSpec.sEndDate;
+  td = RepSpec.sStartDate;
+  while (td<=RepSpec.sEndDate) begin
+    testf = true;
+    GetDepAcc(RepSpec.f12,depcode,assetdepacc,nlclass);
+    Objbalsf = GetObjBal(RepSpec.f12,"",ObjBalr);
+    GetAccTurnover(RepSpec.f12,"",td,td,ObjBalr,"",0,0,0,t,v2);
+    GetAccBalance(RepSpec.f12,"",td,ObjBalr,1,0,0,"",0,v);
+
+    Objbalsf = GetObjBal(assetdepacc,"",ObjBalr);
+    GetAccTurnover(assetdepacc,"",td,td,ObjBalr,"",0,0,0,t1,v3);
+    GetAccBalance(assetdepacc,"",td,ObjBalr,1,0,0,"",0,v4);
+
+    totalval = v + v2 + v4;
+    totdprbef = 0; totwrofsum = 0; totrevbef = 0; totthestartval = 0; totdprv = 0; 
+    totinitdprval = 0; totpurchval = 0; totstartval = 0; totdprv = 0; totresval = 0; totwrofsum = 0;
+    DepRepSpec.flags[9] = 1;
+    DepRepSpec.f3 = depcode;
+    AT2DeprCalculation(DepRepSpec,1,totinitdprval,totpurchval,totstartval,totdprbef,totdprv,totresval,totwrofsum,totrevbef,totthestartval,false);
+    depr = totstartval - totdprbef - totdprv; 
+    if (RepSpec.flags[2]!=0) then begin
+      if (totalval==depr) then begin
+        testf = false;
+      end;
+    end;
+    if (testf) then begin
+      if (LastDayOfMonth(td)) then begin
+        StartFormat(15);
+        OutDate(0,"DblTrialBalMonthVc",td,false);
+        OutVal(2,0,totalval,M4Val,true);
+        OutVal(3,0,depr,M4Val,true);
+        OutVal(1,0,totalval-depr,M4Val,true);
+        EndFormat;
+      end;
+    end;  
+    td = AddDay(td,1);
+  end;
+  EndJob;
+LAssetCheckingRn:;
+  return;
+end;

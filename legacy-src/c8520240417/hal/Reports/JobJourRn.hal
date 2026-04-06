@@ -1,0 +1,226 @@
+external function Boolean IsCancelState(string);
+external Function Val GetCustAccount(LongInt,string,Boolean,Boolean);
+external Function Val GetDownGuest(record JobVc);
+
+function Boolean JobInTime(record JobVc Jobr,Time frtime,Time totime,Integer mode)
+begin
+  Boolean res;
+
+  if (mode==0) then begin
+    if (Jobr.StartTime>=frtime and Jobr.StartTime<=totime) then begin
+      res = true;
+    end;
+  end else begin
+    if (Jobr.EndTime>=frtime and Jobr.EndTime<=totime) then begin
+      res = true;
+    end;
+  end;
+  
+  JobInTime = res;
+  return;
+end;
+
+global
+function boolean JobJourSelect(record RcVc RepSpec,record JobVc Jobr,var boolean foundf)
+begin
+  Boolean res;
+  string 20 CustCat;
+  record CUVc CUr;
+  record HotelShiftsBlock HotelShiftsb;
+
+  BlockLoad(HotelShiftsb);
+  res = true;
+  CUr.Code = Jobr.Source;
+  if (ReadFirstMain(CUr,1,true)) then begin 
+    CustCat = CUr.CustCat;
+  end;  
+  if (((RepSpec.flags[0]==0) and (Jobr.RegDate>RepSpec.sEndDate)) or 
+      ((RepSpec.flags[0]==1) and (Jobr.TransDate>RepSpec.sEndDate))) then begin
+        foundf = false;  
+  end else begin
+    if (nonblank(RepSpec.f1) and RepSpec.f1!=Jobr.ResStatus) then begin   res = false; goto LJobJourSelect; end;
+    if (nonblank(RepSpec.f2) and RepSpec.f2!=Jobr.Source) then begin      res = false; goto LJobJourSelect; end;
+    if (nonblank(RepSpec.f3) and RepSpec.f3!=CustCat) then begin          res = false; goto LJobJourSelect; end;
+    if (nonblank(RepSpec.f4) and RepSpec.f4!=Jobr.BookOrigin) then begin  res = false; goto LJobJourSelect; end;
+    if (nonblank(RepSpec.f5) and RepSpec.f5!=Jobr.ResUsage) then begin    res = false; goto LJobJourSelect; end;
+    if (nonblank(RepSpec.f6) and RepSpec.f6!=Jobr.PriceList) then begin   res = false; goto LJobJourSelect; end;
+    if (nonblank(RepSpec.f7)) then begin
+      if (RepSpec.f7==HotelShiftsb.Comment1) then begin
+        res = JobInTime(Jobr,HotelShiftsb.FrTime1,HotelShiftsb.ToTime1,RepSpec.flags[4]);
+      end;
+      if (RepSpec.f7==HotelShiftsb.Comment2) then begin
+        res = JobInTime(Jobr,HotelShiftsb.FrTime2,HotelShiftsb.ToTime2,RepSpec.flags[4]);
+      end;
+      if (RepSpec.f7==HotelShiftsb.Comment3) then begin
+        res = JobInTime(Jobr,HotelShiftsb.FrTime3,HotelShiftsb.ToTime3,RepSpec.flags[4]);
+      end;
+      if (RepSpec.f7==HotelShiftsb.Comment4) then begin
+        res = JobInTime(Jobr,HotelShiftsb.FrTime4,HotelShiftsb.ToTime4,RepSpec.flags[4]);
+      end;
+      if (RepSpec.f7==HotelShiftsb.Comment5) then begin
+        res = JobInTime(Jobr,HotelShiftsb.FrTime5,HotelShiftsb.ToTime5,RepSpec.flags[4]);
+      end;
+    end;
+    if (RepSpec.flags[1]==1 and Jobr.Mother!=-1) then begin               res = false; goto LJobJourSelect; end;
+    if (RepSpec.flags[2]==0 and IsCancelState(Jobr.ResStatus)) then begin res = false; goto LJobJourSelect; end;
+    if (RepSpec.flags[5]==1 and (nonblank(Jobr.ResCode))) then begin      res = false; goto LJobJourSelect; end;
+  end;
+LJobJourSelect:;
+  JobJourSelect = res;   
+  return;
+end;
+ 
+procedure AddToArr(record JobVc Jobp,var array record JobVc aJobr)
+begin
+  aJobr[aJobr.length] = Jobp;
+  return;
+end;
+
+procedure DoJobJourRn(record RcVc RepSpec,var val totMonto)
+begin
+  Integer i; 
+  record JobVc Jobr;
+  record CUVc CUr;   
+  Boolean TsHr,tflag;
+  String 50 tstr;
+  String 20 keystr;
+  Val Monto,DownPaid;
+  array record JobVc aJobr;
+
+  StartFormat(15);
+  OutString(0,0,USetStr(9986),false);
+  OutString(2,0,USetStr(9991),false);
+  OutString(3,0,USetStr(9992),false);
+  OutString(4,0,USetStr(9991),false);
+  OutString(5,0,USetStr(11157),false);
+  OutString(6,0,USetStr(11168),false);
+  OutString(7,0,USetStr(9993),false);
+  OutString(8,0,USetStr(9988),true);
+  OutString(9,0,USetStr(12122),true);
+  if (RepSpec.flags[6]==1) or (RepSpec.flags[5]==1)then begin
+    OutString(480,0,"Waitlist",true);
+  end;
+  EndFormat;
+  Gray_Divider(0,1);
+
+  if (RepSpec.flags[0]==0) then begin
+    Jobr.RegDate = RepSpec.sStartDate;
+    keystr = "RegDate";
+  end else begin
+    Jobr.TransDate = RepSpec.sStartDate;
+    keystr = "TransDate";
+  end;
+
+  TsHr = true;  
+  while (LoopKey(keystr,Jobr,1,TsHr)) begin
+   if (JobJourSelect(RepSpec,Jobr,TsHr)) then begin
+      AddToArr(Jobr,aJobr);
+    end;  
+  end;  
+
+  SortRecordArray(aJobr,"WaitlistPrio");
+  
+  for (i=0;i<aJobr.length;i=i+1) begin
+      Jobr = aJobr[i];
+      StartFormat(15);
+      OutStringID(0,"DblJobVc",Jobr.SerNr,false,Jobr.SerNr & ":" & CurrentCompany);
+      OutString(2,0,left(Jobr.CUName,22),false);
+      OutString(3,0,Jobr.Source,false);
+      CUr.Code = Jobr.Source;
+      if ReadFirstMain(CUr,1,true) then begin
+        OutString(4,0,Left(CUr.Name,22),false);
+      end;
+      OutString(7,0,Jobr.BookOrigin,false);
+      OutString(5,0,DatetoString(Jobr.TransDate,"DD/MM") & " - " & DatetoString(Jobr.EndDate,"DD/MM"),false);
+      OutLongInt(6,0,Jobr.NrOfDays,false);
+      tstr = LowerCase(Jobr.ResStatus);
+      OutString(7,0,tstr,false);
+      DownPaid = GetDownGuest(Jobr);
+      if (RepSpec.flags[3]==1) then begin tflag = false; end else begin tflag = true; end;
+      Monto = GetCustAccount(Jobr.SerNr,Jobr.Source,tflag,false); 
+      OutVal(8,0,Monto,M4Val,true);
+      OutString(9,0,Jobr.ResCode,true);
+      if (RepSpec.flags[6]==1) or (RepSpec.flags[5]==1)then begin
+        OutString(480,0,Jobr.WaitlistPrio,true);
+      end;
+      EndFormat;
+      totMonto = totMonto + Monto; 
+  end;
+  Gray_Divider(0,1);
+  StartFormat(15);
+  OutString(0,0,USetStr(9990),false);
+  OutVal(8,0,totMonto,M4Val,true);
+  EndFormat;
+  return;
+end;
+
+global
+procedure JobJourRn(record RcVc RepSpec)
+begin
+  Integer i,rw,rwcnt,totpersons,allcompguests,oldcomp; 
+  val allcompdata,totMonto;
+  String 50 tstr;
+  record CompaniesBlock Cb;
+  row CompaniesBlock Cbrw;
+
+  StartReportJob(USetStr(9985));
+  rw = 1;
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  if (RepSpec.IncDaughter==1) then begin
+    tstr = USetStr(19171);
+    Header(rw,tstr,0);
+    rw = rw + 1;
+  end;
+  EndHeader;
+  if (RepSpec.flags[6]==1) or (RepSpec.flags[5]==1)then begin
+    SetRepCol(2,30);
+    SetRepCol(3,150);
+    SetRepCol(4,190);
+    SetRepCol(5,270);
+    SetRepCol(6,330);
+    SetRepCol(7,370);
+    SetRepCol(8,420);
+    SetRepCol(9,450);
+  end else begin
+    SetRepCol(2,47);
+    SetRepCol(3,180);
+    SetRepCol(4,220);
+    SetRepCol(5,300);
+    SetRepCol(6,350);
+    SetRepCol(7,385);
+    SetRepCol(8,440);
+    SetRepCol(9,480);
+  end;
+
+  if (RepSpec.IncDaughter!=0) then begin 
+    oldcomp = CurrentCompany;
+    BlockLoad(Cb);
+    rwcnt = MatRowCnt(Cb);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(Cb,i,Cbrw);
+      if (SetCompanyCode(Cbrw.CompCode,false)) then begin
+        StartFormat(15);
+        OutString(0,0,Cbrw.CompName,false);
+        EndFormat;      
+        DoJobJourRn(RepSpec,totMonto);
+        allcompdata = allcompdata +  totMonto;
+        Black_Divider(0,1);
+        StartFormat(15);
+        EndFormat;
+      end;
+    end;
+    ResetCompany(oldcomp);
+  end else begin
+    DoJobJourRn(RepSpec,totMonto);
+  end;
+  if (RepSpec.IncDaughter!=0) then begin 
+    StartFormat(15);
+    OutString(0,0,USetStr(9990) & " " & USetStr(26462)& ": ",false);
+    OutVal(8,0,allcompdata,M4Val,true);
+    EndFormat;   
+  end;
+
+  EndJob;
+  return;
+end;

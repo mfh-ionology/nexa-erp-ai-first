@@ -1,0 +1,146 @@
+external function Integer CountObjects(string);
+remote updating function LongInt CancelApprovalRequest(string,string,var Integer);
+remote updating function Integer RequestApproval_WayListVc(record WayListVc,var record RcVc,var Integer);
+remote procedure WayListDClassOnOpenWindowRemote(var record ExpVc,var Integer);
+remote function Boolean WayListVc_FindLastUnfinished(var record WayListVc);
+
+global
+procedure ExportWayListLsm()
+begin
+  record RcVc RepSpec;
+  
+  OpenWindow("WayListEClass",0,0,"","",RepSpec);
+  return;
+end;
+
+global
+procedure FinishWayListLsm()
+begin
+  record WayListVc WayListr;
+  Integer wn;
+  
+  if (WayListVc_FindLastUnfinished(WayListr)) then begin
+    wn = OpenWindow("WayListDClass",0,0,"","",WayListr);
+//    WindowFieldGoto(wn,WayListr,-1,"Endkm",true);
+  end;
+  
+  return;
+end;
+
+global
+updating procedure DeleteWayListLsm()
+begin
+  LongInt i;
+  Integer wn;
+  record WayListVc WayListr;
+  
+  wn = CurWindow;
+  i = 1;
+  while (GetRecordFromBrowse(WayListr,wn,i)) begin
+    RecordDelete(WayListr);
+    i = i + 1;
+  end;
+  UpdateBrowses("WayListVc");
+  
+  return;
+end;
+
+global
+updating procedure WayListSendforAcceptanceWayListDsmExecute(Integer wn,string acceptanceby,string acceptancefyi)
+begin
+  Integer err,nwn;
+  record WayListVc WLr;
+  Integer ApproverSelection,ApprovalStatusFlag;
+  record RcVc RepSpec;
+  
+  GetWindowRecord(wn,WLr);
+  if (WindowState(wn)!=Rs_normal) then begin
+    if (WindowDoOK(wn,0)==false) then begin
+      goto LWayListSendforAcceptanceWayListDsm;
+    end;
+    GetWindowRecord(wn,WLr);
+  end;
+  WLr.AcceptanceBy = acceptanceby;
+  WLr.AcceptanceFYI = acceptancefyi;
+  err = RequestApproval_WayListVc(WLr,RepSpec,ApprovalStatusFlag);
+  ApproverSelection = RepSpec.ArtMode;
+  if ((ApproverSelection==kAcceptanceApproverSelectionManual) and (blank(WLr.AcceptanceBy))) then begin
+    switch (err) begin  
+      case 0:
+        if (CountObjects(RepSpec.f12)==1) then begin
+          RepSpec.f1 = RepSpec.f12;
+        end;
+        if (CountObjects(RepSpec.f11)==1) then begin
+          RepSpec.f2 = RepSpec.f11;
+        end;
+        nwn = OpenWindow("SelectApproverWClass",0,wn,"","",RepSpec);
+      otherwise
+        MessageBox(err,"");
+    end;
+  end else begin
+    switch (err) begin  
+      case 0:
+        PutWindowRecord(wn,WLr);
+        if (WindowDoOK(wn,0)) then begin
+        end;
+        PutWindowString(wn,"AcceptanceStatusFlag",StringFromSet(443,ApprovalStatusFlag));  
+        CheckmarkBox(37501,"");
+      otherwise
+        MessageBox(err,"");
+    end;
+  end;
+LWayListSendforAcceptanceWayListDsm:;  
+  return;
+end;
+
+global
+updating procedure WayListSendforAcceptanceWayListDsm()
+begin
+  WayListSendforAcceptanceWayListDsmExecute(CurWindow,"","");
+  return;
+end;
+
+global
+updating procedure WayListCancelApprovalRequest(Integer wn)
+begin
+  record WayListVc WLr;
+  Integer ApprovalStatusFlag;
+  LongInt err;
+
+  GetWindowRecord(wn,WLr);
+  err = CancelApprovalRequest("WayListVc",WLr.SerNr,ApprovalStatusFlag);
+  if (err!=0) then begin
+    MessageBox(err,"");
+    if (err!=37503) then begin
+      goto LWayListCancelApprovalRequest;
+    end;
+  end;
+  PutWindowString(wn,"AcceptanceStatusFlag",StringFromSet(443,ApprovalStatusFlag));  
+LWayListCancelApprovalRequest:;
+  return;
+end;
+
+global
+function Boolean WayListDClassOnOpenWindow(Integer wn)
+begin
+  record WayListVc WLr;
+  Integer AcceptanceStatusFlag;
+  
+  GetWindowRecord(wn,WLr);
+  WayListDClassOnOpenWindowRemote(WLr,AcceptanceStatusFlag);
+  PutWindowString(wn,"AcceptanceStatusFlag",StringFromSet(443,AcceptanceStatusFlag));  
+  WayListDClassOnOpenWindow = false;
+  return;
+end;
+
+global
+procedure WayListDClassOnWindowRecordChange(Integer wn)
+begin
+  record WayListVc WLr;
+  Integer AcceptanceStatusFlag;
+
+  GetWindowRecord(wn,WLr);
+  WayListDClassOnOpenWindowRemote(WLr,AcceptanceStatusFlag);
+  PutWindowString(wn,"AcceptanceStatusFlag",StringFromSet(443,AcceptanceStatusFlag));  
+  return;
+end;

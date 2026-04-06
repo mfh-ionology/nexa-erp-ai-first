@@ -1,0 +1,82 @@
+
+
+function Boolean KitchenOrderDClassArtCodeEFAfter(Integer wn,Integer rownr,Boolean changedf)
+begin
+  record INVc INr;
+  record KitchenOrderVc KOr;
+  row KitchenOrderVc KOrw;
+
+  if (changedf) then begin
+    GetWindowRecord(wn,KOr);
+    DeselectWindow(wn,false);
+    MatRowGet(KOr,rownr,KOrw);
+    INr.Code = KOrw.ArtCode;
+    if (ReadFirstMain(INr,1,true)) then begin
+    end;
+    KOrw.Spec = INr.Name;
+    MatRowPut(KOr,rownr,KOrw);
+    PutWindowRecord(wn,KOr);
+  end;
+  KitchenOrderDClassArtCodeEFAfter = true;
+  return;
+end;
+
+global
+function Boolean KitchenOrderDClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+
+  switch (fieldname) begin
+    case "ArtCode": res = KitchenOrderDClassArtCodeEFAfter(wn,rownr,changed!=0);
+  end;
+
+  KitchenOrderDClassAfterEditField = res;
+  return;
+end;
+
+global
+function Boolean KitchenOrderDClassActiveEditField(Integer wn,string fieldname,Integer fn,Integer wnst,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record KitchenOrderVc KOr;
+  record KitchenOrderVc KO2r;
+
+  res = true;
+  GetWindowRecord(wn,KOr);
+  if (KOr.Invalid!=0) then begin
+    res = false;
+    goto LKitchenOrderDClassActiveEditField;
+  end;
+  if (WindowState(wn)!=Rs_insert) then begin
+    if (KOr.OKFlag!=0) then begin
+      res = false;
+      goto LKitchenOrderDClassActiveEditField;
+    end;
+  end;
+LKitchenOrderDClassActiveEditField:;  
+  KitchenOrderDClassActiveEditField = res;
+  return;
+end;
+
+global
+function Boolean KitchenOrderDClassOKFlagButtonAction(Integer wn,Integer value)
+begin
+  Boolean res;
+  record KitchenOrderVc KOr;
+ 
+  res = true;
+  if (WindowState(wn)==Rs_normal) then begin
+    GetWindowRecord(wn,KOr);
+    if (KOr.OKFlag!=0) then begin
+      res = UserCanAction("UnOKAll",false);
+    end;
+  end;  
+  if (WindowState(wn)==Rs_update) then begin
+    GetPrevWindowRecord(wn,KOr);
+    if (KOr.OKFlag!=0) then begin
+      res = false;
+    end;
+  end;  
+  KitchenOrderDClassOKFlagButtonAction = res;
+  return;
+end;

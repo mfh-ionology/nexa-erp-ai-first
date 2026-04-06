@@ -1,0 +1,129 @@
+external function Boolean ResolveReportingPeriod(record ReportingPeriodVc,var date,var date,var Boolean);
+
+/*
+global
+function LongInt RepSetVcRecordDefaults(var record RepSetVc RepSetr,record RepSetVc RepSet2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+      
+  RepSetr.SerNr = -1;
+  RepSetVcRecordDefaults = res; 
+  RETURN;
+END;
+
+global
+function LongInt RepSetVcRecordDuplicate(var record RepSetVc RepSetr,record RepSetVc RepSet2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+
+  RepSetr.SerNr = -1;
+  RepSetVcRecordDuplicate = res; 
+  RETURN;
+END;
+
+global
+function LongInt RepSetVcRecordSave(var record RepSetVc RepSetr,record RepSetVc RepSet2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+
+  RepSetr.SerNr = NextSerNr("RepSetVc",CurrentDate,-1,false,"");
+  RepSetVcRecordSave = res; 
+  RETURN;
+END;
+*/
+
+global
+function longint ReportingPeriodVcRecordDefaults(record ReportingPeriodVc RPr, record ReportingPeriodVc RP2r, longint long1, longint long2)
+begin
+  LongInt res;
+
+  RPr.PeriodType = kPeriodTypeBlank;
+
+  RPr.Start_Year_Delta = 0;
+  RPr.Start_Month_Delta = 0;
+  RPr.Start_Day_Delta = 0;
+  RPr.End_Year_Delta = 0;
+  RPr.End_Month_Delta = 0;
+  RPr.End_Day_Delta = 0;
+
+  ReportingPeriodVcRecordDefaults = res;
+end;
+
+function Boolean CheckOneFilled(LongInt start,LongInt delta,string field)
+begin
+  if (start>0 and delta<>0) then begin
+    RecordCheckError(21720,"",-1,field);
+    CheckOneFilled = false;
+  end else begin
+    CheckOneFilled = true;
+  end;
+end;
+
+function Boolean CheckOneInRange(LongInt value,LongInt StartRange,LongInt EndRange,LongInt ErrorNo,string field)
+begin
+  Boolean res;
+  
+  res = true;
+  
+  if (value<>-1) then begin
+    if ((value<StartRange) or (EndRange<value)) then begin
+      RecordCheckError(ErrorNo,"",-1,field);
+      res = false;
+    end;
+  end;
+  
+  CheckOneInRange = res;
+end;
+
+global
+function LongInt ReportingPeriodVcRecordCheck(var record ReportingPeriodVc RPr,record ReportingPeriodVc RP2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  date frdat,todat;
+  Boolean dynf;
+
+  res = -1;
+  
+  if (RPr.Code=="") then begin
+    RecordCheckError(1058,"",-1,"Code");
+  end;
+  
+  if (CheckOneFilled(RPr.Start_Year_Fixed,RPr.Start_Year_Delta,"Start_Year_Delta")==false) then begin goto LReportingPeriodVcRecordCheck_out; end;
+  if (CheckOneFilled(RPr.Start_Month_Fixed,RPr.Start_Month_Delta,"Start_Month_Delta")==false) then begin goto LReportingPeriodVcRecordCheck_out; end;
+  if (CheckOneFilled(RPr.Start_Day_Fixed,RPr.Start_Day_Delta,"Start_Day_Delta")==false) then begin goto LReportingPeriodVcRecordCheck_out; end;
+  if (CheckOneFilled(RPr.End_Year_Fixed,RPr.End_Year_Delta,"End_Year_Delta")==false) then begin goto LReportingPeriodVcRecordCheck_out; end;
+  if (CheckOneFilled(RPr.End_Month_Fixed,RPr.End_Month_Delta,"End_Month_Delta")==false) then begin goto LReportingPeriodVcRecordCheck_out; end;
+  if (CheckOneFilled(RPr.End_Day_Fixed,RPr.End_Day_Delta,"End_Day_Delta")==false) then begin goto LReportingPeriodVcRecordCheck_out; end;
+
+  ResolveReportingPeriod(RPr,frdat,todat,dynf);
+
+  if (todat<frdat) then begin
+    RecordCheckError(21721,"",-1,"Start_Year_Fixed");
+    goto LReportingPeriodVcRecordCheck_out;
+  end;
+
+  if (CheckOneInRange(RPr.Start_Year_Fixed ,1900,2100,21722,"Start_Year_Fixed")==false) then begin goto LReportingPeriodVcRecordCheck_out; end;
+  if (CheckOneInRange(RPr.End_Year_Fixed   ,1900,2100,21722,"End_Year_Fixed")==false) then begin goto LReportingPeriodVcRecordCheck_out; end;
+
+  if (CheckOneInRange(RPr.Start_Month_Fixed,   1,  12,21723,"Start_Month_Fixed")==false) then begin goto LReportingPeriodVcRecordCheck_out; end;
+  if (CheckOneInRange(RPr.End_Month_Fixed  ,   1,  12,21723,"End_Month_Fixed")==false) then begin goto LReportingPeriodVcRecordCheck_out; end;
+
+  if (CheckOneInRange(RPr.Start_Day_Fixed  ,   1,  31,21724,"Start_Day_Fixed")==false) then begin goto LReportingPeriodVcRecordCheck_out; end;
+  if (CheckOneInRange(RPr.End_Day_Fixed    ,   1,  31,21724,"End_Day_Fixed")==false) then begin goto LReportingPeriodVcRecordCheck_out; end;
+
+  // temp start
+  if (CheckOneInRange(RPr.Start_Year_Delta ,   0,   0,2246,"Start_Year_Delta")==false) then begin goto LReportingPeriodVcRecordCheck_out; end;
+  if (CheckOneInRange(RPr.End_Year_Delta   ,   0,   0,2246,"End_Year_Delta")==false) then begin goto LReportingPeriodVcRecordCheck_out; end;
+
+  if (CheckOneInRange(RPr.Start_Month_Delta,   0,   0,2246,"Start_Month_Delta")==false) then begin goto LReportingPeriodVcRecordCheck_out; end;
+  if (CheckOneInRange(RPr.End_Month_Delta  ,   0,   0,2246,"End_Month_Delta")==false) then begin goto LReportingPeriodVcRecordCheck_out; end;
+
+  if (CheckOneInRange(RPr.Start_Day_Delta  ,   0,   0,2246,"Start_Day_Delta")==false) then begin goto LReportingPeriodVcRecordCheck_out; end;
+  if (CheckOneInRange(RPr.End_Day_Delta    ,   0,   0,2246,"End_Day_Delta")==false) then begin goto LReportingPeriodVcRecordCheck_out; end;
+  // end temp
+
+  res = 0;
+
+LReportingPeriodVcRecordCheck_out:;
+  ReportingPeriodVcRecordCheck = res;
+end;

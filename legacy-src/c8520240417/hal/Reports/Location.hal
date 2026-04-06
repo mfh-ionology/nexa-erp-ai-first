@@ -1,0 +1,59 @@
+global
+procedure LocationRn(record RcVc RepSpec)
+begin
+  record LocationVc Locr;
+  Boolean found;
+  string 10 afr,ato;
+  string 255 index;
+
+  afr = FirstInRange(RepSpec.f1,10);
+  ato = LastInRange(RepSpec.f1,10);
+  StartReportJob(USetStr(5360));
+  EndHeader;
+  StartFormat(15);
+  OutString(0,0,USetStr(5361),false);
+  OutString(130,0,USetStr(5362),false);
+  OutString(330,0,USetStr(5363),false);
+  EndFormat;
+  StartFormat(15);
+  OutString(130,0,USetStr(5364),false);
+  OutString(330,0,USetStr(5365),false);
+  EndFormat;
+  Gray_Divider(0,1);
+  Locr.Code = afr;
+  found = true;
+  index = "ActCode";
+  if (RepSpec.flags[0]) then begin
+    index = "Code";
+  end;
+  while (LoopKey(index,Locr,1,found)) begin
+   if (found) then begin
+      if (nonblank(ato)) then begin
+        if (Locr.Code > ato) then begin
+          found = false;
+        end;
+      end;
+    end;
+    if (found) then begin
+      StartFormat(15);
+      OutString(0,"DblLocationVc",Locr.Code,false);
+      OutString(130,0,Locr.Name,false);
+      OutString(330,0,Locr.Contact,false);
+      EndFormat;
+      StartFormat(15);
+      OutString(130,0,Locr.Addr0,false);
+      OutString(330,0,Locr.Phone,false);
+      EndFormat;
+      StartFormat(15);
+      OutString(130,0,Locr.Addr1,false);
+      OutString(330,0,Locr.Fax,false);
+      EndFormat;
+      StartFormat(15);
+      OutString(130,0,Locr.Addr2,false);
+      EndFormat;
+      Gray_Divider(0,1);
+    end;
+  end;
+  EndJob;
+  return;
+end;

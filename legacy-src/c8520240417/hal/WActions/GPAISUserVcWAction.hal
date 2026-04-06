@@ -1,0 +1,127 @@
+external procedure LogAreaToFile(string,area);
+function Boolean GPAISUserDClassUserCodeEFAfter(Integer wn,Boolean changedf)
+begin  
+  record GPAISUserVc YUr;
+  record UserVc Userr;
+
+  if (changedf) then begin
+    GetWindowRecord(wn,YUr);
+    Userr.Code = YUr.UserCode;
+    ReadFirstMain(Userr,1,true);
+    YUr.UserName = Userr.Name;
+    PutWindowRecord(wn,YUr);
+  end;
+  GPAISUserDClassUserCodeEFAfter = true;
+  return;
+end;
+
+global
+function Boolean GPAISUserDClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
+begin
+  Boolean res;
+
+  switch (fieldname) begin
+    case "UserCode": res = GPAISUserDClassUserCodeEFAfter(wn,changed!=0);
+  end;
+  GPAISUserDClassAfterEditField = res;
+  return;
+end;
+
+
+global
+procedure ItemResourceGPAISLsm()
+begin
+  record RcVc ReoSpec;
+   
+  OpenWindow("GPAISVClass",0,0,"","",ReoSpec);
+  return;
+end;
+
+function string 255 CreateAuthenticationString(string user,string regnr,string rsakeyfile)
+begin
+  string 255 res;
+  string 255 bootstrap_script;
+  area tmp;
+  LongInt fsz;
+  
+  res = "Authorization: Basic ";
+  AddTextToArea(regnr & "|" & CurrentUnixUTCTime & CurrentUnixUTCTimeMicroseconds/1000,tmp);  
+  res = res & base64encode(user & ":" & RSASignArea(tmp,rsakeyfile,"",kCryptKeyFormatPEM,kSignMethod_RSA_SHA1));
+  CreateAuthenticationString = res;
+  return;
+end;
+
+global
+procedure SendFileToGPAIS()
+begin
+  Integer wn;
+  record RcVc RepSpec;
+  record GPAISUserVc GPAISUr;
+  record CYBlock CYb;
+  string 255 psswd,contenttype;
+  area request;
+  LongInt fsz;
+  
+  wn = CurWindow;
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+  if (blank(RepSpec.f1)) then begin
+    goto LSendFileToGPAIS;
+  end;
+  GPAISUr.UserCode = CurrentUser;
+  if (ReadFirstMain(GPAISUr,1,true)==false) then begin
+    goto LSendFileToGPAIS;
+  end;
+  if (blank(GPAISUr.GPAISUsername)) then begin
+    goto LSendFileToGPAIS;
+  end;
+  if (blank(GPAISUr.GPAISKey)) then begin
+    goto LSendFileToGPAIS;
+  end;
+  BlockLoad(CYb);
+
+  fsz = FileSize(RepSpec.f1);
+  LoadFileToArea(RepSpec.f1,0,fsz,request);
+
+  psswd = CreateAuthenticationString(GPAISUr.GPAISUsername,CYb.OrgNr,GPAISUr.GPAISKey);  //rsa.key
+  contenttype = "application/xml";
+  SetWebHeaders(psswd);
+  SendAsyncWebRequest("www.gpais.eu",443,-1,true,"POST","/o/vvs/zrn/journal/import",contenttype,"",request,"SendFileToGPAISReply",40);
+  
+LSendFileToGPAIS:;
+  return;
+end;
+
+global
+procedure SendFileToGPAISReply(area reply,Area replyheader,boolean timedout)
+begin
+  string 255 tstr,t1,errcode,errstr;
+  LongInt pos,res;
+
+  if (GetAreaLength(replyheader)>4) then begin
+    tstr = GetLineFromArea(replyheader,0);
+
+    pos = 0;
+    GetNextSubstring(tstr,pos," ",t1);
+    GetNextSubstring(tstr,pos," ",errcode);
+    switch (errcode) begin
+      case "200":
+        res = 40410;
+      case "202":
+        res = 40410;
+      otherwise 
+        res = 40402;
+        GetNextSubstring(tstr,pos,chr(13),errstr);
+    end;
+  end else begin
+    res = 40405;
+  end;
+  if (res>0) then begin
+    MessageBox(res,"");
+  end;
+
+//    LogAreaToFile("_SendFileToGPAISReply_reply.txt",reply);
+//    LogAreaToFile("_SendFileToGPAISReply_replyheader.txt",replyheader);
+
+  return;
+end;

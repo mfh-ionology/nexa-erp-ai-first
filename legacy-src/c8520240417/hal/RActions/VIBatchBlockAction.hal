@@ -1,0 +1,88 @@
+external function Integer CheckObjs(string,string,var string);
+
+global
+function LongInt VIBatchBlockCheck(var record VIBatchBlock VIBatchr,record VIBatchBlock VIBatch2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  Integer rwcnt,i,errcode;
+  string 255 errstr;
+  row VIBatchBlock VIBatchbrw;
+  record VITBlock VITb;
+  record OTCheckBlock OTCheckb;
+
+  res = 0;
+  rwcnt = MatRowCnt(VIBatchr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(VIBatchr,i,VIBatchbrw);
+    if (blank(VIBatchbrw.InvDate)) then begin
+      RecordCheckError(1058,"",i,"InvDate");
+      res = -1;
+      goto LVIBatchBlockCheck;
+    end;
+    if (blank(VIBatchbrw.VECode)) then begin
+      RecordCheckError(1058,"",i,"VECode");
+      res = -1;
+      goto LVIBatchBlockCheck;
+    end;
+    if (blank(VIBatchbrw.InvoiceNr)) then begin
+      BlockLoad(VITb);
+      if (VITb.RequireSuppInvNr==1) then begin
+        RecordCheckError(1058,"",i,"InvoiceNr");
+        res = -1;
+        goto LVIBatchBlockCheck;
+      end;
+    end;
+    if (VIBatchbrw.Sum==-1) then begin
+      RecordCheckError(1058,"",i,"Sum");
+      res = -1;
+      goto LVIBatchBlockCheck;
+    end;
+    if (VIBatchbrw.VATVal==-1) then begin
+      RecordCheckError(1058,"",i,"VATVal");
+      res = -1;
+      goto LVIBatchBlockCheck;
+    end;
+    if (blank(VIBatchbrw.PayDeal)) then begin
+      RecordCheckError(1058,"",i,"PayDeal");
+      res = -1;
+      goto LVIBatchBlockCheck;
+    end;
+    if (blank(VIBatchbrw.AccNumber)) then begin
+      RecordCheckError(1058,"",i,"AccNumber");
+      res = -1;
+      goto LVIBatchBlockCheck;
+    end;
+    if (blank(VIBatchbrw.VATCode)) then begin
+      RecordCheckError(1058,"",i,"VATCode");
+      res = -1;
+      goto LVIBatchBlockCheck;
+    end;
+    if (blank(VIBatchbrw.CurncyCode)) then begin
+      RecordCheckError(1058,"",i,"CurncyCode");
+      res = -1;
+      goto LVIBatchBlockCheck;
+    end;
+    if (blank(VIBatchbrw.DueDate)) then begin
+      RecordCheckError(1058,"",i,"DueDate");
+      res = -1;
+      goto LVIBatchBlockCheck;
+    end;
+    if (blank(VIBatchbrw.TransDate)) then begin
+      RecordCheckError(1058,"",i,"TransDate");
+      res = -1;
+      goto LVIBatchBlockCheck;
+    end;
+    if (blank(VIBatchbrw.Objects)) then begin
+      errcode = CheckObjs(VIBatchbrw.AccNumber,VIBatchbrw.Objects,errstr);
+      if (errcode!=0) then begin
+        RecordCheckError(errcode,errstr,i,"Objects");      
+        res = -1;
+        goto LVIBatchBlockCheck;
+      end;  
+    end;
+  end;
+  
+LVIBatchBlockCheck:;
+  VIBatchBlockCheck = res;
+  return;
+end;

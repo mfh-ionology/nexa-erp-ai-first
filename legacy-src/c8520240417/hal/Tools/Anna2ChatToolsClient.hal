@@ -1,0 +1,309 @@
+// ## move R- and W-actions to separate files
+
+external procedure PasteFromSysList2(Integer);
+external procedure AIChat_AddMessage(var array string,var array string,string,string);
+external procedure AIChat_StoreWn(LongInt,array string,array string,Boolean,Boolean,Boolean);
+external procedure AIChat_StoreCbctx(string,array string,array string,Boolean,Boolean,Boolean);
+external procedure AIChat_LoadWn(LongInt,var array string,var array string);
+external procedure AIChat_LoadCbctx(string,var array string,var array string);
+
+external function Boolean ORVc_PasteArtCode(var record ORVc,Integer,var string,var string,Boolean);
+external function Boolean PasteCustInOrder(var record ORVc,string,string,var string,var string);
+external updating function Integer CreateMailFromORD(record ORVc,var record MailVc,var string,string);
+
+external function Boolean QTVc_PasteArtCode(var record QTVc,Integer,var string,var string);
+external function Boolean PasteCustInQT(var record QTVc,string,string,var string,Boolean);
+external updating function Integer CreateMailFromQTD(record QTVc,var record MailVc,var string,string);
+
+external function Boolean FindCustomerAndInvoice(string,Longint,var Integer,var val,var val,var string);
+external updating function Integer CreateMailFromIVD(record IVVc,var record MailVc,var string,Boolean,string);
+
+external procedure FindLastPayments(string,Integer,date,var array date,var array val,var array string);
+external function Boolean FindPlannedDeliveryDate(string,LongInt,var date);
+external procedure FindStockLevelOfItem(string,var val);
+
+external function string 255 SayValAsCurrency(val,string);
+external function string 255 SayAsDate(date);
+external function string 255 SayNumberAsCardinal(string);
+
+external function string 255 CR();
+external function string 255 LF();
+//external function string 255 NL();
+
+external function string 255 TimeStampStr();
+
+external procedure CloudTextToSpeech(string,string,string);
+
+external procedure StringToContext(string,var record Anna2ContextVc);
+external procedure StringToNode(string,var record Anna2ChatNodeVc);
+external procedure PushNode(var array record Anna2ChatNodeVc,record Anna2ChatNodeVc);
+external procedure PushNodeCode(var array record Anna2ChatNodeVc,string);
+external function LongInt Anna2StartNode();
+external function string 255 ContextToString(record Anna2ContextVc);
+external function string 255 NodeToString(record Anna2ChatNodeVc);
+external procedure Anna2Chat_DebugToWindow(string,Integer,string,Integer,var string);
+external function string 255 Anna2_Ctx_DebugStr(record Anna2ContextVc,array record Anna2ChatNodeVc);
+external procedure Anna2_AddMessage(var record Anna2ContextVc,
+                                    var array string,
+                                    var array string,
+                                    string,
+                                    string);
+remote function string 255 Anna2Chat_Process(var record Anna2ContextVc,var array record Anna2ChatNodeVc,string);
+remote procedure Anna2_Init();
+
+function string 255 NL()
+begin
+  NL = CR & LF;
+end;
+
+global
+procedure Anna2Chat_OpenDebugWindow(string wclass,Integer multif,record OpenAILogVc ALogr)
+begin
+  LongInt wn;
+  
+  if (multif==0) then begin
+    wn = FindWindow(wclass);
+    if (wn>0) then begin
+      DeselectWindow(wn,false);
+      PutWindowRecord(wn,ALogr);
+      goto LAnna2Chat_OpenDebugWindow_out;
+    end;
+  end;
+  
+  OpenWindow(wclass,multif,0,"","",ALogr);
+LAnna2Chat_OpenDebugWindow_out:;
+end;
+
+
+// ### chat window functions ###
+
+global
+updating procedure StartAnna2ChatSm()
+begin
+  record AIChatVc AICr;
+  
+  OpenWindow("Anna2ChatWClass",0,0,"","",AICr);
+end;
+
+procedure Anna2_LoadWn(LongInt wn,var record Anna2ContextVc Ctxr,var array record Anna2ChatNodeVc nodestack,
+                     var array string roles,var array string messages)
+begin
+  string 255 nodestr,ctxstr;
+  record Anna2ChatNodeVc Noder,StartNode;
+  
+  ctxstr = GetWindowString(wn,"Anna2Contextr");
+  StringToContext(ctxstr,Ctxr);
+
+  ClearArray(nodestack);
+  nodestr = GetWindowString(wn,"Nodestack[0]");
+  while (nodestr<>"") begin
+    StringToNode(nodestr,Noder);
+    PushNode(nodestack,Noder);
+    nodestr = GetWindowString(wn,"Nodestack[" & nodestack.length & "]");
+  end;
+  
+  if (nodestack.length==0) then begin
+    StartNode.SerNr = Anna2StartNode;
+    ReadFirstMain(StartNode,1,true);
+    nodestack[0] = StartNode;
+  end;
+  
+  AIChat_LoadWn(wn,roles,messages);
+end;
+
+procedure Anna2_StoreWn(LongInt wn,record Anna2ContextVc Ctxr,array record Anna2ChatNodeVc nodestack,
+                      var array string roles,var array string messages)
+begin
+  LongInt i,rwcnt;
+  string 255 ctxstr,resp_message; //,filename;
+  record Anna2SettingsBlock A2Sb;
+  
+  LogText(0,"Anna2_StoreWn");
+  BlockLoad(A2Sb);
+
+  ctxstr = ContextToString(Ctxr);
+  PutWindowString(wn,"Anna2Contextr",ctxstr);
+
+  //filename = CreateTempFile("Anna2_Context_Put_" & TimeStampStr,".txt");
+  //WriteStringToFile(ctxstr,filename,0);
+
+  for (i = 0; i<nodestack.length; i = i + 1) begin
+    PutWindowString(wn,"Nodestack[" & i & "]",NodeToString(nodestack[i]));
+  end;
+
+  PutWindowString(wn,"Nodestack[" & nodestack.length & "]","");
+
+  AIChat_StoreWn(wn,roles,messages,false,true,true);
+  
+  Anna2Chat_DebugToWindow("Anna2Chat_StateWClass",0,Anna2_Ctx_DebugStr(Ctxr,nodestack),A2Sb.CtxDebug,resp_message);
+end;
+
+global
+procedure Anna2ChatWClass_Chat_Do(LongInt wn,string chattext,Boolean SpeakFlag)
+begin
+  record Anna2SettingsBlock A2Sb;
+  record Anna2ContextVc Ctxr;
+  array record Anna2ChatNodeVc nodestack;
+  array string 255 roles,messages;
+  string 255 resp_message;
+  array string 255 atimings;
+  string 255 timmsg,total;
+  LongInt i;
+  
+  StartInternalTimer("unaccounted");
+  
+  BlockLoad(A2Sb);
+  
+  Anna2_LoadWn(wn,Ctxr,nodestack,roles,messages);
+  Anna2_AddMessage(Ctxr,roles,messages,"user",chattext);
+  
+  if (roles[roles.length - 1]=="user") then begin
+    Anna2_StoreWn(wn,Ctxr,nodestack,roles,messages);
+
+    resp_message = Anna2Chat_Process(Ctxr,nodestack,messages[messages.length - 1]);
+
+    if (resp_message<>"") then begin
+      if (SpeakFlag) then begin
+        CloudTextToSpeech("en",resp_message,"%LOCALSPEAKER%");
+      end;
+    end;
+  end;
+
+  total = EndInternalTimer(atimings);
+  
+  SortStringArray(atimings);
+
+  timmsg = "total " & total & NL & NL;
+
+  for (i = 0; i<atimings.length; i = i + 1) begin
+    timmsg = timmsg & atimings[i] & NL;
+  end;
+  
+  Anna2Chat_DebugToWindow("Anna2Chat_TimingsWClass",0,timmsg,A2Sb.PerfDebug,resp_message);
+  
+  if (resp_message<>"") then begin
+    Anna2_AddMessage(Ctxr,roles,messages,"Anna",resp_message);
+  end;
+  
+  Anna2_StoreWn(wn,Ctxr,nodestack,roles,messages);
+end;
+
+global
+procedure Anna2ChatWClass_Chat()
+begin
+  Integer wn;
+  record AIChatVc AICr;
+  string 255 chattext;
+  
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,AICr);
+
+  chattext = GetTextField(AICr);
+  SetTextField(AICr,"");
+  PutWindowRecord(wn,AICr);
+  
+  Anna2ChatWClass_Chat_Do(wn,chattext,AICr.SpeakFlag);
+end;
+
+global
+function Boolean Anna2ChatWClassOnOKWindow(Integer wn)
+begin
+  Anna2ChatWClass_Chat;
+  Anna2ChatWClassOnOKWindow = false;
+end;
+
+global
+function Boolean Anna2ChatNodeDClassOnOpenWindow(Integer wn)
+begin
+  record Anna2ChatNodeVc Noder;
+  
+  GetWindowRecord(wn,Noder);
+  SetWindowSubset(wn,Noder.SerNr);
+end;
+
+global
+procedure Anna2ChatWClass_WhisperText(string newtext)
+begin
+  record Anna2ContextVc Ctxr;
+  array record Anna2ChatNodeVc nodestack;
+  array string 255 roles,messages;
+  LongInt wn,pos;
+  
+  wn = FindWindow("Anna2ChatWClass");
+  if (wn>0) then begin
+    Anna2_LoadWn(wn,Ctxr,nodestack,roles,messages);
+    Anna2_AddMessage(Ctxr,roles,messages,"user",newtext);
+    Anna2_StoreWn(wn,Ctxr,nodestack,roles,messages);
+  end;
+end;
+
+global
+procedure Anna2ChatWClass_WhisperDone()
+begin
+  LongInt wn;
+  record AIChatVc AICr;
+  
+  wn = FindWindow("Anna2ChatWClass");
+  
+  if (wn>0) then begin
+    GetWindowRecord(wn,AICr);
+    Anna2ChatWClass_Chat_Do(wn,"",AICr.SpeakFlag);
+  end;
+end;
+
+global
+procedure TTSWClass_WhisperText(string newtext)
+begin
+  record AIChatVc AICr;
+  LongInt wn;
+  string 255 oldtext;
+  
+  LogText(0,"TTSWClass_WhisperText(" & newtext & ")");
+  
+  wn = FindWindow("TTSWClass");
+  if (wn>0) then begin
+    DeselectWindow(wn,true);
+    GetWindowRecord(wn,AICr);
+    oldtext = GetTextField(AICr);
+    SetTextField(AICr,oldtext & " " & newtext);
+    PutWindowRecord(wn,AICr);
+  end;
+end;
+
+global
+procedure TTSWClass_WhisperDone()
+begin
+end;
+
+global
+function Boolean Anna2ChatWClassOnOpenWindow(Integer wn)
+begin
+  string 255 greeting;
+  array string 255 roles,messages;
+  array record Anna2ChatNodeVc nodestack;
+  record Anna2ContextVc Ctxr;
+  record AIChatVc AICr;
+  
+  Anna2_Init;
+  
+  GetWindowRecord(wn,AICr);
+  AICr.SpeakFlag = 1;
+  PutWindowRecord(wn,AICr);
+  
+  //Anna2_LoadWn(wn,Ctxr,nodestack,roles,messages);
+  
+  RecordNew(Ctxr);
+  PushNodeCode(nodestack,Anna2StartNode);
+  
+  greeting = Anna2Chat_Process(Ctxr,nodestack,"");
+  
+  if (greeting<>"") then begin
+    Anna2_AddMessage(Ctxr,roles,messages,"Anna",greeting);
+    if (AICr.SpeakFlag) then begin
+      CloudTextToSpeech("en",greeting,"%LOCALSPEAKER%");
+    end;
+  end;
+  
+  Anna2_StoreWn(wn,Ctxr,nodestack,roles,messages);
+end;

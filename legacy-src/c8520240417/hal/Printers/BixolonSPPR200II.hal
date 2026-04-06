@@ -1,0 +1,1223 @@
+external procedure PrintLongLine();
+external procedure PrintCashHeader(string);
+external function val CalculateDiscountPercentage(val,val,val);
+external procedure SetupVATBase(var record SMVc,var Integer);
+external function Boolean UseTaxTemplatesforTaxCalc();
+external procedure M4PadString(string,Integer,string,Boolean,var string);
+external procedure AddVATBase(var record SMVc,string,val,val,Integer,Integer,Integer);
+external function Boolean GetPM(string,var string,var string);
+external procedure GetUserName(String,var String);
+external function val FindVAT(string,val,Integer,Integer);
+external function roundmode SetRoundModeD(Integer);
+external function roundmode GetTotalRoundMode(record RoundBlock);
+external function roundmode GetVATRoundMode(record RoundBlock);
+external procedure OpenCashDrawer_IVVc(record IVVc);
+external procedure OpenCashDrawer_RestAccVc(record RestAccVc);
+external procedure OpenCashDrawer_IVCashVc(record IVCashVc);
+external procedure GetVATRow(string,var row VATCodeBlock);
+
+procedure SetupComCommands(var string StandardMode,var string EmphesizeOn,var string EmphesizeOff,var string LangSetOn,var string BigSizeOn,var string BigSizeOff,
+                           var string UnderlineOn,var string UnderlineOff,var string FormFeed,var string CutPaper,
+                           var string CenterOn,var string CenterOff)
+begin
+  LangSetOn = chr(27) & chr(116) & chr(0) & chr(27) & chr(82) & chr(7);
+  StandardMode = chr(27) & chr(83);
+  BigSizeOn = chr(29) & chr(33) & chr(1);  //?
+  BigSizeOff = chr(29) & chr(33) & chr(0);// i dont know how to get this other way, zero doesnt work here
+//  BigSizeOff = chr(27) & chr(64);
+  EmphesizeOn = chr(27) & chr(69) & chr(1);
+  EmphesizeOff = chr(27) & chr(69) & chr(0);
+  UnderlineOn = chr(27) & chr(45) & chr(1);;
+  UnderlineOff = chr(27) & chr(45) & chr(0);;
+  FormFeed =  chr(27) & chr(100) & chr(5);
+  CutPaper = chr(27) & chr(105);
+//  CenterOn = chr(27) & chr(97) & chr(1);
+//  CenterOff = chr(27) & chr(97) & chr(0);
+  return;
+end;
+
+
+procedure BixolonSPPR200II_PrinterOn()
+begin
+  string 20 PrintMode,PrinterOn,InitPrinter;
+
+  PrintMode  = chr(27) & chr(33) & chr(0);/*ESC ! 0*/
+  InitPrinter = chr(27) & chr(64);/*ESC @*/
+  PrinterOn = chr(27) & chr(61) & chr(1); /*ESC = 1*/
+
+  OutComPort(0,PrinterOn);  
+  OutComPort(0,PrintMode);  
+  OutComPort(0,InitPrinter);  
+  return;
+end;
+
+procedure SetupVATBase1(var record SMVc SMr,var Integer vatcnt)
+BEGIN
+  row SMVc SMrw;
+  Integer rwcnt,i;
+  record VATCodeBlock VATr;
+  row VATCodeBlock VATrw;
+  
+  BlockLoad(VATr);  
+  rwcnt = MatRowCnt(VATr);
+  for (i=0; i<rwcnt; i=i+1) begin
+    MatRowGet(VATr,i,VATrw);
+    SMrw.VATCode = VATrw.VATCode;
+    SMrw.DebVal = blankval;
+    SMrw.CredVal = blankval;
+    SMrw.CredVal2 = blankval;
+    SMrw.CurCredVal = blankval;
+    MatRowPut(SMr,i,SMrw);
+  end;
+  vatcnt = rwcnt;
+  RETURN;
+END;
+
+procedure PrintCompanyInfo(string before,string after)
+begin
+  record CYBlock CYb;
+  Integer Error;
+  string 255 s;
+
+  BlockLoad(CYb);
+  s =  before & CYb.CompName & after;
+  Error = OutComPort(1,s & chr(10));
+  if (nonblank(CYb.Addr0)) then begin
+    Error = OutComPort(1,CYb.Addr0 & chr(10));
+  end;
+  if (nonblank(CYb.Addr1)) then begin
+    Error = OutComPort(1,CYb.Addr1 & chr(10));
+  end;
+  if (nonblank(CYb.Addr2)) then begin
+    Error = OutComPort(1,CYb.Addr2 & chr(10));
+  end;
+  if (nonblank(CYb.VATNr)) then begin
+    s = "VAT.no.: " & CYb.VATNr;
+    Error = OutComPort(1,s & chr(10));
+  end;
+  if (nonblank(CYb.OrgNr)) then begin
+    s = "Reg.no.: " & CYb.OrgNr;
+    Error = OutComPort(1,s & chr(10));
+  end;
+  if (nonblank(CYb.Phone)) then begin
+    s = "Tel: " & CYb.Phone;
+    Error = OutComPort(1,s & chr(10));
+  end;
+  if (nonblank(CYb.Fax)) then begin
+    s = "Fax: " & CYb.Fax;
+    Error = OutComPort(1,s & chr(10));
+  end;
+  if (nonblank(CYb.wwwAddr)) then begin
+    Error = OutComPort(1,CYb.wwwAddr & chr(10));  
+  end;
+  return
+end;
+
+procedure PrintFourHeaders(string h1,string h2,Integer p1,string h3,Integer p2,string h4,Integer p3)
+begin
+  Integer Error;
+  string 255 L1,L2,s;
+
+  s = h1; 
+  L1 = h2;  
+  M4PadString(L1,p1," ",true,L2);
+  s = s & L2; 
+  L1 = h3;  
+  M4PadString(L1,p2," ",true,L2);
+  s = s & L2; 
+  L1 = h4;  
+  M4PadString(L1,p3," ",true,L2);
+  s = s & L2; 
+  Error = OutComPort(1,s & chr(10));
+  return;
+end;
+
+procedure PrintLineIfNotBlank(string thetext)
+begin
+  Integer Error;
+
+  if (nonblank(thetext)) then begin
+    Error = OutComPort(1,thetext & chr(10));
+  end;
+  return;
+end;
+
+procedure PrintCashFoot(string localmachinecode)
+begin
+  record CashPrintBlock CPb;
+  record MachineCashVc MCr;
+
+  MCr.Code = localmachinecode;
+  ReadFirstMain(MCr,1,true);
+  BlockLoad(CPb);
+  if (nonblank(MCr.Foot0)) then begin
+    PrintLineIfNotBlank(MCr.Foot0);
+  end else begin
+    PrintLineIfNotBlank(CPb.Foot0);
+  end;
+  if (nonblank(MCr.Foot1)) then begin
+    PrintLineIfNotBlank(MCr.Foot1);
+  end else begin
+    PrintLineIfNotBlank(CPb.Foot1);
+  end;
+  if (nonblank(MCr.Foot2)) then begin
+    PrintLineIfNotBlank(MCr.Foot2);
+  end else begin
+    PrintLineIfNotBlank(CPb.Foot2);
+  end;
+  if (nonblank(MCr.Foot3)) then begin
+    PrintLineIfNotBlank(MCr.Foot3);
+  end else begin
+    PrintLineIfNotBlank(CPb.Foot3);
+  end;
+  if (nonblank(MCr.Foot4)) then begin
+    PrintLineIfNotBlank(MCr.Foot4);
+  end else begin
+    PrintLineIfNotBlank(CPb.Foot4);
+  end;
+  return;
+end;
+
+procedure PrintSumIfNotZero(string thedeal,val thesum)
+begin
+  string 25 PMDisc;
+  string 255 L1,L2,s;
+  Integer Error;
+
+  if ((thesum <> 0) and (nonblank(thedeal))) then begin
+    if (GetPM(thedeal,L1,PMDisc)) then begin
+    end;
+    if (blank(PMDisc)) then begin
+      PMDisc = thedeal;
+    end;
+    L1 = PMDisc;
+    M4PadString(L1,20," ",true,L2);
+    s = L2;
+    L1 = ValToString(thesum,M4Val,"",",",0);
+    M4PadString(L1,10," ",true,L2);
+    s = s & L2; 
+    Error = OutComPort(1,s & chr(10)); s ="";
+  end;
+  return;
+end;
+
+procedure PrintShortLine()
+begin
+  Integer Error;
+
+  Error = OutComPort(1,"-----------------------------------" & chr(10));
+  return;
+end;
+
+procedure PrintOneLineHeader(string h1,Integer p1,string h2,Integer p2,string h3,Integer p3)
+begin
+  Integer Error;
+  string 255 L1,L2,s;
+
+  L1 = h1;
+  M4PadString(L1,p1," ",false,L2);
+  s = s & L2; 
+  L1 = h2;  
+  M4PadString(L1,p2," ",false,L2);
+  s = s & L2; 
+  L1 = h3;  
+  M4PadString(L1,p3," ",true,L2);
+  s = s & L2; 
+  Error = OutComPort(1,s & chr(10)); s ="";
+  return;
+end;
+
+procedure PrintFourSums(record SysFormatBlock SFb,string str1,Integer pstr1,val s1,Integer p1,val s2,Integer p2,val s3,Integer p3)
+begin
+  Integer Error;
+  string 255 L1,L2,s;
+
+  L1 = str1;
+  M4PadString(L1,pstr1," ",false,L2);
+  s = s & L2;
+  L1 = ValToString(s1,M4Val,SFb.thousSep,SFb.decimalPt,0);
+  M4PadString(L1,p1," ",true,L2);
+  s = s & L2;
+  L1 = ValToString(s2,M4Val,SFb.thousSep,SFb.decimalPt,0);
+  M4PadString(L1,p2," ",true,L2);
+  s = s & L2;
+  if (blank(s3)==false) then begin
+    L1 = ValToString(s3,M4Val,SFb.thousSep,SFb.decimalPt,0);
+    M4PadString(L1,p3," ",true,L2);
+    s = s & L2;
+  end;
+  Error = OutComPort(1,s & chr(10)); s ="";
+  return;
+end;
+
+procedure PrintSumAndComment(string comment,val qty,val price,Boolean unitprice)
+begin
+  Integer Error;
+  string 255 L1,L2,s;
+
+  if (price!=0) then begin
+    M4PadString(ValToString(qty,M4UVal,"",",",0),5," ",false,L2);
+    s = s & L2;
+    M4PadString(comment,17," ",false,L2);
+    s = s & L2;
+    if (unitprice) then begin
+      M4PadString(ValToString(price,M4Val,"",",",0),10," ",true,L2);
+    end else begin
+      M4PadString(ValToString(price*qty,M4Val,"",",",0),10," ",true,L2);
+    end;
+    s = s & L2;
+    Error = OutComPort(1,s & chr(10)); s ="";
+  end;
+  return;
+end;
+
+procedure PrintSumAndCommentDisc(string comment,val qty,val price,val sum)
+begin
+  Integer Error;
+  string 255 L1,L2,s;
+    
+  if (price!=0) then begin
+    M4PadString(ValToString(qty,M4Val,"",",",0),4," ",false,L2);
+    s = s & L2 & " ";
+    M4PadString(comment,16," ",false,L2);
+    s = s & L2;
+    M4PadString("-" & CalculateDiscountPercentage(qty,price,sum) & "%",4," ",false,L2);
+    s = s & L2;
+    M4PadString(ValToString(qty*price - sum,M4Val,"",",",0),9," ",true,L2);
+    s = s & L2 & " ";
+    Error = OutComPort(1,s & chr(10)); s ="";
+  end;
+  return;
+end;
+
+global
+procedure RestAccBarOrder_PrintBixolonSPPR200IIReceipt(record RestAccVc CashR,var array Integer bararr,Integer bari)
+begin
+  Row RestAccVc Cashrw;
+  record CUVc CUr;
+  Integer i,j,Error;
+  String 80 s,s2;
+  String 20 StandardMode,EmphesizeOn,EmphesizeOff,LangSetOn,BigSizeOn,BigSizeOff;
+  String 20 UnderlineOn,UnderlineOff,FormFeed,CutPaper,CenterOn,CenterOff;
+  string 60 pername;
+  record SerPrintBlock SPb;
+  string 255 port;
+  SetupComCommands(StandardMode,EmphesizeOn,EmphesizeOff,LangSetOn,BigSizeOn,BigSizeOff,UnderlineOn,UnderlineOff,FormFeed,CutPaper,CenterOn,CenterOff);
+
+  Error = OutComPort(1,StandardMode);
+  Error = OutComPort(1,BigSizeOn);
+  Error = OutComPort(1,EmphesizeOn);
+  Error = OutComPort(1,UnderlineOn);
+  Error = OutComPort(1,"Bar Order" & chr(10)); s ="";
+  Error = OutComPort(1,UnderlineOff);
+  Error = OutComPort(1,EmphesizeOff);
+  Error = OutComPort(1,BigSizeOff);	
+  Error = OutComPort(1,StandardMode);
+
+  s = USetStr(11208) & ": " & CashR.SerNr & "  " & USetStr(10075) & " " & CashR.CustCode & "     " & CashR.TransTime;
+  Error = OutComPort(1,s & chr(10)); s ="";
+  if (nonblank(CashR.CustCode)) then begin
+    s = "Table: " & CashR.CustCode;
+    Error = OutComPort(1,s & chr(10));
+  end;
+  PrintLongLine;
+  Error = OutComPort(1,EmphesizeOn);
+  s ="";
+  for (i=0;i<bari;i=i+1) begin
+    MatRowGet(CashR,bararr[i],Cashrw);
+    switch (Cashrw.stp) begin
+//jjbartab    
+      case 1:
+        M4PadString(ValToString(Cashrw.Quant,M4UVal,"",",",0),5," ",false,s);
+        M4PadString(Left(Cashrw.Spec,50),35," ",false,s2);
+        s = s & s2;
+        Error = OutComPort(1,s & chr(10)); s = "";
+      case 3:
+        M4PadString(ValToString(-Cashrw.Quant,M4UVal,"",",",0),5," ",false,s);
+        M4PadString(Left(Cashrw.Spec,50),35," ",false,s2);
+        s = s & s2;
+        Error = OutComPort(1,s & chr(10)); s = "";
+    end;
+  end;
+  Error = OutComPort(1,EmphesizeOff);
+  PrintLongLine;
+  GetUserName(Cashr.Cashier,pername);
+  Error = OutComPort(1,USetStr(11192) & ": " & pername & chr(10)); s ="";
+  Error = OutComPort(1,FormFeed);
+//  Error = OutComPort(1,CutPaper);
+  return;
+end;
+
+global
+procedure RestAccVc_PrintBixolonSPPR200IIReceipt(record RestAccVc CashR,Boolean okf)
+begin
+  record VATCodeBlock VATCodes;
+  record INVc INr; 
+  row VATCodeBlock VATCodesrw;
+  Row RestAccVc Cashrw;
+  record CUVc CUr;
+  Integer i,j,rwcnt,rwcnt1,Error;
+  String 80 s,L1,L2;
+  String 20 StandardMode,EmphesizeOn,EmphesizeOff,LangSetOn,BigSizeOn,BigSizeOff,UnderlineOn,UnderlineOff,CenterOn,CenterOff;
+  String 20 FormFeed,CutPaper;
+  Integer wn;
+  Val RowTot,sum;
+  Boolean res;
+  Integer vatcnt;
+  record SMVc SMr; 
+  row SMVc SMrw; 
+  record RoundBlock RoundRec;
+  string 10 stock;
+  string 60 pername;
+  record LocationVc Locationr;
+  Boolean twolines;
+  record SysFormatBlock SFb;
+  area a;
+
+  BlockLoad(SFb);
+  sum = 0;
+  SetupComCommands(StandardMode,EmphesizeOn,EmphesizeOff,LangSetOn,BigSizeOn,BigSizeOff,UnderlineOn,UnderlineOff,FormFeed,CutPaper,CenterOn,CenterOff);
+
+  BixolonSPPR200II_PrinterOn;
+  Error = OutComPort(1,StandardMode);
+//----
+  Error = OutComPort(1,BigSizeOff);
+  PrintCashHeader(CashR.MachineName);
+  PrintCompanyInfo("","");
+  Error = OutComPort(1,BigSizeOff);
+  s = USetStr(11208) & ": " & CashR.SerNr & "   " & CashR.TransDate & " " & CashR.TransTime;
+  Error = OutComPort(1,s & chr(10)); s ="";
+  if (nonblank(CashR.CustCode)) then begin
+    s = "Table: " & CashR.CustCode;
+    Error = OutComPort(1,s & chr(10));
+  end;
+  M4PadString("-",32,"-",true,s);
+  Error = OutComPort(1,s & chr(10)); s = "";
+  PrintOneLineHeader(USetStr(11201),5,USetStr(11187),17,USetStr(11186),10);
+//----
+  SetupVATBase1(SMr,vatcnt);
+  rwcnt1 = MatRowCnt(CashR);
+  s ="";
+  Error = OutComPort(1,BigSizeOff);
+  for (i=0;i<rwcnt1;i=i+1) begin
+    MatRowGet(CashR,i,Cashrw);
+    RowTot = Cashrw.Price * Cashrw.Quant;
+    AddVATBase(SMr,Cashrw.VATCode,Cashrw.Price * Cashrw.Quant,blankval,vatcnt,1,0);
+    PrintSumAndComment(Cashrw.Spec,Cashrw.Quant,Cashrw.Price,false);
+  end;
+
+//  Error = OutComPort(1,EmphesizeOff);
+  M4PadString("-",32,"-",true,s);
+  Error = OutComPort(1,s & chr(10)); s = "";
+  M4PadString(USetStr(11185),22," ",true,s);
+  M4PadString(ValToString(CashR.Sum4,M4Val,"",",",0),10," ",true,L2);
+  s = s & L2; 
+  Error = OutComPort(1,s & chr(10)); s ="";
+//  Error = OutComPort(1,BigSizeOff);
+  if (okf) then begin
+    PrintSumIfNotZero(CashR.PayDeal,CashR.CashValue);
+    PrintSumIfNotZero(CashR.PayDeal2,CashR.Paid);
+    PrintSumIfNotZero(CashR.PayDeal3,CashR.Paid2);
+    PrintSumIfNotZero(CashR.PayDeal4,CashR.Paid3);
+    PrintSumIfNotZero(USetStr(11205),CashR.RetValue);
+    PrintSumIfNotZero(USetStr(11206),CashR.TipValue);
+    if (CashR.TipValue<>0) then begin
+      Error = OutComPort(1,USetStr(11204) & chr(10)); s =""; 
+    end;
+    M4PadString("-",32,"-",true,s);
+    Error = OutComPort(1,s & chr(10)); s = "";
+    PrintFourHeaders(USetStr(11188),USetStr(11189),9,USetStr(11184),9,USetStr(11185),9);
+    BlockLoad(VATCodes);
+    BlockLoad(RoundRec);
+    rwcnt = MatRowCnt(VATCodes);
+    for (i=0;i<vatcnt;i=i+1) begin
+      MatRowGet(SMr,i,SMrw);
+      sum = FindVAT(SMrw.VATCode,SMrw.DebVal,1,0);
+      sum = Round(sum,GetVATRoundMode(RoundRec));
+      if (SMrw.DebVal!=blankval) then begin
+        for (j=0;j<rwcnt;j=j+1) begin
+          MatRowGet(VATCodes,j,VATCodesrw);
+          if (SMrw.VATCode==VATCodesrw.VATCode) then begin
+            M4PadString(ValToString(VATCodesrw.ExVatpr,M4Val,"",",",0),15," ",false,s);
+            j = rwcnt;
+          end;
+        end;
+        SMrw.DebVal = Round(SMrw.DebVal,GetTotalRoundMode(RoundRec));
+        PrintFourSums(SFb,s,5,SMrw.DebVal-sum,9,sum,9,SMrw.DebVal,9);
+      end;  
+    end;  
+    M4PadString("-",32,"-",true,s);
+    Error = OutComPort(1,s & chr(10)); s = "";
+  end;
+LSKIP:; 
+  if (okf==false) then begin
+    Error = OutComPort(1,"" & chr(10)); s ="";
+    M4PadString(USetStr(11207),25," ",false,s);
+    Error = OutComPort(1,s & chr(10)); s ="";
+  end;
+  if (nonblank(CashR.Resource)) then begin
+    s = EmphesizeOn & "Charge to Room: " & CashR.Resource & EmphesizeOff;
+    Error = OutComPort(1,s); s ="";
+    if (okf==false) then begin
+      Error = OutComPort(1,"" & chr(10)); s ="";
+      Error = OutComPort(1,USetStr(9231) & chr(10)); s ="";
+      Error = OutComPort(1,"" & chr(10)); s ="";
+      M4PadString("-",32,"-",true,s);
+      Error = OutComPort(1,s & chr(10)); s = "";
+      Error = OutComPort(1,"" & chr(10)); s ="";
+    end else begin
+      Error = OutComPort(1,"" & chr(10)); s ="";
+    end;
+  end else begin
+    Error = OutComPort(1,"" & chr(10)); s ="";
+  end;
+  GetUserName(Cashr.Cashier,pername);
+  Error = OutComPort(1,USetStr(11192) & ": " & pername & chr(10)); s ="";
+  Error = OutComPort(1,StandardMode);
+  PrintCashFoot(CashR.MachineName);
+  Error = OutComPort(1,FormFeed);
+  Error = OutComPort(1,CutPaper);
+  Error = CloseComPort(1);
+  return;
+end;
+
+procedure PrintRowsHeader(string h1,Integer p1,string h2,Integer p2,string h3,Integer p3,string h4,Integer p4)
+begin
+  Integer Error;
+  string 255 s,tstr;
+
+  M4PadString(h1,p1," ",false,tstr);
+  s = s & tstr;
+  M4PadString(h2,p2," ",true,tstr);
+  s = s & tstr;
+  M4PadString(h3,p3," ",true,tstr);
+  s = s & tstr;
+  M4PadString(h4,p4," ",true,tstr);
+  s = s & tstr;
+  Error = OutComPort(1,s & chr(10));
+  return;
+end;
+
+procedure IVCashVc_PrintBixolonSPPR200IIReceipt_Header(var record IVCashVc IVCashp,record IVCashVc prevIVCashp,Integer wnst,Boolean merchantisef)
+begin
+  String 20 StandardMode,EmphesizeOn,EmphesizeOff,LangSetOn,BigSizeOn,BigSizeOff,UnderlineOn,UnderlineOff,CenterOn,CenterOff;
+  String 20 FormFeed,CutPaper;
+  String 80 s,L1,L2;
+  Integer Error;
+  Integer pad;
+  Boolean testf;
+  transaction Integer gPaperSize;
+
+  SetupComCommands(StandardMode,EmphesizeOn,EmphesizeOff,LangSetOn,BigSizeOn,BigSizeOff,UnderlineOn,UnderlineOff,FormFeed,CutPaper,CenterOn,CenterOff);
+  BixolonSPPR200II_PrinterOn;
+  Error = OutComPort(1,StandardMode);
+
+  PrintCashHeader(IVCashp.LocalMachineCode);
+  Error = OutComPort(1,BigSizeOff);
+  PrintCompanyInfo("" &  EmphesizeOn & UnderlineOn,"" & UnderlineOff & EmphesizeOff);
+  Error = OutComPort(1,StandardMode);
+  Error = OutComPort(1,BigSizeOff);
+  
+//  s = USetStr(11224) & ": " & IVCashp.SerNr & "    " & IVCashp.TransDate & "  " & IVCashp.TransTime;
+//  Error = OutComPort(1,s & chr(10)); s ="";
+/*
+  if (IVCashp.Invalid !=0) then begin
+    L1 = USetStr(11219);
+    L2 = USetStr(11220);
+  end;
+  if (IVCashp.OKFlag==0) then begin
+    L1 = USetStr(11219);
+    L2 = USetStr(11221);
+  end;
+  if((IVCashp.OKFlag != 0) and (IVCashp.Invalid==0)) then begin
+    if(IVCashp.Prntdf!=0) then begin
+      L1 = USetStr(11219);
+      L2 = USetStr(11223);
+    end else begin
+      L1 = USetStr(11219);
+      L2 = "";
+    end;
+  end;
+  s = "         " & L1 & ":  " & IVCashp.SerNr & "  " & L2;
+  Error = OutComPort(1,s & chr(10)); s ="";
+  Error = OutComPort(1,s & chr(10)); s =""; //empty line
+*/  
+  if ((nonblank(IVCashp.Addr0)) or (nonblank(IVCashp.Addr1)) or (nonblank(IVCashp.Addr2)) or (nonblank(IVCashp.Addr3)) or (nonblank(IVCashp.InvAddr4))) then begin
+//    s = USetStr(11197) & " " & IVCashp.CustCode;
+//    Error = OutComPort(1,s & chr(10)); s="";
+    if (nonblank(IVCashp.Addr0)) then begin 
+      s = IVCashp.Addr0;
+      Error = OutComPort(1,s & chr(10)); s="";
+    end;
+//comment address tristan
+//    if (nonblank(IVCashp.Addr1)) then begin
+//      s = IVCashp.Addr1;
+//      Error = OutComPort(1,s & chr(10)); s="";
+//    end;
+//    if (nonblank(IVCashp.Addr2)) then begin
+//       s = IVCashp.Addr2;
+//      Error = OutComPort(1,s & chr(10)); s="";
+//    end;
+//    if (nonblank(IVCashp.Addr3)) then begin
+//      s = IVCashp.Addr3;
+//     Error = OutComPort(1,s & chr(10)); s="";
+//  end;
+//    if (nonblank(IVCashp.InvAddr4)) then begin
+//      s = IVCashp.InvAddr4;
+//      Error = OutComPort(1,s & chr(10)); s="";
+//    end;
+  end;
+  
+  testf = false;
+/*  
+  switch (wnst) begin
+    case Rs_update:
+      if (RecordValid(prevIVCashp)) then begin
+        if (prevIVCashp.OKFlag==0) then begin testf = true; end;
+      end;
+  end;
+*/  
+  testf = false;
+  if (IVCashp.Suspended!=0) then begin testf = true; end;
+  if (testf) then begin
+    s = "Transaction Resumed";
+    pad = (gPaperSize-len(s))/2;
+    M4PadString(s,pad+len(s)," ",true,s);
+    Error = OutComPort(1,EmphesizeOn & s & chr(10)); 
+    Error = OutComPort(1,EmphesizeOff);
+  end;
+  if (merchantisef) then begin
+    s = "Merchantise Exchange";
+    pad = (gPaperSize-len(s))/2;
+    M4PadString(s,pad+len(s)," ",true,s);
+    Error = OutComPort(1,EmphesizeOn & s & chr(10) & EmphesizeOff); 
+  end;
+  if (nonblank(IVCashp.LoyaltyCardNr)) then begin
+    s = "Loyalty Card No.: " & IVCashp.LoyaltyCardNr;
+    Error = OutComPort(1,s & chr(10)); s="";
+  end;
+  if (IVCashp.OKFlag!=0) then begin
+    if (IVCashp.Invalid!=0) then begin
+      s = "Transaction Post Voided";
+      pad = (gPaperSize-len(s))/2;
+      M4PadString(s,pad+len(s)," ",true,s);
+      Error = OutComPort(1,EmphesizeOn & s & chr(10)); 
+      Error = OutComPort(1,EmphesizeOff);
+    end;
+  end;
+
+  PrintLongLine;
+  Error = OutComPort(1,EmphesizeOn);
+  PrintRowsHeader(USetStr(11187),15,USetStr(11201),9,USetStr(11202),9,USetStr(11186),10);
+  Error = OutComPort(1,EmphesizeOff);
+  return;
+end;
+
+procedure AddStringListRow_Payment(string spec,string paymode,string crncy,string s,var string res)
+begin
+  string 255 tstr,tstr2;
+  Integer m,al,dl,pl,cl,sl;
+  transaction Integer gPaperSize;
+
+//total 45-2, gPaperSize-2
+  dl = gPaperSize-30+9;
+  sl = 9+10;  
+
+  M4PadString(spec,dl," ",true,tstr);
+  M4PadString(s,sl," ",true,tstr2);
+  tstr = tstr & tstr2;
+  res = tstr;
+  return;
+end;
+
+procedure PrintBixolonSPPR200IIReceiptRow_SendToCom(string s,Boolean boldf)
+begin
+  String 20 StandardMode,EmphesizeOn,EmphesizeOff,LangSetOn,BigSizeOn,BigSizeOff,UnderlineOn,UnderlineOff,CenterOn,CenterOff;
+  String 20 FormFeed,CutPaper;
+  Integer Error;
+
+  SetupComCommands(StandardMode,EmphesizeOn,EmphesizeOff,LangSetOn,BigSizeOn,BigSizeOff,UnderlineOn,UnderlineOff,FormFeed,CutPaper,CenterOn,CenterOff);
+  Error = OutComPort(1,BigSizeOff & EmphesizeOff);
+  if (boldf) then begin
+    Error = OutComPort(1,BigSizeOff & EmphesizeOn);
+  end else begin
+    Error = OutComPort(1,BigSizeOff & EmphesizeOff);
+  end;
+  Error = OutComPort(1,s & chr(10)); 
+  if (boldf) then begin
+    Error = OutComPort(1,EmphesizeOff);
+  end;
+  return;
+end;
+
+procedure IVCashVc_PrintCCInfo(record IVCashVc IVCashr)
+begin
+  row IVCashVc IVCashrw;
+  Integer i,rwcnt,Error;
+  
+  rwcnt = MatRowCnt(IVCashr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(IVCashr,i,IVCashrw);
+    if (IVCashrw.stp==kInvoiceRowTypeCreditCardPayment) then begin
+      Error = OutComPort(1,USetStr(21580) & ": " & IVCashrw.CreditCard & chr(10)); 
+      Error = OutComPort(1,USetStr(21581) & ": " & IVCashr.Addr0 & chr(10));
+    end;
+  end;
+  
+  return;
+end;
+
+procedure IVCashVc_PrintBixolonSPPR200IIReceipt_Footer(record SysFormatBlock SFb,var record IVCashVc IVCashp,record SMVc SMr,Integer vatcnt,Boolean okf,Boolean depositf)
+begin
+  row IVCashVc IVCashrw;
+  Integer i,j,rwcnt;
+  String 20 StandardMode,EmphesizeOn,EmphesizeOff,LangSetOn,BigSizeOn,BigSizeOff,UnderlineOn,UnderlineOff,CenterOn,CenterOff;
+  String 20 FormFeed,CutPaper;
+  String 80 s,L1,L2;
+  Integer Error;
+  Boolean twolines;
+  record RoundBlock RoundRec;
+  record VATCodeBlock VATCodes;
+  row VATCodeBlock VATCodesrw;
+  row SMVc SMrw; 
+  val sum;
+  string 60 pername;
+  Integer pad;
+  record LoyaltyCardVc LCr;
+  transaction Integer gPaperSize;
+
+  SetupComCommands(StandardMode,EmphesizeOn,EmphesizeOff,LangSetOn,BigSizeOn,BigSizeOff,UnderlineOn,UnderlineOff,FormFeed,CutPaper,CenterOn,CenterOff);
+  twolines = false;
+
+  Error = OutComPort(1,BigSizeOff & EmphesizeOff);
+  PrintLongLine;
+  if (okf) then begin
+    AddStringListRow_Payment("Net","","",ValToString(IVCashp.Sum4-IVCashp.Sum3,M4Val,SFb.thousSep,SFb.decimalPt,0),s);
+    PrintBixolonSPPR200IIReceiptRow_SendToCom(s,true);
+    for (i=0;i<vatcnt;i=i+1) begin
+      MatRowGet(SMr,i,SMrw);
+      if (SMrw.DebVal!=blankval) then begin
+        sum = FindVAT(SMrw.VATCode,SMrw.DebVal,IVCashp.InclVAT,0);
+//        sum = Round(sum,GetVATRoundMode(RoundRec));
+        GetVATRow(SMrw.VATCode,VATCodesrw);
+        AddStringListRow_Payment("Tax " & ValToString(VATCodesrw.ExVatpr,M4UVal,SFb.thousSep,SFb.decimalPt,0) & "%","","",ValToString(sum,M4Val,SFb.thousSep,SFb.decimalPt,0),s);
+        PrintBixolonSPPR200IIReceiptRow_SendToCom(s,true);
+      end;  
+    end;  
+    AddStringListRow_Payment("TOTAL","","",ValToString(IVCashp.Sum4,M4Val,SFb.thousSep,SFb.decimalPt,0),s);
+    PrintBixolonSPPR200IIReceiptRow_SendToCom(s,true);
+//    PrintFourHeaders("TAX Code","Net",10,"TAX",10,"",0);
+//    BlockLoad(VATCodes);
+//    BlockLoad(RoundRec);
+//    rwcnt = MatRowCnt(VATCodes);
+//    for (i=0;i<vatcnt;i=i+1) begin
+//      MatRowGet(SMr,i,SMrw);
+//      sum = FindVAT(SMrw.VATCode,SMrw.DebVal,1,0);
+//      sum = Round(sum,GetVATRoundMode(RoundRec));
+//      if (SMrw.DebVal!=blankval) then begin
+//        for (j=0;j<rwcnt;j=j+1) begin
+//          MatRowGet(VATCodes,j,VATCodesrw);
+//          if (SMrw.VATCode==VATCodesrw.VATCode) then begin
+//            M4PadString(ValToString(VATCodesrw.ExVatpr,M4Val,SFb.thousSep,SFb.decimalPt,0),15," ",false,s);
+//            j = rwcnt;
+//          end;
+//        end;
+//        SMrw.DebVal = Round(SMrw.DebVal,GetTotalRoundMode(RoundRec));
+//        PrintFourSums(SFb,SMrw.VATCode,8,SMrw.DebVal-sum,10,sum,10,blankval,10);
+//      end;  
+//    end;  
+    PrintLongLine;
+  end;
+
+  if (IVCashp.OKFlag==0) then begin
+    if (IVCashp.Invalid!=0) then begin
+      s = "Transaction Voided";
+      pad = (gPaperSize-len(s))/2;
+      M4PadString(s,pad+len(s)," ",true,s);
+      Error = OutComPort(1,EmphesizeOn & s & chr(10)); 
+      Error = OutComPort(1,EmphesizeOff);
+    end else begin
+      if (IVCashp.Suspended!=0) then begin
+        s = "Transaction Suspended";
+        pad = (gPaperSize-len(s))/2;
+        M4PadString(s,pad+len(s)," ",true,s);
+        Error = OutComPort(1,EmphesizeOn & s & chr(10)); 
+        Error = OutComPort(1,EmphesizeOff);
+      end;
+    end;
+  end;
+  if (nonblank(IVCashp.LoyaltyCardNr)) then begin
+    LCr.SerNr = IVCashp.LoyaltyCardNr;
+    ReadFirstMain(LCr,1,true);
+    s = "Earned pts: " & IVCashp.Points;
+    Error = OutComPort(1,s & chr(10)); s="";
+    s = "Total pts: " & LCr.PointsBalance;
+    Error = OutComPort(1,s & chr(10)); s="";
+  end;
+
+  if (nonblank(IVCashp.Bagger)) then begin
+    s = "Bagger: " & IVCashp.Bagger;
+    Error = OutComPort(1,s & chr(10)); s="";
+  end;
+  GetUserName(IVCashp.SalesMan,pername);
+  Error = OutComPort(1,USetStr(9230) & ": " & pername & chr(10)); s ="";
+//tristan ads start
+  PrintLongLine;
+  IVCashVc_PrintCCInfo(IVCashp);
+  s =  "Transaction Start Time:   " & IVCashp.StartTime; 
+  Error = OutComPort(1,s & chr(10)); s ="";
+  s =  "Transaction End Time:     " & IVCashp.TransTime; 
+  Error = OutComPort(1,s & chr(10)); s ="";
+  s = USetStr(11224) & ": " & IVCashp.SerNr & "    " & IVCashp.TransDate;
+  Error = OutComPort(1,s & chr(10)); s ="";
+  s = USetStr(9832) & ": " & IVCashp.LocalMachineCode;
+  Error = OutComPort(1,s & chr(10)); s ="";
+  Error = OutComPort(1,s & chr(10)); s ="";
+  if (depositf) then begin
+    s = "  Signature:________________________";
+    Error = OutComPort(1,s & chr(10)); s ="";
+    Error = OutComPort(1,chr(10));
+    s = "  Customer name:____________________";
+    Error = OutComPort(1,s & chr(10)); s ="";
+  end;
+  if (IVCashp.OKFlag!=0) then begin
+    Error = OutComPort(1,EmphesizeOn & "      " & USetStr(27521) & chr(10)); 
+//    Error = OutComPort(1,"   Return / Exchange purposes within 7 days" & chr(10) & EmphesizeOff); 
+    Error = OutComPort(1,s & chr(10)); s ="";
+//    Error = OutComPort(1,"  For comments and suggetions: 0920-2215318" & chr(10));
+//    Error = OutComPort(1,"      customer_service@isetann.com.ph" & chr(10));
+    Error = OutComPort(1,s & chr(10)); s ="";
+    s = "Thank you for shopping!";
+    pad = (gPaperSize-len(s))/2;
+    M4PadString(s,pad+len(s)," ",true,s);
+    Error = OutComPort(1,EmphesizeOn & s & chr(10) & EmphesizeOff);
+  end;
+  PrintLongLine;
+  PrintCashFoot(IVCashp.LocalMachineCode);
+  s ="";
+  Error = OutComPort(1,s & chr(10)); 
+  Error = OutComPort(1,s & chr(10)); 
+  Error = OutComPort(1,s & chr(10)); 
+  Error = OutComPort(1,StandardMode);
+  return;
+end;
+
+//Item per row
+
+procedure IVCashVc_PrintBixolonSPPR200IIReceipt_Row(var record IVCashVc IVCashp,row IVCashVc IVCashrw,var val last_discount)
+begin
+  Boolean twolines;
+  string 255 s;
+  String 20 StandardMode,EmphesizeOn,EmphesizeOff,LangSetOn,BigSizeOn,BigSizeOff,UnderlineOn,UnderlineOff,CenterOn,CenterOff;
+  String 20 FormFeed,CutPaper;
+  Integer Error;
+  record SysFormatBlock SFb;
+
+  BlockLoad(SFb);
+
+  SetupComCommands(StandardMode,EmphesizeOn,EmphesizeOff,LangSetOn,BigSizeOn,BigSizeOff,UnderlineOn,UnderlineOff,FormFeed,CutPaper,CenterOn,CenterOff);
+
+  Error = OutComPort(1,BigSizeOff); //tristan change font per item row
+  twolines = false;
+  if (twolines) then begin
+    M4PadString(Left(IVCashrw.Spec,20),20," ",false,s);
+    Error = OutComPort(1,s & chr(10)); s = "";
+    if ((nonblank(IVCashrw.ArtCode)) and ((IVCashrw.Price * IVCashrw.Quant)>0)) then begin
+      PrintFourSums(SFb,"",0,IVCashrw.Price,20,IVCashrw.Quant,10,IVCashrw.Price * IVCashrw.Quant,12);    
+    end;
+  end else begin
+    if (IVCashrw.stp!=kInvoiceRowTypeCashPayment or IVCashrw.stp!=kInvoiceRowTypeCreditCardPayment or IVCashrw.stp!=kInvoiceRowTypeChequePayment or IVCashrw.stp!=kInvoiceRowTypeLoyaltyPointsPayment) then begin
+      if (blank(IVCashrw.ArtCode)) then begin
+        //PrintSumAndComment(IVCashrw.Spec,IVCashrw.Quant,-last_discount,true); //Only the negatIVCashe discount would be printed here? Why did we print this? -Wilko
+      end else begin
+        if (nonblank(IVCashrw.vRebate)) then begin
+          PrintSumAndCommentDisc(IVCashrw.Spec,IVCashrw.Quant,IVCashrw.Price,IVCashrw.Sum); //IVCashrw.Sum/IVCashrw.Quant,IVCashrw.vRebate)
+        end else begin
+          PrintSumAndComment(IVCashrw.Spec,IVCashrw.Quant,IVCashrw.Sum/IVCashrw.Quant,false);
+        end;
+      end;
+    end;
+    last_discount = IVCashrw.Quant*IVCashrw.Price - IVCashrw.Sum;
+  end;
+  return;
+end;
+
+procedure AddStringListRow(string artcode,string spec,string q,string p,string s,string vat,var string res)
+begin
+  string 255 tstr,tstr2;
+  Integer m,al,dl,ql,pl,sl;
+  transaction Integer gPaperSize;
+
+//total 45-2, gPaperSize-2
+  dl = gPaperSize-30;
+  ql = 9;
+  pl = 9;
+  sl = 10;  
+
+  M4PadString(spec,dl," ",false,tstr2);
+  tstr = tstr & tstr2;
+  M4PadString(q,ql," ",true,tstr2);
+  tstr = tstr & tstr2;
+  M4PadString(p,pl," ",true,tstr2);
+  tstr = tstr & tstr2;
+  M4PadString(s,sl," ",true,tstr2);
+  tstr = tstr & tstr2;
+  M4PadString(vat,2," ",true,tstr2);
+  tstr = tstr & tstr2;
+  res = tstr;
+  return;
+end;
+
+procedure AddStringListRow2(string spec,var string res)
+begin
+  transaction Integer gPaperSize;
+
+  M4PadString(spec,gPaperSize," ",false,res);
+  return;
+end;
+
+procedure AddStringListRow3(string artcode1,string spec,string q,string artcode2,string s,var string res)
+begin
+  string 255 tstr,tstr2;
+  Integer m,al,dl,ql,a2l,sl;
+  transaction Integer gPaperSize;
+
+//total 45, gPaperSize
+  al = 8;
+  dl = gPaperSize - 30 + 3;  //18 for gPaperSize==45
+  a2l = 8;
+  sl = 11;  
+  M4PadString(artcode1,al," ",false,tstr);
+  M4PadString(spec,dl," ",false,tstr2);
+  tstr = tstr & tstr2;
+  M4PadString(q,ql," ",true,tstr2);
+  tstr = tstr & tstr2;
+  M4PadString(artcode2,a2l," ",true,tstr2);
+  tstr = tstr & tstr2;
+  M4PadString(s,sl," ",true,tstr2);
+  tstr = tstr & tstr2;
+  res = tstr;
+  return;
+end;
+
+procedure IVCashVc_PrintBixolonSPPR200IIReceiptRow(row IVCashVc IVCashrw,record SysFormatBlock SFb,record CashierDefBlock CDb)
+begin
+  string 255 s;
+  
+  switch (IVCashrw.stp) begin
+      case kInvoiceRowTypeStructuredItemComponent:
+        goto LkInvoiceRowTypeNormal1;
+      case kInvoiceRowTypeNormal:
+LkInvoiceRowTypeNormal1:;
+      if (IVCashrw.Sum!=0) then begin
+        if (nonblank(IVCashrw.vRebate)) then begin
+          if (IVCashrw.ArtCode==CDb.DiscountItem) or (IVCashrw.ArtCode=="ADDON") or (IVCashrw.ArtCode=="DEPOSIT") then begin
+            AddStringListRow(IVCashrw.ArtCode,IVCashrw.Spec,ValToString(blankval,M4Qty,SFb.thousSep,SFb.decimalPt,0),ValToString(IVCashrw.Price,M4Val,SFb.thousSep,SFb.decimalPt,0),ValToString(IVCashrw.Quant*IVCashrw.Price,M4Val,SFb.thousSep,SFb.decimalPt,0),IVCashrw.VATCode,s);
+          end else begin
+            AddStringListRow(IVCashrw.ArtCode,IVCashrw.Spec,ValToString(IVCashrw.Quant,M4Qty,SFb.thousSep,SFb.decimalPt,0),ValToString(IVCashrw.Price,M4Val,SFb.thousSep,SFb.decimalPt,0),ValToString(IVCashrw.Quant*IVCashrw.Price,M4Val,SFb.thousSep,SFb.decimalPt,0),IVCashrw.VATCode,s);
+          end;
+          PrintBixolonSPPR200IIReceiptRow_SendToCom(s,false);
+          if (nonblank(IVCashrw.SerialNr)) then begin
+            AddStringListRow2(USetStr(24178) & "  " & IVCashrw.SerialNr,s);
+            PrintBixolonSPPR200IIReceiptRow_SendToCom(s,false);
+          end;
+          AddStringListRow("","Discount: ",blankval,blankval,ValToString(IVCashrw.Sum-IVCashrw.Quant*IVCashrw.Price,M4Val,SFb.thousSep,SFb.decimalPt,0),"",s);
+          PrintBixolonSPPR200IIReceiptRow_SendToCom(s,false);
+        end else begin
+          if (IVCashrw.ArtCode==CDb.DiscountItem) or (IVCashrw.ArtCode=="ADDON") or (IVCashrw.ArtCode=="DEPOSIT") then begin
+            AddStringListRow(IVCashrw.ArtCode,IVCashrw.Spec,ValToString(blankval,M4Qty,SFb.thousSep,SFb.decimalPt,0),ValToString(IVCashrw.Price,M4Val,SFb.thousSep,SFb.decimalPt,0),ValToString(IVCashrw.Sum,M4Val,SFb.thousSep,SFb.decimalPt,0),IVCashrw.VATCode,s);
+          end else begin
+            AddStringListRow(IVCashrw.ArtCode,IVCashrw.Spec,ValToString(IVCashrw.Quant,M4Qty,SFb.thousSep,SFb.decimalPt,0),ValToString(IVCashrw.Price,M4Val,SFb.thousSep,SFb.decimalPt,0),ValToString(IVCashrw.Sum,M4Val,SFb.thousSep,SFb.decimalPt,0),IVCashrw.VATCode,s);
+          end;
+          PrintBixolonSPPR200IIReceiptRow_SendToCom(s,false);
+          if (nonblank(IVCashrw.SerialNr)) then begin
+            AddStringListRow2(USetStr(24178) & "  " & IVCashrw.SerialNr,s);
+            PrintBixolonSPPR200IIReceiptRow_SendToCom(s,false);
+          end;
+        end;
+      end;
+    case kInvoiceRowTypeSplitItem:
+      AddStringListRow3(USetStr(24179) & " " & IVCashrw.ArtCode,IVCashrw.Spec,ValToString(IVCashrw.Quant,M4Qty,SFb.thousSep,SFb.decimalPt,0),IVCashrw.SplitArtCode,ValToString(IVCashrw.SplitQuant,M4Qty,SFb.thousSep,SFb.decimalPt,0),s);
+      PrintBixolonSPPR200IIReceiptRow_SendToCom(s,false);
+   case kInvoiceRowTypeMultiBuyDiscount:
+      AddStringListRow3(USetStr(24181),IVCashrw.Spec,"","",ValToString(IVCashrw.Sum,M4Val,SFb.thousSep,SFb.decimalPt,0),);
+      PrintBixolonSPPR200IIReceiptRow_SendToCom(s,false);
+    case kInvoiceRowTypeVoid:
+      AddStringListRow(IVCashrw.ArtCode,IVCashrw.Spec,ValToString(IVCashrw.Quant,M4Qty,SFb.thousSep,SFb.decimalPt,0),ValToString(IVCashrw.Price,M4Val,SFb.thousSep,SFb.decimalPt,0),ValToString(IVCashrw.Sum,M4Val,SFb.thousSep,SFb.decimalPt,0),IVCashrw.VATCode,s);
+      PrintBixolonSPPR200IIReceiptRow_SendToCom(s,false);
+    case kInvoiceRowTypeSalesAssistant:
+      AddStringListRow2(USetStr(24192) & "  " & IVCashrw.SalesAssistant,s);
+      PrintBixolonSPPR200IIReceiptRow_SendToCom(s,false);
+  end;
+  return;
+end;
+
+function Boolean IVCashVc_PrintBixolonSPPR200IIReceiptExecute(Integer wn,var record IVCashVc IVCashp,record IVCashVc prevIVCashp,Integer rownr,Boolean okf,Boolean opendrawerf,Integer IncrementalPrint,Integer wnst)
+begin
+  Boolean res;
+  record INVc INr; 
+  Row IVCashVc IVCashrw;
+  record CUVc CUr;
+  Integer i,j,rwcnt,rwcnt1,Error;
+  String 80 s,L1,L2;
+  Boolean twolines;
+  Val sum;
+  string 10 stock;
+  record LocationVc Locationr;
+  val last_discount,txreb;
+  Integer vatcnt;
+  record SMVc SMr; 
+  String 20 FormFeed,CutPaper,PrinterOff;  
+  val totq,tota;
+  vector Boolean vartcodef;
+  record LocalMachineBlock LMb;
+  record SysFormatBlock SFb;
+  Boolean testf;
+  record CashierDefBlock CDb;
+  Integer PrevSuspended,Suspended;
+  Boolean depositf,merchantisef;
+
+  //not ready
+//  goto LIVCashVc_PrintBixolonSPPR200IIReceipt;
+  Suspended = StringToInt(GetWindowString(wn,"Suspended"));
+  PrevSuspended = StringToInt(GetWindowString(wn,"PrevSuspended"));
+  BlockLoad(SFb);
+  BlockLoad(CDb);
+  
+  rwcnt1 = MatRowCnt(IVCashp);
+  for (i=0;i<rwcnt1;i=i+1) begin
+    MatRowGet(IVCashp,i,IVCashrw);
+    if (IVCashrw.ArtCode=="DEPOSIT") then begin
+      depositf = true;
+    end;
+    switch (IVCashrw.stp) begin
+      case kInvoiceRowTypeStructuredItemComponent:
+        goto LkInvoiceRowTypeNormal2;
+      case kInvoiceRowTypeNormal:
+LkInvoiceRowTypeNormal2:;
+        if (IVCashrw.Quant<0) then begin
+          merchantisef = true;
+        end;
+    end;
+  end;
+  if (IncrementalPrint==0) then begin
+    if (rownr>=0) then begin
+      goto LIVCashVc_PrintBixolonSPPR200IIReceipt;
+    end;
+  end else begin
+    if (rownr<0) then begin
+      if (okf) then begin
+        BixolonSPPR200II_PrinterOn;
+        goto LIVCashVc_PrintBixolonSPPR200IIReceipt_Footer;
+      end else begin
+        if (MatRowCnt(IVCashp)>0) then begin
+          BixolonSPPR200II_PrinterOn;
+          goto LIVCashVc_PrintBixolonSPPR200IIReceipt_Footer;
+        end else begin
+          goto LIVCashVc_PrintBixolonSPPR200IIReceipt;
+        end;
+      end;
+    end else begin
+      switch (wnst) begin
+        case Rs_update:
+          if (PrevSuspended!=0) then begin 
+            if (Suspended==0) then begin 
+              testf = true; 
+            end;
+          end;
+      end;
+      if (testf) then begin
+        rwcnt1 = MatRowCnt(IVCashp);
+        if (rwcnt1>rownr) then begin rwcnt1 = rownr+1; end;       
+        IVCashVc_PrintBixolonSPPR200IIReceipt_Header(IVCashp,prevIVCashp,wnst,merchantisef);
+        for (i=0;i<rwcnt1;i=i+1) begin
+          MatRowGet(IVCashp,i,IVCashrw);
+          testf = true;
+          if (testf) then begin
+            IVCashVc_PrintBixolonSPPR200IIReceiptRow(IVCashrw,SFb,CDb);
+          end;
+        end;
+        PutWindowString(wn,"PrevSuspended","0");
+      end else begin
+        if (rownr==0) then begin
+          IVCashVc_PrintBixolonSPPR200IIReceipt_Header(IVCashp,prevIVCashp,wnst,merchantisef);
+        end else begin
+          BixolonSPPR200II_PrinterOn;
+        end;
+        MatRowGet(IVCashp,rownr,IVCashrw);
+        IVCashVc_PrintBixolonSPPR200IIReceiptRow(IVCashrw,SFb,CDb);    
+      end;
+    end;
+    res = true;
+    goto LIVCashVc_PrintBixolonSPPR200IIReceipt;
+  end;
+  sum = 0;
+  res = true;
+  twolines = false;
+
+  IVCashVc_PrintBixolonSPPR200IIReceipt_Header(IVCashp,prevIVCashp,wnst,merchantisef);
+
+/*  
+  s ="";
+  for (i=0;i<rwcnt1;i=i+1) begin
+    MatRowGet(IVCashp,i,IVCashrw);
+    AddVATBase(SMr,IVCashrw.VATCode,IVCashrw.Sum,txreb,vatcnt,1,0);   
+    IVCashVc_PrintBixolonSPPR200IIReceipt_Row(IVCashp,IVCashrw,last_discount);
+  end;
+*/
+
+  BlockLoad(LMb);
+
+  rwcnt1 = MatRowCnt(IVCashp);
+  for (i=0;i<rwcnt1;i=i+1) begin
+    MatRowGet(IVCashp,i,IVCashrw);
+    testf = true;
+    if (LMb.IncrementalReceiptPrinting!=0) then begin
+      switch (IVCashrw.stp) begin
+        case kInvoiceRowTypeNormal:
+        case kInvoiceRowTypeStructuredItemComponent:
+        case kInvoiceRowTypeVoid:
+      end;
+    end else begin
+      switch (IVCashrw.stp) begin
+      case kInvoiceRowTypeStructuredItemComponent:
+        goto LkInvoiceRowTypeNormal3;
+      case kInvoiceRowTypeNormal:
+LkInvoiceRowTypeNormal3:;
+          if (IVCashrw.ovst!=0) then begin
+            testf = false;
+          end;
+        case kInvoiceRowTypeVoid:
+          ;
+      end;
+    end;
+    if (testf) then begin
+      IVCashVc_PrintBixolonSPPR200IIReceiptRow(IVCashrw,SFb,CDb);
+    end;
+  end;
+LIVCashVc_PrintBixolonSPPR200IIReceipt_Footer:;
+  SetupVATBase1(SMr,vatcnt);  
+  rwcnt1 = MatRowCnt(IVCashp);
+  for (i=0;i<rwcnt1;i=i+1) begin
+    MatRowGet(IVCashp,i,IVCashrw);
+    switch (IVCashrw.stp) begin
+      case kInvoiceRowTypeStructuredItemComponent:
+        goto LkInvoiceRowTypeNormal4;
+      case kInvoiceRowTypeNormal:
+LkInvoiceRowTypeNormal4:;
+        AddVATBase(SMr,IVCashrw.VATCode,IVCashrw.Sum,txreb,vatcnt,1,0);   
+        testf = true;
+        if (blank(IVCashrw.ArtCode)) then begin testf = false; end;
+        if (IVCashrw.ovst!=0) then begin testf = false; end;
+        if (IVCashrw.ArtCode==CDb.DiscountItem) then begin testf = false; end;
+        if (IVCashrw.ArtCode=="DEPOSIT") then begin testf = false; end;
+        if (IVCashrw.ArtCode=="ADDON") then begin testf = false; end;
+        if (IVCashrw.Quant<0) then begin testf = false; end;
+        if (testf) then begin
+          totq = totq + IVCashrw.Quant;
+          if (vartcodef[IVCashrw.ArtCode]==false) then begin
+            tota = tota + 1;
+            vartcodef[IVCashrw.ArtCode] = true;
+          end;
+        end;
+    end;
+  end;
+
+  AddStringListRow2(ValToString(tota,M4UVal,SFb.thousSep,SFb.decimalPt,0) & " " & USetStr(24174),s);
+  PrintBixolonSPPR200IIReceiptRow_SendToCom(s,false);
+
+/*
+  if (LMb.HideQty==0) then begin
+    AddStringListRow(USetStr(12011) & ValToString(totq,M4UVal,SFb.thousSep,SFb.decimalPt,0),USetStr(24171),"","",ValToString(IVCashp.Sum4,M4Val,SFb.thousSep,SFb.decimalPt,0),"",s);
+  end else begin
+    AddStringListRow("",USetStr(24171),"","",ValToString(IVCashp.Sum4,M4Val,SFb.thousSep,SFb.decimalPt,0),"",s);
+//    AddStringListRow(ValToString(blankval,M4UVal,SFb.thousSep,SFb.decimalPt,0),USetStr(24171),"","",ValToString(IVCashp.Sum4,M4Val,SFb.thousSep,SFb.decimalPt,0),s);
+  end;
+*/  
+//  AddStringListRow("",USetStr(12011) & ValToString(totq,M4Qty,SFb.thousSep,SFb.decimalPt,0),"","","","",s);
+  AddStringListRow("",USetStr(12011),"","",ValToString(totq,M4Val,SFb.thousSep,SFb.decimalPt,0),"",s);
+  PrintBixolonSPPR200IIReceiptRow_SendToCom(s,true);
+
+  AddStringListRow("","",USetStr(24171),"",ValToString(IVCashp.Sum4,M4Val,SFb.thousSep,SFb.decimalPt,0),"",s);
+  PrintBixolonSPPR200IIReceiptRow_SendToCom(s,true);
+/*  
+  AddStringListRow("",USetStr(24173),"","",ValToString(IVCashp.Sum3,M4Val,SFb.thousSep,SFb.decimalPt,0),"",s);
+  PrintBixolonSPPR200IIReceiptRow_SendToCom(s);
+*/ 
+
+  testf = false;
+  for (i=0;i<rwcnt1;i=i+1) begin
+    MatRowGet(IVCashp,i,IVCashrw);
+    switch (IVCashrw.stp) begin
+      case kInvoiceRowTypeLoyaltyPointsBonus:
+        AddStringListRow_Payment(IVCashrw.Spec,IVCashrw.PayMode,IVCashrw.CurncyCode,ValToString(IVCashrw.Sum,M4Val,SFb.thousSep,SFb.decimalPt,0),s);
+        PrintBixolonSPPR200IIReceiptRow_SendToCom(s,true);
+      case kInvoiceRowTypeLoyaltyPointsPayment:
+        AddStringListRow_Payment(IVCashrw.Spec,IVCashrw.PayMode,IVCashrw.CurncyCode,ValToString(IVCashrw.Sum,M4Val,SFb.thousSep,SFb.decimalPt,0),s);
+        PrintBixolonSPPR200IIReceiptRow_SendToCom(s,true);
+      case kInvoiceRowTypeCashPayment:
+        AddStringListRow_Payment(IVCashrw.Spec,IVCashrw.PayMode,IVCashrw.CurncyCode,ValToString(IVCashrw.Sum,M4Val,SFb.thousSep,SFb.decimalPt,0),s);
+        PrintBixolonSPPR200IIReceiptRow_SendToCom(s,true);
+        testf = true;
+      case kInvoiceRowTypeCreditCardPayment:
+        AddStringListRow_Payment(IVCashrw.Spec,IVCashrw.PayMode,IVCashrw.CurncyCode,ValToString(IVCashrw.Sum,M4Val,SFb.thousSep,SFb.decimalPt,0),s);
+        PrintBixolonSPPR200IIReceiptRow_SendToCom(s,true);
+      case kInvoiceRowTypeChequePayment:
+        AddStringListRow_Payment(IVCashrw.Spec,IVCashrw.PayMode,IVCashrw.CurncyCode,ValToString(IVCashrw.Sum,M4Val,SFb.thousSep,SFb.decimalPt,0),s);
+        PrintBixolonSPPR200IIReceiptRow_SendToCom(s,true);
+      case kInvoiceRowTypeGiftVoucherPayment:
+        AddStringListRow_Payment(IVCashrw.Spec,IVCashrw.PayMode,IVCashrw.CurncyCode,ValToString(IVCashrw.Sum,M4Val,SFb.thousSep,SFb.decimalPt,0),s);
+        PrintBixolonSPPR200IIReceiptRow_SendToCom(s,true);
+    end;
+  end;
+
+  if (IVCashp.OKFlag==0) then begin 
+    testf = false; 
+  end else begin
+    if (IVCashp.Invalid!=0) then begin 
+      testf = false; 
+    end;
+  end;
+//only when cash Payment  
+  if (testf) then begin
+    if (IVCashp.RetValue>0) then begin
+      AddStringListRow_Payment(USetStr(24172),"","",ValToString(IVCashp.RetValue,M4Val,SFb.thousSep,SFb.decimalPt,0),s);
+    end else begin
+      AddStringListRow_Payment(USetStr(24172),"","",ValToString(0.00,M4Val,SFb.thousSep,SFb.decimalPt,0),s);
+    end;
+    PrintBixolonSPPR200IIReceiptRow_SendToCom(s,true);  
+  end;
+
+  IVCashVc_PrintBixolonSPPR200IIReceipt_Footer(SFb,IVCashp,SMr,vatcnt,okf,depositf);
+  
+  
+  FormFeed =  chr(27) & chr(100) & chr(5);
+//  CutPaper = chr(27) & chr(105);
+  PrinterOff = chr(27) & chr(61) & chr(2); /*ESC = 2*/
+
+  Error = OutComPort(1,FormFeed);
+//  Error = OutComPort(1,CutPaper);
+  Error = OutComPort(0,PrinterOff);  
+LIVCashVc_PrintBixolonSPPR200IIReceipt:;  
+  Error = CloseComPort(1);
+
+  if (opendrawerf==true) then begin
+//    OpenCashDrawer_IVCashVc(IVCashp);
+  end;
+  
+  IVCashVc_PrintBixolonSPPR200IIReceiptExecute = res;
+  return;
+end;
+
+
+global
+function Boolean IVCashVc_PrintBixolonSPPR200IIReceipt(Integer wn,var record IVCashVc IVCashp,record IVCashVc prevIVCashp,Integer rownr,Boolean okf,Boolean opendrawerf,Integer IncrementalPrint,Integer wnst)
+begin
+  transaction Integer gPaperSize;
+  
+  //not ready
+  gPaperSize = 45;
+  IVCashVc_PrintBixolonSPPR200IIReceipt = IVCashVc_PrintBixolonSPPR200IIReceiptExecute(wn,IVCashp,prevIVCashp,rownr,okf,opendrawerf,IncrementalPrint,wnst);
+  return;
+end;
+

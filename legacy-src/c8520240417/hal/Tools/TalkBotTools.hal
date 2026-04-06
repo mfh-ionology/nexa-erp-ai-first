@@ -1,0 +1,2362 @@
+external function Integer GetIntYc(Date);
+external procedure FindStockValue(string,string,var record ItemStatusVc);
+external procedure FindRepDefHeader(string,string,var string);
+external function Date DateFromString(string,string);
+external function Boolean GetExchangeRateFromBank(record RcVc,Boolean,var LongInt,var string);
+external function Boolean CreateBlankOrderWSerial(var record ORVc);
+external function Boolean PasteCustInOrder(var record ORVc,string,string,var string,var string);
+external function Boolean ORVc_PasteArtCode(var record ORVc,Integer,var string,var string,Boolean);
+external function Boolean PasteCustInQT(var record QTVc,string,string,var string,Boolean);
+external function Boolean CreateBlankQTWSerial(var record QTVc,string);
+external updating function Integer CreateMailFromQTD(record QTVc,var record MailVc,var string,string);
+external updating function Integer CreateMailFromORD(record ORVc,var record MailVc,var string,string);
+external function Boolean QTVc_PasteArtCode(var record QTVc,Integer,var string,var string);
+external updating function Integer CreateMailFromIVD(record IVVc,var record MailVc,var string,Boolean,string);
+external procedure WatsonSendToChatBot(string,string,var string);
+external function boolean TalkBotReplaceText(string,string,var string,boolean);
+external function string 255 ActiveIntentEngine();
+external function Boolean GetCustomersCurrentQT(var record QTVc,string);
+
+// Anna2
+external procedure PushNodeCode(var array record Anna2ChatNodeVc,string);
+external function LongInt Anna2StartNode();
+external procedure Anna2_LoadCbctx(string,var record Anna2ContextVc,var array record Anna2ChatNodeVc,var array string,var array string);
+external procedure Anna2_StoreCbctx(string,record Anna2ContextVc,array record Anna2ChatNodeVc,var array string,var array string);
+external function string 255 Anna2Chat_Process(var record Anna2ContextVc,var array record Anna2ChatNodeVc,string);
+
+function Integer TTSProvider()
+begin
+  record TTSSettingsBlock TTSb;
+  
+  BlockLoad(TTSb);
+  
+  TTSProvider = TTSb.Provider;
+end;
+
+updating
+procedure AttachWorkspace(var area a_workspace,record WatsonAssistantWorkspaceVc WAWr)
+begin
+  record Attach2Vc AT2r;
+  record RLinkVc RLr;
+  Integer i;
+  string 255 filename;
+
+  filename = "workspace.json";
+
+  i = 0;
+  while (ReadRecordLink(WAWr,i,AT2r,RLr)) begin
+    if (AT2r.FileName==filename) then begin
+      RecordDelete(RLr);
+      StepBack(RLr);
+    end;
+    i = i + 1;
+  end;
+
+  Delete_File("tmp/" & filename);
+  WriteAreaToFile(a_workspace,"tmp/" & filename,0);
+  RecordLinkFile("tmp/" & filename,0,WAWr,CurrentCompany);
+  Delete_File("tmp/" & filename);
+
+  return;
+end;
+
+function string 255 SayAsPhoneNumber(string phonestr)
+begin
+  string 255 res;
+
+  if (TTSProvider==kTextToSpeechEngineGoogle) then begin
+    res = "<say-as interpret-as='telephone'>"; // google:style='zero-as-zero' -- this makes it say 'zero' instead of 'oh'
+  end else begin
+    res = "<say-as interpret-as='vxml:phone'>";
+  end;
+  
+  res = res & phonestr;
+  res = res & "</say-as>";
+
+  SayAsPhoneNumber = res;
+  return;
+end;
+
+function string 255 SayAsTime(string instr)
+begin
+  string 255 res;
+
+  if (TTSProvider==kTextToSpeechEngineGoogle) then begin
+    res = "<say-as interpret-as='time'>";
+  end else begin
+    res = "<say-as interpret-as='vxml:time'>";
+  end;
+
+  res = res & instr;
+  res = res & "</say-as>";
+
+  SayAsTime = res;
+  return;
+end;
+
+global
+function string 255 SayValAsCurrency(val inval,string currency_code)
+begin
+  string 255 res;
+  
+  if (TTSProvider==kTextToSpeechEngineGoogle) then begin
+    res = "<say-as interpret-as='currency'>";
+  end else begin;
+    res = "<say-as interpret-as='vxml:currency'>";
+  end;
+  
+  res = res & UpperCase(currency_code);
+  res = res & ValToString(inval,M4Val,"",".",0);
+  res = res & "</say-as>";
+
+  SayValAsCurrency = res;
+  return;
+end;
+
+global
+function string 255 SayAsDate(date d)
+begin
+  string 255 res;
+  
+  //TODO add yesterday tomorrow
+  if (CurrentDate==d) then begin
+    res = "today";
+  end else begin
+  res = "<say-as interpret-as='date' format='mdy'>";
+  res = res & DateToString(d,"MM/DD/YYYY");
+  res = res & "</say-as>";
+  end;
+
+  SayAsDate = res;
+  return;
+end;
+
+function string 255 SayAsDigits(string instr)
+begin
+  string 255 res;
+
+  res = "<say-as interpret-as='digits'>";
+  res = res & instr;
+  res = res & "</say-as>";
+
+  SayAsDigits = res;
+end;
+
+function string 255 SayValAsDigits(val inval)
+begin
+  string 255 res,tstr;
+
+  tstr = Trim(ValToString(inval,M4Val,"",".",1));
+  if (blank(tstr)) then begin tstr = "0"; end;
+  res = SayAsDigits(tstr);
+
+  SayValAsDigits = res;
+  return;
+end;
+
+global
+function string 255 SayNumberAsCardinal(string numberstr)
+begin
+  string 255 res;
+
+  res = "<say-as interpret-as='cardinal'>";
+  res = res & numberstr;
+  res = res & "</say-as>";
+
+  SayNumberAsCardinal = res;
+end;
+
+procedure GetIVStatus(record IVVc IVr,var integer stat,var val amount_due,var val amount_full)
+begin
+  record ARVc ARr;
+
+  amount_due = blankval;
+  amount_full = blankval;
+  
+  ARr.InvoiceNr = IVr.SerNr;
+  
+  if (IVr.OKFlag==0) then begin
+    stat = 3;
+    goto LGetIVStatus_out;
+  end;
+  
+  amount_full = IVr.Sum4;
+  
+  if (ReadFirstMain(ARr,1,true)==false) then begin
+    stat = 0;
+    goto LGetIVStatus_out;
+  end;
+  
+  if (ARr.DueDate>CurrentDate) then begin
+    stat = 1;
+  end else begin
+    stat = 2;
+  end;
+  
+  amount_due = ARr.RVal;
+
+LGetIVStatus_out:;
+end;
+
+function string 255 FindCurrency(string currency_code)
+begin
+  string 255 res;
+  record CurncyCodeVc CCr;
+
+  CCr.CurncyCode = currency_code;
+  if (ReadFirstMain(CCr,1,true)) then begin
+    if (CCr.CurncyCode==currency_code) then begin
+      res = CCr.CurText;
+    end;
+  end;
+
+  FindCurrency = res;
+  return;
+end;
+
+function Boolean FindInvoice(Longint invoiceno,string custcode,var Integer invstat,var val amount_due,var val amount_full,var string currency_code)
+begin
+  Boolean res;
+  record IVVc IVr;
+
+  IVr.SerNr = invoiceno;
+  if (ReadFirstMain(IVr,1,true)) then begin
+    if ((custcode=="") or (IVr.CustCode==custcode)) then begin
+      res = true;
+      GetIVStatus(IVr,invstat,amount_due,amount_full);
+    end else begin
+      invstat = 3;
+    end;
+    currency_code = IVr.CurncyCode;
+  end;
+
+  FindInvoice = res;
+end;
+
+global
+function Boolean FindCustomerAndInvoice(string customer_code,Longint invoiceno,var Integer invstat,var val amount_due,var val amount_full,var string currency_code)
+begin
+  record CUVc CUr;
+  Boolean res;
+  
+  if (customer_code<>"") then begin
+    CUr.Code = customer_code;
+    res = ReadFirstMain(CUr,1,true);
+    if (res==false) then begin
+      invstat = 4;
+      goto LFindCustomerAndInvoice_out;
+    end;
+  end;
+  
+  res = FindInvoice(invoiceno,CUr.Code,invstat,amount_due,amount_full,currency_code);
+
+LFindCustomerAndInvoice_out:;
+  FindCustomerAndInvoice = res;
+end;
+
+function Boolean FindOrder(Longint orderno,string custcode,var Integer invstat,var val amount_due,var string currency_code)
+begin
+  Boolean res;
+  record ORVc ORr;
+
+  ORr.SerNr = orderno;
+  if (ReadFirstMain(ORr,1,true)) then begin
+    if (ORr.CustCode==custcode) then begin
+      res = true;
+      //GetORStatus(ORr,invstat,amount_due);
+    end else begin
+      invstat = 3;
+    end;
+    currency_code = ORr.CurncyCode;
+  end else begin
+    invstat = 3;
+  end;
+
+  FindOrder = res;
+  return;
+end;
+
+function Boolean FindCustomerAndOrder(string customer_code,Longint orderno,var Integer invstat,var val amount_due,var string currency_code)
+begin
+  record CUVc CUr;
+  Boolean res;
+
+  CUr.Code = customer_code;
+  if (ReadFirstMain(CUr,1,true)) then begin
+    res = FindOrder(orderno,CUr.Code,invstat,amount_due,currency_code);
+  end else begin
+    invstat = 3;
+  end;
+
+  FindCustomerAndOrder = res;
+  return;
+end;
+
+function Boolean FindQuotation(Longint quoteno,string custcode,var Integer invstat,var val amount_due,var string currency_code)
+begin
+  Boolean res;
+  record QTVc QTr;
+
+  QTr.SerNr = quoteno;
+  if (ReadFirstMain(QTr,1,true)) then begin
+    if (QTr.CustCode==custcode) then begin
+      res = true;
+      //GetQTStatus(QTr,invstat,amount_due);
+    end else begin
+      invstat = 3;
+    end;
+    currency_code = QTr.CurncyCode;
+  end else begin
+    invstat = 3;
+  end;
+
+  FindQuotation = res;
+  return;
+end;
+
+function Boolean FindCustomerAndQuotation(string customer_code,Longint quoteno,var Integer invstat,var val amount_due,var string currency_code)
+begin
+  record CUVc CUr;
+  Boolean res;
+
+  CUr.Code = customer_code;
+  if (ReadFirstMain(CUr,1,true)) then begin
+    res = FindQuotation(quoteno,CUr.Code,invstat,amount_due,currency_code);
+  end else begin
+    invstat = 3;
+  end;
+
+  FindCustomerAndQuotation = res;
+  return;
+end;
+
+/* N last payments */
+function LongInt FindLastPayment(var Integer cnt,var vector LongInt vfound,LongInt TransType,LongInt TransNr)
+begin
+  string 255 transkey;
+  LongInt res;
+  
+  transkey = TransType & ":" & TransNr;
+  res = vfound[transkey];
+  if (res==-1) then begin
+    res = cnt;
+    cnt = cnt + 1;
+    vfound[transkey] = res;
+  end;
+  
+  FindLastPayment = res;
+end;
+
+function Boolean GetPaymentFromIPrs(string customer_code,record IPrsVc IPrsr,var val pay_amount,var string pay_currency)
+begin
+  Boolean res;
+  record IVVc IVr;
+  record IPVc IPr;
+  row IPVc IPrw;
+  record TRVc TRr;
+  row TRVc TRrw;
+  record CLInVc CLINr;
+  row CLInVc CLINrw;
+  LongInt rw;
+  
+  res = false;
+  pay_amount = blankval;
+  
+  switch (IPrsr.TransType) begin
+    case kIPrsTransTypeInvoice:
+      /*
+      IVr.SerNr = IPrsr.TransNr;
+      if (ReadFirstMain(IVr,1,true)) then begin
+        if (IVr.InvType==kInvoiceTypeCredit or IVr.InvType==kInvoiceTypeCreditSpecialSales) then begin
+          res = true;
+          pay_amount = IVr.Sum4;
+          pay_currency = IVr.CurncyCode;
+        end;
+      end;
+      */
+    case kIPrsTransTypeReceipt:
+      LogText(0,"GetPaymentFromIPrs IP " & IPrsr.TransNr & ":" & IPrsr.TransRow);
+      
+      IPr.SerNr = IPrsr.TransNr;
+      if (ReadFirstMain(IPr,1,true)) then begin
+        for (rw = 0; rw<MatRowCnt(IPr); rw = rw + 1) begin
+          MatRowGet(IPr,rw,IPrw);
+          if (IPrw.CustCode==customer_code) then begin
+            pay_amount = pay_amount + IPrw.BankVal;
+            pay_currency = IPrw.BankCurncy;
+            res = true;
+          end;
+        end;
+//        if (IPrsr.TransRow>=0 and MatRowCnt(IPr)>IPrsr.TransRow) then begin
+//          MatRowGet(IPr,IPrsr.TransRow,IPrw);
+//          pay_amount = IPrw.BankVal;
+//          pay_currency = IPrw.BankCurncy;
+//          res = true;
+//        end;
+      end;
+    case kIPrsTransTypeNLTransaction:
+      TRr.Number = IPrsr.TransNr;
+      TRr.IntYc = GetIntYc(IPrsr.TransDate);
+      if (ReadFirstMain(TRr,2,true)) then begin
+        if (MatRowCnt(TRr)>IPrsr.TransRow) then begin
+          MatRowGet(TRr,IPrsr.TransRow,TRrw);
+          if (TRrw.ovst==0 and
+              TRrw.stp==1 and
+              TRrw.SerNr==-1 and
+              TRrw.Typ==1) then begin
+            
+            pay_amount = TRrw.CredVal;
+            if (blank(pay_amount)) then begin pay_amount = -TRrw.DebVal; end;
+            pay_currency = TRrw.Curncy;
+            res = true;
+          end;
+        end;
+      end;
+    case kIPrsTransTypeCashIn:
+      if (MatRowCnt(CLInr)>IPrsr.TransRow) then begin
+        MatRowGet(CLInr,IPrsr.TransRow,CLInrw);
+        if ((CLInrw.Type==1) and
+            (CLInrw.TransNr==IPrsr.IVNr) and
+            (CLInr.CUCode==IPrsr.CustCode)) then begin
+          pay_amount = CLInrw.Sum;
+          pay_currency = CLInr.CurncyCode;
+          res = true;
+        end;
+      end;
+  end;
+  
+  GetPaymentFromIPrs = res;
+end;
+
+global
+procedure FindLastPayments(string customer_code,Integer maxcount,date mindate,
+                           var array date payment_date_arr,
+                           var array val payment_amount_arr,
+                           var array string payment_currency_arr)
+begin
+  record IPrsVc IPrsr;
+  Boolean addf;
+  Integer cnt,ix;
+  Integer i,rwcnt;
+  vector Boolean viprowprntdf;
+  val pay_amount;
+  string 255 pay_currency;
+  vector LongInt vfound;
+  
+  IPrsr.CustCode = customer_code;
+  while (LoopBackKey("MainKey",IPrsr,1,true)) begin
+    
+    if (IPrsr.CustCode<>customer_code) then begin goto LFindLastPayments_out; end;
+    if ((maxcount>0) and (cnt>=maxcount)) then begin goto LFindLastPayments_out; end;
+    if (nonblankDate(mindate) and (mindate>IPrsr.CustDate)) then begin goto LFindLastPayments_out; end;
+    
+    if (GetPaymentFromIPrs(customer_code,IPrsr,pay_amount,pay_currency)) then begin
+      ix = FindLastPayment(cnt,vfound,IPrsr.TransType,IPrsr.TransNr);
+      payment_date_arr[ix] = IPrsr.CustDate;
+      
+      if (ix>=payment_amount_arr.length) then begin
+        payment_amount_arr[ix] = pay_amount;
+      end else begin
+        payment_amount_arr[ix] = payment_amount_arr[ix] + pay_amount;
+      end;
+      
+      payment_currency_arr[ix] = pay_currency;
+    end;
+  end;
+  
+LFindLastPayments_out:;
+end;
+
+/* N last payments */
+/*
+procedure FindLastPayments(string customer_code,Integer count,
+                           var array date payment_date_arr,
+                           var array val payment_amount_arr,
+                           var array string payment_currency_arr)
+begin
+  record IPrsVc IPrsr;
+  Boolean found,testf;
+  record IVVc IVr;
+  record IPVc IPr;
+  row IPVc IPrw;
+  record TRVc TRr;
+  row TRVc TRrw;
+  record CLInVc CLINr;
+  row CLInVc CLINrw;
+  Integer cnt;
+  Integer i,rwcnt;
+  vector Boolean viprowprntdf;
+
+  found = true;
+  IPrsr.CustCode = customer_code;
+  while (LoopBackKey("MainKey",IPrsr,1,found)) begin
+    if (IPrsr.CustCode!=customer_code) then begin found = false; end;
+    if (cnt>=count) then begin found = false; end;
+    if (found) then begin
+      testf = true;
+      if (testf) then begin
+        switch (IPrsr.TransType) begin
+          case kIPrsTransTypeInvoice:
+            IVr.SerNr = IPrsr.TransNr;
+            if (ReadFirstMain(IVr,1,true)) then begin
+              if (IVr.InvType==kInvoiceTypeCredit or IVr.InvType==kInvoiceTypeCreditSpecialSales) then begin
+                payment_date_arr[cnt] = IPrsr.CustDate;
+                payment_amount_arr[cnt] = IVr.Sum4;
+                payment_currency_arr[cnt] = IVr.CurncyCode;
+                cnt = cnt + 1;
+              end;
+            end;
+          case kIPrsTransTypeReceipt:
+            IPr.SerNr = IPrsr.TransNr;
+            if (ReadFirstMain(IPr,1,true)) then begin
+              rwcnt = MatRowCnt(IPr);
+              for (i=0;i<rwcnt;i=i+1) begin
+                if (viprowprntdf[IPr.SerNr & ":" & i]==false) then begin
+                  MatRowGet(IPr,i,IPrw);
+                  payment_date_arr[cnt] = IPrsr.CustDate;
+                  payment_amount_arr[cnt] = IPrw.BankVal;
+                  payment_currency_arr[cnt] = IPrw.BankCurncy;
+                  i = rwcnt;
+                  viprowprntdf["IPVc_" & IPr.SerNr & ":" & i] = true;
+                  cnt = cnt + 1;
+                end;
+              end;
+            end;
+          case kIPrsTransTypeNLTransaction:
+            TRr.Number = IPrsr.TransNr;
+            TRr.IntYc = GetIntYc(IPrsr.TransDate);
+            if (ReadFirstMain(TRr,2,true)) then begin
+              rwcnt = MatRowCnt(TRr);
+              for (i=0; i<rwcnt; i=i+1) begin
+                MatRowGet(TRr,i,TRrw);
+                if (TRrw.ovst==0 and TRrw.stp==1) then begin
+                  if (TRrw.SerNr==-1 and TRrw.Typ==1) then begin
+                    if (viprowprntdf["TRVc_" & TRr.Number & "_" & TRr.IntYc & ":" & i]==false) then begin
+                      payment_amount_arr[cnt] = TRrw.CredVal;
+                      if (blank(payment_amount_arr[cnt])) then begin
+                        payment_amount_arr[cnt] = -TRrw.DebVal;
+                      end;
+                      payment_currency_arr[cnt] = TRrw.Curncy;
+                      viprowprntdf["TRVc_" & TRr.Number & "_" & TRr.IntYc & ":" & i] = true;
+                      cnt = cnt + 1;
+                    end;
+                  end;
+                end;
+              end;
+            end;
+          case kIPrsTransTypeCashIn:
+            rwcnt = MatRowCnt(CLInr);
+            for (i=0;i<rwcnt;i=i+1) begin
+              MatRowGet(CLInr,i,CLInrw);
+              if ((CLInrw.Type==1) and (CLInrw.TransNr==IPrsr.IVNr)) then begin
+                if (CLInr.CUCode==IPrsr.CustCode) then begin
+                  if (viprowprntdf["CLInVc_" & CLInr.SerNr & ":" & i]==false) then begin
+                    viprowprntdf["CLInVc_" & CLInr.SerNr & ":" & i] = true;
+                    payment_amount_arr[cnt] = CLInrw.Sum;
+                    payment_currency_arr[cnt] = CLInr.CurncyCode;
+                    cnt = cnt + 1;
+                  end;
+                end;
+              end;
+            end;
+        end;
+      end;
+    end;
+  end;
+
+  return;
+end;
+*/
+
+global
+function string 255 AnnaGetLastPayments(string customercode,string paycount)
+begin
+  Boolean foundf;
+  string 255 res;
+  Integer count,oldcomp;
+  LongInt i;
+  array date payment_date_arr;
+  array val payment_amount_arr;
+  array string 255 payment_currency_arr;
+  date blankdateval;
+  
+  count = StringToInt(paycount);
+  if (blank(count) or count<1 or count>6) then begin
+    count = 6;
+  end;
+
+  oldcomp = CurrentCompany;
+  SetCompany(1,false);
+  FindLastPayments(customercode,count,blankdateval,payment_date_arr,payment_amount_arr,payment_currency_arr);
+  ResetCompany(oldcomp);
+  res = "{";
+  res = res & "\"statusCode\": \"0\",";
+  res = res & "\"count\": \"" & count & "\",";
+  res = res & "\"responseText\": \"";
+  for (i=0; i<payment_date_arr.length; i = i + 1) begin
+    res = res & SayValAsCurrency(payment_amount_arr[i],payment_currency_arr[i]) & ", " & SayAsDate(payment_date_arr[i]);
+    if (i<(payment_date_arr.length-1)) then begin
+      res = res & "<break strength='medium'></break> ";
+    end;
+  end;
+  res = res & "\"";
+  res = res & "}";
+
+  AnnaGetLastPayments = res;
+  return;
+end;
+
+/* Expected delivery date */
+global
+function Boolean FindPlannedDeliveryDate(string customer_code,LongInt order_no,var date planed_delivery_date)
+begin
+  Boolean res;
+  record ORVc ORr;
+  record SHVc SHr;
+  Integer cnt;
+
+  ORr.SerNr = order_no;
+  if (ReadFirstMain(ORr,1,true)==false) then begin
+    goto LFindPlannedDeliveryDate;
+  end;
+
+  if (ORr.CustCode!=customer_code) then begin
+    goto LFindPlannedDeliveryDate;
+  end;
+
+  planed_delivery_date = ORr.PlanShip;
+  if (blank(planed_delivery_date)) then begin
+    SHr.OrderNr = ORr.SerNr;
+    if (ReadLastKey("OrderKey",SHr,1,true)==false) then begin
+      goto LFindPlannedDeliveryDate;
+    end;
+    planed_delivery_date = SHr.ShipDate;
+  end;
+
+  res = true;
+
+LFindPlannedDeliveryDate:;
+  FindPlannedDeliveryDate = res;
+end;
+
+global
+function string 255 AnnaGetPlannedDeliveryDate(string customercode,string ordernr)
+begin
+  Boolean foundf;
+  string 255 res;
+  Integer oldcomp;
+  LongInt orderno;
+  Boolean resf;
+  Integer status_code;
+  date planned_delivery_date;
+
+  orderno = StringToLongInt(ordernr);
+
+  if (orderno<=0) then begin
+    status_code = 2; // Order no parse error
+    goto LAnnaGetPlannedDeliveryDate_response;
+  end;
+
+  oldcomp = CurrentCompany;
+  SetCompany(1,false);
+  resf = FindPlannedDeliveryDate(customercode,orderno,planned_delivery_date);
+  ResetCompany(oldcomp);
+
+  if (resf==false) then begin
+    status_code = 3; // Order not found
+  end;
+
+LAnnaGetPlannedDeliveryDate_response:;
+  res = "{";
+  if (status_code==0) then begin
+    res = res & "\"plannedDeliveryDate\": \"" & SayAsDate(planned_delivery_date) & "\",";
+  end;
+  res = res & "\"statusCode\": \"" & status_code & "\"";
+  res = res & "}";
+  
+  AnnaGetPlannedDeliveryDate = res;
+  return;
+end;
+
+/* Orders not yet delivered */
+procedure FindOrdersPendingDelivery(string customer_code,Integer count,var array LongInt order_no_arr,var array date order_date_arr)
+begin
+  Boolean res;
+  record ORVc ORr;
+  Boolean foundf,testf;
+  Integer cnt,cnt_max;
+
+  cnt_max = count;
+  if (cnt_max==0) then begin cnt_max = 5; end;
+
+  foundf = true;
+  ORr.OSFlag = 1;
+  ORr.CustCode = customer_code;
+
+  while (LoopBackKey("OSCU",ORr,2,foundf)) begin
+    if (ORr.OSFlag!=1) then begin foundf = false; end;
+    if (ORr.CustCode!=customer_code) then begin foundf = false; end;
+    if (cnt>(cnt_max-1)) then begin foundf = false; end;
+    if (foundf) then begin
+      testf = false;
+      if ((ORr.ShipFlag==0) and (ORr.InvFlag<2 or ORr.InvBeforeShip==1)) then begin testf = true; end;
+      if ((ORr.ShipFlag==0) and ((ORr.InvFlag==0) or (ORr.InvFlag==2))) then begin testf = true; end;
+      if (testf) then begin
+        order_no_arr[cnt] = ORr.SerNr;
+        order_date_arr[cnt] = ORr.OrdDate;
+        cnt = cnt + 1;
+      end;
+    end;
+  end;
+
+  return;
+end;
+
+global
+function string 255 AnnaGetOrdersPendingDelivery(string customercode,string pdcount)
+begin
+  string 255 res;
+  Integer oldcomp,status_code,count;
+  array LongInt order_no_arr;
+  array date order_date_arr;
+  LongInt i;
+
+  count = StringToInt(pdcount);
+  if (blank(count) or count<1 or count>6) then begin
+    count = 6;
+  end;
+
+  oldcomp = CurrentCompany;
+  SetCompany(1,false);
+  FindOrdersPendingDelivery(customercode,count,order_no_arr,order_date_arr);
+  ResetCompany(oldcomp);
+  if (order_no_arr.length==0) then begin
+    status_code = 2; // No orders found
+  end;
+
+LAnnaGetOrdersPendingDelivery_response:;
+  res = "{";
+  if (status_code==0) then begin
+    res = res & "\"responseText\": \"";
+    for (i = 0; i<order_no_arr.length; i = i + 1) begin
+      res = res & "order " & SayNumberAsCardinal(order_no_arr[i]) & ", " & SayAsDate(order_date_arr[i]);
+      if (i<(order_no_arr.length-1)) then begin
+        res = res & ", <break strength='medium'></break>";
+      end;
+    end;
+    res = res & "\",";
+  end;
+  res = res & "\"statusCode\": \"" & status_code & "\"";
+  res = res & "}";
+
+  AnnaGetOrdersPendingDelivery = res;
+  return;
+end;
+
+/* Stock level of item */
+global
+procedure FindStockLevelOfItem(string item_code,var val instock)
+begin
+  Boolean res;
+  record ItemStatusVc ISr;
+
+  FindStockValue(item_code,"",ISr);
+  instock = ISr.Instock;
+
+  return;
+end;
+
+global
+function Boolean FindItemFromString_old(string item,var record INVc INr)
+begin
+  Boolean res;
+  //get ArtCode from itemname
+
+  INr.Code = item;
+  if (ReadFirstKey("Code",INr,1,true)) then begin
+    res = true;
+    goto LFindItemFromString_old_out;
+  end;
+
+  INr.Name = item;
+  if (ReadFirstKey("ActName",INr,1,true)) then begin
+    res = true;
+    goto LFindItemFromString_old_out;
+  end;
+
+  //try removing trailing "s" for miltiple items
+  INr.Name = Left(item,(len(item)-1));
+  if (ReadFirstKey("ActName",INr,1,true)) then begin
+    res = true;
+    goto LFindItemFromString_old_out;
+  end;
+  
+  res = false;
+  
+LFindItemFromString_old_out:;
+  LogText(0,"FindItemFromString_old item '" & item & "' -> Code '" & INr.Code & "'");
+  FindItemFromString_old = res;
+end;
+
+global
+function string 255 AnnaGetStockLevelOfItem(string customercode,string itemcode)
+begin
+  string 255 item_code,res,stock_levelstr;
+  Integer oldcomp,status_code;
+  val stock_level;
+  record INVc INr;
+
+  item_code = Trim(itemcode);
+  if (blank(item_code)) then begin
+    status_code = 2; // Item code blank
+    goto LAnnaGetStockLevelOfItem_response;
+  end;
+
+  if (FindItemFromString_old(itemcode,INr)==false) then begin
+    status_code = 3; // Item not found
+    goto LAnnaGetStockLevelOfItem_response;
+  end;
+
+  oldcomp = CurrentCompany;
+  SetCompany(1,false);
+  FindStockLevelOfItem(item_code,stock_level);
+  ResetCompany(oldcomp);
+  stock_levelstr = Trim(ValToString(stock_level,M4Val,"",".",1));
+  if (blank(stock_levelstr)) then begin stock_levelstr = "0"; end;
+
+LAnnaGetStockLevelOfItem_response:;
+  res = "{";
+  if (status_code==0) then begin
+    res = res & "\"stockLevel\": \"" & stock_levelstr & "\",";
+  end;
+  res = res & "\"statusCode\": \"" & status_code & "\"";
+  res = res & "}";
+
+  AnnaGetStockLevelOfItem = res;
+  return;
+end;
+
+/* Identify caller */
+function Boolean FindCustomerFromNormalizedPhoneNr(string normnum,var record CUVc CUr)
+begin
+  Boolean res;
+  record NormPhoneNumVc NPNr;
+
+  NPNr.NormNum = normnum;
+  if (ReadFirstMain(NPNr,1,true)==true) then begin
+    CUr.Code = NPNr.CustCode; // TODO: Company...
+    if (ReadFirstMain(CUr,1,true)==true) then begin
+      res = true;
+    end;
+  end;
+
+  FindCustomerFromNormalizedPhoneNr = res;
+  return;
+end;
+
+function Boolean FindCustomerFromCaller(string ident,var record CUVc CUr)
+begin
+  Integer status_code,compno;
+  record PBXConnectionVc PBXr;
+  Boolean foundf,res;
+
+  if (FindCustomerFromNormalizedPhoneNr(ident,CUr)) then begin res = true; goto LFindCustomerFromCaller; end;
+  foundf = true;
+  PBXr.Closed = 0;
+  while (LoopKey("Closed",PBXr,1,foundf)) begin
+    if (PBXr.Closed!=0) then begin foundf = false; end;
+    if (foundf) then begin
+      res = FindCustomerFromNormalizedPhoneNr(ident & "@" & PBXr.PBXHost,CUr);
+      if (res) then begin goto LFindCustomerFromCaller; end;
+    end;
+  end;
+  if (FindCustomerFromNormalizedPhoneNr(NormalizePhoneNumber(ident),CUr)) then begin res = true; goto LFindCustomerFromCaller; end;
+  if (FindCustomerFromNormalizedPhoneNr(NormalizePhoneNumber("+" & ident),CUr)) then begin res = true; goto LFindCustomerFromCaller; end;
+  res = GetUserContactCard(ident,CUr,compno);
+
+LFindCustomerFromCaller:;
+  FindCustomerFromCaller = res;
+  return;
+end;
+
+procedure SetChatBotContextUserInfo(string ctxkey,string compcode,record CUVc CUr)
+begin
+
+  if (nonblank(ctxkey)) then begin
+    SetChatBotContextValue(ctxkey,"contactcode",CUr.Code);
+    SetChatBotContextValue(ctxkey,"companycode",compcode);
+    if (nonblank(CUr.SearchKey)) then begin
+      SetChatBotContextValue(ctxkey,"shortcode",CUr.SearchKey);
+    end;
+  end;
+
+  return;
+end;
+
+function string 255 AnnaIdentifyCaller(string ctxkey,string ident)
+begin
+  string 255 res;
+  Integer oldcomp,status_code,i,rwcnt;
+  record CUVc CUr;
+  record CompaniesBlock Compb;
+  row CompaniesBlock Comprw;
+
+  status_code = 3;
+  if (ident=="anonymous") then begin
+    status_code = 4;
+    goto LAnnaIdentifyCaller_response;
+  end;
+  if (blank(trim(ident))) then begin
+    status_code = 2;
+    goto LAnnaIdentifyCaller_response;
+  end;
+  
+  oldcomp = CurrentCompany;
+  BlockLoad(Compb);
+  rwcnt = MatRowCnt(Compb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(Compb,i,Comprw);
+    if (SetCompanyCode(Comprw.CompCode,false)) then begin
+      if (FindCustomerFromCaller(ident,CUr)) then begin
+        SetChatBotContextUserInfo(ctxkey,Comprw.CompCode,CUr);
+        status_code = 0;
+        i = rwcnt;
+      end;
+    end;
+  end;
+  ResetCompany(oldcomp);
+  
+LAnnaIdentifyCaller_response:;
+  LogText(0,"TalkBotTools.hal:AnnaIdentifyCaller() ident=" & ident & ", Normalized as=" & NormalizePhoneNumber("+" & ident) & ", CUr.Name=" & CUr.Name);
+  res = "{";
+  res = res & "\"customerPhone\": \"+" & SayAsPhoneNumber(ident) & "\",";
+  if (status_code==0) then begin
+    res = res & "\"customerName\": \"" & CUr.Name & "\",";
+    res = res & "\"customerCode\": \"" & CUr.Code & "\",";
+  end;
+  res = res & "\"statusCode\": \"" & status_code & "\"";
+  res = res & "}";
+  
+  AnnaIdentifyCaller = res;
+
+  return;
+end;
+
+/* Identify employee */
+function Boolean FindEmployeeURI(string contact_no,var string sip_uri)
+begin
+  Boolean res;
+  record CUVc CUr;
+
+  CUr.Code = contact_no;
+  if (ReadFirstMain(CUr,1,true)==true) then begin
+    res = true;
+    if (nonblank(CUr.SIPCode)) then begin
+      sip_uri = "sip:" & CUr.SIPCode;
+      ReplaceStringWithString(sip_uri,"@","\\\\@");
+      goto LFindEmployeeURI;
+    end;
+    if (nonblank(CUr.Mobile)) then begin
+      sip_uri = "sip:" & CUr.Mobile & "\\\\@sip.us.hansaworld.com"; //TODO take from pbx connection
+      goto LFindEmployeeURI;
+    end;
+    if (nonblank(CUr.AltPhone)) then begin
+      sip_uri = "sip:" & CUr.AltPhone & "\\\\@sip.us.hansaworld.com"; //TODO take from pbx connection
+      goto LFindEmployeeURI;
+    end;
+    if (nonblank(CUr.Phone)) then begin
+      sip_uri = "sip:" & CUr.Phone & "\\\\@sip.us.hansaworld.com"; //TODO take from pbx connection
+      goto LFindEmployeeURI;
+    end;
+    res = false;
+  end;
+
+LFindEmployeeURI:;
+  FindEmployeeURI = res;
+  return;
+end;
+
+function string 255 AnnaGetEmployeeTransferURI(string contactno)
+begin
+  string 255 contact_no,transfer_uri,res;
+  Integer oldcomp,status_code;
+  Boolean foundf;
+
+  contact_no = Trim(contactno);
+  if (blank(contact_no)) then begin
+    status_code = 2; // Must have contact no
+    goto LAnnaGetEmployeeTransferURI_response;
+  end;
+
+  oldcomp = CurrentCompany;
+  SetCompany(1,false);
+  foundf = FindEmployeeURI(contact_no,transfer_uri);
+  ResetCompany(oldcomp);
+
+  if (foundf==false) then begin
+    status_code = 3; // Employee not identified
+    goto LAnnaGetEmployeeTransferURI_response;
+  end;
+
+LAnnaGetEmployeeTransferURI_response:;
+  res = "{";
+  if (status_code==0) then begin
+    res = res & "\"transferURI\": \"" & transfer_uri & "\",";
+  end;
+  res = res & "\"statusCode\": \"" & status_code & "\"";
+  res = res & "}";
+
+  AnnaGetEmployeeTransferURI = res;
+  return;
+end;
+
+/* Open a report on the client if the contact is logged in */
+function Integer OpenReportForContact(string contact_no,record RcVc RepSpec)
+begin
+  Integer res;
+  record CUVc CUr;
+
+  CUr.Code = contact_no;
+  if (ReadFirstMain(CUr,1,true)==false) then begin
+    LogText(0,"OpenReportForContact failed to find contact " & contact_no);
+    goto LOpenReportForContact;
+  end;
+
+  res = RunReportFromClient(CUr,RepSpec);
+
+LOpenReportForContact:;
+  OpenReportForContact = res;
+  return;
+end;
+
+global
+updating function string 255 AnnaAddItemToOrder(string customercode,string item,string quantity)
+begin
+  record ORVc ORr;
+  record ORVc oldORr;
+  record INVc INr;
+  row ORVc ORrw;
+  integer rwcnt,status_code,wn;
+  LongInt serial;
+  string 255 inwarning,warning,res;
+  record CUVc CUr;
+  
+  CUr.Code = customercode;
+  if (customercode=="" or ReadFirstMain(CUr,1,true)==false) then begin
+    status_code = 2; // Order not found -> should be customer not found
+    goto LAnnaAddItemToOrder;
+  end;
+  
+  //get last order serial
+  if (CreateBlankOrderWSerial(ORr)==false) then begin
+    status_code = 2; // Order not found
+    goto LAnnaAddItemToOrder;
+  end;
+  
+  serial = ORr.SerNr - 1;
+  RecordClear(ORr);
+  ORr.SerNr = serial;
+  if (ReadFirstMain(ORr,1,true)==false) then begin
+    status_code = 2; // Order not found
+    goto LAnnaAddItemToOrder;
+  end;
+  
+  if (ORr.CustCode<>CUr.Code) then begin
+    status_code = 2; // Order not found -> should be customer not found
+    goto LAnnaAddItemToOrder;
+  end;
+
+  if (FindItemFromString_old(item,INr)==false) then begin
+    status_code = 3; // Item not found
+    goto LAnnaAddItemToOrder;
+  end;
+  
+  rwcnt = MatRowCnt(ORr);
+  ORrw.ArtCode = INr.Code;
+  ORrw.Quant = StringToVal(quantity,M4Val);
+  MatRowPut(ORr,rwcnt,ORrw);
+  recordCopy(oldORr,ORr);
+  ORVc_PasteArtCode(ORr,rwcnt,inwarning,warning,false);
+  if (RecordUpdate(oldORr,ORr,false)!=0) then begin
+    status_code = 4; // Record update failed
+    goto LAnnaAddItemToOrder;
+  end;
+/*
+  //TODO check if user logged in?
+  wn = FindWindow("ORDClass");
+  if (wn>0) then begin
+    PutWindowRecord(wn,ORr);
+  end;
+*/
+LAnnaAddItemToOrder:;
+LogText(0,"AnnaAddItemToOrder END status_code=" & status_code & ", wn=" & wn);
+  res = "{";
+  res = res & "\"statusCode\": \"" & status_code & "\"";
+  res = res & "}";
+
+  AnnaAddItemToOrder = res;
+  return;
+end;
+
+global
+updating function string 255 AnnaCreateNewOrder(string customercode)
+begin
+  record ORVc ORr;
+  string 255 warning,errstr,res;
+  Integer status_code,nwn;
+
+  if(CreateBlankOrderWSerial(ORr)==false) then begin
+    status_code = 2; //order could not be created
+    goto LAnnaCreateNewOrder_response;
+  end;
+  ORr.CustCode = customercode;
+  PasteCustInOrder(ORr,ORr.CustCode,"",warning,errstr);
+  if (RecordStore(ORr,true)==false) then begin
+    status_code = 3; //order could not be saved
+    goto LAnnaCreateNewOrder_response;
+  end;
+/*
+  //TODO check if users client is open then try to open window
+  nwn = OpenWindow("ORDClass",1,0,"","",ORr);
+*/
+LAnnaCreateNewOrder_response:;
+  res = "{";
+  res = res & "\"statusCode\": \"" & status_code & "\",";
+  res = res & "\"orderNumber\": \"" & ORr.SerNr & "\"";
+  res = res & "}";
+  
+  AnnaCreateNewOrder = res;
+  return;
+end;
+
+/*
+global
+updating procedure TalkBot_MyNewSystemFunction(var vector string parameters,var vector result,boolean usagef)
+begin
+  if (usagef) then begin
+    parameters["item_number"] = "entity(sys-number)";
+    parameters["other_parameter"] = "$context.foo";
+    parameters["name"] = "name of a galaxy";
+    goto LMyNewSystemFunction;
+  end;
+
+  if (nonblank(parameters["item_number"]) or nonblank(parameters["name"])) then begin
+    result["code"] = 1;
+    goto LMyNewSystemFunction;
+  end;
+
+// do the stuff...
+
+  result["code"] = 0;
+
+LMyNewSystemFunction:;
+  return;
+end;
+*/
+
+global
+updating function string 255 AnnaCreateNewQuotation(string customercode)
+begin
+  record QTVc QTr;
+  string 255 warning,errstr,res;
+  Integer status_code,nwn;
+
+  if (CreateBlankQTWSerial(QTr,customercode)==false) then begin
+    status_code = 2; //Quotation could not be created
+    goto LAnnaCreateNewQuotation_response;
+  end;
+  QTr.CustCode = customercode;
+  PasteCustInQT(QTr,QTr.CustCode,"",warning,true);
+
+  if (RecordStore(QTr,true)==false) then begin
+    status_code = 3; //Quotation could not be saved
+    goto LAnnaCreateNewQuotation_response;
+  end;
+/*
+  //TODO check if users client is open then try to open window
+  nwn = OpenWindow("QTDClass",1,0,"","",ORr);
+*/
+LAnnaCreateNewQuotation_response:;
+  res = "{";
+  res = res & "\"statusCode\": \"" & status_code & "\",";
+  res = res & "\"quotationNumber\": \"" & QTr.SerNr & "\"";
+  res = res & "}";
+
+  AnnaCreateNewQuotation = res;
+  return;
+end;
+
+global
+updating function string 255 AnnaAddItemToQuotation(string customercode,string item,string quantity)
+begin
+  record QTVc QTr;
+  record QTVc oldQTr;
+  record INVc INr;
+  row QTVc QTrw;
+  integer rwcnt,status_code,wn;
+  LongInt serial;
+  string 255 res,inwarning,warning;
+  
+  //get last order serial
+  if (GetCustomersCurrentQT(QTr,customercode)==false) then begin
+    status_code = 2; // Quotation not found
+    goto LAnnaAddItemToQuotation_response;
+  end;
+  
+  serial = QTr.SerNr - 1;
+  RecordClear(QTr);
+  QTr.SerNr = serial;
+  if (ReadFirstMain(QTr,1,true)==false) then begin
+    status_code = 2; // Quotation not found
+    goto LAnnaAddItemToQuotation_response;
+  end;
+  
+LogText(0,"AnnaAddItemToQuotation QTr.SerNr=" & QTr.SerNr & ", item=" & item & ", quantity=" & quantity);
+
+  if (FindItemFromString_old(item,INr)==false) then begin
+    status_code = 3; // Item not found
+    goto LAnnaAddItemToQuotation_response;
+  end;
+  
+  rwcnt = MatRowCnt(QTr);
+  QTrw.ArtCode = INr.Code;
+  QTrw.Quant = StringToVal(quantity,M4Val);
+  MatRowPut(QTr,rwcnt,QTrw);
+  RecordCopy(oldQTr,QTr);
+  QTVc_PasteArtCode(QTr,rwcnt,inwarning,warning);
+  if (RecordUpdate(oldQTr,QTr,false)!=0) then begin
+    status_code = 4; // Record update failed
+    goto LAnnaAddItemToQuotation_response;
+  end;
+/*
+//TODO check if user logged in?
+  wn = FindWindow("QTDClass");
+  if (wn>0) then begin
+    PutWindowRecord(wn,QTr);
+  end;
+*/
+  LAnnaAddItemToQuotation_response:;
+LogText(0,"AnnaAddItemToQuotation END status_code=" & status_code & ", wn=" & wn);
+  res = "{";
+  res = res & "\"statusCode\": \"" & status_code & "\"";
+  res = res & "}";
+
+  AnnaAddItemToQuotation = res;
+  return;
+end;
+
+global
+updating function string 255 AnnaEmailInvoice(string customercode,string invoice)
+begin
+  record IVVc IVr;
+  record MailVc Mailr;
+  record MailVc OldMailr;
+  record CompaniesBlock CBl;
+  row CompaniesBlock CBlrw;
+  Integer oldcomp,rwcnt,i,cnt,invstat,err;
+  Boolean foundf;
+  string 255 res,status_string,currency_code,tstr;
+  val amount_due,amount_full;
+  Longint invoiceno;
+  Boolean resf;
+
+  invstat = 1;
+  invoiceno = StringToLongint(invoice);
+
+  oldcomp = CurrentCompany;
+  BlockLoad(CBl);
+  rwcnt = MatRowCnt(CBl);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(CBl,i,CBlrw);
+    if (SetCompany(i+1,false)) then begin
+      if (FindCustomerAndInvoice(customercode,invoiceno,invstat,amount_due,amount_full,currency_code)) then begin
+        IVr.SerNr = invoiceno;
+        if (ReadFirstMain(IVr,1,true)) then begin
+          err = CreateMailFromIVD(IVr,Mailr,tstr,false,"");
+          if (err!=0) then begin
+            if (err>0) then begin
+              status_string = USetStr(err) & " " & tstr;
+            end;
+          end else begin
+            // RecordCopy(oldIVr,IVr);
+            // IVr.Prntdf = 1;
+            // RecordUpdate(oldIVr,IVr,false);
+            RecordCopy(OldMailr,Mailr);
+            Mailr.SendFlag = 1;
+            RecordUpdate(OldMailr,Mailr,true);
+            invstat = 0;
+            resf = true;
+          end;
+          goto LAnnaEmailInvoice;
+        end;
+      end;
+    end;
+  end;
+  status_string = "not found";
+LAnnaEmailInvoice:;
+  ResetCompany(oldcomp);
+  if (resf==true) then begin
+    status_string = "email sent";
+  end else begin
+    if (status_string=="") then begin
+      status_string = "could not send email";
+    end;
+  end;
+
+  res = "{";
+  res = res & "\"statusCode\": \"" & invstat & "\",";
+  res = res & "\"statusText\": \"" & status_string & "\",";
+  res = res & "\"amountDue\": \"" & SayValAsCurrency(amount_due,currency_code) & "\"";
+  res = res & "}";
+  
+  AnnaEmailInvoice = res;
+  return;
+end;
+
+global
+updating function string 255 AnnaEmailOrder(string customercode,string order)
+begin
+  record ORVc ORr;
+  record MailVc Mailr;
+  record MailVc OldMailr;
+  record CompaniesBlock CBl;
+  row CompaniesBlock CBlrw;
+  Integer oldcomp,rwcnt,i,cnt,invstat,err;
+  Boolean foundf;
+  string 255 res,status_string,currency_code,tstr;
+  val amount_due;
+  Longint orderno;
+  Boolean resf;
+
+  invstat = 1;
+  orderno = StringToLongint(order);
+
+  oldcomp = CurrentCompany;
+  BlockLoad(CBl);
+  rwcnt = MatRowCnt(CBl);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(CBl,i,CBlrw);
+    if (SetCompany(i+1,false)) then begin
+      if (FindCustomerAndOrder(customercode,orderno,invstat,amount_due,currency_code)) then begin
+        ORr.SerNr = orderno;
+        if (ReadFirstMain(ORr,1,true)) then begin
+          err = CreateMailFromORD(ORr,Mailr,tstr,"");
+          if (err!=0) then begin
+            if (err>0) then begin
+              status_string = USetStr(err) & " " & tstr;
+            end;
+          end else begin
+            // RecordCopy(oldORr,ORr);
+            // ORr.Prntdf = 1;
+            // RecordUpdate(oldORr,ORr,false);
+            RecordCopy(OldMailr,Mailr);
+            Mailr.SendFlag = 1;
+            RecordUpdate(OldMailr,Mailr,true);
+            resf = true;
+            invstat = 0;
+          end;
+          goto LAnnaEmailOrder;
+        end;
+      end;
+    end;
+  end;
+
+  status_string = "not found";
+
+LAnnaEmailOrder:;
+  ResetCompany(oldcomp);
+  if (resf==true) then begin
+    status_string = "email sent";
+  end else begin
+    if (status_string=="") then begin
+      status_string = "could not send email";
+    end;
+  end;
+
+  res = "{";
+  res = res & "\"statusCode\": \"" & invstat & "\",";
+  res = res & "\"statusText\": \"" & status_string & "\",";
+  res = res & "\"amountDue\": \"" & SayValAsCurrency(amount_due,currency_code) & "\"";
+  res = res & "}";
+  
+  AnnaEmailOrder = res;
+  return;
+end;
+
+global
+updating function string 255 AnnaEmailQuotation(string customercode, string quote)
+begin
+  record QTVc QTr;
+  record MailVc Mailr;
+  record MailVc OldMailr;
+  record CompaniesBlock CBl;
+  row CompaniesBlock CBlrw;
+  Integer oldcomp,rwcnt,i,cnt,invstat,err;
+  Boolean foundf,resf;
+  string 255 res,status_string,currency_code,tstr;
+  val amount_due;
+  Longint quoteno;
+
+  invstat = 1;
+  quoteno = StringToLongint(quote);
+
+  oldcomp = CurrentCompany;
+  BlockLoad(CBl);
+  rwcnt = MatRowCnt(CBl);
+
+LogText(0,"AnnaEmailQuotation tqno: " & quoteno & " cu: " & customercode);
+
+  for (i = 0; i<rwcnt; i = i + 1) begin
+    MatRowGet(CBl,i,CBlrw);
+    if (SetCompany(i+1,false)) then begin
+      if (FindCustomerAndQuotation(customercode,quoteno,invstat,amount_due,currency_code)) then begin
+        QTr.SerNr = quoteno;
+        if (ReadFirstMain(QTr,1,true)) then begin
+          err = CreateMailFromQTD(QTr,Mailr,tstr,"");
+          if (err!=0) then begin
+            if (err>0) then begin
+              status_string = USetStr(err) & " " & tstr;
+            end;
+          end else begin
+            // RecordCopy(oldQTr,QTr);
+            // QTr.Prntdf = 1;
+            // RecordUpdate(oldQTr,QTr,false);
+            RecordCopy(OldMailr,Mailr);
+            Mailr.SendFlag = 1;
+            RecordUpdate(OldMailr,Mailr,true);
+            resf = true;
+            invstat = 0;
+          end;
+          goto LAnnaEmailQuotation;
+        end;
+      end;
+    end;
+  end;
+
+  status_string = "not found";
+
+LAnnaEmailQuotation:;
+  ResetCompany(oldcomp);
+
+  if (resf==true) then begin
+    status_string = "email sent";
+  end else begin
+    if (status_string=="") then begin
+      status_string = "could not send email";
+    end;
+  end;
+
+  res = "{";
+  res = res & "\"statusCode\": \"" & invstat & "\",";
+  res = res & "\"statusText\": \"" & status_string & "\",";
+  res = res & "\"amountDue\": \"" & SayValAsCurrency(amount_due,currency_code) & "\"";
+  res = res & "}";
+  
+  AnnaEmailQuotation = res;
+  return;
+end;
+
+global
+function string 255 AnnaOpenBalanceSheetForContact(string contactno,string datestr1)
+begin
+  string 255 contact_no,res,tstr,datestr;
+  Integer oldcomp;
+  Integer status_code,res1,month,year;
+  record RcVc RepSpec;
+  date dt,sd,ed;
+
+  contact_no = Trim(contactno);
+  if (blank(contact_no)) then begin
+    status_code = 2; // Must have contact no
+    goto LAnnaOpenBalanceSheetForContact_response;
+  end;
+
+  datestr = Trim(datestr1);
+  if (nonblank(datestr)) then begin
+    dt = DateFromString(datestr,"YYYY-MM-DD");
+    month = GetMonth(dt);
+    year = GetYear(dt);
+  end else begin
+    month = GetMonth(AddMonth(CurrentDate,-1));
+    year = GetYear(CurrentDate);
+  end;
+  sd.Month = month;
+  sd.Year = year;
+
+  ReportDefaults(RepSpec,"BalRClass");
+  sd.Day = 1;
+  ed = AddDay(AddMonth(sd,1),-1);
+  RepSpec.sStartDate = sd;
+  RepSpec.sEndDate = ed;
+  RepSpec.Media = mtScreen;
+  RepSpec.repname = "BalRn";
+  FindRepDefHeader(RepSpec.repname,RepSpec.shortname,tstr);
+  RepSpec.f1 = tstr;
+  RepSpec.AccSpec = 1;
+
+  oldcomp = CurrentCompany;
+  SetCompany(1,false);
+  res1 = OpenReportForContact(contact_no,RepSpec);
+  ResetCompany(oldcomp);
+
+  if (res1!=0) then begin
+    status_code = 9 + res1; // Couldn't open report, code from RunReportFromClient in C
+    goto LAnnaOpenBalanceSheetForContact_response;
+  end;
+
+LAnnaOpenBalanceSheetForContact_response:;
+  res = "{";
+  res = res & "\"statusCode\": \"" & status_code & "\"";
+  res = res & "}";
+
+  AnnaOpenBalanceSheetForContact = res;
+  return;
+end;
+
+//not acyually setup in code
+global
+function string 255 AnnaRefreshCurrencyRates(string datestr1)
+begin
+  record ERBlock ERb;
+  record RcVc RepSpec;
+  string 255 contact_no,tstr,datestr,errstr,res;
+  Integer oldcomp,status_code,month,year;
+  date dt,sd,ed;
+  LongInt errno;
+  //Integer nwn;
+  //record RcVc RepSpec;
+  Boolean found;
+
+  datestr = Trim(datestr1);
+  if (nonblank(datestr)) then begin
+    dt = DateFromString(datestr,"YYYY-MM-DD");
+    month = GetMonth(dt);
+    year = GetYear(dt);
+  end else begin
+    month = GetMonth(AddMonth(CurrentDate,-1));
+    year = GetYear(CurrentDate);
+  end;
+
+
+  BlockLoad(ERb);
+  RepSpec.d1 = AddDay(CurrentDate,-1);
+//  RepSpec.flags[0] = 1;
+  RepSpec.flags[1] = ERb.OverwriteExistRate;
+
+  found = GetExchangeRateFromBank(RepSpec,true,errno,errstr);
+
+  if (found) then begin
+    status_code = 9 + 1; // Couldn't open report, code from RunReportFromClient in C
+    goto LAnnaRefreshCurrencyRates_response;
+  end;
+
+LAnnaRefreshCurrencyRates_response:;
+  res = "{";
+  res = res & "\"statusCode\": \"" & status_code & "\"";
+  res = res & "}";
+
+  AnnaRefreshCurrencyRates = res;
+  return;
+end;
+
+global
+function string 255 AnnaUICommand(string contact_no,string action)
+begin
+  string 255 res;
+  Integer status_code;
+  record CUVc CUr;
+  Integer wn;
+
+LogText(0,"AnnaUICommand RAN");
+/*
+  if (blank(contact_no)) then begin
+  status_code = 2; // Must have contact no
+  goto LAnnaUICommand;
+  end;
+  CUr.Code = contact_no;
+  if (ReadFirstMain(CUr,1,true)==false) then begin
+    LogText(0,"OpenReportForContact failed to find contact " & contact_no);
+    goto LAnnaUICommand;
+  end;
+*/
+  switch (action) begin
+    case "UIOpenTempTest":
+      ToolAction(1,ToolNext,0,false);
+    case "UIOpenCalendar":
+      ToolAction(1,ToolCalendar,0,false);
+    case "ToolMail":
+      ToolAction(1,ToolMail,0,false);         //does not work because mailbox is not set (user not set correctly)
+    case "UIOpenConferences":
+      ToolAction(1,ToolConferences,0,false);  //does not work because mailbox is not set (user not set correctly)
+    case "UIOpenTasks":
+      ToolAction(1,ToolTodo,0,false);         //crashes because user is not set prooperly
+    case "UIOpenResources":
+      ToolAction(1,ToolResources,0,false);    //crashes because user is not set prooperly
+    case "UIOpenSmartApps":
+      ToolAction(1,ToolForms,0,false);        //does not open
+    case "UIOpenFeedReader":
+      ToolAction(1,ToolAggregator,0,false);   //does not open
+    case "UIOpenRegisters":
+      ToolAction(1,ToolRegs,0,false);
+    case "UIOpenSettings":
+      ToolAction(1,ToolSetup,0,false);
+    case "UIOpenReports":
+      ToolAction(1,ToolReport,0,false);
+    case "UIOpenRoutines":
+      ToolAction(1,ToolRoutines,0,false);
+    case "UIOpenForms":
+      ToolAction(1,ToolDocument,0,false);
+    case "UIOpenModules":
+      ToolAction(1,ToolModule,0,false);
+    case "UIOpenCompanies":
+      ToolAction(1,ToolOpen,0,false);
+    case "UICloseWindow":
+//TODO probably need to be moved to a seprate function
+      wn = CurWindow;
+      CloseWindow(wn);
+    otherwise
+      LogText(0,"received invalid action: " & action);
+      status_code = 3; //invalid parameters
+  end;
+
+LAnnaUICommand:;
+  res = "{";
+  res = res & "\"statusCode\": \"" & status_code & "\"";
+  res = res & "}";
+  
+  AnnaUICommand = res;
+  return;
+end;
+
+
+/*      Invoices      */
+
+function string 255 AnnaCheckInvoiceStatus(string customercode,string invoicenumstr)
+begin
+  record CompaniesBlock CBl;
+  row CompaniesBlock CBlrw;
+  Integer oldcomp,rwcnt,i,cnt,invstat;
+  Boolean foundf;
+  string 255 status_string,currency_code,res;
+  val amount_due,amount_full;
+  Longint invoiceno;
+
+  invoiceno = StringToLongint(invoicenumstr);
+
+  oldcomp = CurrentCompany;
+  BlockLoad(CBl);
+  rwcnt = MatRowCnt(CBl);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(CBl,i,CBlrw);
+    if (SetCompany(i+1,false)) then begin
+      if (FindCustomerAndInvoice(customercode,invoiceno,invstat,amount_due,amount_full,currency_code)) then begin
+        foundf = true;
+        goto LAnnaCheckInvoiceStatus;
+      end;
+    end;
+  end;
+
+LAnnaCheckInvoiceStatus:;
+  ResetCompany(oldcomp);
+
+  status_string = "not found";
+  if (foundf==true) then begin
+    switch (invstat) begin
+      case 0: status_string = "paid";
+      case 1: status_string = "awaiting payment";
+      case 2: status_string = "overdue";
+      case 3: status_string = "not registered";
+    end;
+  end;
+  res = "{";
+  res = res & "\"statusCode\": \"" & invstat & "\",";
+  res = res & "\"statusText\": \"" & status_string & "\",";
+  res = res & "\"amountDue\": \"" & SayValAsCurrency(amount_due,currency_code) & "\"";
+  res = res & "}";
+  
+  AnnaCheckInvoiceStatus = res;
+  return;
+end;
+
+function integer FindInvoicesReverse(var integer count,string custcode,var string invoicelist,boolean paidonlyf)
+begin
+  Boolean THrS;
+  record IVVc IVr;
+  integer count2,invstat,res;
+  string 255 comma;
+  val amount_due,amount_full;
+
+  count2 = count;
+  count = 0;
+  THrS = true;
+  IVr.CustCode=custcode;
+  while (LoopKey("CustCode",IVr,1,THrS)) begin
+    if (IVr.CustCode!=custcode) then begin THrS = false; end;
+    if (THrS and IVr.OKFlag<>0) then begin
+      GetIVStatus(IVr,invstat,amount_due,amount_full);
+      if (paidonlyf==false or invstat!=0) then begin
+        invoicelist = invoicelist & comma & IVr.SerNr & " for " & SayValAsCurrency(amount_due,IVr.CurncyCode) & " " & SayAsDate(IVr.InvDate);
+        count = count + 1;
+        res = 2;
+        if (count>=count2) then begin
+          THrS = false;
+          res = 1;
+        end;
+        comma = ", ";
+      end;
+    end;
+  end;
+
+  FindInvoicesReverse = res;
+  return;
+end;
+
+function integer FindInvoices(var integer count,string custcode,var string invoicelist,Boolean openinvoices)
+begin
+  Boolean THrS;
+  record IVVc IVr;
+  integer count2,invstat,res;
+  string 255 comma;
+  val amount_due,amount_full;
+
+  count2 = count;
+  count = 0;
+  THrS = true;
+  IVr.CustCode=custcode;
+  while (LoopBackKey("CustCode",IVr,1,THrS)) begin
+    if (IVr.CustCode!=custcode) then begin THrS = false; end;
+    if (THrS and IVr.OKFlag<>0) then begin
+      GetIVStatus(IVr,invstat,amount_due,amount_full);
+      if (openinvoices==false or invstat!=0) then begin
+        invoicelist = invoicelist & comma & IVr.SerNr;
+        
+        if (openinvoices) then begin
+          invoicelist = invoicelist & " due amount " & SayValAsCurrency(amount_due,IVr.CurncyCode);
+        end else begin
+          invoicelist = invoicelist & " for " & SayValAsCurrency(amount_full,IVr.CurncyCode);
+        end;
+        
+        invoicelist = invoicelist & " " & SayAsDate(IVr.InvDate);
+        
+        count = count + 1;
+        res = 2;
+        if (count>=count2) then begin
+          THrS = false;
+          res = 1;
+        end;
+        comma = ", ";
+      end;
+    end;
+  end;
+
+  FindInvoices = res;
+  return;
+end;
+
+global
+function string 255 AnnaRequestInvoices(string custcode,string countstr,string typestr)
+begin
+  record CompaniesBlock CBl;
+  row CompaniesBlock CBlrw;
+  Integer oldcomp,rwcnt,i,cnt;
+  string 255 res,invoicelist;
+  Integer count,type,status_code;
+
+  count = StringToInt(countstr);
+  type = StringToInt(typestr);
+  if (blank(count) or count<1 or count>6) then begin
+    count = 6;
+  end;
+  
+  oldcomp = CurrentCompany;
+  BlockLoad(CBl);
+  rwcnt = MatRowCnt(CBl);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(CBl,i,CBlrw);
+    if (SetCompany(i+1,false)) then begin
+      switch (type) begin
+        case 0:   //search all
+          status_code = FindInvoices(count,custcode,invoicelist,false);
+        case 1:   //search unpaid
+          status_code = FindInvoices(count,custcode,invoicelist,true);
+        case 2:   //search unpaid reverse
+          status_code = FindInvoicesReverse(count,custcode,invoicelist,true);
+        default:
+          goto LAnnaRequestInvoices;
+      end;
+    end;
+  end;
+LAnnaRequestInvoices:;
+  ResetCompany(oldcomp);
+  res = "{";
+  res = res & "\"statusCode\": \"" & status_code & "\",";
+  res = res & "\"statusText\": \"" & invoicelist & "\",";
+  res = res & "\"InvoiceCount\": \"" & count & "\"";
+  res = res & "}";
+  
+  AnnaRequestInvoices = res;
+  return;
+end;
+
+global
+procedure DoAnnaHangup(string conversationid)
+begin
+  HangupPhonecallForConversation(conversationid);
+  return;
+end;
+
+global
+procedure AnnaHangup(string conversationid)
+begin
+
+  if (blank(conversationid)) then begin goto LAnnaHangup; end;
+  queued.DoAnnaHangup(conversationid);
+  
+LAnnaHangup:;
+  return;
+end;
+
+global
+procedure DoAnnaTransferCall(string conversationid,string target)
+begin
+  TransferPhonecallForConversation(conversationid,target);
+  return;
+end;
+
+global
+procedure DoAnnaStop(string conversationid)
+begin
+  TalkBotStop(conversationid);
+  return;
+end;
+
+global
+procedure AnnaStop(string conversationid)
+begin
+
+  if (blank(conversationid)) then begin goto LAnnaStop; end;
+  queued.DoAnnaStop(conversationid);
+  
+LAnnaStop:;
+  return;
+end;
+
+global
+function string 255 AnnaTransferCall(string conversationid,string target)
+begin
+  Integer status_code;
+  string 255 res;
+  
+  if (blank(conversationid) or blank(target)) then begin goto LAnnaTransferCall; end;
+  
+  queued.DoAnnaTransferCall(conversationid,target);
+  status_code = 1;
+  
+LAnnaTransferCall:;
+  res = "{";
+  res = res & "\"statusCode\": \"" & status_code & "\"";
+  res = res & "}";
+  
+  AnnaTransferCall = res;
+  return;
+end;
+
+/*       company info         */
+
+global
+function string 255 AnnaRequestCompanyAddress()
+begin
+  record CYBlock CYb;
+  string 255 res,address,stat;
+  
+  BlockLoad(CYb);
+  address = CYb.Addr0 & " " & CYb.Addr1 & " " & CYb.Addr2 & " " & CYb.Addr3;
+  stat = 1;
+  res = "{";
+  res = res & "\"statusCode\": \"" & stat & "\",";
+  res = res & "\"Info\": \"" & address & "\"";
+  res = res & "}";
+  
+  AnnaRequestCompanyAddress = res;
+  return;
+end;
+
+global
+function string 255 AnnaRequestCompanyCEO()
+begin
+  record CYBlock CYb;
+  string 255 res,stat;
+  
+  BlockLoad(CYb);
+  stat = 1;
+  if (blank(CYb.Manager)) then begin
+    stat = 0;
+  end;
+  res = "{";
+  res = res & "\"statusCode\": \"" & stat & "\",";
+  res = res & "\"Info\": \"" & CYb.Manager & "\"";
+  res = res & "}";
+
+  AnnaRequestCompanyCEO = res;
+  return;
+end;
+
+global
+function string 255 AnnaRequestCompanyAccountant()
+begin
+  record CYBlock CYb;
+  string 255 res,stat;
+  
+  BlockLoad(CYb);
+  stat = 1;
+  if (blank(CYb.ChiefAccountant)) then begin
+    stat = 0;
+  end;
+  res = "{";
+  res = res & "\"statusCode\": \"" & stat & "\",";
+  res = res & "\"Info\": \"" & CYb.ChiefAccountant & "\"";
+  res = res & "}";
+
+  AnnaRequestCompanyAccountant = res;
+  return;
+end;
+
+global
+function string 255 AnnaRequestCompanyEmail()
+begin
+  record CYBlock CYb;
+  string 255 res,stat;
+
+  BlockLoad(CYb);
+  stat = 1;
+  if (blank(CYb.emailAddr)) then begin
+    stat = 0;
+  end;
+  res = "{";
+  res = res & "\"statusCode\": \"" & stat & "\",";
+  res = res & "\"Info\": \"" & CYb.emailAddr & "\"";
+  res = res & "}";
+
+  AnnaRequestCompanyEmail = res;
+  return;
+end;
+
+global
+function string 255 AnnaRequestCompanyPostcode()
+begin
+  record CYBlock CYb;
+  string 255 res,stat;
+
+  BlockLoad(CYb);
+  stat = 1;
+  if (blank(CYb.Addr4)) then begin
+    stat = 0;
+  end;
+  res = "{";
+  res = res & "\"statusCode\": \"" & stat & "\",";
+  res = res & "\"Info\": \"" & CYb.Addr4 & "\"";
+  res = res & "}";
+  
+  AnnaRequestCompanyPostcode = res;
+  return;
+end;
+
+global
+function string 255 AnnaRequestCompanyWebsite()
+begin
+  record CYBlock CYb;
+  string 255 res,stat;
+
+  BlockLoad(CYb);
+  stat = 1;
+  if (blank(CYb.wwwAddr)) then begin
+    stat = 0;
+  end;
+  res = "{";
+  res = res & "\"statusCode\": \"" & stat & "\",";
+  res = res & "\"Info\": \"" & CYb.wwwAddr & "\"";
+  res = res & "}";
+  
+  AnnaRequestCompanyWebsite = res;
+  return;
+end;
+
+global
+function string 255 AnnaRequestCompanyVAT()
+begin
+  record CYBlock CYb;
+  string 255 res;
+
+  BlockLoad(CYb);
+  if (blank(CYb.VATNr)) then begin
+    res = "This company information is not available.  What else can I do for you?";
+  end else begin
+    res = "The company <say-as interpret-as='letters'>VAT</say-as> number is " & CYb.VATNr;
+  end;
+  
+  AnnaRequestCompanyVAT = res;
+  return;
+end;
+
+global
+function string 255 AnnaRequestCompanyVAT2()
+begin
+  record CYBlock CYb;
+  string 255 res,stat;
+
+  BlockLoad(CYb);
+  stat = 1;
+  if (blank(CYb.VATNr)) then begin
+    stat = 0;
+  end;
+  res = "{";
+  res = res & "\"statusCode\": \"" & stat & "\",";
+  res = res & "\"Info\": \"" & CYb.VATNr & "\"";
+  res = res & "}";
+  
+  AnnaRequestCompanyVAT2 = res;
+  return;
+end;
+
+global
+function string 255 AnnaDisplayActivities(string ctxkey,json js)
+begin
+  record ActVc Actr;
+  string 255 res,stat,keystr,shortcode,sdate;
+  date ddate;
+  integer cnt;
+  boolean TrHs,foundf;
+  
+  shortcode = GetChatBotContextValue(ctxkey,"shortcode");
+  if (blank(shortcode)) then begin
+    res = "You do not have a shortcode setup, so I am unable to check your activities";
+    goto LAnnaDisplayActivities;
+  end;
+  sdate = JSONGet(js,"actions/[0]/parameters/date");
+  if (blank(sdate)) then begin
+    ddate = CurrentDate;
+  end else begin
+    ddate = stringtodate(sdate);
+  end;
+  keystr = "DateUserMain:" & shortcode;
+  Actr.CalTimeFlag = 1;
+  Actr.TransDate = ddate;
+  TrHs = true;
+  cnt = 0;
+  while (LoopKey(keystr,Actr,2,TrHs)) begin
+    foundf = true;
+    if (SetInSet(shortcode,Actr.MainPersons)==false) then begin TrHs = false; foundf = false; end;
+    if (Actr.TodoFlag!=2 and Actr.TodoFlag!=0) then begin foundf = false; end;
+    if (Actr.TransDate!=ddate) then begin TrHs = false; foundf = false; end;
+    if (foundf) then begin
+      res = res & Actr.Comment & " at " & SayAsTime(Left(Actr.StartTime,5));
+      cnt = cnt + 1;
+      if (cnt>10) then begin   //limit to 10 for now
+        TrHs = false;
+      end;
+      if (cnt>0) then begin
+        res = res & ", ";
+      end;
+    end;
+  end;
+  if (cnt>0) then begin
+    res = "Here are your activities for " & SayAsDate(ddate) & ". " & res;
+  end else begin
+    res = "You have no activities for " & SayAsDate(ddate);
+  end;
+  
+LAnnaDisplayActivities:;
+  
+  AnnaDisplayActivities = res;
+  return;
+end;
+
+function string 255 AnnaJsonWrapResponseText(string text)
+begin
+  string 255 res;
+  
+  res = "{";
+  res = res & "\"statusCode\": \"1\",";
+  res = res & "\"text\": \"" & text & "\"";
+  res = res & "}";
+  
+  AnnaJsonWrapResponseText = res;
+  return;
+end;
+
+global
+function string 255 DoLocalAnnaRequest(var json js,string action_name,LongInt action_idx)
+begin
+  string 255 server,path,res,param1,param2,param3,conversationid,ctxkey,compcode;
+  Boolean phonef;
+  Integer oldcomp;
+  
+  conversationid = JSONGet(js,"context/conversation_id");
+  if (IsConversationThroughPhonecall(conversationid)) then begin
+    phonef = true;
+    oldcomp = CurrentCompany;
+    compcode = GetChatBotContextValue(ctxkey,"companycode");
+    SetCompanyCode(compcode,false);
+  end;
+  ctxkey = JSONGet(js,"context/chatBotContextKey");
+  
+  switch (action_name) begin
+    case "IdentifyCaller":
+      if (JSONNodeExists(js,"context/annaSIPCallerID")) then begin
+        param1 = JSONGet(js,"context/annaSIPCallerID");
+      end;
+      if (JSONNodeExists(js,"context/chatBotUserCode")) then begin
+        param1 = JSONGet(js,"context/chatBotUserCode");
+      end;
+      res = AnnaIdentifyCaller(ctxkey,param1);
+    case "GetEmployeeTransferURI":
+      param1 = JSONGet(js,"actions/[" & action_idx & "]/parameters/contactno");
+      res = AnnaGetEmployeeTransferURI(param1);
+    case "AddItemToOrder":
+      param1 = JSONGet(js,"context/caller_id/customerCode");
+      param2 = URLEncode(JSONGet(js,"actions/[" & action_idx & "]/parameters/item"));
+      param3 = URLEncode(JSONGet(js,"actions/[" & action_idx & "]/parameters/number"));
+      res = qupdating.AnnaAddItemToOrder(param1,param2,param3);
+    case "CheckInvoiceStatus":
+      param1 = JSONGet(js,"context/caller_id/customerCode");
+      param2 = JSONGet(js,"actions/[" & action_idx & "]/parameters/invoiceno");
+      res = AnnaCheckInvoiceStatus(param1,param2);
+    case "GetLastPayments":
+      param1 = JSONGet(js,"context/caller_id/customerCode");
+      param2 = JSONGet(js,"actions/[" & action_idx & "]/parameters/count");
+      res = AnnaGetLastPayments(param1,param2);
+    case "GetPlannedDeliveryDate":
+      param1 = JSONGet(js,"context/caller_id/customerCode");
+      param2 = JSONGet(js,"actions/[" & action_idx & "]/parameters/orderno");
+      res = AnnaGetPlannedDeliveryDate(param1,param2);
+    case "GetOrdersPendingDelivery":
+      param1 = JSONGet(js,"context/caller_id/customerCode");
+      param2 = JSONGet(js,"actions/[" & action_idx & "]/parameters/count");
+      res = AnnaGetOrdersPendingDelivery(param1,param2);
+    case "GetStockLevelOfItem":
+      param1 = JSONGet(js,"context/caller_id/customerCode");
+      param2 = JSONGet(js,"actions/[" & action_idx & "]/parameters/item_code");
+      res = AnnaGetStockLevelOfItem(param1,param2);
+    case "CreateNewOrder":
+      param1 = JSONGet(js,"context/caller_id/customerCode");
+      res = qupdating.AnnaCreateNewOrder(param1);
+    case "CreateNewQuotation":
+      param1 = JSONGet(js,"context/caller_id/customerCode");
+      res = qupdating.AnnaCreateNewQuotation(param1);
+    case "AddItemToQuotation":
+      param1 = JSONGet(js,"context/caller_id/customerCode");
+      param2 = URLEncode(JSONGet(js,"actions/[" & action_idx & "]/parameters/item"));
+      param3 = URLEncode(JSONGet(js,"actions/[" & action_idx & "]/parameters/number"));
+      res = qupdating.AnnaAddItemToQuotation(param1,param2,param3);
+    case "EmailInvoice":
+      param1 = JSONGet(js,"context/caller_id/customerCode");
+      param2 = JSONGet(js,"actions/[" & action_idx & "]/parameters/invoiceno");
+      res = qupdating.AnnaEmailInvoice(param1,param2);
+    case "EmailOrder":
+      param1 = JSONGet(js,"context/caller_id/customerCode");
+      param2 = JSONGet(js,"actions/[" & action_idx & "]/parameters/orderno");
+      res = qupdating.AnnaEmailOrder(param1,param2);
+    case "EmailQuotation":
+      param1 = JSONGet(js,"context/caller_id/customerCode");
+      param2 = JSONGet(js,"actions/[" & action_idx & "]/parameters/quoteno");
+      res = qupdating.AnnaEmailQuotation(param1,param2);
+    case "OpenBalanceSheetForContact":
+      param1 = JSONGet(js,"context/caller_id/customerCode");
+      param2 = JSONGet(js,"actions/[" & action_idx & "]/parameters/date");
+      res = AnnaOpenBalanceSheetForContact(param1,param2);
+    case "UICommand":
+      param1 = JSONGet(js,"actions/[" & action_idx & "]/parameters/action");
+      param2 = JSONGet(js,"context/caller_id/customerCode");
+      res = AnnaUICommand(param1,param2);
+    case "RequestInvoices":
+      param1 = JSONGet(js,"context/caller_id/customerCode");
+      param2 = JSONGet(js,"actions/[" & action_idx & "]/parameters/count");
+      param3 = JSONGet(js,"actions/[" & action_idx & "]/parameters/type");
+      res = AnnaRequestInvoices(param1,param2,param3);
+    case "RequestCompanyAddress":
+      res = AnnaRequestCompanyAddress;
+    case "RequestCompanyCEO":
+      res = AnnaRequestCompanyCEO;
+    case "RequestCompanyAccountant":
+      res = AnnaRequestCompanyAccountant;
+    case "RequestCompanyEmail":
+      res = AnnaRequestCompanyEmail;
+    case "RequestCompanyPostcode":
+      res = AnnaRequestCompanyPostcode;
+    case "RequestCompanyWebsite":
+      res = AnnaRequestCompanyWebsite;
+    case "RequestCompanyVAT":
+      res = AnnaRequestCompanyVAT2;
+    case "StopTalking":
+      AnnaStop(conversationid);  //when adding to anna session dont save intent, should we use ctxkey
+    case "Hangup":
+      AnnaHangup(conversationid); //should we use ctxkey
+    case "TransferToQueue":
+      param1 = JSONGet(js,"actions/[" & action_idx & "]/parameters/type");
+      res = AnnaTransferCall(conversationid,param1);
+    case "RequestActivities":
+      //param1 = JSONGet(js,"actions/[" & action_idx & "]/parameters/date");
+      param1 = AnnaDisplayActivities(ctxkey,js);
+      res = AnnaJsonWrapResponseText(param1);
+  end;
+  LogTextToFile("WatsonSOE.hal:DoLocalAnnaRequest SERP performed Anna action '" & action_name & "', with result " & res,"json.log");
+  
+  if (phonef) then begin ResetCompany(oldcomp); end;
+  DoLocalAnnaRequest = res;
+  return;
+end;
+
+//we are kind of neglecting this, should it be discontinued?
+global
+procedure WebAI_AnnaAction()
+begin
+  string 255 key,action_name,res,param1,param2,param3,ctxkey;
+  Integer status_code;
+//TODO if we want to use this ctxkey needs to be supplied from the call ctxkey = JSONGet(js,"context/conversation_id");
+
+  key = WebGetArg("key");
+  if (key!="N6U4B1uzxCQB") then begin
+    status_code = 1; // Bad key
+    WebOutString("{");
+    WebOutString("\"statusCode\": \"" & status_code & "\"");
+    WebOutString("}");
+    goto LWebAI_AnnaAction;
+  end;
+  action_name = WebGetArg("action");
+  param1 = WebGetArg("param1");
+  param2 = WebGetArg("param2");
+  param3 = WebGetArg("param3");
+  
+  switch (action_name) begin
+    case "IdentifyCaller":              res = AnnaIdentifyCaller(ctxkey,param1);
+    case "GetEmployeeTransferURI":      res = AnnaGetEmployeeTransferURI(param1);
+    case "AddItemToOrder":              res = qupdating.AnnaAddItemToOrder(param1,param2,param3);
+    case "CheckInvoiceStatus":          res = AnnaCheckInvoiceStatus(param1,param2);
+    case "GetLastPayments":             res = AnnaGetLastPayments(param1,param2);
+    case "GetPlannedDeliveryDate":      res = AnnaGetPlannedDeliveryDate(param1,param2);
+    case "GetOrdersPendingDelivery":    res = AnnaGetOrdersPendingDelivery(param1,param2);
+    case "GetStockLevelOfItem":         res = AnnaGetStockLevelOfItem(param1,param2);
+    case "CreateNewOrder":              res = qupdating.AnnaCreateNewOrder(param1);
+    case "CreateNewQuotation":          res = qupdating.AnnaCreateNewQuotation(param1);
+    case "AddItemToQuotation":          res = qupdating.AnnaAddItemToQuotation(param1,param2,param3);
+    case "EmailInvoice":                res = qupdating.AnnaEmailInvoice(param1,param2);
+    case "EmailOrder":                  res = qupdating.AnnaEmailOrder(param1,param2);
+    case "EmailQuotation":              res = qupdating.AnnaEmailQuotation(param1,param2);
+    case "OpenBalanceSheetForContact":  res = AnnaOpenBalanceSheetForContact(param1,param2);
+    case "UICommand":                   res = AnnaUICommand(param1,param2);
+    case "RequestInvoices":             res = AnnaRequestInvoices(param1,param2,param3);
+    case "RequestCompanyAddress":       res = AnnaRequestCompanyAddress;
+    case "RequestCompanyCEO":           res = AnnaRequestCompanyCEO;
+    case "RequestCompanyAccountant":    res = AnnaRequestCompanyAccountant;
+    case "RequestCompanyEmail":         res = AnnaRequestCompanyEmail;
+    case "RequestCompanyPostcode":      res = AnnaRequestCompanyPostcode;
+    case "RequestCompanyWebsite":       res = AnnaRequestCompanyWebsite;
+    case "RequestCompanyVAT":           res = AnnaRequestCompanyVAT;
+  end;
+  WebOutString(res);
+  LogTextToFile("WatsonSOE.hal:WebAI_AnnaAction SOE performed Anna action '" & action_name & "', with result " & res,"json.log");
+  
+LWebAI_AnnaAction:;
+
+end;
+
+procedure UnexpectedDTMF(string dtmf,string conversationid)
+begin
+//anna stop
+
+//play hardcoded? message
+
+
+end;
+
+global
+procedure DTMFReceived(string dtmf,string conversationid)
+begin
+  //TODO add cbctx as parameter
+  //TODO needs decision weather what we want to actually do with this, needs context. Transfer immidietly, play transfer options, other?
+  
+  //how bad is it speed wise if we have a get context (loop through gp->annacontencxt to find correct anna, then return its context).
+  //can we be too smart for our good and have a hstring variable returned to hal that is the datapointer to that anna object?
+  
+  switch (0) begin
+    case "contextTransfer":
+    case "contextOther":
+    otherwise
+      UnexpectedDTMF(dtmf,conversationid);
+  end;
+  
+  LogText(0,"DTMF received " & dtmf & " on conversation " & conversationid);
+
+  return;
+end;
+
+global
+procedure PhonecallToChatBot(string callid,string callerid,string calledext,string sipserveraddr,string text_in,var string text_out)
+begin
+  Boolean result;
+  string 255 ctxkey,sanitized_text_in,reply,initstr;
+  area a_context;
+  record Anna2ContextVc Ctxr;
+  array record Anna2ChatNodeVc nodestack;
+  array string 255 roles,messages;
+  Integer oldcomp;
+
+  ctxkey = callid;
+  
+  switch (ActiveIntentEngine) begin
+    case "Anna2":
+      oldcomp = CurrentCompany;
+      SetCompany(1,false);
+      
+      initstr = GetChatBotContextValue(ctxkey,"initstr");
+      
+      if (initstr<>"initialized") then begin
+        LogText(0,"PhonecallToChatBot, initializing Anna2");
+        
+        AI_InitIntents;
+        
+        RecordNew(Ctxr);
+        PushNodeCode(nodestack,Anna2StartNode);
+
+        ChatBotContext_SetRecord(ctxkey,"A2Ctx",Ctxr);
+
+        SetChatBotContextValue(ctxkey,"currentLanguage","en");
+
+        SetChatBotContextValue(ctxkey,"initstr","initialized");
+      end else begin
+        Anna2_LoadCbctx(ctxkey,Ctxr,nodestack,roles,messages);
+      end;
+      
+      text_out = Anna2Chat_Process(Ctxr,nodestack,text_in);
+      
+      LogText(0,"PhonecallToChatBot text_out " & text_out);
+      
+      Anna2_StoreCbctx(ctxkey,Ctxr,nodestack,roles,messages);
+      
+      ResetCompany(oldcomp);
+    case "IBM":
+      GetChatbotContextArea(ctxkey,"AssistantContext",a_context);
+      if (GetAreaLength(a_context)==0) then begin
+        AddTextToArea("{",a_context);
+        AddTextToArea("\"context\": {",a_context);
+        AddTextToArea("\"annaSIPCallerID\": \"" & callerid & "\",",a_context);
+        AddTextToArea("\"annaSIPCalledExtension\": \"" & calledext & "\",",a_context);
+        AddTextToArea("\"chatBotContextKey\": \"" & ctxkey & "\"",a_context);
+        AddTextToArea("},",a_context);
+        AddTextToArea("\"user_id\": \"HansaWorld\",",a_context);   //Billing: Customer number? contract number? phone number?
+        AddTextToArea("\"input\": {",a_context);
+        AddTextToArea("\"text\": \"" & text_in & "\"",a_context);
+        AddTextToArea("}",a_context);
+        AddTextToArea("}",a_context);
+        SetChatbotContextArea(ctxkey,"AssistantContext",a_context);
+      end;
+      
+      TalkBotReplaceText(ctxkey,text_in,sanitized_text_in,false);
+      
+      WatsonSendToChatBot(ctxkey,sanitized_text_in,reply);
+//    case "botpress":
+//      BotpressPhonecallToChatBot(sanitized_text_in,text_out,sessionID,"text");
+  end;
+  
+  //TalkBotReplaceText(ctxkey,reply,text_out,true);
+end;

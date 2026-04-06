@@ -1,0 +1,121 @@
+external inner procedure HT2Per(Date,Date,var string);
+
+global
+procedure YapilyAuthHistRn(record RcVc RepSpec)
+begin
+  Integer rw;
+  string 255 tstr;
+  record PMBlock PMb;
+  row PMBlock PMbrw;
+  record YapilyAuthHistVc YapilyAuthHistr;
+  integer rwcnt,i;
+  string 255 pmaccnr;
+  Boolean foundf,testf;
+  
+  StartReportJob("Yapily Authorisation History");
+  // HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1); rw = rw + 1;
+  if (nonblank(RepSpec.f1)) then begin
+    Header(rw,"Payment Mode: " & RepSpec.f1,1); 
+    rw = rw + 1; 
+  end;
+  if (nonblank(RepSpec.f2)) then begin
+    Header(rw,"Bank: " & RepSpec.f2,1); 
+    rw = rw + 1; 
+  end;
+  tstr = "";
+  if (RepSpec.flags[1]) then begin tstr = "Bank Transactions"; end;
+  if (RepSpec.flags[2]) then begin 
+    if (blank(tstr)) then begin
+      tstr = "Payments";
+    end else begin
+      tstr = tstr & ", ";
+      tstr = tstr & "Payments";
+    end;
+  end;
+  if (RepSpec.flags[3]) then begin 
+    if (blank(tstr)) then begin
+      tstr = "Consents Revoked";
+    end else begin
+      tstr = tstr & ", ";
+      tstr = tstr & "Consents Revoked";
+    end;
+  end;
+  if (nonblank(tstr)) then begin
+    if (nonblank(RepSpec.f1)) then begin
+      Header(rw,"Include: " & tstr,1); 
+      rw = rw + 1; 
+    end;
+  end;
+  EndHeader;
+  
+  SetRepCol(3,40);
+  SetRepCol(4,100);
+  SetRepCol(5,210);
+  SetRepCol(6,300);
+  SetRepCol(7,400);
+  
+  StartFormat(15);
+  OutString(0,0,"No.",false);
+  OutString(3,0,"Date",false);
+  OutString(4,0,"Account No.",false);
+  OutString(5,0,"Bank",false);
+  OutString(6,0,"Type",false);
+  OutString(7,0,"Revoked",false);
+  OutString(1,0,"Expired",true);
+  EndFormat;
+  StartFormat(1);
+  Black_divider(0,1);
+  EndFormat;
+
+  BlockLoad(PMb);
+
+  foundf = true;
+  YapilyAuthHistr.ConsentDate = RepSpec.sEndDate;
+  while (LoopBackKey("ConsentDate",YapilyAuthHistr,1,foundf)) begin
+    if (DateInRange(YapilyAuthHistr.ConsentDate,RepSpec.sStartDate,RepSpec.sEndDate)==false) then begin foundf = false; end;
+    if (foundf) then begin
+      testf = false;
+      if (RepSpec.flags[1] and YapilyAuthHistr.Type==kYapilyAuthTypeBankTrans) then begin testf = true; end;
+      if (RepSpec.flags[2] and YapilyAuthHistr.Type==kYapilyAuthTypePayment) then begin testf = true; end;
+      if (RepSpec.flags[3] and YapilyAuthHistr.Type==kYapilyAuthTypeRevokeAuth) then begin testf = true; end;
+      if (nonblank(RepSpec.f2) and RepSpec.f2!=YapilyAuthHistr.PMBankCode) then begin testf = false; end;
+      if (testf) then begin
+        if (nonblank(RepSpec.f1)) then begin
+          testf = false;
+          rwcnt = MatRowCnt(PMb);
+          for (i=0;i<rwcnt;i=i+1) begin
+            MatRowGet(PMb,i,PMbrw);
+            if (PMbrw.Code==RepSpec.f1 and PMbrw.BankNr==YapilyAuthHistr.PMAccNr) then begin
+              testf = true;
+              i = rwcnt;
+            end;
+          end;
+        end;
+        if (testf) then begin
+          StartFormat(15);
+          OutString(0,0,YapilyAuthHistr.SerNr,false);
+          OutString(3,0,YapilyAuthHistr.ConsentDate,false);
+          OutString(4,0,YapilyAuthHistr.PMAccNr,false);
+          OutString(5,0,StringFromStringSet(696,YapilyAuthHistr.YapilyInstitutionId),false);
+          OutString(6,0,StringFromSet(747,YapilyAuthHistr.Type),false);
+          if (YapilyAuthHistr.RevokedFlag) then begin
+            OutString(7,0,uchr(10003),false);
+          end;
+          if (YapilyAuthHistr.ExpiredFlag) then begin
+            OutString(1,0,uchr(10003),true);
+          end;
+          EndFormat;
+        end;
+      end;
+    end;
+  end;
+
+  StartFormat(1);
+  Gray_divider(0,1);
+  EndFormat;
+  
+  EndJob;
+  
+  return;
+end;

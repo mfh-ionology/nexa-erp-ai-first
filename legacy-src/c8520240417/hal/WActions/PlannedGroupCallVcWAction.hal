@@ -1,0 +1,59 @@
+remote procedure GetUserName(String,var String);
+
+function Boolean PlannedGroupCallDClassUserCodeEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf)
+begin
+  Boolean res;
+  record PlannedGroupCallVc PGCr;
+  row PlannedGroupCallVc PGCrw;
+  record UserVc Userr;
+  string 255 username;
+  
+  res = true;
+  if (changedf!=0) then begin
+    GetWindowRecord(wn,PGCr);
+    MatRowGet(PGCr,rownr,PGCrw);
+    GetUserName(PGCrw.UserCode,username);
+      PGCrw.UserName = username;
+    MatRowPut(PGCr,rownr,PGCrw);
+    PutWindowRecord(wn,PGCr);
+  end;
+  
+  PlannedGroupCallDClassUserCodeEFAfter = res;
+  return;
+end;
+
+function Boolean PlannedGroupCallDClassCallGroupCodeEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf)
+begin
+  Boolean res;
+  record PlannedGroupCallVc PGCr;
+  record CallGroupVc CGr;
+  string 255 username;
+  
+  res = true;
+  if (changedf!=0) then begin
+    GetWindowRecord(wn,PGCr);
+    CGr.Code = PGCr.CallGroupCode;
+    if (ReadFirstMain(CGr,1,true)) then begin
+      PGCr.Comment = CGr.Comment;
+    end;
+    PutWindowRecord(wn,PGCr);
+  end;
+  
+  PlannedGroupCallDClassCallGroupCodeEFAfter = res;
+  return;
+end;
+
+global
+function Boolean PlannedGroupCallDClassAfterEditField(Integer wn,string fieldname,Integer fn,Integer rownr,Integer changed)
+begin
+  Boolean res;
+  
+  res = false;
+  switch (fieldname) begin
+    case "UserCode": res = PlannedGroupCallDClassUserCodeEFAfter(wn,fn,rownr,changed);
+    case "CallGroupCode": res = PlannedGroupCallDClassCallGroupCodeEFAfter(wn,fn,rownr,changed);
+  end;
+  
+  PlannedGroupCallDClassAfterEditField = res;
+  return;
+end;
